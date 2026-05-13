@@ -2567,6 +2567,7 @@ impl BlockExpr {
                         // Expression nodes
                         SyntaxKind::EXPR
                         | SyntaxKind::BINARY_EXPR
+                        | SyntaxKind::IS_EXPR
                         | SyntaxKind::UNARY_EXPR
                         | SyntaxKind::CALL_EXPR
                         | SyntaxKind::IF_EXPR

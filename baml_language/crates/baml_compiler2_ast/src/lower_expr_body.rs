@@ -608,6 +608,7 @@ impl LoweringContext {
     fn lower_expr_inner(&mut self, node: &SyntaxNode) -> ExprId {
         match node.kind() {
             SyntaxKind::BINARY_EXPR => self.lower_binary_expr(node),
+            SyntaxKind::IS_EXPR => self.lower_is_expr(node),
             SyntaxKind::UNARY_EXPR => self.lower_unary_expr(node),
             SyntaxKind::CALL_EXPR => self.lower_call_expr(node),
             SyntaxKind::IF_EXPR => self.lower_if_expr(node),
@@ -767,6 +768,66 @@ impl LoweringContext {
         let op = op.unwrap_or(BinaryOp::Add);
 
         self.alloc_expr(Expr::Binary { op, lhs, rhs }, node.text_range())
+    }
+
+    /// Lower `<expr> is <pattern>` to `Expr::Is`. The pattern-test semantics
+    /// (always `bool`, no exhaustiveness, non-matching is fine) are enforced
+    /// downstream by TIR/MIR — this layer just preserves the shape.
+    fn lower_is_expr(&mut self, node: &SyntaxNode) -> ExprId {
+        let mut scrutinee = None;
+        let mut pattern = None;
+
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Node(child) => match child.kind() {
+                    SyntaxKind::PATTERN => {
+                        pattern = Some(self.lower_pattern(&child));
+                    }
+                    _ => {
+                        if scrutinee.is_none() {
+                            scrutinee = Some(self.lower_expr(&child));
+                        }
+                    }
+                },
+                rowan::NodeOrToken::Token(token) => {
+                    // The LHS may be a bare token (WORD, INTEGER_LITERAL, …)
+                    // not wrapped in its own node by the Pratt parser.
+                    if scrutinee.is_none() {
+                        let span = token.text_range();
+                        match token.kind() {
+                            SyntaxKind::INTEGER_LITERAL => {
+                                let value = token.text().parse::<i64>().unwrap_or(0);
+                                scrutinee =
+                                    Some(self.alloc_expr(Expr::Literal(Literal::Int(value)), span));
+                            }
+                            SyntaxKind::FLOAT_LITERAL => {
+                                scrutinee = Some(self.alloc_expr(
+                                    Expr::Literal(Literal::Float(token.text().to_string())),
+                                    span,
+                                ));
+                            }
+                            k if is_ident_token(k) => {
+                                let text = token.text();
+                                let e = match text {
+                                    "true" => Expr::Literal(Literal::Bool(true)),
+                                    "false" => Expr::Literal(Literal::Bool(false)),
+                                    "null" => Expr::Null,
+                                    _ => Expr::Path(vec![Name::new(text)]),
+                                };
+                                scrutinee = Some(self.alloc_expr(e, span));
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+
+        let span = node.text_range();
+        let scrutinee = scrutinee.unwrap_or_else(|| self.alloc_expr(Expr::Missing, span));
+        let pattern = pattern.unwrap_or_else(|| self.alloc_pattern(Pattern::Wildcard, span));
+
+        self.alloc_expr(Expr::Is { scrutinee, pattern }, span)
     }
 
     fn try_lower_assignment(&mut self, node: &SyntaxNode) -> Option<StmtId> {

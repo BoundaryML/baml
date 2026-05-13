@@ -604,6 +604,17 @@ pub enum Expr {
         scrutinee_type: Option<TypeAnnotId>,
         arms: Vec<MatchArmId>,
     },
+    /// `<expr> is <pattern>` — Rust `matches!`-style pattern test.
+    ///
+    /// Always evaluates to `bool`: `true` if the scrutinee matches the
+    /// pattern, `false` otherwise. Unlike `Match`, a pattern that cannot
+    /// match the scrutinee's static type is **not** a compile error here —
+    /// it just always evaluates to `false`. Treat it as a one-arm
+    /// pattern-test, not as an exhaustive match.
+    Is {
+        scrutinee: ExprId,
+        pattern: PatId,
+    },
     Catch {
         base: ExprId,
         clauses: Vec<CatchClause>,

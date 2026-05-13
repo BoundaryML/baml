@@ -19,6 +19,7 @@ pub enum Expression {
     Path(PathExpr),
     Paren(ParenExpr),
     Binary(BinaryExpr),
+    Is(IsExpr),
     Unary(UnaryExpr),
     If(IfExpr),
     Match(MatchExpr),
@@ -69,6 +70,7 @@ impl FromCST for Expression {
             }
             SyntaxKind::PAREN_EXPR => ParenExpr::from_cst(elem).map(Expression::Paren)?,
             SyntaxKind::BINARY_EXPR => BinaryExpr::from_cst(elem).map(Expression::Binary)?,
+            SyntaxKind::IS_EXPR => IsExpr::from_cst(elem).map(Expression::Is)?,
             SyntaxKind::UNARY_EXPR => UnaryExpr::from_cst(elem).map(Expression::Unary)?,
             SyntaxKind::IF_EXPR => IfExpr::from_cst(elem).map(Expression::If)?,
             SyntaxKind::MATCH_EXPR => MatchExpr::from_cst(elem).map(Expression::Match)?,
@@ -121,6 +123,7 @@ impl Expression {
             Expression::Path(path) => path.single_line_width(input),
             Expression::Paren(paren) => paren.single_line_width(input),
             Expression::Binary(binary) => binary.single_line_width(input),
+            Expression::Is(is) => is.single_line_width(input),
             Expression::Unary(unary) => unary.single_line_width(input),
             Expression::If(_) => None,
             Expression::Match(_) => None,
@@ -166,6 +169,7 @@ impl Printable for Expression {
             }
             Expression::Paren(paren) => paren.print(shape, printer),
             Expression::Binary(binary) => binary.print(shape, printer),
+            Expression::Is(is) => is.print(shape, printer),
             Expression::Unary(unary) => unary.print(shape, printer),
             Expression::If(if_expr) => if_expr.print(shape, printer),
             Expression::Match(match_expr) => match_expr.print(shape, printer),
@@ -189,6 +193,7 @@ impl Printable for Expression {
             Expression::Path(path) => path.leftmost_token(),
             Expression::Paren(paren) => paren.leftmost_token(),
             Expression::Binary(binary) => binary.leftmost_token(),
+            Expression::Is(is) => is.leftmost_token(),
             Expression::Unary(unary) => unary.leftmost_token(),
             Expression::If(if_expr) => if_expr.leftmost_token(),
             Expression::Match(match_expr) => match_expr.leftmost_token(),
@@ -215,6 +220,7 @@ impl Printable for Expression {
             Expression::Path(path) => path.rightmost_token(),
             Expression::Paren(paren) => paren.rightmost_token(),
             Expression::Binary(binary) => binary.rightmost_token(),
+            Expression::Is(is) => is.rightmost_token(),
             Expression::Unary(unary) => unary.rightmost_token(),
             Expression::If(if_expr) => if_expr.rightmost_token(),
             Expression::Match(match_expr) => match_expr.rightmost_token(),
@@ -857,6 +863,103 @@ impl BinaryOpChainingGroup {
             BinaryOp::AndAnd(_) | BinaryOp::OrOr(_) => Some(Self::Logical),
             _ => None,
         }
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::IS_EXPR`] node.
+///
+/// `<expr> is <pattern>` — Rust `matches!`-style pattern test. Structure is
+/// rigid (an expression LHS, a single keyword, a pattern RHS), so the
+/// formatter prints it on a single line whenever it fits and otherwise
+/// keeps the keyword glued to the pattern on the next line.
+#[derive(Debug)]
+pub struct IsExpr {
+    pub lhs: Box<Expression>,
+    pub keyword: t::Is,
+    pub pattern: MatchPattern,
+}
+
+impl FromCST for IsExpr {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::IS_EXPR)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+        let lhs_elem = it.expect_next("`is` left expression")?;
+        let lhs = Expression::from_cst(lhs_elem)?;
+        let kw_elem = it.expect_next("`is` keyword")?;
+        let keyword = t::Is::from_cst(kw_elem)?;
+        let pat_elem = it.expect_next("`is` pattern")?;
+        let pattern = MatchPattern::from_cst(pat_elem)?;
+        it.expect_end()?;
+
+        Ok(IsExpr {
+            lhs: Box::new(lhs),
+            keyword,
+            pattern,
+        })
+    }
+}
+
+impl KnownKind for IsExpr {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::IS_EXPR
+    }
+}
+
+impl IsExpr {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if the LHS can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        let lhs = self.lhs.single_line_width(input)?;
+        // The pattern's width is hard to query precisely without
+        // reimplementing MatchPattern's own width logic, so use the source
+        // span between leftmost and rightmost tokens as an upper bound —
+        // overestimates by leading/trailing trivia, which is fine for the
+        // line-fit check.
+        let pat_left = self.pattern.leftmost_token().start();
+        let pat_right = self.pattern.rightmost_token().end();
+        let pattern_width = usize::from(pat_right - pat_left);
+        // `<lhs> is <pattern>` — lhs + " " + "is" + " " + pattern.
+        Some(lhs + 1 + usize::from(self.keyword.span().len()) + 1 + pattern_width)
+    }
+}
+
+impl Printable for IsExpr {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        // Mirrors `BinaryExpr::try_print_single_line`'s trivia handling so
+        // comments around the `is` keyword (e.g. `v /*hint*/ is int`) round-
+        // trip instead of being silently dropped.
+        let mut multi_lined = false;
+
+        multi_lined |= printer.print(&*self.lhs, shape.clone()).multi_lined;
+
+        let lhs_trailing = printer.trivia.get_trailing_for_element(&*self.lhs);
+        let (kw_leading, kw_trailing) = printer.trivia.get_for_range_split(self.keyword.span());
+
+        let mut left_trivia_len = printer.print_trivia_squished(lhs_trailing);
+        left_trivia_len += printer.print_trivia_squished(kw_leading);
+        if left_trivia_len == 0 {
+            printer.print_spaces(1);
+        }
+
+        printer.print_raw_token(&self.keyword);
+
+        let pat_leading = printer.trivia.get_leading_for_element(&self.pattern);
+        let mut right_trivia_len = printer.print_trivia_squished(kw_trailing);
+        right_trivia_len += printer.print_trivia_squished(pat_leading);
+        if right_trivia_len == 0 {
+            printer.print_spaces(1);
+        }
+
+        multi_lined |= printer.print(&self.pattern, shape).multi_lined;
+        PrintInfo { multi_lined }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.lhs.leftmost_token()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.pattern.rightmost_token()
     }
 }
 

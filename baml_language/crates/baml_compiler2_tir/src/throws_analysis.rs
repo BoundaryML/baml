@@ -217,6 +217,9 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
                 collect_from_expr(context, arm.body, body, out);
             }
         }
+        Expr::Is { scrutinee, .. } => {
+            collect_from_expr(context, *scrutinee, body, out);
+        }
         Expr::Binary { lhs, rhs, .. } => {
             collect_from_expr(context, *lhs, body, out);
             collect_from_expr(context, *rhs, body, out);

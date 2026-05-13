@@ -1791,6 +1791,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                     shadowed.truncate(saved_len);
                 }
             }
+            Expr::Is { scrutinee, .. } => {
+                // The pattern has no body and its bindings don't escape, so we
+                // only need to recurse into the scrutinee.
+                Self::collect_default_expr_forward_references(
+                    *scrutinee,
+                    body,
+                    later_params,
+                    shadowed,
+                    refs,
+                );
+            }
             Expr::Catch { base, clauses } => {
                 Self::collect_default_expr_forward_references(
                     *base,
@@ -2540,8 +2551,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.infer_expr(*condition, body);
 
                 // Extract narrowings from the condition expression.
-                let narrowings =
-                    crate::narrowing::extract_narrowings(*condition, body, &self.expressions);
+                let narrowings = crate::narrowing::extract_narrowings(
+                    *condition,
+                    body,
+                    &self.expressions,
+                    &self.pattern_types,
+                );
 
                 // Apply then-branch narrowings, saving originals.
                 let saved = crate::narrowing::apply_then_narrowings(&narrowings, &mut self.locals);
@@ -2779,6 +2794,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             Expr::Match {
                 scrutinee, arms, ..
             } => self.infer_match_expr(expr_id, *scrutinee, arms, body),
+            Expr::Is { scrutinee, pattern } => self.infer_is_expr(*scrutinee, *pattern, body),
             Expr::Catch { base, clauses } => {
                 self.infer_catch_expr(expr_id, *base, clauses, body, None)
             }
@@ -3111,8 +3127,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.infer_expr(*condition, body);
 
                 // Extract narrowings from the condition expression.
-                let narrowings =
-                    crate::narrowing::extract_narrowings(*condition, body, &self.expressions);
+                let narrowings = crate::narrowing::extract_narrowings(
+                    *condition,
+                    body,
+                    &self.expressions,
+                    &self.pattern_types,
+                );
 
                 // Apply then-branch narrowings, saving originals.
                 let saved = crate::narrowing::apply_then_narrowings(&narrowings, &mut self.locals);
@@ -3845,8 +3865,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // infer_expr for the Expr::If will re-infer it (idempotent: the
                 // type is recorded and cached in self.expressions).
                 self.infer_expr(condition, body);
-                let narrowings =
-                    crate::narrowing::extract_narrowings(condition, body, &self.expressions);
+                let narrowings = crate::narrowing::extract_narrowings(
+                    condition,
+                    body,
+                    &self.expressions,
+                    &self.pattern_types,
+                );
 
                 // Run the normal check_stmt (which handles the full Expr::If
                 // including inner narrowing for the branches).
@@ -4035,6 +4059,42 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
 
         Self::join_all(&arm_types)
+    }
+
+    /// Type-check `<expr> is <pattern>` (Rust `matches!`-style pattern test).
+    ///
+    /// Always evaluates to `bool`. Unlike `match`:
+    ///   - no exhaustiveness check — there's only one pattern, the rest is "false"
+    ///   - no pattern-vs-scrutinee subtype check — `v is string` for `v: int` is
+    ///     legal, it just always evaluates to `false`
+    ///   - pattern bindings are restricted to the pattern itself and discarded,
+    ///     so the surrounding scope never sees them (use `match` / `if let` for
+    ///     binding semantics)
+    ///
+    /// We still lower the pattern (records `pattern_types` so LSP/MIR/codegen
+    /// can read the per-PatId type) and infer the scrutinee — that's how we
+    /// keep "unresolved type" diagnostics inside the pattern working.
+    fn infer_is_expr(
+        &mut self,
+        scrutinee_expr_id: ExprId,
+        pattern_id: PatId,
+        body: &ExprBody,
+    ) -> Ty {
+        let scrutinee_ty = self.infer_expr(scrutinee_expr_id, body);
+
+        // Snapshot the scope so pattern bindings don't leak out — `is` is a
+        // test, not a binder.
+        let snapshot = self.snapshot_scoped_locals();
+        let result = self.analyze_and_lower_no_subtype_check(
+            pattern_id,
+            &scrutinee_ty,
+            body,
+            scrutinee_expr_id,
+        );
+        self.finalize_pattern_lowering(pattern_id, &result, None, None, &scrutinee_ty);
+        self.restore_scoped_locals(&snapshot);
+
+        Ty::Primitive(PrimitiveType::Bool, TyAttr::default())
     }
 
     fn infer_catch_expr(
@@ -4286,11 +4346,20 @@ impl<'db> TypeInferenceBuilder<'db> {
     // `analyze_pattern` walks once with the incoming value type to compute
     // matched type, bindings, coverage, and PatId -> Ty output.
 
+    /// Resolve a class-pattern head (and any generic args) to a `Ty`.
+    ///
+    /// `anchor` controls diagnostic placement:
+    ///   - `None`: silent (used when computing a pattern's natural type for
+    ///     subtype checks — we don't want to double-report).
+    ///   - `Some((pat_id, fallback_expr))`: anchor unresolved-name / type-
+    ///     mismatch diagnostics at the pattern's source span via
+    ///     `report_at_pat_or_expr`, falling back to `fallback_expr` only
+    ///     when the source map has no span for `pat_id`.
     fn resolve_class_pattern_type(
         &mut self,
         class: &[Name],
         generic_args: &[TypeExpr],
-        at_expr: Option<ExprId>,
+        anchor: Option<(PatId, ExprId)>,
     ) -> Ty {
         if !generic_args.is_empty() {
             let ty_expr = TypeExpr::Path {
@@ -4298,23 +4367,24 @@ impl<'db> TypeInferenceBuilder<'db> {
                 generic_args: generic_args.to_vec(),
                 attrs: Vec::new(),
             };
-            let ty = if let Some(at_expr) = at_expr {
-                self.resolve_type_expr(&ty_expr, at_expr)
+            let ty = if let Some((pat_id, fallback)) = anchor {
+                self.resolve_type_expr_at_pat(&ty_expr, pat_id, fallback)
             } else {
                 self.resolve_type_expr_silent(&ty_expr)
             };
             if matches!(ty, Ty::Class(..) | Ty::Unknown { .. } | Ty::Error { .. }) {
                 return ty;
             }
-            if let Some(at_expr) = at_expr {
-                self.context.report_simple(
+            if let Some((pat_id, fallback)) = anchor {
+                self.report_at_pat_or_expr(
                     TirTypeError::TypeMismatch {
                         expected: Ty::Type {
                             attr: TyAttr::default(),
                         },
                         got: ty,
                     },
-                    at_expr,
+                    pat_id,
+                    fallback,
                 );
             }
             return Ty::Unknown {
@@ -4329,10 +4399,13 @@ impl<'db> TypeInferenceBuilder<'db> {
             return ty;
         }
 
-        if let Some(at_expr) = at_expr {
+        if let Some((pat_id, fallback)) = anchor {
             let lookup = class.last().cloned().unwrap_or_else(|| Name::new("_"));
-            self.context
-                .report_simple(TirTypeError::UnresolvedName { name: lookup }, at_expr);
+            self.report_at_pat_or_expr(
+                TirTypeError::UnresolvedName { name: lookup },
+                pat_id,
+                fallback,
+            );
         }
         Ty::Unknown {
             attr: TyAttr::default(),
@@ -4638,6 +4711,39 @@ impl<'db> TypeInferenceBuilder<'db> {
         ty
     }
 
+    /// Same as [`Self::resolve_type_expr`], but anchors diagnostics at the
+    /// pattern's source span (via [`Self::report_at_pat_or_expr`]) instead
+    /// of falling all the way back to the surrounding scrutinee
+    /// expression. Used by pattern-lowering call sites where we have a
+    /// `PatId` in scope so the squiggle lands on the actual type name.
+    fn resolve_type_expr_at_pat(
+        &mut self,
+        ty: &TypeExpr,
+        pat_id: PatId,
+        fallback_expr: ExprId,
+    ) -> Ty {
+        if let TypeExpr::Path { segments, .. } = ty {
+            if segments.len() == 1 {
+                if let Some(resolved) = bare_type_sugar_to_ty(&segments[0]) {
+                    return resolved;
+                }
+            }
+        }
+        let mut diags = Vec::new();
+        let resolved = crate::lower_type_expr::lower_type_expr_in_ns(
+            self.context.db(),
+            ty,
+            self.package_items,
+            &self.ns_context,
+            &self.generic_params,
+            &mut diags,
+        );
+        for diag in diags {
+            self.report_at_pat_or_expr(diag, pat_id, fallback_expr);
+        }
+        resolved
+    }
+
     fn ty_panic_subset(&self, ty: &Ty) -> Option<Ty> {
         match ty {
             Ty::Class(qtn, _, _) => qtn.is_panic_type().then(|| ty.clone()),
@@ -4924,6 +5030,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                     self.collect_throw_facts_from_expr(arm.body, body, out);
                 }
+            }
+            Expr::Is { scrutinee, .. } => {
+                self.collect_throw_facts_from_expr(*scrutinee, body, out);
             }
             Expr::Binary { lhs, rhs, .. } => {
                 self.collect_throw_facts_from_expr(*lhs, body, out);
@@ -8780,12 +8889,12 @@ impl TypeInferenceBuilder<'_> {
             ast::Pattern::Bind { name, subpat } => {
                 self.lower_bind_pat(pat_id, name.clone(), *subpat, scrut_ty, body, at_expr)
             }
-            ast::Pattern::Type(t) => self.lower_type_pat(t, scrut_ty, at_expr),
+            ast::Pattern::Type(t) => self.lower_type_pat(t, pat_id, scrut_ty, at_expr),
             ast::Pattern::Class {
                 class,
                 generic_args,
                 fields,
-            } => self.lower_class_pat(class, generic_args, fields, scrut_ty, body, at_expr),
+            } => self.lower_class_pat(class, generic_args, fields, pat_id, scrut_ty, body, at_expr),
             ast::Pattern::Array {
                 prefix,
                 rest,
@@ -8862,10 +8971,15 @@ impl TypeInferenceBuilder<'_> {
     fn lower_type_pat(
         &mut self,
         ty_expr: &TypeExpr,
+        pat_id: PatId,
         scrut_ty: &Ty,
         at_expr: ExprId,
     ) -> crate::pattern_lowering::PatternResult {
-        let resolved = self.resolve_type_expr(ty_expr, at_expr);
+        // Anchor "unresolved type" / "type mismatch" diagnostics at the
+        // pattern's own span rather than the surrounding expression so the
+        // squiggle lands on the type name (e.g. `Frobnitz`), not the
+        // scrutinee.
+        let resolved = self.resolve_type_expr_at_pat(ty_expr, pat_id, at_expr);
         let dpat = self.dpat_for_type(&resolved, scrut_ty);
         let matched = self.intersect_pattern_flow_types(scrut_ty, &resolved);
         crate::pattern_lowering::PatternResult {
@@ -8986,11 +9100,13 @@ impl TypeInferenceBuilder<'_> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn lower_class_pat(
         &mut self,
         class: &[Name],
         generic_args: &[TypeExpr],
         fields: &[ast::FieldPat],
+        pat_id: PatId,
         scrut_ty: &Ty,
         body: &ExprBody,
         at_expr: ExprId,
@@ -9000,7 +9116,12 @@ impl TypeInferenceBuilder<'_> {
             pattern_lowering::{PatternBinding, PatternResult},
         };
 
-        let class_ty = self.resolve_class_pattern_type(class, generic_args, Some(at_expr));
+        // Anchor unresolved-name / type-mismatch diagnostics for the class
+        // head and its generic args at the pattern's span (same treatment
+        // as `Pattern::Type` in `lower_type_pat`). `at_expr` stays in the
+        // tuple as a fallback for `report_at_pat_or_expr`.
+        let class_ty =
+            self.resolve_class_pattern_type(class, generic_args, Some((pat_id, at_expr)));
         if !matches!(class_ty, Ty::Class(..)) {
             // Resolution failed; bail out with a wildcard so downstream
             // can keep going. Diagnostics already emitted by resolver.

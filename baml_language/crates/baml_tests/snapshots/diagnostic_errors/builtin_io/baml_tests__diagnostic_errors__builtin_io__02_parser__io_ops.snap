@@ -28,7 +28,7 @@ SOURCE_FILE
               STRING_LITERAL "What is your name? "
                 QUOTE """
                 WORD "What"
-                WORD "is"
+                KW_IS "is"
                 WORD "your"
                 WORD "name"
                 QUESTION "?"

@@ -2331,6 +2331,39 @@ impl LoweringContext<'_> {
                 self.lower_match(expr_id, scrutinee, &arms_owned, dest);
             }
 
+            AstExpr::Is { scrutinee, pattern } => {
+                // `<scrutinee> is <pattern>` — runtime pattern test that
+                // yields `true` if the pattern matches, `false` otherwise.
+                // We reuse `lower_pattern_test`, the same engine match-arm
+                // dispatch uses, with two terminal blocks that write the
+                // boolean constant into `dest` and jump to a join.
+                let scrutinee_local = self.try_resolve_to_local(scrutinee).unwrap_or_else(|| {
+                    let op = self.lower_to_operand(scrutinee);
+                    let ty = self.expr_ty(scrutinee);
+                    self.operand_to_local(op, ty)
+                });
+
+                let bb_true = self.builder.create_block();
+                let bb_false = self.builder.create_block();
+                let bb_join = self.builder.create_block();
+
+                self.lower_pattern_test(scrutinee_local, pattern, bb_true, bb_false);
+
+                self.builder.set_current_block(bb_true);
+                self.builder.assign(
+                    dest.clone(),
+                    Rvalue::Use(Operand::Constant(Constant::Bool(true))),
+                );
+                self.builder.goto(bb_join);
+
+                self.builder.set_current_block(bb_false);
+                self.builder
+                    .assign(dest, Rvalue::Use(Operand::Constant(Constant::Bool(false))));
+                self.builder.goto(bb_join);
+
+                self.builder.set_current_block(bb_join);
+            }
+
             AstExpr::Catch { base, clauses } => {
                 let clauses_owned = clauses;
                 self.lower_catch(expr_id, base, &clauses_owned, &dest);

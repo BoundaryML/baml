@@ -109,7 +109,7 @@ function user.class_destructure_unresolved_class() -> int throws never {
     let MissingClass { age: age } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person -> unknown
     0 : 0
   }
-  !! 2472..2563: unresolved name: MissingClass
+  !! 2440..2469: unresolved name: MissingClass
 }
 function user.class_destructure_field_pattern_type_mismatch() -> int throws never {
   { : 1 | 0

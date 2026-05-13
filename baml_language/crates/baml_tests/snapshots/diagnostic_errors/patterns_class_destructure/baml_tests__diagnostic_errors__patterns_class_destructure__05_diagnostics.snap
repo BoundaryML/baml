@@ -87,13 +87,12 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: unresolved name: MissingClass
-     ╭─[ patterns_class_destructure.baml:109:32 ]
+     ╭─[ patterns_class_destructure.baml:108:55 ]
      │
- 109 │ ╭─▶     let MissingClass { age } = Person {
-     ┆ ┆   
- 113 │ ├─▶     };
-     │ │            
-     │ ╰──────────── unresolved name: MissingClass
+ 108 │ ╭─▶ function class_destructure_unresolved_class() -> int {
+ 109 │ ├─▶     let MissingClass { age } = Person {
+     │ │                                             
+     │ ╰───────────────────────────────────────────── unresolved name: MissingClass
      │     
      │     Note: Error code: E0003
 ─────╯
