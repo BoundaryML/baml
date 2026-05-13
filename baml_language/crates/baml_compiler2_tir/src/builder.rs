@@ -4346,11 +4346,20 @@ impl<'db> TypeInferenceBuilder<'db> {
     // `analyze_pattern` walks once with the incoming value type to compute
     // matched type, bindings, coverage, and PatId -> Ty output.
 
+    /// Resolve a class-pattern head (and any generic args) to a `Ty`.
+    ///
+    /// `anchor` controls diagnostic placement:
+    ///   - `None`: silent (used when computing a pattern's natural type for
+    ///     subtype checks — we don't want to double-report).
+    ///   - `Some((pat_id, fallback_expr))`: anchor unresolved-name / type-
+    ///     mismatch diagnostics at the pattern's source span via
+    ///     `report_at_pat_or_expr`, falling back to `fallback_expr` only
+    ///     when the source map has no span for `pat_id`.
     fn resolve_class_pattern_type(
         &mut self,
         class: &[Name],
         generic_args: &[TypeExpr],
-        at_expr: Option<ExprId>,
+        anchor: Option<(PatId, ExprId)>,
     ) -> Ty {
         if !generic_args.is_empty() {
             let ty_expr = TypeExpr::Path {
@@ -4358,23 +4367,24 @@ impl<'db> TypeInferenceBuilder<'db> {
                 generic_args: generic_args.to_vec(),
                 attrs: Vec::new(),
             };
-            let ty = if let Some(at_expr) = at_expr {
-                self.resolve_type_expr(&ty_expr, at_expr)
+            let ty = if let Some((pat_id, fallback)) = anchor {
+                self.resolve_type_expr_at_pat(&ty_expr, pat_id, fallback)
             } else {
                 self.resolve_type_expr_silent(&ty_expr)
             };
             if matches!(ty, Ty::Class(..) | Ty::Unknown { .. } | Ty::Error { .. }) {
                 return ty;
             }
-            if let Some(at_expr) = at_expr {
-                self.context.report_simple(
+            if let Some((pat_id, fallback)) = anchor {
+                self.report_at_pat_or_expr(
                     TirTypeError::TypeMismatch {
                         expected: Ty::Type {
                             attr: TyAttr::default(),
                         },
                         got: ty,
                     },
-                    at_expr,
+                    pat_id,
+                    fallback,
                 );
             }
             return Ty::Unknown {
@@ -4389,10 +4399,13 @@ impl<'db> TypeInferenceBuilder<'db> {
             return ty;
         }
 
-        if let Some(at_expr) = at_expr {
+        if let Some((pat_id, fallback)) = anchor {
             let lookup = class.last().cloned().unwrap_or_else(|| Name::new("_"));
-            self.context
-                .report_simple(TirTypeError::UnresolvedName { name: lookup }, at_expr);
+            self.report_at_pat_or_expr(
+                TirTypeError::UnresolvedName { name: lookup },
+                pat_id,
+                fallback,
+            );
         }
         Ty::Unknown {
             attr: TyAttr::default(),
@@ -8881,7 +8894,7 @@ impl TypeInferenceBuilder<'_> {
                 class,
                 generic_args,
                 fields,
-            } => self.lower_class_pat(class, generic_args, fields, scrut_ty, body, at_expr),
+            } => self.lower_class_pat(class, generic_args, fields, pat_id, scrut_ty, body, at_expr),
             ast::Pattern::Array {
                 prefix,
                 rest,
@@ -9087,11 +9100,13 @@ impl TypeInferenceBuilder<'_> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn lower_class_pat(
         &mut self,
         class: &[Name],
         generic_args: &[TypeExpr],
         fields: &[ast::FieldPat],
+        pat_id: PatId,
         scrut_ty: &Ty,
         body: &ExprBody,
         at_expr: ExprId,
@@ -9101,7 +9116,12 @@ impl TypeInferenceBuilder<'_> {
             pattern_lowering::{PatternBinding, PatternResult},
         };
 
-        let class_ty = self.resolve_class_pattern_type(class, generic_args, Some(at_expr));
+        // Anchor unresolved-name / type-mismatch diagnostics for the class
+        // head and its generic args at the pattern's span (same treatment
+        // as `Pattern::Type` in `lower_type_pat`). `at_expr` stays in the
+        // tuple as a fallback for `report_at_pat_or_expr`.
+        let class_ty =
+            self.resolve_class_pattern_type(class, generic_args, Some((pat_id, at_expr)));
         if !matches!(class_ty, Ty::Class(..)) {
             // Resolution failed; bail out with a wildcard so downstream
             // can keep going. Diagnostics already emitted by resolver.

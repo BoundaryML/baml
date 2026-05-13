@@ -1070,6 +1070,51 @@ fn is_or_pattern_with_bindings_does_not_leak() {
 }
 
 #[test]
+fn is_unresolved_class_head_in_destructure_anchors_at_the_type_name() {
+    // Same as the simple type-pattern case, but the unresolved name is the
+    // *head* of a class-destructure pattern. Without the pat anchor for
+    // `lower_class_pat`, the squiggle would land on the scrutinee.
+    let errors = collect_compile_errors(
+        "
+        class Wrap { x int }
+        function check(v: Wrap) -> bool {
+            v is Frobnitz { x }
+        }
+        function main() -> bool { check(Wrap { x: 1 }) }
+        ",
+    );
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.contains("unresolved name: Frobnitz")),
+        "expected an unresolved-name diagnostic naming `Frobnitz`; got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
+#[test]
+fn is_unresolved_generic_arg_in_class_pattern_anchors_at_the_type_name() {
+    // Class pattern with an unresolved generic arg: `v is Wrap<Missing>`
+    // should anchor at the pattern, not the scrutinee.
+    let errors = collect_compile_errors(
+        "
+        class Wrap<T> { val T }
+        function check(v: Wrap<int>) -> bool {
+            v is Wrap<Missing>
+        }
+        function main() -> bool { check(Wrap<int> { val: 1 }) }
+        ",
+    );
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.contains("unresolved type: Missing")),
+        "expected an unresolved-type diagnostic naming `Missing`; got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
+#[test]
 fn is_unresolved_type_in_pattern_anchors_at_the_type_name() {
     // Regression: `v is Frobnitz` used to anchor the "unresolved type"
     // diagnostic at the scrutinee (`v`), making the squiggle land on the
