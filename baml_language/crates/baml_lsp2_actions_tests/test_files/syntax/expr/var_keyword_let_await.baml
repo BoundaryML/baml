@@ -12,4 +12,48 @@ function UseReserved() -> int {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: Expected identifier after 'let', found await
+//    ╭─[ expr_var_keyword_let_await.baml:2:7 ]
+//    │
+//  2 │   let await = 1;
+//    │       ──┬──  
+//    │         ╰──── Expected identifier after 'let', found await
+//    │ 
+//    │ Note: Error code: E0010
+// ───╯
+// Error: Expected initializer (=), found await
+//    ╭─[ expr_var_keyword_let_await.baml:2:7 ]
+//    │
+//  2 │   let await = 1;
+//    │       ──┬──  
+//    │         ╰──── Expected initializer (=), found await
+//    │ 
+//    │ Note: Error code: E0010
+// ───╯
+// Error: Expected expression, found '='
+//    ╭─[ expr_var_keyword_let_await.baml:2:13 ]
+//    │
+//  2 │   let await = 1;
+//    │             ┬  
+//    │             ╰── Expected expression, found '='
+//    │ 
+//    │ Note: Error code: E0010
+// ───╯
+// Error: Expected expression, found '}'
+//    ╭─[ expr_var_keyword_let_await.baml:4:1 ]
+//    │
+//  4 │ }
+//    │ ┬  
+//    │ ╰── Expected expression, found '}'
+//    │ 
+//    │ Note: Error code: E0010
+// ───╯
+// Error: Expected '}', found EOF
+//     ╭─[ expr_var_keyword_let_await.baml:11:7 ]
+//     │
+//  11 │ //    |
+//     │       ┬  
+//     │       ╰── Expected '}', found EOF
+//     │ 
+//     │ Note: Error code: E0010
+// ────╯

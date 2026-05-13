@@ -19,6 +19,7 @@
 
 mod array;
 mod float;
+mod future;
 mod int;
 pub mod json;
 mod map;

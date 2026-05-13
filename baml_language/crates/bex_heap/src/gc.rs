@@ -1803,9 +1803,13 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         let result = tlab.alloc_string("result".to_string());
-        let future = Future::pending(FutureId::from_usize(0));
-        // SAFETY: single-writer; this Future is local and not yet visible.
-        unsafe { future.set_ready(Value::Object(result)) };
+        let future = Future::pending(
+            FutureId::from_usize(0),
+            bex_vm_types::types::CancellationToken::new(),
+        );
+        // SAFETY: this Future is local and not yet visible; CAS will win.
+        let ok = unsafe { future.settle_ready(Value::Object(result)) };
+        assert!(ok);
         let future_ptr = tlab.alloc(Object::Future(future));
 
         let roots = vec![future_ptr];
@@ -1831,9 +1835,13 @@ mod tests {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
-        let future = Future::pending(FutureId::from_usize(0));
-        // SAFETY: single-writer; this Future is local and not yet visible.
-        unsafe { future.set_ready(Value::Int(99)) };
+        let future = Future::pending(
+            FutureId::from_usize(0),
+            bex_vm_types::types::CancellationToken::new(),
+        );
+        // SAFETY: this Future is local and not yet visible; CAS will win.
+        let ok = unsafe { future.settle_ready(Value::Int(99)) };
+        assert!(ok);
         let future_ptr = tlab.alloc(Object::Future(future));
         let roots = vec![future_ptr];
         let (stats, _, _) = unsafe { heap.collect_garbage(&roots) };

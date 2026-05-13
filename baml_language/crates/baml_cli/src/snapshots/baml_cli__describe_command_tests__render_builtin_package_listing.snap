@@ -41,6 +41,8 @@ class            fs.DirEntry                      <builtin>/baml/ns_fs/fs.baml:6
 class            fs.MkdirOptions                  <builtin>/baml/ns_fs/fs.baml:72
 function         fs.read_dir                      <builtin>/baml/ns_fs/fs.baml:76
 function         fs.mkdir                         <builtin>/baml/ns_fs/fs.baml:80
+enum             future.FutureState               <builtin>/baml/ns_future/future.baml:17
+class            future.Future                    <builtin>/baml/ns_future/future.baml:24
 class            glob.ScanOptions                 <builtin>/baml/ns_glob/glob.baml:1
 class            glob.Glob                        <builtin>/baml/ns_glob/glob.baml:10
 function         glob.new                         <builtin>/baml/ns_glob/glob.baml:22

@@ -1143,12 +1143,9 @@ function baml.future.Future.cancel(self: null) -> bool {
 }
 
 function baml.future.Future.from_json(j: baml.json.json) -> baml.future.Future<void, void> {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.future.Future<#0, #1>
-    load_var _2
-    call baml.json.from_string
+    load_type #0
+    load_type #1
+    alloc_instance<2> baml.future.Future
     return
 }
 
@@ -1168,10 +1165,7 @@ function baml.future.Future.state(self: null) -> baml.future.FutureState {
 }
 
 function baml.future.Future.to_json(self: null) -> baml.json.json {
-    load_type baml.future.Future<#0, #1>
-    load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    alloc_map 0
     return
 }
 

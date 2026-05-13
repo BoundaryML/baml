@@ -5127,6 +5127,27 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 })
             }
+            Ty::Future(value_ty, error_ty, _) => {
+                // Bridge: Future<T, E> → baml.future.Future class
+                self.resolve_builtin_member(
+                    &["future", "Future"],
+                    &[value_ty.as_ref().clone(), error_ty.as_ref().clone()],
+                    member,
+                    at,
+                )
+                .unwrap_or_else(|| {
+                    self.context.report_at_member_simple(
+                        TirTypeError::UnresolvedMember {
+                            base_type: base_ty.clone(),
+                            member: member.clone(),
+                        },
+                        at,
+                    );
+                    Ty::Unknown {
+                        attr: TyAttr::default(),
+                    }
+                })
+            }
             Ty::Primitive(PrimitiveType::String, _)
             | Ty::Literal(baml_base::Literal::String(_), _, _) => {
                 // Bridge: string / string-literal → String class
@@ -5516,6 +5537,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                 .resolve_builtin_method(
                     &["Map"],
                     &[key_ty.as_ref().clone(), val_ty.as_ref().clone()],
+                    member,
+                )
+                .map(BuiltinResolution::into_ty),
+            Ty::Future(value_ty, error_ty, _) => self
+                .resolve_builtin_method(
+                    &["future", "Future"],
+                    &[value_ty.as_ref().clone(), error_ty.as_ref().clone()],
                     member,
                 )
                 .map(BuiltinResolution::into_ty),

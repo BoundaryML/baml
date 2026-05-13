@@ -22,8 +22,6 @@ enum FutureState {
 }
 
 class Future<T, E> {
-  _handle $rust_type
-
   /// Request cancellation of the future. If the future is already
   /// settled, this is a no-op and returns `false`. Otherwise the
   /// future's cancel token fires; the spawned thread will throw
@@ -32,36 +30,37 @@ class Future<T, E> {
   /// Returns `true` if a transition to the Cancelled state was
   /// performed, `false` if the future was already settled.
   function cancel(self) -> bool {
-    $rust_io_function
+    $rust_function
   }
 
   /// `true` if the future has reached a terminal state (Ready, Error,
   /// or Cancelled). Once `true`, this method's result never changes.
   function is_settled(self) -> bool {
-    $rust_io_function
+    $rust_function
   }
 
   /// `true` if the future was cancelled before producing a value.
   /// Implies `is_settled() == true`.
   function is_cancelled(self) -> bool {
-    $rust_io_function
+    $rust_function
   }
 
   /// `true` if the future settled with a successful value. Implies
   /// `is_settled() == true`.
   function is_result(self) -> bool {
-    $rust_io_function
+    $rust_function
   }
 
   /// `true` if the future settled with an error. Implies
   /// `is_settled() == true`.
   function is_error(self) -> bool {
-    $rust_io_function
+    $rust_function
   }
 
   /// Return the current state of the future as a [`FutureState`]
   /// variant.
+  //baml:mut_vm
   function state(self) -> FutureState {
-    $rust_io_function
+    $rust_function
   }
 }
