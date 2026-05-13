@@ -237,6 +237,32 @@ impl<'a> BexValue<'a> {
         }
     }
 
+    /// Extract an `Arc<BigInt>` from a bigint value. External bigints are
+    /// stored as `BigInt` by value; heap bigints share an `Arc<BigInt>` —
+    /// in both cases the caller gets an owned `Arc` (cheap clone for the
+    /// heap case, fresh allocation for the external case).
+    pub fn as_bigint(
+        self,
+        heap: &BexHeap,
+        permit: PermitProof<'a>,
+    ) -> Result<std::sync::Arc<num_bigint::BigInt>, AccessError> {
+        match self {
+            BexValue::ExternalValue(BexExternalValue::Bigint(bi)) => {
+                Ok(std::sync::Arc::new(bi.clone()))
+            }
+            other => other.as_object("bigint", heap, permit, |ptr| {
+                let obj = unsafe { ptr.get() };
+                let Object::Bigint(arc) = obj else {
+                    return Err(AccessError::TypeMismatch {
+                        expected: "bigint",
+                        actual: obj.to_string(),
+                    });
+                };
+                Ok(std::sync::Arc::clone(arc))
+            }),
+        }
+    }
+
     pub fn as_array(
         self,
         heap: &BexHeap,

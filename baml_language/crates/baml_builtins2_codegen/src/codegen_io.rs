@@ -280,6 +280,15 @@ fn external_to_typed_expr(
                 }),
             }
         },
+        BamlType::Bigint => quote! {
+            match #val_expr {
+                BexExternalValue::Bigint(v) => Ok(std::sync::Arc::new(v)),
+                other => Err(AccessError::TypeMismatch {
+                    expected: "bigint",
+                    actual: other.type_name().to_string(),
+                }),
+            }
+        },
         BamlType::Float => quote! {
             match #val_expr {
                 BexExternalValue::Float(v) => Ok(v),
@@ -405,6 +414,9 @@ fn owned_to_external_expr(
 ) -> TokenStream {
     match ty {
         BamlType::Int => quote! { BexExternalValue::Int(#field_expr) },
+        BamlType::Bigint => quote! {
+            BexExternalValue::Bigint(std::sync::Arc::unwrap_or_clone(#field_expr))
+        },
         BamlType::Float => quote! { BexExternalValue::Float(#field_expr) },
         BamlType::Bool => quote! { BexExternalValue::Bool(#field_expr) },
         BamlType::String => quote! { BexExternalValue::String(#field_expr) },
@@ -501,6 +513,7 @@ fn glue_extract_expr(
     match ty {
         BamlType::String => quote! { #arg_ident.as_string(heap.as_ref(), permit)?.to_string() },
         BamlType::Int => quote! { #arg_ident.as_int()? },
+        BamlType::Bigint => quote! { #arg_ident.as_bigint(heap.as_ref(), permit)? },
         BamlType::Float => quote! { #arg_ident.as_float()? },
         BamlType::Bool => quote! { #arg_ident.as_bool()? },
         BamlType::Named(name) => {
@@ -2253,6 +2266,17 @@ fn emit_result_conversion_for_ty(
             quote! {
                 match __val {
                     BexExternalValue::Int(v) => Ok(v),
+                    other => Err(RuntimeIoError::Other(
+                        format!(#msg, other.type_name()),
+                    )),
+                }
+            }
+        }
+        BamlType::Bigint => {
+            let msg = format!("expected bigint{ctx}, got {{}}");
+            quote! {
+                match __val {
+                    BexExternalValue::Bigint(v) => Ok(std::sync::Arc::new(v)),
                     other => Err(RuntimeIoError::Other(
                         format!(#msg, other.type_name()),
                     )),
