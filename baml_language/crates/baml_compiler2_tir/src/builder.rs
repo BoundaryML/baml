@@ -2238,22 +2238,25 @@ impl<'db> TypeInferenceBuilder<'db> {
                 name,
                 body: spawn_body,
             } => {
-                // BEP-034: `spawn name? { body } : Future<T, E>` where the
-                // body has type `T throws E`. The name (if any) is parsed
-                // for type info but not validated against `string` in
-                // Phase C — a more thorough check belongs in a dedicated
-                // diagnostic pass after the surface lands.
+                // BEP-034: `spawn name? { body } : Future<T, E>` where
+                // `body` has type `T throws E`. After AST lowering the
+                // body is wrapped in a synthetic 0-arg lambda; we infer
+                // the lambda's type and peel its return type out as `T`.
                 if let Some(name_id) = name {
                     let _ = self.infer_expr(*name_id, body);
                 }
-                let body_ty = self.infer_expr(*spawn_body, body);
+                let lambda_ty = self.infer_expr(*spawn_body, body);
+                let value_ty = match &lambda_ty {
+                    Ty::Function { ret, .. } => ret.as_ref().clone(),
+                    _ => lambda_ty.clone(),
+                };
                 // Phase C approximates the throws set as `Null` per
                 // implementation plan ("Future<T, never> ≈ Future<T,
                 // null> in v1"). Threading the spawn body's effective
                 // throws set through requires the full throws-analysis
                 // pass; deferred to a follow-up.
                 let throws_ty = Ty::Primitive(PrimitiveType::Null, TyAttr::default());
-                Ty::Future(Box::new(body_ty), Box::new(throws_ty), TyAttr::default())
+                Ty::Future(Box::new(value_ty), Box::new(throws_ty), TyAttr::default())
             }
             Expr::Await { future } => {
                 // BEP-034: `await e : T` where `e : Future<T, E>`.

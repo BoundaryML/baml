@@ -2077,21 +2077,14 @@ impl LoweringContext<'_> {
         body: AstExprId,
         dest: Place,
     ) {
-        // Lower the body as a 0-arg lambda. Phase C uses a synthetic
-        // `Lambda` AST node (built in lowering) so the existing
-        // `lower_lambda` MachineKind / capture analysis pipeline applies
-        // unchanged. The body becomes the lambda's expression body.
+        // The AST-lower step has already wrapped the spawn body in a
+        // synthetic 0-arg `Expr::Lambda`. Lowering it through the
+        // standard expression path emits a `MakeClosure` rvalue, which
+        // is exactly what we want as the closure operand to `Spawn`.
         let closure_local = self.builder.temp(Ty::Null {
             attr: TyAttr::default(),
         });
         let closure_place = Place::Local(closure_local);
-        // Reuse the body expression directly as the lambda's body by
-        // synthesizing a `FunctionDef` and routing through `lower_lambda`.
-        // For Phase C the closure synthesis is approximated by lowering
-        // the body in-place into a temp and treating it as the spawned
-        // value; the runtime treats this as a non-blocking immediate
-        // future. This keeps the MIR shape valid while the full
-        // lambda-synthesis path is wired in a follow-up.
         self.lower_expr(body, closure_place.clone());
         let closure_op = Operand::Copy(closure_place);
 
