@@ -985,10 +985,43 @@ async fn test_bigint_int_mixed_shl() {
 }
 
 #[tokio::test]
-async fn test_bigint_int_mixed_bitand_negative() {
+async fn test_bigint_int_mixed_bitand_neg_one_with_mask() {
+    // `-1n` is all-ones in two's-complement, so `(-1n) & 255` masks to the
+    // low 8 bits as `255n`. Exercises mixed-int widening on the RHS plus
+    // num-bigint's two's-complement bitwise semantics on a negative LHS.
     let output = baml_test!(
         r#"
         function main() -> bool { return ((-1n) & 255) == 255n; }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn test_bigint_int_mixed_bitor() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool { return (1n | 2) == 3n; }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn test_bigint_int_mixed_bitxor() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool { return (5n ^ 3) == 6n; }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn test_bigint_int_mixed_shr() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool { return (16n >> 2) == 4n; }
     "#
     );
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));

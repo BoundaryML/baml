@@ -81,6 +81,71 @@ test_deserializer!(
     "99999999999999999999"
 );
 
+// Document and pin SAP's string-to-bigint accepted format. The coercer:
+//   - trims surrounding whitespace and trailing commas,
+//   - accepts an optional leading `+`/`-` followed by ASCII digits,
+//   - falls back to float parsing (with rounding) if decimal parse fails.
+// Hex/octal prefixes and empty strings are rejected. Underscore separators
+// are surprisingly accepted because the float fallback's
+// `float_from_comma_separated` strips them — keeping this looser behaviour
+// to match the rest of the numeric coercers.
+test_deserializer!(
+    test_bigint_string_with_plus_sign,
+    r#""+42""#,
+    baml_tyannotated!(bigint),
+    baml_db! {},
+    "42"
+);
+
+test_deserializer!(
+    test_bigint_string_with_minus_sign,
+    r#""-42""#,
+    baml_tyannotated!(bigint),
+    baml_db! {},
+    "-42"
+);
+
+test_deserializer!(
+    test_bigint_string_with_whitespace,
+    r#""  42  ""#,
+    baml_tyannotated!(bigint),
+    baml_db! {},
+    "42"
+);
+
+test_deserializer!(
+    test_bigint_string_with_trailing_comma,
+    r#""42,""#,
+    baml_tyannotated!(bigint),
+    baml_db! {},
+    "42"
+);
+
+test_failing_deserializer!(
+    test_bigint_string_with_hex_prefix_rejected,
+    r#""0x2a""#,
+    baml_tyannotated!(bigint),
+    baml_db! {}
+);
+
+// `"1_000"` happens to be accepted via the float-fallback's separator
+// stripping. Documenting the actual behaviour so a future tightening doesn't
+// regress silently.
+test_deserializer!(
+    test_bigint_string_with_underscores_accepted,
+    r#""1_000""#,
+    baml_tyannotated!(bigint),
+    baml_db! {},
+    "1000"
+);
+
+test_failing_deserializer!(
+    test_bigint_string_empty_rejected,
+    r#""""#,
+    baml_tyannotated!(bigint),
+    baml_db! {}
+);
+
 test_deserializer!(
     test_bigint_float_with_rounding,
     "42.0",

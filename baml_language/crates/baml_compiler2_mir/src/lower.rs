@@ -6843,6 +6843,7 @@ impl LoweringContext<'_> {
     fn type_tag_for_ty(&self, ty: &Ty) -> Option<i64> {
         match ty {
             Ty::Int { .. } => Some(baml_type::typetag::INT),
+            Ty::Bigint { .. } => Some(baml_type::typetag::BIGINT),
             Ty::String { .. } => Some(baml_type::typetag::STRING),
             Ty::Bool { .. } => Some(baml_type::typetag::BOOL),
             Ty::Null { .. } => Some(baml_type::typetag::NULL),
@@ -7768,6 +7769,7 @@ impl LoweringContext<'_> {
 fn format_type_tag_name(tag: i64) -> String {
     match tag {
         baml_type::typetag::INT => "int".to_string(),
+        baml_type::typetag::BIGINT => "bigint".to_string(),
         baml_type::typetag::STRING => "string".to_string(),
         baml_type::typetag::BOOL => "bool".to_string(),
         baml_type::typetag::NULL => "null".to_string(),

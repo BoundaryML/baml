@@ -596,7 +596,7 @@ fn value_type_tag(value: &Value) -> i64 {
             let obj = unsafe { ptr.get() };
             match obj {
                 Object::String(_) => type_tags::STRING,
-                Object::Bigint(_) => type_tags::UNKNOWN,
+                Object::Bigint(_) => type_tags::BIGINT,
                 Object::Uint8Array(_) => type_tags::UINT8ARRAY,
                 Object::Variant(_) => type_tags::ENUM,
                 Object::Array(_) => type_tags::LIST,
