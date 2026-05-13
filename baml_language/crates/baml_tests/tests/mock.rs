@@ -104,6 +104,62 @@ async fn mock_replace_changes_active_impl() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(1005)));
 }
 
+/// Sanity: a direct method call (`c.method(arg)`) is intercepted today.
+/// This is the common case and the compiler appears to lower it through a
+/// path that already consults `mock_stack`. Kept as a regression guard so
+/// any future refactor that breaks this surfaces immediately.
+#[tokio::test]
+async fn mock_intercepts_direct_method_call() {
+    let output = baml_test!(
+        r#"
+        class Counter {
+          function bump(self, n: int) -> int { n + 1 }
+        }
+
+        function main() -> int {
+            let c = Counter {}
+            let m = baml.mock.Mock.new(c.bump, (n: int) -> int { 99 })
+            m.scope<int, never>(() -> int throws never { c.bump(10) })
+        }
+    "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
+}
+
+/// KNOWN GAP — `Instruction::CallIndirect` / `OpCode::CallIndirect`:
+/// the `BoundMethod` branch does NOT consult `mock_stack`. So if a bound
+/// method is *stashed as a value* and then invoked indirectly (rather
+/// than called directly as `c.method(...)`), the override is bypassed.
+///
+/// This test stores `c.bump` in a local and calls it indirectly inside
+/// `scope`. With the fix in place the assertion should be `99`; today
+/// the original method runs and the value is `11`. Marked `#[ignore]` so
+/// the suite stays green until the BoundMethod CallIndirect path is
+/// patched.
+#[tokio::test]
+#[ignore = "CallIndirect BoundMethod branch does not consult mock_stack (open gap)"]
+async fn mock_intercepts_indirect_bound_method_call() {
+    let output = baml_test!(
+        r#"
+        class Counter {
+          function bump(self, n: int) -> int { n + 1 }
+        }
+
+        function main() -> int {
+            let c = Counter {}
+            let m = baml.mock.Mock.new(c.bump, (n: int) -> int { 99 })
+            m.scope<int, never>(() -> int throws never {
+                let bound = c.bump;
+                bound(10)
+            })
+        }
+    "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
+}
+
 /// GC stress: a Closure replacement that captures a heap-allocated cell
 /// (the counter) is pushed onto the mock stack, and the body allocates
 /// aggressively to force collection while the override is active. The
