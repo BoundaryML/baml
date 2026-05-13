@@ -1,0 +1,89 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] Error: unreachable arm
+    ╭─[ main.baml:23:4 ]
+    │
+ 23 │   }
+    │    │ 
+    │    ╰─ unreachable arm
+    │ 
+    │ Note: Error code: E0063
+────╯
+
+  [type] Error: unreachable arm
+    ╭─[ main.baml:31:4 ]
+    │
+ 31 │   }
+    │    │ 
+    │    ╰─ unreachable arm
+    │ 
+    │ Note: Error code: E0063
+────╯
+
+  [type] Error: unreachable arm
+    ╭─[ main.baml:40:4 ]
+    │
+ 40 │   }
+    │    │ 
+    │    ╰─ unreachable arm
+    │ 
+    │ Note: Error code: E0063
+────╯
+
+  [type] Error: unreachable arm
+    ╭─[ main.baml:55:4 ]
+    │
+ 55 │   };
+    │    │ 
+    │    ╰─ unreachable arm
+    │ 
+    │ Note: Error code: E0063
+────╯
+
+  [type] Error: unreachable arm
+    ╭─[ main.baml:64:4 ]
+    │
+ 64 │   };
+    │    │ 
+    │    ╰─ unreachable arm
+    │ 
+    │ Note: Error code: E0063
+────╯
+
+  [type] Error: unreachable arm
+    ╭─[ main.baml:74:17 ]
+    │
+ 74 │ ╭─▶   let n = 5 else {
+    ┆ ┆   
+ 76 │ ├─▶   };
+    │ │          
+    │ ╰────────── unreachable arm
+    │     
+    │     Note: Error code: E0063
+────╯
+
+  [type] Error: unreachable arm
+    ╭─[ main.baml:82:22 ]
+    │
+ 82 │ ╭─▶   let n: int = v else {
+    ┆ ┆   
+ 84 │ ├─▶   };
+    │ │          
+    │ ╰────────── unreachable arm
+    │     
+    │     Note: Error code: E0063
+────╯
+
+  [type] Error: unreachable arm
+    ╭─[ main.baml:91:30 ]
+    │
+ 91 │ ╭─▶   let n: int = 1 + 2 + 3 else {
+    ┆ ┆   
+ 93 │ ├─▶   };
+    │ │          
+    │ ╰────────── unreachable arm
+    │     
+    │     Note: Error code: E0063
+────╯

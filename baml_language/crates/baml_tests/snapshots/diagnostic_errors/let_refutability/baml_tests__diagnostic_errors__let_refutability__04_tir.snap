@@ -1,0 +1,133 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+function user.if_let_irrefutable_bare_bind() -> int throws never {
+  { : never
+    match (42 : 42) : void
+      x =>
+        { : never
+          return x + 1 : 43
+        }
+      _ =>
+        { : void
+        }
+    return 0 : 0
+  }
+  !! 1082..1082: unreachable arm
+}
+function user.if_let_irrefutable_wildcard() -> int throws never {
+  { : never
+    match (5 : 5) : void
+      _ =>
+        { : never
+          return 1 : 1
+        }
+      _ =>
+        { : void
+        }
+    return 0 : 0
+  }
+  !! 1237..1237: unreachable arm
+}
+function user.if_let_irrefutable_supertype_narrow(v: int) -> int throws never {
+  { : never
+    match (v : int) : void
+      n: int =>
+        { : never
+          return n : int
+        }
+      _ =>
+        { : void
+        }
+    return Neg 1 : -1
+  }
+  !! 1466..1466: unreachable arm
+}
+function user.while_let_irrefutable_bare_bind() -> int throws never {
+  { : never
+    let i = 0 : 0 -> int
+    let acc = 0 : 0 -> int
+    while true
+      { : void
+        match (i : int) : void
+          n =>
+            { : void
+              acc = acc + n : int
+              if (i >= 3 : bool) : void
+                { : never
+                  break
+                }
+              i = i + 1 : int
+            }
+          _ =>
+            { : never
+              break
+            }
+      }
+    return acc : int
+  }
+  !! 1808..1808: unreachable arm
+}
+function user.while_let_irrefutable_supertype_narrow(v: int) -> int throws never {
+  { : never
+    let acc = 0 : 0 -> int
+    while true
+      { : never
+        match (v : int) : never
+          n: int =>
+            { : never
+              acc = acc + n : int
+              break
+            }
+          _ =>
+            { : never
+              break
+            }
+      }
+    return acc : int
+  }
+  !! 1965..1965: unreachable arm
+}
+function user.let_else_irrefutable_bare_bind() -> int throws never {
+  { : never
+    let n = : 5 -> int
+      match (5 : 5) : 5
+        n =>
+          n : 5
+        _ =>
+          { : never
+            return Neg 1 : -1
+          }
+    return n + 1 : int
+  }
+  !! 2372..2393: unreachable arm
+}
+function user.let_else_irrefutable_supertype_narrow(v: int) -> int throws never {
+  { : never
+    let n: int = : int
+      match (v : int) : int
+        n: int =>
+          n : int
+        _ =>
+          { : never
+            return Neg 1 : -1
+          }
+    return n : int
+  }
+  !! 2554..2575: unreachable arm
+}
+function user.let_else_irrefutable_static_narrow() -> int throws never {
+  { : never
+    let n: int = : 6 -> int
+      match (1 + 2 + 3 : 6) : 6
+        n: int =>
+          n : 6
+        _ =>
+          { : never
+            return Neg 1 : -1
+          }
+    return n : int
+  }
+  !! 2795..2816: unreachable arm
+}

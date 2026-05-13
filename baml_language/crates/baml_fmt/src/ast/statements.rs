@@ -243,8 +243,15 @@ impl FromCST for LetStmt {
     }
 }
 
-impl Printable for LetStmt {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+impl LetStmt {
+    /// Print just the `[watch] let <pat> = <expr>` portion (no `else`, no
+    /// trailing `;`), preserving comment trivia around `=` and the
+    /// initializer. Shared by [`Self::print`], [`super::IfLetExpr`], and
+    /// [`super::WhileLetStmt`] so a comment inside the header survives the
+    /// formatter for every form.
+    ///
+    /// Returns whether the header itself was multi-lined.
+    pub(crate) fn print_header(&self, shape: Shape, printer: &mut Printer) -> bool {
         let mut multi_lined = false;
 
         if let Some(watch) = &self.watch {
@@ -262,11 +269,22 @@ impl Printable for LetStmt {
             printer.print_trivia_squished(equals_trailing);
             let expr_leading = printer.trivia.get_leading_for_element(expr);
             printer.print_trivia_squished(expr_leading);
-            multi_lined |= printer.print(expr, shape.clone()).multi_lined;
-            if self.semicolon.is_some() || self.let_else.is_some() {
-                let expr_trailing = printer.trivia.get_trailing_for_element(expr);
-                printer.print_trivia_squished(expr_trailing);
-            }
+            multi_lined |= printer.print(expr, shape).multi_lined;
+        }
+
+        multi_lined
+    }
+}
+
+impl Printable for LetStmt {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let mut multi_lined = self.print_header(shape.clone(), printer);
+
+        if (self.semicolon.is_some() || self.let_else.is_some())
+            && let Some((_, expr)) = &self.initializer
+        {
+            let expr_trailing = printer.trivia.get_trailing_for_element(expr);
+            printer.print_trivia_squished(expr_trailing);
         }
 
         if let Some((else_kw, else_block)) = &self.let_else {
@@ -396,27 +414,12 @@ impl Printable for WhileLetStmt {
         printer.print_raw_token(&self.keyword);
         printer.print_str(" ");
 
-        // The header prints as `let <pat> = <expr>;` — but we don't want a
-        // trailing semicolon when used as a while-let header. The header's
-        // semicolon field is None in this context (parser doesn't emit one),
-        // and LetStmt::print only emits a synthetic `;` when both semicolon
-        // and let_else are absent. To keep the canonical form
-        // `while let <pat> = <expr> { ... }` we print pattern + initializer
-        // manually rather than delegating.
-        if let Some(watch) = &self.header.watch {
-            printer.print_raw_token(watch);
-            printer.print_str(" ");
-        }
-        let mut multi_lined = printer
-            .print(&self.header.pattern, shape.clone())
-            .multi_lined;
-
-        if let Some((equals, expr)) = &self.header.initializer {
-            printer.print_str(" ");
-            printer.print_raw_token(equals);
-            printer.print_str(" ");
-            multi_lined |= printer.print(expr, shape.clone()).multi_lined;
-        }
+        // Delegate header printing to `LetStmt::print_header` so comment
+        // trivia around `=` and the initializer is preserved. We can't
+        // call `LetStmt::print` here because it would emit a synthetic
+        // `;` after the initializer (the header's `semicolon` field is
+        // None and there's no `let_else`).
+        let _ = self.header.print_header(shape.clone(), printer);
 
         printer.print_str(" ");
 
@@ -426,7 +429,6 @@ impl Printable for WhileLetStmt {
             first_line_offset: 0,
         };
         printer.print(&self.body, body_shape);
-        let _ = multi_lined;
         PrintInfo::default_multi_lined()
     }
     fn leftmost_token(&self) -> TextRange {

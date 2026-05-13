@@ -1126,20 +1126,10 @@ impl Printable for IfLetExpr {
         printer.print_raw_token(&self.keyword);
         printer.print_str(" ");
 
-        // Print `let <pat> = <expr>` manually so we don't emit a trailing
-        // semicolon. The LetStmt has no semicolon child in this context, but
-        // its Printable impl emits a synthetic one — so we bypass it.
-        if let Some(watch) = &self.header.watch {
-            printer.print_raw_token(watch);
-            printer.print_str(" ");
-        }
-        printer.print(&self.header.pattern, shape.clone());
-        if let Some((equals, expr)) = &self.header.initializer {
-            printer.print_str(" ");
-            printer.print_raw_token(equals);
-            printer.print_str(" ");
-            printer.print(expr, shape.clone());
-        }
+        // Delegate header printing to `LetStmt::print_header` so comment
+        // trivia around `=` and the initializer survives. Bypassing
+        // `LetStmt::print` keeps it from emitting a trailing synthetic `;`.
+        let _ = self.header.print_header(shape.clone(), printer);
 
         printer.print_str(" ");
         printer.print(&self.block, shape.clone());
