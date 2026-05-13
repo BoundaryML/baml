@@ -49,6 +49,11 @@ use crate::{
 /// (because the v1 parser cannot handle compiler2-specific syntax like generic
 /// type parameters or `$rust_type` fields). Implementors that have such files
 /// should override this to return the appropriate `Compiler2ExtraFiles` handle.
+///
+/// The `compiler2_runtime_files()` method provides access to files inserted at
+/// runtime by `reflect.Package.add_compile(...)`. Each runtime file's path
+/// encodes its owning package (`<runtime>/<pkg_name>/...`), so the same
+/// `file_package` and `package_items` machinery handles them uniformly.
 #[salsa::db]
 pub trait Db: baml_workspace::Db {
     /// Returns the compiler2-only extra files, or `None` if not configured.
@@ -56,6 +61,15 @@ pub trait Db: baml_workspace::Db {
     /// The default implementation returns `None`, meaning no extra files.
     /// `ProjectDatabase` overrides this to return the v2 builtin stubs.
     fn compiler2_extra_files(&self) -> Option<baml_workspace::Compiler2ExtraFiles> {
+        None
+    }
+
+    /// Returns the runtime-compiled snippet files, or `None` if not configured.
+    ///
+    /// The default implementation returns `None`. `ProjectDatabase` overrides
+    /// this to return the per-engine `Compiler2RuntimeFiles` handle that the
+    /// native `reflect.Package.add_compile` builtin mutates.
+    fn compiler2_runtime_files(&self) -> Option<baml_workspace::Compiler2RuntimeFiles> {
         None
     }
 }
@@ -84,6 +98,9 @@ pub fn compiler2_all_files(db: &dyn Db) -> Vec<baml_base::SourceFile> {
         .collect();
     if let Some(extra) = db.compiler2_extra_files() {
         files.extend_from_slice(extra.files(db));
+    }
+    if let Some(runtime) = db.compiler2_runtime_files() {
+        files.extend_from_slice(runtime.files(db));
     }
     files
 }

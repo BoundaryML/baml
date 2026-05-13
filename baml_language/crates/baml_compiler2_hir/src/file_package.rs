@@ -1,8 +1,15 @@
 //! Package/namespace resolution for a source file.
 //!
 //! Determines which package and namespace chain a file belongs to based on
-//! its path. User files → `package: "user"`, built-in files → `package: "baml"`
-//! or `"env"` based on the `<builtin>/` prefix.
+//! its path:
+//!
+//! - `<builtin>/<pkg>/[ns_*/]*<file>.baml` → built-in `<pkg>` (e.g. `baml`,
+//!   `log`, `reflect`, `testing`, `assert`).
+//! - `<runtime>/<pkg>/[ns_*/]*<file>.baml` → runtime-compiled package `<pkg>`
+//!   created at runtime by `reflect.Package.new(...).add_compile(...)`. The
+//!   package name is encoded in the path so this single function handles
+//!   both build-time and runtime files uniformly, with no side-map required.
+//! - Any other path → user files, `package: "user"`.
 
 use baml_base::{Name, SourceFile};
 
@@ -35,7 +42,13 @@ pub fn file_package(db: &dyn crate::Db, file: SourceFile) -> PackageInfo {
     let path = file.path(db);
     let path_str = path.to_string_lossy();
 
-    if let Some(relative) = path_str.strip_prefix("<builtin>/") {
+    // `<builtin>/<pkg>/...` and `<runtime>/<pkg>/...` share the same shape:
+    // first path segment after the prefix is the package name, intermediate
+    // `ns_*` segments form the namespace path. Differ only in the prefix.
+    let prefixed = path_str
+        .strip_prefix("<builtin>/")
+        .or_else(|| path_str.strip_prefix("<runtime>/"));
+    if let Some(relative) = prefixed {
         let segments: Vec<&str> = relative.split('/').collect();
         if segments.len() >= 2 {
             let package = Name::new(segments[0]);

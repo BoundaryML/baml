@@ -73,6 +73,23 @@ pub struct Compiler2ExtraFiles {
     pub files: Vec<SourceFile>,
 }
 
+/// Input: source files created at runtime by `reflect.Package.new(...).add_compile(...)`.
+///
+/// Each file's owning package is encoded in its path as `<runtime>/<pkg_name>/...`
+/// so `file_package(db, file)` resolves it via the existing path-based mechanism
+/// without needing a side-map. `package_items(db, PackageId)` queries continue to
+/// work uniformly across build-time and runtime files because they filter on
+/// `file_package(...).package`.
+///
+/// Mutated under the project-DB mutex by the native `reflect.Package.add_compile`
+/// builtin; never touched by build-time emit.
+#[salsa::input]
+pub struct Compiler2RuntimeFiles {
+    /// All runtime-compiled source files across all packages.
+    #[returns(ref)]
+    pub files: Vec<SourceFile>,
+}
+
 /// Helper to create a source file in the database
 pub fn create_source_file(
     db: &dyn salsa::Database,

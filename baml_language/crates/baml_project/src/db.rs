@@ -13,7 +13,7 @@ use std::{
 };
 
 use baml_db::{FileId, SourceFile};
-use baml_workspace::{Compiler2ExtraFiles, Project};
+use baml_workspace::{Compiler2ExtraFiles, Compiler2RuntimeFiles, Project};
 use salsa::Setter;
 
 /// Context about what the cursor is pointing at, for playground navigation.
@@ -86,6 +86,10 @@ pub struct ProjectDatabase {
     /// Compiler2-only extra files (`baml_builtins2` stubs). Held separately so
     /// they are NOT added to `project.files()`.
     compiler2_extra_files: Option<Compiler2ExtraFiles>,
+    /// Runtime-compiled snippet files inserted by `reflect.Package.add_compile`.
+    /// Each file's path encodes its owning runtime package as `<runtime>/<pkg_name>/...`.
+    /// `None` until `set_project_root` initializes the Salsa input.
+    compiler2_runtime_files: Option<Compiler2RuntimeFiles>,
     /// Maps file paths to their `SourceFile` handles (user files only).
     file_map: HashMap<std::path::PathBuf, SourceFile>,
     /// Maps file paths to compiler2-only `SourceFile` handles.
@@ -109,6 +113,10 @@ impl baml_workspace::Db for ProjectDatabase {
 impl baml_compiler2_hir::Db for ProjectDatabase {
     fn compiler2_extra_files(&self) -> Option<baml_workspace::Compiler2ExtraFiles> {
         self.compiler2_extra_files
+    }
+
+    fn compiler2_runtime_files(&self) -> Option<baml_workspace::Compiler2RuntimeFiles> {
+        self.compiler2_runtime_files
     }
 }
 
@@ -135,6 +143,7 @@ impl ProjectDatabase {
             next_file_id: Arc::new(AtomicU32::new(0)),
             project: None,
             compiler2_extra_files: None,
+            compiler2_runtime_files: None,
             file_map: HashMap::new(),
             compiler2_file_map: HashMap::new(),
             file_id_to_path: HashMap::new(),
@@ -154,6 +163,7 @@ impl ProjectDatabase {
             next_file_id: Arc::new(AtomicU32::new(0)),
             project: None,
             compiler2_extra_files: None,
+            compiler2_runtime_files: None,
             file_map: HashMap::new(),
             compiler2_file_map: HashMap::new(),
             file_id_to_path: HashMap::new(),
@@ -301,6 +311,13 @@ impl ProjectDatabase {
         // Create the compiler2 extra files Salsa input (separate from project.files)
         let compiler2_extra = Compiler2ExtraFiles::new(self, v2_builtin_files);
         self.compiler2_extra_files = Some(compiler2_extra);
+
+        // Create the runtime files Salsa input pre-populated empty. The native
+        // `reflect.Package.add_compile` builtin mutates this input as user code
+        // creates packages and adds files. Phase 3 sets it up but no consumer
+        // populates it yet — runtime packages land in Phase 4+.
+        let runtime_files = Compiler2RuntimeFiles::new(self, Vec::new());
+        self.compiler2_runtime_files = Some(runtime_files);
 
         project
     }
