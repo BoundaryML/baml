@@ -30,8 +30,17 @@ pub fn inbound_to_external(
             InboundValueVariant::StringValue(s) => Ok(BexExternalValue::String(s)),
             InboundValueVariant::IntValue(i) => Ok(BexExternalValue::Int(i)),
             InboundValueVariant::BigintValue(s) => {
+                // Pre-allocation cap: stop a multi-megabyte hex blob from
+                // building a multi-megabyte `BigInt` before the VM's own
+                // `MAX_BIGINT_BITS` guard fires. Sized to match that VM cap
+                // (~268M bits ≈ 67M hex digits, +2 for sign and slack).
+                const MAX_BIGINT_HEX_LEN: usize = (1 << 28) / 4 + 2;
                 // Hex / base sixteen on the wire. `parse_bytes` honors a leading `-` for negatives.
-                let bi = num_bigint::BigInt::parse_bytes(s.as_bytes(), 16)
+                let trimmed = s.trim();
+                if trimmed.len() > MAX_BIGINT_HEX_LEN {
+                    return Err(CtypesError::InvalidBigint(s));
+                }
+                let bi = num_bigint::BigInt::parse_bytes(trimmed.as_bytes(), 16)
                     .ok_or_else(|| CtypesError::InvalidBigint(s.clone()))?;
                 Ok(BexExternalValue::Bigint(bi))
             }

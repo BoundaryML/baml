@@ -1149,8 +1149,44 @@ impl BexVm {
     }
 
     /// Allocate a bigint on the heap. Takes an `Arc<BigInt>` to allow sharing.
-    pub fn alloc_bigint(&mut self, arc: std::sync::Arc<num_bigint::BigInt>) -> Value {
-        Value::Object(self.tlab.alloc(Object::Bigint(arc)))
+    ///
+    /// Refuses values exceeding `MAX_BIGINT_BITS` so a single arithmetic op
+    /// (add/sub/mul/shl) can't materialise an arbitrarily large bigint and
+    /// blow out memory. Callers whose input is bounded — e.g. `int → bigint`
+    /// widening or a bounded-length literal parse — can never trip the check
+    /// in practice, but routing through this path keeps the guard central.
+    ///
+    /// On failure returns `VmError::Thrown` with an `AllocFailure` exception
+    /// already constructed so instruction handlers can use `?` directly.
+    /// Codegenned glue functions return `VmRustFnError`; they call
+    /// [`Vm::try_alloc_bigint`] instead, which returns the raw `VmPanic`
+    /// (auto-converts to `VmRustFnError::Panic` via `#[from]`).
+    pub fn alloc_bigint(
+        &mut self,
+        arc: std::sync::Arc<num_bigint::BigInt>,
+    ) -> Result<Value, VmError> {
+        match self.try_alloc_bigint(arc) {
+            Ok(v) => Ok(v),
+            Err(panic) => Err(VmError::Thrown(self.panic_to_exception_value(panic))),
+        }
+    }
+
+    /// Like [`Vm::alloc_bigint`] but returns the raw `VmPanic` so codegen glue
+    /// (which returns `VmRustFnError`) can use `?` to propagate.
+    pub fn try_alloc_bigint(
+        &mut self,
+        arc: std::sync::Arc<num_bigint::BigInt>,
+    ) -> Result<Value, VmPanic> {
+        let bits = arc.bits();
+        if bits > crate::package_baml::bigint::MAX_BIGINT_BITS {
+            return Err(VmPanic::AllocFailure {
+                message: format!(
+                    "bigint allocation requires {bits} bits (limit: {})",
+                    crate::package_baml::bigint::MAX_BIGINT_BITS
+                ),
+            });
+        }
+        Ok(Value::Object(self.tlab.alloc(Object::Bigint(arc))))
     }
 
     pub fn alloc_uint8array(&mut self, data: Vec<u8>) -> Value {
@@ -3258,7 +3294,7 @@ impl BexVm {
                     };
                     lb.as_ref() + rb.as_ref()
                 };
-                let value = self.alloc_bigint(std::sync::Arc::new(result));
+                let value = self.alloc_bigint(std::sync::Arc::new(result))?;
                 self.stack.push(value);
             }
             Instruction::SubBigint => {
@@ -3277,7 +3313,7 @@ impl BexVm {
                     };
                     lb.as_ref() - rb.as_ref()
                 };
-                let value = self.alloc_bigint(std::sync::Arc::new(result));
+                let value = self.alloc_bigint(std::sync::Arc::new(result))?;
                 self.stack.push(value);
             }
             Instruction::MulBigint => {
@@ -3296,7 +3332,7 @@ impl BexVm {
                     };
                     lb.as_ref() * rb.as_ref()
                 };
-                let value = self.alloc_bigint(std::sync::Arc::new(result));
+                let value = self.alloc_bigint(std::sync::Arc::new(result))?;
                 self.stack.push(value);
             }
             Instruction::DivBigint => {
@@ -3322,7 +3358,7 @@ impl BexVm {
                 };
                 match result {
                     Ok(q) => {
-                        let value = self.alloc_bigint(std::sync::Arc::new(q));
+                        let value = self.alloc_bigint(std::sync::Arc::new(q))?;
                         self.stack.push(value);
                     }
                     Err(()) => {
@@ -3358,7 +3394,7 @@ impl BexVm {
                 };
                 match result {
                     Ok(m) => {
-                        let value = self.alloc_bigint(std::sync::Arc::new(m));
+                        let value = self.alloc_bigint(std::sync::Arc::new(m))?;
                         self.stack.push(value);
                     }
                     Err(()) => {
@@ -3387,7 +3423,7 @@ impl BexVm {
                     };
                     lb.as_ref() & rb.as_ref()
                 };
-                let value = self.alloc_bigint(std::sync::Arc::new(result));
+                let value = self.alloc_bigint(std::sync::Arc::new(result))?;
                 self.stack.push(value);
             }
             Instruction::BitOrBigint => {
@@ -3406,7 +3442,7 @@ impl BexVm {
                     };
                     lb.as_ref() | rb.as_ref()
                 };
-                let value = self.alloc_bigint(std::sync::Arc::new(result));
+                let value = self.alloc_bigint(std::sync::Arc::new(result))?;
                 self.stack.push(value);
             }
             Instruction::BitXorBigint => {
@@ -3425,7 +3461,7 @@ impl BexVm {
                     };
                     lb.as_ref() ^ rb.as_ref()
                 };
-                let value = self.alloc_bigint(std::sync::Arc::new(result));
+                let value = self.alloc_bigint(std::sync::Arc::new(result))?;
                 self.stack.push(value);
             }
             Instruction::ShlBigint => {
@@ -3435,27 +3471,35 @@ impl BexVm {
                 let Value::Object(li) = self.stack.ensure_pop() else {
                     unsafe { std::hint::unreachable_unchecked() }
                 };
-                // Shift count: a value too large for `usize` would shift past
-                // any addressable bit and is treated as `AllocFailure`. Defer
-                // the `to_string` formatting to the error path so the happy
-                // path never allocates a diagnostic.
-                let shift_result = {
+                // Reject negative shifts and shifts too big for `usize` with
+                // distinct messages so the failure is debuggable. Defer the
+                // `to_string` formatting to the error path so the happy path
+                // never allocates a diagnostic.
+                let shift_check = {
                     let Object::Bigint(rb) = self.get_object(ri) else {
                         unsafe { std::hint::unreachable_unchecked() }
                     };
-                    usize::try_from(rb.as_ref())
+                    if rb.sign() == num_bigint::Sign::Minus {
+                        Err(true)
+                    } else {
+                        usize::try_from(rb.as_ref()).map_err(|_| false)
+                    }
                 };
-                let Ok(shift) = shift_result else {
-                    let Object::Bigint(rb) = self.get_object(ri) else {
-                        unsafe { std::hint::unreachable_unchecked() }
-                    };
-                    return Err(VmError::Thrown(self.panic_to_exception_value(
-                        VmPanic::AllocFailure {
-                            message: format!(
-                                "bigint shl: shift count ({rb}) does not fit in usize"
-                            ),
-                        },
-                    )));
+                let shift = match shift_check {
+                    Ok(s) => s,
+                    Err(is_negative) => {
+                        let Object::Bigint(rb) = self.get_object(ri) else {
+                            unsafe { std::hint::unreachable_unchecked() }
+                        };
+                        let message = if is_negative {
+                            format!("bigint shl: negative shift count ({rb})")
+                        } else {
+                            format!("bigint shl: shift count ({rb}) does not fit in usize")
+                        };
+                        return Err(VmError::Thrown(
+                            self.panic_to_exception_value(VmPanic::AllocFailure { message }),
+                        ));
+                    }
                 };
                 let val_bits = {
                     let Object::Bigint(lb) = self.get_object(li) else {
@@ -3483,7 +3527,7 @@ impl BexVm {
                     };
                     lb.as_ref() << shift
                 };
-                let value = self.alloc_bigint(std::sync::Arc::new(result));
+                let value = self.alloc_bigint(std::sync::Arc::new(result))?;
                 self.stack.push(value);
             }
             Instruction::ShrBigint => {
@@ -3514,7 +3558,7 @@ impl BexVm {
                         None => num_bigint::BigInt::ZERO,
                     }
                 };
-                let value = self.alloc_bigint(std::sync::Arc::new(result));
+                let value = self.alloc_bigint(std::sync::Arc::new(result))?;
                 self.stack.push(value);
             }
 
@@ -3547,7 +3591,7 @@ impl BexVm {
                     .into());
                 };
                 let bi = num_bigint::BigInt::from(n);
-                let result = self.alloc_bigint(std::sync::Arc::new(bi));
+                let result = self.alloc_bigint(std::sync::Arc::new(bi))?;
                 self.stack.push(result);
             }
 
@@ -3609,7 +3653,7 @@ impl BexVm {
                         };
                         match negated_arc {
                             Some(arc) => {
-                                let result = self.alloc_bigint(arc);
+                                let result = self.alloc_bigint(arc)?;
                                 self.stack.push(result);
                                 return Ok(None);
                             }
@@ -7448,7 +7492,7 @@ impl BexVm {
                         };
                         lb.as_ref() + rb.as_ref()
                     };
-                    let value = self.alloc_bigint(std::sync::Arc::new(result));
+                    let value = self.alloc_bigint(std::sync::Arc::new(result))?;
                     self.stack.push(value);
                 }
                 OpCode::SubBigint => {
@@ -7467,7 +7511,7 @@ impl BexVm {
                         };
                         lb.as_ref() - rb.as_ref()
                     };
-                    let value = self.alloc_bigint(std::sync::Arc::new(result));
+                    let value = self.alloc_bigint(std::sync::Arc::new(result))?;
                     self.stack.push(value);
                 }
                 OpCode::MulBigint => {
@@ -7486,7 +7530,7 @@ impl BexVm {
                         };
                         lb.as_ref() * rb.as_ref()
                     };
-                    let value = self.alloc_bigint(std::sync::Arc::new(result));
+                    let value = self.alloc_bigint(std::sync::Arc::new(result))?;
                     self.stack.push(value);
                 }
                 OpCode::DivBigint => {
@@ -7512,7 +7556,7 @@ impl BexVm {
                     };
                     match quotient {
                         Some(q) => {
-                            let value = self.alloc_bigint(std::sync::Arc::new(q));
+                            let value = self.alloc_bigint(std::sync::Arc::new(q))?;
                             self.stack.push(value);
                         }
                         None => {
@@ -7548,7 +7592,7 @@ impl BexVm {
                     };
                     match remainder {
                         Some(m) => {
-                            let value = self.alloc_bigint(std::sync::Arc::new(m));
+                            let value = self.alloc_bigint(std::sync::Arc::new(m))?;
                             self.stack.push(value);
                         }
                         None => {
@@ -7577,7 +7621,7 @@ impl BexVm {
                         };
                         lb.as_ref() & rb.as_ref()
                     };
-                    let value = self.alloc_bigint(std::sync::Arc::new(result));
+                    let value = self.alloc_bigint(std::sync::Arc::new(result))?;
                     self.stack.push(value);
                 }
                 OpCode::BitOrBigint => {
@@ -7596,7 +7640,7 @@ impl BexVm {
                         };
                         lb.as_ref() | rb.as_ref()
                     };
-                    let value = self.alloc_bigint(std::sync::Arc::new(result));
+                    let value = self.alloc_bigint(std::sync::Arc::new(result))?;
                     self.stack.push(value);
                 }
                 OpCode::BitXorBigint => {
@@ -7615,7 +7659,7 @@ impl BexVm {
                         };
                         lb.as_ref() ^ rb.as_ref()
                     };
-                    let value = self.alloc_bigint(std::sync::Arc::new(result));
+                    let value = self.alloc_bigint(std::sync::Arc::new(result))?;
                     self.stack.push(value);
                 }
                 OpCode::ShlBigint => {
@@ -7625,25 +7669,35 @@ impl BexVm {
                     let Value::Object(li) = self.stack.ensure_pop() else {
                         std::hint::unreachable_unchecked()
                     };
-                    // Defer the `to_string` formatting to the error path so the
-                    // happy path never allocates a diagnostic.
-                    let shift_result = {
+                    // Reject negative shifts and shifts too big for `usize` with
+                    // distinct messages so the failure is debuggable. Defer the
+                    // `to_string` formatting to the error path so the happy path
+                    // never allocates a diagnostic.
+                    let shift_check = {
                         let Object::Bigint(rb) = self.get_object(ri) else {
                             std::hint::unreachable_unchecked()
                         };
-                        usize::try_from(rb.as_ref())
+                        if rb.sign() == num_bigint::Sign::Minus {
+                            Err(true)
+                        } else {
+                            usize::try_from(rb.as_ref()).map_err(|_| false)
+                        }
                     };
-                    let Ok(shift) = shift_result else {
-                        let Object::Bigint(rb) = self.get_object(ri) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        return Err(VmError::Thrown(self.panic_to_exception_value(
-                            VmPanic::AllocFailure {
-                                message: format!(
-                                    "bigint shl: shift count ({rb}) does not fit in usize"
-                                ),
-                            },
-                        )));
+                    let shift = match shift_check {
+                        Ok(s) => s,
+                        Err(is_negative) => {
+                            let Object::Bigint(rb) = self.get_object(ri) else {
+                                std::hint::unreachable_unchecked()
+                            };
+                            let message = if is_negative {
+                                format!("bigint shl: negative shift count ({rb})")
+                            } else {
+                                format!("bigint shl: shift count ({rb}) does not fit in usize")
+                            };
+                            return Err(VmError::Thrown(
+                                self.panic_to_exception_value(VmPanic::AllocFailure { message }),
+                            ));
+                        }
                     };
                     let val_bits = {
                         let Object::Bigint(lb) = self.get_object(li) else {
@@ -7671,7 +7725,7 @@ impl BexVm {
                         };
                         lb.as_ref() << shift
                     };
-                    let value = self.alloc_bigint(std::sync::Arc::new(result));
+                    let value = self.alloc_bigint(std::sync::Arc::new(result))?;
                     self.stack.push(value);
                 }
                 OpCode::ShrBigint => {
@@ -7701,7 +7755,7 @@ impl BexVm {
                             None => num_bigint::BigInt::ZERO,
                         }
                     };
-                    let value = self.alloc_bigint(std::sync::Arc::new(result));
+                    let value = self.alloc_bigint(std::sync::Arc::new(result))?;
                     self.stack.push(value);
                 }
 
@@ -7716,7 +7770,7 @@ impl BexVm {
                         .into());
                     };
                     let bi = num_bigint::BigInt::from(n);
-                    let result = self.alloc_bigint(std::sync::Arc::new(bi));
+                    let result = self.alloc_bigint(std::sync::Arc::new(bi))?;
                     self.stack.push(result);
                 }
 
@@ -7748,7 +7802,7 @@ impl BexVm {
                             };
                             match negated_arc {
                                 Some(arc) => {
-                                    let result = self.alloc_bigint(arc);
+                                    let result = self.alloc_bigint(arc)?;
                                     self.stack.push(result);
                                 }
                                 None => {

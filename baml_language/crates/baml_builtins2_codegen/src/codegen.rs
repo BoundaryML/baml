@@ -1398,7 +1398,7 @@ fn result_conversion_expr(name: &str, ty: &BamlType) -> String {
         BamlType::String => format!("vm.alloc_string({name})"),
         BamlType::Uint8Array => format!("vm.alloc_uint8array({name})"),
         BamlType::Int => format!("Value::Int({name})"),
-        BamlType::Bigint => format!("vm.alloc_bigint({name})"),
+        BamlType::Bigint => format!("vm.try_alloc_bigint({name})?"),
         BamlType::Float => format!("Value::Float({name})"),
         BamlType::Bool => format!("Value::Bool({name})"),
         BamlType::Null => "Value::Null".to_string(),

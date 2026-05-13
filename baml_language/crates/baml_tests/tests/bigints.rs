@@ -960,6 +960,18 @@ async fn test_bigint_shl_alloc_failure() {
 }
 
 #[tokio::test]
+async fn test_bigint_shl_negative_shift() {
+    // A negative shift count should raise AllocFailure with a clear message,
+    // not the generic "does not fit in usize" path.
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { return 1n << -1n; }
+    "#
+    );
+    assert_alloc_failure(&output.result);
+}
+
+#[tokio::test]
 async fn test_bigint_pow_normal_works() {
     // (2n).pow(256n) is a 78-digit number — well within MAX_BIGINT_BITS.
     let output = baml_test!(
