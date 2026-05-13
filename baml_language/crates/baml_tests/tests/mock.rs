@@ -133,6 +133,185 @@ async fn mock_scope_auto_increments_call_count() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(18_803)));
 }
 
+/// Per-instance counter: a `Mock.new(c1.bump, …)` only ticks `call_count`
+/// for calls that resolve to `c1` — `c2.bump(…)` runs the original and
+/// leaves the counter alone.
+#[tokio::test]
+async fn mock_per_instance_counter_only_counts_matching_receiver() {
+    let output = baml_test!(
+        r#"
+        class Counter {
+          function bump(self, n: int) -> int { n + 1 }
+        }
+
+        function main() -> int {
+            let c1 = Counter {}
+            let c2 = Counter {}
+            let m = baml.mock.Mock.new(c1.bump, (n: int) -> int { 99 })
+            let sum = m.scope<int, never>(() -> int throws never {
+                c1.bump(0) + c2.bump(0) + c1.bump(0)
+            })
+            // sum = 99 + 1 + 99 = 199 ; call_count = 2 (only c1 ticks)
+            sum * 100 + m.call_count
+        }
+    "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(19_902)));
+}
+
+/// Class-wide counter: a `Mock.new(Counter.bump, …)` ticks `call_count`
+/// for every instance's call to that method.
+#[tokio::test]
+async fn mock_class_wide_counter_counts_every_instance() {
+    let output = baml_test!(
+        r#"
+        class Counter {
+          function bump(self, n: int) -> int { n + 1 }
+        }
+
+        function main() -> int {
+            let c1 = Counter {}
+            let c2 = Counter {}
+            let m = baml.mock.Mock.new(Counter.bump, (self: Counter, n: int) -> int { 99 })
+            let sum = m.scope<int, never>(() -> int throws never {
+                c1.bump(0) + c2.bump(0) + c1.bump(0)
+            })
+            // sum = 99 + 99 + 99 = 297 ; call_count = 3
+            sum * 100 + m.call_count
+        }
+    "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(29_703)));
+}
+
+/// SysOp interception (`baml.http.fetch`) still ticks `call_count` —
+/// confirms the `DispatchFuture` + `WrapReadyFutureContinuation` path
+/// hits the same counter wiring as plain Calls.
+#[tokio::test]
+async fn mock_sysop_intercept_bumps_call_count() {
+    let output = baml_test!(
+        r#"
+        function main() -> int throws unknown {
+            let fake = (url: string) -> baml.http.Response throws baml.errors.Io | baml.errors.Timeout {
+                baml.http.Response {
+                    status_code: 200,
+                    headers: {},
+                    url: url,
+                    _body: "fake",
+                }
+            }
+            let m = baml.mock.Mock.new(baml.http.fetch, fake)
+            let _ = m.scope<int, unknown>(() -> int throws unknown {
+                let _ = baml.http.fetch("https://a.example.invalid/")
+                let _ = baml.http.fetch("https://b.example.invalid/")
+                let _ = baml.http.fetch("https://c.example.invalid/")
+                0
+            })
+            m.call_count
+        }
+    "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
+}
+
+/// `YieldToCall` interception (`array.map(target)`) ticks `call_count`
+/// once per element — the native callback dispatch path bumps the
+/// counter just like an `Instruction::Call` would.
+#[tokio::test]
+async fn mock_yield_to_call_intercept_bumps_call_count() {
+    let output = baml_test!(
+        r#"
+        function double(n: int) -> int { n * 2 }
+        function triple(n: int) -> int { n * 3 }
+
+        function main() -> int {
+            let m = baml.mock.Mock.new(double, triple)
+            let _ = m.scope<int, unknown>(() -> int throws unknown {
+                [1, 2, 3, 4, 5].map(double)
+                    .reduce((acc: int, x: int) -> int { acc + x }, 0)
+            })
+            m.call_count
+        }
+    "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(5)));
+}
+
+/// If the body throws partway through, `call_count` still reflects the
+/// interceptions that *did* happen before the throw — the counter is
+/// updated eagerly per-call and is not rolled back on unwind.
+#[tokio::test]
+async fn mock_call_count_preserved_when_body_throws() {
+    let output = baml_test!(
+        r#"
+        function double(n: int) -> int { n * 2 }
+        function triple(n: int) -> int { n * 3 }
+        function call_double(n: int) -> int { double(n) }
+
+        function main() -> int {
+            let m = baml.mock.Mock.new(double, triple)
+            let _ = {
+                m.scope<int, unknown>(() -> int throws unknown {
+                    let _ = call_double(1)
+                    let _ = call_double(2)
+                    throw "boom"
+                })
+            } catch_all (e) {
+                _ => 0,
+            }
+            // Two calls landed before the throw — counter ticks twice.
+            m.call_count
+        }
+    "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
+}
+
+/// Nested scopes with two different mocks each track their own counter.
+/// The outer mock's counter only ticks for calls inside the outer scope
+/// that *also* dispatch to its target; the inner mock's counter ticks
+/// only for its own intercepts.
+#[tokio::test]
+async fn mock_nested_scopes_track_independent_counters() {
+    let output = baml_test!(
+        r#"
+        function alpha(n: int) -> int { n + 1 }
+        function beta(n: int)  -> int { n + 2 }
+        function call_alpha(n: int) -> int { alpha(n) }
+        function call_beta(n: int)  -> int { beta(n) }
+
+        function main() -> int {
+            let m_alpha = baml.mock.Mock.new(alpha, (n: int) -> int { 100 })
+            let m_beta  = baml.mock.Mock.new(beta,  (n: int) -> int { 200 })
+
+            let _ = m_alpha.scope<int, never>(() -> int throws never {
+                let _ = call_alpha(0)  // m_alpha tick
+                let _ = m_beta.scope<int, never>(() -> int throws never {
+                    let _ = call_alpha(0)  // m_alpha tick (still on stack)
+                    let _ = call_beta(0)   // m_beta tick
+                    let _ = call_beta(0)   // m_beta tick
+                    0
+                })
+                let _ = call_alpha(0)  // m_alpha tick (m_beta popped)
+                let _ = call_beta(0)   // no tick anywhere (m_beta popped, m_alpha doesn't match)
+                0
+            })
+
+            // alpha intercepted: 3 times. beta intercepted: 2 times.
+            m_alpha.call_count * 10 + m_beta.call_count
+        }
+    "#
+    );
+
+    // m_alpha = 3, m_beta = 2 → 32
+    assert_eq!(output.result, Ok(BexExternalValue::Int(32)));
+}
+
 /// Sanity: a direct method call (`c.method(arg)`) is intercepted today.
 /// This is the common case and the compiler appears to lower it through a
 /// path that already consults `mock_stack`. Kept as a regression guard so
