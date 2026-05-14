@@ -33,7 +33,7 @@ struct LiveProject {
 }
 
 #[derive(Clone)]
-struct BexMulitProject {
+struct BexMultiProject {
     projects:
         std::sync::Arc<std::sync::Mutex<HashMap<crate::fs::FsPath, std::sync::Arc<LiveProject>>>>,
     sys_op_factory: SysOpFactory,
@@ -169,7 +169,7 @@ enum ProjectRefreshMode {
     Only(Vec<vfs::VfsPath>),
 }
 
-impl BexMulitProject {
+impl BexMultiProject {
     fn new(
         sys_op_factory: SysOpFactory,
         sender: std::sync::Arc<dyn LspClientSenderTrait + Send + Sync>,
@@ -959,7 +959,7 @@ fn bex_value_to_json(v: &bex_engine::BexExternalValue) -> serde_json::Value {
 }
 
 #[async_trait::async_trait]
-impl super::BexLsp for BexMulitProject {
+impl super::BexLsp for BexMultiProject {
     fn get_bex_for_project(
         &self,
         project_root: &crate::fs::FsPath,
@@ -1120,7 +1120,7 @@ pub fn new_lsp(
     event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
     spawner: BackgroundSpawner,
 ) -> impl crate::bex_lsp::BexLsp {
-    BexMulitProject::new(
+    BexMultiProject::new(
         sys_op_factory,
         sender,
         playground_sender,

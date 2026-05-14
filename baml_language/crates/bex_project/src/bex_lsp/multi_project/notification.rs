@@ -1,7 +1,7 @@
-use super::{BexMulitProject, LspError, ProjectRefreshMode};
+use super::{BexMultiProject, LspError, ProjectRefreshMode};
 use crate::bex_lsp::notification::BexLspNotification;
 
-impl BexLspNotification for BexMulitProject {
+impl BexLspNotification for BexMultiProject {
     fn notification_sender(
         &self,
     ) -> Box<dyn Fn(lsp_server::Notification) -> Result<(), LspError> + '_> {

@@ -7,7 +7,7 @@ use lsp_types::{
     WorkspaceServerCapabilities,
 };
 
-use super::{BexMulitProject, LspError, WithDiagnostics, commands, wasm_helpers};
+use super::{BexMultiProject, LspError, WithDiagnostics, commands, wasm_helpers};
 use crate::bex_lsp::{multi_project::commands::BexLspCommand, request::BexLspRequest};
 
 /// Server capabilities advertised during the LSP `initialize` handshake.
@@ -81,7 +81,7 @@ pub(super) fn server_capabilities() -> ServerCapabilities {
     }
 }
 
-impl BexLspRequest for BexMulitProject {
+impl BexLspRequest for BexMultiProject {
     fn request_sender(
         &self,
     ) -> Box<
@@ -848,7 +848,7 @@ fn compute_line_starts(source: &str) -> Vec<u32> {
     super::diagnostics::compute_line_starts(source)
 }
 
-impl BexMulitProject {
+impl BexMultiProject {
     fn compute_on_position<T>(
         &self,
         params: &lsp_types::TextDocumentPositionParams,
