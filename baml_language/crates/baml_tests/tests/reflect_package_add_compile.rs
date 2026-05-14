@@ -69,3 +69,49 @@ async fn add_compile_inserts_files_into_runtime_input() {
         "expected `<runtime>/_pkg_0/more.baml` in {paths:?}"
     );
 }
+
+/// `add_compile` with syntactically invalid source must throw rather than
+/// silently succeed — the re-emit catches the parse / type error and the
+/// native impl translates the `LoweringError` to a BAML throw that the
+/// caller can `catch`.
+#[tokio::test]
+async fn add_compile_throws_on_compile_error() {
+    let source = r#"
+        function main() -> bool {
+            let pkg = reflect.Package.new();
+            // Bad source — `fn` is not a BAML keyword.
+            let _result = pkg.add_compile({
+                "bad.baml": "fn nope() -> int { 0 }"
+            });
+            false
+        }
+        function entry() -> bool {
+            main() catch (_e) {
+                _ => true
+            }
+        }
+    "#;
+
+    let (program, db) = compile_source_with_opt_returning_db(source, OptLevel::One);
+    let db_handle = Arc::new(parking_lot::Mutex::new(db));
+
+    let mut engine = BexEngine::new(
+        program,
+        Arc::new(sys_ops::SysOps::native()),
+        None,
+        Vec::new(),
+    )
+    .expect("BexEngine::new");
+    engine.set_project_db(Arc::clone(&db_handle));
+    let engine = Arc::new(engine);
+
+    let result = engine
+        .call_function_bound_args(
+            "user.entry",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+    assert!(result.is_ok(), "entry() returned: {result:?}");
+}

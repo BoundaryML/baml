@@ -353,6 +353,25 @@ impl ProjectDatabase {
         self.add_or_update_file(path.as_ref(), content)
     }
 
+    /// Compile the current project (including runtime-compiled files) into
+    /// a fresh `Program`.
+    ///
+    /// Used by `reflect.Package.add_compile` after inserting new runtime
+    /// files: this re-runs the emit pipeline so the new items can be
+    /// extracted and lifted into the heap by the caller.
+    ///
+    /// Returns the lowering error verbatim — `add_compile` translates it
+    /// to a BAML-side throw.
+    pub fn compile_project(
+        &self,
+        opt: baml_compiler2_emit::OptLevel,
+    ) -> Result<bex_vm_types::Program, baml_compiler2_emit::LoweringError> {
+        let opts = baml_compiler2_emit::CompileOptions {
+            emit_test_cases: false,
+        };
+        baml_compiler2_emit::generate_project_bytecode_with_opt(self, &opts, opt)
+    }
+
     /// Append a runtime-compiled source file to `Compiler2RuntimeFiles`.
     ///
     /// Used by `reflect.Package.add_compile`. The path encodes the owning

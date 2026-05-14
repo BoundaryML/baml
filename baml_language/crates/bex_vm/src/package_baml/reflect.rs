@@ -193,10 +193,25 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             db_guard.add_runtime_file(std::path::PathBuf::from(full_path), &source);
         }
 
-        // TODO(Phase 5.2d+): run the emit pipeline now that the runtime
-        // files for this package are in the DB, then heap-allocate the
-        // newly-compiled items and append them to `pkg_ptr`'s `items` +
-        // `PackageGlobals::Dynamic` slot space.
+        // Re-run the emit pipeline against the modified DB. If the new
+        // sources have parse / type / lowering errors this returns Err
+        // and we surface it as a BAML throw. Successful compile is the
+        // dependency for the incremental `emit_package` item lift that
+        // lands in the next commit (Phase 5.2e).
+        //
+        // `OptLevel::One` mirrors the default test/runtime opt level;
+        // a future commit may expose this as an `add_compile` option.
+        let _program = db_guard
+            .compile_project(baml_project::OptLevel::One)
+            .map_err(|e| VmBamlError::Unsupported {
+                message: format!("reflect.Package.add_compile: compile failed: {e:?}"),
+            })?;
+
+        // TODO(Phase 5.2e): walk `_program` for items whose
+        // `package_name` matches `pkg_name`, heap-allocate them in gen0
+        // via `emit_package`'s identity-preserving incremental lift, and
+        // populate `pkg_ptr`'s `items` + `PackageGlobals::Dynamic` slot
+        // space with the per-package slot assignments.
         drop(db_guard);
         Ok(*package)
     }

@@ -30,6 +30,7 @@ pub mod symbols;
 #[cfg(feature = "testing")]
 pub mod testing;
 
+pub use baml_compiler2_emit::{LoweringError, OptLevel};
 pub use check::{CheckResult, collect_compiler2_diagnostics, collect_diagnostics};
 pub use client_codegen::build_symbol_pool;
 pub use db::{CursorContext, EventCallback, ProjectDatabase};
