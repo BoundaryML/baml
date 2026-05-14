@@ -3488,37 +3488,44 @@ impl LoweringContext<'_> {
         // We extract the information we need from the resolution tables before
         // mutably borrowing `self` for lowering, to satisfy the borrow checker.
         //
-        // We build a map from `param_index → bool` (is_bigint) using an immutable
-        // borrow.  `FunctionLoc` is `Copy` (it's a Salsa interned id) so we can
-        // safely store the value without retaining the borrow.
-        //
-        // NOTE: this re-lowers raw signature param types and so misses generic
-        // instantiation — `f<bigint>(1)` and methods on `Box<bigint>` pass an
-        // `int` through unchanged. Tracked as a follow-up; a complete fix
-        // needs the call's type-arg substitution applied to `sig.params`.
+        // For each param we lower its type-expr in the callee's namespace with
+        // the call-site's generic substitution applied, so that:
+        // - aliases like `type Big = bigint` walk through;
+        // - generic instantiation (`f<bigint>(1)`, `box.set(1)` on `Box<bigint>`)
+        //   resolves the param's effective type to bigint and triggers the
+        //   int→bigint widening at the call site.
+        // `FunctionLoc` is `Copy` (a Salsa interned id) so we can safely store
+        // the value without retaining the borrow.
         let param_bigint_flags: Vec<(usize, bool)> = {
             let callee_func_loc = self.callee_func_loc_for_call(expr_id);
             if let Some(fl) = callee_func_loc {
                 let sig = baml_compiler2_ppir::function_signature(self.db, fl);
-                // Resolve each param's type-expr in the callee's namespace so
-                // aliases like `type Big = bigint` are walked through —
-                // matching `p.ty, AstTypeExpr::Bigint { .. }` alone would miss
-                // them and skip the int→bigint widening at the call site.
                 let callee_file = fl.file(self.db);
                 let callee_pkg_info = file_package(self.db, callee_file);
                 let callee_pkg_id = PackageId::new(self.db, callee_pkg_info.package);
                 let callee_pkg_items = package_items(self.db, callee_pkg_id);
-                sig.params
+                let bindings = self.call_site_type_bindings(expr_id, fl);
+                // TIR's `CallPlan` indexes params after a leading `self` is
+                // stripped (see `generics::skip_self_param`), so the flags
+                // we build here must be indexed the same way for
+                // `arg_to_param` lookups to line up.
+                let user_params: &[_] =
+                    if sig.params.first().map(|p| p.name.as_str()) == Some("self") {
+                        &sig.params[1..]
+                    } else {
+                        &sig.params
+                    };
+                user_params
                     .iter()
                     .enumerate()
                     .map(|(i, p)| {
                         let mut diags = Vec::new();
-                        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+                        let tir_ty = baml_compiler2_tir::generics::lower_type_expr_with_generics(
                             self.db,
                             &p.ty,
                             callee_pkg_items,
                             &callee_pkg_info.namespace_path,
-                            &[],
+                            &bindings,
                             &mut diags,
                         );
                         let ty = self.resolved_aliases.convert(&tir_ty);
@@ -4622,6 +4629,94 @@ impl LoweringContext<'_> {
             }
         }
         self.lower_to_operand(expr_id)
+    }
+
+    /// Build the call-site type-variable bindings for a resolved call, so the
+    /// callee's signature can be lowered with generic instantiation applied.
+    ///
+    /// Two sources contribute, matching the De Bruijn ordering used by the VM:
+    /// 1. **Class type args** from the receiver (when the callee is a method).
+    ///    For `box.set(1)` with `box: Box<bigint>`, binds the class's
+    ///    `generic_params` (`["T"]`) to the receiver's `class_type_args`
+    ///    (`[bigint]`).
+    /// 2. **Function type args** from `Call.type_args` (explicit `f<bigint>()`),
+    ///    bound against the callee's `user_generic_params`.
+    fn call_site_type_bindings(
+        &self,
+        call_expr_id: AstExprId,
+        fl: baml_compiler2_hir::loc::FunctionLoc<'_>,
+    ) -> rustc_hash::FxHashMap<Name, Tir2Ty> {
+        let mut bindings: rustc_hash::FxHashMap<Name, Tir2Ty> = rustc_hash::FxHashMap::default();
+
+        // `OptionalCall` has no syntactic type-args (it's `func?.(args)`), so
+        // explicit fn type args only come from `Call.type_args`. Class type
+        // args (from the receiver) still apply to both shapes.
+        let (callee_expr_id, ast_type_args): (AstExprId, Vec<AstTypeExpr>) =
+            match &self.body.exprs[call_expr_id] {
+                AstExpr::Call {
+                    callee, type_args, ..
+                } => (*callee, type_args.clone()),
+                AstExpr::OptionalCall { callee, .. } => (*callee, Vec::new()),
+                _ => return bindings,
+            };
+
+        // ── Class type args from the receiver, if this is a method call ─────
+        let receiver_ty: Option<Tir2Ty> = match &self.body.exprs[callee_expr_id] {
+            AstExpr::MemberAccess { base, .. } => {
+                self.expr_types.get(&self.expr_metadata_key(*base)).cloned()
+            }
+            AstExpr::Path(segments) if segments.len() > 1 => self
+                .path_root_types
+                .get(&self.expr_metadata_key(callee_expr_id))
+                .cloned(),
+            _ => None,
+        };
+        if let Some(Tir2Ty::Class(_, class_type_args, _)) = receiver_ty {
+            if !class_type_args.is_empty() {
+                let callee_file = fl.file(self.db);
+                let item_tree = baml_compiler2_ppir::file_item_tree(self.db, callee_file);
+                let callee_id = fl.id(self.db);
+                if let Some(class_data) = item_tree
+                    .classes
+                    .values()
+                    .find(|cd| cd.methods.contains(&callee_id))
+                {
+                    for (param, arg) in class_data.generic_params.iter().zip(class_type_args.iter())
+                    {
+                        bindings.insert(param.clone(), arg.clone());
+                    }
+                }
+            }
+        }
+
+        // ── Explicit fn type args from the call expression ──────────────────
+        if !ast_type_args.is_empty() {
+            let elab_sig = baml_compiler2_ppir::elaborated_function_signature(self.db, fl);
+            if !elab_sig.user_generic_params.is_empty() {
+                let callee_file = fl.file(self.db);
+                let callee_pkg_info = file_package(self.db, callee_file);
+                let callee_pkg_id = PackageId::new(self.db, callee_pkg_info.package.clone());
+                let callee_pkg_items = package_items(self.db, callee_pkg_id);
+                for (param, ast_arg) in elab_sig
+                    .user_generic_params
+                    .iter()
+                    .zip(ast_type_args.iter())
+                {
+                    let mut diags = Vec::new();
+                    let arg_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+                        self.db,
+                        ast_arg,
+                        callee_pkg_items,
+                        &callee_pkg_info.namespace_path,
+                        &[],
+                        &mut diags,
+                    );
+                    bindings.insert(param.clone(), arg_ty);
+                }
+            }
+        }
+
+        bindings
     }
 
     /// Extract the `FunctionLoc` for the callee of the given call expression,

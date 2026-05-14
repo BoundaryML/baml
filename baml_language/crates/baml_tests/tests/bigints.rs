@@ -161,6 +161,39 @@ async fn test_int_to_bigint_assign_op_mul() {
 }
 
 #[tokio::test]
+async fn test_int_to_bigint_generic_fn_explicit_type_arg() {
+    // `f<bigint>(1)`: the param `x: T` is instantiated as bigint at the call
+    // site, so the int literal `1` must widen.
+    let output = baml_test!(
+        baml: r#"
+        function Identity<T>(x: T) -> T { x }
+        function Caller() -> bigint { Identity<bigint>(1) }
+    "#,
+        entry: "Caller",
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(1))));
+}
+
+#[tokio::test]
+async fn test_int_to_bigint_generic_method_class_type_arg() {
+    // `box.set(1)` on `Box<bigint>`: the method param `v: T` is instantiated
+    // as bigint via the receiver's class type args.
+    let output = baml_test!(
+        r#"
+        class Box<T> {
+            v T
+            function set(self, x: T) -> T { self.v = x; x }
+        }
+        function main() -> bigint {
+            let b = Box<bigint> { v: 0n };
+            b.set(7)
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(7))));
+}
+
+#[tokio::test]
 async fn test_int_to_bigint_captured_in_lambda() {
     // `local_bigint += captured_int` inside a closure: the lambda boundary
     // resets `self.locals`, so widening must consult the captured binding's
