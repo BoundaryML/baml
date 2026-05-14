@@ -2029,6 +2029,96 @@ impl BexVm {
         }
     }
 
+    /// If `replacement_ptr` resolves to a `SysOp` function, build an
+    /// `UnscheduledFuture` from the operand-stack args (prepending the
+    /// bound receiver for a `BoundMethod` replacement and discarding any
+    /// type-arg slots sitting below the args), push the
+    /// `UnsuppressMockContinuation` Native frame, and return the
+    /// `VmExecState::DispatchSysOpInline` yield state that the engine
+    /// uses for schedule+await dispatch.
+    ///
+    /// Returns `Ok(None)` for non-SysOp replacements; the caller then
+    /// falls back to the synchronous
+    /// `normalize_mock_replacement_for_stack` path. This lets `Mock<T>`
+    /// accept any callable replacement (including `SysOps` like
+    /// `baml.sys.sleep` / `baml.http.fetch` / LLM ops) — those used to
+    /// fatal-error in `execute_call_from_locals_offset`'s
+    /// `FunctionKind::SysOp` arm because they were forced through the
+    /// synchronous call helper.
+    fn try_dispatch_sysop_mock_replacement(
+        &mut self,
+        replacement_ptr: HeapPtr,
+        mock_idx: usize,
+        visible_arg_count: usize,
+        ntypeargs: usize,
+    ) -> Result<Option<VmExecState>, VmError> {
+        let (sys_op, bound_receiver) = match self.get_object(replacement_ptr) {
+            Object::Function(f) => match f.kind {
+                FunctionKind::SysOp(s) => (s, None),
+                _ => return Ok(None),
+            },
+            Object::Closure(c) => {
+                let func_obj = unsafe { c.function.get() };
+                let Object::Function(f) = func_obj else {
+                    return Ok(None);
+                };
+                match f.kind {
+                    FunctionKind::SysOp(s) => (s, None),
+                    _ => return Ok(None),
+                }
+            }
+            Object::BoundMethod(bm) => {
+                let func_obj = unsafe { bm.function.get() };
+                let Object::Function(f) = func_obj else {
+                    return Ok(None);
+                };
+                match f.kind {
+                    FunctionKind::SysOp(s) => (s, Some(bm.receiver)),
+                    _ => return Ok(None),
+                }
+            }
+            _ => return Ok(None),
+        };
+
+        // Drain the visible args off the stack, then prepend the
+        // bound receiver if applicable. Type-arg slots (if any) sit
+        // *below* the args; SysOps don't take type-args, so we truncate
+        // them away after harvesting the args.
+        let args_offset = self
+            .stack
+            .len()
+            .checked_sub(visible_arg_count)
+            .ok_or(VmInternalError::NotEnoughItemsOnStack(visible_arg_count))?;
+        let mut args: Vec<Value> = self
+            .stack
+            .drain(StackIndex::from_raw(args_offset)..)
+            .collect();
+        if let Some(receiver) = bound_receiver {
+            args.insert(0, receiver);
+        }
+        if ntypeargs > 0 {
+            let base = self
+                .stack
+                .len()
+                .checked_sub(ntypeargs)
+                .ok_or(VmInternalError::NotEnoughItemsOnStack(ntypeargs))?;
+            self.stack.truncate(base);
+        }
+
+        let unscheduled = UnscheduledFuture {
+            operation: sys_op,
+            args,
+        };
+        let unsched_ptr = self.tlab.alloc(Object::UnscheduledFuture(unscheduled));
+
+        // Push the unsuppress Native frame so the recursion-guard flag
+        // is cleared when the value returns through the VM's exec loop
+        // (it processes Native frames at the top of every iteration).
+        self.push_mock_unsuppress_frame(replacement_ptr, mock_idx);
+
+        Ok(Some(VmExecState::DispatchSysOpInline(unsched_ptr)))
+    }
+
     fn execute_call_from_locals_offset(
         &mut self,
         callee_ptr: HeapPtr,
@@ -4061,6 +4151,25 @@ impl BexVm {
                 if let Some((replacement_ptr, mock_idx)) =
                     self.lookup_mock_override_for_callee(callee_ptr, None)?
                 {
+                    // SysOp replacement → schedule+await yield path.
+                    // `try_dispatch_sysop_mock_replacement` pushes the
+                    // unsuppress frame for us; we add the wrap frame on
+                    // top so the resolved value is wrapped in a Future
+                    // for the caller's subsequent `Await` opcode.
+                    if let Some(state) = self.try_dispatch_sysop_mock_replacement(
+                        replacement_ptr,
+                        mock_idx,
+                        callable_arity,
+                        0,
+                    )? {
+                        self.frames.push(Frame::Native(NativeFrame {
+                            function: replacement_ptr,
+                            continuation: Box::new(
+                                crate::package_baml::WrapReadyFutureContinuation,
+                            ),
+                        }));
+                        return Ok(Some(state));
+                    }
                     let (rep_ptr, rep_arity) =
                         self.normalize_mock_replacement_for_stack(replacement_ptr, callable_arity)?;
                     let args_offset = self
@@ -4327,6 +4436,16 @@ impl BexVm {
                 if let Some((replacement_ptr, mock_idx)) =
                     self.lookup_mock_override_for_callee(callee_ptr, args_base)?
                 {
+                    // SysOp replacement → route through the engine's
+                    // schedule+await yield path instead of the sync helper.
+                    if let Some(state) = self.try_dispatch_sysop_mock_replacement(
+                        replacement_ptr,
+                        mock_idx,
+                        arg_count,
+                        ntypeargs as usize,
+                    )? {
+                        return Ok(Some(state));
+                    }
                     let (rep_ptr, rep_arity) =
                         self.normalize_mock_replacement_for_stack(replacement_ptr, arg_count)?;
                     callee_ptr = rep_ptr;
@@ -4569,6 +4688,15 @@ impl BexVm {
                         // operand stack matches the visible call shape
                         // before we normalize the replacement.
                         let _popped = self.stack.ensure_pop();
+                        // SysOp replacement → schedule+await yield path.
+                        if let Some(state) = self.try_dispatch_sysop_mock_replacement(
+                            replacement_ptr,
+                            mock_idx,
+                            visible_arity,
+                            0,
+                        )? {
+                            return Ok(Some(state));
+                        }
                         let (rep_ptr, rep_arity) = self
                             .normalize_mock_replacement_for_stack(replacement_ptr, visible_arity)?;
                         let args_offset = self
@@ -4642,6 +4770,15 @@ impl BexVm {
                         // visible call shape before normalization injects
                         // a BoundMethod replacement's receiver.
                         let _popped_callee = self.stack.ensure_pop();
+                        // SysOp replacement → schedule+await yield path.
+                        if let Some(state) = self.try_dispatch_sysop_mock_replacement(
+                            replacement_ptr,
+                            mock_idx,
+                            arg_count,
+                            0,
+                        )? {
+                            return Ok(Some(state));
+                        }
                         let (rep_ptr, rep_arity) =
                             self.normalize_mock_replacement_for_stack(replacement_ptr, arg_count)?;
                         let args_offset = self
@@ -6152,6 +6289,26 @@ impl BexVm {
                     if let Some((replacement_ptr, mock_idx)) =
                         self.lookup_mock_override_for_callee(callee_ptr, None)?
                     {
+                        // Save pc so the saved frame returns cleanly.
+                        let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
+                            unsafe { std::hint::unreachable_unchecked() }
+                        };
+                        bf.instruction_ptr = *pc;
+                        // SysOp replacement → schedule+await yield path.
+                        if let Some(state) = self.try_dispatch_sysop_mock_replacement(
+                            replacement_ptr,
+                            mock_idx,
+                            callable_arity,
+                            0,
+                        )? {
+                            self.frames.push(Frame::Native(NativeFrame {
+                                function: replacement_ptr,
+                                continuation: Box::new(
+                                    crate::package_baml::WrapReadyFutureContinuation,
+                                ),
+                            }));
+                            return Ok(Some(state));
+                        }
                         let (rep_ptr, rep_arity) = self.normalize_mock_replacement_for_stack(
                             replacement_ptr,
                             callable_arity,
@@ -6162,11 +6319,6 @@ impl BexVm {
                             .checked_sub(rep_arity)
                             .ok_or(VmInternalError::NotEnoughItemsOnStack(rep_arity))?;
                         let locals_offset = StackIndex::from_raw(args_offset);
-                        // Save pc so the saved frame returns cleanly.
-                        let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
-                            unsafe { std::hint::unreachable_unchecked() }
-                        };
-                        bf.instruction_ptr = *pc;
                         // Push unsuppress first (runs after wrap on return).
                         self.push_mock_unsuppress_frame(rep_ptr, mock_idx);
                         self.frames.push(Frame::Native(NativeFrame {
@@ -6367,6 +6519,15 @@ impl BexVm {
                     if let Some((replacement_ptr, mock_idx)) =
                         self.lookup_mock_override_for_callee(callee_ptr, args_base)?
                     {
+                        // SysOp replacement → schedule+await yield path.
+                        if let Some(state) = self.try_dispatch_sysop_mock_replacement(
+                            replacement_ptr,
+                            mock_idx,
+                            arg_count,
+                            ntypeargs,
+                        )? {
+                            return Ok(Some(state));
+                        }
                         let (rep_ptr, rep_arity) =
                             self.normalize_mock_replacement_for_stack(replacement_ptr, arg_count)?;
                         callee_ptr = rep_ptr;
@@ -6530,6 +6691,15 @@ impl BexVm {
                             // normalization injects a BoundMethod
                             // replacement's receiver.
                             let _popped = self.stack.ensure_pop();
+                            // SysOp replacement → schedule+await yield path.
+                            if let Some(state) = self.try_dispatch_sysop_mock_replacement(
+                                replacement_ptr,
+                                mock_idx,
+                                visible_arity,
+                                0,
+                            )? {
+                                return Ok(Some(state));
+                            }
                             let (rep_ptr, rep_arity) = self.normalize_mock_replacement_for_stack(
                                 replacement_ptr,
                                 visible_arity,
@@ -6591,6 +6761,15 @@ impl BexVm {
                             // the visible call shape before normalization
                             // injects a BoundMethod replacement's receiver.
                             let _popped_callee = self.stack.ensure_pop();
+                            // SysOp replacement → schedule+await yield path.
+                            if let Some(state) = self.try_dispatch_sysop_mock_replacement(
+                                replacement_ptr,
+                                mock_idx,
+                                arg_count,
+                                0,
+                            )? {
+                                return Ok(Some(state));
+                            }
                             let (rep_ptr, rep_arity) = self
                                 .normalize_mock_replacement_for_stack(replacement_ptr, arg_count)?;
                             let args_offset = self

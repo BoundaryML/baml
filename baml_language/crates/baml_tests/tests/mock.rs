@@ -1633,6 +1633,40 @@ async fn mock_replacement_can_be_a_bound_method() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(705)));
 }
 
+/// Regression: SysOp functions (`baml.sys.sleep`, `baml.http.fetch`, LLM
+/// ops, …) require the engine's schedule+await yield path — the bytecode
+/// VM can't dispatch them synchronously via
+/// `execute_call_from_locals_offset`. Before the fix, every mock-redirect
+/// site fed the replacement into that sync helper, which would refuse a
+/// SysOp with a fatal `TypeError { expected: Callable, got: SysOp }`
+/// `VmInternalError`. After the fix, the dispatcher detects a SysOp
+/// replacement and routes the call through `VmExecState::DispatchSysOpInline`
+/// (the same path `m.original` uses for SysOp *targets*).
+#[tokio::test]
+async fn mock_replacement_can_be_a_sysop() {
+    let output = baml_test!(
+        r#"
+        function target(ms: int) -> null throws baml.errors.Io { null }
+
+        function main() -> string {
+            let m = baml.mock.Mock.new(target)
+            // baml.sys.sleep matches target's signature (int) -> null throws Io
+            // and is dispatched as a SysOp.
+            m.replace(baml.sys.sleep)
+            let _ = m.scope<null, baml.errors.Io>(() -> null throws baml.errors.Io {
+                target(0)
+            })
+            "completed"
+        }
+    "#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("completed".to_string()))
+    );
+}
+
 /// The override is popped even when the body throws.
 #[tokio::test]
 async fn mock_scope_pops_on_throw() {
