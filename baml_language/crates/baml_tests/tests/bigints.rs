@@ -268,6 +268,68 @@ async fn test_bigint_return_widens_int() {
     );
 }
 
+// ─── Bigint × Bigint constant folding (TIR `try_fold_binary`) ────────────────
+
+#[tokio::test]
+async fn test_bigint_constant_fold_add_narrows_to_literal_type() {
+    // `1n + 2n` must fold to the literal type `3n` so the function body can
+    // satisfy the literal-typed return contract. Without folding the inferred
+    // type of the expression is bare `bigint`, which is not a subtype of
+    // `Ty::Literal(Bigint(3))` — the compile would fail.
+    let output = baml_test!(
+        baml: r#"
+        function GetThree() -> 3n { 1n + 2n }
+    "#,
+        entry: "GetThree",
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(3))));
+}
+
+#[tokio::test]
+async fn test_bigint_constant_fold_mul_narrows() {
+    let output = baml_test!(
+        baml: r#"
+        function GetTwelve() -> 12n { 3n * 4n }
+    "#,
+        entry: "GetTwelve",
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Bigint(BigInt::from(12)))
+    );
+}
+
+#[tokio::test]
+async fn test_bigint_constant_fold_comparison_to_bool() {
+    // `1n < 2n` folds to literal `true`, satisfying a `true` literal-typed
+    // return. The bigint comparison fold returns a Bool literal, not a Bigint.
+    let output = baml_test!(
+        baml: r#"
+        function IsLess() -> true { 1n < 2n }
+    "#,
+        entry: "IsLess",
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn test_bigint_constant_fold_negative_shift_refused() {
+    // A negative shift count must NOT fold (mirrors runtime which raises
+    // `baml.panics.NegativeBitShift`). The body must still compile at the
+    // unnarrowed `bigint` return type because the folder returns `None`.
+    let output = baml_test!(
+        baml: r#"
+        function NegShr() -> bigint { 1n >> -1n }
+    "#,
+        entry: "NegShr",
+    );
+    // The runtime raises NegativeBitShift; we just assert it threw, not that
+    // a literal-typed return was inferred.
+    let Err(_) = &output.result else {
+        panic!("expected NegativeBitShift panic, got: {:?}", output.result);
+    };
+}
+
 #[tokio::test]
 async fn test_int_to_bigint_captured_in_lambda() {
     // `local_bigint += captured_int` inside a closure: the lambda boundary

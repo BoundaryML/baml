@@ -1,5 +1,9 @@
 use std::sync::Arc;
 
+/// Re-export of the shared `bigint` allocation cap. Defined in `baml_type`
+/// so TIR's constant-folder can refuse to fold bigint expressions that the
+/// VM would refuse to allocate.
+pub(crate) use baml_type::MAX_BIGINT_BITS;
 use bex_vm_types::Value;
 use num_bigint::{BigInt, BigUint, Sign};
 
@@ -8,13 +12,6 @@ use crate::{
     BexVm,
     errors::{VmBamlError, VmPanic, VmRustFnError},
 };
-
-/// Upper bound on the bit-length of a bigint we are willing to allocate from
-/// `pow` / `shl`. ~268 million bits ≈ 80 million decimal digits ≈ 32 MiB of
-/// digits. Beyond this we raise [`VmPanic::AllocFailure`] instead of letting
-/// the allocator either succeed (and starve the rest of the runtime) or abort
-/// the process outright.
-pub(crate) const MAX_BIGINT_BITS: u64 = 1 << 28;
 
 impl BamlClassBigint for PackageBamlImpl {
     fn to_json(vm: &mut BexVm, bigint: Arc<BigInt>) -> Value {

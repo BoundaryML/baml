@@ -23,6 +23,18 @@ pub use attr::*;
 pub use defs::*;
 pub use template::TyTemplate;
 
+/// Upper bound on the bit-length of a `bigint` value we are willing to
+/// materialize at runtime. ~268 million bits ≈ 80 million decimal digits ≈ 32
+/// MiB of digits. Operations that would produce a larger result raise
+/// `baml.panics.AllocFailure` instead of either succeeding (and starving the
+/// rest of the runtime) or aborting the process outright.
+///
+/// Shared by the VM's allocation guard (`bex_vm::package_baml::bigint`),
+/// the FFI decoder's pre-allocation cap
+/// (`bridge_ctypes::value_decode::MAX_BIGINT_HEX_LEN`), and TIR's
+/// constant-folding refusal threshold.
+pub const MAX_BIGINT_BITS: u64 = 1 << 28;
+
 /// A lightweight name type for class/enum/type-alias references.
 ///
 /// Replaces both `QualifiedName` (VIR+) and plain `String` keys.

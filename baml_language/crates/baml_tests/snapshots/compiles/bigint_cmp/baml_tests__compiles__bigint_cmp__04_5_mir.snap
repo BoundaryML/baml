@@ -32,7 +32,7 @@ fn user.EqSameAlloc() -> bool {
     let _0: bool // _0 // return
 
     bb0: {
-        _0 = const 42n == const 42n;
+        _0 = const true;
         goto -> bb1;
     }
 
@@ -46,7 +46,7 @@ fn user.OrderingGtEq() -> bool {
     let _0: bool // _0 // return
 
     bb0: {
-        _0 = const 5n >= const 5n;
+        _0 = const true;
         goto -> bb1;
     }
 
@@ -60,7 +60,7 @@ fn user.OrderingLt() -> bool {
     let _0: bool // _0 // return
 
     bb0: {
-        _0 = const 3n < const 5n;
+        _0 = const true;
         goto -> bb1;
     }
 

@@ -4471,20 +4471,22 @@ impl LoweringContext<'_> {
         Operand::Copy(Place::Local(temp))
     }
 
-    /// Returns `true` if an `int`→`bigint` implicit widening is needed.
-    ///
-    /// The widening applies when the destination type is `bigint` and the
-    /// source expression's type is `int` (or a literal-int type, which is a
-    /// subtype of `int` and therefore of `bigint`).
     /// Returns true if the AST expression's "natural" value type is `int` —
     /// i.e. it would lower to an int constant or an int-typed local at runtime,
     /// regardless of any TIR-level coercion applied at the use site.
     ///
-    /// Used by `AssignOp` widening: TIR coerces an `AssignOp`'s value to the
-    /// target type, so `expr_ty(value)` reports `Bigint` for `x += 1` even
-    /// though the literal lowers to `Constant::Int(1)`. Without this check,
-    /// the widening would be skipped and the runtime would fault with
-    /// `CannotApplyBinOp(Bigint, Int)`.
+    /// Used by `AssignOp` and `AssignOpOptionalChain` widening: TIR coerces an
+    /// assign-op's value to the target type, so `expr_ty(value)` reports
+    /// `Bigint` for `x += 1` even though the literal lowers to
+    /// `Constant::Int(1)`. Without this check the widening would be skipped
+    /// and the runtime would fault with `CannotApplyBinOp(Bigint, Int)`.
+    ///
+    /// Resolution strategy for `Path([name])` rhs values:
+    /// 1. Look up `self.locals` for a same-frame local and inspect its type.
+    /// 2. Fall back to the captured binding's declared TIR type via
+    ///    `pat_types` keyed by the binding's *declaring* scope. Required
+    ///    inside lambdas, where `self.locals` is reset at the boundary and
+    ///    captured int locals would otherwise be invisible.
     fn value_is_natural_int(&self, expr_id: AstExprId) -> bool {
         let expr = &self.body.exprs[expr_id];
         match expr {

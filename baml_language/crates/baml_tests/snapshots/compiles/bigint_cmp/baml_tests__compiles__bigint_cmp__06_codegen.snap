@@ -12,22 +12,16 @@ function user.EqDistinctAllocs() -> bool {
 }
 
 function user.EqSameAlloc() -> bool {
-    load_const 42n
-    load_const 42n
-    cmp_bigint_op ==
+    load_const true
     return
 }
 
 function user.OrderingGtEq() -> bool {
-    load_const 5n
-    load_const 5n
-    cmp_bigint_op >=
+    load_const true
     return
 }
 
 function user.OrderingLt() -> bool {
-    load_const 3n
-    load_const 5n
-    cmp_bigint_op <
+    load_const true
     return
 }

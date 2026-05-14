@@ -8191,6 +8191,11 @@ impl<'db> TypeInferenceBuilder<'db> {
             };
         }
 
+        // Bigint × Bigint
+        if let (LiteralValue::Bigint(a), LiteralValue::Bigint(b)) = (lhs_lit, rhs_lit) {
+            return Self::try_fold_bigint_binary(op, a, b, f);
+        }
+
         // Float × Float
         if let (LiteralValue::Float(a_s), LiteralValue::Float(b_s)) = (lhs_lit, rhs_lit) {
             let a: f64 = a_s.parse().ok()?;
@@ -8312,6 +8317,101 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
 
         None
+    }
+
+    /// Fold a `Bigint × Bigint` binary operation at the literal-type level.
+    ///
+    /// Returns `None` when the operation would not survive at runtime — division
+    /// or modulo by zero, negative shift counts, or a result whose bit-length
+    /// exceeds `baml_type::MAX_BIGINT_BITS` (the VM's allocation cap). Treating
+    /// those as non-foldable matches the runtime behavior: the user-visible
+    /// effect is the same as if the literal types had never been narrowed,
+    /// rather than producing a literal type the VM could not actually
+    /// materialize.
+    fn try_fold_bigint_binary(
+        op: baml_compiler2_ast::BinaryOp,
+        a: &num_bigint::BigInt,
+        b: &num_bigint::BigInt,
+        f: crate::ty::Freshness,
+    ) -> Option<Ty> {
+        use baml_compiler2_ast::BinaryOp;
+        use num_bigint::Sign;
+
+        use crate::ty::LiteralValue;
+
+        // Reject if the bit-length of `n` would trip the VM's allocation cap.
+        let within_cap =
+            |n: &num_bigint::BigInt| -> bool { n.bits() <= baml_type::MAX_BIGINT_BITS };
+
+        let lit_bigint = |n: num_bigint::BigInt| -> Option<Ty> {
+            if !within_cap(&n) {
+                return None;
+            }
+            Some(Ty::Literal(LiteralValue::Bigint(n), f, TyAttr::default()))
+        };
+        let lit_bool = |v: bool| -> Option<Ty> {
+            Some(Ty::Literal(LiteralValue::Bool(v), f, TyAttr::default()))
+        };
+
+        match op {
+            BinaryOp::Add => lit_bigint(a + b),
+            BinaryOp::Sub => lit_bigint(a - b),
+            BinaryOp::Mul => {
+                // Pre-flight check matching `Instruction::MulBigint`.
+                if a.bits().saturating_add(b.bits()) > baml_type::MAX_BIGINT_BITS {
+                    return None;
+                }
+                lit_bigint(a * b)
+            }
+            BinaryOp::Div => {
+                if b.sign() == Sign::NoSign {
+                    return None;
+                }
+                lit_bigint(a / b)
+            }
+            BinaryOp::Mod => {
+                if b.sign() == Sign::NoSign {
+                    return None;
+                }
+                lit_bigint(a % b)
+            }
+            BinaryOp::BitAnd => lit_bigint(a & b),
+            BinaryOp::BitOr => lit_bigint(a | b),
+            BinaryOp::BitXor => lit_bigint(a ^ b),
+            BinaryOp::Shl => {
+                if b.sign() == Sign::Minus {
+                    return None;
+                }
+                let shift = usize::try_from(b).ok()?;
+                let shift_u64 = u64::try_from(shift).ok()?;
+                if a.bits().saturating_add(shift_u64) > baml_type::MAX_BIGINT_BITS {
+                    return None;
+                }
+                lit_bigint(a << shift)
+            }
+            BinaryOp::Shr => {
+                if b.sign() == Sign::Minus {
+                    return None;
+                }
+                // Mirror `Instruction::ShrBigint`: counts that don't fit in
+                // `usize` saturate to 0n (or -1n for negative operands).
+                match usize::try_from(b) {
+                    Ok(shift) => lit_bigint(a >> shift),
+                    Err(_) => lit_bigint(if a.sign() == Sign::Minus {
+                        num_bigint::BigInt::from(-1)
+                    } else {
+                        num_bigint::BigInt::ZERO
+                    }),
+                }
+            }
+            BinaryOp::Eq => lit_bool(a == b),
+            BinaryOp::Ne => lit_bool(a != b),
+            BinaryOp::Lt => lit_bool(a < b),
+            BinaryOp::Le => lit_bool(a <= b),
+            BinaryOp::Gt => lit_bool(a > b),
+            BinaryOp::Ge => lit_bool(a >= b),
+            _ => None,
+        }
     }
 
     fn assign_op_to_binary_op(op: baml_compiler2_ast::AssignOp) -> baml_compiler2_ast::BinaryOp {

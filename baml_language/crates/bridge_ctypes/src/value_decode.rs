@@ -217,11 +217,11 @@ mod tests {
     fn bigint_round_trip(original: &BexExternalValue) -> BexExternalValue {
         use crate::{
             baml_core::cffi::baml_outbound_value::Value as OutboundVariant,
-            handle_table::CffiHandleTableOptions, value_encode::external_to_baml_value,
+            handle_table::CffiHandleTableOptions, value_encode::external_to_outbound,
         };
 
         let opts = CffiHandleTableOptions::for_in_process();
-        let outbound = external_to_baml_value(original, &opts).expect("encode succeeds");
+        let outbound = external_to_outbound(original, &opts).expect("encode succeeds");
         let s = match outbound.value {
             Some(OutboundVariant::BigintValue(s)) => s,
             other => panic!("expected outbound BigintValue, got {other:?}"),
