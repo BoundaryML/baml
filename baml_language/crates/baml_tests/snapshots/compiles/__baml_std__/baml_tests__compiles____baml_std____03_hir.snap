@@ -794,22 +794,22 @@ function baml.media.url(self: ?) -> string?  [builtin]
 class baml.mock.Mock {
   call_count: int
   original: baml.mock.T
-  _impl: baml.mock.T
+  _impl: baml.mock.T?
   _original: baml.mock.T
 }
 function baml.mock.from_json(j: baml.json.json) -> baml.mock.Mock  [expr] {
   baml.mock.Mock { call_count: baml.json.from_json(baml.json.field(j, "call_count")), original: baml.json.from_json(baml.json.field(j, "original")), _impl: baml.json.from_json(baml.json.field(j, "_impl")), _original: baml.json.from_json(baml.json.field(j, "_original")) }
 }
 function baml.mock.new(original: baml.mock.T) -> baml.mock.Mock  [expr] {
-  {  } baml.mock.Mock { call_count: 0, original: baml.mock.wrap_unmocked(original), _impl: original, _original: original }
+  {  } baml.mock.Mock { call_count: 0, original: baml.mock.wrap_unmocked(original), _impl: null, _original: original }
 }
 function baml.mock.pop_override() -> null  [builtin]
-function baml.mock.push_override(target: baml.mock.T, replacement: baml.mock.T, counter_owner: baml.mock.Mock?) -> null  [builtin]
+function baml.mock.push_override(target: baml.mock.T, replacement: baml.mock.T?, counter_owner: baml.mock.Mock?) -> null  [builtin]
 function baml.mock.replace(self: ?, impl: baml.mock.T) -> void  [expr] {
   { self._impl = impl }
 }
 function baml.mock.scope(self: ?, body: () -> baml.mock.U throws baml.mock.EU) -> baml.mock.U  [expr] {
-  { let _ = baml.mock.push_override(self._original, self._impl, self); let result = {  } body() catch_all (e) { _ => { let _ = baml.mock.pop_override(); throw e } }; let _ = baml.mock.pop_override() } result
+  { let _ = baml.mock.push_override(self._original, self._impl, self) catch (e) { _ => baml.sys.panic("baml.mock.Mock.sc...") }; let result = {  } body() catch_all (e) { _ => { let _ = baml.mock.pop_override(); throw e } }; let _ = baml.mock.pop_override() } result
 }
 function baml.mock.to_json(self: ?) -> baml.json.json  [expr] {
   map { "call_count": self.call_count.to_json(), "original": baml.json.to_json(self.original), "_impl": baml.json.to_json(self._impl), "_original": baml.json.to_json(self._original) }

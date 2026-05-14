@@ -256,9 +256,12 @@ async fn mock_original_bypasses_active_override() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(10_101)));
 }
 
-/// Spy mode: `Mock.new(f)` without `replace` passes calls through to `f`
-/// and ticks `call_count`. Recursive targets work — natural recursion in
-/// the spied function shouldn't trip the recursion guard.
+/// Spy mode: `Mock.new(f)` without `replace` leaves `_impl = null`, so
+/// the override is a *spy* entry — matching calls bump `call_count` and
+/// fall through to `f` un-intercepted (no replacement frame is ever
+/// pushed). Natural recursion in `f` works fine because the recursion
+/// guard's suppression flag is only set when a real replacement is
+/// dispatched.
 #[tokio::test]
 async fn mock_spy_passes_through_and_supports_recursion() {
     let output = baml_test!(
@@ -1436,6 +1439,198 @@ async fn mock_new_rejects_non_callable_target() {
         output.result,
         Ok(BexExternalValue::String("rejected".to_string()))
     );
+}
+
+/// `baml.mock.push_override` rejects non-callable arguments directly
+/// (with `baml.errors.InvalidArgument`), instead of silently no-oping.
+/// The legitimate caller (`Mock.scope`) re-raises this as a `baml.sys.panic`
+/// because `Mock.new`/`replace` already guarantee callability — see the
+/// runtime guard in `package_baml::mock::push_override`.
+#[tokio::test]
+async fn mock_push_override_rejects_non_callable_target() {
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            let r = {
+                let _ = baml.mock.push_override<int>(42, 99, null)
+                "accepted"
+            } catch (e) {
+                baml.errors.InvalidArgument => "rejected",
+            }
+            r
+        }
+    "#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("rejected".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn mock_push_override_rejects_non_callable_object() {
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            // Arrays are objects but not callables — push_override must
+            // catch this even though the `Value::Object` discriminant
+            // alone matches.
+            let arr = [1, 2, 3]
+            let r = {
+                let _ = baml.mock.push_override<int[]>(arr, arr, null)
+                "accepted"
+            } catch (e) {
+                baml.errors.InvalidArgument => "rejected",
+            }
+            r
+        }
+    "#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("rejected".to_string()))
+    );
+}
+
+/// Regression for an older `is_spy` heuristic that compared the
+/// replacement's normalized inner-function pointer to the target's. Any
+/// `replace(impl)` where `impl` reduces to the same inner function — a
+/// re-export, a closure-over-target, a `BoundMethod` sharing the same
+/// inner fn — would be silently treated as spy mode and the recursion
+/// guard would be disabled. Replacement is now an explicit `Option`
+/// (`null` = spy, `Some` = real replacement), so even
+/// `replace(target_itself)` is treated as a real replacement: calls into
+/// the target are suppressed, and a re-entry inside the replacement
+/// triggers the `MockRecursion` panic.
+#[tokio::test]
+async fn mock_replace_with_same_callable_triggers_recursion_guard() {
+    let output = baml_test!(
+        r#"
+        function target(n: int) -> int throws unknown {
+            if (n <= 0) { 0 } else { target(n - 1) }
+        }
+
+        function main() -> string {
+            let m = baml.mock.Mock.new(target)
+            // Replacement is literally the target — under the old
+            // `is_spy = (callable_identity(replacement) == target_fn)`
+            // heuristic this would silently demote to spy mode and let
+            // the natural recursion run uninterrupted. After the fix,
+            // any non-null replacement engages the recursion guard.
+            m.replace(target)
+            let r = {
+                m.scope<int, unknown>(() -> int throws unknown {
+                    target(2)
+                })
+                "ran-without-guard"
+            } catch (e) {
+                baml.panics.UserPanic => "guard-fired",
+            }
+            r
+        }
+    "#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("guard-fired".to_string())),
+    );
+}
+
+/// Regression: when a replacement throws and the exception is caught
+/// *inside* the active scope (i.e. upstream of the mock dispatch but
+/// downstream of the user's `catch`), the recursion-guard suppression
+/// flag must be cleared so subsequent intercepted calls still resolve
+/// through the replacement.
+///
+/// Before the fix, `try_unwind_exception` popped `Frame::Native(_)`
+/// frames during unwinding without invoking their continuations, so
+/// `UnsuppressMockContinuation` never ran on the throw path. The
+/// matching `mock_stack` entry stayed `suppressed = true` for the rest
+/// of the scope; the next call to the target would walk past the
+/// suppressed entry, see `saw_suppressed_match`, and throw a
+/// `MockRecursion` panic instead of dispatching the replacement.
+#[tokio::test]
+async fn mock_replacement_throw_caught_inside_scope_clears_suppression() {
+    let output = baml_test!(
+        r#"
+        function target(n: int) -> int throws unknown { n }
+
+        function main() -> int {
+            let m = baml.mock.Mock.new(target)
+            // First intercepted call throws; the second returns 100 + n.
+            m.replace((n: int) -> int throws unknown {
+                if (n == 1) {
+                    throw "first"
+                } else {
+                    100 + n
+                }
+            })
+
+            let r = m.scope<int, unknown>(() -> int throws unknown {
+                // First call: replacement throws "first", caught here.
+                let a = { target(1) } catch_all (e) { _ => -1 }
+                // Second call: must still dispatch the replacement
+                // (suppression must have been cleared on unwind).
+                let b = target(2)
+                a * 1000 + b
+            })
+
+            // a = -1 (throw caught), b = 102 (replacement returned 100+2).
+            // Result: -1 * 1000 + 102 = -898.
+            r
+        }
+    "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(-898)));
+}
+
+/// Regression: when the user passes an `Object::BoundMethod` as the
+/// replacement, the dispatcher must inject the bound receiver into the
+/// operand stack before invoking the inner function. The visible
+/// (self-less) arity is what's already on the stack at the call site;
+/// the inner function's arity includes `self`, so dispatching the
+/// BoundMethod without prepending the receiver mis-aligns every
+/// argument (or underflows the stack outright).
+///
+/// Before the fix, every mock-redirect site called
+/// `resolve_callable_target(replacement)` (which reports the full
+/// arity for a BoundMethod) and then forwarded that count to
+/// `execute_call_from_locals_offset` without inserting the receiver.
+/// The result was either `InvalidArgumentCount` / stack underflow or,
+/// worse, a silent off-by-one that read a stale slot as `self`.
+#[tokio::test]
+async fn mock_replacement_can_be_a_bound_method() {
+    let output = baml_test!(
+        r#"
+        class C {
+            value int
+            function method(self, n: int) -> int { self.value * 100 + n }
+        }
+
+        function target(n: int) -> int { n }
+        function call_target(n: int) -> int { target(n) }
+
+        function main() -> int {
+            let c = C { value: 7 }
+            let m = baml.mock.Mock.new(target)
+            // BoundMethod replacement: the dispatcher must inject `c`
+            // as `self` so `method` sees (c, 5) and computes 7*100 + 5.
+            m.replace(c.method)
+
+            let r = m.scope<int, never>(() -> int throws never {
+                call_target(5)
+            })
+            // 705 = c.method(5) with c.value = 7.
+            r
+        }
+    "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(705)));
 }
 
 /// The override is popped even when the body throws.

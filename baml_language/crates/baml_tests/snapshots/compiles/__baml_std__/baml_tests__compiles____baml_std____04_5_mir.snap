@@ -6130,7 +6130,7 @@ fn baml.mock.Mock.from_json(j: baml.json.json) -> baml.mock.Mock<void> {
     let _5: void
     let _6: baml.json.json
     let _7: type
-    let _8: void
+    let _8: void?
     let _9: baml.json.json
     let _10: type
     let _11: void
@@ -6160,7 +6160,7 @@ fn baml.mock.Mock.from_json(j: baml.json.json) -> baml.mock.Mock<void> {
     }
 
     bb5: {
-        _10 = load_type(#0);
+        _10 = load_type(#0?);
         _8 = call const fn baml.json.from_json<copy _10>(copy _9) -> [bb6];
     }
 
@@ -6196,7 +6196,7 @@ fn baml.mock.Mock.new(original: void) -> baml.mock.Mock<void> {
     }
 
     bb1: {
-        _0 = baml.mock.Mock<TypeArgRef(0)> { const 0_i64, copy _2, copy _1, copy _1 };
+        _0 = baml.mock.Mock<TypeArgRef(0)> { const 0_i64, copy _2, const null, copy _1 };
         goto -> bb2;
     }
 
@@ -6232,50 +6232,59 @@ fn baml.mock.Mock.scope(self: baml.mock.Mock, body: () -> void throws never) -> 
     let _1: baml.mock.Mock // self // param
     let _2: () -> void throws never // body // param
     let _3: null
-    let _4: void
+    let _4: unknown // e
     let _5: void
-    let _6: type
-    let _7: void // result
-    let _8: unknown // e
-    let _9: null
-    let _10: void
-    let _11: null
+    let _6: void?
+    let _7: type
+    let _8: void // result
+    let _9: unknown // e
+    let _10: null
+    let _11: void
+    let _12: null
 
     bb0: {
-        _4 = copy _1.3;
-        _5 = copy _1.2;
-        _6 = load_type(#0);
-        _3 = call const fn baml.mock.push_override<copy _6>(copy _4, copy _5, copy _1) -> [bb1];
+        _5 = copy _1.3;
+        _6 = copy _1.2;
+        _7 = load_type(#0);
+        _3 = call const fn baml.mock.push_override<copy _7>(copy _5, copy _6, copy _1) -> [bb3, unwind: bb1];
     }
 
     bb1: {
-        _7 = call copy _2() -> [bb2, unwind: bb5];
+        throw_if_panic copy _4 -> bb2;
     }
 
     bb2: {
-        _11 = call const fn baml.mock.pop_override() -> [bb3];
+        _3 = call const fn baml.sys.panic(const "baml.mock.Mock.scope: push_override rejected the mock's target/replacement; this should be impossible given Mock.new's callability check.") -> [bb3];
     }
 
     bb3: {
-        _0 = copy _7;
-        goto -> bb4;
+        _8 = call copy _2() -> [bb4, unwind: bb7];
     }
 
     bb4: {
-        return;
+        _12 = call const fn baml.mock.pop_override() -> [bb5];
     }
 
     bb5: {
-        throw_if_panic copy _8 -> bb6;
+        _0 = copy _8;
+        goto -> bb6;
     }
 
     bb6: {
-        _9 = call const fn baml.mock.pop_override() -> [bb7];
+        return;
     }
 
     bb7: {
-        _10 = copy _8;
-        throw copy _10;
+        throw_if_panic copy _9 -> bb8;
+    }
+
+    bb8: {
+        _10 = call const fn baml.mock.pop_override() -> [bb9];
+    }
+
+    bb9: {
+        _11 = copy _9;
+        throw copy _11;
     }
 }
 
@@ -6290,7 +6299,7 @@ fn baml.mock.Mock.to_json(self: baml.mock.Mock) -> baml.json.json {
     let _6: void
     let _7: baml.mock.Mock
     let _8: baml.json.json
-    let _9: void
+    let _9: void?
     let _10: baml.mock.Mock
     let _11: baml.json.json
     let _12: void

@@ -26,11 +26,23 @@
 /// `pop_override` call. Pairs MUST be balanced — `Mock.scope` is the intended
 /// caller and handles the bookkeeping.
 ///
+/// `replacement = null` registers a *spy* entry: matching calls bump
+/// `counter_owner.call_count` and then fall through to the original
+/// target with no interception. Spy mode never sets the recursion-guard
+/// suppression flag, so the spied function can recurse naturally.
+///
 /// `counter_owner` is the `Mock<T>` instance whose `call_count` field
 /// should be incremented when this override fires. Pass `null` to skip
 /// counter tracking (e.g. tests pushing overrides outside of a `Mock`).
+///
+/// Throws `baml.errors.InvalidArgument` if `target` (or a non-null
+/// `replacement`) is not a callable (`Function`/`Closure`/`BoundMethod`).
+/// BAML can't bound `T` to callables yet (no `T: Fn(...)`), so misuse is
+/// caught at the VM boundary; `Mock.scope` rethrows that as a
+/// `baml.sys.panic` because the legitimate call site has already
+/// type-checked both args as callable via `Mock.new` / `replace`.
 //baml:mut_vm
-function push_override<T>(target: T, replacement: T, counter_owner: Mock<T>?) -> null {
+function push_override<T>(target: T, replacement: T?, counter_owner: Mock<T>?) -> null throws baml.errors.InvalidArgument {
   $rust_function
 }
 
@@ -70,18 +82,24 @@ class Mock<T> {
   ///     m.original(url)        // calls the real fetch, bypassing the mock
   ///   })
   original T
-  _impl T
+  /// Replacement implementation, or `null` while in *spy* mode. Spy mode
+  /// is the default after `Mock.new(target)`: matching calls bump
+  /// `call_count` and fall through to `target` without interception, so
+  /// the spied function's natural recursion is unaffected by the
+  /// recursion-guard suppression machinery. `replace(impl)` swaps in a
+  /// real replacement.
+  _impl T?
   _original T
 
-  /// Construct a `Mock` that initially passes through to `original`. Use
-  /// [`replace`] before entering `scope` to install an actual replacement
-  /// implementation. Without `replace`, the mock just observes calls
-  /// (counter ticks on every intercepted invocation).
+  /// Construct a `Mock` that initially passes through to `original` (a
+  /// spy). Call [`replace`] before entering `scope` to install an actual
+  /// replacement implementation. Without `replace`, the mock just
+  /// observes calls (counter ticks on every intercepted invocation).
   function new(original: T) -> Mock<T> {
     Mock<T> {
       call_count: 0,
       original: baml.mock.wrap_unmocked<T>(original),
-      _impl: original,
+      _impl: null,
       _original: original,
     }
   }
@@ -98,7 +116,13 @@ class Mock<T> {
   /// incremented on each intercepted call.
   //baml:mut_self
   function scope<U, EU>(self, body: () -> U throws EU) -> U throws EU {
-    let _ = baml.mock.push_override<T>(self._original, self._impl, self)
+    // `Mock.new`/`replace` already type-check that `_original` and
+    // `_impl` are callable, so an `InvalidArgument` here is a host-side
+    // contract violation — surface it as an uncatchable panic rather
+    // than letting it leak into the user's `throws EU`.
+    let _ = baml.mock.push_override<T>(self._original, self._impl, self) catch (e) {
+      _ => baml.sys.panic("baml.mock.Mock.scope: push_override rejected the mock's target/replacement; this should be impossible given Mock.new's callability check.")
+    }
     let result = {
       body()
     } catch_all (e) {

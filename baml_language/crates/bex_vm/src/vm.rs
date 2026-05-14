@@ -73,8 +73,12 @@ pub struct MockOverride {
     /// `Some(r)` ⇒ match only `BoundMethod` calls whose receiver equals `r`.
     pub receiver: Option<Value>,
     /// Heap pointer to the replacement callable (`Function`, `Closure`, or
-    /// `BoundMethod`). Invoked in place of the target on a match.
-    pub replacement: HeapPtr,
+    /// `BoundMethod`) invoked in place of the target on a match. `None`
+    /// marks a *spy* entry: the lookup bumps `counter_instance` and
+    /// returns `Ok(None)`, so the real `target_fn` runs un-intercepted
+    /// (and the recursion guard never engages — there is no replacement
+    /// frame to re-enter).
+    pub replacement: Option<HeapPtr>,
     /// Optional `Mock<T>` instance whose `call_count` field is incremented
     /// each time this entry intercepts a call. `Mock.scope` passes
     /// `self` here so callers see the counter tick up without needing a
@@ -821,11 +825,16 @@ impl BexVm {
     ///
     /// Returns:
     /// - `Ok(Some((replacement, entry_idx)))` — a non-suppressed match
-    ///   was found. The matched entry has been marked `suppressed = true`
-    ///   and its owning Mock's `call_count` bumped. The caller must push
-    ///   an `UnsuppressMockContinuation` keyed by `entry_idx` to flip the
+    ///   with an installed `replacement` was found. The matched entry
+    ///   has been marked `suppressed = true` and its owning Mock's
+    ///   `call_count` bumped. The caller must push an
+    ///   `UnsuppressMockContinuation` keyed by `entry_idx` to flip the
     ///   flag back when the replacement frame returns.
-    /// - `Ok(None)` — no entry in `mock_stack` matches.
+    /// - `Ok(None)` — either no entry matches, or the topmost match is
+    ///   a *spy* entry (`replacement = None`). In the spy case the
+    ///   counter has already been bumped; the caller proceeds to
+    ///   dispatch the original `target_fn` unchanged, so the spied
+    ///   function's natural recursion sees no suppression.
     /// - `Err(VmError::Thrown(MockRecursion))` — at least one matching
     ///   entry exists but every match is currently `suppressed`. This is
     ///   the "replacement is calling its own target" recursion case.
@@ -863,20 +872,27 @@ impl BexVm {
             let entry = &mut self.mock_stack[idx];
             let replacement = entry.replacement;
             let counter_instance = entry.counter_instance;
-            let entry_target_fn = entry.target_fn;
-            // Skip the recursion-guard suppression when the replacement IS
-            // the target (spy mode — `Mock.new(f)` without a `replace`).
-            // Natural recursion in `f` shouldn't trip the recursion guard.
-            let replacement_id = self.callable_identity(replacement);
-            let is_spy = replacement_id == entry_target_fn;
-            let entry = &mut self.mock_stack[idx];
-            if !is_spy {
-                entry.suppressed = true;
+            match replacement {
+                Some(rep) => {
+                    // Real replacement: suppress so the replacement
+                    // calling back into `target_fn` triggers the
+                    // recursion guard (unless it uses `m.original`).
+                    entry.suppressed = true;
+                    if let Some(inst_ptr) = counter_instance {
+                        self.bump_mock_call_count(inst_ptr);
+                    }
+                    return Ok(Some((rep, idx)));
+                }
+                None => {
+                    // Spy entry: just count and let the call proceed
+                    // to the un-mocked target. No suppression needed
+                    // since we never push a replacement frame.
+                    if let Some(inst_ptr) = counter_instance {
+                        self.bump_mock_call_count(inst_ptr);
+                    }
+                    return Ok(None);
+                }
             }
-            if let Some(inst_ptr) = counter_instance {
-                self.bump_mock_call_count(inst_ptr);
-            }
-            return Ok(Some((replacement, idx)));
         }
         if saw_suppressed_match {
             // Replacement is recursing into its own target. The lookup
@@ -1755,12 +1771,25 @@ impl BexVm {
             let frame = &self.frames[depth];
 
             // Native continuation frames have no exception handlers and own
-            // no eval stack region — just pop and continue unwinding.
+            // no eval stack region — pop them, but first let their
+            // continuation run its unwind hook so cleanup that must
+            // happen on both the return and the throw paths (e.g.
+            // clearing a mock-recursion suppression flag) still fires.
             if matches!(frame, Frame::Native(_)) {
                 if self.frames.len() <= 1 {
+                    // The continuation can't observe `vm` state and then
+                    // also return out of this fn, so we still need to
+                    // run `on_unwind` before re-throwing.
+                    let popped = self.frames.pop().expect("frame stack is not empty");
+                    if let Frame::Native(nf) = popped {
+                        nf.continuation.on_unwind(self);
+                    }
                     return Err(VmError::Thrown(exception_value));
                 }
-                self.frames.pop();
+                let popped = self.frames.pop().expect("frame stack is not empty");
+                if let Frame::Native(nf) = popped {
+                    nf.continuation.on_unwind(self);
+                }
                 // Clean up tracing / interrupt bookkeeping
                 while self
                     .traced_frames
@@ -1933,6 +1962,73 @@ impl BexVm {
         callee
     }
 
+    /// Normalize a mock-replacement pointer for operand-stack dispatch.
+    ///
+    /// When the replacement is an `Object::BoundMethod`, the inner
+    /// function's arity includes `self` but the call site's stack only
+    /// holds the visible args (the call shape is the target's, which by
+    /// `Mock<T>`'s constraint equals the replacement's visible arity).
+    /// Inserts the bound receiver at the start of the args region so the
+    /// stack ends up `[receiver, arg1, ..., argN]`, then returns
+    /// `(replacement_ptr, full_arity)` for the caller to forward to
+    /// `execute_call_from_locals_offset`. For `Function`/`Closure`
+    /// replacements the stack is left untouched and the visible arity
+    /// is returned unchanged.
+    ///
+    /// Centralizes the receiver-injection step that the regular
+    /// `CallIndirect` `BoundMethod` arm does inline — every mock-redirect
+    /// dispatch site must use this helper instead of calling
+    /// `resolve_callable_target(replacement)` directly, otherwise a
+    /// `BoundMethod` replacement underflows the stack or shifts every
+    /// arg by one slot.
+    fn normalize_mock_replacement_for_stack(
+        &mut self,
+        replacement_ptr: HeapPtr,
+        visible_arg_count: usize,
+    ) -> Result<(HeapPtr, usize), VmError> {
+        let expected = FunctionType::Callable;
+        match self.get_object(replacement_ptr) {
+            Object::Function(f) => Ok((replacement_ptr, f.arity)),
+            Object::Closure(c) => {
+                let func_obj = unsafe { c.function.get() };
+                match func_obj {
+                    Object::Function(f) => Ok((replacement_ptr, f.arity)),
+                    _ => Err(VmInternalError::TypeError {
+                        expected: expected.into(),
+                        got: ObjectType::of(func_obj).into(),
+                    }
+                    .into()),
+                }
+            }
+            Object::BoundMethod(bm) => {
+                let receiver = bm.receiver;
+                let func_obj = unsafe { bm.function.get() };
+                let full_arity = match func_obj {
+                    Object::Function(f) => f.arity,
+                    _ => {
+                        return Err(VmInternalError::TypeError {
+                            expected: expected.into(),
+                            got: ObjectType::of(func_obj).into(),
+                        }
+                        .into());
+                    }
+                };
+                let args_offset = self
+                    .stack
+                    .len()
+                    .checked_sub(visible_arg_count)
+                    .ok_or(VmInternalError::NotEnoughItemsOnStack(visible_arg_count))?;
+                self.stack.insert(args_offset, receiver);
+                Ok((replacement_ptr, full_arity))
+            }
+            other => Err(VmInternalError::TypeError {
+                expected: expected.into(),
+                got: ObjectType::of(other).into(),
+            }
+            .into()),
+        }
+    }
+
     fn execute_call_from_locals_offset(
         &mut self,
         callee_ptr: HeapPtr,
@@ -2093,7 +2189,11 @@ impl BexVm {
                                 // mock entry's `suppressed` flag flips back
                                 // when the replacement returns.
                                 self.push_mock_unsuppress_frame(rep, mock_idx);
-                                rep
+                                // If the replacement is itself a BoundMethod,
+                                // inject its receiver before the visible
+                                // args — same shape adjustment we'd do for
+                                // a direct BoundMethod callee.
+                                self.resolve_bound_method_callee(rep, &mut callback_args)
                             }
                             None => {
                                 // If callee is a BoundMethod, insert receiver into args.
@@ -2512,7 +2612,8 @@ impl BexVm {
                             let real_callee = match mock_redirect {
                                 Some((rep, mock_idx)) => {
                                     self.push_mock_unsuppress_frame(rep, mock_idx);
-                                    rep
+                                    // BoundMethod replacement → inject receiver.
+                                    self.resolve_bound_method_callee(rep, &mut callback_args)
                                 }
                                 None => {
                                     // If callee is a BoundMethod, insert receiver into args.
@@ -3960,24 +4061,25 @@ impl BexVm {
                 if let Some((replacement_ptr, mock_idx)) =
                     self.lookup_mock_override_for_callee(callee_ptr, None)?
                 {
-                    let arity = callable_arity;
+                    let (rep_ptr, rep_arity) =
+                        self.normalize_mock_replacement_for_stack(replacement_ptr, callable_arity)?;
                     let args_offset = self
                         .stack
                         .len()
-                        .checked_sub(arity)
-                        .ok_or(VmInternalError::NotEnoughItemsOnStack(arity))?;
+                        .checked_sub(rep_arity)
+                        .ok_or(VmInternalError::NotEnoughItemsOnStack(rep_arity))?;
                     let locals_offset = StackIndex::from_raw(args_offset);
                     // Push unsuppress first (runs after wrap when returning,
                     // i.e. last in the LIFO continuation chain).
-                    self.push_mock_unsuppress_frame(replacement_ptr, mock_idx);
+                    self.push_mock_unsuppress_frame(rep_ptr, mock_idx);
                     self.frames.push(Frame::Native(NativeFrame {
-                        function: replacement_ptr,
+                        function: rep_ptr,
                         continuation: Box::new(crate::package_baml::WrapReadyFutureContinuation),
                     }));
                     if let Some(state) = self.execute_call_from_locals_offset(
-                        replacement_ptr,
+                        rep_ptr,
                         locals_offset,
-                        arity,
+                        rep_arity,
                         frame_idx,
                         function,
                     )? {
@@ -4226,7 +4328,7 @@ impl BexVm {
                     self.lookup_mock_override_for_callee(callee_ptr, args_base)?
                 {
                     let (rep_ptr, rep_arity) =
-                        self.resolve_callable_target(Value::Object(replacement_ptr))?;
+                        self.normalize_mock_replacement_for_stack(replacement_ptr, arg_count)?;
                     callee_ptr = rep_ptr;
                     arg_count = rep_arity;
                     // Push the unsuppress continuation now so it sits below
@@ -4463,9 +4565,12 @@ impl BexVm {
                         self.lookup_mock_override(inner_fn_ptr, Some(receiver))?
                     };
                     if let Some((replacement_ptr, mock_idx)) = mock_hit {
-                        let (rep_ptr, rep_arity) =
-                            self.resolve_callable_target(Value::Object(replacement_ptr))?;
+                        // Pop the callee (bound_method) first so the
+                        // operand stack matches the visible call shape
+                        // before we normalize the replacement.
                         let _popped = self.stack.ensure_pop();
+                        let (rep_ptr, rep_arity) = self
+                            .normalize_mock_replacement_for_stack(replacement_ptr, visible_arity)?;
                         let args_offset = self
                             .stack
                             .len()
@@ -4518,8 +4623,7 @@ impl BexVm {
                     }
                 } else {
                     // Plain Function or Closure: existing path.
-                    let (mut callee_ptr, mut arg_count) =
-                        self.resolve_callable_target(callee_value)?;
+                    let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
                     // Mock-stack interception (indirect call site). The
                     // stack layout here is `[args..., callee]`, so the
                     // first arg sits at `stack.len() - arg_count - 1`.
@@ -4528,38 +4632,52 @@ impl BexVm {
                         .len()
                         .checked_sub(arg_count + 1)
                         .map(StackIndex::from_raw);
-                    let mut pending_unsuppress: Option<(HeapPtr, usize)> = None;
                     let mock_hit = if bypass_mock {
                         None
                     } else {
                         self.lookup_mock_override_for_callee(callee_ptr, args_base)?
                     };
                     if let Some((replacement_ptr, mock_idx)) = mock_hit {
+                        // Pop the callee first so the stack matches the
+                        // visible call shape before normalization injects
+                        // a BoundMethod replacement's receiver.
+                        let _popped_callee = self.stack.ensure_pop();
                         let (rep_ptr, rep_arity) =
-                            self.resolve_callable_target(Value::Object(replacement_ptr))?;
-                        callee_ptr = rep_ptr;
-                        arg_count = rep_arity;
-                        pending_unsuppress = Some((rep_ptr, mock_idx));
-                    }
-                    let args_offset = self
-                        .stack
-                        .len()
-                        .checked_sub(arg_count + 1)
-                        .ok_or(VmInternalError::NotEnoughItemsOnStack(arg_count + 1))?;
-                    let _popped_callee = self.stack.ensure_pop();
-                    let locals_offset = StackIndex::from_raw(args_offset);
-                    if let Some((rep_ptr, mock_idx)) = pending_unsuppress {
+                            self.normalize_mock_replacement_for_stack(replacement_ptr, arg_count)?;
+                        let args_offset = self
+                            .stack
+                            .len()
+                            .checked_sub(rep_arity)
+                            .ok_or(VmInternalError::NotEnoughItemsOnStack(rep_arity))?;
+                        let locals_offset = StackIndex::from_raw(args_offset);
                         self.push_mock_unsuppress_frame(rep_ptr, mock_idx);
-                    }
+                        if let Some(state) = self.execute_call_from_locals_offset(
+                            rep_ptr,
+                            locals_offset,
+                            rep_arity,
+                            frame_idx,
+                            function,
+                        )? {
+                            return Ok(Some(state));
+                        }
+                    } else {
+                        let args_offset = self
+                            .stack
+                            .len()
+                            .checked_sub(arg_count + 1)
+                            .ok_or(VmInternalError::NotEnoughItemsOnStack(arg_count + 1))?;
+                        let _popped_callee = self.stack.ensure_pop();
+                        let locals_offset = StackIndex::from_raw(args_offset);
 
-                    if let Some(state) = self.execute_call_from_locals_offset(
-                        callee_ptr,
-                        locals_offset,
-                        arg_count,
-                        frame_idx,
-                        function,
-                    )? {
-                        return Ok(Some(state));
+                        if let Some(state) = self.execute_call_from_locals_offset(
+                            callee_ptr,
+                            locals_offset,
+                            arg_count,
+                            frame_idx,
+                            function,
+                        )? {
+                            return Ok(Some(state));
+                        }
                     }
                 }
                 if self.early_yield.should_early_yield() {
@@ -5502,7 +5620,8 @@ impl BexVm {
                         let real_callee = match mock_redirect {
                             Some((rep, mock_idx)) => {
                                 self.push_mock_unsuppress_frame(rep, mock_idx);
-                                rep
+                                // BoundMethod replacement → inject receiver.
+                                self.resolve_bound_method_callee(rep, &mut callback_args)
                             }
                             None => self.resolve_bound_method_callee(callee, &mut callback_args),
                         };
@@ -6033,12 +6152,15 @@ impl BexVm {
                     if let Some((replacement_ptr, mock_idx)) =
                         self.lookup_mock_override_for_callee(callee_ptr, None)?
                     {
-                        let arity = callable_arity;
+                        let (rep_ptr, rep_arity) = self.normalize_mock_replacement_for_stack(
+                            replacement_ptr,
+                            callable_arity,
+                        )?;
                         let args_offset = self
                             .stack
                             .len()
-                            .checked_sub(arity)
-                            .ok_or(VmInternalError::NotEnoughItemsOnStack(arity))?;
+                            .checked_sub(rep_arity)
+                            .ok_or(VmInternalError::NotEnoughItemsOnStack(rep_arity))?;
                         let locals_offset = StackIndex::from_raw(args_offset);
                         // Save pc so the saved frame returns cleanly.
                         let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
@@ -6046,17 +6168,17 @@ impl BexVm {
                         };
                         bf.instruction_ptr = *pc;
                         // Push unsuppress first (runs after wrap on return).
-                        self.push_mock_unsuppress_frame(replacement_ptr, mock_idx);
+                        self.push_mock_unsuppress_frame(rep_ptr, mock_idx);
                         self.frames.push(Frame::Native(NativeFrame {
-                            function: replacement_ptr,
+                            function: rep_ptr,
                             continuation: Box::new(
                                 crate::package_baml::WrapReadyFutureContinuation,
                             ),
                         }));
                         if let Some(state) = self.execute_call_from_locals_offset(
-                            replacement_ptr,
+                            rep_ptr,
                             locals_offset,
-                            arity,
+                            rep_arity,
                             frame_idx,
                             function,
                         )? {
@@ -6246,7 +6368,7 @@ impl BexVm {
                         self.lookup_mock_override_for_callee(callee_ptr, args_base)?
                     {
                         let (rep_ptr, rep_arity) =
-                            self.resolve_callable_target(Value::Object(replacement_ptr))?;
+                            self.normalize_mock_replacement_for_stack(replacement_ptr, arg_count)?;
                         callee_ptr = rep_ptr;
                         arg_count = rep_arity;
                         pending_unsuppress = Some((rep_ptr, mock_idx));
@@ -6403,9 +6525,15 @@ impl BexVm {
                             self.lookup_mock_override(fn_ptr, Some(receiver))?
                         };
                         if let Some((replacement_ptr, mock_idx)) = mock_hit {
-                            let (rep_ptr, rep_arity) =
-                                self.resolve_callable_target(Value::Object(replacement_ptr))?;
+                            // Pop the callee first so the operand stack
+                            // matches the visible call shape before
+                            // normalization injects a BoundMethod
+                            // replacement's receiver.
                             let _popped = self.stack.ensure_pop();
+                            let (rep_ptr, rep_arity) = self.normalize_mock_replacement_for_stack(
+                                replacement_ptr,
+                                visible_arity,
+                            )?;
                             let args_offset = self
                                 .stack
                                 .len()
@@ -6446,45 +6574,58 @@ impl BexVm {
                             return Ok(Some(state));
                         }
                     } else {
-                        let (mut callee_ptr, mut arg_count) =
-                            self.resolve_callable_target(callee_value)?;
+                        let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
                         // Mock-stack interception (indirect call site, fast path).
                         let args_base = self
                             .stack
                             .len()
                             .checked_sub(arg_count + 1)
                             .map(StackIndex::from_raw);
-                        let mut pending_unsuppress: Option<(HeapPtr, usize)> = None;
                         let mock_hit = if bypass_mock {
                             None
                         } else {
                             self.lookup_mock_override_for_callee(callee_ptr, args_base)?
                         };
                         if let Some((replacement_ptr, mock_idx)) = mock_hit {
-                            let (rep_ptr, rep_arity) =
-                                self.resolve_callable_target(Value::Object(replacement_ptr))?;
-                            callee_ptr = rep_ptr;
-                            arg_count = rep_arity;
-                            pending_unsuppress = Some((rep_ptr, mock_idx));
-                        }
-                        let args_offset = self
-                            .stack
-                            .len()
-                            .checked_sub(arg_count + 1)
-                            .ok_or(VmInternalError::NotEnoughItemsOnStack(arg_count + 1))?;
-                        let _popped_callee = self.stack.ensure_pop();
-                        let locals_offset = StackIndex::from_raw(args_offset);
-                        if let Some((rep_ptr, mock_idx)) = pending_unsuppress {
+                            // Pop the callee first so the stack matches
+                            // the visible call shape before normalization
+                            // injects a BoundMethod replacement's receiver.
+                            let _popped_callee = self.stack.ensure_pop();
+                            let (rep_ptr, rep_arity) = self
+                                .normalize_mock_replacement_for_stack(replacement_ptr, arg_count)?;
+                            let args_offset = self
+                                .stack
+                                .len()
+                                .checked_sub(rep_arity)
+                                .ok_or(VmInternalError::NotEnoughItemsOnStack(rep_arity))?;
+                            let locals_offset = StackIndex::from_raw(args_offset);
                             self.push_mock_unsuppress_frame(rep_ptr, mock_idx);
-                        }
-                        if let Some(state) = self.execute_call_from_locals_offset(
-                            callee_ptr,
-                            locals_offset,
-                            arg_count,
-                            frame_idx,
-                            function,
-                        )? {
-                            return Ok(Some(state));
+                            if let Some(state) = self.execute_call_from_locals_offset(
+                                rep_ptr,
+                                locals_offset,
+                                rep_arity,
+                                frame_idx,
+                                function,
+                            )? {
+                                return Ok(Some(state));
+                            }
+                        } else {
+                            let args_offset = self
+                                .stack
+                                .len()
+                                .checked_sub(arg_count + 1)
+                                .ok_or(VmInternalError::NotEnoughItemsOnStack(arg_count + 1))?;
+                            let _popped_callee = self.stack.ensure_pop();
+                            let locals_offset = StackIndex::from_raw(args_offset);
+                            if let Some(state) = self.execute_call_from_locals_offset(
+                                callee_ptr,
+                                locals_offset,
+                                arg_count,
+                                frame_idx,
+                                function,
+                            )? {
+                                return Ok(Some(state));
+                            }
                         }
                     }
                     if self.early_yield.should_early_yield() {
@@ -7593,7 +7734,9 @@ impl ::bex_vm_types::RootHaver for BexVm {
         // after a move.
         for entry in &self.mock_stack {
             roots.push(entry.target_fn);
-            roots.push(entry.replacement);
+            if let Some(rep) = entry.replacement {
+                roots.push(rep);
+            }
             if let Some(Value::Object(receiver)) = entry.receiver {
                 roots.push(receiver);
             }
@@ -7636,8 +7779,10 @@ impl ::bex_vm_types::RootHaver for BexVm {
             if let Some(&new) = roots.get(&entry.target_fn) {
                 entry.target_fn = new;
             }
-            if let Some(&new) = roots.get(&entry.replacement) {
-                entry.replacement = new;
+            if let Some(rep) = &mut entry.replacement {
+                if let Some(&new) = roots.get(rep) {
+                    *rep = new;
+                }
             }
             if let Some(Value::Object(ref mut receiver_ptr)) = entry.receiver {
                 if let Some(&new) = roots.get(receiver_ptr) {

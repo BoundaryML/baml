@@ -102,6 +102,14 @@ pub trait Continuation: Send {
 
     /// Update all `HeapPtr` values after GC moves objects (forwarding).
     fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>);
+
+    /// Run when the owning `Frame::Native` is popped during exception
+    /// unwinding (i.e. `call` will never fire). Default is a no-op;
+    /// override for cleanup that must happen on both the return and the
+    /// throw paths (e.g. clearing a recursion-guard flag). Callers
+    /// invoke this *before* dropping the boxed continuation so it can
+    /// observe `vm` state at unwind time.
+    fn on_unwind(self: Box<Self>, _vm: &mut BexVm) {}
 }
 
 // Generate the BamlClass*/BamlNamespace*/BamlPackageBaml trait hierarchy.

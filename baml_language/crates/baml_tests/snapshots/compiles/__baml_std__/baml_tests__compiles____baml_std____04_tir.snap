@@ -1215,12 +1215,12 @@ class baml.media.Image$stream {
 class baml.mock.Mock {
   call_count: int
   original: T
-  _impl: T
+  _impl: T?
   _original: T
 }
 function baml.mock.Mock.new(original: unknown) -> baml.mock.Mock<unknown> throws never {
   { : baml.mock.Mock<T>
-    Mock { call_count: 0, original: baml.mock.wrap_unmocked<T>(original), _impl: original, _original: original } : baml.mock.Mock<T>
+    Mock { call_count: 0, original: baml.mock.wrap_unmocked<T>(original), _impl: null, _original: original } : baml.mock.Mock<T>
   }
 }
 function baml.mock.Mock.replace(self: baml.mock.Mock, impl: unknown) -> void throws never {
@@ -1230,7 +1230,11 @@ function baml.mock.Mock.replace(self: baml.mock.Mock, impl: unknown) -> void thr
 }
 function baml.mock.Mock.scope<U, EU>(self: baml.mock.Mock, body: () -> U throws EU) -> U throws EU {
   { : U
-    let _ = baml.mock.push_override<T>(self._original, self._impl, self) : null
+    let _ = : null
+      catch (baml.mock.push_override<T>(self._original, self._impl, self) : null) : null
+        catch (e)
+          _ =>
+            baml.sys.panic("baml.mock.Mock.sc...") : never
     let result = : U
       catch ({ 0 stmts + tail } : U) : U
         catch_all (e)
@@ -1247,7 +1251,7 @@ function baml.mock.Mock.to_json(self: baml.mock.Mock) -> baml.json.json throws b
   map { "call_count": self.call_count.to_json(), "original": baml.json.to_json(self.original), "_impl": baml.json.to_json(self._impl), "_original": baml.json.to_json(self._original) } : map<string, baml.json.json>
 }
 function baml.mock.Mock.from_json(j: baml.json.json) -> baml.mock.Mock<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Mock { call_count: baml.json.from_json<int>(baml.json.field(j, "call_count")), original: baml.json.from_json<T>(baml.json.field(j, "original")), _impl: baml.json.from_json<T>(baml.json.field(j, "_impl")), _original: baml.json.from_json<T>(baml.json.field(j, "_original")) } : baml.mock.Mock<T>
+  Mock { call_count: baml.json.from_json<int>(baml.json.field(j, "call_count")), original: baml.json.from_json<T>(baml.json.field(j, "original")), _impl: baml.json.from_json<T?>(baml.json.field(j, "_impl")), _original: baml.json.from_json<T>(baml.json.field(j, "_original")) } : baml.mock.Mock<T>
 }
 class baml.mock.Mock$stream {
   call_count: null | int
