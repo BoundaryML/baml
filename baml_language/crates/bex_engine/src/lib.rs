@@ -650,6 +650,12 @@ impl BexEngine {
         #[cfg(not(target_arch = "wasm32"))]
         let park_requested = Arc::new(AtomicBool::new(false));
 
+        // Mint counter for runtime-compiled package names. Constructed up-front
+        // (rather than only at the `Self {}` literal below) so the `$init` VM
+        // can see it — `reflect.Package.new` from a top-level `let` needs the
+        // counter to mint a real `_pkg_N` name.
+        let runtime_pkg_counter = Arc::new(AtomicUsize::new(0));
+
         // Run $init for each package in dependency order.
         // $init evaluates top-level let-binding initializers and stores their
         // results into the global slots via StoreGlobal instructions.
@@ -668,6 +674,12 @@ impl BexEngine {
                     Arc::clone(&park_requested),
                     Arc::clone(&argv),
                 );
+                // Top-level `let pkg = reflect.Package.new()` runs during
+                // `$init`. Without the shared counter, `Package.new` from
+                // `$init` would mint a package whose `name` field is empty
+                // (the native impl checks the counter and rejects the call),
+                // leaving the package unusable for downstream `add_compile`.
+                vm.runtime_pkg_counter = Some(Arc::clone(&runtime_pkg_counter));
                 vm.set_entry_point(*init_ptr, &[]);
                 // Drive the VM to completion. $init only contains synchronous
                 // bytecode (no async ops), but we loop to handle any intermediate
@@ -794,7 +806,7 @@ impl BexEngine {
             test_cases,
             argv,
             project_db: std::sync::OnceLock::new(),
-            runtime_pkg_counter: Arc::new(AtomicUsize::new(0)),
+            runtime_pkg_counter,
             heap_permit_manager,
             checking_gc: AtomicBool::new(false),
             #[cfg(not(target_arch = "wasm32"))]

@@ -633,6 +633,128 @@ async fn add_compile_failure_reverts_runtime_files() {
     );
 }
 
+/// `add_compile` must lift runtime-defined classes alongside functions and
+/// wire them into per-function `aux_object_ptrs` so `AllocInstance` works.
+/// This test defines `class Box { x: int }` and `function make_box() -> Box`,
+/// asserts `pkg.items["Box"]` is a gen0 `Object::Class`, asserts `make_box`'s
+/// aux pool points at it, and confirms the `AllocInstance` operand was
+/// rewritten to the aux-pool slot rather than the original program-pool one.
+#[tokio::test]
+async fn add_compile_lifts_class_and_populates_aux_pool() {
+    let source = r#"
+        function build() -> reflect.Package {
+            reflect.Package.new().add_compile({
+                "lib.baml": "class Box { x: int } function make_box() -> Box { Box { x: 7 } }"
+            })
+        }
+        function main() -> bool {
+            let _ = build();
+            true
+        }
+    "#;
+
+    let (program, db) = compile_source_with_opt_returning_db(source, OptLevel::One);
+    let db_handle = Arc::new(parking_lot::Mutex::new(db));
+
+    let engine = BexEngine::new(
+        program,
+        Arc::new(sys_ops::SysOps::native()),
+        None,
+        Vec::new(),
+    )
+    .expect("BexEngine::new");
+    engine
+        .set_project_db(Arc::clone(&db_handle))
+        .expect("set_project_db");
+    let engine = Arc::new(engine);
+
+    let result = engine
+        .call_function_bound_args(
+            "user.main",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+    assert!(result.is_ok(), "main() returned: {result:?}");
+
+    unsafe {
+        let heap = engine.heap();
+        let mut pkg_ref: Option<&bex_vm_types::Package> = None;
+        let gen0 = heap.gen0_ref();
+        for i in 0..gen0.len() {
+            let ptr = gen0.get_ptr(i);
+            let obj_ref: &Object = &*ptr;
+            if let Object::Package(p) = obj_ref
+                && p.name == "_pkg_0"
+            {
+                pkg_ref = Some(p.as_ref());
+                break;
+            }
+        }
+        let pkg = pkg_ref.expect("runtime package _pkg_0 should be reachable in gen0");
+
+        // `pkg.items["Box"]` must be a gen0 Object::Class.
+        let box_ptr = *pkg
+            .items
+            .get("Box")
+            .expect("pkg.items should contain `Box` from the lifted class");
+        assert!(
+            matches!(box_ptr.get(), Object::Class(_)),
+            "pkg.items[\"Box\"] should be Object::Class, got {:?}",
+            box_ptr.get()
+        );
+
+        // `make_box`'s aux pool must point at the same Box HeapPtr.
+        let make_box_ptr = *pkg
+            .items
+            .get("make_box")
+            .expect("pkg.items should contain `make_box`");
+        let Object::Function(make_box_fn) = make_box_ptr.get() else {
+            panic!("pkg.items[\"make_box\"] is not a Function");
+        };
+        assert!(
+            !make_box_fn.aux_object_ptrs.is_empty(),
+            "make_box should have a non-empty aux_object_ptrs (AllocInstance target)"
+        );
+        let mut found_box_in_aux = false;
+        for entry in &make_box_fn.aux_object_ptrs {
+            if *entry == box_ptr {
+                found_box_in_aux = true;
+                break;
+            }
+        }
+        assert!(
+            found_box_in_aux,
+            "make_box.aux_object_ptrs should contain the gen0 Box class HeapPtr; \
+             got {:?}",
+            make_box_fn.aux_object_ptrs
+        );
+
+        // The AllocInstance instruction's ObjectIndex must be rewritten to
+        // point into the aux pool, not the original program-pool index.
+        let alloc_idx = make_box_fn
+            .bytecode
+            .instructions
+            .iter()
+            .find_map(|i| match i {
+                Instruction::AllocInstance { class_obj, .. } => Some(class_obj.into_raw()),
+                _ => None,
+            })
+            .expect("make_box should have an AllocInstance instruction");
+        assert!(
+            alloc_idx < make_box_fn.aux_object_ptrs.len(),
+            "AllocInstance operand {alloc_idx} should be a valid aux-pool index \
+             (aux_object_ptrs.len() = {})",
+            make_box_fn.aux_object_ptrs.len()
+        );
+        assert_eq!(
+            make_box_fn.aux_object_ptrs[alloc_idx], box_ptr,
+            "AllocInstance operand should point at the lifted Box class"
+        );
+    }
+}
+
 /// `set_project_db` takes `&self` (not `&mut self`), so production embedders
 /// can wrap the engine in `Arc::new(...)` *before* attaching the database
 /// handle. This mirrors how `bex_project::BexProject` wires reflection

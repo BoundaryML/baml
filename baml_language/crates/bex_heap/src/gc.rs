@@ -402,6 +402,17 @@ impl BexHeap {
                 }
             }
             Object::Package(pkg) => {
+                // Defensive: build-time packages have `PackageGlobals::Static`
+                // and should never have items inserted into them — items are
+                // populated by `reflect.Package.add_compile` exclusively for
+                // runtime (`Dynamic`-globals) packages. Catches regressions
+                // where a future change accidentally allows item insertion on
+                // a compile-time package.
+                debug_assert!(
+                    matches!(pkg.globals, PackageGlobals::Dynamic(_)) || pkg.items.is_empty(),
+                    "Static-globals package must have empty items, got {} items",
+                    pkg.items.len(),
+                );
                 // Items are HeapPtrs to user-visible package members
                 // (functions, classes, enums). Walk each.
                 for ptr in pkg.items.values() {

@@ -18,6 +18,44 @@ use crate::{
     errors::{VmBamlError, VmRustFnError},
 };
 
+/// Extract the [`ObjectIndex`] operand from an instruction if it has one.
+///
+/// Used by the `add_compile` lift to find every object-pool reference in a
+/// runtime function's bytecode so they can be lifted into the function's
+/// per-function `aux_object_ptrs` pool. `IsType` is omitted: its operand
+/// indexes into `bytecode.constants` (a `ConstValue`), not the object pool,
+/// so it's covered by `resolve_runtime_const` instead.
+fn instruction_object_idx(instr: &Instruction) -> Option<bex_vm_types::ObjectIndex> {
+    match *instr {
+        Instruction::AllocInstance { class_obj, .. } => Some(class_obj),
+        Instruction::AllocVariant(idx) => Some(idx),
+        Instruction::MakeClosure { obj_idx, .. } => Some(obj_idx),
+        _ => None,
+    }
+}
+
+/// Set the [`ObjectIndex`] operand on an instruction that has one.
+///
+/// Returns `false` for instructions without an `ObjectIndex` operand — those
+/// are no-ops for the aux-pool rewrite pass.
+fn set_instruction_object_idx(instr: &mut Instruction, idx: bex_vm_types::ObjectIndex) -> bool {
+    match instr {
+        Instruction::AllocInstance { class_obj, .. } => {
+            *class_obj = idx;
+            true
+        }
+        Instruction::AllocVariant(slot) => {
+            *slot = idx;
+            true
+        }
+        Instruction::MakeClosure { obj_idx, .. } => {
+            *obj_idx = idx;
+            true
+        }
+        _ => false,
+    }
+}
+
 /// Extract the [`GlobalIndex`] operand from an instruction if it has one.
 ///
 /// Used by the `add_compile` lift to find every global slot reference in a
@@ -26,6 +64,7 @@ use crate::{
 fn instruction_global_slot(instr: &Instruction) -> Option<GlobalIndex> {
     match *instr {
         Instruction::LoadGlobal(s)
+        | Instruction::StoreGlobal(s)
         | Instruction::DispatchFuture(s)
         | Instruction::MakeBoundMethod(s) => Some(s),
         Instruction::Call { callee, .. } => Some(callee),
@@ -40,6 +79,7 @@ fn instruction_global_slot(instr: &Instruction) -> Option<GlobalIndex> {
 fn set_instruction_global_slot(instr: &mut Instruction, slot: GlobalIndex) -> bool {
     match instr {
         Instruction::LoadGlobal(s)
+        | Instruction::StoreGlobal(s)
         | Instruction::DispatchFuture(s)
         | Instruction::MakeBoundMethod(s) => {
             *s = slot;
@@ -135,25 +175,38 @@ fn resolve_runtime_const(
     }
 }
 
+/// Object kind tag for `ObjectIndex` resolution during the lift. Carried in
+/// the index map so AllocInstance/AllocVariant/MakeClosure ObjectIndex
+/// operands route to the right same-package or external lookup table.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LiftedObjectKind {
+    Function,
+    Class,
+    Enum,
+}
+
 /// Lift the runtime package's items from a freshly compiled `Program` into
 /// `pkg_ptr`'s `Package.items` + `Package.globals.Dynamic`, preserving
 /// `HeapPtr` identity for items defined in earlier `add_compile` batches.
 ///
 /// For each new function whose `package_name` matches this package:
-/// 1. Walk its bytecode to discover global-slot references.
-/// 2. Assign per-package slots for the targets:
-///    - Same-package callees → the corresponding entry from `pkg.items` (existing
-///      or newly-lifted).
-///    - External callees (stdlib / host / `deps`) → currently throw
-///      `Unsupported`; supported in a follow-up commit.
-/// 3. Rewrite the bytecode's slot operands from flat to per-package and
-///    regenerate the compact form.
+/// 1. Walk its bytecode for `GlobalIndex` operands → build per-package slot map.
+/// 2. Walk its bytecode for `ObjectIndex` operands (AllocInstance,
+///    AllocVariant, MakeClosure) → populate `aux_object_ptrs`. Same-package
+///    targets resolve through `pkg.items`; external targets resolve through
+///    the engine's resolved-name tables (functions / classes / enums).
+/// 3. Rewrite the bytecode's `GlobalIndex` operands from flat to per-package
+///    slots and rewrite `ObjectIndex` operands from the program object pool
+///    to aux-pool slots. Regenerate the compact form.
 /// 4. Resolve the function's bytecode constants (`ConstValue::*`) to
 ///    runtime `Value::*`, allocating strings into gen0.
 /// 5. Allocate `Object::Function` in gen0 and register it in `pkg.items`
 ///    under its local name.
 /// 6. Append the new slot assignments to `pkg.globals.Dynamic` and
 ///    `pkg.function_slot_map`.
+///
+/// Classes and enums whose FQN's package prefix matches `pkg_name` are also
+/// lifted into gen0 and registered in `pkg.items` under their local names.
 fn lift_runtime_package(
     vm: &mut BexVm,
     pkg_ptr: HeapPtr,
@@ -184,51 +237,96 @@ fn lift_runtime_package(
         _ => unreachable!("pkg_ptr was validated as Object::Package by caller"),
     };
 
-    // Index program.objects by ObjectIndex → FQN for callee lookup. We
-    // only care about Function-typed entries for now; class / enum lifting
-    // lands in a later commit.
-    let object_index_to_fqn: HashMap<usize, String> = program
+    // F13: cache external function FQN → HeapPtr in a single up-front scan of
+    // the engine's frozen globals. Without this, every same-batch instruction
+    // that references an external callee would scan all globals linearly.
+    let external_fn_cache: HashMap<String, HeapPtr> = {
+        let mut cache: HashMap<String, HeapPtr> = HashMap::new();
+        for v in vm.globals.as_slice(vm.proof()) {
+            if let Value::Object(ptr) = v
+                && let Object::Function(f) = vm.get_object(*ptr)
+            {
+                cache.insert(f.name.clone(), *ptr);
+            }
+        }
+        cache
+    };
+
+    // Index program.objects by ObjectIndex → (FQN, kind). Covers functions,
+    // classes, and enums; needed both for `GlobalIndex` (Call/LoadGlobal
+    // target functions) and `ObjectIndex` (AllocInstance class targets,
+    // AllocVariant enum targets, MakeClosure function targets).
+    let object_index_lookup: HashMap<usize, (String, LiftedObjectKind)> = program
         .objects
         .iter()
         .enumerate()
         .filter_map(|(idx, obj)| match obj {
-            Object::Function(f) => Some((idx, f.name.clone())),
+            Object::Function(f) => Some((idx, (f.name.clone(), LiftedObjectKind::Function))),
+            Object::Class(c) => Some((idx, (c.name.to_string(), LiftedObjectKind::Class))),
+            Object::Enum(e) => Some((idx, (e.name.to_string(), LiftedObjectKind::Enum))),
             _ => None,
         })
         .collect();
 
-    // Collect new functions: those whose `package_name` matches and whose
-    // local name isn't already in `pkg.items` (identity preserved across
-    // batches by skipping these).
-    let new_functions: Vec<Function> = program
-        .objects
-        .iter()
-        .filter_map(|obj| match obj {
+    // Collect items new to this batch. An item is "new" iff its FQN's package
+    // prefix matches `pkg_name` AND its local name isn't already in `pkg.items`
+    // (identity is preserved across batches by skipping existing entries).
+    //
+    // `package_name` on `Function` is set by emit; for `Class`/`Enum` we
+    // check the FQN prefix directly via `pkg_dot` since they don't carry an
+    // explicit package field.
+    let mut new_functions: Vec<Function> = Vec::new();
+    let mut new_classes: Vec<bex_vm_types::Class> = Vec::new();
+    let mut new_enums: Vec<bex_vm_types::Enum> = Vec::new();
+    for obj in &program.objects {
+        match obj {
             Object::Function(f) if f.package_name == pkg_name => {
-                let local_name = f
+                let local = f
                     .name
                     .strip_prefix(pkg_dot.as_str())
                     .unwrap_or(f.name.as_str());
-                if existing_items.contains_key(local_name) {
-                    None
-                } else {
-                    Some((**f).clone())
+                if !existing_items.contains_key(local) {
+                    new_functions.push((**f).clone());
                 }
             }
-            _ => None,
-        })
-        .collect();
+            Object::Class(c) => {
+                let fqn = c.name.to_string();
+                if let Some(local) = fqn.strip_prefix(pkg_dot.as_str())
+                    && !existing_items.contains_key(local)
+                {
+                    new_classes.push((**c).clone());
+                }
+            }
+            Object::Enum(e) => {
+                let fqn = e.name.to_string();
+                if let Some(local) = fqn.strip_prefix(pkg_dot.as_str())
+                    && !existing_items.contains_key(local)
+                {
+                    new_enums.push((**e).clone());
+                }
+            }
+            _ => {}
+        }
+    }
 
-    // Pass A: pre-allocate `Object::Function` shells in gen0 so we have
-    // stable HeapPtrs to reference from each function's rewritten bytecode.
-    // We allocate with the original (flat-slot) bytecode here; pass B
-    // mutates the bytecode in place via `get_object_mut`.
+    // Pass A: pre-allocate gen0 shells for new functions, classes, and enums
+    // so we have stable HeapPtrs available before any bytecode rewrite. The
+    // bytecode is still in flat-slot form here; pass B mutates each function
+    // in place via `get_object_mut`.
     //
-    // `name_to_ptr` maps every local name (existing + new) to its HeapPtr;
-    // slot map building references this.
+    // `name_to_ptr` maps every local name (existing + new, all kinds) to its
+    // HeapPtr; the slot map and aux pool population both consult it for
+    // same-package targets.
     let mut name_to_ptr: HashMap<String, HeapPtr> = existing_items;
-    let mut newly_allocated: Vec<(String, HeapPtr)> = Vec::with_capacity(new_functions.len());
-    for func in &new_functions {
+    let mut newly_allocated: Vec<(String, HeapPtr)> = Vec::new();
+
+    // Functions first — we need their HeapPtrs for `resolve_runtime_const`
+    // when walking constants in pass B.
+    let mut newly_allocated_fns: Vec<(String, HeapPtr)> = Vec::with_capacity(new_functions.len());
+    // Consume by value so each allocation is `Box::new(func)` (no double box
+    // via `Box::new(func.clone())`). `new_functions` is no longer needed
+    // after this loop.
+    for mut func in new_functions {
         let local_name = func
             .name
             .strip_prefix(pkg_dot.as_str())
@@ -236,27 +334,51 @@ fn lift_runtime_package(
             .to_string();
         // Tag the function with its owning package so runtime dispatch
         // (`resolve_frame_package`) reads `pkg.globals` for `Call`/`LoadGlobal`.
-        let mut func_clone = func.clone();
-        func_clone.package = pkg_ptr;
-        let ptr = vm.tlab.alloc(Object::Function(Box::new(func_clone)));
+        func.package = pkg_ptr;
+        let ptr = vm.tlab.alloc(Object::Function(Box::new(func)));
+        name_to_ptr.insert(local_name.clone(), ptr);
+        newly_allocated_fns.push((local_name.clone(), ptr));
+        newly_allocated.push((local_name, ptr));
+    }
+    // Then classes and enums. They have no rewrite step — just allocate and
+    // index.
+    for class in new_classes {
+        let local_name = class
+            .name
+            .to_string()
+            .strip_prefix(pkg_dot.as_str())
+            .unwrap_or(class.name.display_name.as_str())
+            .to_string();
+        let ptr = vm.tlab.alloc(Object::Class(Box::new(class)));
+        name_to_ptr.insert(local_name.clone(), ptr);
+        newly_allocated.push((local_name, ptr));
+    }
+    for enm in new_enums {
+        let local_name = enm
+            .name
+            .to_string()
+            .strip_prefix(pkg_dot.as_str())
+            .unwrap_or(enm.name.display_name.as_str())
+            .to_string();
+        let ptr = vm.tlab.alloc(Object::Enum(Box::new(enm)));
         name_to_ptr.insert(local_name.clone(), ptr);
         newly_allocated.push((local_name, ptr));
     }
 
     // Pass B: for each newly-allocated function, walk its bytecode for
-    // global-slot references, build the slot map, then rewrite the slots
-    // and regenerate the compact form.
+    // global-slot references AND object-pool references, build the slot map
+    // and aux pool, then rewrite the operands and regenerate the compact form.
     let mut new_global_entries: Vec<Value> = Vec::new();
     let mut next_slot = existing_globals_len;
 
-    for (_local_name, fn_ptr) in &newly_allocated {
-        // First pass: collect every flat slot used in this function and
-        // ensure each one has a `slot_map` entry. We snapshot the
-        // instructions to release the heap borrow before mutating.
+    for (_local_name, fn_ptr) in &newly_allocated_fns {
+        // Snapshot instructions to release the heap borrow before mutating.
         let instructions_snapshot: Vec<Instruction> = match vm.get_object(*fn_ptr) {
             Object::Function(f) => f.bytecode.instructions.clone(),
             _ => unreachable!(),
         };
+
+        // ─── Pass B.1: GlobalIndex slot map ───
         for instr in &instructions_snapshot {
             let Some(flat_slot) = instruction_global_slot(instr) else {
                 continue;
@@ -282,22 +404,31 @@ fn lift_runtime_package(
                 }
                 .into());
             };
-            let fqn = object_index_to_fqn
+            let (fqn, kind) = object_index_lookup
                 .get(&obj_idx.into_raw())
                 .cloned()
                 .ok_or_else(|| VmBamlError::Unsupported {
                     message: format!(
                         "reflect.Package.add_compile: slot {flat_idx} points to ObjectIndex \
-                         {obj_idx:?} which isn't a Function"
+                         {obj_idx:?} which isn't a Function/Class/Enum"
                     ),
                 })?;
+            if kind != LiftedObjectKind::Function {
+                return Err(VmBamlError::Unsupported {
+                    message: format!(
+                        "reflect.Package.add_compile: global slot {flat_idx} targets a \
+                         non-function object ({fqn}, kind={kind:?}); only function targets \
+                         are supported in global slots"
+                    ),
+                }
+                .into());
+            }
             if slot_map.contains_key(&fqn) {
                 continue;
             }
-            // Resolve the callee. Same-package callees come from the
-            // local `name_to_ptr` map (existing items + newly-allocated).
-            // External callees (stdlib, host, deps) are looked up in the
-            // engine's frozen globals by FQN.
+            // Resolve the callee. Same-package callees come from `name_to_ptr`
+            // (existing items + newly-allocated). External callees come from
+            // the up-front `external_fn_cache` built from the engine's globals.
             let target_ptr = if let Some(local) = fqn.strip_prefix(pkg_dot.as_str()) {
                 *name_to_ptr
                     .get(local)
@@ -308,7 +439,8 @@ fn lift_runtime_package(
                         ),
                     })?
             } else {
-                vm.find_function_by_name(&fqn)
+                *external_fn_cache
+                    .get(&fqn)
                     .ok_or_else(|| VmBamlError::Unsupported {
                         message: format!(
                             "reflect.Package.add_compile: external callee {fqn} not found \
@@ -320,6 +452,76 @@ fn lift_runtime_package(
             slot_map.insert(fqn, next_slot);
             new_global_entries.push(Value::Object(target_ptr));
             next_slot += 1;
+        }
+
+        // ─── Pass B.2: ObjectIndex → aux pool ───
+        // For each AllocInstance/AllocVariant/MakeClosure operand, resolve
+        // the target HeapPtr and assign it a slot in the function's aux pool.
+        // `aux_index_for` deduplicates within a single function so multiple
+        // references to the same target share one aux slot.
+        let mut aux_pool: Vec<HeapPtr> = Vec::new();
+        let mut aux_index_for: HashMap<usize, usize> = HashMap::new();
+        for instr in &instructions_snapshot {
+            let Some(obj_idx) = instruction_object_idx(instr) else {
+                continue;
+            };
+            let raw = obj_idx.into_raw();
+            if aux_index_for.contains_key(&raw) {
+                continue;
+            }
+            let (fqn, kind) =
+                object_index_lookup
+                    .get(&raw)
+                    .cloned()
+                    .ok_or_else(|| VmBamlError::Unsupported {
+                        message: format!(
+                            "reflect.Package.add_compile: ObjectIndex {raw} in instruction \
+                         {instr:?} doesn't match any Function/Class/Enum in the program \
+                         object pool"
+                        ),
+                    })?;
+            // Resolve same-package vs external:
+            //  - Same-package: look up local name in `name_to_ptr`.
+            //  - External: look up by FQN in the appropriate engine map.
+            let target_ptr = if let Some(local) = fqn.strip_prefix(pkg_dot.as_str()) {
+                *name_to_ptr
+                    .get(local)
+                    .ok_or_else(|| VmBamlError::Unsupported {
+                        message: format!(
+                            "reflect.Package.add_compile: same-package {kind:?} target {fqn} \
+                         not found in package items"
+                        ),
+                    })?
+            } else {
+                match kind {
+                    LiftedObjectKind::Function => {
+                        *external_fn_cache
+                            .get(&fqn)
+                            .ok_or_else(|| VmBamlError::Unsupported {
+                                message: format!(
+                                    "reflect.Package.add_compile: external function {fqn} \
+                             referenced via ObjectIndex not found in engine globals"
+                                ),
+                            })?
+                    }
+                    // BAML's runtime type namespace is unified — classes and
+                    // enums share `vm.resolved_class_names` (FQNs are unique
+                    // across both kinds; see [crates/bex_vm/src/vm.rs](crates/bex_vm/src/vm.rs)
+                    // where enum entries are folded into the same map).
+                    LiftedObjectKind::Class | LiftedObjectKind::Enum => *vm
+                        .resolved_class_names
+                        .get(&fqn)
+                        .ok_or_else(|| VmBamlError::Unsupported {
+                            message: format!(
+                                "reflect.Package.add_compile: external {kind:?} {fqn} not \
+                                 found in engine class/enum registry"
+                            ),
+                        })?,
+                }
+            };
+            let slot = aux_pool.len();
+            aux_pool.push(target_ptr);
+            aux_index_for.insert(raw, slot);
         }
 
         // Resolve constants for this function.
@@ -338,11 +540,14 @@ fn lift_runtime_package(
             )?);
         }
 
-        // Second pass: mutate the function in place. We need:
+        // Second pass: mutate the function in place.
         //   1. Rewrite each instruction's GlobalIndex from flat → per-pkg slot.
-        //   2. Set resolved_constants.
-        //   3. Re-lower to compact form so the VM's fast-path dispatch sees
-        //      the rewritten slots.
+        //   2. Rewrite each ObjectIndex operand from program-pool → aux-pool.
+        //   3. Install `aux_object_ptrs` so `BexVm::resolve_obj_idx` routes
+        //      ObjectIndex operands through it at runtime.
+        //   4. Set resolved_constants.
+        //   5. Re-lower to compact form so the VM's fast-path dispatch sees
+        //      the rewritten operands.
         match vm.get_object_mut(*fn_ptr) {
             Object::Function(f) => {
                 for instr in &mut f.bytecode.instructions {
@@ -351,16 +556,38 @@ fn lift_runtime_package(
                         let ConstValue::Object(obj_idx) = cv else {
                             unreachable!("guarded above");
                         };
-                        let fqn = &object_index_to_fqn[&obj_idx.into_raw()];
+                        let (fqn, _kind) = &object_index_lookup[&obj_idx.into_raw()];
                         let new_slot = slot_map[fqn];
                         set_instruction_global_slot(instr, GlobalIndex::from_raw(new_slot));
                     }
+                    if let Some(obj_idx) = instruction_object_idx(instr) {
+                        let new_idx = aux_index_for[&obj_idx.into_raw()];
+                        set_instruction_object_idx(
+                            instr,
+                            bex_vm_types::ObjectIndex::from_raw(new_idx),
+                        );
+                    }
                 }
+                f.aux_object_ptrs = aux_pool;
                 f.bytecode.resolved_constants = resolved;
                 f.bytecode.compact = Some(f.bytecode.lower_to_compact());
             }
             _ => unreachable!(),
         }
+    }
+
+    // Write barriers: every object reference that's about to be written
+    // into `pkg.items` or `pkg.globals.Dynamic` must be reported to the
+    // GC's card table so an older-generation `pkg` correctly tracks
+    // outgoing references to younger-generation items. Call these BEFORE
+    // `get_object_mut` so the heap borrow doesn't conflict with the
+    // mutable package borrow. Matches the pattern at SetField /
+    // ArraySet / MapSet (see [crates/bex_vm/src/vm.rs](crates/bex_vm/src/vm.rs)).
+    for (_name, ptr) in &newly_allocated {
+        vm.heap.write_barrier(pkg_ptr, Value::Object(*ptr));
+    }
+    for entry in &new_global_entries {
+        vm.heap.write_barrier(pkg_ptr, *entry);
     }
 
     // Commit the new state to the package.
@@ -666,3 +893,30 @@ impl BamlClassReflectPackage for PackageBamlImpl {
 }
 
 impl BamlNamespaceReflect for PackageBamlImpl {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `StoreGlobal` must be recognized by both `instruction_global_slot`
+    /// and `set_instruction_global_slot` so any runtime package containing a
+    /// top-level `let` binding (which emits `StoreGlobal` from its synthetic
+    /// `$init` function) has the slot remapped from flat to per-package
+    /// space along with every other Call/LoadGlobal/etc. site.
+    #[test]
+    fn store_global_slot_helpers_round_trip() {
+        let mut instr = Instruction::StoreGlobal(GlobalIndex::from_raw(7));
+        assert_eq!(
+            instruction_global_slot(&instr).map(|g| g.into_raw()),
+            Some(7)
+        );
+        assert!(set_instruction_global_slot(
+            &mut instr,
+            GlobalIndex::from_raw(42),
+        ));
+        assert!(matches!(
+            instr,
+            Instruction::StoreGlobal(g) if g.into_raw() == 42
+        ));
+    }
+}

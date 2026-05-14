@@ -69,18 +69,17 @@ pub struct BytecodeFrame {
     pub function: HeapPtr,
     /// Pointer to the `Object::Package` this frame's function belongs to.
     ///
-    /// Resolved at frame push from `function.package_name` via
-    /// `vm.packages.get(&name)`. `None` when no matching package is registered
-    /// — typically VMs constructed via `BexVm::from_program` (tests / standalone
-    /// analysis tools) that don't go through the engine's package
-    /// construction. Functions emitted by `BexEngine::new` always resolve to a
-    /// compile-time-pool `Object::Package`.
+    /// Hot-path cache populated at frame push from `function.package`. `None`
+    /// when the underlying function has `package: HeapPtr::null()` —
+    /// typically VMs constructed via `BexVm::from_program` (tests /
+    /// standalone analysis tools) that don't go through the engine's
+    /// package construction. Functions emitted by `BexEngine::new` always
+    /// resolve to a compile-time-pool `Object::Package`; runtime-lifted
+    /// functions (from `reflect.Package.add_compile`) resolve to a gen0
+    /// `Object::Package`.
     ///
-    /// Consumed by the package-routed dispatch path (`LoadGlobal`, `Call` by
-    /// global slot, etc.) once that lands. The pointer is to a compile-time
-    /// `Object::Package` for build-time functions (stable across GC); a
-    /// future Phase 5 commit will add the gen0 case for runtime-compiled
-    /// packages.
+    /// Consumed by the package-routed dispatch path (`LoadGlobal`, `Call`
+    /// by global slot, etc.).
     pub package: Option<HeapPtr>,
     /// Instruction pointer (IP). Points to the next instruction.
     pub instruction_ptr: usize,
