@@ -80,6 +80,24 @@ async fn fire_and_forget_error_surfaces_at_next_await() {
     );
 }
 
+/// BEP-034 Phase G `cancel_from_handle.rs` from the original plan:
+/// `let f = spawn { sleep(1s); 42 }; f.cancel(); await f catch
+/// (Cancelled) { 0 }` returns 0. Confirms the full round-trip from
+/// user-side cancel → await throws Cancelled → user catches.
+#[tokio::test]
+async fn cancel_from_handle_then_await_catches_cancelled() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            let f = spawn { baml.sys.sleep(60000); 42 };
+            let _ = f.cancel();
+            (await f) catch (e) { baml.panics.Cancelled => 0 }
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(0)));
+}
+
 /// State observation companion to the test above. After `waiter` is
 /// cancelled mid-`await`, its heap Future state must reflect Cancelled
 /// (not stay Pending), so any subsequent state inspection or re-await

@@ -1392,9 +1392,9 @@ fn baml.fs.write_bytes = builtin(io)
 
 fn baml.future.Future.cancel = builtin(vm)
 
-fn baml.future.Future.from_json(j: baml.json.json) -> baml.future.Future<void, void> {
+fn baml.future.Future.from_json(j: baml.json.json) -> future<void, void> {
     // Locals:
-    let _0: baml.future.Future<void, void> // _0 // return
+    let _0: future<void, void> // _0 // return
     let _1: baml.json.json // j // param
 
     bb0: {

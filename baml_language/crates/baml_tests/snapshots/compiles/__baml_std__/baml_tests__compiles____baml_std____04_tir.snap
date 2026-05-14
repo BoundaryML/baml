@@ -301,7 +301,7 @@ class baml.future.Future {
 function baml.future.Future.to_json(self: baml.future.Future) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
   map {  } : map<never, never>
 }
-function baml.future.Future.from_json(j: baml.json.json) -> baml.future.Future<unknown, unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function baml.future.Future.from_json(j: baml.json.json) -> Future<unknown, unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Future {  } : baml.future.Future<T, E>
 }
 class baml.future.Future$stream {

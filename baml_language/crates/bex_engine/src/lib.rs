@@ -1976,12 +1976,23 @@ impl BexEngine {
                 }
 
                 VmExecState::Await(future_id) => {
-                    // BEP-034: drain any fire-and-forget child error
-                    // before processing the await. "If a fire-and-forget
-                    // task throws an unhandled error, the error
-                    // propagates to the parent task at its next `await`
-                    // point." We surface the head-of-queue error here
-                    // (and ignore `future_id` until the queue is empty).
+                    // BEP-034: surface any fire-and-forget child error
+                    // at this checkpoint, EXCEPT the one belonging to
+                    // the future we're about to await — that error
+                    // will surface via the normal `FutureRead::Error
+                    // → VmError::Thrown` path, which is catchable by
+                    // user `catch` clauses. Without this carve-out, an
+                    // explicit `(await f) catch (e) { … }` where `f`
+                    // errored fire-and-forget would have its error
+                    // pre-empted here as `EngineError::UnhandledThrow`
+                    // and bypass the catch.
+                    let awaiting_ptr = {
+                        let g = self.futures.acquire(thread.proof()).await;
+                        g.future_heap_ptr(future_id)
+                    };
+                    if let Some(ptr) = awaiting_ptr {
+                        thread.vm_thread_consume_pending_child_error_for(ptr);
+                    }
                     if let Some(value) = Self::read_pending_child_error_value(&mut thread) {
                         // Same propagation pattern as
                         // `VmError::ThrownUnhandled` for a non-cancel
@@ -2086,6 +2097,17 @@ impl BexEngine {
                     // await checkpoint (not slip past it). The pre-
                     // drain caught errors that were ready going in;
                     // this catches errors that arrived during the wait.
+                    //
+                    // Same catch-natural carve-out as pre-drain: if
+                    // the awaited future itself errored during the
+                    // wait and pushed to our queue, consume that
+                    // entry so the VM's re-execution of Await throws
+                    // via the heap state (catchable) rather than
+                    // surfacing here as `EngineError::UnhandledThrow`
+                    // (uncatchable).
+                    if let Some(ptr) = awaiting_ptr {
+                        thread.vm_thread_consume_pending_child_error_for(ptr);
+                    }
                     if let Some(value) = Self::read_pending_child_error_value(&mut thread) {
                         if let Some(our_future_id) = thread.vm_thread_settles_future() {
                             let our_cancel = thread.vm_thread_cancel().clone();

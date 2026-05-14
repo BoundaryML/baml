@@ -1142,7 +1142,7 @@ function baml.fs.write_bytes(path: string, content: uint8array) -> int {
 function baml.future.Future.cancel(self: null) -> bool {
 }
 
-function baml.future.Future.from_json(j: baml.json.json) -> baml.future.Future<void, void> {
+function baml.future.Future.from_json(j: baml.json.json) -> future<void, void> {
     load_type #0
     load_type #1
     alloc_instance<2> baml.future.Future

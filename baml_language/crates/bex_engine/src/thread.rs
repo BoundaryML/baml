@@ -74,6 +74,19 @@ impl ChildErrorQueue {
             .pop_front()
     }
 
+    /// Remove every queue entry whose ptr equals `ptr`. Returns the
+    /// number removed. Used by the parent's await handler to "consume"
+    /// an explicitly-awaited errored future from the queue — the VM
+    /// will throw via the heap state on its own, letting user
+    /// `catch` clauses fire naturally rather than being short-circuited
+    /// by the engine-level fire-and-forget surface path.
+    pub fn remove_matching(&self, ptr: HeapPtr) -> usize {
+        let mut queue = self.inner.lock().expect("ChildErrorQueue poisoned");
+        let before = queue.len();
+        queue.retain(|p| *p != ptr);
+        before - queue.len()
+    }
+
     /// GC root collection: copy out every queued ptr.
     pub fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
         let queue = self.inner.lock().expect("ChildErrorQueue poisoned");
@@ -195,6 +208,13 @@ impl BexThread {
     /// fire-and-forget errors per BEP-034.
     pub fn vm_thread_pop_pending_child_error(&self) -> Option<HeapPtr> {
         self.pending_child_errors.pop()
+    }
+
+    /// Remove any queue entries for `ptr` (the explicitly-awaited
+    /// future). Returns true if at least one entry was removed.
+    /// See [`ChildErrorQueue::remove_matching`] for why.
+    pub fn vm_thread_consume_pending_child_error_for(&self, ptr: HeapPtr) -> bool {
+        self.pending_child_errors.remove_matching(ptr) > 0
     }
 
     /// Push our settled future ptr onto the parent's pending-child-errors

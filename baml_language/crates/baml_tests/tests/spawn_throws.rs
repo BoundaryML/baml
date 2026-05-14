@@ -4,16 +4,6 @@
 //! E parameter (`Future<T, E>`) is the union of types it might throw,
 //! and the awaiter's catch clause must be able to handle them as
 //! ordinary thrown values.
-//!
-//! KNOWN ISSUE — catch + await: `(await f) catch (e) { … }` does not
-//! invoke the catch handler today. The bytecode emitter generates the
-//! catch arms after the `await` instruction, but the exception table
-//! entry produced by `build_exception_table` does not cover the
-//! await's PC, so a re-thrown value from a settled-Error future
-//! escapes past the catch and bubbles to the host. Direct-call catch
-//! (`boom() catch (e) { … }`) works fine, so the bug is specific to
-//! the await catch-region wiring. Tracked separately; tests below
-//! cover the throw-round-trip without relying on user-side catch.
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
@@ -66,6 +56,88 @@ async fn await_uncaught_user_error_bubbles_to_host() {
         msg.contains("MyErr") && msg.contains("nope"),
         "expected MyErr with field values, got {msg}",
     );
+}
+
+#[tokio::test]
+async fn await_rethrows_caught_by_user_catch() {
+    // The re-thrown error from `await` must be catchable via user
+    // catch arms. `(await f) catch (e) { … }` parses as expected
+    // (parentheses required because `await` is a prefix that would
+    // otherwise consume the entire trailing expression including the
+    // catch). The engine's fire-and-forget propagation has a
+    // carve-out so that an explicit await of an errored future doesn't
+    // pre-empt the catch.
+    let output = baml_test!(
+        r#"
+        function boom() -> int throws baml.errors.Io {
+            throw baml.errors.Io { message: "x" }
+        }
+        function main() -> int {
+            let f = spawn { boom() };
+            (await f) catch (e) { baml.errors.Io => 99 }
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
+}
+
+#[tokio::test]
+async fn await_rethrows_user_class_caught_by_user_catch() {
+    // User-defined error type also flows through to the catch.
+    let output = baml_test!(
+        r#"
+        class MyErr { code int }
+        function fail() -> int throws MyErr {
+            throw MyErr { code: 7 }
+        }
+        function main() -> int {
+            let f = spawn { fail() };
+            (await f) catch (e) { MyErr => 99 }
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
+}
+
+#[tokio::test]
+async fn errored_future_is_error_returns_true() {
+    // After the awaiter swallowed the error via catch, the heap
+    // Future is in Error state and `is_error()` returns true.
+    let output = baml_test!(
+        r#"
+        function fail() -> int throws baml.errors.Io {
+            throw baml.errors.Io { message: "x" }
+        }
+        function main() -> bool {
+            let f = spawn { fail() };
+            let _ = (await f) catch (e) { baml.errors.Io => 0 };
+            f.is_error()
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn errored_future_state_returns_error_variant() {
+    let output = baml_test!(
+        r#"
+        function fail() -> int throws baml.errors.Io {
+            throw baml.errors.Io { message: "x" }
+        }
+        function main() -> baml.future.FutureState {
+            let f = spawn { fail() };
+            let _ = (await f) catch (e) { baml.errors.Io => 0 };
+            f.state()
+        }
+        "#
+    );
+    match output.result {
+        Ok(BexExternalValue::Variant { variant_name, .. }) => {
+            assert_eq!(variant_name, "Error");
+        }
+        other => panic!("expected Variant Error, got {other:?}"),
+    }
 }
 
 #[tokio::test]

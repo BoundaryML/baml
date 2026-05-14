@@ -75,12 +75,27 @@ async fn three_level_nested_spawn_sum() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(111)));
 }
 
-// `spawn_returns_future.rs` from the original Phase G plan would test
-// `function spawn_child() -> Future<int, null> { spawn { 99 } }`, but
-// `Future<T, E>` is not currently parseable as a user-written type
-// expression (the syntax kind exists; the parser doesn't emit it).
-// When that lands, add the test that calls `await spawn_child()`
-// from main to confirm the value flows through a Future-typed return.
+/// BEP-034: function-typed return of `Future<T, E>` — the spawning
+/// helper's return value flows through the await at the call site.
+/// Mirrors the `spawn_returns_future.rs` item from the original
+/// Phase G plan. The fully-qualified `baml.future.Future<T, E>` form
+/// resolves to `Ty::Future`; bare `Future<T, E>` would need to be in
+/// lexical scope and isn't auto-imported in v1.
+#[tokio::test]
+async fn function_can_return_future_typed_value() {
+    let output = baml_test!(
+        r#"
+        function spawn_child() -> baml.future.Future<int, null> {
+            spawn { 99 }
+        }
+        function main() -> int {
+            let f = spawn_child();
+            await f
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
+}
 
 /// BEP-034: "Parent throws still cascade-cancel children." When the
 /// parent function throws an unhandled error, the parent thread's
