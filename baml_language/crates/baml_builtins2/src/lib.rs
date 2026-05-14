@@ -49,6 +49,9 @@ impl BuiltinFile {
 
 /// Package name for the main std package (baml types and namespaces).
 pub const PACKAGE_BAML: &str = "baml";
+/// Package name for the standalone `reflect` package (e.g. `reflect.type_of`,
+/// `reflect.Package`).
+pub const PACKAGE_REFLECT: &str = "reflect";
 /// Package name for the testing package.
 pub const PACKAGE_TESTING: &str = "testing";
 /// Package name for the assert package.

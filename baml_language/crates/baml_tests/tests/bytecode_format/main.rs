@@ -9,7 +9,7 @@ fn compile_display_functions(source: &str, opt: OptLevel) -> Vec<(String, Functi
     let mut functions: Vec<(String, Function)> = program
         .function_indices
         .iter()
-        .filter(|(name, _)| !name.starts_with("baml."))
+        .filter(|(name, _)| !name.starts_with("baml.") && !name.starts_with("reflect."))
         .filter_map(|(name, idx)| match program.objects.get(*idx) {
             Some(Object::Function(f)) => Some((name.clone(), (**f).clone())),
             _ => None,

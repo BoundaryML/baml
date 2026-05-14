@@ -25,6 +25,7 @@ mod map;
 mod math;
 mod media;
 mod primitives;
+mod reflect;
 mod root;
 mod stack_trace;
 mod string;
@@ -207,9 +208,14 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 bex_vm_types::FunctionKind::Bytecode => bex_vm_types::FunctionKind::Bytecode,
                 bex_vm_types::FunctionKind::SysOp(op) => bex_vm_types::FunctionKind::SysOp(op),
                 bex_vm_types::FunctionKind::NativeUnresolved => {
-                    // Only attempt resolution for the `baml.*` package. Functions
-                    // from other stdlib packages (assert, testing, …) are deferred.
-                    if !function.name.starts_with("baml.") {
+                    // Resolve native functions from packages that the codegen
+                    // covers: `baml.*` (the main stdlib) and `reflect.*` (the
+                    // standalone reflect package — `reflect.type_of`,
+                    // `reflect.Package.new`, …). Functions from other stdlib
+                    // packages (assert, testing, log, …) are pure BAML and
+                    // stay deferred.
+                    if !function.name.starts_with("baml.") && !function.name.starts_with("reflect.")
+                    {
                         bex_vm_types::FunctionKind::NativeUnresolved
                     } else {
                         let Some(native_function) =

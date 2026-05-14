@@ -76,6 +76,7 @@ pub fn display_user_functions_with_options(program: &Program, show_auto_derive: 
                 && !name.starts_with("assert.")
                 && !name.starts_with("log.")
                 && !name.starts_with("env.")
+                && !name.starts_with("reflect.")
         })
         .filter_map(|(name, idx)| match program.objects.get(*idx) {
             Some(Object::Function(f)) => {

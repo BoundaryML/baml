@@ -639,6 +639,11 @@ fn emit_class_trait(
     if let Some(first) = entries.first() {
         writeln!(out, "/// Generated from `{}`", first.builtin.source_file).unwrap();
     }
+    // Class traits frequently expose static factory methods named `new` that
+    // return the BAML-side wrapper `Value`, not the Rust `Self` of
+    // `PackageBamlImpl`. The lint doesn't apply to generated trait
+    // contracts.
+    out.push_str("#[allow(clippy::new_ret_no_self)]\n");
     writeln!(out, "pub trait {trait_name} {{").unwrap();
 
     for entry in entries {
@@ -802,7 +807,13 @@ fn emit_root_trait(out: &mut String, root: &NamespaceNode) {
     }
 
     out.push_str("    fn get_native_fn(path: &str) -> Option<NativeFunction> {\n");
-    out.push_str("        let rest = path.strip_prefix(\"baml.\")?;\n");
+    // Accept both `baml.X` (canonical builtin path) and bare `X` paths used
+    // by top-level sibling packages like `reflect.*`. The codegen's
+    // namespace tree treats each top-level namespace below `baml.` as a
+    // separate dispatch arm, so a path like `reflect.Package.new` can be
+    // routed via the `reflect` arm directly once the `baml.` prefix is
+    // stripped (or wasn't there to begin with).
+    out.push_str("        let rest = path.strip_prefix(\"baml.\").unwrap_or(path);\n");
     out.push_str("        match rest.split_once('.') {\n");
 
     for class_name in root.classes.keys() {

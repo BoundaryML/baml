@@ -65,10 +65,14 @@ pub fn extract_native_builtins()
     let mut class_defs = Vec::new();
     let mut diagnostic_lines: Vec<String> = Vec::new();
 
-    for builtin_file in baml_builtins2::ALL
-        .iter()
-        .filter(|f| f.package == baml_builtins2::PACKAGE_BAML)
-    {
+    // Process the `baml` and `reflect` packages: both contain classes whose
+    // methods need Rust-side trait implementations. Other packages
+    // (`testing`, `assert`, `log`) are pure BAML — they have no
+    // `$rust_function` bodies — so we skip them to avoid emitting empty
+    // trait scaffolding for them.
+    for builtin_file in baml_builtins2::ALL.iter().filter(|f| {
+        f.package == baml_builtins2::PACKAGE_BAML || f.package == baml_builtins2::PACKAGE_REFLECT
+    }) {
         let path = builtin_file.virtual_path();
         // Real filesystem path for diagnostic messages (clickable in editors).
         let diag_path = format!(
