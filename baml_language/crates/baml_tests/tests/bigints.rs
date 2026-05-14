@@ -193,6 +193,81 @@ async fn test_int_to_bigint_generic_method_class_type_arg() {
     assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(7))));
 }
 
+// ─── FFI-boundary int↔bigint coercion ────────────────────────────────────────
+
+#[tokio::test]
+async fn test_bigint_param_accepts_int_from_host() {
+    // Host SDK passes a plain `int(42)` to a function whose declared param
+    // is `bigint` and whose body actually exercises bigint arithmetic. The
+    // engine's call-boundary coercion widens int→bigint so the body's
+    // `+ 1n` doesn't fault with `CannotApplyBinOp(Bigint, Int)`.
+    let output = baml_test!(
+        baml: r#"
+        function PlusOne(x: bigint) -> bigint { x + 1n }
+    "#,
+        entry: "PlusOne",
+        args: { "x" => BexExternalValue::Int(42) },
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Bigint(BigInt::from(43)))
+    );
+}
+
+#[tokio::test]
+async fn test_int_param_accepts_bigint_from_host_in_range() {
+    // Symmetric: a Bigint that fits in i64 lands in an `int` slot.
+    let output = baml_test!(
+        baml: r#"
+        function Echo(x: int) -> int { x }
+    "#,
+        entry: "Echo",
+        args: { "x" => BexExternalValue::Bigint(BigInt::from(42)) },
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
+}
+
+#[tokio::test]
+async fn test_int_param_rejects_bigint_overflow() {
+    // A Bigint that doesn't fit in i64 against an `int` slot is a hard
+    // error — there's no silently-truncate option that's safe.
+    let huge = BigInt::parse_bytes(b"99999999999999999999", 10).unwrap();
+    let output = baml_test!(
+        baml: r#"
+        function Echo(x: int) -> int { x }
+    "#,
+        entry: "Echo",
+        args: { "x" => BexExternalValue::Bigint(huge) },
+    );
+    let Err(err) = &output.result else {
+        panic!("expected overflow error, got: {:?}", output.result);
+    };
+    let msg = format!("{err:?}");
+    assert!(
+        msg.contains("does not fit in i64"),
+        "expected i64 overflow error, got: {msg}"
+    );
+}
+
+#[tokio::test]
+async fn test_bigint_return_widens_int() {
+    // The return path mirrors the arg path: a function declared to return
+    // `bigint` that lowers internally to `Value::Int` (via e.g. an `int`
+    // literal preserved through a passthrough) surfaces as a `Bigint`
+    // BexExternalValue.
+    let output = baml_test!(
+        baml: r#"
+        function Identity<T>(x: T) -> T { x }
+        function GetBig() -> bigint { Identity(42) }
+    "#,
+        entry: "GetBig",
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Bigint(BigInt::from(42)))
+    );
+}
+
 #[tokio::test]
 async fn test_int_to_bigint_captured_in_lambda() {
     // `local_bigint += captured_int` inside a closure: the lambda boundary

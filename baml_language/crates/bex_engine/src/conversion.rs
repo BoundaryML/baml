@@ -854,6 +854,99 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: &Value) -> BexExternalValue 
     }
 }
 
+/// Coerce a host-encoded **incoming** value to match the declared param type.
+///
+/// Handles two layers of bridge mismatch:
+///
+/// 1. **Class / enum naming:** host encoders carry an informational class or
+///    variant name (e.g. `root.lorem.MyLorem`); rewrite it to the
+///    engine-registered FQN (`user.lorem.MyLorem`) so VM heap lookups hit. A
+///    plain `Map` arriving at a class slot is also promoted to `Instance`.
+/// 2. **Numeric / optional / union coercion:** see `coerce_numeric_to_declared_type`.
+///
+/// Nested container types (arrays/maps with mismatched element types) are not
+/// walked; host-side schema-aware encoders own that shaping.
+pub(crate) fn coerce_arg_to_declared_type(
+    value: BexExternalValue,
+    ty: &Ty,
+) -> Result<BexExternalValue, EngineError> {
+    match (value, ty) {
+        // ── Class / enum naming (incoming only) ──────────────────────────
+        (BexExternalValue::Map { entries, .. }, Ty::Class(type_name, _, _)) => {
+            Ok(BexExternalValue::Instance {
+                class_name: type_name.to_string(),
+                fields: entries,
+            })
+        }
+        (BexExternalValue::Instance { fields, .. }, Ty::Class(type_name, _, _)) => {
+            Ok(BexExternalValue::Instance {
+                class_name: type_name.to_string(),
+                fields,
+            })
+        }
+        (BexExternalValue::Variant { variant_name, .. }, Ty::Enum(type_name, _)) => {
+            Ok(BexExternalValue::Variant {
+                enum_name: type_name.to_string(),
+                variant_name,
+            })
+        }
+
+        // ── Numeric / optional / union ───────────────────────────────────
+        (v, ty) => coerce_numeric_to_declared_type(v, ty),
+    }
+}
+
+/// Coerce an **outgoing** return value to match the declared return type.
+///
+/// Restricted to direction-symmetric coercions: int↔bigint widening, optional
+/// unwrap, and numeric-singleton unions. Class / enum naming is intentionally
+/// *not* rewritten here — the engine-side FQN (e.g. `user.lorem.MyLorem`) is
+/// the authoritative output and stripping it back to the bare display name
+/// would break host-side type lookups.
+pub(crate) fn coerce_return_to_declared_type(
+    value: BexExternalValue,
+    ty: &Ty,
+) -> Result<BexExternalValue, EngineError> {
+    coerce_numeric_to_declared_type(value, ty)
+}
+
+/// Shared numeric / optional / union coercion used by both arg and return paths.
+fn coerce_numeric_to_declared_type(
+    value: BexExternalValue,
+    ty: &Ty,
+) -> Result<BexExternalValue, EngineError> {
+    match (value, ty) {
+        // Int → Bigint widening
+        (BexExternalValue::Int(i), Ty::Bigint { .. } | Ty::Literal(Literal::Bigint(_), _)) => {
+            Ok(BexExternalValue::Bigint(num_bigint::BigInt::from(i)))
+        }
+
+        // Optional<inner>: null short-circuits; otherwise unwrap and recurse.
+        (BexExternalValue::Null, Ty::Optional(_, _)) => Ok(BexExternalValue::Null),
+        (v, Ty::Optional(inner, _)) => coerce_numeric_to_declared_type(v, inner),
+
+        // Union with exactly one of {Int, Bigint}: route to that member.
+        // Unions containing both are left alone; `find_matching_union_member`
+        // picks by value shape at the VM boundary.
+        (v, Ty::Union(members, _)) => {
+            let has_int = members.iter().any(|m| matches!(m, Ty::Int { .. }));
+            let has_bigint = members.iter().any(|m| matches!(m, Ty::Bigint { .. }));
+            if has_int == has_bigint {
+                Ok(v)
+            } else if let Some(target) = members
+                .iter()
+                .find(|m| matches!(m, Ty::Int { .. } | Ty::Bigint { .. }))
+            {
+                coerce_numeric_to_declared_type(v, target)
+            } else {
+                Ok(v)
+            }
+        }
+
+        (v, _) => Ok(v),
+    }
+}
+
 /// Convert a compiled `TestArgValue` to a `BexExternalValue` for function calls.
 pub fn test_arg_to_external(v: &bex_vm_types::TestArgValue) -> BexExternalValue {
     match v {

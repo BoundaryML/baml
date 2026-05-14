@@ -65,3 +65,27 @@ class TestBigintRoundTripAsync:
         huge_neg = -(2**128)
         result = await call_function(rt, "EchoBigint", {"x": huge_neg})
         assert result.result() == huge_neg
+
+
+# The Python encoder routes small ints (< 2^63) through `int_value` because
+# it doesn't know the declared param type. The engine's call-boundary
+# coercion then widens int→bigint based on the BAML signature, so functions
+# that actually perform bigint arithmetic on a small-int input work without
+# requiring host-side type awareness.
+PLUS_ONE_BAML = """\
+function PlusOne(x: bigint) -> bigint {
+    x + 1n
+}
+"""
+
+
+class TestBigintFFICoercion:
+    def test_bigint_param_accepts_python_int_with_arithmetic(self):
+        rt = make_runtime(PLUS_ONE_BAML)
+        result = call_function_sync(rt, "PlusOne", {"x": 42})
+        assert result.result() == 43
+
+    def test_bigint_param_accepts_python_int_negative(self):
+        rt = make_runtime(PLUS_ONE_BAML)
+        result = call_function_sync(rt, "PlusOne", {"x": -5})
+        assert result.result() == -4

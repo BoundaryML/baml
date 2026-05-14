@@ -1591,6 +1591,7 @@ dependencies = [
  "indexmap 2.14.0",
  "insta",
  "log",
+ "num-bigint",
  "serde_json",
  "sys_llm",
  "sys_native",

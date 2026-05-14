@@ -1160,6 +1160,30 @@ impl BexEngine {
             });
         let throws_type = self.function_throws_type(function_name);
 
+        // Type-directed coercion for each provided arg: lets host SDKs send
+        // `int(42)` to a `bigint` slot (and vice versa) without re-encoding,
+        // and rewrites the engine-registered class FQN onto incoming
+        // `Map`/`Instance`/`Variant` values. Idempotent for already-matching
+        // values, so callers that already coerced (e.g. `BexProject::Bex`
+        // kwargs entry) aren't double-charged.
+        let param_types: Vec<Ty> = self
+            .function_params(function_name)?
+            .into_iter()
+            .map(|(_, ty, _)| ty.clone())
+            .collect();
+        let args: Vec<BexCallArg> = args
+            .into_iter()
+            .enumerate()
+            .map(|(idx, arg)| match arg {
+                BexCallArg::Provided(value) => {
+                    let coerced =
+                        crate::conversion::coerce_arg_to_declared_type(*value, &param_types[idx])?;
+                    Ok(BexCallArg::Provided(Box::new(coerced)))
+                }
+                BexCallArg::OmittedDefault => Ok(BexCallArg::OmittedDefault),
+            })
+            .collect::<Result<_, EngineError>>()?;
+
         // Register this call so `cancel_function_call(call_id)` can target
         // it. The RAII guard removes the entry on drop (including panic
         // unwind). Insertion and guard construction are atomic, so a panic
@@ -2072,6 +2096,10 @@ impl BexEngine {
                                 &return_type,
                                 thread.proof(),
                             )?;
+                            let external = crate::conversion::coerce_return_to_declared_type(
+                                external,
+                                &return_type,
+                            )?;
                             (external.clone(), external)
                         }
                     } else {
@@ -2079,6 +2107,10 @@ impl BexEngine {
                             &value,
                             &return_type,
                             thread.proof(),
+                        )?;
+                        let external = crate::conversion::coerce_return_to_declared_type(
+                            external,
+                            &return_type,
                         )?;
                         (external.clone(), external)
                     };
