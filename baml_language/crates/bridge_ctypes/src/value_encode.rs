@@ -206,15 +206,14 @@ fn ty_to_baml_ty_name(ty: &Ty) -> BamlTyName {
 
 fn literal_to_field_type_literal(lit: &Literal) -> BamlTyLiteral {
     use crate::baml_core::cffi::{
-        BamlLiteralBool, BamlLiteralInt, BamlLiteralString,
+        BamlLiteralBigint, BamlLiteralBool, BamlLiteralInt, BamlLiteralString,
         baml_ty_literal::Literal as LiteralOneof,
     };
     let literal = match lit {
         Literal::String(s) => LiteralOneof::StringLiteral(BamlLiteralString { value: s.clone() }),
         Literal::Int(i) => LiteralOneof::IntLiteral(BamlLiteralInt { value: *i }),
-        // Bigint FFI encoding not yet implemented; represent as decimal string.
-        Literal::Bigint(n) => LiteralOneof::StringLiteral(BamlLiteralString {
-            value: n.to_string(),
+        Literal::Bigint(n) => LiteralOneof::BigintLiteral(BamlLiteralBigint {
+            value: format!("{n:x}"),
         }),
         Literal::Bool(b) => LiteralOneof::BoolLiteral(BamlLiteralBool { value: *b }),
         Literal::Float(s) => LiteralOneof::StringLiteral(BamlLiteralString { value: s.clone() }),

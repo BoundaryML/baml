@@ -80,26 +80,30 @@ export function encodeCallArgs(kwargs: Record<string, unknown>): Buffer {
 
 // ─── Outbound (Rust → TS) ───
 
+// Hex / base sixteen on the wire (see Phase 10 of the bigint plan). Shared
+// by `bigint_value` (runtime values) and `bigint_literal` (type literals)
+// since both fields use the same wire format. BigInt() accepts a "0x"-prefixed
+// hex literal; strip a leading minus so we can parse the magnitude. Guard
+// against empty or sign-only inputs — `BigInt("0x")` throws `SyntaxError`,
+// so we surface a clearer error instead.
+function parseHexBigint(s: string): bigint {
+    const magnitude = s.startsWith('-') ? s.slice(1) : s;
+    if (magnitude.length === 0 || !/^[0-9a-fA-F]+$/.test(magnitude)) {
+        throw new Error(
+            `Invalid bigint hex on the wire: ${JSON.stringify(s)}`,
+        );
+    }
+    return s.startsWith('-')
+        ? -BigInt(`0x${magnitude}`)
+        : BigInt(`0x${magnitude}`);
+}
+
 function decodeValueHolder(holder: baml_core.cffi.v1.IBamlOutboundValue): unknown {
     if (holder.nullValue != null) return null;
     if (holder.stringValue != null) return holder.stringValue;
     if (holder.intValue != null) return Number(holder.intValue);
     if (holder.bigintValue != null) {
-        // Hex / base sixteen on the wire (see Phase 10 of the bigint plan).
-        // BigInt() accepts a "0x"-prefixed hex literal; strip a leading
-        // minus so we can parse the magnitude. Guard against empty or
-        // sign-only inputs — `BigInt("0x")` throws `SyntaxError`, so we
-        // surface a clearer error instead.
-        const s = holder.bigintValue as string;
-        const magnitude = s.startsWith('-') ? s.slice(1) : s;
-        if (magnitude.length === 0 || !/^[0-9a-fA-F]+$/.test(magnitude)) {
-            throw new Error(
-                `Invalid bigint hex on the wire: ${JSON.stringify(s)}`,
-            );
-        }
-        return s.startsWith('-')
-            ? -BigInt(`0x${magnitude}`)
-            : BigInt(`0x${magnitude}`);
+        return parseHexBigint(holder.bigintValue as string);
     }
     if (holder.floatValue != null) return holder.floatValue;
     if (holder.boolValue != null) return holder.boolValue;
@@ -118,6 +122,13 @@ function decodeValueHolder(holder: baml_core.cffi.v1.IBamlOutboundValue): unknow
         if (holder.literalValue.stringLiteral != null) return holder.literalValue.stringLiteral.value;
         if (holder.literalValue.intLiteral != null) return Number(holder.literalValue.intLiteral.value);
         if (holder.literalValue.boolLiteral != null) return holder.literalValue.boolLiteral.value;
+        // Hex / base sixteen on the wire, matching `bigint_value`. `value` is
+        // a required proto field so the wire form always carries a string;
+        // coalesce defensively for missing-field decoding (an empty `'0'`
+        // decodes as `0n`).
+        if (holder.literalValue.bigintLiteral != null) {
+            return parseHexBigint(holder.literalValue.bigintLiteral.value ?? '0');
+        }
     }
     if (holder.listValue) {
         return (holder.listValue.items || []).map(item => decodeValueHolder(item));

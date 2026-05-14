@@ -447,6 +447,10 @@ def _decode_literal(literal) -> Any:
         return literal.int_literal.value
     if which == "bool_literal":
         return literal.bool_literal.value
+    if which == "bigint_literal":
+        # Hex / base sixteen on the wire, matching `bigint_value`. `int(s, 16)`
+        # handles a leading minus sign natively.
+        return int(literal.bigint_literal.value, base=16)
     return None
 
 

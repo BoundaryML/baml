@@ -10791,6 +10791,211 @@ $root.baml_core = (function() {
                 return BamlLiteralBool;
             })();
 
+            v1.BamlLiteralBigint = (function() {
+
+                /**
+                 * Properties of a BamlLiteralBigint.
+                 * @memberof baml_core.cffi.v1
+                 * @interface IBamlLiteralBigint
+                 * @property {string|null} [value] BamlLiteralBigint value
+                 */
+
+                /**
+                 * Constructs a new BamlLiteralBigint.
+                 * @memberof baml_core.cffi.v1
+                 * @classdesc Represents a BamlLiteralBigint.
+                 * @implements IBamlLiteralBigint
+                 * @constructor
+                 * @param {baml_core.cffi.v1.IBamlLiteralBigint=} [properties] Properties to set
+                 */
+                function BamlLiteralBigint(properties) {
+                    if (properties)
+                        for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                            if (properties[keys[i]] != null)
+                                this[keys[i]] = properties[keys[i]];
+                }
+
+                /**
+                 * BamlLiteralBigint value.
+                 * @member {string} value
+                 * @memberof baml_core.cffi.v1.BamlLiteralBigint
+                 * @instance
+                 */
+                BamlLiteralBigint.prototype.value = "";
+
+                /**
+                 * Creates a new BamlLiteralBigint instance using the specified properties.
+                 * @function create
+                 * @memberof baml_core.cffi.v1.BamlLiteralBigint
+                 * @static
+                 * @param {baml_core.cffi.v1.IBamlLiteralBigint=} [properties] Properties to set
+                 * @returns {baml_core.cffi.v1.BamlLiteralBigint} BamlLiteralBigint instance
+                 */
+                BamlLiteralBigint.create = function create(properties) {
+                    return new BamlLiteralBigint(properties);
+                };
+
+                /**
+                 * Encodes the specified BamlLiteralBigint message. Does not implicitly {@link baml_core.cffi.v1.BamlLiteralBigint.verify|verify} messages.
+                 * @function encode
+                 * @memberof baml_core.cffi.v1.BamlLiteralBigint
+                 * @static
+                 * @param {baml_core.cffi.v1.IBamlLiteralBigint} message BamlLiteralBigint message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlLiteralBigint.encode = function encode(message, writer) {
+                    if (!writer)
+                        writer = $Writer.create();
+                    if (message.value != null && Object.hasOwnProperty.call(message, "value"))
+                        writer.uint32(/* id 1, wireType 2 =*/10).string(message.value);
+                    return writer;
+                };
+
+                /**
+                 * Encodes the specified BamlLiteralBigint message, length delimited. Does not implicitly {@link baml_core.cffi.v1.BamlLiteralBigint.verify|verify} messages.
+                 * @function encodeDelimited
+                 * @memberof baml_core.cffi.v1.BamlLiteralBigint
+                 * @static
+                 * @param {baml_core.cffi.v1.IBamlLiteralBigint} message BamlLiteralBigint message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlLiteralBigint.encodeDelimited = function encodeDelimited(message, writer) {
+                    return this.encode(message, writer).ldelim();
+                };
+
+                /**
+                 * Decodes a BamlLiteralBigint message from the specified reader or buffer.
+                 * @function decode
+                 * @memberof baml_core.cffi.v1.BamlLiteralBigint
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @param {number} [length] Message length if known beforehand
+                 * @returns {baml_core.cffi.v1.BamlLiteralBigint} BamlLiteralBigint
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlLiteralBigint.decode = function decode(reader, length, error) {
+                    if (!(reader instanceof $Reader))
+                        reader = $Reader.create(reader);
+                    var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlLiteralBigint();
+                    while (reader.pos < end) {
+                        var tag = reader.uint32();
+                        if (tag === error)
+                            break;
+                        switch (tag >>> 3) {
+                        case 1: {
+                                message.value = reader.string();
+                                break;
+                            }
+                        default:
+                            reader.skipType(tag & 7);
+                            break;
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Decodes a BamlLiteralBigint message from the specified reader or buffer, length delimited.
+                 * @function decodeDelimited
+                 * @memberof baml_core.cffi.v1.BamlLiteralBigint
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @returns {baml_core.cffi.v1.BamlLiteralBigint} BamlLiteralBigint
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlLiteralBigint.decodeDelimited = function decodeDelimited(reader) {
+                    if (!(reader instanceof $Reader))
+                        reader = new $Reader(reader);
+                    return this.decode(reader, reader.uint32());
+                };
+
+                /**
+                 * Verifies a BamlLiteralBigint message.
+                 * @function verify
+                 * @memberof baml_core.cffi.v1.BamlLiteralBigint
+                 * @static
+                 * @param {Object.<string,*>} message Plain object to verify
+                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
+                 */
+                BamlLiteralBigint.verify = function verify(message) {
+                    if (typeof message !== "object" || message === null)
+                        return "object expected";
+                    if (message.value != null && message.hasOwnProperty("value"))
+                        if (!$util.isString(message.value))
+                            return "value: string expected";
+                    return null;
+                };
+
+                /**
+                 * Creates a BamlLiteralBigint message from a plain object. Also converts values to their respective internal types.
+                 * @function fromObject
+                 * @memberof baml_core.cffi.v1.BamlLiteralBigint
+                 * @static
+                 * @param {Object.<string,*>} object Plain object
+                 * @returns {baml_core.cffi.v1.BamlLiteralBigint} BamlLiteralBigint
+                 */
+                BamlLiteralBigint.fromObject = function fromObject(object) {
+                    if (object instanceof $root.baml_core.cffi.v1.BamlLiteralBigint)
+                        return object;
+                    var message = new $root.baml_core.cffi.v1.BamlLiteralBigint();
+                    if (object.value != null)
+                        message.value = String(object.value);
+                    return message;
+                };
+
+                /**
+                 * Creates a plain object from a BamlLiteralBigint message. Also converts values to other types if specified.
+                 * @function toObject
+                 * @memberof baml_core.cffi.v1.BamlLiteralBigint
+                 * @static
+                 * @param {baml_core.cffi.v1.BamlLiteralBigint} message BamlLiteralBigint
+                 * @param {$protobuf.IConversionOptions} [options] Conversion options
+                 * @returns {Object.<string,*>} Plain object
+                 */
+                BamlLiteralBigint.toObject = function toObject(message, options) {
+                    if (!options)
+                        options = {};
+                    var object = {};
+                    if (options.defaults)
+                        object.value = "";
+                    if (message.value != null && message.hasOwnProperty("value"))
+                        object.value = message.value;
+                    return object;
+                };
+
+                /**
+                 * Converts this BamlLiteralBigint to JSON.
+                 * @function toJSON
+                 * @memberof baml_core.cffi.v1.BamlLiteralBigint
+                 * @instance
+                 * @returns {Object.<string,*>} JSON object
+                 */
+                BamlLiteralBigint.prototype.toJSON = function toJSON() {
+                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+                };
+
+                /**
+                 * Gets the default type url for BamlLiteralBigint
+                 * @function getTypeUrl
+                 * @memberof baml_core.cffi.v1.BamlLiteralBigint
+                 * @static
+                 * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns {string} The default type url
+                 */
+                BamlLiteralBigint.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                    if (typeUrlPrefix === undefined) {
+                        typeUrlPrefix = "type.googleapis.com";
+                    }
+                    return typeUrlPrefix + "/baml_core.cffi.v1.BamlLiteralBigint";
+                };
+
+                return BamlLiteralBigint;
+            })();
+
             v1.BamlTyLiteral = (function() {
 
                 /**
@@ -10800,6 +11005,7 @@ $root.baml_core = (function() {
                  * @property {baml_core.cffi.v1.IBamlLiteralString|null} [stringLiteral] BamlTyLiteral stringLiteral
                  * @property {baml_core.cffi.v1.IBamlLiteralInt|null} [intLiteral] BamlTyLiteral intLiteral
                  * @property {baml_core.cffi.v1.IBamlLiteralBool|null} [boolLiteral] BamlTyLiteral boolLiteral
+                 * @property {baml_core.cffi.v1.IBamlLiteralBigint|null} [bigintLiteral] BamlTyLiteral bigintLiteral
                  */
 
                 /**
@@ -10841,17 +11047,25 @@ $root.baml_core = (function() {
                  */
                 BamlTyLiteral.prototype.boolLiteral = null;
 
+                /**
+                 * BamlTyLiteral bigintLiteral.
+                 * @member {baml_core.cffi.v1.IBamlLiteralBigint|null|undefined} bigintLiteral
+                 * @memberof baml_core.cffi.v1.BamlTyLiteral
+                 * @instance
+                 */
+                BamlTyLiteral.prototype.bigintLiteral = null;
+
                 // OneOf field names bound to virtual getters and setters
                 var $oneOfFields;
 
                 /**
                  * BamlTyLiteral literal.
-                 * @member {"stringLiteral"|"intLiteral"|"boolLiteral"|undefined} literal
+                 * @member {"stringLiteral"|"intLiteral"|"boolLiteral"|"bigintLiteral"|undefined} literal
                  * @memberof baml_core.cffi.v1.BamlTyLiteral
                  * @instance
                  */
                 Object.defineProperty(BamlTyLiteral.prototype, "literal", {
-                    get: $util.oneOfGetter($oneOfFields = ["stringLiteral", "intLiteral", "boolLiteral"]),
+                    get: $util.oneOfGetter($oneOfFields = ["stringLiteral", "intLiteral", "boolLiteral", "bigintLiteral"]),
                     set: $util.oneOfSetter($oneOfFields)
                 });
 
@@ -10885,6 +11099,8 @@ $root.baml_core = (function() {
                         $root.baml_core.cffi.v1.BamlLiteralInt.encode(message.intLiteral, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
                     if (message.boolLiteral != null && Object.hasOwnProperty.call(message, "boolLiteral"))
                         $root.baml_core.cffi.v1.BamlLiteralBool.encode(message.boolLiteral, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+                    if (message.bigintLiteral != null && Object.hasOwnProperty.call(message, "bigintLiteral"))
+                        $root.baml_core.cffi.v1.BamlLiteralBigint.encode(message.bigintLiteral, writer.uint32(/* id 4, wireType 2 =*/34).fork()).ldelim();
                     return writer;
                 };
 
@@ -10931,6 +11147,10 @@ $root.baml_core = (function() {
                             }
                         case 3: {
                                 message.boolLiteral = $root.baml_core.cffi.v1.BamlLiteralBool.decode(reader, reader.uint32());
+                                break;
+                            }
+                        case 4: {
+                                message.bigintLiteral = $root.baml_core.cffi.v1.BamlLiteralBigint.decode(reader, reader.uint32());
                                 break;
                             }
                         default:
@@ -10997,6 +11217,16 @@ $root.baml_core = (function() {
                                 return "boolLiteral." + error;
                         }
                     }
+                    if (message.bigintLiteral != null && message.hasOwnProperty("bigintLiteral")) {
+                        if (properties.literal === 1)
+                            return "literal: multiple values";
+                        properties.literal = 1;
+                        {
+                            var error = $root.baml_core.cffi.v1.BamlLiteralBigint.verify(message.bigintLiteral);
+                            if (error)
+                                return "bigintLiteral." + error;
+                        }
+                    }
                     return null;
                 };
 
@@ -11026,6 +11256,11 @@ $root.baml_core = (function() {
                         if (typeof object.boolLiteral !== "object")
                             throw TypeError(".baml_core.cffi.v1.BamlTyLiteral.boolLiteral: object expected");
                         message.boolLiteral = $root.baml_core.cffi.v1.BamlLiteralBool.fromObject(object.boolLiteral);
+                    }
+                    if (object.bigintLiteral != null) {
+                        if (typeof object.bigintLiteral !== "object")
+                            throw TypeError(".baml_core.cffi.v1.BamlTyLiteral.bigintLiteral: object expected");
+                        message.bigintLiteral = $root.baml_core.cffi.v1.BamlLiteralBigint.fromObject(object.bigintLiteral);
                     }
                     return message;
                 };
@@ -11057,6 +11292,11 @@ $root.baml_core = (function() {
                         object.boolLiteral = $root.baml_core.cffi.v1.BamlLiteralBool.toObject(message.boolLiteral, options);
                         if (options.oneofs)
                             object.literal = "boolLiteral";
+                    }
+                    if (message.bigintLiteral != null && message.hasOwnProperty("bigintLiteral")) {
+                        object.bigintLiteral = $root.baml_core.cffi.v1.BamlLiteralBigint.toObject(message.bigintLiteral, options);
+                        if (options.oneofs)
+                            object.literal = "bigintLiteral";
                     }
                     return object;
                 };

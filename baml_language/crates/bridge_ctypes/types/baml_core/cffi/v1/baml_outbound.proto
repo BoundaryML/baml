@@ -209,11 +209,19 @@ message BamlLiteralBool {
   bool value = 1;
 }
 
+// `value` is a base-sixteen hex string with an optional leading minus sign
+// (matches the wire format used for runtime bigint values via
+// `BamlOutboundValue.bigint_value`).
+message BamlLiteralBigint {
+  string value = 1;
+}
+
 message BamlTyLiteral {
   oneof literal {
     BamlLiteralString string_literal = 1;
     BamlLiteralInt int_literal = 2;
     BamlLiteralBool bool_literal = 3;
+    BamlLiteralBigint bigint_literal = 4;
   }
 }
 

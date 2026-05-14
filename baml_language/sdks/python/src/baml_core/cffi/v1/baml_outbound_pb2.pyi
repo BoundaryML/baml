@@ -299,15 +299,23 @@ class BamlLiteralBool(_message.Message):
     value: bool
     def __init__(self, value: bool = ...) -> None: ...
 
+class BamlLiteralBigint(_message.Message):
+    __slots__ = ("value",)
+    VALUE_FIELD_NUMBER: _ClassVar[int]
+    value: str
+    def __init__(self, value: _Optional[str] = ...) -> None: ...
+
 class BamlTyLiteral(_message.Message):
-    __slots__ = ("string_literal", "int_literal", "bool_literal")
+    __slots__ = ("string_literal", "int_literal", "bool_literal", "bigint_literal")
     STRING_LITERAL_FIELD_NUMBER: _ClassVar[int]
     INT_LITERAL_FIELD_NUMBER: _ClassVar[int]
     BOOL_LITERAL_FIELD_NUMBER: _ClassVar[int]
+    BIGINT_LITERAL_FIELD_NUMBER: _ClassVar[int]
     string_literal: BamlLiteralString
     int_literal: BamlLiteralInt
     bool_literal: BamlLiteralBool
-    def __init__(self, string_literal: _Optional[_Union[BamlLiteralString, _Mapping]] = ..., int_literal: _Optional[_Union[BamlLiteralInt, _Mapping]] = ..., bool_literal: _Optional[_Union[BamlLiteralBool, _Mapping]] = ...) -> None: ...
+    bigint_literal: BamlLiteralBigint
+    def __init__(self, string_literal: _Optional[_Union[BamlLiteralString, _Mapping]] = ..., int_literal: _Optional[_Union[BamlLiteralInt, _Mapping]] = ..., bool_literal: _Optional[_Union[BamlLiteralBool, _Mapping]] = ..., bigint_literal: _Optional[_Union[BamlLiteralBigint, _Mapping]] = ...) -> None: ...
 
 class BamlTyMedia(_message.Message):
     __slots__ = ("media",)

@@ -4240,6 +4240,103 @@ export namespace baml_core {
                 public static getTypeUrl(typeUrlPrefix?: string): string;
             }
 
+            /** Properties of a BamlLiteralBigint. */
+            interface IBamlLiteralBigint {
+
+                /** BamlLiteralBigint value */
+                value?: (string|null);
+            }
+
+            /** Represents a BamlLiteralBigint. */
+            class BamlLiteralBigint implements IBamlLiteralBigint {
+
+                /**
+                 * Constructs a new BamlLiteralBigint.
+                 * @param [properties] Properties to set
+                 */
+                constructor(properties?: baml_core.cffi.v1.IBamlLiteralBigint);
+
+                /** BamlLiteralBigint value. */
+                public value: string;
+
+                /**
+                 * Creates a new BamlLiteralBigint instance using the specified properties.
+                 * @param [properties] Properties to set
+                 * @returns BamlLiteralBigint instance
+                 */
+                public static create(properties?: baml_core.cffi.v1.IBamlLiteralBigint): baml_core.cffi.v1.BamlLiteralBigint;
+
+                /**
+                 * Encodes the specified BamlLiteralBigint message. Does not implicitly {@link baml_core.cffi.v1.BamlLiteralBigint.verify|verify} messages.
+                 * @param message BamlLiteralBigint message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encode(message: baml_core.cffi.v1.IBamlLiteralBigint, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Encodes the specified BamlLiteralBigint message, length delimited. Does not implicitly {@link baml_core.cffi.v1.BamlLiteralBigint.verify|verify} messages.
+                 * @param message BamlLiteralBigint message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encodeDelimited(message: baml_core.cffi.v1.IBamlLiteralBigint, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Decodes a BamlLiteralBigint message from the specified reader or buffer.
+                 * @param reader Reader or buffer to decode from
+                 * @param [length] Message length if known beforehand
+                 * @returns BamlLiteralBigint
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml_core.cffi.v1.BamlLiteralBigint;
+
+                /**
+                 * Decodes a BamlLiteralBigint message from the specified reader or buffer, length delimited.
+                 * @param reader Reader or buffer to decode from
+                 * @returns BamlLiteralBigint
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml_core.cffi.v1.BamlLiteralBigint;
+
+                /**
+                 * Verifies a BamlLiteralBigint message.
+                 * @param message Plain object to verify
+                 * @returns `null` if valid, otherwise the reason why it is not
+                 */
+                public static verify(message: { [k: string]: any }): (string|null);
+
+                /**
+                 * Creates a BamlLiteralBigint message from a plain object. Also converts values to their respective internal types.
+                 * @param object Plain object
+                 * @returns BamlLiteralBigint
+                 */
+                public static fromObject(object: { [k: string]: any }): baml_core.cffi.v1.BamlLiteralBigint;
+
+                /**
+                 * Creates a plain object from a BamlLiteralBigint message. Also converts values to other types if specified.
+                 * @param message BamlLiteralBigint
+                 * @param [options] Conversion options
+                 * @returns Plain object
+                 */
+                public static toObject(message: baml_core.cffi.v1.BamlLiteralBigint, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+                /**
+                 * Converts this BamlLiteralBigint to JSON.
+                 * @returns JSON object
+                 */
+                public toJSON(): { [k: string]: any };
+
+                /**
+                 * Gets the default type url for BamlLiteralBigint
+                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns The default type url
+                 */
+                public static getTypeUrl(typeUrlPrefix?: string): string;
+            }
+
             /** Properties of a BamlTyLiteral. */
             interface IBamlTyLiteral {
 
@@ -4251,6 +4348,9 @@ export namespace baml_core {
 
                 /** BamlTyLiteral boolLiteral */
                 boolLiteral?: (baml_core.cffi.v1.IBamlLiteralBool|null);
+
+                /** BamlTyLiteral bigintLiteral */
+                bigintLiteral?: (baml_core.cffi.v1.IBamlLiteralBigint|null);
             }
 
             /** Represents a BamlTyLiteral. */
@@ -4271,8 +4371,11 @@ export namespace baml_core {
                 /** BamlTyLiteral boolLiteral. */
                 public boolLiteral?: (baml_core.cffi.v1.IBamlLiteralBool|null);
 
+                /** BamlTyLiteral bigintLiteral. */
+                public bigintLiteral?: (baml_core.cffi.v1.IBamlLiteralBigint|null);
+
                 /** BamlTyLiteral literal. */
-                public literal?: ("stringLiteral"|"intLiteral"|"boolLiteral");
+                public literal?: ("stringLiteral"|"intLiteral"|"boolLiteral"|"bigintLiteral");
 
                 /**
                  * Creates a new BamlTyLiteral instance using the specified properties.

@@ -137,6 +137,13 @@ function decodeValueHolder(holder) {
             return Number(holder.literalValue.intLiteral.value);
         if (holder.literalValue.boolLiteral != null)
             return holder.literalValue.boolLiteral.value;
+        // Decimal string with an optional leading minus sign; preserve full
+        // precision by returning a JS `BigInt`. `value` is a required proto
+        // field so the wire form always carries a string; coalesce defensively
+        // for missing-field decoding.
+        if (holder.literalValue.bigintLiteral != null) {
+            return BigInt(holder.literalValue.bigintLiteral.value ?? '0');
+        }
     }
     if (holder.listValue) {
         return (holder.listValue.items || []).map(item => decodeValueHolder(item));
