@@ -3,13 +3,14 @@
 use std::{ffi::CStr, panic::AssertUnwindSafe};
 
 use baml_lsp_server::playground_ws::WsOutMessage;
-use base64::Engine as _;
 use bridge_ctypes::{DecodeFromBuffer, HANDLE_TABLE, kwargs_to_bex_values};
 use futures::future::FutureExt;
-use prost::Message as _;
 
 use crate::{
-    engine::{get_broadcast_tx, get_project_key, get_runtime, get_tokio_runtime},
+    engine::{
+        broadcast_call_function_end, broadcast_call_function_start, get_broadcast_tx, get_runtime,
+        get_tokio_runtime,
+    },
     error::BridgeError,
     ffi::callbacks::{send_error_to_callback, send_result_to_callback},
 };
@@ -110,19 +111,16 @@ fn call_function_inner(
         .map_err(BridgeError::from)?
         .to_owned();
 
-    // Capture the raw args bytes for the WS broadcast before we decode
-    // them — the playground UI ingests these as base64-encoded
-    // `CallFunctionArgs` and `buildRunEntryFromMessage` decodes them
-    // itself. SAFETY: caller upholds the same `(ptr, len)` invariant
-    // the protobuf decoder relies on below.
-    let args_b64 = if encoded_args.is_null() || length == 0 {
-        String::new()
+    // SAFETY: caller upholds the same `(ptr, len)` invariant the protobuf
+    // decoder relies on below. Borrowed once here for both the WS broadcast
+    // payload and the decode.
+    let args_bytes: &[u8] = if encoded_args.is_null() || length == 0 {
+        &[]
     } else {
-        let raw = unsafe { std::slice::from_raw_parts(encoded_args, length) };
-        base64::engine::general_purpose::STANDARD.encode(raw)
+        unsafe { std::slice::from_raw_parts(encoded_args, length) }
     };
 
-    let args = if encoded_args.is_null() || length == 0 {
+    let args = if args_bytes.is_empty() {
         CallFunctionArgs::default()
     } else {
         unsafe { CallFunctionArgs::from_c_buffer(encoded_args, length) }?
@@ -131,23 +129,12 @@ fn call_function_inner(
 
     let call_ctx = bex_project::FunctionCallContextBuilder::new(sys_types::CallId(id.into()));
 
-    // Resolve the broadcast channel + project key once on the calling
-    // thread so init/lock failures surface synchronously rather than
-    // getting swallowed inside the spawn.
-    let broadcast_tx = get_broadcast_tx()?;
-    let project = get_project_key()?;
+    // Bracket the call: emit `callFunction` before the spawn so the webview's
+    // port.onMessage handler can construct a RunEntry for this id before the
+    // first RuntimeEvent / FetchLogNew arrives. Init/lock failures surface
+    // synchronously rather than getting swallowed inside the spawn.
+    broadcast_call_function_start(id.into(), &func_name, args_bytes)?;
 
-    // Bracket the call: emit `callFunction` before the spawn so the
-    // webview's port.onMessage handler can construct a RunEntry for
-    // this id before the first RuntimeEvent / FetchLogNew arrives.
-    let _ = broadcast_tx.send(WsOutMessage::CallFunction {
-        id: id.into(),
-        project: project.as_path().to_string_lossy().into_owned(),
-        name: func_name.clone(),
-        args_proto: args_b64,
-    });
-
-    let broadcast_tx_for_spawn = broadcast_tx.clone();
     get_tokio_runtime()?.spawn(async move {
         let result = AssertUnwindSafe(async {
             runtime
@@ -158,43 +145,12 @@ fn call_function_inner(
         .await;
 
         match result {
-            Ok(Ok(value)) => {
-                send_result_to_callback(id, &value);
-
-                // Re-encode the result for the wire. The FFI callback
-                // above uses `for_in_process()` because Python resolves
-                // handles in the same process; the webview can't, so
-                // the broadcast variant uses `for_wire()` which inlines
-                // media bytes and the prompt AST.
-                let wire_options = bridge_ctypes::CffiHandleTableOptions::for_wire();
-                let msg = match bridge_ctypes::external_to_baml_value(&value, &wire_options) {
-                    Ok(baml_val) => {
-                        let b64 = base64::engine::general_purpose::STANDARD
-                            .encode(baml_val.encode_to_vec());
-                        WsOutMessage::CallFunctionResult {
-                            id: id.into(),
-                            result: b64,
-                        }
-                    }
-                    Err(e) => WsOutMessage::CallFunctionError {
-                        id: id.into(),
-                        error: format!("Failed to encode result for wire: {e}"),
-                        cancelled: None,
-                    },
-                };
-                let _ = broadcast_tx_for_spawn.send(msg);
-            }
-            Ok(Err(e)) => {
-                let cancelled = bex_project::is_cancelled_runtime_error(&e);
-                let bridge_err = BridgeError::Runtime(e);
-                let err_str = bridge_error_to_string(&bridge_err);
-                send_error_to_callback(id, &err_str);
-
-                let _ = broadcast_tx_for_spawn.send(WsOutMessage::CallFunctionError {
-                    id: id.into(),
-                    error: err_str,
-                    cancelled: if cancelled { Some(true) } else { None },
-                });
+            Ok(call_result) => {
+                match &call_result {
+                    Ok(value) => send_result_to_callback(id, value),
+                    Err(e) => send_error_to_callback(id, &runtime_error_to_string(e)),
+                }
+                broadcast_call_function_end(id.into(), call_result.as_ref());
             }
             Err(panic_info) => {
                 let msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
@@ -206,11 +162,13 @@ fn call_function_inner(
                 };
                 send_error_to_callback(id, &format!("Panic: {msg}"));
 
-                let _ = broadcast_tx_for_spawn.send(WsOutMessage::CallFunctionError {
-                    id: id.into(),
-                    error: format!("Panic: {msg}"),
-                    cancelled: None,
-                });
+                if let Ok(tx) = get_broadcast_tx() {
+                    let _ = tx.send(WsOutMessage::CallFunctionError {
+                        id: id.into(),
+                        error: format!("Panic: {msg}"),
+                        cancelled: None,
+                    });
+                }
             }
         }
     });

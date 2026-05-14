@@ -153,11 +153,22 @@ impl BamlRuntime {
             call_ctx = call_ctx.with_host_ctx(host_ctx);
         }
 
+        // Emit the start half of the WS bracket synchronously so the webview
+        // can bucket subsequent RuntimeEvents / FetchLogNew on this call_id.
+        bridge_cffi::engine::broadcast_call_function_start(
+            call_id.0,
+            &function_name,
+            &args_proto,
+        )
+        .map_err(bridge_error_to_py)?;
+
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let result = bex
+            let call_result = bex
                 .call_function(&function_name, kwargs, call_ctx.build())
-                .await
-                .map_err(runtime_error_to_py)?;
+                .await;
+            bridge_cffi::engine::broadcast_call_function_end(call_id.0, call_result.as_ref());
+
+            let result = call_result.map_err(runtime_error_to_py)?;
 
             let handle_options = bridge_ctypes::CffiHandleTableOptions::for_in_process();
             let baml_value = external_to_baml_value(&result, &handle_options).map_err(|e| {
@@ -210,11 +221,22 @@ impl BamlRuntime {
             call_ctx = call_ctx.with_host_ctx(host_ctx);
         }
 
+        // Bracket the call so the playground webview can bucket
+        // RuntimeEvents / FetchLogs that fire from inside the engine.
+        bridge_cffi::engine::broadcast_call_function_start(
+            call_id.0,
+            &function_name,
+            &args_proto,
+        )
+        .map_err(bridge_error_to_py)?;
+
         let rt = bridge_cffi::engine::get_tokio_runtime().map_err(bridge_error_to_py)?;
 
-        let result = py
-            .detach(|| rt.block_on(bex.call_function(&function_name, kwargs, call_ctx.build())))
-            .map_err(runtime_error_to_py)?;
+        let call_result = py
+            .detach(|| rt.block_on(bex.call_function(&function_name, kwargs, call_ctx.build())));
+        bridge_cffi::engine::broadcast_call_function_end(call_id.0, call_result.as_ref());
+
+        let result = call_result.map_err(runtime_error_to_py)?;
 
         let handle_options = bridge_ctypes::CffiHandleTableOptions::for_in_process();
         let baml_value = external_to_baml_value(&result, &handle_options).map_err(|e| {

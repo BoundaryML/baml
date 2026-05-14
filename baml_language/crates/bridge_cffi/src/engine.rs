@@ -12,6 +12,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use base64::Engine as _;
 use baml_lsp_server::{
     no_op_lsp_sender::NoOpLspSender,
     playground_sender::NativePlaygroundSender,
@@ -21,10 +22,11 @@ use baml_lsp_server::{
 };
 use bex_events::EventSink;
 use bex_project::{
-    BamlVFS, Bex, BexLsp, FsPath, InMemoryFs, LspClientSenderTrait,
-    new_lsp_with_initial_project,
+    BamlVFS, Bex, BexExternalValue, BexLsp, FsPath, InMemoryFs, LspClientSenderTrait,
+    RuntimeError, is_cancelled_runtime_error, new_lsp_with_initial_project,
 };
 use once_cell::sync::OnceCell;
+use prost::Message as _;
 use tokio::{net::TcpListener, runtime::Runtime, sync::broadcast};
 
 use crate::error::BridgeError;
@@ -247,6 +249,68 @@ pub fn get_project_key() -> Result<FsPath, BridgeError> {
         .ok_or(BridgeError::NotInitialized)
 }
 
+/// Emit `WsOutMessage::CallFunction` on the playground broadcast channel before
+/// a `bex.call_function(...)` await. Mirrors the start half of the bracket the
+/// LSP WS handler emits at `playground_server.rs`. Returns Err only when the
+/// runtime isn't initialized — broadcast send errors (zero subscribers) are
+/// dropped silently, matching the rest of the WS emit sites.
+pub fn broadcast_call_function_start(
+    id: u64,
+    function_name: &str,
+    args_proto: &[u8],
+) -> Result<(), BridgeError> {
+    let tx = get_broadcast_tx()?;
+    let project = get_project_key()?;
+    let args_b64 = base64::engine::general_purpose::STANDARD.encode(args_proto);
+    let _ = tx.send(WsOutMessage::CallFunction {
+        id,
+        project: project.as_path().to_string_lossy().into_owned(),
+        name: function_name.to_string(),
+        args_proto: args_b64,
+    });
+    Ok(())
+}
+
+/// Emit `CallFunctionResult` (Ok) or `CallFunctionError` (Err) after a
+/// `bex.call_function(...)` await. Re-encodes Ok values with `for_wire()` —
+/// the WS client lives in a browser and can't share in-process handle table
+/// entries with the host (Python / Go / etc.), so media bytes and prompt AST
+/// have to be inlined on the wire. Best-effort: no broadcast channel means
+/// the playground server didn't start, which is fine in unit tests.
+pub fn broadcast_call_function_end(
+    id: u64,
+    result: Result<&BexExternalValue, &RuntimeError>,
+) {
+    let Ok(tx) = get_broadcast_tx() else { return };
+    let msg = match result {
+        Ok(value) => {
+            let opts = bridge_ctypes::CffiHandleTableOptions::for_wire();
+            match bridge_ctypes::external_to_baml_value(value, &opts) {
+                Ok(baml_val) => WsOutMessage::CallFunctionResult {
+                    id,
+                    result: base64::engine::general_purpose::STANDARD
+                        .encode(baml_val.encode_to_vec()),
+                },
+                Err(e) => WsOutMessage::CallFunctionError {
+                    id,
+                    error: format!("Failed to encode result for wire: {e}"),
+                    cancelled: None,
+                },
+            }
+        }
+        Err(e) => WsOutMessage::CallFunctionError {
+            id,
+            error: format!("{e}"),
+            cancelled: if is_cancelled_runtime_error(e) {
+                Some(true)
+            } else {
+                None
+            },
+        },
+    };
+    let _ = tx.send(msg);
+}
+
 /// Flush the registered event sink. Called by `bridge_python::flush_events()`.
 pub fn flush_event_sink() {
     if let Ok(guard) = EVENT_SINK.read()
@@ -307,12 +371,13 @@ mod tests {
         // (1) Bex-trait path: exercises the event sink so the trace file
         // gets populated. Does NOT go through the FFI emit code.
         let result = rt.block_on(async {
-            bex.call_function(
-                "greet",
-                BexArgs(HashMap::new()),
-                FunctionCallContextBuilder::new(sys_types::CallId(1)).build(),
-            )
-            .await
+            bex.clone()
+                .call_function(
+                    "greet",
+                    BexArgs(HashMap::new()),
+                    FunctionCallContextBuilder::new(sys_types::CallId(1)).build(),
+                )
+                .await
         });
         result.expect("call_function ok");
 
@@ -329,13 +394,34 @@ mod tests {
             FFI_ID,
         );
 
-        let (saw_call, saw_result) = rt.block_on(async {
+        // (3) Helper-bracket path: mirrors what bridge_python's
+        // `BamlRuntime::call_function{,_sync}` does — wraps a direct
+        // `bex.call_function(...)` await with the public broadcast helpers.
+        // Uses `CallId::next()` instead of a hand-picked id so the assertion
+        // is on whatever the runtime allocates, matching pyo3's call_id flow.
+        let pyo3_id = sys_types::CallId::next();
+        broadcast_call_function_start(pyo3_id.0, "greet", &[])
+            .expect("start helper");
+        let pyo3_result = rt.block_on(async {
+            bex.clone()
+                .call_function(
+                    "greet",
+                    BexArgs(HashMap::new()),
+                    FunctionCallContextBuilder::new(pyo3_id).build(),
+                )
+                .await
+        });
+        broadcast_call_function_end(pyo3_id.0, pyo3_result.as_ref());
+
+        let (saw_call, saw_result, saw_pyo3_call, saw_pyo3_result) = rt.block_on(async {
             let mut saw_call = false;
             let mut saw_result = false;
+            let mut saw_pyo3_call = false;
+            let mut saw_pyo3_result = false;
             let deadline =
                 tokio::time::Instant::now() + std::time::Duration::from_secs(5);
             while tokio::time::Instant::now() < deadline
-                && !(saw_call && saw_result)
+                && !(saw_call && saw_result && saw_pyo3_call && saw_pyo3_result)
             {
                 match tokio::time::timeout(
                     std::time::Duration::from_millis(200),
@@ -347,16 +433,28 @@ mod tests {
                         baml_lsp_server::playground_ws::WsOutMessage::CallFunction {
                             id, ..
                         },
-                    )) if id == u64::from(FFI_ID) => saw_call = true,
+                    )) => {
+                        if id == u64::from(FFI_ID) {
+                            saw_call = true;
+                        } else if id == pyo3_id.0 {
+                            saw_pyo3_call = true;
+                        }
+                    }
                     Ok(Ok(
                         baml_lsp_server::playground_ws::WsOutMessage::CallFunctionResult {
                             id, ..
                         },
-                    )) if id == u64::from(FFI_ID) => saw_result = true,
+                    )) => {
+                        if id == u64::from(FFI_ID) {
+                            saw_result = true;
+                        } else if id == pyo3_id.0 {
+                            saw_pyo3_result = true;
+                        }
+                    }
                     _ => {}
                 }
             }
-            (saw_call, saw_result)
+            (saw_call, saw_result, saw_pyo3_call, saw_pyo3_result)
         });
 
         flush_event_sink();
@@ -368,10 +466,18 @@ mod tests {
             bytes > 0,
             "trace file {trace:?} should be non-empty after flush"
         );
-        assert!(saw_call, "WsOutMessage::CallFunction was not broadcast");
+        assert!(saw_call, "FFI: WsOutMessage::CallFunction was not broadcast");
         assert!(
             saw_result,
-            "WsOutMessage::CallFunctionResult was not broadcast"
+            "FFI: WsOutMessage::CallFunctionResult was not broadcast"
+        );
+        assert!(
+            saw_pyo3_call,
+            "pyo3-shape: WsOutMessage::CallFunction was not broadcast"
+        );
+        assert!(
+            saw_pyo3_result,
+            "pyo3-shape: WsOutMessage::CallFunctionResult was not broadcast"
         );
 
         // Cleanup: drop the BAML_TRACE_FILE env var so a follow-on `cargo test`
