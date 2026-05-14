@@ -141,6 +141,14 @@ impl FutureManagerGuard<'_> {
         (id, ptr)
     }
 
+    /// Look up the heap pointer for `id`, or `None` if the future is
+    /// no longer in `active_futures`. Used by the engine's
+    /// fire-and-forget propagation path to capture the soon-to-settle
+    /// future's pointer before the terminal helper removes the entry.
+    pub fn future_heap_ptr(&self, id: FutureId) -> Option<HeapPtr> {
+        self.holder().active_futures.get(&id).map(|s| s.future)
+    }
+
     pub fn fulfill_future(&mut self, id: FutureId, value: Value) -> Result<(), EngineError> {
         if let Some(fut) = self.take_pending(id)? {
             // SAFETY: caller holds the heap permit (witnessed by `self.proof`).
@@ -580,14 +588,23 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn double_complete_returns_not_found() {
+    async fn double_complete_is_idempotent() {
+        // After the BEP-034 fix-A change, the terminal helpers
+        // (`fulfill_future` / `err_future` / `cancel_future`) became
+        // idempotent: if `take_pending` finds the entry already
+        // removed (or the heap state already terminal — e.g. user
+        // called `f.cancel()` from BAML, transitioning the heap
+        // directly), the helper returns `Ok(())` without doing
+        // anything. This protects the engine from spurious
+        // `TypeMismatch` errors on legitimate races between user-side
+        // settles and producer-thread settles.
         let (mgr, pm) = make_manager().await;
         let temp = temp_permit(&pm).await;
         let mut guard = mgr.acquire(temp.proof()).await;
         let (id, _) = guard.new_future(CancellationToken::new());
         guard.fulfill_future(id, Value::Int(1)).unwrap();
         let again = guard.fulfill_future(id, Value::Int(2));
-        assert!(matches!(again, Err(EngineError::FutureNotFound { .. })));
+        assert!(again.is_ok(), "second fulfill should be idempotent no-op");
     }
 
     #[tokio::test]

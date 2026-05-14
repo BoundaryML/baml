@@ -14,14 +14,82 @@ fn _assert_send<T: Send>() {}
 fn _assert_sync<T: Sync>() {}
 
 use std::{
-    collections::HashMap,
-    sync::atomic::{AtomicU64, Ordering},
+    collections::{HashMap, VecDeque},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicU64, Ordering},
+    },
 };
 
 use ::bex_heap::{Tlab, TlabHolder};
 use ::bex_vm_types::{HeapPtr, RootHaver, types::FutureId};
 use bex_vm::BexVm;
 use tokio_util::sync::CancellationToken;
+
+/// Cross-thread FIFO of heap pointers to children futures that errored
+/// fire-and-forget — i.e. they reached a terminal `Error` or `Cancelled`
+/// state without an explicit `await` consuming the error.
+///
+/// Per BEP-034 ("If a fire-and-forget task throws an unhandled error,
+/// the error propagates to the parent task at its next `await` point"),
+/// every `BexThread` owns one of these as `pending_child_errors`, and
+/// each child thread holds a clone of its parent's queue in
+/// `parent_pending_errors`. When the child terminates with an error
+/// it pushes its own future heap ptr onto the parent's queue. The
+/// parent's next engine yield (await / sys-op) drains one entry and
+/// raises the underlying value at that yield point.
+///
+/// GC: while a future ptr sits in the queue it is rooted via the
+/// owning `BexThread::collect_roots`, which locks the queue and
+/// pushes the `HeapPtr`s. `forward_roots` mirrors the update path. The
+/// `std::sync::Mutex` is held only across brief push/pop/iterate
+/// critical sections that never `.await`, so it cannot deadlock with
+/// the tokio runtime.
+pub struct ChildErrorQueue {
+    inner: Mutex<VecDeque<HeapPtr>>,
+}
+
+impl ChildErrorQueue {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self {
+            inner: Mutex::new(VecDeque::new()),
+        })
+    }
+
+    /// Append `future_ptr` (which must be in `Error` or `Cancelled`
+    /// state) to the queue. Called by a child thread's termination
+    /// path on its parent's queue.
+    pub fn push(&self, future_ptr: HeapPtr) {
+        self.inner
+            .lock()
+            .expect("ChildErrorQueue poisoned")
+            .push_back(future_ptr);
+    }
+
+    /// Pop the oldest queued future ptr, or `None` if empty.
+    pub fn pop(&self) -> Option<HeapPtr> {
+        self.inner
+            .lock()
+            .expect("ChildErrorQueue poisoned")
+            .pop_front()
+    }
+
+    /// GC root collection: copy out every queued ptr.
+    pub fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
+        let queue = self.inner.lock().expect("ChildErrorQueue poisoned");
+        roots.extend(queue.iter().copied());
+    }
+
+    /// GC fixup: rewrite queued ptrs through the relocation mapping.
+    pub fn forward_roots(&self, mapping: &HashMap<HeapPtr, HeapPtr>) {
+        let mut queue = self.inner.lock().expect("ChildErrorQueue poisoned");
+        for ptr in queue.iter_mut() {
+            if let Some(new_ptr) = mapping.get(ptr) {
+                *ptr = *new_ptr;
+            }
+        }
+    }
+}
 
 /// Identifier for a BEX-level green thread.
 ///
@@ -56,6 +124,17 @@ pub struct BexThread {
     pub cancel: CancellationToken,
     pub settles_future: Option<FutureId>,
     pub parent: Option<ThreadId>,
+    /// Queue of errored child futures (heap ptrs) that this thread's
+    /// children push onto when they terminate fire-and-forget with an
+    /// unhandled throw. Drained at this thread's next engine yield to
+    /// propagate the error per BEP-034. Always non-None so children
+    /// always have a valid push target.
+    pub pending_child_errors: Arc<ChildErrorQueue>,
+    /// Clone of the parent's `pending_child_errors`, or `None` for the
+    /// root thread. When this thread terminates with an unhandled throw,
+    /// the engine pushes our settled future ptr here so the parent
+    /// observes the error at its next await.
+    pub parent_pending_errors: Option<Arc<ChildErrorQueue>>,
     // v2 expansion points (intentionally left commented):
     // pub group: Option<TaskGroupHandle>,
     // pub detach: bool,
@@ -71,17 +150,21 @@ impl BexThread {
             cancel,
             settles_future: None,
             parent: None,
+            pending_child_errors: ChildErrorQueue::new(),
+            parent_pending_errors: None,
         }
     }
 
     /// Build a child thread that will settle `future_id` when its body
-    /// terminates.
+    /// terminates. `parent_pending_errors` is a clone of the spawning
+    /// thread's `pending_child_errors` queue Arc.
     pub fn new_child(
         vm: BexVm,
         cancel: CancellationToken,
         name: Option<String>,
         settles_future: FutureId,
         parent: ThreadId,
+        parent_pending_errors: Arc<ChildErrorQueue>,
     ) -> Self {
         Self {
             vm,
@@ -90,6 +173,8 @@ impl BexThread {
             cancel,
             settles_future: Some(settles_future),
             parent: Some(parent),
+            pending_child_errors: ChildErrorQueue::new(),
+            parent_pending_errors: Some(parent_pending_errors),
         }
     }
 
@@ -104,15 +189,41 @@ impl BexThread {
     pub fn vm_thread_cancel(&self) -> &CancellationToken {
         &self.cancel
     }
+
+    /// Pop one queued child-error future ptr, if any. Called by the
+    /// engine at this thread's await/sys-op checkpoints to deliver
+    /// fire-and-forget errors per BEP-034.
+    pub fn vm_thread_pop_pending_child_error(&self) -> Option<HeapPtr> {
+        self.pending_child_errors.pop()
+    }
+
+    /// Push our settled future ptr onto the parent's pending-child-errors
+    /// queue, if we have a parent. No-op for root threads.
+    pub fn vm_thread_notify_parent_of_error(&self, settled_future_ptr: HeapPtr) {
+        if let Some(parent_q) = &self.parent_pending_errors {
+            parent_q.push(settled_future_ptr);
+        }
+    }
+
+    /// Clone of this thread's `pending_child_errors` Arc. Passed to
+    /// freshly spawned children as their `parent_pending_errors`.
+    pub fn vm_thread_pending_errors_arc(&self) -> Arc<ChildErrorQueue> {
+        Arc::clone(&self.pending_child_errors)
+    }
 }
 
 impl RootHaver for BexThread {
     fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
         self.vm.collect_roots(roots);
+        // The pending-child-errors queue holds settled future ptrs
+        // until the parent's next yield drains them; keep those heap
+        // objects alive across any concurrent GC.
+        self.pending_child_errors.collect_roots(roots);
     }
 
     fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
         self.vm.forward_roots(roots);
+        self.pending_child_errors.forward_roots(roots);
     }
 }
 
