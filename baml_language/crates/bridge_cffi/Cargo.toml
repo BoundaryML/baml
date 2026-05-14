@@ -54,5 +54,8 @@ vfs = { workspace = true }
 [build-dependencies]
 cbindgen = { workspace = true }
 
+[dev-dependencies]
+tempfile = { workspace = true }
+
 [package.metadata.ci]
 wasm_support = false

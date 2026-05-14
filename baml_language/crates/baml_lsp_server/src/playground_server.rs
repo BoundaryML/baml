@@ -667,3 +667,110 @@ fn static_router(dir: String) -> Router {
     let index = format!("{dir}/index.html");
     Router::new().fallback_service(ServeDir::new(&dir).not_found_service(ServeFile::new(index)))
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use bex_project::{BamlVFS, FsPath, InMemoryFs, new_lsp_with_initial_project};
+    use tokio_tungstenite::tungstenite;
+
+    use super::*;
+    use crate::{
+        no_op_lsp_sender::NoOpLspSender,
+        playground_sender::NativePlaygroundSender,
+        playground_setup::PlaygroundWiring,
+    };
+
+    /// When neither `BAML_PLAYGROUND_DIR` nor `BAML_PLAYGROUND_DEV_PORT` is set,
+    /// `build_router` used to `bail!` and kill the server task. Now it falls
+    /// through to `/api/ws`-only mode so bridge_cffi hosts that don't ship
+    /// playground assets still get a working WS endpoint.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn api_ws_only_fallback_when_no_env_vars() {
+        // SAFETY: env vars are process-global. baml_lsp_server has no other
+        // tests today, so this won't race with anything.
+        unsafe {
+            std::env::remove_var("BAML_PLAYGROUND_DIR");
+            std::env::remove_var("BAML_PLAYGROUND_DEV_PORT");
+        }
+
+        let wiring = PlaygroundWiring::build();
+
+        let sources: HashMap<FsPath, String> = HashMap::from([(
+            FsPath::from_str("/baml_src/main.baml".to_string()),
+            String::new(),
+        )]);
+        let mut files: HashMap<String, Vec<u8>> = HashMap::new();
+        files.insert("/baml_src/main.baml".to_string(), Vec::new());
+        let vfs = BamlVFS::new(std::sync::Arc::new(Box::new(InMemoryFs::new(files))));
+        let root = vfs::VfsPath::from(vfs.clone()).join("baml_src").unwrap();
+
+        let lsp_sender: std::sync::Arc<dyn bex_project::LspClientSenderTrait + Send + Sync> =
+            std::sync::Arc::new(NoOpLspSender);
+        let playground_sender = std::sync::Arc::new(NativePlaygroundSender::new(
+            wiring.broadcast_tx.clone(),
+            lsp_sender.clone(),
+            0,
+            false,
+        ));
+
+        let bex = new_lsp_with_initial_project(
+            wiring.sys_op_factory.clone(),
+            lsp_sender,
+            playground_sender,
+            vfs,
+            Some(wiring.event_sink.clone()),
+            bex_project::BackgroundSpawner::new(),
+            root,
+            sources,
+        )
+        .expect("project registration");
+        let bex: Arc<dyn bex_project::BexLsp> = Arc::new(bex);
+
+        // Bind an OS-assigned ephemeral port; pick_port returns its argument
+        // verbatim, not the listener's actual local_addr.
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .expect("bind ephemeral port");
+        let port = listener.local_addr().expect("local_addr").port();
+        let btx = wiring.broadcast_tx.clone();
+        let es = wiring.env_state.clone();
+        let ios = wiring.io_state.clone();
+        tokio::spawn(async move {
+            let _ = run(listener, bex, btx, es, ios).await;
+        });
+
+        // Give the server a moment to come up.
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        // 1. WS upgrade on /api/ws succeeds.
+        let ws_url = format!("ws://127.0.0.1:{port}/api/ws");
+        let (mut stream, response) = tokio_tungstenite::connect_async(&ws_url)
+            .await
+            .expect("WS handshake should succeed when no fallback env vars are set");
+        assert_eq!(
+            response.status(),
+            tungstenite::http::StatusCode::SWITCHING_PROTOCOLS
+        );
+        // The handler immediately sends a Ready message after the upgrade.
+        let first = tokio::time::timeout(std::time::Duration::from_secs(2), stream.next())
+            .await
+            .expect("first WS message arrives within 2s")
+            .expect("WS stream not closed")
+            .expect("WS frame ok");
+        match first {
+            tungstenite::Message::Text(_) => { /* ready frame */ }
+            other => panic!("expected text Ready frame, got {other:?}"),
+        }
+        drop(stream);
+
+        // 2. Non-/api GET 404s cleanly (no fallback service mounted).
+        let resp = reqwest::Client::new()
+            .get(format!("http://127.0.0.1:{port}/index.html"))
+            .send()
+            .await
+            .expect("HTTP request completes");
+        assert_eq!(resp.status(), reqwest::StatusCode::NOT_FOUND);
+    }
+}

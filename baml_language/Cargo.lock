@@ -1825,6 +1825,7 @@ dependencies = [
  "sys_native",
  "sys_ops",
  "sys_types",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",

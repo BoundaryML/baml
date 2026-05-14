@@ -238,3 +238,66 @@ pub fn flush_event_sink() {
 pub fn get_event_sink() -> Option<Arc<dyn EventSink>> {
     EVENT_SINK.read().ok().and_then(|g| g.clone())
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use bex_project::{BexArgs, FunctionCallContextBuilder};
+
+    use super::*;
+
+    /// End-to-end smoke: a function call with `BAML_TRACE_FILE` set writes
+    /// events to the file once `flush_event_sink` runs.
+    ///
+    /// Lives in bridge_cffi because that's where the global engine + file
+    /// sink wiring lives. Single-threaded test flavor: bridge_cffi's
+    /// runtime statics are process-global, so the test must be the only one
+    /// touching them.
+    #[test]
+    fn flush_event_sink_after_call() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let trace = dir.path().join("trace.jsonl");
+        // SAFETY: bridge_cffi tests run in one binary; the other tests
+        // (host_spans::*) don't read BAML_TRACE_FILE or the engine globals.
+        unsafe {
+            std::env::set_var("BAML_TRACE_FILE", &trace);
+        }
+
+        let mut src = HashMap::new();
+        src.insert(
+            "main.baml".to_string(),
+            "function greet() -> string { \"hi\" }".to_string(),
+        );
+
+        let bex = initialize_runtime("baml_src", src).expect("initialize_runtime");
+
+        let rt = get_tokio_runtime().expect("tokio runtime");
+        let result = rt.block_on(async {
+            bex.call_function(
+                "greet",
+                BexArgs(HashMap::new()),
+                FunctionCallContextBuilder::new(sys_types::CallId(1)).build(),
+            )
+            .await
+        });
+        result.expect("call_function ok");
+
+        flush_event_sink();
+
+        let bytes = std::fs::metadata(&trace)
+            .unwrap_or_else(|e| panic!("trace file {trace:?} missing: {e}"))
+            .len();
+        assert!(
+            bytes > 0,
+            "trace file {trace:?} should be non-empty after flush"
+        );
+
+        // Cleanup: drop the BAML_TRACE_FILE env var so a follow-on `cargo test`
+        // run in the same shell doesn't inherit it.
+        // SAFETY: same justification as the set_var above.
+        unsafe {
+            std::env::remove_var("BAML_TRACE_FILE");
+        }
+    }
+}

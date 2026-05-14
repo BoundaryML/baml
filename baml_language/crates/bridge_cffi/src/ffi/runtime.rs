@@ -55,11 +55,15 @@ pub extern "C" fn create_baml_runtime(
 }
 
 /// Destroy the BAML runtime.
-/// This is a no-op since the global engine persists for the process lifetime.
+///
+/// No-op: the global engine and the playground HTTP/WS server task spawned by
+/// `initialize_runtime` both live for the process lifetime. Tokio binds the
+/// playground listener with SO_REUSEADDR, so re-`initialize_runtime` calls
+/// from the same process pick a new port out of [3700, 3800) without colliding
+/// with the previous (still-running) server. If a host needs the port back
+/// before exit, kill the process.
 #[unsafe(no_mangle)]
-pub extern "C" fn destroy_baml_runtime(_runtime: *const libc::c_void) {
-    // No-op: global engine persists
-}
+pub extern "C" fn destroy_baml_runtime(_runtime: *const libc::c_void) {}
 
 /// Invoke the BAML CLI.
 /// Currently returns 1 (error) as CLI is not implemented for bridge.
