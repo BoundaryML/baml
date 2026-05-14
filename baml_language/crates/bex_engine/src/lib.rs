@@ -79,7 +79,7 @@ use std::{
 use ::bex_heap::{HeapPermit as _, Tlab};
 // Re-export event types for callers.
 use ::bex_vm_types::{RootHaver, types::FutureId};
-use ::core::sync::atomic::AtomicBool;
+use ::core::sync::atomic::{AtomicBool, AtomicUsize};
 use ::sys_types::OpFuture;
 use async_trait::async_trait;
 use baml_project::ProjectDatabase;
@@ -463,6 +463,16 @@ pub struct BexEngine {
     /// engine.
     project_db: Option<Arc<parking_lot::Mutex<ProjectDatabase>>>,
 
+    /// Monotonically incrementing counter for minting unique names for
+    /// runtime-compiled packages. `reflect.Package.new()` claims an index
+    /// `n` and tags the resulting `Object::Package` with name `_pkg_{n}`
+    /// so files inserted under `<runtime>/_pkg_{n}/…` route back to that
+    /// package via the existing path-based `file_package` mechanism.
+    ///
+    /// Atomic so concurrent `reflect.Package.new` calls (across VMs)
+    /// never collide on the same name.
+    runtime_pkg_counter: Arc<AtomicUsize>,
+
     // --- GC coordination ---
     heap_permit_manager: Arc<HeapPermitManager>,
     /// Used to prevent multiple threads from trying to run GC at the same time.
@@ -808,6 +818,7 @@ impl BexEngine {
             test_cases,
             argv,
             project_db: None,
+            runtime_pkg_counter: Arc::new(AtomicUsize::new(0)),
             heap_permit_manager,
             checking_gc: AtomicBool::new(false),
             #[cfg(not(target_arch = "wasm32"))]
@@ -1218,6 +1229,7 @@ impl BexEngine {
             Arc::clone(&self.argv),
         );
         vm.project_db = self.project_db.clone();
+        vm.runtime_pkg_counter = Some(Arc::clone(&self.runtime_pkg_counter));
         let vm = self.heap_permit_manager.new_permit(vm).await;
         let mut vm = vm.acquire().await;
 

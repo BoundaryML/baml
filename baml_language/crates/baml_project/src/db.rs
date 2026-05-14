@@ -353,6 +353,31 @@ impl ProjectDatabase {
         self.add_or_update_file(path.as_ref(), content)
     }
 
+    /// Append a runtime-compiled source file to `Compiler2RuntimeFiles`.
+    ///
+    /// Used by `reflect.Package.add_compile`. The path encodes the owning
+    /// package (e.g. `<runtime>/_pkg_3/lib.baml`) so the existing
+    /// `file_package` path-resolution mechanism in `baml_compiler2_hir`
+    /// routes the file to the right package without a side map.
+    ///
+    /// # Panics
+    /// Panics if `set_project_root` hasn't been called (runtime files
+    /// require the Salsa input to exist).
+    pub fn add_runtime_file(
+        &mut self,
+        path: impl Into<std::path::PathBuf>,
+        content: &str,
+    ) -> SourceFile {
+        let file = self.add_file_internal(path, content);
+        let runtime = self
+            .compiler2_runtime_files
+            .expect("add_runtime_file: project root not set");
+        let mut files: Vec<SourceFile> = runtime.files(self).clone();
+        files.push(file);
+        runtime.set_files(self).to(files);
+        file
+    }
+
     /// Get all files currently in the database.
     pub fn files(&self) -> impl Iterator<Item = SourceFile> + '_ {
         self.file_map.values().copied()

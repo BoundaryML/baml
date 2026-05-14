@@ -348,6 +348,16 @@ pub struct BexVm {
     /// opt into reflection — natives throw a runtime error in that case.
     pub project_db: Option<std::sync::Arc<parking_lot::Mutex<baml_project::ProjectDatabase>>>,
 
+    /// Shared engine-wide counter for minting unique runtime package
+    /// names. `reflect.Package.new` increments this and tags the new
+    /// `Object::Package` with the resulting `_pkg_{n}` identifier so that
+    /// files added via `add_compile` route under
+    /// `<runtime>/_pkg_{n}/…` in `Compiler2RuntimeFiles`. Atomic so
+    /// concurrent `Package.new` calls (across VMs) never collide. `None`
+    /// for VMs without an attached engine (e.g. `BexVm::from_program`);
+    /// in that case `Package.new` uses an empty placeholder name.
+    pub runtime_pkg_counter: Option<std::sync::Arc<::core::sync::atomic::AtomicUsize>>,
+
     /// Resolved class names mapping fully-qualified class names to their heap pointers.
     ///
     /// Used by `resolve_class()` for generated `copy::` struct `to_value()` methods.
@@ -784,6 +794,7 @@ impl BexVm {
             globals,
             packages,
             project_db: None,
+            runtime_pkg_counter: None,
             resolved_class_names,
             error_class_ptrs,
             panic_class_ptrs,

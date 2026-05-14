@@ -61,12 +61,25 @@ pub fn compile_source(source: &str) -> Program {
 
 /// Compile BAML source with a specific optimization level.
 pub fn compile_source_with_opt(source: &str, opt: OptLevel) -> Program {
+    let (program, _db) = compile_source_with_opt_returning_db(source, opt);
+    program
+}
+
+/// Like [`compile_source_with_opt`], but also returns the
+/// `ProjectDatabase` so tests that exercise runtime compilation
+/// (`reflect.Package.add_compile`) can hand the same DB to
+/// `BexEngine::set_project_db`.
+pub fn compile_source_with_opt_returning_db(
+    source: &str,
+    opt: OptLevel,
+) -> (Program, ProjectDatabase) {
     let db = setup_test_db(source);
     assert_no_diagnostic_errors(&db);
 
     let opts = CompileOptions {
         emit_test_cases: false,
     };
-    generate_project_bytecode_with_opt(&db, &opts, opt)
-        .expect("generate_project_bytecode should succeed for valid test source")
+    let program = generate_project_bytecode_with_opt(&db, &opts, opt)
+        .expect("generate_project_bytecode should succeed for valid test source");
+    (program, db)
 }

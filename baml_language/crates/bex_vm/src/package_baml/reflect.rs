@@ -72,12 +72,27 @@ impl BamlClassReflectPackage for PackageBamlImpl {
     /// `Object::Package` keeps the dispatch-relevant state (items, per-pkg
     /// globals) the VM cares about.
     ///
-    /// The internal package's `name` is left empty for now; the only
-    /// identity that matters at runtime is the `HeapPtr` itself (every
-    /// frame caches the owning package by pointer, not by name).
+    /// Each new runtime package is tagged with `_pkg_{n}` where `n` is
+    /// the next slot from the engine's `runtime_pkg_counter`. The name is
+    /// what `add_compile` uses to prefix file paths (`<runtime>/_pkg_{n}/…`)
+    /// so the existing `file_package` resolver routes runtime files back
+    /// to this package. Atomic across concurrent `Package.new` calls.
+    ///
+    /// For VMs constructed via `BexVm::from_program` (no engine attached)
+    /// the counter is `None`; we fall back to an empty name, which makes
+    /// such packages unusable for `add_compile` but harmless for tests
+    /// that only need a placeholder handle.
     fn new(vm: &mut BexVm) -> Value {
+        let name = vm
+            .runtime_pkg_counter
+            .as_ref()
+            .map(|c| {
+                let n = c.fetch_add(1, ::core::sync::atomic::Ordering::Relaxed);
+                format!("_pkg_{n}")
+            })
+            .unwrap_or_default();
         let pkg = Package {
-            name: String::new(),
+            name,
             items: HashMap::new(),
             globals: PackageGlobals::Dynamic(Vec::new()),
         };
@@ -97,22 +112,48 @@ impl BamlClassReflectPackage for PackageBamlImpl {
 
     /// Compile a batch of source files into this runtime package.
     ///
-    /// This is the skeleton: it validates the receiver, looks up the
-    /// engine's `ProjectDatabase`, and acquires the project-DB mutex.
-    /// The actual file insertion + emit pipeline lands in subsequent
-    /// commits.
+    /// For each `(path, source)` in `files`, inserts a runtime source
+    /// file at `<runtime>/{pkg_name}/{path}` into `Compiler2RuntimeFiles`.
+    /// The path prefix routes the file back to this package via the
+    /// existing `file_package` path resolver.
     ///
-    /// Throws `Unsupported` if the engine wasn't constructed with
-    /// reflection support (i.e., the host didn't call
-    /// `BexEngine::set_project_db`).
+    /// This commit (Phase 5.2c) wires file insertion only — the re-emit
+    /// pipeline and item-extraction land in subsequent commits, so calls
+    /// after this one don't yet make the new items reachable via
+    /// `pkg.get<F>(...)` or `pkg.eval<T>(...)`.
+    ///
+    /// Throws `Unsupported` if:
+    /// - The engine wasn't constructed with reflection support
+    ///   (host didn't call `BexEngine::set_project_db`).
+    /// - The receiver doesn't carry a name (the engine didn't supply a
+    ///   `runtime_pkg_counter` — typically `BexVm::from_program` VMs).
+    ///
+    /// Throws `InvalidArgument` if a file path or source isn't a string.
     fn add_compile(
         vm: &mut BexVm,
         package: &Value,
-        _files: &IndexMap<String, Value>,
+        files: &IndexMap<String, Value>,
     ) -> Result<Value, VmRustFnError> {
-        // Validate the receiver up-front so any later compile error sees a
-        // well-formed package handle.
-        let _pkg_ptr = unwrap_package_handle(vm, package)?;
+        let pkg_ptr = unwrap_package_handle(vm, package)?;
+
+        // Snapshot the package's name; we need it as a `String` before
+        // touching the DB lock so the borrow doesn't conflict with the
+        // mutable VM heap access.
+        let pkg_name = match vm.get_object(pkg_ptr) {
+            Object::Package(pkg) => pkg.name.clone(),
+            _ => unreachable!("unwrap_package_handle returned a non-Package ptr"),
+        };
+        if pkg_name.is_empty() {
+            return Err(VmBamlError::Unsupported {
+                message: "reflect.Package.add_compile: this package has no \
+                          assigned name; the engine was constructed without a \
+                          `runtime_pkg_counter`. Did you call \
+                          `BexEngine::set_project_db` and use `call_function` \
+                          to drive the runtime?"
+                    .to_string(),
+            }
+            .into());
+        }
 
         let Some(db_handle) = vm.project_db.as_ref() else {
             return Err(VmBamlError::Unsupported {
@@ -123,16 +164,40 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             }
             .into());
         };
+        let db_handle = std::sync::Arc::clone(db_handle);
+        let mut db_guard = db_handle.lock();
 
-        // Acquire the project-DB mutex for the duration of the compile.
-        // Concurrent `add_compile` calls on the same engine serialize
-        // here. The lock is dropped at the end of this block.
-        let _db_guard = db_handle.lock();
+        // Materialize each `(path, source)` pair into a SourceFile under
+        // `<runtime>/{pkg_name}/{path}`.
+        for (path, source_value) in files {
+            let Value::Object(src_ptr) = *source_value else {
+                return Err(VmBamlError::InvalidArgument {
+                    message: format!(
+                        "reflect.Package.add_compile: file {path:?} value is not a string"
+                    ),
+                }
+                .into());
+            };
+            let source = match vm.get_object(src_ptr) {
+                Object::String(s) => s.clone(),
+                _ => {
+                    return Err(VmBamlError::InvalidArgument {
+                        message: format!(
+                            "reflect.Package.add_compile: file {path:?} value is not a string"
+                        ),
+                    }
+                    .into());
+                }
+            };
+            let full_path = format!("<runtime>/{pkg_name}/{path}");
+            db_guard.add_runtime_file(std::path::PathBuf::from(full_path), &source);
+        }
 
-        // TODO(Phase 5.2c+): insert `_files` into `Compiler2RuntimeFiles`
-        // under the package's path prefix, re-emit, and append the new
-        // items + globals to `pkg_ptr`'s owned `PackageGlobals::Dynamic`
-        // slot space.
+        // TODO(Phase 5.2d+): run the emit pipeline now that the runtime
+        // files for this package are in the DB, then heap-allocate the
+        // newly-compiled items and append them to `pkg_ptr`'s `items` +
+        // `PackageGlobals::Dynamic` slot space.
+        drop(db_guard);
         Ok(*package)
     }
 }
