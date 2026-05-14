@@ -86,6 +86,19 @@ pub enum WsOutMessage {
     Ready,
     #[serde(rename = "playgroundNotification")]
     PlaygroundNotification { notification: serde_json::Value },
+    /// Notifies all connected webviews that a `bex.call_function` invocation
+    /// is about to begin for this `id`. Mirrors `WsInMessage::CallFunction`'s
+    /// payload so a webview can construct a `RunEntry` for runs it didn't
+    /// initiate locally.
+    #[serde(rename = "callFunction")]
+    CallFunction {
+        id: u64,
+        project: String,
+        name: String,
+        /// Base64-encoded protobuf `CallFunctionArgs`.
+        #[serde(rename = "argsProto")]
+        args_proto: String,
+    },
     #[serde(rename = "callFunctionResult")]
     CallFunctionResult {
         id: u64,
