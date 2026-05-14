@@ -104,6 +104,81 @@ async fn no_deadlock_between_gc_and_concurrent_schedule_future() {
     assert_eq!(engine.active_future_count().await, 0);
 }
 
+// ============================================================================
+// GC during `m.original` SysOp dispatch (VmExecState::DispatchSysOpInline).
+//
+// The engine allocates a `Future` heap object via `new_future` and stores
+// only a local `HeapPtr` to it. Before dereferencing, it releases the VM
+// permit, optionally runs `maybe_collect_garbage`, and awaits the future.
+// During that release-and-await window the freshly-allocated Future is
+// reachable through the `FutureManager` registry (which forwards on GC)
+// but the local `future_ptr` is NOT a GC root — so a minor or major GC
+// during the window moves the Future and the local pointer goes stale.
+// Dereferencing it after the await reads the pre-GC Gen0 bytes (still
+// `state = Pending`, since `fulfill_future` only wrote the new location),
+// hitting the `unreachable!("future was awaited successfully but isn't
+// terminal")` branch in `DispatchSysOpInline`.
+// ============================================================================
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn gc_during_mock_original_does_not_dereference_stale_future() {
+    // We need a Minor GC to land *inside* the DispatchSysOpInline window:
+    // between `new_future` (Future allocated in Gen0) and the
+    // `future_ptr.get()` deref after `future.await?`. The pre-fix code held
+    // `future_ptr` only as a Rust local — not a GC root — so a Minor GC
+    // there would move the Future out of Gen0 and leave the local stale.
+    //
+    // Approach: long `baml.sys.sleep` provides plenty of GC window, and a
+    // single calibrated background `collect_garbage` call lands inside it.
+    // We use the engine's existing `collect_garbage` rather than the
+    // internal heuristic because the heuristic resets `allocs_since_gc`
+    // at the VM's EarlyYield safepoints, which would fire before
+    // DispatchSysOpInline rather than inside it.
+    let source = r#"
+        function main() -> int throws unknown {
+            let m = baml.mock.Mock.new(baml.sys.sleep)
+            m.replace((ms: int) -> null throws baml.errors.Io {
+                m.original(ms)
+            })
+            m.scope<int, unknown>(() -> int throws unknown {
+                let _ = baml.sys.sleep(200)
+                42
+            })
+        }
+    "#;
+    let engine = make_engine(source);
+
+    let engine_for_gc = Arc::clone(&engine);
+    let gc_task = tokio::spawn(async move {
+        // Wait long enough that the VM is parked inside DispatchSysOpInline's
+        // `future.await?` — the BAML sleep started ~immediately after the
+        // call kicks off, and we want GC to run while the future hasn't
+        // resolved yet (so the post-GC local `future_ptr` is stale).
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        engine_for_gc
+            .collect_garbage(bex_heap::CollectionLevel::Minor)
+            .await;
+    });
+
+    let call = engine.call_function(
+        "main",
+        vec![],
+        FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+        true,
+    );
+    let result = tokio::time::timeout(std::time::Duration::from_secs(10), call)
+        .await
+        .expect("call did not complete in time");
+
+    gc_task.await.expect("gc task panicked");
+
+    assert_eq!(
+        result.expect("call failed"),
+        BexExternalValue::Int(42),
+        "DispatchSysOpInline dereferenced a stale future_ptr after GC"
+    );
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn gc_during_await_completes_promptly() {
     // Single call that schedules a future and awaits it; concurrent GC

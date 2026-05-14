@@ -1998,6 +1998,12 @@ impl BexEngine {
                         let mut g = self.futures.acquire(vm.proof()).await;
                         g.new_future(future_cancel.clone())
                     };
+                    // Park `future_ptr` on the VM stack so GC forwards it
+                    // across the safepoint below; the local copy is not a
+                    // GC root and would go stale after a minor or major
+                    // collection while we're permit-released and awaiting.
+                    // We pop it back out after re-acquiring the permit.
+                    vm.stack.push(Value::Object(future_ptr));
                     if cancel.is_cancelled() {
                         self.futures
                             .acquire(vm.proof())
@@ -2066,12 +2072,20 @@ impl BexEngine {
                     future.await?;
                     vm = inactive.acquire().await;
 
-                    // Read the resolved value off the Future heap object
-                    // and push it as the result of the CallIndirect site.
-                    // SAFETY: `future_ptr` was just allocated by
-                    // `new_future` and remained reachable through the
-                    // FutureManager registry, so it's a valid pointer to
-                    // an `Object::Future` whose state is now terminal.
+                    // Recover the (possibly forwarded) `future_ptr` from
+                    // the VM stack — GC walks `vm.stack` as roots and
+                    // updates each entry to the new heap location, so the
+                    // popped value points at the post-GC `Future`.
+                    let future_ptr = match vm.stack.pop() {
+                        Some(Value::Object(p)) => p,
+                        other => unreachable!(
+                            "DispatchSysOpInline parked future_ptr on the stack; got {other:?}"
+                        ),
+                    };
+
+                    // SAFETY: `future_ptr` was just resolved from the VM
+                    // stack (a GC root), so it's a valid pointer to an
+                    // `Object::Future` whose state is now terminal.
                     let resolved = unsafe {
                         match future_ptr.get() {
                             Object::Future(fut) => fut.read(),
