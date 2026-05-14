@@ -340,6 +340,14 @@ pub struct BexVm {
     /// `BytecodeFrame::package = None`.
     pub packages: EnginePackages,
 
+    /// Optional handle to the engine's `ProjectDatabase`, set by
+    /// `BexEngine::set_project_db`. Reflection-bearing natives
+    /// (`reflect.Package.add_compile`, `Package.eval`, `Package.get`)
+    /// acquire this mutex to insert files / re-emit. `None` for VMs
+    /// constructed via `BexVm::from_program` or for engines that didn't
+    /// opt into reflection — natives throw a runtime error in that case.
+    pub project_db: Option<std::sync::Arc<parking_lot::Mutex<baml_project::ProjectDatabase>>>,
+
     /// Resolved class names mapping fully-qualified class names to their heap pointers.
     ///
     /// Used by `resolve_class()` for generated `copy::` struct `to_value()` methods.
@@ -775,6 +783,7 @@ impl BexVm {
             tlab,
             globals,
             packages,
+            project_db: None,
             resolved_class_names,
             error_class_ptrs,
             panic_class_ptrs,

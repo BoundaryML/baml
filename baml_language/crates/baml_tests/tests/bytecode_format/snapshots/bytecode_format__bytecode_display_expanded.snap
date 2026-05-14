@@ -637,7 +637,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
 
   176   49    load_var 12                      (sub)
         50    load_var 2                       (name)
-        51    call 437 ntypeargs=0             (testing.TestRegistry.expand_set)
+        51    call 438 ntypeargs=0             (testing.TestRegistry.expand_set)
         52    jump +49                         (to 101)
 
   156   53    load_var 3                       (_3)
@@ -699,7 +699,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
         98    pop 1                            
 
   169   99    load_var 1                       (self)
-        100   call 432 ntypeargs=0             (testing.TestRegistry.serialize)
+        100   call 433 ntypeargs=0             (testing.TestRegistry.serialize)
         101   return                           
 }
 
@@ -812,7 +812,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
 
   147   49   load_var 9             (sub)
         50   load_var 2             (name)
-        51   call 436 ntypeargs=0   (testing.TestRegistry.run_test)
+        51   call 437 ntypeargs=0   (testing.TestRegistry.run_test)
         52   jump +21               (to 73)
 
   136   53   load_var 3             (_3)
@@ -837,7 +837,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
         69   load_field 1           (body)
         70   load_var 5             (t)
         71   load_field 2           (runner)
-        72   call 443 ntypeargs=0   (testing.run_test)
+        72   call 444 ntypeargs=0   (testing.run_test)
         73   return                 
 }
 
@@ -910,7 +910,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
         56   store_var 10                     (_25)
 
   122   57   load_var 9                       (sub)
-        58   call 432 ntypeargs=0             (testing.TestRegistry.serialize)
+        58   call 433 ntypeargs=0             (testing.TestRegistry.serialize)
         59   store_var 11                     (_26)
 
   120   60   load_var 2                       (items)
@@ -954,7 +954,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
 function testing.TestRegistry.to_json(self: null) -> baml.json.json {
   93   0    load_var 1             (self)
        1    load_field 0           (collector)
-       2    call 444 ntypeargs=0   (testing.TestCollector.to_json)
+       2    call 445 ntypeargs=0   (testing.TestCollector.to_json)
        3    store_var 2            (_2)
        4    load_var 1             (self)
        5    load_field 1           (expansions)
@@ -1159,7 +1159,7 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> testi
         2    store_var 1            
 
   185   3    load_var 1             (body)
-        4    make_closure 886 1     
+        4    make_closure 887 1     
         5    store_var 3            (base_run)
 
   200   6    load_var 2             (runner)

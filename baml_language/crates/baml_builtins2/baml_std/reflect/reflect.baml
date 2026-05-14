@@ -50,4 +50,22 @@ class Package {
     function new() -> reflect.Package {
         $rust_function
     }
+
+    /// Add a batch of source files to this package and compile them.
+    ///
+    /// Each key in `files` is a virtual path within the package (e.g.
+    /// `"lib.baml"`), and each value is the BAML source for that file.
+    /// Items defined across the batch can reference each other freely;
+    /// references to items defined in a *later* `add_compile` call are
+    /// errors at compile time (cyclic references are why batches exist).
+    ///
+    /// Returns the same package handle so calls can chain.
+    ///
+    /// Throws on compile errors. Acquires the engine's project-DB mutex
+    /// for the duration of the compile, so concurrent `add_compile` calls
+    /// on the same engine serialize.
+    //baml:mut_vm
+    function add_compile(self, files: map<string, string>) -> reflect.Package throws root.errors.Unsupported {
+        $rust_function
+    }
 }

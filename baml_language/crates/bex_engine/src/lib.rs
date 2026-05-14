@@ -82,6 +82,7 @@ use ::bex_vm_types::{RootHaver, types::FutureId};
 use ::core::sync::atomic::AtomicBool;
 use ::sys_types::OpFuture;
 use async_trait::async_trait;
+use baml_project::ProjectDatabase;
 use bex_events::{EventKind, FunctionEnd, FunctionEvent, FunctionStart, SpanContext};
 pub use bex_events::{HostSpanContext, RuntimeEvent, SpanId};
 pub use bex_external_types::{BexExternalValue, Ty, TypeName, UnionMetadata};
@@ -445,6 +446,23 @@ pub struct BexEngine {
     /// `baml.sys.argv()`. Shared (cheap to clone) with each spawned VM.
     argv: Arc<[String]>,
 
+    /// Optional handle to the host's `ProjectDatabase`, wrapped in a
+    /// `parking_lot::Mutex` so it can be mutated under exclusion from any
+    /// thread.
+    ///
+    /// Reflection-bearing operations — currently `reflect.Package.add_compile`
+    /// / `Package.eval` / `Package.get`, landing in upcoming commits — acquire
+    /// this lock to insert files into `Compiler2RuntimeFiles` and re-emit.
+    /// `None` for engines constructed without reflection support; in that case
+    /// `Package.add_compile` throws a runtime error rather than silently
+    /// failing.
+    ///
+    /// `parking_lot::Mutex` (not `std::sync::Mutex`) so a panic inside a
+    /// runtime-compile call doesn't poison the lock — the host can still
+    /// recover and continue serving normal `call_function` requests on the
+    /// engine.
+    project_db: Option<Arc<parking_lot::Mutex<ProjectDatabase>>>,
+
     // --- GC coordination ---
     heap_permit_manager: Arc<HeapPermitManager>,
     /// Used to prevent multiple threads from trying to run GC at the same time.
@@ -789,6 +807,7 @@ impl BexEngine {
             event_sink,
             test_cases,
             argv,
+            project_db: None,
             heap_permit_manager,
             checking_gc: AtomicBool::new(false),
             #[cfg(not(target_arch = "wasm32"))]
@@ -796,6 +815,29 @@ impl BexEngine {
             active_calls: Mutex::new(HashMap::new()),
             futures: FutureManager::new(futures_permit),
         })
+    }
+
+    /// Inject a `ProjectDatabase` handle so reflection-bearing methods
+    /// (`reflect.Package.add_compile`, `Package.eval`, `Package.get`) can
+    /// re-emit BAML source at runtime.
+    ///
+    /// The supplied database should already contain the host's source files
+    /// and stdlib (typically the same DB the host used to compile the
+    /// `Program` passed to `BexEngine::new`). Without this call, runtime
+    /// compilation methods throw a runtime error.
+    ///
+    /// Wrap the database in a `parking_lot::Mutex` to avoid `std::sync::Mutex`
+    /// poisoning on panic — a panic inside one `add_compile` call doesn't
+    /// permanently break later calls.
+    pub fn set_project_db(&mut self, db: Arc<parking_lot::Mutex<ProjectDatabase>>) {
+        self.project_db = Some(db);
+    }
+
+    /// Borrow the optional project-DB handle. Used by reflection-bearing
+    /// native methods that need to mutate `Compiler2RuntimeFiles` and re-emit.
+    #[allow(dead_code, reason = "consumed by upcoming Package.add_compile commit")]
+    pub(crate) fn project_db(&self) -> Option<&Arc<parking_lot::Mutex<ProjectDatabase>>> {
+        self.project_db.as_ref()
     }
 
     /// Emit an event: store in `CollectorStore` for in-memory queries,
@@ -1162,7 +1204,7 @@ impl BexEngine {
 
         // Create VM with shared heap (each VM gets its own TLAB).
         // Globals are shared as a frozen `Arc<[Value]>` — cloning is a refcount bump.
-        let vm = BexVm::new(
+        let mut vm = BexVm::new(
             Arc::clone(&self.heap),
             VmGlobals::Shared(self.globals.clone()),
             self.packages.clone(),
@@ -1175,6 +1217,7 @@ impl BexEngine {
             Arc::clone(&self.park_requested),
             Arc::clone(&self.argv),
         );
+        vm.project_db = self.project_db.clone();
         let vm = self.heap_permit_manager.new_permit(vm).await;
         let mut vm = vm.acquire().await;
 
