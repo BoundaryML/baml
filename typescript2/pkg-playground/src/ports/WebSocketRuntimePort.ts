@@ -33,6 +33,8 @@ type WsOutMessage =
   | { type: 'fetchLogNew'; callId: number; id: number; method: string; url: string; requestHeaders: Record<string, string>; requestBody: string }
   | { type: 'fetchLogUpdate'; callId: number; logId: number; status?: number; durationMs?: number; responseBody?: string; error?: string; responseHeaders?: Record<string, string> }
   | { type: 'controlFlowGraphResult'; functionName: string; graph: unknown | null }
+  | { type: 'controlFlowGraphDiffResult'; functionName: string; baseGraph: unknown | null; headGraph: unknown | null; diff: unknown | null }
+  | { type: 'gitRefs'; branches: string[]; tags: string[] }
   | { type: 'cursorContext'; context: unknown }
   | { type: 'runtimeEvent'; data: string; callId: number };
 
@@ -49,6 +51,8 @@ type WsInMessage =
   | { type: 'requestState' }
   | { type: 'requestCollectTests'; project: string }
   | { type: 'requestControlFlowGraph'; project: string; functionName: string }
+  | { type: 'requestControlFlowGraphDiff'; project: string; functionName: string; baseRef?: string }
+  | { type: 'requestGitRefs' }
   | { type: 'cursorPosition'; file: string; line: number; column: number };
 
 const MAX_RECONNECT_DELAY = 5000;
@@ -213,6 +217,15 @@ export class WebSocketRuntimePort implements RuntimePort {
           project: msg.project,
           functionName: msg.functionName,
         };
+      case 'requestControlFlowGraphDiff':
+        return {
+          type: 'requestControlFlowGraphDiff',
+          project: msg.project,
+          functionName: msg.functionName,
+          ...(msg.baseRef ? { baseRef: msg.baseRef } : {}),
+        };
+      case 'requestGitRefs':
+        return { type: 'requestGitRefs' };
       case 'cursorPosition':
         return {
           type: 'cursorPosition',
@@ -329,6 +342,20 @@ export class WebSocketRuntimePort implements RuntimePort {
           type: 'controlFlowGraphResult',
           functionName: raw.functionName,
           graph: (raw.graph ?? null) as import('../worker-protocol').ControlFlowGraph | null,
+        };
+      case 'controlFlowGraphDiffResult':
+        return {
+          type: 'controlFlowGraphDiffResult',
+          functionName: raw.functionName,
+          baseGraph: (raw.baseGraph ?? null) as import('../worker-protocol').ControlFlowGraph | null,
+          headGraph: (raw.headGraph ?? null) as import('../worker-protocol').ControlFlowGraph | null,
+          diff: (raw.diff ?? null) as import('../worker-protocol').GraphDiffResult | null,
+        };
+      case 'gitRefs':
+        return {
+          type: 'gitRefs',
+          branches: raw.branches as string[],
+          tags: raw.tags as string[],
         };
       case 'cursorContext':
         return {

@@ -102,6 +102,8 @@ export type PlaygroundNotification =
   | { type: 'updateProject'; project: string; update: ProjectUpdate }
   | { type: 'openPlayground'; project: string; functionName?: string }
   | { type: 'controlFlowGraphResult'; functionName: string; graph: ControlFlowGraph | null }
+  | { type: 'controlFlowGraphDiffResult'; functionName: string; baseGraph: ControlFlowGraph | null; headGraph: ControlFlowGraph | null; diff: GraphDiffResult | null }
+  | { type: 'gitRefs'; branches: string[]; tags: string[] }
   | { type: 'cursorContext'; context: CursorContext }
   | { type: 'testCollectionResult'; project: string; generation: number; callId: number; data: number[]; expandError?: { testsetName: string; message: string } }
   | { type: 'runtimeEvent'; data: number[]; callId?: number };
@@ -143,6 +145,13 @@ export interface ControlFlowGraph {
   nodes: Record<string, CfgNode>;
   /** IndexMap<NodeId, Vec<Edge>> serializes as an object with numeric string keys. */
   edgesBySrc: Record<string, CfgEdge[]>;
+}
+
+export interface GraphDiffResult {
+  added: number[]
+  removed: number[]
+  modified: [number, number][]
+  unchanged: [number, number][]
 }
 
 // ---------------------------------------------------------------------------
@@ -228,6 +237,8 @@ export type WorkerOutMessage =
   | { type: 'vfsFileDeleted'; path: string }
   | { type: 'buildTime'; value: string }
   | { type: 'controlFlowGraphResult'; functionName: string; graph: ControlFlowGraph | null }
+  | { type: 'controlFlowGraphDiffResult'; functionName: string; baseGraph: ControlFlowGraph | null; headGraph: ControlFlowGraph | null; diff: GraphDiffResult | null }
+  | { type: 'gitRefs'; branches: string[]; tags: string[] }
   | { type: 'cursorContext'; context: CursorContext }
   | { type: 'logDecorations'; decorations: LogDecoration[] }
   | { type: 'clearLogDecorations' }
@@ -248,6 +259,8 @@ export type WorkerInMessage =
   | { type: 'selectProject'; root: string }
   | { type: 'requestState' }
   | { type: 'requestControlFlowGraph'; project: string; functionName: string }
+  | { type: 'requestControlFlowGraphDiff'; project: string; functionName: string; baseRef?: string }
+  | { type: 'requestGitRefs' }
   | { type: 'cursorPosition'; file: string; line: number; column: number }
   | { type: 'requestCollectTests'; project: string }
   | { type: 'callTestFunction'; id: number; project: string; generation: number; testName: string }

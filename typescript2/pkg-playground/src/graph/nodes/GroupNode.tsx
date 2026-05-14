@@ -1,7 +1,7 @@
 import { type NodeProps } from '@xyflow/react';
 import { Repeat } from 'lucide-react';
 import { type ComponentType, memo } from 'react';
-import { selectionRing, stateColors } from '../constants';
+import { selectionRing, stateColors, diffColors } from '../constants';
 import type { WorkflowNodeData } from '../types';
 import { NodeHandles } from './NodeHandles';
 
@@ -23,9 +23,11 @@ export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
 
   const borderColor = isHighlighted
     ? selectionRing.color
-    : isStateful
-      ? stateStyle.border
-      : 'rgba(255,255,255,0.10)';
+    : d.diffStatus
+      ? diffColors[d.diffStatus].border
+      : isStateful
+        ? stateStyle.border
+        : 'rgba(255,255,255,0.10)';
 
   return (
     <div
@@ -37,11 +39,14 @@ export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
         borderRadius: 12,
         // Frame-only: no fill, so the canvas reads through. Nested groups
         // never stack into a darker patch — they just compose hairline frames.
-        background: 'transparent',
-        border: `1px solid ${borderColor}`,
+        background: d.diffStatus ? diffColors[d.diffStatus].bg : 'transparent',
+        border: `${d.diffStatus ? (diffColors[d.diffStatus].borderWidth ?? '1px') : '1px'} ${d.diffStatus === 'removed' ? 'dashed' : 'solid'} ${borderColor}`,
+        opacity: d.diffStatus ? diffColors[d.diffStatus].opacity : undefined,
         boxShadow: isHighlighted
           ? `0 0 0 1px ${selectionRing.glow}`
-          : undefined,
+          : d.diffStatus && diffColors[d.diffStatus].glow !== 'transparent'
+            ? `0 0 8px ${diffColors[d.diffStatus].glow}`
+            : undefined,
         transition: 'border-color 150ms ease, box-shadow 150ms ease',
       }}
     >

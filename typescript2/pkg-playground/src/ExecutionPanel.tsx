@@ -44,6 +44,8 @@ import { ResultDisplay } from './ResultDisplay';
 import { registerBuiltinResultRenderers } from './renderers/registerBuiltins';
 import { HttpRequestCurlRenderer, isHttpRequest } from './renderers/HttpRequestCurl';
 import { GraphView } from './graph/GraphView';
+import { DiffGraphView } from './graph/DiffGraphView';
+import type { GraphDiffResult } from './worker-protocol';
 import { FunctionSidebar } from './FunctionSidebar';
 import { EventValueDisplay } from './EventValueDisplay';
 import { findImageMedia, mediaToSrc } from './shared/media-values';
@@ -366,6 +368,15 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const [highlightedNodeId, setHighlightedNodeId] = useState<number | null>(null);
   const [cursorOffset, setCursorOffset] = useState<number | null>(null);
 
+  // Diff mode state
+  const [diffMode, setDiffMode] = useState(false);
+  const [diffResult, setDiffResult] = useState<{
+    baseGraph: ControlFlowGraph | null;
+    headGraph: ControlFlowGraph | null;
+    diff: GraphDiffResult;
+  } | null>(null);
+  const [diffBaseRef, setDiffBaseRef] = useState<string>('');  // empty = merge-base main
+  const [gitRefs, setGitRefs] = useState<{ branches: string[]; tags: string[] } | null>(null);
   // Workflow context: when a function belongs to multiple workflows,
   // this tracks which workflow is being viewed and the alternatives.
   const [workflowContext, setWorkflowContext] = useState<{
@@ -851,6 +862,23 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           if (data.graph) setControlFlowGraph(data.graph);
           break;
 
+        case "controlFlowGraphDiffResult": {
+          if (data.diff && (data.baseGraph || data.headGraph)) {
+            setDiffResult({
+              baseGraph: data.baseGraph,
+              headGraph: data.headGraph,
+              diff: data.diff,
+            });
+          } else {
+            setDiffResult(null);
+          }
+          break;
+        }
+
+        case "gitRefs":
+          setGitRefs({ branches: data.branches, tags: data.tags });
+          break;
+
         case "cursorContext":
           handleCursorContext(data.context);
           break;
@@ -901,6 +929,27 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     if (!selectedFn || !selectedProject) return;
     port.postMessage({ type: 'requestControlFlowGraph', project: selectedProject, functionName: selectedFn });
   }, [port, selectedFn, selectedProject, projectUpdateVersion]);
+
+  // Send diff request when diff mode is active
+  useEffect(() => {
+    if (diffMode && selectedFn && selectedProject) {
+      port.postMessage({
+        type: 'requestControlFlowGraphDiff',
+        project: selectedProject,
+        functionName: selectedFn,
+        ...(diffBaseRef ? { baseRef: diffBaseRef } : {}),
+      });
+    }
+  }, [diffMode, selectedFn, selectedProject, port, diffBaseRef]);
+
+  // Fetch git refs when diff mode is toggled on
+  useEffect(() => {
+    if (diffMode && !gitRefs) {
+      port.postMessage({ type: 'requestGitRefs' });
+    }
+  }, [diffMode, gitRefs, port]);
+
+
 
   // Clear preview results when selected function changes
   useEffect(() => {
@@ -1314,6 +1363,64 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
           <div className="flex-1" />
 
+          {selectedFn && !viewingCollection && !viewingTestRun && activeTab === 'graph' && (
+            <>
+              <ToggleGroup
+                value={diffMode ? 'diff' : 'current'}
+                onValueChange={(v) => {
+                  const isDiff = v === 'diff';
+                  setDiffMode(isDiff);
+                  if (!isDiff) {
+                    setDiffResult(null);
+                  }
+                }}
+                options={[
+                  { value: 'current', label: 'Current' },
+                  { value: 'diff', label: 'Diff' },
+                ]}
+                size="sm"
+              />
+              {diffMode && (
+                <select
+                  value={diffBaseRef}
+                  onChange={(e) => {
+                    setDiffBaseRef(e.target.value);
+                    setDiffResult(null);
+                  }}
+                  style={{
+                    height: 24,
+                    fontSize: 10,
+                    padding: '1px 4px',
+                    borderRadius: 4,
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    background: '#1e1e1e',
+                    color: '#ccc',
+                    minWidth: 80,
+                    outline: 'none',
+                    appearance: 'auto',
+                  }}
+                >
+                  <option value="">vs main</option>
+                  <option value="__staged__">vs staged</option>
+                  <option value="HEAD">vs HEAD</option>
+                  <option value="HEAD~1">vs HEAD~1</option>
+                  <option value="HEAD~2">vs HEAD~2</option>
+                  <option value="HEAD~3">vs HEAD~3</option>
+                  {gitRefs?.branches.map((b) => (
+                    <option key={`branch:${b}`} value={b}>
+                      vs {b}
+                    </option>
+                  ))}
+                  {gitRefs?.tags.map((t) => (
+                    <option key={`tag:${t}`} value={t}>
+                      vs tag:{t}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </>
+          )}
+
           {projectRoots.length > 1 && (
             <ToggleGroup
               value={selectedProject ?? projectRoots[0]}
@@ -1719,7 +1826,20 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                     ))}
                   </div>
                 )}
-                {controlFlowGraph ? (
+                {diffMode && diffResult ? (
+                  <DiffGraphView
+                    baseGraph={diffResult.baseGraph}
+                    headGraph={diffResult.headGraph}
+                    diff={diffResult.diff}
+                    selectedNodeId={highlightedNodeId}
+                    onNodeClick={handleGraphNodeClick}
+                    baseLabel={diffBaseRef === '__staged__' ? 'Staged' : diffBaseRef ? `Base (${diffBaseRef})` : 'Base (main)'}
+                  />
+                ) : diffMode ? (
+                  <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg h-full">
+                    Computing diff...
+                  </div>
+                ) : controlFlowGraph ? (
                   <GraphView
                     graph={controlFlowGraph}
                     runtimeEvents={latestGraphRun?.runtimeEvents}

@@ -1609,4 +1609,68 @@ function ContentPipeline(text: string) -> string {
             });
         assert!(summarize_matched, "Summarize should still be matched");
     }
+
+    /// Test that a temp `ProjectDatabase` built from multiple raw file contents
+    /// (simulating the diff handler's base-branch loading) can resolve functions.
+    #[test]
+    fn test_temp_db_from_raw_file_contents() {
+        // Simulate what the diff handler does: create a temp DB from
+        // raw file contents using a synthetic root path.
+        let files: Vec<(&str, &str)> = vec![
+            (
+                "clients.baml",
+                r#"
+client<llm> GPT4 {
+    provider openai
+    options {
+        model "gpt-4"
+    }
+}
+"#,
+            ),
+            (
+                "functions.baml",
+                r##"
+function Summarize(input: string) -> string {
+    client GPT4
+    prompt #"Summarize {{ input }}"#
+}
+
+function Pipeline(input: string) -> string {
+    let result = Summarize(input);
+    result
+}
+"##,
+            ),
+        ];
+
+        let synthetic_root = std::path::Path::new("/tmp");
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(synthetic_root);
+        for (filename, content) in &files {
+            let abs_path = synthetic_root.join(filename);
+            db.add_or_update_file(&abs_path, content);
+        }
+
+        // LLM function should be found
+        let llm_graph = db.ast_control_flow_graph("Summarize");
+        assert!(
+            llm_graph.is_some(),
+            "should find LLM function Summarize in temp DB"
+        );
+
+        // Workflow function that calls the LLM function should also be found
+        let pipeline_graph = db.ast_control_flow_graph("Pipeline");
+        assert!(
+            pipeline_graph.is_some(),
+            "should find workflow function Pipeline in temp DB"
+        );
+
+        // Non-existent function should not be found
+        let missing = db.ast_control_flow_graph("DoesNotExist");
+        assert!(
+            missing.is_none(),
+            "non-existent function should return None"
+        );
+    }
 }

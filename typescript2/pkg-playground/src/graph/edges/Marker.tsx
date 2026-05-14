@@ -19,6 +19,10 @@ export const kAllMarkerColors = [
   kNoMarkerColorDark,
   ...kBaseMarkerColorsLight,
   ...kBaseMarkerColorsDark,
+  // Diff status edge markers
+  '#4ade80',  // green-400 (added)
+  '#f87171',  // red-400 (removed)
+  '#fbbf24',  // amber-400 (modified)
 ];
 
 export const getMarkerColors = () => {

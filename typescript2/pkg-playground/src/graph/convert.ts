@@ -1,5 +1,5 @@
-import type { ControlFlowGraph, CfgNodeType } from '../worker-protocol';
-import type { GraphNode, GraphEdge, GraphNodeType, WorkflowNode, WorkflowEdge } from './types';
+import type { ControlFlowGraph, CfgNodeType, GraphDiffResult } from '../worker-protocol';
+import type { GraphNode, GraphEdge, GraphNodeType, WorkflowNode, WorkflowEdge, DiffStatus } from './types';
 import { getMarkerColors } from './edges/Marker';
 
 // Stage 1: ControlFlowGraph JSON -> GraphNode[] / GraphEdge[]
@@ -155,4 +155,50 @@ function graphTypeToReactflowType(gt: GraphNodeType): string {
     case 'scope': return 'base';
     case 'header': return 'base';
   }
+}
+
+/**
+ * Annotate ReactFlow nodes with diff status.
+ *
+ * @param side - 'base' or 'head' determines which node IDs from the diff apply:
+ *   - base side: removed (red), modified (amber), unchanged (dimmed)
+ *   - head side: added (green), modified (amber), unchanged (dimmed)
+ */
+export function decorateNodesWithDiff(
+  nodes: WorkflowNode[],
+  diff: GraphDiffResult,
+  side: 'base' | 'head',
+): WorkflowNode[] {
+  const statusByNodeId = new Map<string, DiffStatus>();
+
+  if (side === 'base') {
+    for (const id of diff.removed) {
+      statusByNodeId.set(String(id), 'removed');
+    }
+    for (const [baseId] of diff.modified) {
+      statusByNodeId.set(String(baseId), 'modified');
+    }
+    for (const [baseId] of diff.unchanged) {
+      statusByNodeId.set(String(baseId), 'unchanged');
+    }
+  } else {
+    for (const id of diff.added) {
+      statusByNodeId.set(String(id), 'added');
+    }
+    for (const [, headId] of diff.modified) {
+      statusByNodeId.set(String(headId), 'modified');
+    }
+    for (const [, headId] of diff.unchanged) {
+      statusByNodeId.set(String(headId), 'unchanged');
+    }
+  }
+
+  return nodes.map((node) => {
+    const diffStatus = statusByNodeId.get(node.id);
+    if (!diffStatus) return node;
+    return {
+      ...node,
+      data: { ...node.data, diffStatus },
+    };
+  });
 }

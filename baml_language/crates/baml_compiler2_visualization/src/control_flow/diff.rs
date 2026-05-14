@@ -13,6 +13,8 @@ use super::{ControlFlowGraph, Node, NodeId, NodeType, build_children_map};
 ///
 /// Node IDs reference nodes in the original `base` and `head` graphs —
 /// the diff is a lightweight report, not a copy.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GraphDiff {
     /// Nodes present in `head` but not in `base`.
     pub added: Vec<NodeId>,

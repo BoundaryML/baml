@@ -1329,6 +1329,7 @@ dependencies = [
  "anyhow",
  "axum",
  "baml_compiler2_visualization",
+ "baml_project",
  "baml_type",
  "base64",
  "bex_events",
