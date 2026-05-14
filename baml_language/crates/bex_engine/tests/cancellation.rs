@@ -656,3 +656,94 @@ async fn cancelled_panic_shape_equivalence() {
         assert_eq!(s_val, v_val, "field {s_key} differs");
     }
 }
+
+// ============================================================================
+// Cancellation of a SysOp dispatched through `m.original` (DispatchSysOpInline).
+// Exercises the new yield-state introduced for the baml.mock wrap-and-delegate
+// pattern. If the pre-execute cancel checks in DispatchSysOpInline drop the
+// resolved value (the contract is "always push or err"), the test surfaces as
+// a stack-imbalance VmInternalError rather than a clean Cancelled panic.
+// ============================================================================
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn cancel_during_mock_original_sysop_returns_cancelled() {
+    // Many iterations with varied cancel timing — pre-execute cancel
+    // window is narrow, so we run the scenario repeatedly to maximize
+    // the chance of cancel landing between future allocation and the
+    // pre-execute check. A bugged handler would surface as a non-
+    // Cancelled error (typically VmInternalError stack-imbalance).
+    let source = r#"
+        function main() -> int throws unknown {
+            let m = baml.mock.Mock.new(baml.sys.sleep)
+            m.replace((ms: int) -> null throws baml.errors.Io {
+                m.original(ms)
+            })
+            m.scope<int, unknown>(() -> int throws unknown {
+                let i = 0
+                while (i < 500) {
+                    // sleep(0) → very short awaits, so most execution time
+                    // lives between awaits, widening the pre-execute
+                    // cancel window relative to the post-await one.
+                    let _ = baml.sys.sleep(0)
+                    i = i + 1
+                }
+                42
+            })
+        }
+    "#;
+    let snapshot = compile_for_engine(source);
+
+    for iteration in 0u64..30 {
+        let engine = Arc::new(
+            BexEngine::new(
+                snapshot.clone(),
+                std::sync::Arc::new(sys_native::SysOps::native()),
+                None,
+                Vec::new(),
+            )
+            .expect("Failed to create engine"),
+        );
+
+        let cancel = CancellationToken::new();
+        let cancel_clone = cancel.clone();
+        let handle = tokio::spawn({
+            let engine = Arc::clone(&engine);
+            async move {
+                engine
+                    .call_function(
+                        "main",
+                        vec![],
+                        FunctionCallContextBuilder::new(sys_types::CallId::next())
+                            .with_cancel_token(cancel_clone)
+                            .build(),
+                        true,
+                    )
+                    .await
+            }
+        });
+
+        // Spread cancel arrivals across different points in the loop.
+        let delay_us = 20 + iteration * 7;
+        tokio::time::sleep(std::time::Duration::from_micros(delay_us)).await;
+        cancel.cancel();
+
+        let result = handle.await.expect("task panicked");
+        match &result {
+            Err(EngineError::UnhandledThrow { value, .. }) => match value.as_ref() {
+                BexExternalValue::Instance { class_name, .. } => {
+                    assert_eq!(
+                        class_name, CANCELLED_PANIC_CLASS,
+                        "iteration {iteration}: expected {CANCELLED_PANIC_CLASS}, got class {class_name}"
+                    );
+                }
+                other => panic!("iteration {iteration}: expected Instance, got {other:?}"),
+            },
+            Ok(_) => {
+                // Function finished before the cancel landed — fine.
+            }
+            other => panic!(
+                "iteration {iteration}: expected UnhandledThrow(Cancelled) or Ok, got {other:?}"
+            ),
+        }
+    }
+}

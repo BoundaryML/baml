@@ -2003,7 +2003,7 @@ impl BexEngine {
                             .acquire(vm.proof())
                             .await
                             .cancel_future(future_id)?;
-                        continue;
+                        return Err(cancelled_unhandled_throw());
                     }
 
                     let sys_op_result =
@@ -2014,7 +2014,7 @@ impl BexEngine {
                             if cancel.is_cancelled() {
                                 future_permit.cancel_future(future_id)?;
                                 drop(future_permit);
-                                continue;
+                                return Err(cancelled_unhandled_throw());
                             }
                             match result {
                                 Ok(external) => {
