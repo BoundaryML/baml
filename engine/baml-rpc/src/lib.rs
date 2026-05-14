@@ -2,6 +2,7 @@ pub mod ast;
 pub mod auth;
 
 mod base;
+pub mod public_query;
 mod rpc;
 pub mod runtime_api;
 mod s3;
