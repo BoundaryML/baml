@@ -32,6 +32,7 @@ bundle-http = [ "sys_native/bundle-http", "baml_lsp_server/bundle-http" ]
 
 [dependencies]
 baml_lsp_server = { workspace = true, default-features = false }
+base64 = { workspace = true }
 bex_events = { workspace = true }
 bex_events_native = { workspace = true }
 bex_project = { workspace = true }

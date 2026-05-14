@@ -225,6 +225,28 @@ pub fn get_lsp() -> Result<Arc<dyn BexLsp>, BridgeError> {
         .ok_or(BridgeError::NotInitialized)
 }
 
+/// Access the playground broadcast channel. Used by the FFI call_function
+/// entry point to emit `WsOutMessage::CallFunction` / `CallFunctionResult`
+/// so Python-triggered calls bracket-match the WS-triggered ones the
+/// playground UI already buckets on.
+pub fn get_broadcast_tx() -> Result<broadcast::Sender<WsOutMessage>, BridgeError> {
+    BROADCAST_TX
+        .read()
+        .map_err(|_| BridgeError::LockPoisoned)?
+        .clone()
+        .ok_or(BridgeError::NotInitialized)
+}
+
+/// Project key set during `initialize_runtime` — the canonical
+/// `FsPath::from_vfs(&root_vfs_path)` form used as the LSP project lookup key.
+pub fn get_project_key() -> Result<FsPath, BridgeError> {
+    ROOT_PATH
+        .read()
+        .map_err(|_| BridgeError::LockPoisoned)?
+        .clone()
+        .ok_or(BridgeError::NotInitialized)
+}
+
 /// Flush the registered event sink. Called by `bridge_python::flush_events()`.
 pub fn flush_event_sink() {
     if let Ok(guard) = EVENT_SINK.read()
@@ -248,12 +270,14 @@ mod tests {
     use super::*;
 
     /// End-to-end smoke: a function call with `BAML_TRACE_FILE` set writes
-    /// events to the file once `flush_event_sink` runs.
+    /// events to the file once `flush_event_sink` runs, *and* the FFI
+    /// `call_function` entry point broadcasts both `CallFunction` and
+    /// `CallFunctionResult` on the playground channel.
     ///
     /// Lives in bridge_cffi because that's where the global engine + file
-    /// sink wiring lives. Single-threaded test flavor: bridge_cffi's
-    /// runtime statics are process-global, so the test must be the only one
-    /// touching them.
+    /// sink + broadcast wiring lives. One unified test instead of two
+    /// because bridge_cffi's runtime statics are process-global; two tests
+    /// both calling `initialize_runtime` would race on the locks.
     #[test]
     fn flush_event_sink_after_call() {
         let dir = tempfile::tempdir().expect("tempdir");
@@ -273,6 +297,15 @@ mod tests {
         let bex = initialize_runtime("baml_src", src).expect("initialize_runtime");
 
         let rt = get_tokio_runtime().expect("tokio runtime");
+
+        // Subscribe before driving the FFI call — broadcast channels
+        // only deliver messages sent *after* a subscriber attaches.
+        let mut rx = get_broadcast_tx()
+            .expect("broadcast tx available after init")
+            .subscribe();
+
+        // (1) Bex-trait path: exercises the event sink so the trace file
+        // gets populated. Does NOT go through the FFI emit code.
         let result = rt.block_on(async {
             bex.call_function(
                 "greet",
@@ -283,6 +316,49 @@ mod tests {
         });
         result.expect("call_function ok");
 
+        // (2) FFI path: exercises the new `WsOutMessage::CallFunction` /
+        // `CallFunctionResult` emits added by 03b. send_result_to_callback
+        // will log "callback not registered" and return early, but the
+        // broadcast emits happen in functions.rs::call_function_inner
+        // around that call, not inside it — so they still fire.
+        const FFI_ID: u32 = 2;
+        crate::ffi::functions::call_function(
+            c"greet".as_ptr().cast(),
+            std::ptr::null(),
+            0,
+            FFI_ID,
+        );
+
+        let (saw_call, saw_result) = rt.block_on(async {
+            let mut saw_call = false;
+            let mut saw_result = false;
+            let deadline =
+                tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+            while tokio::time::Instant::now() < deadline
+                && !(saw_call && saw_result)
+            {
+                match tokio::time::timeout(
+                    std::time::Duration::from_millis(200),
+                    rx.recv(),
+                )
+                .await
+                {
+                    Ok(Ok(
+                        baml_lsp_server::playground_ws::WsOutMessage::CallFunction {
+                            id, ..
+                        },
+                    )) if id == u64::from(FFI_ID) => saw_call = true,
+                    Ok(Ok(
+                        baml_lsp_server::playground_ws::WsOutMessage::CallFunctionResult {
+                            id, ..
+                        },
+                    )) if id == u64::from(FFI_ID) => saw_result = true,
+                    _ => {}
+                }
+            }
+            (saw_call, saw_result)
+        });
+
         flush_event_sink();
 
         let bytes = std::fs::metadata(&trace)
@@ -291,6 +367,11 @@ mod tests {
         assert!(
             bytes > 0,
             "trace file {trace:?} should be non-empty after flush"
+        );
+        assert!(saw_call, "WsOutMessage::CallFunction was not broadcast");
+        assert!(
+            saw_result,
+            "WsOutMessage::CallFunctionResult was not broadcast"
         );
 
         // Cleanup: drop the BAML_TRACE_FILE env var so a follow-on `cargo test`

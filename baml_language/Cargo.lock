@@ -1810,6 +1810,7 @@ name = "bridge_cffi"
 version = "0.218.1"
 dependencies = [
  "baml_lsp_server",
+ "base64",
  "bex_events",
  "bex_events_native",
  "bex_project",
