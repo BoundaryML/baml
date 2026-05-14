@@ -934,6 +934,23 @@ pub struct Package {
     ///
     /// See [`PackageGlobals`] for the static vs. dynamic split.
     pub globals: PackageGlobals,
+
+    /// FQN → per-package slot index in `globals`.
+    ///
+    /// Populated by `reflect.Package.add_compile`'s lift pass: each function
+    /// referenced by this package (local items, stdlib targets, and items
+    /// from `deps`) gets a stable slot index in this package's slot space.
+    /// Calls in this package's bytecode go through the slot, and
+    /// `globals[slot]` is the resolved `HeapPtr` to the callee.
+    ///
+    /// The map is keyed by **fully-qualified name** so cross-package
+    /// references (e.g. `baml.math.trunc` called from a `_pkg_3` function)
+    /// don't collide with local items.
+    ///
+    /// Empty for build-time packages whose dispatch already routes
+    /// through the engine's flat `SharedGlobals` via
+    /// `PackageGlobals::Static`.
+    pub function_slot_map: HashMap<String, usize>,
 }
 
 /// Per-package globals storage.
