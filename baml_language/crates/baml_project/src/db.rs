@@ -54,6 +54,34 @@ pub struct CursorContext {
 /// Type alias for Salsa event callbacks
 pub type EventCallback = Box<dyn Fn(salsa::Event) + Send + Sync + 'static>;
 
+/// Errors returned by [`ProjectDatabase::add_runtime_file`]. Callers translate
+/// these to BAML-side `Unsupported` throws so the runtime never panics on
+/// recoverable conditions like a duplicate runtime file path.
+#[derive(Debug)]
+pub enum AddRuntimeFileError {
+    /// `Compiler2RuntimeFiles` has not been initialized — `set_project_root`
+    /// must run before any `add_runtime_file` call.
+    ProjectRootNotSet,
+    /// A runtime file with this path is already present in the Salsa input.
+    DuplicatePath(std::path::PathBuf),
+}
+
+impl std::fmt::Display for AddRuntimeFileError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ProjectRootNotSet => write!(
+                f,
+                "runtime files input not initialized (set_project_root not called)"
+            ),
+            Self::DuplicatePath(path) => {
+                write!(f, "runtime file path already exists: {}", path.display())
+            }
+        }
+    }
+}
+
+impl std::error::Error for AddRuntimeFileError {}
+
 /// The main database for BAML projects.
 ///
 /// `ProjectDatabase` owns the Salsa storage directly and implements all the
@@ -379,22 +407,53 @@ impl ProjectDatabase {
     /// `file_package` path-resolution mechanism in `baml_compiler2_hir`
     /// routes the file to the right package without a side map.
     ///
-    /// # Panics
-    /// Panics if `set_project_root` hasn't been called (runtime files
-    /// require the Salsa input to exist).
+    /// Returns `Err(ProjectRootNotSet)` if `set_project_root` hasn't been
+    /// called (runtime files require the Salsa input to exist), or
+    /// `Err(DuplicatePath)` if a runtime file with the same path already
+    /// exists. Callers translate these to BAML-side throws.
     pub fn add_runtime_file(
         &mut self,
         path: impl Into<std::path::PathBuf>,
         content: &str,
-    ) -> SourceFile {
-        let file = self.add_file_internal(path, content);
+    ) -> Result<SourceFile, AddRuntimeFileError> {
+        let canonical_path: std::path::PathBuf = path.into();
         let runtime = self
             .compiler2_runtime_files
-            .expect("add_runtime_file: project root not set");
+            .ok_or(AddRuntimeFileError::ProjectRootNotSet)?;
+        if runtime
+            .files(self)
+            .iter()
+            .any(|existing| existing.path(self) == canonical_path.as_path())
+        {
+            return Err(AddRuntimeFileError::DuplicatePath(canonical_path));
+        }
+        let file = self.add_file_internal(canonical_path.clone(), content);
+        let file_id = file.file_id(self);
+        self.file_id_to_path.insert(file_id, canonical_path);
         let mut files: Vec<SourceFile> = runtime.files(self).clone();
         files.push(file);
         runtime.set_files(self).to(files);
-        file
+        Ok(file)
+    }
+
+    /// Read the current set of runtime files. Used by `reflect.Package.add_compile`
+    /// to snapshot pre-mutation state for atomic rollback.
+    ///
+    /// Returns `None` if `set_project_root` hasn't been called.
+    pub fn runtime_files_snapshot(&self) -> Option<Vec<SourceFile>> {
+        self.compiler2_runtime_files
+            .map(|runtime| runtime.files(self).clone())
+    }
+
+    /// Replace the current set of runtime files. Used by `reflect.Package.add_compile`
+    /// to revert mutations after a failed compile.
+    ///
+    /// Panics if `set_project_root` hasn't been called.
+    pub fn set_runtime_files(&mut self, files: Vec<SourceFile>) {
+        let runtime = self
+            .compiler2_runtime_files
+            .unwrap_or_else(|| unreachable!("set_runtime_files: project root not set"));
+        runtime.set_files(self).to(files);
     }
 
     /// Get all files currently in the database.

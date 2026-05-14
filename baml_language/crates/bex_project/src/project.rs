@@ -21,7 +21,11 @@ impl TestState {
 }
 
 pub(crate) struct BexProject {
-    pub(crate) db: std::sync::Arc<std::sync::Mutex<baml_project::ProjectDatabase>>,
+    /// `parking_lot::Mutex` (not `std::sync::Mutex`): a panic inside a held
+    /// guard would poison `std::sync::Mutex` and break every later access.
+    /// `BexEngine::set_project_db` requires a `parking_lot` handle to share
+    /// the same DB with reflection-bearing engines.
+    pub(crate) db: std::sync::Arc<parking_lot::Mutex<baml_project::ProjectDatabase>>,
     sys_ops: std::sync::Arc<SysOps>,
     event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
     current_bex: std::sync::RwLock<(bool, Option<std::sync::Arc<BexEngine>>)>,
@@ -35,8 +39,8 @@ pub(crate) struct BexProject {
 impl BexProject {
     pub(crate) fn try_lock_db(
         &self,
-    ) -> Result<std::sync::MutexGuard<'_, baml_project::ProjectDatabase>, crate::LspError> {
-        self.db.try_lock().map_err(|_| {
+    ) -> Result<parking_lot::MutexGuard<'_, baml_project::ProjectDatabase>, crate::LspError> {
+        self.db.try_lock().ok_or_else(|| {
             crate::LspError::UnknownErrorCode(
                 "Database mutex is locked (possibly from a prior panic)".to_string(),
             )
@@ -51,7 +55,7 @@ impl BexProject {
         let mut db = baml_project::ProjectDatabase::new();
         db.set_project_root(crate::fs::FsPath::from_vfs(root_path).as_path());
         Self {
-            db: std::sync::Arc::new(std::sync::Mutex::new(db)),
+            db: std::sync::Arc::new(parking_lot::Mutex::new(db)),
             sys_ops,
             event_sink,
             current_bex: std::sync::RwLock::new((false, None)),
@@ -65,7 +69,7 @@ impl BexProject {
 
     #[allow(dead_code)]
     pub(crate) fn update_single_source(&self, path: &vfs::VfsPath, source: &str) {
-        let mut db = self.db.lock().unwrap();
+        let mut db = self.db.lock();
         db.add_or_update_file(crate::fs::FsPath::from_vfs(path).as_path(), source);
         drop(db);
 
@@ -77,7 +81,7 @@ impl BexProject {
         &self,
         sources: &std::collections::HashMap<crate::fs::FsPath, String>,
     ) {
-        let mut db = self.db.lock().unwrap();
+        let mut db = self.db.lock();
         let mut existing_paths: std::collections::HashSet<_> =
             db.non_builtin_file_paths().collect();
         for (path, source) in sources {
@@ -99,7 +103,7 @@ impl BexProject {
         &self,
         sources: &std::collections::HashMap<crate::fs::FsPath, String>,
     ) {
-        let mut db = self.db.lock().unwrap();
+        let mut db = self.db.lock();
         for (path, source) in sources {
             db.add_or_update_file(path.as_path(), source);
         }
@@ -110,7 +114,7 @@ impl BexProject {
 
     #[allow(dead_code)]
     pub(crate) fn remove_source(&self, path: &vfs::VfsPath) -> Result<(), RuntimeError> {
-        let mut db = self.db.lock().unwrap();
+        let mut db = self.db.lock();
         db.remove_file(crate::fs::FsPath::from_vfs(path).as_path());
         drop(db);
 
@@ -150,9 +154,12 @@ impl BexProject {
     }
 
     fn get_bytecode(&self) -> Result<bex_vm_types::Program, RuntimeError> {
-        let db = self.db.try_lock().map_err(|_| RuntimeError::Compilation {
-            message: "Database mutex is locked (possibly from a prior panic)".to_string(),
-        })?;
+        let db = self
+            .db
+            .try_lock()
+            .ok_or_else(|| RuntimeError::Compilation {
+                message: "Database mutex is locked (possibly from a prior panic)".to_string(),
+            })?;
         db.get_bytecode().map_err(|e| RuntimeError::Compilation {
             message: e.to_string(),
         })
@@ -165,7 +172,14 @@ impl BexProject {
 
     fn set_current_bex(&self, bex: BexEngine) {
         let mut current_bex = self.current_bex.write().unwrap();
-        current_bex.1 = Some(std::sync::Arc::new(bex));
+        let arc_bex = std::sync::Arc::new(bex);
+        // Attach the shared project DB so reflection-bearing natives
+        // (`reflect.Package.add_compile` and friends) can re-emit BAML
+        // source. `set_project_db` is fallible only if already set —
+        // this engine is freshly constructed, so silently ignore the
+        // `Err` (it can't happen for a brand-new engine).
+        let _ = arc_bex.set_project_db(std::sync::Arc::clone(&self.db));
+        current_bex.1 = Some(arc_bex);
         current_bex.0 = true;
         // Cancel in-flight tasks, bump generation, and clear stale test registry
         let mut state = self.test_state.lock().unwrap();
@@ -180,7 +194,7 @@ impl BexProject {
 
         // Skip bytecode generation if there are any diagnostic errors.
         {
-            let db = self.db.lock().unwrap();
+            let db = self.db.lock();
             let diagnostics = baml_project::collect_compiler2_diagnostics(&db);
             let has_errors = diagnostics
                 .iter()

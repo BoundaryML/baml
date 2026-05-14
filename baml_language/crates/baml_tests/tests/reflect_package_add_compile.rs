@@ -30,14 +30,16 @@ async fn add_compile_inserts_files_into_runtime_input() {
     let (program, db) = compile_source_with_opt_returning_db(source, OptLevel::One);
     let db_handle = Arc::new(parking_lot::Mutex::new(db));
 
-    let mut engine = BexEngine::new(
+    let engine = BexEngine::new(
         program,
         Arc::new(sys_ops::SysOps::native()),
         None,
         Vec::new(),
     )
     .expect("BexEngine::new");
-    engine.set_project_db(Arc::clone(&db_handle));
+    engine
+        .set_project_db(Arc::clone(&db_handle))
+        .expect("set_project_db");
     let engine = Arc::new(engine);
 
     let result = engine
@@ -96,14 +98,16 @@ async fn add_compile_throws_on_compile_error() {
     let (program, db) = compile_source_with_opt_returning_db(source, OptLevel::One);
     let db_handle = Arc::new(parking_lot::Mutex::new(db));
 
-    let mut engine = BexEngine::new(
+    let engine = BexEngine::new(
         program,
         Arc::new(sys_ops::SysOps::native()),
         None,
         Vec::new(),
     )
     .expect("BexEngine::new");
-    engine.set_project_db(Arc::clone(&db_handle));
+    engine
+        .set_project_db(Arc::clone(&db_handle))
+        .expect("set_project_db");
     let engine = Arc::new(engine);
 
     let result = engine
@@ -154,14 +158,16 @@ async fn add_compile_lifts_items_and_remaps_slots() {
     let (program, db) = compile_source_with_opt_returning_db(source, OptLevel::One);
     let db_handle = Arc::new(parking_lot::Mutex::new(db));
 
-    let mut engine = BexEngine::new(
+    let engine = BexEngine::new(
         program,
         Arc::new(sys_ops::SysOps::native()),
         None,
         Vec::new(),
     )
     .expect("BexEngine::new");
-    engine.set_project_db(Arc::clone(&db_handle));
+    engine
+        .set_project_db(Arc::clone(&db_handle))
+        .expect("set_project_db");
     let engine = Arc::new(engine);
 
     // Build both batches via the chained add_compile inside `build_pkg()`.
@@ -272,14 +278,16 @@ async fn add_compile_resolves_external_stdlib_callee() {
     let (program, db) = compile_source_with_opt_returning_db(source, OptLevel::One);
     let db_handle = Arc::new(parking_lot::Mutex::new(db));
 
-    let mut engine = BexEngine::new(
+    let engine = BexEngine::new(
         program,
         Arc::new(sys_ops::SysOps::native()),
         None,
         Vec::new(),
     )
     .expect("BexEngine::new");
-    engine.set_project_db(Arc::clone(&db_handle));
+    engine
+        .set_project_db(Arc::clone(&db_handle))
+        .expect("set_project_db");
     let engine = Arc::new(engine);
 
     let result = engine
@@ -359,14 +367,16 @@ async fn add_compile_lifts_string_constant() {
     let (program, db) = compile_source_with_opt_returning_db(source, OptLevel::One);
     let db_handle = Arc::new(parking_lot::Mutex::new(db));
 
-    let mut engine = BexEngine::new(
+    let engine = BexEngine::new(
         program,
         Arc::new(sys_ops::SysOps::native()),
         None,
         Vec::new(),
     )
     .expect("BexEngine::new");
-    engine.set_project_db(Arc::clone(&db_handle));
+    engine
+        .set_project_db(Arc::clone(&db_handle))
+        .expect("set_project_db");
     let engine = Arc::new(engine);
 
     let result = engine
@@ -452,14 +462,16 @@ async fn add_compile_preserves_wrapper_identity() {
     let (program, db) = compile_source_with_opt_returning_db(source, OptLevel::One);
     let db_handle = Arc::new(parking_lot::Mutex::new(db));
 
-    let mut engine = BexEngine::new(
+    let engine = BexEngine::new(
         program,
         Arc::new(sys_ops::SysOps::native()),
         None,
         Vec::new(),
     )
     .expect("BexEngine::new");
-    engine.set_project_db(Arc::clone(&db_handle));
+    engine
+        .set_project_db(Arc::clone(&db_handle))
+        .expect("set_project_db");
     let engine = Arc::new(engine);
 
     let result = engine
@@ -474,5 +486,260 @@ async fn add_compile_preserves_wrapper_identity() {
         result,
         Ok(bex_engine::BexExternalValue::Bool(true)),
         "main() should observe identity preservation across batches"
+    );
+}
+
+/// Second `add_compile` with a path that already exists in the runtime
+/// Salsa input must throw a BAML-side `Unsupported`. The first batch's
+/// file remains; the second batch's mutation is reverted by the
+/// `RuntimeBatchGuard`.
+#[tokio::test]
+async fn add_compile_rejects_duplicate_path() {
+    let source = r#"
+        function main() -> bool {
+            let pkg = reflect.Package.new();
+            let _ = pkg.add_compile({
+                "lib.baml": "function a() -> int { 1 }"
+            });
+            // Same path again — must throw.
+            let _ = pkg.add_compile({
+                "lib.baml": "function b() -> int { 2 }"
+            });
+            false
+        }
+        function entry() -> bool {
+            main() catch (_e) {
+                _ => true
+            }
+        }
+    "#;
+
+    let (program, db) = compile_source_with_opt_returning_db(source, OptLevel::One);
+    let db_handle = Arc::new(parking_lot::Mutex::new(db));
+
+    let engine = BexEngine::new(
+        program,
+        Arc::new(sys_ops::SysOps::native()),
+        None,
+        Vec::new(),
+    )
+    .expect("BexEngine::new");
+    engine
+        .set_project_db(Arc::clone(&db_handle))
+        .expect("set_project_db");
+    let engine = Arc::new(engine);
+
+    let result = engine
+        .call_function_bound_args(
+            "user.entry",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+    assert_eq!(
+        result,
+        Ok(bex_engine::BexExternalValue::Bool(true)),
+        "entry() should catch the duplicate-path throw"
+    );
+
+    // The first batch's file must still be present; the duplicate batch's
+    // mutation should have been rolled back, leaving exactly one file.
+    let db = db_handle.lock();
+    let runtime_files = db
+        .compiler2_runtime_files()
+        .expect("runtime files input should exist");
+    let files = runtime_files.files(&*db);
+    assert_eq!(
+        files.len(),
+        1,
+        "after the duplicate-path failure, only the first batch's file should remain"
+    );
+    assert_eq!(
+        files[0].path(&*db).to_string_lossy(),
+        "<runtime>/_pkg_0/lib.baml"
+    );
+}
+
+/// A failed `add_compile` (parse/type error mid-batch) must revert the
+/// Salsa runtime files input to its pre-call state. A subsequent successful
+/// `add_compile` on the same package must observe only the originally
+/// committed files plus its own.
+#[tokio::test]
+async fn add_compile_failure_reverts_runtime_files() {
+    // The second batch references an undefined name, which is a name-
+    // resolution error caught by HIR. `add_compile` returns a `LoweringError`,
+    // the `RuntimeBatchGuard` reverts the Salsa input.
+    let source = r#"
+        function main() -> bool {
+            let pkg = reflect.Package.new();
+            let _ = pkg.add_compile({
+                "good.baml": "function a() -> int { 1 }"
+            });
+            let _ = pkg.add_compile({
+                "bad.baml": "function b() -> int { does_not_exist() }"
+            });
+            false
+        }
+        function entry() -> bool {
+            main() catch (_e) {
+                _ => true
+            }
+        }
+    "#;
+
+    let (program, db) = compile_source_with_opt_returning_db(source, OptLevel::One);
+    let db_handle = Arc::new(parking_lot::Mutex::new(db));
+
+    let engine = BexEngine::new(
+        program,
+        Arc::new(sys_ops::SysOps::native()),
+        None,
+        Vec::new(),
+    )
+    .expect("BexEngine::new");
+    engine
+        .set_project_db(Arc::clone(&db_handle))
+        .expect("set_project_db");
+    let engine = Arc::new(engine);
+
+    let result = engine
+        .call_function_bound_args(
+            "user.entry",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+    assert_eq!(
+        result,
+        Ok(bex_engine::BexExternalValue::Bool(true)),
+        "entry() should catch the compile-failure throw"
+    );
+
+    let db = db_handle.lock();
+    let runtime_files = db
+        .compiler2_runtime_files()
+        .expect("runtime files input should exist");
+    let files = runtime_files.files(&*db);
+    let paths: Vec<String> = files
+        .iter()
+        .map(|f: &SourceFile| f.path(&*db).to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(
+        paths,
+        vec!["<runtime>/_pkg_0/good.baml".to_string()],
+        "after a failed batch, only the first batch's file should remain"
+    );
+}
+
+/// `set_project_db` takes `&self` (not `&mut self`), so production embedders
+/// can wrap the engine in `Arc::new(...)` *before* attaching the database
+/// handle. This mirrors how `bex_project::BexProject` wires reflection
+/// support: the engine is built, `Arc`-wrapped, then handed off to async
+/// consumers; `set_project_db` happens through the `Arc`.
+#[tokio::test]
+async fn set_project_db_works_after_arc_wrap() {
+    let source = r#"
+        function main() -> bool {
+            let pkg = reflect.Package.new();
+            let _ = pkg.add_compile({
+                "lib.baml": "function hello() -> int { 42 }"
+            });
+            true
+        }
+    "#;
+
+    let (program, db) = compile_source_with_opt_returning_db(source, OptLevel::One);
+    let db_handle = Arc::new(parking_lot::Mutex::new(db));
+
+    let engine = Arc::new(
+        BexEngine::new(
+            program,
+            Arc::new(sys_ops::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("BexEngine::new"),
+    );
+    // The whole point of `OnceLock`: this call works through the `Arc`.
+    engine
+        .set_project_db(Arc::clone(&db_handle))
+        .expect("set_project_db on Arc-wrapped engine");
+
+    let result = engine
+        .call_function_bound_args(
+            "user.main",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+    assert_eq!(
+        result,
+        Ok(bex_engine::BexExternalValue::Bool(true)),
+        "main() should succeed because the DB handle is attached"
+    );
+
+    // A second `set_project_db` call on the same engine must fail (it's a
+    // one-shot operation; the project DB is fixed per engine instance).
+    let err_handle = Arc::clone(&db_handle);
+    assert!(
+        engine.set_project_db(err_handle).is_err(),
+        "second set_project_db must return Err (already-set)"
+    );
+}
+
+/// Calling `add_compile` on an engine that wasn't constructed with
+/// `set_project_db` must throw a BAML-side `Unsupported` rather than
+/// panicking. `set_project_db` is the production way to wire a
+/// reflection-bearing engine; tests omitting it should still get a
+/// catchable BAML throw.
+#[tokio::test]
+async fn add_compile_without_project_db_throws_baml_unsupported() {
+    let source = r#"
+        function main() -> bool {
+            let pkg = reflect.Package.new();
+            let _ = pkg.add_compile({
+                "lib.baml": "function hello() -> int { 1 }"
+            });
+            false
+        }
+        function entry() -> bool {
+            main() catch (_e) {
+                _ => true
+            }
+        }
+    "#;
+
+    let (program, _db) = compile_source_with_opt_returning_db(source, OptLevel::One);
+
+    // Note: NO call to `engine.set_project_db(...)`. `reflect.Package.new`
+    // also needs the project_db (to mint the `_pkg_N` name through the
+    // runtime counter), so we expect the throw to surface at `Package.new`
+    // — earlier than `add_compile`, but still a BAML throw caught by
+    // `entry`. Either way, no Rust panic.
+    let engine = Arc::new(
+        BexEngine::new(
+            program,
+            Arc::new(sys_ops::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("BexEngine::new"),
+    );
+
+    let result = engine
+        .call_function_bound_args(
+            "user.entry",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+    assert_eq!(
+        result,
+        Ok(bex_engine::BexExternalValue::Bool(true)),
+        "entry() should catch the project-db-missing throw"
     );
 }

@@ -522,7 +522,7 @@ impl BexMulitProject {
     ) -> crate::bex_lsp::ProjectUpdate {
         let is_bex_current = project.project.is_bex_current();
 
-        let db_guard = project.project.db.lock().unwrap();
+        let db_guard = project.project.db.lock();
         let db = db_guard.db();
         let functions = baml_project::list_functions_with_metadata(db)
             .into_iter()
@@ -971,7 +971,7 @@ impl super::BexLsp for BexMulitProject {
         let projects = self.projects.lock().unwrap();
         let mut names = std::collections::BTreeSet::new();
         for (_path, project) in projects.iter() {
-            let db_guard = project.project.db.lock().unwrap();
+            let db_guard = project.project.db.lock();
             let db = db_guard.db();
             for name in baml_lsp2_actions::all_env_var_names(db) {
                 names.insert(name);
@@ -1003,7 +1003,7 @@ impl super::BexLsp for BexMulitProject {
     ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph> {
         let projects = self.projects.lock().ok()?;
         for project in projects.values() {
-            let db = project.project.db.lock().ok()?;
+            let db = project.project.db.lock();
             if let Some(graph) = db.ast_control_flow_graph(function_name) {
                 return Some(graph);
             }
@@ -1047,9 +1047,7 @@ impl super::BexLsp for BexMulitProject {
         };
 
         for project in projects.values() {
-            let Ok(db) = project.project.db.lock() else {
-                continue;
-            };
+            let db = project.project.db.lock();
 
             // Convert line/column to byte offset using the source file text.
             // The file_path from Monaco may be relative — find matching file.
@@ -1103,7 +1101,7 @@ impl super::BexLsp for BexMulitProject {
     fn resolve_file_id(&self, file_id: u32) -> Option<String> {
         let projects = self.projects.lock().unwrap();
         for project in projects.values() {
-            let db = project.project.db.lock().unwrap();
+            let db = project.project.db.lock();
             if let Some(path) = db.file_id_to_path(baml_base::FileId::new(file_id)) {
                 return Some(path.to_string_lossy().to_string());
             }

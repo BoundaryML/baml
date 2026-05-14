@@ -167,7 +167,7 @@ impl WithDiagnostics for crate::project::BexProject {
         &self,
         position_encoding: PositionEncoding,
     ) -> std::collections::HashMap<std::path::PathBuf, Vec<lsp_types::Diagnostic>> {
-        let Ok(db) = self.db.try_lock() else {
+        let Some(db) = self.db.try_lock() else {
             log::warn!("diagnostics_by_file: db mutex already locked, skipping");
             return HashMap::new();
         };

@@ -1625,6 +1625,7 @@ dependencies = [
  "log",
  "lsp-server",
  "lsp-types",
+ "parking_lot",
  "paste",
  "percent-encoding",
  "regex",

@@ -30,10 +30,12 @@ pub mod symbols;
 #[cfg(feature = "testing")]
 pub mod testing;
 
+pub use baml_compiler_diagnostics::{Diagnostic, Severity};
 pub use baml_compiler2_emit::{LoweringError, OptLevel};
+pub use baml_db::SourceFile;
 pub use check::{CheckResult, collect_compiler2_diagnostics, collect_diagnostics};
 pub use client_codegen::build_symbol_pool;
-pub use db::{CursorContext, EventCallback, ProjectDatabase};
+pub use db::{AddRuntimeFileError, CursorContext, EventCallback, ProjectDatabase};
 pub use symbols::{
     FunctionOrigin, FunctionSymbol, Symbol, SymbolKind, TestSymbol, find_symbol,
     find_symbol_locations, list_classes, list_clients, list_enums, list_functions,

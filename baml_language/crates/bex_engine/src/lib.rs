@@ -440,15 +440,16 @@ pub struct BexEngine {
     /// Reflection-bearing operations — currently `reflect.Package.add_compile`
     /// / `Package.eval` / `Package.get`, landing in upcoming commits — acquire
     /// this lock to insert files into `Compiler2RuntimeFiles` and re-emit.
-    /// `None` for engines constructed without reflection support; in that case
+    /// Unset for engines constructed without reflection support; in that case
     /// `Package.add_compile` throws a runtime error rather than silently
     /// failing.
     ///
-    /// `parking_lot::Mutex` (not `std::sync::Mutex`) so a panic inside a
-    /// runtime-compile call doesn't poison the lock — the host can still
-    /// recover and continue serving normal `call_function` requests on the
-    /// engine.
-    project_db: Option<Arc<parking_lot::Mutex<ProjectDatabase>>>,
+    /// `OnceLock` (not `Option`) so `set_project_db` can be called after the
+    /// engine has been wrapped in `Arc` — production embedders construct the
+    /// `BexEngine`, wrap it in `Arc::new`, then attach the DB handle. The
+    /// outer `Arc<parking_lot::Mutex<_>>` keeps the DB shareable and panic-
+    /// resilient (no poisoning on panic).
+    project_db: std::sync::OnceLock<Arc<parking_lot::Mutex<ProjectDatabase>>>,
 
     /// Monotonically incrementing counter for minting unique names for
     /// runtime-compiled packages. `reflect.Package.new()` claims an index
@@ -792,7 +793,7 @@ impl BexEngine {
             event_sink,
             test_cases,
             argv,
-            project_db: None,
+            project_db: std::sync::OnceLock::new(),
             runtime_pkg_counter: Arc::new(AtomicUsize::new(0)),
             heap_permit_manager,
             checking_gc: AtomicBool::new(false),
@@ -807,6 +808,11 @@ impl BexEngine {
     /// (`reflect.Package.add_compile`, `Package.eval`, `Package.get`) can
     /// re-emit BAML source at runtime.
     ///
+    /// Takes `&self` (not `&mut self`) so production embedders can call this
+    /// *after* wrapping the engine in `Arc::new(...)`. Returns the supplied
+    /// handle as `Err` if the DB has already been set on this engine; the
+    /// project DB is set-once per engine instance.
+    ///
     /// The supplied database should already contain the host's source files
     /// and stdlib (typically the same DB the host used to compile the
     /// `Program` passed to `BexEngine::new`). Without this call, runtime
@@ -815,15 +821,18 @@ impl BexEngine {
     /// Wrap the database in a `parking_lot::Mutex` to avoid `std::sync::Mutex`
     /// poisoning on panic — a panic inside one `add_compile` call doesn't
     /// permanently break later calls.
-    pub fn set_project_db(&mut self, db: Arc<parking_lot::Mutex<ProjectDatabase>>) {
-        self.project_db = Some(db);
+    pub fn set_project_db(
+        &self,
+        db: Arc<parking_lot::Mutex<ProjectDatabase>>,
+    ) -> Result<(), Arc<parking_lot::Mutex<ProjectDatabase>>> {
+        self.project_db.set(db)
     }
 
     /// Borrow the optional project-DB handle. Used by reflection-bearing
     /// native methods that need to mutate `Compiler2RuntimeFiles` and re-emit.
     #[allow(dead_code, reason = "consumed by upcoming Package.add_compile commit")]
     pub(crate) fn project_db(&self) -> Option<&Arc<parking_lot::Mutex<ProjectDatabase>>> {
-        self.project_db.as_ref()
+        self.project_db.get()
     }
 
     /// Emit an event: store in `CollectorStore` for in-memory queries,
@@ -1202,7 +1211,7 @@ impl BexEngine {
             Arc::clone(&self.park_requested),
             Arc::clone(&self.argv),
         );
-        vm.project_db = self.project_db.clone();
+        vm.project_db = self.project_db.get().cloned();
         vm.runtime_pkg_counter = Some(Arc::clone(&self.runtime_pkg_counter));
         let vm = self.heap_permit_manager.new_permit(vm).await;
         let mut vm = vm.acquire().await;

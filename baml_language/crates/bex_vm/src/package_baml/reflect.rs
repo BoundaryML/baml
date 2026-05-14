@@ -381,6 +381,32 @@ fn lift_runtime_package(
     Ok(())
 }
 
+/// RAII guard wrapping the Salsa runtime files input around an `add_compile`
+/// batch. Snapshots the runtime files at construction; reverts on drop unless
+/// `commit()` was called. Makes `add_compile` atomic with respect to the
+/// project database: a failure (or panic) anywhere in the batch leaves the
+/// Salsa input exactly as it was before the call.
+struct RuntimeBatchGuard<'a> {
+    db: &'a mut baml_project::ProjectDatabase,
+    /// `Some` until committed; cleared by `commit()` to suppress the rollback.
+    snapshot: Option<Vec<baml_project::SourceFile>>,
+}
+
+impl RuntimeBatchGuard<'_> {
+    /// Mark the batch as committed so the rollback in `Drop` is skipped.
+    fn commit(mut self) {
+        self.snapshot = None;
+    }
+}
+
+impl Drop for RuntimeBatchGuard<'_> {
+    fn drop(&mut self) {
+        if let Some(snapshot) = self.snapshot.take() {
+            self.db.set_runtime_files(snapshot);
+        }
+    }
+}
+
 /// Unwrap a `reflect.Package` BAML instance value to the inner
 /// `Object::Package` `HeapPtr` it wraps.
 ///
@@ -534,8 +560,10 @@ impl BamlClassReflectPackage for PackageBamlImpl {
         let db_handle = std::sync::Arc::clone(db_handle);
         let mut db_guard = db_handle.lock();
 
-        // Materialize each `(path, source)` pair into a SourceFile under
-        // `<runtime>/{pkg_name}/{path}`.
+        // Pre-translate each `(path, source)` BAML value to native (String, String)
+        // BEFORE acquiring any Salsa state. This way we don't touch `db_guard`
+        // unless every file value is valid, and the rollback path stays simple.
+        let mut to_insert: Vec<(std::path::PathBuf, String)> = Vec::with_capacity(files.len());
         for (path, source_value) in files {
             let Value::Object(src_ptr) = *source_value else {
                 return Err(VmBamlError::InvalidArgument {
@@ -557,25 +585,81 @@ impl BamlClassReflectPackage for PackageBamlImpl {
                 }
             };
             let full_path = format!("<runtime>/{pkg_name}/{path}");
-            db_guard.add_runtime_file(std::path::PathBuf::from(full_path), &source);
+            to_insert.push((std::path::PathBuf::from(full_path), source));
         }
 
-        // Re-run the emit pipeline against the modified DB. If the new
-        // sources have parse / type / lowering errors this returns Err
-        // and we surface it as a BAML throw. Successful compile is the
-        // dependency for the incremental `emit_package` item lift that
-        // lands in the next commit (Phase 5.2e).
+        // Snapshot the runtime files Salsa input before mutating, so we can
+        // roll back atomically if `add_runtime_file` / `compile_project` /
+        // `lift_runtime_package` fails. A `RuntimeBatchGuard` revert-on-drop
+        // pattern keeps the input consistent across panics too.
+        let snapshot = db_guard.runtime_files_snapshot().ok_or_else(|| {
+            VmRustFnError::from(VmBamlError::Unsupported {
+                message: "reflect.Package.add_compile: runtime files input not \
+                          initialized (set_project_root has not run)"
+                    .to_string(),
+            })
+        })?;
+        let batch = RuntimeBatchGuard {
+            db: &mut db_guard,
+            snapshot: Some(snapshot),
+        };
+
+        // Materialize each `(path, source)` pair into a SourceFile. Errors
+        // from `add_runtime_file` (duplicate path, project root unset) are
+        // surfaced as BAML `Unsupported` throws.
+        let mut new_source_files: Vec<baml_project::SourceFile> = Vec::with_capacity(files.len());
+        for (full_path, source) in to_insert {
+            let file = batch.db.add_runtime_file(full_path, &source).map_err(|e| {
+                VmRustFnError::from(VmBamlError::Unsupported {
+                    message: format!("reflect.Package.add_compile: {e}"),
+                })
+            })?;
+            new_source_files.push(file);
+        }
+
+        // Compile-time error check. `compile_project` itself only fails on
+        // internal lowering errors (e.g. circular let-binding deps), not on
+        // parse / name-resolution / type errors — those are collected as
+        // diagnostics. We must surface error-severity diagnostics from the
+        // newly-added files so bad user source rejects the batch (and the
+        // guard reverts the Salsa input).
+        for file in &new_source_files {
+            let diags = batch.db.check_file(*file);
+            if let Some(err_diag) = diags
+                .iter()
+                .find(|d| d.severity == baml_project::Severity::Error)
+            {
+                return Err(VmRustFnError::from(VmBamlError::Unsupported {
+                    message: format!(
+                        "reflect.Package.add_compile: compile error in {}: {}",
+                        file.path(&*batch.db).display(),
+                        err_diag.message
+                    ),
+                }));
+            }
+        }
+
+        // Re-run the emit pipeline against the modified DB. The guard
+        // reverts the Salsa input on the early-return.
         //
         // `OptLevel::One` mirrors the default test/runtime opt level;
         // a future commit may expose this as an `add_compile` option.
-        let program = db_guard
+        let program = batch
+            .db
             .compile_project(baml_project::OptLevel::One)
             .map_err(|e| VmBamlError::Unsupported {
                 message: format!("reflect.Package.add_compile: compile failed: {e:?}"),
             })?;
-        drop(db_guard);
 
+        // Lift the new items into the heap. Failure here also triggers the
+        // guard's revert so the Salsa input never observes a half-applied
+        // batch. (Already-allocated gen0 objects from a failed lift get
+        // reclaimed by the next GC.)
         lift_runtime_package(vm, pkg_ptr, &pkg_name, &program)?;
+
+        // All steps succeeded — keep the new Salsa state.
+        batch.commit();
+        drop(db_guard);
 
         Ok(*package)
     }
