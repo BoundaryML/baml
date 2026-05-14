@@ -1099,6 +1099,27 @@ async fn test_bigint_shl_negative_shift() {
 }
 
 #[tokio::test]
+async fn test_bigint_mul_pre_flight_alloc_failure() {
+    // Two operands each ≈ MAX_BIGINT_BITS / 2 would produce a product
+    // exceeding the per-allocation cap. The pre-flight check rejects before
+    // materializing the intermediate `lb * rb` temporary, so we never
+    // allocate the oversized result.
+    //
+    // MAX_BIGINT_BITS = 1 << 28; the operands here have ≈ 2e8 bits each,
+    // so `bits(lb) + bits(rb)` ≈ 4e8 > MAX_BIGINT_BITS.
+    let output = baml_test!(
+        r#"
+        function main() -> bigint {
+            let a = (2n).pow(200000000n);
+            let b = (2n).pow(200000000n);
+            return a * b;
+        }
+    "#
+    );
+    assert_alloc_failure(&output.result);
+}
+
+#[tokio::test]
 async fn test_bigint_pow_normal_works() {
     // (2n).pow(256n) is a 78-digit number — well within MAX_BIGINT_BITS.
     let output = baml_test!(

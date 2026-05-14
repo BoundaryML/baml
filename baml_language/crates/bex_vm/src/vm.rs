@@ -3323,15 +3323,28 @@ impl BexVm {
                 let Value::Object(li) = self.stack.ensure_pop() else {
                     unsafe { std::hint::unreachable_unchecked() }
                 };
-                let result = {
-                    let Object::Bigint(rb) = self.get_object(ri) else {
-                        unsafe { std::hint::unreachable_unchecked() }
-                    };
-                    let Object::Bigint(lb) = self.get_object(li) else {
-                        unsafe { std::hint::unreachable_unchecked() }
-                    };
-                    lb.as_ref() * rb.as_ref()
+                let Object::Bigint(rb) = self.get_object(ri) else {
+                    unsafe { std::hint::unreachable_unchecked() }
                 };
+                let Object::Bigint(lb) = self.get_object(li) else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                // Pre-flight bit-length check: `bits(lb * rb) ≤ bits(lb) + bits(rb)`
+                // exactly. Reject before materializing the product so two
+                // operands near `MAX_BIGINT_BITS` can't blow memory with an
+                // intermediate twice the limit. Matches the pattern in `ShlBigint`.
+                let estimated_bits = lb.bits().saturating_add(rb.bits());
+                if estimated_bits > crate::package_baml::bigint::MAX_BIGINT_BITS {
+                    return Err(VmError::Thrown(self.panic_to_exception_value(
+                        VmPanic::AllocFailure {
+                            message: format!(
+                                "bigint mul: result of bigint multiplication would require ~{estimated_bits} bits (limit: {})",
+                                crate::package_baml::bigint::MAX_BIGINT_BITS
+                            ),
+                        },
+                    )));
+                }
+                let result = lb.as_ref() * rb.as_ref();
                 let value = self.alloc_bigint(std::sync::Arc::new(result))?;
                 self.stack.push(value);
             }
@@ -7521,15 +7534,25 @@ impl BexVm {
                     let Value::Object(li) = self.stack.ensure_pop() else {
                         std::hint::unreachable_unchecked()
                     };
-                    let result = {
-                        let Object::Bigint(rb) = self.get_object(ri) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        let Object::Bigint(lb) = self.get_object(li) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        lb.as_ref() * rb.as_ref()
+                    let Object::Bigint(rb) = self.get_object(ri) else {
+                        std::hint::unreachable_unchecked()
                     };
+                    let Object::Bigint(lb) = self.get_object(li) else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    // Pre-flight bit-length check (mirrors `Instruction::MulBigint`).
+                    let estimated_bits = lb.bits().saturating_add(rb.bits());
+                    if estimated_bits > crate::package_baml::bigint::MAX_BIGINT_BITS {
+                        return Err(VmError::Thrown(self.panic_to_exception_value(
+                            VmPanic::AllocFailure {
+                                message: format!(
+                                    "bigint mul: result of bigint multiplication would require ~{estimated_bits} bits (limit: {})",
+                                    crate::package_baml::bigint::MAX_BIGINT_BITS
+                                ),
+                            },
+                        )));
+                    }
+                    let result = lb.as_ref() * rb.as_ref();
                     let value = self.alloc_bigint(std::sync::Arc::new(result))?;
                     self.stack.push(value);
                 }
