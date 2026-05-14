@@ -1,4 +1,4 @@
-//! Unified tests for deep_copy and deep_equals.
+//! Unified tests for deep_copy, deep_equals, and ref_equals.
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
@@ -822,6 +822,533 @@ async fn deep_equals_circular_structure() {
         load_var a1
         load_var a2
         call baml.deep_equals
+        return
+    }
+    ");
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+// ============ ref_equals tests ============
+
+#[tokio::test]
+async fn ref_equals_same_reference() {
+    let output = baml_test!(
+        r#"
+        class Point {
+            x int
+            y int
+        }
+
+        function main() -> bool {
+            let p = Point { x: 1, y: 2 };
+            baml.ref_equals(p, p)
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @"
+    function main() -> bool {
+        alloc_instance user.Point
+        load_const 1
+        init_field .x
+        load_const 2
+        init_field .y
+        store_var p
+        load_var p
+        load_var p
+        call baml.ref_equals
+        return
+    }
+    ");
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn ref_equals_distinct_but_equal_objects() {
+    let output = baml_test!(
+        r#"
+        class Point {
+            x int
+            y int
+        }
+
+        function main() -> bool {
+            let p1 = Point { x: 1, y: 2 };
+            let p2 = Point { x: 1, y: 2 };
+            baml.ref_equals(p1, p2)
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @"
+    function main() -> bool {
+        alloc_instance user.Point
+        load_const 1
+        init_field .x
+        load_const 2
+        init_field .y
+        alloc_instance user.Point
+        load_const 1
+        init_field .x
+        load_const 2
+        init_field .y
+        call baml.ref_equals
+        return
+    }
+    ");
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(false)));
+}
+
+#[tokio::test]
+async fn ref_equals_after_deep_copy() {
+    let output = baml_test!(
+        r#"
+        class Point {
+            x int
+            y int
+        }
+
+        function main() -> bool {
+            let p = Point { x: 1, y: 2 };
+            let copy = baml.deep_copy(p);
+            // deep_copy must produce a distinct object even though it's value-equal.
+            baml.ref_equals(p, copy)
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @"
+    function main() -> bool {
+        alloc_instance user.Point
+        load_const 1
+        init_field .x
+        load_const 2
+        init_field .y
+        store_var p
+        load_var p
+        call baml.deep_copy
+        store_var copy
+        load_var p
+        load_var copy
+        call baml.ref_equals
+        return
+    }
+    ");
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(false)));
+}
+
+#[tokio::test]
+async fn ref_equals_alias_is_same_reference() {
+    let output = baml_test!(
+        r#"
+        class Point {
+            x int
+            y int
+        }
+
+        function main() -> bool {
+            let p = Point { x: 1, y: 2 };
+            let alias = p;
+            baml.ref_equals(p, alias)
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @"
+    function main() -> bool {
+        alloc_instance user.Point
+        load_const 1
+        init_field .x
+        load_const 2
+        init_field .y
+        store_var p
+        load_var p
+        load_var p
+        call baml.ref_equals
+        return
+    }
+    ");
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn ref_equals_nested_field_shared() {
+    let output = baml_test!(
+        r#"
+        class Inner {
+            value int
+        }
+
+        class Outer {
+            a Inner
+            b Inner
+        }
+
+        function main() -> bool {
+            let shared = Inner { value: 42 };
+            // Both fields point at the same inner instance.
+            let o = Outer { a: shared, b: shared };
+            baml.ref_equals(o.a, o.b)
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @"
+    function main() -> bool {
+        alloc_instance user.Inner
+        load_const 42
+        init_field .value
+        store_var shared
+        alloc_instance user.Outer
+        load_var shared
+        init_field .a
+        load_var shared
+        init_field .b
+        store_var o
+        load_var o
+        load_field .a
+        load_var o
+        load_field .b
+        call baml.ref_equals
+        return
+    }
+    ");
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn ref_equals_nested_field_distinct() {
+    let output = baml_test!(
+        r#"
+        class Inner {
+            value int
+        }
+
+        class Outer {
+            a Inner
+            b Inner
+        }
+
+        function main() -> bool {
+            // Two distinct inner instances, even though their contents match.
+            let o = Outer { a: Inner { value: 42 }, b: Inner { value: 42 } };
+            baml.ref_equals(o.a, o.b)
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @"
+    function main() -> bool {
+        alloc_instance user.Outer
+        alloc_instance user.Inner
+        load_const 42
+        init_field .value
+        init_field .a
+        alloc_instance user.Inner
+        load_const 42
+        init_field .value
+        init_field .b
+        store_var o
+        load_var o
+        load_field .a
+        load_var o
+        load_field .b
+        call baml.ref_equals
+        return
+    }
+    ");
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(false)));
+}
+
+#[tokio::test]
+async fn ref_equals_primitive_ints() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool {
+            // Primitives are by-copy, so even equal ints must compare false.
+            baml.ref_equals(42, 42)
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @"
+    function main() -> bool {
+        load_const 42
+        load_const 42
+        call baml.ref_equals
+        return
+    }
+    ");
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(false)));
+}
+
+#[tokio::test]
+async fn ref_equals_primitive_bools() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool {
+            baml.ref_equals(true, true)
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @"
+    function main() -> bool {
+        load_const true
+        load_const true
+        call baml.ref_equals
+        return
+    }
+    ");
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(false)));
+}
+
+#[tokio::test]
+async fn ref_equals_primitive_nulls() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool {
+            baml.ref_equals(null, null)
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @"
+    function main() -> bool {
+        load_const null
+        load_const null
+        call baml.ref_equals
+        return
+    }
+    ");
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(false)));
+}
+
+#[tokio::test]
+async fn ref_equals_primitive_floats() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool {
+            baml.ref_equals(1.5, 1.5)
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @"
+    function main() -> bool {
+        load_const 1.5
+        load_const 1.5
+        call baml.ref_equals
+        return
+    }
+    ");
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(false)));
+}
+
+#[tokio::test]
+async fn ref_equals_mixed_primitive_and_object() {
+    let output = baml_test!(
+        r#"
+        class Point { x int }
+
+        function main() -> bool {
+            let p = Point { x: 1 };
+            baml.ref_equals(p, 1)
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @"
+    function main() -> bool {
+        alloc_instance user.Point
+        load_const 1
+        init_field .x
+        load_const 1
+        call baml.ref_equals
+        return
+    }
+    ");
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(false)));
+}
+
+#[tokio::test]
+async fn ref_equals_same_array() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool {
+            let xs = [1, 2, 3];
+            baml.ref_equals(xs, xs)
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @"
+    function main() -> bool {
+        load_const 1
+        load_const 2
+        load_const 3
+        alloc_array 3
+        store_var xs
+        load_var xs
+        load_var xs
+        call baml.ref_equals
+        return
+    }
+    ");
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn ref_equals_distinct_arrays() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool {
+            let a = [1, 2, 3];
+            let b = [1, 2, 3];
+            baml.ref_equals(a, b)
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @"
+    function main() -> bool {
+        load_const 1
+        load_const 2
+        load_const 3
+        alloc_array 3
+        load_const 1
+        load_const 2
+        load_const 3
+        alloc_array 3
+        call baml.ref_equals
+        return
+    }
+    ");
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(false)));
+}
+
+#[tokio::test]
+async fn ref_equals_same_map() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool {
+            let m = {"a": 1, "b": 2};
+            baml.ref_equals(m, m)
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> bool {
+        load_const 1
+        load_const 2
+        load_const "a"
+        load_const "b"
+        alloc_map 2
+        store_var m
+        load_var m
+        load_var m
+        call baml.ref_equals
+        return
+    }
+    "#);
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn ref_equals_distinct_maps() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool {
+            let m1 = {"a": 1, "b": 2};
+            let m2 = {"a": 1, "b": 2};
+            baml.ref_equals(m1, m2)
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> bool {
+        load_const 1
+        load_const 2
+        load_const "a"
+        load_const "b"
+        alloc_map 2
+        load_const 1
+        load_const 2
+        load_const "a"
+        load_const "b"
+        alloc_map 2
+        call baml.ref_equals
+        return
+    }
+    "#);
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(false)));
+}
+
+#[tokio::test]
+async fn ref_equals_circular_self_reference() {
+    // A pathological case for any recursive equality check: ref_equals must
+    // terminate immediately because it never traverses into children.
+    let output = baml_test!(
+        r#"
+        class Node {
+            value int
+            children Node[]
+        }
+
+        function main() -> bool {
+            let a = Node { value: 1, children: [] };
+            let b = Node { value: 2, children: [a] };
+            a.children = [b];
+
+            baml.ref_equals(a, a.children[0].children[0])
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @"
+    function main() -> bool {
+        alloc_instance user.Node
+        load_const 1
+        init_field .value
+        alloc_array 0
+        init_field .children
+        store_var a
+        load_var a
+        alloc_instance user.Node
+        load_const 2
+        init_field .value
+        load_var a
+        alloc_array 1
+        init_field .children
+        alloc_array 1
+        store_field .children
+        load_var a
+        load_var a
+        load_field .children
+        load_const 0
+        load_array_element
+        load_field .children
+        load_const 0
+        load_array_element
+        call baml.ref_equals
         return
     }
     ");

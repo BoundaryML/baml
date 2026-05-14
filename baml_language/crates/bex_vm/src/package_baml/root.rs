@@ -19,6 +19,15 @@ impl BamlPackageBaml for PackageBamlImpl {
         let mut visited = HashMap::new();
         deep_equals_recursive(vm, *a, *b, &mut visited)
     }
+
+    fn ref_equals(a: &Value, b: &Value) -> bool {
+        match (a, b) {
+            (Value::Object(a_ptr), Value::Object(b_ptr)) => {
+                ::core::ptr::addr_eq(a_ptr.as_ptr(), b_ptr.as_ptr())
+            }
+            _ => false,
+        }
+    }
 }
 
 fn deep_copy_value_recursive(
