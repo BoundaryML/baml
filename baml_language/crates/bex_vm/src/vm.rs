@@ -1159,7 +1159,7 @@ impl BexVm {
     /// On failure returns `VmError::Thrown` with an `AllocFailure` exception
     /// already constructed so instruction handlers can use `?` directly.
     /// Codegenned glue functions return `VmRustFnError`; they call
-    /// [`Vm::try_alloc_bigint`] instead, which returns the raw `VmPanic`
+    /// `try_alloc_bigint` instead, which returns the raw `VmPanic`
     /// (auto-converts to `VmRustFnError::Panic` via `#[from]`).
     pub fn alloc_bigint(
         &mut self,
@@ -1171,7 +1171,7 @@ impl BexVm {
         }
     }
 
-    /// Like [`Vm::alloc_bigint`] but returns the raw `VmPanic` so codegen glue
+    /// Like `alloc_bigint` but returns the raw `VmPanic` so codegen glue
     /// (which returns `VmRustFnError`) can use `?` to propagate.
     pub fn try_alloc_bigint(
         &mut self,

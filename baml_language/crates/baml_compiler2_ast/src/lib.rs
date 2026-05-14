@@ -30,7 +30,7 @@ pub use lowering_diagnostic::LoweringDiagnostic;
 
 /// Parse the digit body of a `bigint` literal into a [`num_bigint::BigInt`].
 ///
-/// The lexer ([`baml_compiler_lexer`]) guarantees one-or-more ASCII decimal
+/// The lexer (`baml_compiler_lexer`) guarantees one-or-more ASCII decimal
 /// digits, so a parse failure here indicates the CST has been corrupted.
 /// Callers should pass the digit-only string (with the trailing `n` suffix
 /// already stripped).
