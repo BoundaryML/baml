@@ -25,7 +25,7 @@ mod map;
 mod math;
 mod media;
 pub(crate) mod mock;
-pub(crate) use mock::WrapReadyFutureContinuation;
+pub(crate) use mock::{UnsuppressMockContinuation, WrapReadyFutureContinuation};
 mod primitives;
 mod root;
 mod stack_trace;

@@ -133,6 +133,105 @@ async fn mock_scope_auto_increments_call_count() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(18_803)));
 }
 
+/// Recursion guard: a replacement that invokes its own target raises a
+/// `baml.panics.UserPanic` instead of looping forever. The error is a
+/// panic (not a regular throw), so a `catch (e) { baml.panics.UserPanic => … }`
+/// pattern is needed to recover from it — `catch_all` alone won't.
+#[tokio::test]
+async fn mock_replacement_calling_target_throws_recursion_error() {
+    let output = baml_test!(
+        r#"
+        function fetch_user(id: string) -> string { "real:" + id }
+        function call_fetch(id: string) -> string { fetch_user(id) }
+
+        function main() -> string {
+            let m = baml.mock.Mock.new(fetch_user, (id: string) -> string {
+                // BUG: replacement re-calls its own target instead of using
+                // an explicit bypass primitive. Should panic, not loop.
+                fetch_user(id)
+            })
+            let result = m.scope<string, unknown>(() -> string throws unknown {
+                call_fetch("42")
+            }) catch (e) {
+                baml.panics.UserPanic => "recursion-caught",
+            }
+            result
+        }
+    "#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("recursion-caught".to_string()))
+    );
+}
+
+/// Once the replacement returns normally, the entry is un-suppressed and
+/// subsequent calls inside the same scope still intercept (counter still
+/// ticks). The guard only blocks re-entry *during* the replacement, not
+/// for the rest of the scope.
+#[tokio::test]
+async fn mock_recursion_guard_unsuppresses_after_replacement_returns() {
+    let output = baml_test!(
+        r#"
+        function double(n: int) -> int { n * 2 }
+        function triple(n: int) -> int { n * 3 }
+        function call_double(n: int) -> int { double(n) }
+
+        function main() -> int {
+            let m = baml.mock.Mock.new(double, triple)
+            let sum = m.scope<int, never>(() -> int throws never {
+                call_double(1) + call_double(2) + call_double(3)
+            })
+            // All three calls are intercepted (no recursion) and the
+            // counter reflects them.
+            sum * 100 + m.call_count
+        }
+    "#
+    );
+
+    // sum = 3 + 6 + 9 = 18 ; counter = 3 ; result = 1803
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1803)));
+}
+
+/// Nested scopes with overlapping targets: an inner replacement that
+/// calls the target falls through to the outer mock's replacement (not
+/// to the real target, and not as a recursion error). The guard only
+/// fires when every matching entry is suppressed.
+#[tokio::test]
+async fn mock_recursion_guard_falls_through_to_outer_entry() {
+    let output = baml_test!(
+        r#"
+        function double(n: int) -> int { n * 2 }
+        function call_double(n: int) -> int { double(n) }
+
+        function main() -> int {
+            let outer = baml.mock.Mock.new(double, (n: int) -> int { 100 })
+            let inner = baml.mock.Mock.new(double, (n: int) -> int {
+                // The inner replacement calls `double` directly. With the
+                // outer mock still pushed (and not suppressed), the
+                // dispatch should land in the outer replacement.
+                call_double(n)
+            })
+            outer.scope<int, never>(() -> int throws never {
+                inner.scope<int, never>(() -> int throws never {
+                    call_double(0)
+                })
+            })
+        }
+    "#
+    );
+
+    // call_double(0)
+    //  → inner's replacement runs (inner.call_count = 1, suppressed=true)
+    //     → call_double(0) inside it
+    //        → inner is suppressed → falls through to outer's replacement
+    //           → returns 100 (outer.call_count = 1)
+    //     → returns 100
+    //  → returns 100
+    assert_eq!(output.result, Ok(BexExternalValue::Int(100)));
+}
+
 /// Per-instance counter: a `Mock.new(c1.bump, …)` only ticks `call_count`
 /// for calls that resolve to `c1` — `c2.bump(…)` runs the original and
 /// leaves the counter alone.

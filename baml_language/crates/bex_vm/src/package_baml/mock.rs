@@ -41,6 +41,7 @@ impl BamlNamespaceMock for PackageBamlImpl {
                 receiver,
                 replacement: *r,
                 counter_instance,
+                suppressed: false,
             });
         }
     }
@@ -48,6 +49,35 @@ impl BamlNamespaceMock for PackageBamlImpl {
     fn pop_override(vm: &mut BexVm) {
         vm.mock_stack.pop();
     }
+}
+
+/// Continuation used after every mock-intercepted call returns: flips the
+/// matched entry's `suppressed` flag back to `false` so subsequent
+/// (outside-the-replacement) calls to the target match the override
+/// again. The entry index is captured at intercept time and is stable
+/// for the duration of the active scope (`mock_stack` is LIFO push/pop and
+/// the entry isn't removed until its scope ends).
+///
+/// If the matched entry has been popped by the time the continuation
+/// runs (e.g. an inner scope is unwinding and `pop_override` was called
+/// before this continuation), the unsuppress is a no-op.
+pub(crate) struct UnsuppressMockContinuation {
+    pub entry_idx: usize,
+}
+
+impl Continuation for UnsuppressMockContinuation {
+    fn call(self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
+        if let Some(entry) = vm.mock_stack.get_mut(self.entry_idx) {
+            entry.suppressed = false;
+        }
+        NativeCallResult::Done(value)
+    }
+
+    fn gc_roots(&self) -> Vec<HeapPtr> {
+        vec![]
+    }
+
+    fn apply_forwarding(&mut self, _: &HashMap<HeapPtr, HeapPtr>) {}
 }
 
 /// Continuation used when a `DispatchFuture` is intercepted by a mock: after
