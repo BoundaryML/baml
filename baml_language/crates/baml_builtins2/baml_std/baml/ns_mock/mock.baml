@@ -1,22 +1,25 @@
-// Mock — wrap an existing function (e.g. `baml.http.fetch`) with a replacement.
+// Mock — wrap an existing function (e.g. `baml.http.fetch`) with a replacement
+// that records call counts and forwards to a user-provided implementation.
 //
 // Inside `mock.scope(body)`, direct calls to the original (e.g.
 // `baml.http.fetch("...")`) are transparently redirected to the replacement
 // via a VM-level function-override stack (see `push_override`/`pop_override`).
 //
-// Usage:
+// Construction is two-step: `Mock.new(original)` returns a passthrough spy
+// (its `_impl` field is the original, so `scope` runs the real function but
+// ticks `call_count`). Call `m.replace(lambda)` to install an interception
+// replacement. Inside the replacement, invoke `m.original(args)` to call the
+// un-mocked target while the override is active — bypasses the mock stack
+// so the recursion guard doesn't fire.
 //
-//   let m = baml.mock.Mock.new(baml.http.fetch, (url: string) -> Response {
-//     Response { status_code: 200, headers: {}, url: url, _body: "fake" }
-//   });
-//
-//   m.scope(() -> void {
-//     // Calls baml.http.fetch here go through the replacement.
-//     baml.http.fetch("https://example.com");
-//   });
-//
-//   // Outside the scope, the real builtin runs.
-//   baml.http.fetch("https://example.com");
+//   let m = baml.mock.Mock.new(baml.http.fetch)
+//   m.replace((url: string) -> Response {
+//     log.push("fetching " + url)
+//     m.original(url)              // dispatches the real baml.http.fetch
+//   })
+//   m.scope(() -> {
+//     baml.http.fetch("https://example.com")   // intercepted
+//   })
 
 /// VM primitive: push an override mapping `target → replacement` onto the
 /// active mock stack. The override stays in effect until a matching
@@ -37,24 +40,50 @@ function pop_override() -> null {
   $rust_function
 }
 
-/// A Mock wraps a function value `T` (any arity, any return, any throws)
-/// and supports scoped replacement via [`scope`]. `T` is left opaque to the
-/// class so that the same `Mock` definition works for every function
-/// signature.
+/// VM primitive: wrap a callable in an `UnmockedRef` so that any
+/// `CallIndirect`/`YieldToCall` on the returned value bypasses the active
+/// mock stack and dispatches the inner callable directly. Used by
+/// `Mock.new` to construct the `original` field. The returned value is
+/// typed as `T` (the wrapped callable's type) — the bypass is a runtime
+/// property invisible to the type system.
+///
+/// Throws `baml.errors.InvalidArgument` if `target` isn't a callable
+/// (`Function`/`Closure`/`BoundMethod`) — a runtime stand-in for the
+/// generic-bounds constraint we'd write if BAML supported them
+/// (`Mock<T> where T: callable`, à la Rust's `T: Fn(...)`). Remove this
+/// check and the `throws` annotation once generic bounds land.
+//baml:mut_vm
+function wrap_unmocked<T>(target: T) -> T throws baml.errors.InvalidArgument {
+  $rust_function
+}
+
 class Mock<T> {
+  // Field order is irrelevant — the VM resolves `call_count` by name at
+  // init and the codegen handles the rest, so this can be reorganised
+  // for readability without breaking anything.
+  call_count int
+  /// Callable that dispatches the un-mocked target regardless of any
+  /// active mock override. Use inside a replacement to wrap-and-delegate:
+  ///
+  ///   m.replace((url: string) -> Response {
+  ///     log.push(url)
+  ///     m.original(url)        // calls the real fetch, bypassing the mock
+  ///   })
+  original T
   _impl T
   _original T
-  call_count int
 
-  /// Construct a Mock from an original function and a replacement implementation.
-  function new(original: T, impl: T) -> Mock<T> {
-    Mock<T> { _impl: impl, _original: original, call_count: 0 }
-  }
-
-  /// Construct a Mock that initially passes through to `original`. Use
-  /// [`replace`] to swap in a real replacement before entering [`scope`].
-  function spy(original: T) -> Mock<T> {
-    Mock<T> { _impl: original, _original: original, call_count: 0 }
+  /// Construct a `Mock` that initially passes through to `original`. Use
+  /// [`replace`] before entering `scope` to install an actual replacement
+  /// implementation. Without `replace`, the mock just observes calls
+  /// (counter ticks on every intercepted invocation).
+  function new(original: T) -> Mock<T> {
+    Mock<T> {
+      call_count: 0,
+      original: baml.mock.wrap_unmocked<T>(original),
+      _impl: original,
+      _original: original,
+    }
   }
 
   /// Swap the replacement implementation. Does not reset `call_count`.
@@ -63,17 +92,10 @@ class Mock<T> {
     self._impl = impl
   }
 
-  /// Reset the call counter to zero.
-  //baml:mut_self
-  function reset(self) -> void {
-    self.call_count = 0
-  }
-
   /// Run `body` with this mock active: any direct call to the original
   /// function within `body` is redirected to the current `_impl`. The
-  /// override is removed when `body` returns or throws.
-  ///
-  /// `call_count` is incremented on each intercepted call.
+  /// override is removed when `body` returns or throws. `call_count` is
+  /// incremented on each intercepted call.
   //baml:mut_self
   function scope<U, EU>(self, body: () -> U throws EU) -> U throws EU {
     let _ = baml.mock.push_override<T>(self._original, self._impl, self)

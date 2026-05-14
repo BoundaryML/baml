@@ -2,20 +2,16 @@ use std::collections::HashMap;
 
 use bex_vm_types::{
     Future, HeapPtr,
-    types::{FutureId, Object, Value},
+    types::{FutureId, Object, UnmockedRef, Value},
 };
 
 use super::{BamlNamespaceMock, Continuation, NativeCallResult, PackageBamlImpl};
-use crate::BexVm;
+use crate::{
+    BexVm,
+    errors::{VmBamlError, VmRustFnError},
+};
 
 impl BamlNamespaceMock for PackageBamlImpl {
-    /// Push a `target → replacement` override onto the VM's mock stack.
-    ///
-    /// Both `target` and `replacement` must be function values (typically
-    /// `Object::Function`, `Object::Closure`, or `Object::BoundMethod`). The
-    /// `HeapPtr` identity of the target is what the interception path
-    /// matches against in `Instruction::Call`, `Instruction::CallIndirect`,
-    /// and `Instruction::DispatchFuture`.
     fn push_override(
         vm: &mut BexVm,
         target: &Value,
@@ -48,6 +44,45 @@ impl BamlNamespaceMock for PackageBamlImpl {
 
     fn pop_override(vm: &mut BexVm) {
         vm.mock_stack.pop();
+    }
+
+    /// Allocate an `UnmockedRef` wrapping the given callable. Returned to
+    /// BAML as type `T` (the wrapped callable's type) — the bypass
+    /// behaviour lives in `CallIndirect`/`YieldToCall`'s recognition of
+    /// `Object::UnmockedRef`, not in the type system.
+    ///
+    /// Runtime guard: BAML doesn't (yet) support generic bounds — there's
+    /// no way to say `Mock<T> where T: callable` à la Rust's `T: Fn(...)`
+    /// or C++'s `requires invocable<T>`. So nothing at the type level
+    /// rejects `Mock.new(42)`; we catch that misuse here at construction
+    /// time with a panic. When BAML gains generic constraints, this
+    /// check (and the `throws baml.panics.UserPanic` on the BAML
+    /// declaration) can be deleted in favour of a compile-time
+    /// `T: callable` bound.
+    fn wrap_unmocked(vm: &mut BexVm, target: &Value) -> Result<Value, VmRustFnError> {
+        let inner = match target {
+            Value::Object(p) => match vm.get_object(*p) {
+                Object::Function(_) | Object::Closure(_) | Object::BoundMethod(_) => *p,
+                other => {
+                    return Err(VmBamlError::InvalidArgument {
+                        message: format!(
+                            "baml.mock.Mock.new: target is not callable (got {})",
+                            ::bex_vm_types::types::ObjectType::of(other)
+                        ),
+                    }
+                    .into());
+                }
+            },
+            _ => {
+                return Err(VmBamlError::InvalidArgument {
+                    message: "baml.mock.Mock.new: target is not callable (got a non-object value)"
+                        .to_string(),
+                }
+                .into());
+            }
+        };
+        let ptr = vm.tlab.alloc(Object::UnmockedRef(UnmockedRef { inner }));
+        Ok(Value::Object(ptr))
     }
 }
 

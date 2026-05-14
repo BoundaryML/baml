@@ -348,6 +348,9 @@ impl BexHeap {
                     worklist.push(*ptr);
                 }
             }
+            Object::UnmockedRef(uref) => {
+                worklist.push(uref.inner);
+            }
             Object::Cell(cell) => {
                 if let Value::Object(ptr) = &cell.value {
                     worklist.push(*ptr);
@@ -467,6 +470,11 @@ impl BexHeap {
                 }
                 for value in &mut closure.captures {
                     self.fixup_value(value, forwarding);
+                }
+            }
+            Object::UnmockedRef(uref) => {
+                if let Some(&new_ptr) = forwarding.get(&uref.inner) {
+                    uref.inner = new_ptr;
                 }
             }
             Object::BoundMethod(bm) => {
@@ -711,6 +719,11 @@ impl BexHeap {
                         .filter_map(Value::as_object_ptr)
                         .filter(|ptr| self.generation_of(*ptr).is_young()),
                 );
+            }
+            Object::UnmockedRef(uref) => {
+                if self.generation_of(uref.inner).is_young() {
+                    worklist.push(uref.inner);
+                }
             }
             Object::BoundMethod(method) => {
                 if self.generation_of(method.function).is_young() {

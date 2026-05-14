@@ -91,8 +91,8 @@ pub use bex_heap::GcStats;
 pub use bex_heap::{ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapPermit};
 use bex_vm::{BexVm, SpanNotification, VmExecState};
 use bex_vm_types::{
-    FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp, Value,
-    VmGlobals,
+    FunctionMeta, FunctionOrigin, FutureRead, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp,
+    Value, VmGlobals,
 };
 pub use conversion::test_arg_to_external;
 // Re-export CancellationToken for callers.
@@ -1967,6 +1967,144 @@ impl BexEngine {
                 }
                 VmExecState::EarlyYield => {
                     vm = self.gc_safepoint(vm).await;
+                }
+
+                VmExecState::DispatchSysOpInline(unscheduled) => {
+                    // Schedule the sys-op + await its result + push the
+                    // resolved value back onto the VM stack — all in one
+                    // engine round-trip. The bytecode call site
+                    // (`CallIndirect` on `UnmockedRef(SysOp)`) doesn't
+                    // emit an `Await` after the call, so we can't rely on
+                    // the normal `ScheduleFuture` → push Future → next
+                    // instruction is `Await` flow.
+                    //
+                    // The body mirrors `ScheduleFuture`'s scheduling step
+                    // and `Await`'s await/release/reacquire step, then
+                    // reads the resolved value off the Future heap object
+                    // and pushes it.
+
+                    let unscheduled_data = vm
+                        .unscheduled_future(unscheduled)
+                        .map_err(EngineError::VmInternalError)?;
+                    let args: Vec<BexExternalValue> = unscheduled_data
+                        .args
+                        .iter()
+                        .map(|v| self.vm_arg_to_bex_value(v))
+                        .collect();
+                    let operation = unscheduled_data.operation;
+
+                    let future_cancel = cancel.child_token();
+                    let (future_id, future_ptr) = {
+                        let mut g = self.futures.acquire(vm.proof()).await;
+                        g.new_future(future_cancel.clone())
+                    };
+                    if cancel.is_cancelled() {
+                        self.futures
+                            .acquire(vm.proof())
+                            .await
+                            .cancel_future(future_id)?;
+                        continue;
+                    }
+
+                    let sys_op_result =
+                        self.execute_sys_op(operation, &args, call_id, cancel, vm.proof());
+                    match sys_op_result {
+                        SysOpResult::Ready(result) => {
+                            let mut future_permit = self.futures.acquire(vm.proof()).await;
+                            if cancel.is_cancelled() {
+                                future_permit.cancel_future(future_id)?;
+                                drop(future_permit);
+                                continue;
+                            }
+                            match result {
+                                Ok(external) => {
+                                    match self
+                                        .convert_external_to_vm_value(&mut future_permit, external)
+                                    {
+                                        Ok(value) => {
+                                            future_permit.fulfill_future(future_id, value)?;
+                                        }
+                                        Err(conv_err) => {
+                                            future_permit
+                                                .internal_error_future(future_id, conv_err)?;
+                                        }
+                                    }
+                                }
+                                Err(op_err) => {
+                                    future_permit.internal_error_future(
+                                        future_id,
+                                        EngineError::from(op_err),
+                                    )?;
+                                }
+                            }
+                            drop(future_permit);
+                        }
+                        SysOpResult::Async(fut) => {
+                            let task = Arc::clone(self).run_future(fut, future_id, future_cancel);
+                            #[cfg(not(target_arch = "wasm32"))]
+                            tokio::spawn(async move {
+                                if let Err(err) = task.await {
+                                    tracing::error!(?err, ?future_id, "spawned future task failed");
+                                }
+                            });
+                            #[cfg(target_arch = "wasm32")]
+                            wasm_bindgen_futures::spawn_local(async move {
+                                if let Err(err) = task.await {
+                                    tracing::error!(?err, ?future_id, "spawned future task failed");
+                                }
+                            });
+                        }
+                    }
+
+                    // Now await the future — same shape as VmExecState::Await.
+                    let future = {
+                        let g = self.futures.acquire(vm.proof()).await;
+                        g.future_ready(future_id)?
+                    };
+                    let inactive = vm.release();
+                    self.maybe_collect_garbage().await;
+                    future.await?;
+                    vm = inactive.acquire().await;
+
+                    // Read the resolved value off the Future heap object
+                    // and push it as the result of the CallIndirect site.
+                    // SAFETY: `future_ptr` was just allocated by
+                    // `new_future` and remained reachable through the
+                    // FutureManager registry, so it's a valid pointer to
+                    // an `Object::Future` whose state is now terminal.
+                    let resolved = unsafe {
+                        match future_ptr.get() {
+                            Object::Future(fut) => fut.read(),
+                            _ => unreachable!("future_ptr is always an Object::Future"),
+                        }
+                    };
+                    match resolved {
+                        FutureRead::Ready(value) => {
+                            vm.stack.push(value);
+                        }
+                        FutureRead::Error(value) => {
+                            // Surface as a thrown exception via the
+                            // engine's existing UnhandledThrow channel.
+                            // The trace is captured at this engine site
+                            // since we don't have the bytecode call site's
+                            // stack handy here.
+                            return Err(EngineError::UnhandledThrow {
+                                value: Box::new(self.vm_value_to_owned(vm.proof(), &value)),
+                                trace: Vec::new(),
+                            });
+                        }
+                        FutureRead::Cancelled => {
+                            return Err(cancelled_unhandled_throw());
+                        }
+                        FutureRead::InternalError(_) | FutureRead::Pending(_) => {
+                            // Pending shouldn't happen after `future.await?`
+                            // succeeded; InternalError would already have
+                            // bailed out via `future.await?`.
+                            unreachable!(
+                                "future was awaited successfully but isn't terminal-Ready/Error/Cancelled"
+                            );
+                        }
+                    }
                 }
             }
         }

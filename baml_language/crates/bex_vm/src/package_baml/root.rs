@@ -119,6 +119,7 @@ fn deep_copy_value_recursive(
                 // state is shared by design (mutation semantics).
                 Object::Closure(c) => vm.tlab.alloc(Object::Closure(c)),
                 Object::BoundMethod(bm) => vm.tlab.alloc(Object::BoundMethod(bm)),
+                Object::UnmockedRef(uref) => vm.tlab.alloc(Object::UnmockedRef(uref)),
                 Object::Cell(cell) => vm.tlab.alloc(Object::Cell(cell)),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(kind) => vm.tlab.alloc(Object::Sentinel(kind)),

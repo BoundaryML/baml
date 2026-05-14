@@ -792,33 +792,29 @@ function baml.media.url(self: ?) -> string?  [builtin]
 
 --- <builtin>/baml/ns_mock/mock.baml ---
 class baml.mock.Mock {
+  call_count: int
+  original: baml.mock.T
   _impl: baml.mock.T
   _original: baml.mock.T
-  call_count: int
 }
 function baml.mock.from_json(j: baml.json.json) -> baml.mock.Mock  [expr] {
-  baml.mock.Mock { _impl: baml.json.from_json(baml.json.field(j, "_impl")), _original: baml.json.from_json(baml.json.field(j, "_original")), call_count: baml.json.from_json(baml.json.field(j, "call_count")) }
+  baml.mock.Mock { call_count: baml.json.from_json(baml.json.field(j, "call_count")), original: baml.json.from_json(baml.json.field(j, "original")), _impl: baml.json.from_json(baml.json.field(j, "_impl")), _original: baml.json.from_json(baml.json.field(j, "_original")) }
 }
-function baml.mock.new(original: baml.mock.T, impl: baml.mock.T) -> baml.mock.Mock  [expr] {
-  {  } baml.mock.Mock { _impl: impl, _original: original, call_count: 0 }
+function baml.mock.new(original: baml.mock.T) -> baml.mock.Mock  [expr] {
+  {  } baml.mock.Mock { call_count: 0, original: baml.mock.wrap_unmocked(original), _impl: original, _original: original }
 }
 function baml.mock.pop_override() -> null  [builtin]
 function baml.mock.push_override(target: baml.mock.T, replacement: baml.mock.T, counter_owner: baml.mock.Mock?) -> null  [builtin]
 function baml.mock.replace(self: ?, impl: baml.mock.T) -> void  [expr] {
   { self._impl = impl }
 }
-function baml.mock.reset(self: ?) -> void  [expr] {
-  { self.call_count = 0 }
-}
 function baml.mock.scope(self: ?, body: () -> baml.mock.U throws baml.mock.EU) -> baml.mock.U  [expr] {
   { let _ = baml.mock.push_override(self._original, self._impl, self); let result = {  } body() catch_all (e) { _ => { let _ = baml.mock.pop_override(); throw e } }; let _ = baml.mock.pop_override() } result
 }
-function baml.mock.spy(original: baml.mock.T) -> baml.mock.Mock  [expr] {
-  {  } baml.mock.Mock { _impl: original, _original: original, call_count: 0 }
-}
 function baml.mock.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "_impl": baml.json.to_json(self._impl), "_original": baml.json.to_json(self._original), "call_count": self.call_count.to_json() }
+  map { "call_count": self.call_count.to_json(), "original": baml.json.to_json(self.original), "_impl": baml.json.to_json(self._impl), "_original": baml.json.to_json(self._original) }
 }
+function baml.mock.wrap_unmocked(target: baml.mock.T) -> baml.mock.T  [builtin]
 
 --- <builtin>/baml/ns_net/net.baml ---
 class baml.net.Socket {

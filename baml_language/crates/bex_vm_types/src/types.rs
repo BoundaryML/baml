@@ -818,6 +818,14 @@ pub enum Object {
     /// A mutable cell holding a single captured value.
     Cell(Cell),
 
+    /// A bypass-the-mock wrapper around a callable. When a `CallIndirect`
+    /// (or `YieldToCall`) site resolves this as its callee, it unwraps
+    /// `inner` and dispatches directly, **skipping the mock-stack
+    /// lookup**. Allocated by `baml.mock.Mock.original` so a user-written
+    /// replacement can invoke the real target without re-tripping the
+    /// active override (and without the recursion guard panicking).
+    UnmockedRef(UnmockedRef),
+
     /// Heap allocated string.
     ///
     /// TODO: Add a `Vm::strings` interner to avoid allocating duplicates.
@@ -891,6 +899,14 @@ pub struct BoundMethod {
     pub receiver: Value,
 }
 
+/// A mock-bypass wrapper around a callable (`Function` / `Closure` /
+/// `BoundMethod`). See `Object::UnmockedRef`.
+#[derive(Clone, Copy, Debug)]
+pub struct UnmockedRef {
+    /// Pointer to the underlying callable.
+    pub inner: HeapPtr,
+}
+
 /// A mutable cell wrapping a single captured value.
 ///
 /// Variables that are closed over are heap-allocated as `Cell` objects so that
@@ -913,6 +929,7 @@ impl std::fmt::Display for Object {
                 write!(f, "<closure captures={captures_len}>")
             }
             Object::BoundMethod(_) => write!(f, "<bound_method>"),
+            Object::UnmockedRef(_) => write!(f, "<unmocked_ref>"),
             Object::Cell(cell) => write!(f, "<cell {}>", cell.value),
             Object::String(string) => string.fmt(f),
             Object::Uint8Array(bytes) => write!(f, "<uint8array len={}>", bytes.len()),
@@ -1361,6 +1378,7 @@ impl ObjectType {
             Object::Function(func) => Self::Function(FunctionType::from(&func.kind)),
             Object::Closure(_) => Self::Closure,
             Object::BoundMethod(_) => Self::Closure, // Treat as callable like closures
+            Object::UnmockedRef(_) => Self::Closure, // Behaves as a callable
             Object::Cell(_) => Self::Cell,
             Object::Class(_) => Self::Class,
             Object::Instance(_) => Self::Instance,

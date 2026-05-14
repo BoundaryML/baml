@@ -90,11 +90,6 @@ pub struct MockOverride {
     pub suppressed: bool,
 }
 
-/// Field index of `call_count` inside a `Mock<T>` instance, matching the
-/// declaration order in `baml/ns_mock/mock.baml` (`_impl`, `_original`,
-/// `call_count`). Used by the VM intercept path to bump the counter.
-pub const MOCK_CALL_COUNT_FIELD_IDX: usize = 2;
-
 /// Bytecode call frame — pushed when entering a bytecode function.
 #[derive(Clone, Debug)]
 pub struct BytecodeFrame {
@@ -407,6 +402,13 @@ pub struct BexVm {
     /// `baml.mock.pop_override` and are intended to be invoked by
     /// `Mock.scope`.
     pub mock_stack: Vec<MockOverride>,
+
+    /// Index of the `call_count` field inside the `baml.mock.Mock<T>`
+    /// instance, resolved by name at VM construction time and cached
+    /// here so the mock-intercept counter-bump path doesn't need to
+    /// hardcode a field-order constant. `None` if the Mock class isn't
+    /// available (should never happen in practice — it's a builtin).
+    pub mock_call_count_field_idx: Option<usize>,
 }
 
 /// VM execution state.
@@ -441,6 +443,18 @@ pub enum VmExecState {
     /// Bytecode execution continues when control flow is handled back to the
     /// VM.
     ScheduleFuture(HeapPtr),
+
+    /// Schedule a `SysOp` future AND immediately await its result,
+    /// pushing the resolved value (not the Future) onto the VM stack.
+    /// Used by `CallIndirect` when the callee is an `UnmockedRef`
+    /// wrapping a `SysOp` `Function` — the bytecode doesn't emit an
+    /// `Await` after `CallIndirect`, so the engine must do schedule +
+    /// await in one round-trip so the caller sees a regular value.
+    ///
+    /// - Input: a `HeapPtr` to an `UnscheduledFuture`.
+    /// - Output: the resolved sys-op value on the VM stack (or a thrown
+    ///   exception if the sys-op errored).
+    DispatchSysOpInline(HeapPtr),
 
     /// VM has completed the execution of all available bytecode.
     Complete(Value),
@@ -627,6 +641,7 @@ fn value_type_tag(value: &Value) -> i64 {
                 Object::Function(_) => type_tags::FUNCTION,
                 Object::Closure(_) => type_tags::FUNCTION,
                 Object::BoundMethod(_) => type_tags::FUNCTION,
+                Object::UnmockedRef(_) => type_tags::FUNCTION,
                 Object::Cell(_) => type_tags::UNKNOWN,
                 Object::Future(_) => type_tags::FUTURE,
                 Object::UnscheduledFuture(_) => type_tags::FUTURE,
@@ -728,6 +743,26 @@ impl BexVm {
             park_requested,
         );
 
+        // Pre-resolve `baml.mock.Mock`'s `call_count` field index so the
+        // VM's mock-intercept counter bump doesn't need to hardcode a
+        // field-order constant. `None` if the class doesn't exist or the
+        // field is missing — defensive, even though `baml.mock.Mock` is a
+        // builtin and the field is required by the class definition.
+        let mock_call_count_field_idx =
+            resolved_class_names
+                .get("baml.mock.Mock")
+                .and_then(|class_ptr| {
+                    // SAFETY: `resolve_class_names` only contains HeapPtrs to
+                    // valid `Object::Class` instances, allocated during VM
+                    // setup.
+                    let obj = unsafe { class_ptr.get() };
+                    if let Object::Class(class) = obj {
+                        class.fields.iter().position(|f| f.name == "call_count")
+                    } else {
+                        None
+                    }
+                });
+
         Self {
             frames: Vec::new(),
             stack: EvalStack::new(),
@@ -746,6 +781,7 @@ impl BexVm {
             argv,
             pending_call_type_args: Vec::new(),
             mock_stack: Vec::new(),
+            mock_call_count_field_idx,
         }
     }
 
@@ -827,7 +863,16 @@ impl BexVm {
             let entry = &mut self.mock_stack[idx];
             let replacement = entry.replacement;
             let counter_instance = entry.counter_instance;
-            entry.suppressed = true;
+            let entry_target_fn = entry.target_fn;
+            // Skip the recursion-guard suppression when the replacement IS
+            // the target (spy mode — `Mock.new(f)` without a `replace`).
+            // Natural recursion in `f` shouldn't trip the recursion guard.
+            let replacement_id = self.callable_identity(replacement);
+            let is_spy = replacement_id == entry_target_fn;
+            let entry = &mut self.mock_stack[idx];
+            if !is_spy {
+                entry.suppressed = true;
+            }
             if let Some(inst_ptr) = counter_instance {
                 self.bump_mock_call_count(inst_ptr);
             }
@@ -841,9 +886,10 @@ impl BexVm {
             let exc = self.panic_to_exception_value(VmPanic::UserPanic {
                 message: "baml.mock: recursion detected — the replacement \
                           for a target invoked the target itself while the \
-                          override was active. Use `baml.mock.call_unmocked` \
-                          (or restructure the replacement to avoid \
-                          self-dispatch) to bypass the active override."
+                          override was active. Use `m.original(args)` \
+                          inside the replacement to invoke the un-mocked \
+                          target, or restructure the replacement to avoid \
+                          self-dispatch."
                     .to_string(),
             });
             return Err(VmError::Thrown(exc));
@@ -868,15 +914,18 @@ impl BexVm {
         }));
     }
 
-    /// Increment the `call_count` field (index `MOCK_CALL_COUNT_FIELD_IDX`)
-    /// of a `Mock<T>` instance. No-op if the pointer isn't an instance or
-    /// the field isn't an `Int` — defensive, since the field's existence
-    /// is guaranteed by the `Mock<T>` class definition but the VM doesn't
-    /// statically know the entry's instance shape.
+    /// Increment the `call_count` field of a `Mock<T>` instance. The
+    /// field index is resolved by name at VM construction time and
+    /// cached in `mock_call_count_field_idx` — keeps the bump path
+    /// refactor-safe against changes to the `Mock<T>` field order.
+    /// No-op if the index isn't available or the slot isn't an `Int`.
     #[inline]
     fn bump_mock_call_count(&mut self, instance_ptr: HeapPtr) {
+        let Some(idx) = self.mock_call_count_field_idx else {
+            return;
+        };
         if let Object::Instance(instance) = self.get_object_mut(instance_ptr) {
-            if let Some(Value::Int(n)) = instance.fields.get_mut(MOCK_CALL_COUNT_FIELD_IDX) {
+            if let Some(Value::Int(n)) = instance.fields.get_mut(idx) {
                 *n = n.saturating_add(1);
             }
         }
@@ -2006,6 +2055,16 @@ impl BexVm {
                         type_args: callback_type_args,
                         continuation,
                     } => {
+                        // If the callee is an `UnmockedRef` (from
+                        // `m.original()`), unwrap to the inner callable and
+                        // skip the mock-stack lookup entirely.
+                        let (callee, bypass_mock) =
+                            if let Object::UnmockedRef(uref) = self.get_object(callee) {
+                                (uref.inner, true)
+                            } else {
+                                (callee, false)
+                            };
+
                         // Mock-stack interception. The native didn't push
                         // anything to the value stack yet, so receiver
                         // inference uses the callee value alone (handles
@@ -2013,7 +2072,11 @@ impl BexVm {
                         // On a hit, redirect to the self-less replacement and
                         // skip the receiver-insertion that would otherwise
                         // happen via `resolve_bound_method_callee`.
-                        let mock_redirect = self.lookup_mock_override_for_callee(callee, None)?;
+                        let mock_redirect = if bypass_mock {
+                            None
+                        } else {
+                            self.lookup_mock_override_for_callee(callee, None)?
+                        };
 
                         // Push a Native continuation frame, then dispatch the
                         // callback through ECFLO. The exec loop's continuation
@@ -2423,10 +2486,20 @@ impl BexVm {
                             type_args: callback_type_args,
                             continuation,
                         } => {
+                            let (callee, bypass_mock) =
+                                if let Object::UnmockedRef(uref) = self.get_object(callee) {
+                                    (uref.inner, true)
+                                } else {
+                                    (callee, false)
+                                };
+
                             // Mock-stack interception — see the equivalent
                             // arm above in the outer YieldToCall dispatcher.
-                            let mock_redirect =
-                                self.lookup_mock_override_for_callee(callee, None)?;
+                            let mock_redirect = if bypass_mock {
+                                None
+                            } else {
+                                self.lookup_mock_override_for_callee(callee, None)?
+                            };
 
                             // The continuation wants to call another function.
                             // Push the new Native frame, then dispatch the
@@ -4292,9 +4365,63 @@ impl BexVm {
             Instruction::CallIndirect => {
                 // Stack layout: [arg1, arg2, ..., argN, callee]
                 let callee_slot = self.stack.ensure_stack_top();
-                let callee_value = self.stack[callee_slot];
+                let mut callee_value = self.stack[callee_slot];
                 let callee_ptr =
                     self.as_object_ptr(&callee_value, FunctionType::Callable.into())?;
+
+                // `m.original()` returns an `UnmockedRef` whose only effect
+                // at the call site is to dispatch its inner callable while
+                // SKIPPING the mock-stack lookup. Unwrap eagerly and
+                // continue with the inner callable as if it were called
+                // directly. The mock-intercept arms below check
+                // `bypass_mock` and short-circuit their lookup.
+                let (callee_ptr, bypass_mock) = {
+                    if let Object::UnmockedRef(uref) = self.get_object(callee_ptr) {
+                        let inner = uref.inner;
+                        // Rewrite the stack top so the rest of the
+                        // CallIndirect machinery sees the unwrapped value.
+                        callee_value = Value::Object(inner);
+                        self.stack[callee_slot] = callee_value;
+                        (inner, true)
+                    } else {
+                        (callee_ptr, false)
+                    }
+                };
+
+                // Special case: `UnmockedRef` wrapping a SysOp Function.
+                // SysOps can't go through `execute_call_from_locals_offset`
+                // (their kind requires the engine yield path). The
+                // bytecode here is `CallIndirect`, no Await follows — so
+                // we yield a combined "schedule + await" state and the
+                // engine pushes the resolved value back on the stack as
+                // the result of this CallIndirect.
+                if bypass_mock {
+                    if let Object::Function(f) = self.get_object(callee_ptr) {
+                        if let FunctionKind::SysOp(sys_op) = f.kind {
+                            let arity = f.arity;
+                            // Pop the callee (we already consumed it in
+                            // `callee_value`), then drain args.
+                            let _popped = self.stack.ensure_pop();
+                            let args_offset = self
+                                .stack
+                                .len()
+                                .checked_sub(arity)
+                                .ok_or(VmInternalError::NotEnoughItemsOnStack(arity))?;
+                            let future_args: Vec<Value> = self
+                                .stack
+                                .drain(StackIndex::from_raw(args_offset)..)
+                                .collect();
+                            let unscheduled = bex_vm_types::types::UnscheduledFuture {
+                                operation: sys_op,
+                                args: future_args,
+                            };
+                            let unsched_ptr =
+                                self.tlab.alloc(Object::UnscheduledFuture(unscheduled));
+                            return Ok(Some(VmExecState::DispatchSysOpInline(unsched_ptr)));
+                        }
+                    }
+                }
+
                 let obj = self.get_object(callee_ptr);
 
                 if let Object::BoundMethod(bm) = obj {
@@ -4327,9 +4454,15 @@ impl BexVm {
                     // The replacement signature is "self-less" — it matches
                     // the visible call shape, not the underlying
                     // `(self, ...)`. Skip receiver insertion when redirecting.
-                    if let Some((replacement_ptr, mock_idx)) =
+                    //
+                    // If we arrived via `UnmockedRef` (m.original()), skip
+                    // the mock lookup entirely so the user's bypass works.
+                    let mock_hit = if bypass_mock {
+                        None
+                    } else {
                         self.lookup_mock_override(inner_fn_ptr, Some(receiver))?
-                    {
+                    };
+                    if let Some((replacement_ptr, mock_idx)) = mock_hit {
                         let (rep_ptr, rep_arity) =
                             self.resolve_callable_target(Value::Object(replacement_ptr))?;
                         let _popped = self.stack.ensure_pop();
@@ -4396,9 +4529,12 @@ impl BexVm {
                         .checked_sub(arg_count + 1)
                         .map(StackIndex::from_raw);
                     let mut pending_unsuppress: Option<(HeapPtr, usize)> = None;
-                    if let Some((replacement_ptr, mock_idx)) =
+                    let mock_hit = if bypass_mock {
+                        None
+                    } else {
                         self.lookup_mock_override_for_callee(callee_ptr, args_base)?
-                    {
+                    };
+                    if let Some((replacement_ptr, mock_idx)) = mock_hit {
                         let (rep_ptr, rep_arity) =
                             self.resolve_callable_target(Value::Object(replacement_ptr))?;
                         callee_ptr = rep_ptr;
@@ -5343,9 +5479,20 @@ impl BexVm {
                         type_args: callback_type_args,
                         continuation,
                     } => {
+                        let (callee, bypass_mock) =
+                            if let Object::UnmockedRef(uref) = self.get_object(callee) {
+                                (uref.inner, true)
+                            } else {
+                                (callee, false)
+                            };
+
                         // Mock-stack interception — see the equivalent arm
                         // in the primary YieldToCall dispatch above.
-                        let mock_redirect = self.lookup_mock_override_for_callee(callee, None)?;
+                        let mock_redirect = if bypass_mock {
+                            None
+                        } else {
+                            self.lookup_mock_override_for_callee(callee, None)?
+                        };
 
                         self.frames.push(Frame::Native(NativeFrame {
                             function: native_fn_ptr,
@@ -6179,9 +6326,52 @@ impl BexVm {
                     bf.instruction_ptr = *pc;
 
                     let callee_slot = self.stack.ensure_stack_top();
-                    let callee_value = self.stack[callee_slot];
+                    let mut callee_value = self.stack[callee_slot];
                     let callee_ptr =
                         self.as_object_ptr(&callee_value, FunctionType::Callable.into())?;
+                    // Unwrap `UnmockedRef` (see Instruction::CallIndirect for
+                    // rationale): bypass the mock-stack lookup for callers
+                    // that explicitly went through `m.original()`.
+                    let (callee_ptr, bypass_mock) = {
+                        if let Object::UnmockedRef(uref) = self.get_object(callee_ptr) {
+                            let inner = uref.inner;
+                            callee_value = Value::Object(inner);
+                            self.stack[callee_slot] = callee_value;
+                            (inner, true)
+                        } else {
+                            (callee_ptr, false)
+                        }
+                    };
+
+                    // Special case: UnmockedRef wrapping a SysOp. Yield
+                    // DispatchSysOpInline so the engine schedules + awaits
+                    // and pushes the resolved value back. See the
+                    // Instruction::CallIndirect path for the rationale.
+                    if bypass_mock {
+                        if let Object::Function(f) = self.get_object(callee_ptr) {
+                            if let FunctionKind::SysOp(sys_op) = f.kind {
+                                let arity = f.arity;
+                                let _popped = self.stack.ensure_pop();
+                                let args_offset = self
+                                    .stack
+                                    .len()
+                                    .checked_sub(arity)
+                                    .ok_or(VmInternalError::NotEnoughItemsOnStack(arity))?;
+                                let future_args: Vec<Value> = self
+                                    .stack
+                                    .drain(StackIndex::from_raw(args_offset)..)
+                                    .collect();
+                                let unscheduled = bex_vm_types::types::UnscheduledFuture {
+                                    operation: sys_op,
+                                    args: future_args,
+                                };
+                                let unsched_ptr =
+                                    self.tlab.alloc(Object::UnscheduledFuture(unscheduled));
+                                return Ok(Some(VmExecState::DispatchSysOpInline(unsched_ptr)));
+                            }
+                        }
+                    }
+
                     let obj = self.get_object(callee_ptr);
 
                     if let Object::BoundMethod(bm) = obj {
@@ -6207,9 +6397,12 @@ impl BexVm {
                         // Mock-stack interception for indirect bound-method
                         // calls. The replacement is "self-less" so we skip
                         // the receiver insertion when redirecting.
-                        if let Some((replacement_ptr, mock_idx)) =
+                        let mock_hit = if bypass_mock {
+                            None
+                        } else {
                             self.lookup_mock_override(fn_ptr, Some(receiver))?
-                        {
+                        };
+                        if let Some((replacement_ptr, mock_idx)) = mock_hit {
                             let (rep_ptr, rep_arity) =
                                 self.resolve_callable_target(Value::Object(replacement_ptr))?;
                             let _popped = self.stack.ensure_pop();
@@ -6262,9 +6455,12 @@ impl BexVm {
                             .checked_sub(arg_count + 1)
                             .map(StackIndex::from_raw);
                         let mut pending_unsuppress: Option<(HeapPtr, usize)> = None;
-                        if let Some((replacement_ptr, mock_idx)) =
+                        let mock_hit = if bypass_mock {
+                            None
+                        } else {
                             self.lookup_mock_override_for_callee(callee_ptr, args_base)?
-                        {
+                        };
+                        if let Some((replacement_ptr, mock_idx)) = mock_hit {
                             let (rep_ptr, rep_arity) =
                                 self.resolve_callable_target(Value::Object(replacement_ptr))?;
                             callee_ptr = rep_ptr;

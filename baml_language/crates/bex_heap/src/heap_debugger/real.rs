@@ -352,6 +352,9 @@ impl BexHeap {
                 self.debug_assert_valid_index(bm.function);
                 self.debug_assert_valid_value(&bm.receiver);
             }
+            Object::UnmockedRef(uref) => {
+                self.debug_assert_valid_index(uref.inner);
+            }
             Object::Cell(cell) => {
                 self.debug_assert_valid_value(&cell.value);
             }

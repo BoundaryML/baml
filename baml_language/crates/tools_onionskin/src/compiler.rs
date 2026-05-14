@@ -3950,6 +3950,16 @@ impl CompilerRunner {
                     // yield has no other task to run — just resume execution.
                     continue;
                 }
+                Ok(VmExecState::DispatchSysOpInline(_)) => {
+                    // The onionskin standalone VM runner doesn't have an
+                    // engine to schedule + await sys-ops inline, so this
+                    // path simply surfaces as unsupported. (Only mock-of-
+                    // sys-op users hit this state.)
+                    self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(
+                        "DispatchSysOpInline is not supported in the onionskin runner".to_string(),
+                    ));
+                    break;
+                }
                 Err(e) => {
                     self.vm_runner_state.execution_result =
                         Some(VmExecutionResult::Error(format!("{:?}", e)));
@@ -5057,6 +5067,7 @@ fn format_vm_value(value: &bex_vm_types::Value, vm: &bex_vm::BexVm) -> String {
                 Object::Type(ty) => format!("<type: {ty}>"),
                 Object::Closure(c) => format!("<closure captures={}>", c.captures.len()),
                 Object::BoundMethod(_) => "<bound_method>".to_string(),
+                Object::UnmockedRef(_) => "<unmocked_ref>".to_string(),
                 Object::Cell(c) => format!("<cell {}>", format_vm_value(&c.value, vm)),
                 Object::Uint8Array(bytes) => format!("<uint8array len={}>", bytes.len()),
                 Object::RustData(_) => "<rust_data>".to_string(),
