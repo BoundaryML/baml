@@ -63,4 +63,11 @@ class HostUnavailable {
   message string
 }
 
-type Panic = DivisionByZero | IndexOutOfBounds | MapKeyNotFound | StackOverflow | AssertionFailed | Unreachable | Cancelled | UserPanic | Exit | AllocFailure | HostUnavailable
+/// The right operand of a bigint shift (`<<` / `>>`) was negative.
+/// The type system can't rule this out because the shift count is a
+/// runtime `bigint` value.
+class NegativeBitShift {
+  message string
+}
+
+type Panic = DivisionByZero | IndexOutOfBounds | MapKeyNotFound | StackOverflow | AssertionFailed | Unreachable | Cancelled | UserPanic | Exit | AllocFailure | HostUnavailable | NegativeBitShift

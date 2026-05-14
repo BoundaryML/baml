@@ -300,15 +300,19 @@ pub enum Instruction {
     BitXorBigint,
     /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]`
     ///
-    /// The right operand is the shift count. If it does not fit in a `usize`
-    /// the VM raises a `VmBamlError::InvalidArgument` (until Phase 12 wires up a
-    /// dedicated `AllocFailure` panic).
+    /// The right operand is the shift count. The VM raises
+    /// `VmPanic::NegativeBitShift` (`baml.panics.NegativeBitShift`) for a
+    /// negative count, and `VmPanic::AllocFailure` (`baml.panics.AllocFailure`)
+    /// when the count does not fit in a `usize` or the resulting value would
+    /// exceed `MAX_BIGINT_BITS`.
     ShlBigint,
     /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]`
     ///
-    /// The right operand is the shift count. If it does not fit in a `usize`
-    /// the VM raises a `VmBamlError::InvalidArgument` (until Phase 12 wires up a
-    /// dedicated `AllocFailure` panic).
+    /// The right operand is the shift count. The VM raises
+    /// `VmPanic::NegativeBitShift` (`baml.panics.NegativeBitShift`) for a
+    /// negative count. Non-negative counts that do not fit in a `usize`
+    /// saturate to `0n` (or `-1n` for negative left operands, matching
+    /// arithmetic right shift).
     ShrBigint,
 
     /// `[left: Int, right: Int] → [Bool]`

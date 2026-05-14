@@ -288,7 +288,11 @@ mod tests {
             panic!("expected InvalidBigint, got: {err:?}");
         };
         assert_eq!(len, blob_len);
-        let message = format!("Invalid bigint hex string ({blob_len} bytes)");
+        let message = err.to_string();
+        assert_eq!(
+            message,
+            format!("Invalid bigint hex string ({blob_len} bytes)")
+        );
         // Sanity: the error message does not embed the megabyte-scale input.
         assert!(message.len() < 200);
     }

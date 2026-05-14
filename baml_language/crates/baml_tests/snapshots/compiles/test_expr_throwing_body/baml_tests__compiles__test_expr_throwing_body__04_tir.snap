@@ -7,7 +7,7 @@ function user.risky() -> void throws string {
     throw "boom" : "boom"
   }
 }
-function user.$init_test_33(registry: testing.TestCollector) -> ? throws never {
+function user.$init_test_34(registry: testing.TestCollector) -> ? throws never {
   { : null
     registry.register_test("throwing body bec...", () -> void { ... }, null) : void
       () -> void { ... } : () -> void throws unknown
@@ -17,5 +17,5 @@ function user.$init_test_33(registry: testing.TestCollector) -> ? throws never {
     null : null
   }
 }
-lambda user.$init_test_33 {
+lambda user.$init_test_34 {
 }

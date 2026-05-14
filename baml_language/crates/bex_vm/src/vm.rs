@@ -1554,6 +1554,10 @@ impl BexVm {
                 let message = self.alloc_string(message);
                 (PanicClass::HostUnavailable, vec![resource, message])
             }
+            VmPanic::NegativeBitShift { message } => {
+                let msg = self.alloc_string(message);
+                (PanicClass::NegativeBitShift, vec![msg])
+            }
         };
         self.alloc_panic_value(class, fields)
     }
@@ -3484,36 +3488,28 @@ impl BexVm {
                 let Value::Object(li) = self.stack.ensure_pop() else {
                     unsafe { std::hint::unreachable_unchecked() }
                 };
-                // Reject negative shifts and shifts too big for `usize` with
-                // distinct messages so the failure is debuggable. Defer the
-                // `to_string` formatting to the error path so the happy path
-                // never allocates a diagnostic.
-                let shift_check = {
+                // Two failure modes with distinct categories:
+                // - Negative count: `baml.panics.NegativeBitShift` (caller bug).
+                // - Count exceeds `usize`: `baml.panics.AllocFailure`
+                //   (the would-be result is unrepresentable in memory).
+                let shift_or_panic: Result<usize, VmPanic> = {
                     let Object::Bigint(rb) = self.get_object(ri) else {
                         unsafe { std::hint::unreachable_unchecked() }
                     };
                     if rb.sign() == num_bigint::Sign::Minus {
-                        Err(true)
+                        Err(VmPanic::NegativeBitShift {
+                            message: format!("bigint shl: negative shift count ({rb})"),
+                        })
                     } else {
-                        usize::try_from(rb.as_ref()).map_err(|_| false)
+                        usize::try_from(rb.as_ref()).map_err(|_| VmPanic::AllocFailure {
+                            message: format!(
+                                "bigint shl: shift count ({rb}) does not fit in usize"
+                            ),
+                        })
                     }
                 };
-                let shift = match shift_check {
-                    Ok(s) => s,
-                    Err(is_negative) => {
-                        let Object::Bigint(rb) = self.get_object(ri) else {
-                            unsafe { std::hint::unreachable_unchecked() }
-                        };
-                        let message = if is_negative {
-                            format!("bigint shl: negative shift count ({rb})")
-                        } else {
-                            format!("bigint shl: shift count ({rb}) does not fit in usize")
-                        };
-                        return Err(VmError::Thrown(
-                            self.panic_to_exception_value(VmPanic::AllocFailure { message }),
-                        ));
-                    }
-                };
+                let shift = shift_or_panic
+                    .map_err(|p| VmError::Thrown(self.panic_to_exception_value(p)))?;
                 let val_bits = {
                     let Object::Bigint(lb) = self.get_object(li) else {
                         unsafe { std::hint::unreachable_unchecked() }
@@ -3550,15 +3546,26 @@ impl BexVm {
                 let Value::Object(li) = self.stack.ensure_pop() else {
                     unsafe { std::hint::unreachable_unchecked() }
                 };
-                let Object::Bigint(rb) = self.get_object(ri) else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                // Reject negative shift counts as `baml.panics.NegativeBitShift`
+                // (mirrors `ShlBigint`). Non-negative counts that don't fit in
+                // a `usize` saturate to `0n`/`-1n` below.
+                let shift_opt = {
+                    let Object::Bigint(rb) = self.get_object(ri) else {
+                        unsafe { std::hint::unreachable_unchecked() }
+                    };
+                    if rb.sign() == num_bigint::Sign::Minus {
+                        let message = format!("bigint shr: negative shift count ({rb})");
+                        return Err(VmError::Thrown(
+                            self.panic_to_exception_value(VmPanic::NegativeBitShift { message }),
+                        ));
+                    }
+                    usize::try_from(rb.as_ref()).ok()
                 };
-                // Right shift never grows the value, so a shift count too
-                // large for `usize` is treated as "shift past every bit".
-                // `num-bigint`'s `Shr` is an arithmetic right shift (rounds
-                // toward -∞), so positives saturate to 0 and negatives
-                // saturate to -1 — matching `i*::shr`.
-                let shift_opt = usize::try_from(rb.as_ref()).ok();
+                // Right shift never grows the value, so a non-negative shift
+                // count too large for `usize` is treated as "shift past every
+                // bit". `num-bigint`'s `Shr` is an arithmetic right shift
+                // (rounds toward -∞), so positives saturate to 0 and
+                // negatives saturate to -1 — matching `i*::shr`.
                 let result = {
                     let Object::Bigint(lb) = self.get_object(li) else {
                         unsafe { std::hint::unreachable_unchecked() }
@@ -7692,36 +7699,26 @@ impl BexVm {
                     let Value::Object(li) = self.stack.ensure_pop() else {
                         std::hint::unreachable_unchecked()
                     };
-                    // Reject negative shifts and shifts too big for `usize` with
-                    // distinct messages so the failure is debuggable. Defer the
-                    // `to_string` formatting to the error path so the happy path
-                    // never allocates a diagnostic.
-                    let shift_check = {
+                    // Negative count → NegativeBitShift; usize-overflow →
+                    // AllocFailure (see `Instruction::ShlBigint`).
+                    let shift_or_panic: Result<usize, VmPanic> = {
                         let Object::Bigint(rb) = self.get_object(ri) else {
                             std::hint::unreachable_unchecked()
                         };
                         if rb.sign() == num_bigint::Sign::Minus {
-                            Err(true)
+                            Err(VmPanic::NegativeBitShift {
+                                message: format!("bigint shl: negative shift count ({rb})"),
+                            })
                         } else {
-                            usize::try_from(rb.as_ref()).map_err(|_| false)
+                            usize::try_from(rb.as_ref()).map_err(|_| VmPanic::AllocFailure {
+                                message: format!(
+                                    "bigint shl: shift count ({rb}) does not fit in usize"
+                                ),
+                            })
                         }
                     };
-                    let shift = match shift_check {
-                        Ok(s) => s,
-                        Err(is_negative) => {
-                            let Object::Bigint(rb) = self.get_object(ri) else {
-                                std::hint::unreachable_unchecked()
-                            };
-                            let message = if is_negative {
-                                format!("bigint shl: negative shift count ({rb})")
-                            } else {
-                                format!("bigint shl: shift count ({rb}) does not fit in usize")
-                            };
-                            return Err(VmError::Thrown(
-                                self.panic_to_exception_value(VmPanic::AllocFailure { message }),
-                            ));
-                        }
-                    };
+                    let shift = shift_or_panic
+                        .map_err(|p| VmError::Thrown(self.panic_to_exception_value(p)))?;
                     let val_bits = {
                         let Object::Bigint(lb) = self.get_object(li) else {
                             std::hint::unreachable_unchecked()
@@ -7758,14 +7755,22 @@ impl BexVm {
                     let Value::Object(li) = self.stack.ensure_pop() else {
                         std::hint::unreachable_unchecked()
                     };
-                    let Object::Bigint(rb) = self.get_object(ri) else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    // Right shift never grows the value, so a shift count too
-                    // large for `usize` is treated as "shift past every bit".
-                    // `num-bigint`'s `Shr` is an arithmetic right shift, so
-                    // positives saturate to 0 and negatives saturate to -1.
-                    let shift_opt = usize::try_from(rb.as_ref()).ok();
+                    // Reject negative shift counts as `baml.panics.NegativeBitShift`;
+                    // non-negative counts that overflow `usize` saturate
+                    // (see `Instruction::ShrBigint`).
+                    let shift_opt =
+                        {
+                            let Object::Bigint(rb) = self.get_object(ri) else {
+                                std::hint::unreachable_unchecked()
+                            };
+                            if rb.sign() == num_bigint::Sign::Minus {
+                                let message = format!("bigint shr: negative shift count ({rb})");
+                                return Err(VmError::Thrown(self.panic_to_exception_value(
+                                    VmPanic::NegativeBitShift { message },
+                                )));
+                            }
+                            usize::try_from(rb.as_ref()).ok()
+                        };
                     let result = {
                         let Object::Bigint(lb) = self.get_object(li) else {
                             std::hint::unreachable_unchecked()

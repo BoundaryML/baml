@@ -145,11 +145,11 @@ impl OutputFormatContent {
 
         let prefix = self.get_prefix(options, &hoisted_classes);
 
-        // For simple primitives (int, float, bool) with Auto prefix, the prefix IS the full message
+        // For simple primitives (int, bigint, float, bool) with Auto prefix, the prefix IS the full message
         // But with explicit prefix, we need to append the type
         if matches!(
             self.target,
-            Ty::Int { .. } | Ty::Float { .. } | Ty::Bool { .. }
+            Ty::Int { .. } | Ty::Bigint { .. } | Ty::Float { .. } | Ty::Bool { .. }
         ) && matches!(options.prefix, RenderSetting::Auto)
         {
             return Ok(prefix);
@@ -358,6 +358,7 @@ impl OutputFormatContent {
                 match &self.target {
                     Ty::String { .. } => None,
                     Ty::Int { .. } => Some("Answer as an int".to_string()),
+                    Ty::Bigint { .. } => Some("Answer as a bigint".to_string()),
                     Ty::Float { .. } => Some("Answer as a float".to_string()),
                     Ty::Bool { .. } => Some("Answer as a bool".to_string()),
                     Ty::List(..) => {
@@ -920,6 +921,15 @@ mod tests {
         });
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(rendered, Some("Answer as an int".to_string()));
+    }
+
+    #[test]
+    fn test_render_bigint() {
+        let content = OutputFormatContent::new(Ty::Bigint {
+            attr: TyAttr::default(),
+        });
+        let rendered = content.render(&RenderOptions::default()).unwrap();
+        assert_eq!(rendered, Some("Answer as a bigint".to_string()));
     }
 
     #[test]

@@ -594,11 +594,13 @@ fn value_matches_type(value: &BexExternalValue, ty: &Ty) -> bool {
         (_, Ty::BuiltinUnknown { .. }) => true,
         (BexExternalValue::Null, Ty::Null { .. }) => true,
         (BexExternalValue::Int(_), Ty::Int { .. }) => true,
+        (BexExternalValue::Bigint(_), Ty::Bigint { .. }) => true,
         (BexExternalValue::Float(_), Ty::Float { .. }) => true,
         (BexExternalValue::Bool(_), Ty::Bool { .. }) => true,
         (BexExternalValue::String(_), Ty::String { .. }) => true,
         // Literal types match their corresponding runtime values
         (BexExternalValue::Int(_), Ty::Literal(Literal::Int(_), _)) => true,
+        (BexExternalValue::Bigint(_), Ty::Literal(Literal::Bigint(_), _)) => true,
         (BexExternalValue::Float(_), Ty::Literal(Literal::Float(_), _)) => true,
         (BexExternalValue::Uint8Array(_), Ty::Uint8Array { .. }) => true,
         (BexExternalValue::String(_), Ty::Literal(Literal::String(_), _)) => true,
@@ -721,9 +723,11 @@ fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'
                 Object::Uint8Array(_) => {
                     members.iter().find(|m| matches!(m, Ty::Uint8Array { .. }))
                 }
+                Object::Bigint(_) => members
+                    .iter()
+                    .find(|m| matches!(m, Ty::Bigint { .. } | Ty::Literal(Literal::Bigint(_), _))),
                 // Types that don't participate in union discrimination.
-                Object::Bigint(_)
-                | Object::Function(_)
+                Object::Function(_)
                 | Object::Closure(_)
                 | Object::BoundMethod(_)
                 | Object::Cell(_)

@@ -6127,6 +6127,33 @@ fn baml.panics.DivisionByZero.from_json(j: baml.json.json) -> baml.panics.Divisi
     }
 }
 
+fn baml.panics.NegativeBitShift.from_json(j: baml.json.json) -> baml.panics.NegativeBitShift {
+    // Locals:
+    let _0: baml.panics.NegativeBitShift // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: baml.json.json
+    let _4: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "message") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(string);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _0 = baml.panics.NegativeBitShift { copy _2 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
 fn baml.panics.StackOverflow.from_json(j: baml.json.json) -> baml.panics.StackOverflow {
     // Locals:
     let _0: baml.panics.StackOverflow // _0 // return
@@ -6461,6 +6488,30 @@ fn baml.panics.DivisionByZero.to_json(self: baml.panics.DivisionByZero) -> baml.
 
     bb1: {
         _0 = { const "dividend": copy _2 };
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.panics.NegativeBitShift.to_json(self: baml.panics.NegativeBitShift) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.panics.NegativeBitShift // self // param
+    let _2: baml.json.json
+    let _3: string
+    let _4: baml.panics.NegativeBitShift
+
+    bb0: {
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _0 = { const "message": copy _2 };
         goto -> bb2;
     }
 

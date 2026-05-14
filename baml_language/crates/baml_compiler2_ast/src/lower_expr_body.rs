@@ -901,6 +901,12 @@ impl LoweringContext {
                     if scrutinee.is_none() {
                         let span = token.text_range();
                         match token.kind() {
+                            SyntaxKind::BIGINT_LITERAL => {
+                                let value = crate::parse_bigint_literal_token(token.text());
+                                scrutinee = Some(
+                                    self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span),
+                                );
+                            }
                             SyntaxKind::INTEGER_LITERAL => {
                                 let value = token.text().parse::<i64>().unwrap_or(0);
                                 scrutinee =

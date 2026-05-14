@@ -375,13 +375,18 @@ impl<'a> Parser<'a> {
         self.at(TokenKind::Word)
             || self.at(TokenKind::Quote) // string literal type
             || self.at(TokenKind::Hash) // raw string literal type
+            || self.at(TokenKind::BigintLiteral)
             || self.at(TokenKind::IntegerLiteral)
             || self.at(TokenKind::FloatLiteral)
             || self.at(TokenKind::LParen) // tuple/parenthesized type
             || (self.at(TokenKind::Minus)
                 && matches!(
                     self.peek(1).map(|t| t.kind),
-                    Some(TokenKind::IntegerLiteral | TokenKind::FloatLiteral)
+                    Some(
+                        TokenKind::BigintLiteral
+                            | TokenKind::IntegerLiteral
+                            | TokenKind::FloatLiteral
+                    )
                 ))
     }
 
@@ -2280,6 +2285,7 @@ impl<'a> Parser<'a> {
                 // These can't be variant names, so they must be type annotations
                 p.at(TokenKind::Quote)
                     || p.at(TokenKind::Hash)
+                    || p.at(TokenKind::BigintLiteral)
                     || p.at(TokenKind::IntegerLiteral)
                     || p.at(TokenKind::FloatLiteral)
                     || p.at(TokenKind::LParen)
@@ -3369,6 +3375,7 @@ impl<'a> Parser<'a> {
             self.current().map(|t| t.kind),
             Some(
                 TokenKind::Word
+                    | TokenKind::BigintLiteral
                     | TokenKind::IntegerLiteral
                     | TokenKind::FloatLiteral
                     | TokenKind::Quote
@@ -3460,6 +3467,7 @@ impl<'a> Parser<'a> {
                 | TokenKind::RBracket
                 | TokenKind::Question
                 | TokenKind::Pipe
+                | TokenKind::BigintLiteral
                 | TokenKind::IntegerLiteral
                 | TokenKind::FloatLiteral
                 | TokenKind::Minus
@@ -4606,7 +4614,8 @@ impl<'a> Parser<'a> {
                 // - `LBracket` / `RBracket` for array suffix `T[]`
                 // - `Question` for optional `T?`
                 // - `Pipe` for unions `A | B`
-                // - `IntegerLiteral` / `FloatLiteral` for literal-union members
+                // - `BigintLiteral` / `IntegerLiteral` / `FloatLiteral` for
+                //   literal-union members
                 // - `Minus` to allow negative numeric literal types (`-1`)
                 //   that `parse_type_primary` accepts as type atoms
                 // - `Quote` / `Hash` for string-literal types (`"a"`,
@@ -4620,6 +4629,7 @@ impl<'a> Parser<'a> {
                 | TokenKind::RBracket
                 | TokenKind::Question
                 | TokenKind::Pipe
+                | TokenKind::BigintLiteral
                 | TokenKind::IntegerLiteral
                 | TokenKind::FloatLiteral
                 | TokenKind::Minus
@@ -5403,12 +5413,18 @@ impl<'a> Parser<'a> {
         }
 
         // Number literals
-        if self.at(TokenKind::IntegerLiteral) || self.at(TokenKind::FloatLiteral) {
+        if self.at(TokenKind::BigintLiteral)
+            || self.at(TokenKind::IntegerLiteral)
+            || self.at(TokenKind::FloatLiteral)
+        {
             return true;
         }
         if self.at(TokenKind::Minus)
             && self.peek(1).is_some_and(|t| {
-                matches!(t.kind, TokenKind::IntegerLiteral | TokenKind::FloatLiteral)
+                matches!(
+                    t.kind,
+                    TokenKind::BigintLiteral | TokenKind::IntegerLiteral | TokenKind::FloatLiteral
+                )
             })
         {
             return true;

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/compiler2_tir/phase5.rs
-assertion_line: 389
 expression: output
 ---
 namespace baml:
@@ -134,6 +133,7 @@ namespace baml.panics:
   class HostUnavailable { methods: [to_json, from_json] }
   class IndexOutOfBounds { methods: [to_json, from_json] }
   class MapKeyNotFound { methods: [to_json, from_json] }
+  class NegativeBitShift { methods: [to_json, from_json] }
   type Panic
   class StackOverflow { methods: [to_json, from_json] }
   class Unreachable { methods: [to_json, from_json] }

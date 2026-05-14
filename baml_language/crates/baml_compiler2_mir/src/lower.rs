@@ -3491,13 +3491,18 @@ impl LoweringContext<'_> {
         // We build a map from `param_index → bool` (is_bigint) using an immutable
         // borrow.  `FunctionLoc` is `Copy` (it's a Salsa interned id) so we can
         // safely store the value without retaining the borrow.
+        //
+        // NOTE: this re-lowers raw signature param types and so misses generic
+        // instantiation — `f<bigint>(1)` and methods on `Box<bigint>` pass an
+        // `int` through unchanged. Tracked as a follow-up; a complete fix
+        // needs the call's type-arg substitution applied to `sig.params`.
         let param_bigint_flags: Vec<(usize, bool)> = {
             let callee_func_loc = self.callee_func_loc_for_call(expr_id);
             if let Some(fl) = callee_func_loc {
                 let sig = baml_compiler2_ppir::function_signature(self.db, fl);
                 // Resolve each param's type-expr in the callee's namespace so
                 // aliases like `type Big = bigint` are walked through —
-                // matches['p.ty, AstTypeExpr::Bigint { .. }] alone would miss
+                // matching `p.ty, AstTypeExpr::Bigint { .. }` alone would miss
                 // them and skip the int→bigint widening at the call site.
                 let callee_file = fl.file(self.db);
                 let callee_pkg_info = file_package(self.db, callee_file);
@@ -4479,18 +4484,42 @@ impl LoweringContext<'_> {
             AstExpr::Literal(baml_base::Literal::Int(_)) => true,
             AstExpr::Path(segments) if segments.len() == 1 => {
                 if let Some(&local) = self.locals.get(&segments[0]) {
-                    matches!(
+                    return matches!(
                         self.builder.local_ty(local),
                         Ty::Int { .. } | Ty::Literal(baml_type::Literal::Int(_), _)
-                    )
-                } else {
-                    // TODO: captured int locals in lambdas aren't visible here
-                    // (binding_locals is fresh inside the lambda's context)
-                    // and `expr_ty` reports the TIR-coerced type. Returning
-                    // false means `x += captured_int` inside a closure won't
-                    // widen — tracked as a follow-up.
-                    false
+                    );
                 }
+                // Captured-from-outer-scope: `self.locals` is reset at the
+                // lambda boundary, and `expr_ty` reports the TIR-coerced
+                // type. Look the binding's *declared* type up via the
+                // pattern's TIR entry, keyed by the scope where it was
+                // declared (which may be an enclosing function or block).
+                let Some(binding_id) = self.binding_id_for_name_at(expr_id, &segments[0]) else {
+                    return false;
+                };
+                let Some(local_idx) = binding_id.local_index() else {
+                    // Parameter capture (rare); declared type isn't in
+                    // pat_types and we don't currently thread the enclosing
+                    // signature here.
+                    return false;
+                };
+                let index = file_semantic_index(self.db, self.file);
+                let Some(scope_bindings) =
+                    index.scope_bindings.get(binding_id.scope.index() as usize)
+                else {
+                    return false;
+                };
+                let Some(binding) = scope_bindings.bindings.get(local_idx) else {
+                    return false;
+                };
+                let key = (MetadataScope::Body(binding_id.scope), binding.pattern);
+                let Some(tir_ty) = self.pat_types.get(&key) else {
+                    return false;
+                };
+                matches!(
+                    self.resolved_aliases.convert(tir_ty),
+                    Ty::Int { .. } | Ty::Literal(baml_type::Literal::Int(_), _)
+                )
             }
             _ => matches!(
                 self.expr_ty(expr_id),
@@ -4604,9 +4633,11 @@ impl LoweringContext<'_> {
         call_expr_id: AstExprId,
     ) -> Option<baml_compiler2_hir::loc::FunctionLoc<'_>> {
         use baml_compiler2_tir::inference::MemberResolution;
-        // Get the callee expr from the call body.
+        // `OptionalCall` routes through the same arg-widening path as `Call`
+        // (via `lower_optional_call` → `lower_call`), so it needs the same
+        // callee resolution.
         let callee = match &self.body.exprs[call_expr_id] {
-            AstExpr::Call { callee, .. } => *callee,
+            AstExpr::Call { callee, .. } | AstExpr::OptionalCall { callee, .. } => *callee,
             _ => return None,
         };
 

@@ -480,6 +480,7 @@ impl Ty {
         matches!(
             self,
             Ty::Int { .. }
+                | Ty::Bigint { .. }
                 | Ty::Float { .. }
                 | Ty::String { .. }
                 | Ty::Bool { .. }

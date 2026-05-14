@@ -160,6 +160,29 @@ async fn test_int_to_bigint_assign_op_mul() {
     );
 }
 
+#[tokio::test]
+async fn test_int_to_bigint_captured_in_lambda() {
+    // `local_bigint += captured_int` inside a closure: the lambda boundary
+    // resets `self.locals`, so widening must consult the captured binding's
+    // declared type via TIR rather than the lambda-local table. Uses a
+    // lambda-local bigint LHS to sidestep the pre-existing capture-writeback
+    // canary bug (see note above on `b.v += <int>`).
+    let output = baml_test!(
+        r#"
+        function main() -> bigint {
+            let small = 5;
+            let f = () -> bigint {
+                let local_big: bigint = 0n;
+                local_big += small;
+                local_big
+            };
+            f()
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(5))));
+}
+
 // Note: `b.v += <int>` on a class field (`obj.field += 1`) tickles a
 // pre-existing canary bug where writing a bigint back into a bigint field
 // after a binop fails with "expected Object(String), got Object(Bigint)".
@@ -1096,6 +1119,20 @@ fn assert_alloc_failure(result: &Result<BexExternalValue, bex_engine::EngineErro
     );
 }
 
+/// Asserts that the engine result is an unhandled throw of `baml.panics.NegativeBitShift`.
+fn assert_negative_bit_shift(result: &Result<BexExternalValue, bex_engine::EngineError>) {
+    let Err(bex_engine::EngineError::UnhandledThrow { value, .. }) = result else {
+        panic!("expected UnhandledThrow with NegativeBitShift, got: {result:?}");
+    };
+    let BexExternalValue::Instance { class_name, .. } = value.as_ref() else {
+        panic!("expected Instance, got: {value:?}");
+    };
+    assert_eq!(
+        class_name, "baml.panics.NegativeBitShift",
+        "expected NegativeBitShift panic, got: {class_name}"
+    );
+}
+
 #[tokio::test]
 async fn test_bigint_pow_alloc_failure() {
     // (2n).pow(1_000_000_000n) would allocate ~125 MB; we raise AllocFailure
@@ -1121,14 +1158,27 @@ async fn test_bigint_shl_alloc_failure() {
 
 #[tokio::test]
 async fn test_bigint_shl_negative_shift() {
-    // A negative shift count should raise AllocFailure with a clear message,
-    // not the generic "does not fit in usize" path.
+    // A negative shift count is a caller bug, not an allocation failure,
+    // so it raises `baml.panics.NegativeBitShift` rather than AllocFailure.
     let output = baml_test!(
         r#"
         function main() -> bigint { return 1n << -1n; }
     "#
     );
-    assert_alloc_failure(&output.result);
+    assert_negative_bit_shift(&output.result);
+}
+
+#[tokio::test]
+async fn test_bigint_shr_negative_shift() {
+    // Negative right-shift count is rejected as NegativeBitShift
+    // (mirrors `<<`), not silently saturated to `0n`/`-1n` by the
+    // usize-overflow path.
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { return 1n >> -1n; }
+    "#
+    );
+    assert_negative_bit_shift(&output.result);
 }
 
 #[tokio::test]
