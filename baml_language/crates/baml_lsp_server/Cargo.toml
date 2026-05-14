@@ -5,7 +5,8 @@ edition.workspace = true
 description = "Native LSP server for BAML using bex_project"
 
 [features]
-default = [ "aws-crypto" ]
+default = [ "aws-crypto", "bundle-http" ]
+bundle-http = [ "sys_native/bundle-http" ]
 aws-crypto = [
   "dep:rustls",
   "reqwest/rustls",
@@ -35,7 +36,7 @@ bex_events_native = { workspace = true }
 bex_heap = { workspace = true }
 bex_project = { workspace = true }
 bridge_ctypes = { workspace = true }
-sys_native = { workspace = true, features = [ "bundle-http" ] }
+sys_native = { workspace = true }
 sys_ops = { workspace = true }
 sys_types = { workspace = true }
 anyhow = { workspace = true }

@@ -1,5 +1,5 @@
 // High-level API
-export { encodeCallArgs, serializeValue } from './encode';
+export { encodeCallArgs, decodeCallArgs, serializeValue } from './encode';
 export { decodeCallResult, deserializeValue, handleTypeName } from './decode';
 export type { WrapHandleFn } from './decode';
 export type { BamlJsValue, BamlJsClass, BamlJsMap, BamlJsHandle, BamlJsMedia, BamlJsPromptAst, BamlJsPromptAstSimple, BamlJsPromptAstMessage, BamlSerializable, PlainHandleDescriptor } from './types';

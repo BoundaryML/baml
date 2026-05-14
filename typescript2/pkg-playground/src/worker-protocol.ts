@@ -212,6 +212,7 @@ export type WorkerOutMessage =
   | { type: 'ready' }
   | { type: 'playgroundNotification'; notification: PlaygroundNotification }
   | { type: 'diagnostics'; entries: DiagnosticEntry[] }
+  | { type: 'callFunction'; id: number; project: string; name: string; argsJson: string }
   | { type: 'callFunctionResult'; id: number; result: BamlJsValue<PlainHandleDescriptor> }
   | { type: 'callFunctionError'; id: number; error: string; cancelled?: boolean }
   | { type: 'fetchLogNew'; entry: FetchLogEntry }

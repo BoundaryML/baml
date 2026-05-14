@@ -696,11 +696,60 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           break;
         }
 
+        case 'callFunction': {
+          // The LSP echoes a callFunction notification immediately before
+          // bex.call_function. For runs initiated by the local click path,
+          // a RunEntry already exists for this id (created by onRunFunction)
+          // and this handler is a no-op. For runs initiated by any other
+          // path that lands at bex.call_function, this creates the RunEntry
+          // so subsequent callId-keyed messages have a target to land on.
+          //
+          // The check + insert MUST live inside the functional setRuns
+          // updater: the LSP can round-trip the echo back faster than React
+          // commits the click path's setRuns, so reading state outside the
+          // updater would race and create duplicates.
+          const startTime = performance.now();
+          setRuns((prev) =>
+            prev.some((r) => r.id === data.id)
+              ? prev
+              : [
+                  ...prev,
+                  {
+                    id: data.id,
+                    functionName: data.name,
+                    argsJson: data.argsJson,
+                    fetchLogs: [],
+                    runtimeEvents: [],
+                    result: null,
+                    error: null,
+                    status: 'running',
+                    startTime,
+                    durationMs: null,
+                  },
+                ],
+          );
+          break;
+        }
+
         case 'callFunctionResult': {
           const pending = pendingCallsRef.current.get(data.id);
           if (pending) {
             pendingCallsRef.current.delete(data.id);
             pending.resolve(data.result);
+          } else {
+            // Echo-initiated run: no awaiter, so patch the RunEntry directly.
+            setRuns((prev) =>
+              prev.map((r) =>
+                r.id === data.id
+                  ? {
+                      ...r,
+                      result: data.result,
+                      status: 'success',
+                      durationMs: Math.round(performance.now() - r.startTime),
+                    }
+                  : r,
+              ),
+            );
           }
           break;
         }
@@ -712,6 +761,21 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
             const err = new Error(data.error);
             (err as any).cancelled = data.cancelled ?? false;
             pending.reject(err);
+          } else {
+            // Echo-initiated run: no awaiter, so patch the RunEntry directly.
+            const cancelled = data.cancelled ?? false;
+            setRuns((prev) =>
+              prev.map((r) =>
+                r.id === data.id
+                  ? {
+                      ...r,
+                      error: cancelled ? null : data.error,
+                      status: cancelled ? 'cancelled' : 'error',
+                      durationMs: Math.round(performance.now() - r.startTime),
+                    }
+                  : r,
+              ),
+            );
           }
           break;
         }

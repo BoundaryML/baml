@@ -280,7 +280,7 @@ async fn handle_ws_in_message(
 
             let broadcast_tx = state.broadcast_tx.clone();
             let call_id = sys_types::CallId(id);
-            let fs_path = bex_project::FsPath::from_str(project);
+            let fs_path = bex_project::FsPath::from_str(project.clone());
 
             let function_call_ctx = bex_project::FunctionCallContextBuilder::new(call_id);
 
@@ -300,8 +300,16 @@ async fn handle_ws_in_message(
                 }
             };
 
+            let echo_msg = WsOutMessage::CallFunction {
+                id,
+                project,
+                name: name.clone(),
+                args_proto,
+            };
+
             tokio::spawn(async move {
                 let handle_options = bridge_ctypes::CffiHandleTableOptions::for_wire();
+                let _ = broadcast_tx.send(echo_msg);
                 let out = match bex
                     .call_function(&name, kwargs.into(), function_call_ctx.build())
                     .await

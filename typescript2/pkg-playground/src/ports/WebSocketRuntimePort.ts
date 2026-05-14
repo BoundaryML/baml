@@ -13,7 +13,7 @@
 
 import type { RuntimePort } from '../runtime-port';
 import type { WorkerOutMessage, WorkerInMessage, PlaygroundNotification, LogLevel, LogDecoration } from '../worker-protocol';
-import { decodeCallResult, RuntimeEvent } from '@b/pkg-proto';
+import { decodeCallArgs, decodeCallResult, RuntimeEvent } from '@b/pkg-proto';
 import { truncateMessage, normalizeLogLevel } from '../shared/log-decorations';
 import { formatValue } from '../shared/format-value';
 import { deserializeRuntimeEvent } from '../shared/deserialize-event';
@@ -22,6 +22,7 @@ import { deserializeRuntimeEvent } from '../shared/deserialize-event';
 type WsOutMessage =
   | { type: 'ready' }
   | { type: 'playgroundNotification'; notification: PlaygroundNotification }
+  | { type: 'callFunction'; id: number; project: string; name: string; argsProto: string }
   | { type: 'callFunctionResult'; id: number; result: string }
   | { type: 'callFunctionError'; id: number; error: string; cancelled?: boolean }
   | { type: 'envVarRequest'; id: number; variable: string }
@@ -259,6 +260,16 @@ export class WebSocketRuntimePort implements RuntimePort {
         return { type: 'ready' };
       case 'playgroundNotification':
         return { type: 'playgroundNotification', notification: raw.notification };
+      case 'callFunction': {
+        let argsJson = '{}';
+        try {
+          const bytes = base64ToUint8Array(raw.argsProto);
+          argsJson = JSON.stringify(decodeCallArgs(bytes));
+        } catch (e) {
+          console.warn('WebSocketRuntimePort: failed to decode callFunction argsProto', e);
+        }
+        return { type: 'callFunction', id: raw.id, project: raw.project, name: raw.name, argsJson };
+      }
       case 'callFunctionResult': {
         try {
           const bytes = base64ToUint8Array(raw.result);
