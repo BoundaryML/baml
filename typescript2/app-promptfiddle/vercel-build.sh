@@ -53,7 +53,9 @@ echo "wasm-pack version: $(wasm-pack --version)"
 export OPENSSL_NO_VENDOR=1
 
 echo "Installing pnpm workspace..."
-pnpm install --frozen-lockfile
+# Vercel sets NODE_ENV=production, which makes pnpm skip devDependencies
+# (buf, typescript, etc.). Force-install them since we need them to build.
+pnpm install --frozen-lockfile --prod=false
 
 echo "Generating proto types..."
 pnpm --filter @b/pkg-proto run generate
