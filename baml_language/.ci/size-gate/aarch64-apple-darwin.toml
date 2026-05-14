@@ -1,13 +1,24 @@
 version = 1
-recorded_at = "2026-05-07T02:32:44Z"
-git_sha = "f5a2a0d29"
+recorded_at = "2026-05-14T02:46:49Z"
 
 [artifacts.bridge_cffi]
-file_bytes = 11778768
-stripped_bytes = 11778808
-gzip_bytes = 5086954
+file_bytes = 14685728
+stripped_bytes = 14685768
+gzip_bytes = 6202382
+
+[artifacts.bridge_cffi.sections]
+__DATA = 49152
+__DATA_CONST = 1015808
+__LINKEDIT = 229376
+__TEXT = 13418496
 
 [artifacts.bridge_cffi-stripped]
-file_bytes = 10765904
-stripped_bytes = 10765944
-gzip_bytes = 4670994
+file_bytes = 13223104
+stripped_bytes = 13223144
+gzip_bytes = 5417722
+
+[artifacts.bridge_cffi-stripped.sections]
+__DATA = 32768
+__DATA_CONST = 770048
+__LINKEDIT = 212992
+__TEXT = 12222464

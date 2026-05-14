@@ -110,24 +110,23 @@ fn build_router(
         .route("/api/ws", get(playground_ws_handler))
         .with_state(ws_state);
 
-    let fallback = if let Ok(dev_port) = std::env::var("BAML_PLAYGROUND_DEV_PORT") {
+    let app = if let Ok(dev_port) = std::env::var("BAML_PLAYGROUND_DEV_PORT") {
         let dev_port: u16 = dev_port
             .parse()
             .map_err(|e| anyhow::anyhow!("Invalid BAML_PLAYGROUND_DEV_PORT: {e}"))?;
         tracing::info!("Playground: dev proxy -> http://localhost:{dev_port}");
-        dev_proxy_router(format!("http://localhost:{dev_port}"))
+        api.fallback_service(dev_proxy_router(format!("http://localhost:{dev_port}")))
     } else if let Ok(dir) = std::env::var("BAML_PLAYGROUND_DIR") {
         tracing::info!("Playground: serving static files from {dir}");
-        static_router(dir)
+        api.fallback_service(static_router(dir))
     } else {
-        anyhow::bail!(
-            "Playground server requires either BAML_PLAYGROUND_DEV_PORT or BAML_PLAYGROUND_DIR"
-        )
+        tracing::info!(
+            "Playground: no BAML_PLAYGROUND_DIR or BAML_PLAYGROUND_DEV_PORT set; serving /api/ws only"
+        );
+        api
     };
 
-    Ok(api
-        .fallback_service(fallback)
-        .layer(middleware::from_fn(cors_middleware)))
+    Ok(app.layer(middleware::from_fn(cors_middleware)))
 }
 
 // ---------------------------------------------------------------------------

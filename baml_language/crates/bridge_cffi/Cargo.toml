@@ -14,27 +14,40 @@ crate-type = [ "cdylib", "lib" ]
 
 [features]
 default = [ "bundle-http", "aws-crypto" ]
-aws-crypto = [ "bex_project/aws-crypto", "bridge_ctypes/aws-crypto", "sys_native/aws-crypto" ]
-ring-crypto = [ "bex_project/ring-crypto", "bridge_ctypes/ring-crypto", "sys_native/ring-crypto" ]
-native-tls = [ "sys_native/native-tls" ]
-rustls = [ "sys_native/rustls" ]
-bundle-http = [ "sys_native/bundle-http" ]
+aws-crypto = [
+  "bex_project/aws-crypto",
+  "bridge_ctypes/aws-crypto",
+  "sys_native/aws-crypto",
+  "baml_lsp_server/aws-crypto",
+]
+ring-crypto = [
+  "bex_project/ring-crypto",
+  "bridge_ctypes/ring-crypto",
+  "sys_native/ring-crypto",
+  "baml_lsp_server/ring-crypto",
+]
+native-tls = [ "sys_native/native-tls", "baml_lsp_server/native-tls" ]
+rustls = [ "sys_native/rustls", "baml_lsp_server/rustls" ]
+bundle-http = [ "sys_native/bundle-http", "baml_lsp_server/bundle-http" ]
 
 [dependencies]
+baml_lsp_server = { workspace = true, default-features = false }
 bex_events = { workspace = true }
 bex_events_native = { workspace = true }
 bex_project = { workspace = true }
 bridge_ctypes = { workspace = true }
 sys_native = { workspace = true }
+sys_ops = { workspace = true }
 sys_types = { workspace = true }
 futures = { workspace = true }
 indexmap = { workspace = true }
 libc = { workspace = true }
+log = { workspace = true }
 once_cell = { workspace = true }
 prost = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
+tokio = { workspace = true, features = [ "rt", "rt-multi-thread", "net", "sync" ] }
 tokio-util = { workspace = true }
 vfs = { workspace = true }
 

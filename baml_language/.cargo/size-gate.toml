@@ -1,16 +1,23 @@
 baseline_dir = ".ci/size-gate"
 
+# bridge_cffi now embeds the baml_lsp_server playground HTTP/WS stack
+# (axum, tower-http, reqwest) so it can host the live playground from inside
+# bridge_python. That added ~1 MB gzipped on aarch64-apple-darwin (5.09 MB
+# -> 6.20 MB for default features; 4.67 MB -> 5.42 MB for --no-default-features).
+# Ceilings and delta cap are loosened to accommodate; Linux/Windows baselines
+# need re-recording in CI on first run.
+
 [artifacts.bridge_cffi-stripped]
 package = "bridge_cffi"
 # ignore default features (includes bundle-http → reqwest + hyper + rustls)
 no_default_features = true
-policy.max_gzip_bytes = 6_391_456
-policy.max_delta_pct = 10.0
+policy.max_gzip_bytes = 7_000_000
+policy.max_delta_pct = 25.0
 
 [artifacts.bridge_cffi]
 package = "bridge_cffi"
-policy.max_gzip_bytes = 6_500_000
-policy.max_delta_pct = 10.0
+policy.max_gzip_bytes = 8_000_000
+policy.max_delta_pct = 25.0
 
 [artifacts.bridge_wasm]
 package = "bridge_wasm"
