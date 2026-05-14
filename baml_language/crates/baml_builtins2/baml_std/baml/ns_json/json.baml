@@ -112,3 +112,26 @@ function from_json<T>(j: json) -> T throws JsonParseError | JsonDecodeError {
 function field(j: json, key: string) -> json {
   $rust_function
 }
+
+/// Serialize `v` to JSON text, honoring user-defined `to_json` overrides on
+/// classes (via [`to_json<T>`]). Equivalent to `stringify(to_json<T>(v))`.
+///
+/// Use this from a host that wants to print a target's return value as JSON
+/// while still respecting class-level `to_json` overrides. The structural
+/// path is [`to_string<T>`], which walks fields directly and bypasses
+/// overrides — appropriate when override behavior would be a problem.
+function serialize<T>(v: T) -> string throws JsonSerializationError | JsonParseError {
+  stringify(to_json<T>(v))
+}
+
+/// Parse JSON text into a value of type `T`, honoring user-defined
+/// `from_json` overrides on classes (via [`from_json<T>`]). Equivalent to
+/// `from_json<T>(parse(s))`.
+///
+/// Use this from a host that wants to coerce a JSON-shaped input (such as
+/// `--json-args`) into a typed BAML value while respecting class-level
+/// `from_json` overrides. The structural path is [`from_string<T>`], which
+/// decodes structurally and bypasses overrides.
+function deserialize<T>(s: string) -> T throws JsonParseError | JsonDecodeError {
+  from_json<T>(parse(s))
+}

@@ -592,7 +592,7 @@ pub fn generate_sys_op_enum(io_builtins: &[NativeBuiltin]) -> String {
         .collect();
 
     let tokens = quote! {
-        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, ::serde::Serialize, ::serde::Deserialize)]
         pub enum SysOp {
             #(#variant_idents,)*
         }

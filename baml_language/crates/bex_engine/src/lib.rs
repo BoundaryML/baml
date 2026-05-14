@@ -119,6 +119,11 @@ pub struct UserFunctionInfo {
     pub param_types: Vec<Ty>,
     pub param_has_default: Vec<bool>,
     pub return_type: Ty,
+    /// Filesystem path of the source file containing the function.
+    /// Empty string for builtins and synthesized functions.
+    /// Exposed for BEP-027 §"`baml.argv`": `argv[1]` under root-main `baml run`
+    /// is the path to the file containing `main`.
+    pub source_file: String,
 }
 
 /// Internal call argument after host binding has distinguished omission from
@@ -234,6 +239,13 @@ pub enum EngineError {
         trace: Vec<bex_vm::StackFrame>,
     },
 
+    /// Clean process-termination request from `baml.sys.exit(code)`.
+    /// The caller is expected to honor this as the process exit code.
+    /// BAML `int` is `i64`, so the signal carries the full value; the
+    /// caller clamps into its shell's range (typically 0..=255 on Unix).
+    #[error("baml.sys.exit({code})")]
+    Exit { code: i64 },
+
     #[error("Cannot convert object of type {type_name}")]
     CannotConvert { type_name: String },
 
@@ -266,6 +278,27 @@ fn format_vm_internal_error(
     );
     write!(out, "VM internal error: {err}").unwrap();
     out
+}
+
+/// Recognize an uncaught `baml.panics.Exit { code }` and pull its `code`
+/// field out. Returns `None` for any other value — the caller should fall
+/// back to the normal unhandled-throw path.
+///
+/// Exit lives in the regular panic class hierarchy so BAML code can catch
+/// it (like Python's `SystemExit`); at the engine boundary we recognize it
+/// by class tag rather than routing it through a separate `VmError`
+/// variant, so the VM's unwinder stays ignorant of which panic classes
+/// are "special" and the special-casing lives in exactly one place — here.
+fn extract_exit_code(value: &BexExternalValue) -> Option<i64> {
+    match value {
+        BexExternalValue::Instance {
+            class_name, fields, ..
+        } if class_name == bex_vm_types::PanicClass::Exit.fqn() => match fields.get("code")? {
+            BexExternalValue::Int(code) => Some(*code),
+            _ => None,
+        },
+        _ => None,
+    }
 }
 
 fn format_unhandled_throw(value: &BexExternalValue, trace: &[bex_vm::StackFrame]) -> String {
@@ -1030,6 +1063,7 @@ impl BexEngine {
             host_ctx,
             collectors,
             cancel,
+            type_args,
         }: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexExternalValue, EngineError> {
@@ -1045,6 +1079,7 @@ impl BexEngine {
                 host_ctx,
                 collectors,
                 cancel,
+                type_args,
             },
             copy_objects,
         )
@@ -1060,6 +1095,7 @@ impl BexEngine {
             host_ctx,
             collectors,
             cancel,
+            type_args,
         }: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexExternalValue, EngineError> {
@@ -1119,7 +1155,7 @@ impl BexEngine {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        vm.set_entry_point(function_index, &vm_args);
+        vm.set_entry_point_with_type_args(function_index, &vm_args, type_args);
 
         // Initialize span tracking for the root call.
         // If host context is provided, nest under the host's span tree.
@@ -1301,7 +1337,7 @@ impl BexEngine {
     }
 
     /// Get the return type for a function by dereferencing its heap object.
-    fn function_return_type(&self, name: &str) -> Option<Ty> {
+    pub fn function_return_type(&self, name: &str) -> Option<Ty> {
         let resolved = self.resolve_function_name(name)?;
         let (ptr, _kind) = self.resolved_function_names.get(resolved)?;
         // SAFETY: ptr is from resolved_function_names, a compile-time object
@@ -1378,6 +1414,23 @@ impl BexEngine {
         self.resolve_function_name(name).is_some()
     }
 
+    /// Replace the process argv exposed to BAML via `baml.sys.argv()`.
+    ///
+    /// Allowed only before the engine is wrapped in an `Arc` and shared,
+    /// because we mutate `self` directly. Used by `baml run` to derive
+    /// `argv[1]` from the compiled program (BEP-027 §"`baml.argv`": the
+    /// path of the file containing root `main`).
+    pub fn set_argv(&mut self, argv: Vec<String>) {
+        self.argv = Arc::from(argv);
+    }
+
+    /// View of the current process argv. Used by hosts that need to
+    /// patch `argv[1]` based on resolution context (e.g. swapping a
+    /// script-alias name for the resolved function it expanded to).
+    pub fn argv(&self) -> &[String] {
+        &self.argv
+    }
+
     /// List all user-callable functions with signature info.
     pub fn user_functions(&self) -> Vec<UserFunctionInfo> {
         self.resolved_function_names
@@ -1398,6 +1451,7 @@ impl BexEngine {
                             param_types: func.param_types.clone(),
                             param_has_default: func.param_has_default.clone(),
                             return_type: func.return_type.clone(),
+                            source_file: func.source_file.clone(),
                         })
                     }
                     _ => None,
@@ -1573,6 +1627,13 @@ impl BexEngine {
                     } else {
                         self.vm_value_to_owned(vm.proof(), &value)
                     };
+                    // `baml.panics.Exit { code }` escaping all handlers is
+                    // the clean-termination path — surface it as an Exit
+                    // rather than a generic unhandled throw so the host
+                    // maps it to a process exit code.
+                    if let Some(code) = extract_exit_code(&external) {
+                        return Err(EngineError::Exit { code });
+                    }
                     return Err(EngineError::UnhandledThrow {
                         value: Box::new(external),
                         trace,
@@ -1582,6 +1643,9 @@ impl BexEngine {
                     // Internal throw that escaped without unwinding — treat as
                     // unhandled with no trace.
                     let external = self.vm_value_to_owned(vm.proof(), &value);
+                    if let Some(code) = extract_exit_code(&external) {
+                        return Err(EngineError::Exit { code });
+                    }
                     return Err(EngineError::UnhandledThrow {
                         value: Box::new(external),
                         trace: Vec::new(),

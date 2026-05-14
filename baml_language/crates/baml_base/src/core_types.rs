@@ -3,6 +3,7 @@
 use std::fmt;
 
 use ariadne;
+use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
 use text_size::{TextRange, TextSize};
 
@@ -32,7 +33,7 @@ use text_size::{TextRange, TextSize};
 ///
 /// - **Roslyn** (C#): synthetic `SyntaxTree`s constructed with a virtual file path.
 /// - **Clang**: bit 31 of `SourceLocation` distinguishes file vs macro-expansion locs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub struct FileId(u32);
 
 impl FileId {
@@ -84,7 +85,7 @@ impl fmt::Display for FileId {
 }
 
 /// A span in source code, tracking both file and position
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Span {
     pub file_id: FileId,
     pub range: TextRange,
@@ -151,7 +152,7 @@ pub type Name = SmolStr;
 ///
 /// `Display` joins with `.` for diagnostics and for places that key off the
 /// dotted form (the bytecode emitter's class registry, debug snapshots).
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TypePath(pub Vec<Name>);
 
 impl TypePath {
@@ -203,7 +204,7 @@ impl fmt::Display for TypePath {
 }
 
 /// The types of media we support
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy, Serialize, Deserialize)]
 pub enum MediaKind {
     Image,
     Audio,
@@ -237,7 +238,7 @@ impl fmt::Display for MediaKind {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Literal {
     Int(i64),
     Float(String),
@@ -257,7 +258,7 @@ impl fmt::Display for Literal {
 }
 
 /// Module identifier (for multi-file support)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ModuleId(u32);
 
 impl ModuleId {
@@ -271,7 +272,7 @@ impl ModuleId {
 }
 
 /// Severity level for diagnostics
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Severity {
     Error,
     Warning,

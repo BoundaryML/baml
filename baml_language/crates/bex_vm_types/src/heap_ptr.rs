@@ -31,6 +31,8 @@
 //! 3. **Thread safety:** The pointer can be copied across threads (it's just
 //!    8 bytes). Dereferencing only happens within a single VM.
 
+use serde::{Deserialize, Serialize};
+
 use crate::Object;
 
 /// A pointer to an object in the heap.
@@ -145,6 +147,19 @@ impl HeapPtr {
     #[inline]
     pub fn epoch(self) -> u32 {
         0
+    }
+}
+
+impl Serialize for HeapPtr {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_unit()
+    }
+}
+
+impl<'de> Deserialize<'de> for HeapPtr {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        <()>::deserialize(deserializer)?;
+        Ok(HeapPtr::null())
     }
 }
 

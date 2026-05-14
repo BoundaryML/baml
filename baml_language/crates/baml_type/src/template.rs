@@ -21,10 +21,12 @@
 
 use std::fmt;
 
+use serde::{Deserialize, Serialize};
+
 use crate::{Ty, TyAttr, TypeName};
 
 /// A type expression that may contain unresolved generic-parameter references.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TyTemplate {
     /// Fully concrete leaf — no substitution needed.
     Concrete(Ty),
