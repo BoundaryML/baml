@@ -2,7 +2,7 @@
 source: crates/baml_cli/src/describe_command_tests.rs
 expression: output
 ---
-class            Bigint                           <builtin>/baml/bigint.baml:1
+class            Bigint                           <builtin>/baml/bigint.baml:9
 class            Bool                             <builtin>/baml/bool.baml:1
 class            Array                            <builtin>/baml/containers.baml:1
 class            Map                              <builtin>/baml/containers.baml:310

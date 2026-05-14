@@ -3260,10 +3260,7 @@ impl LoweringContext<'_> {
             Place::Local(l) => self.builder.local_ty(*l),
             _ => self.expr_ty(inner_target),
         };
-        let target_is_bigint = matches!(
-            target_ty,
-            Ty::Bigint { .. } | Ty::Literal(baml_type::Literal::Bigint(_), _)
-        );
+        let target_is_bigint = Self::dest_widens_int_to_bigint(&target_ty);
         // See AssignOp above: TIR coerces the value to the target type, so we
         // must inspect the AST to detect a natural-int RHS.
         let rhs = if target_is_bigint && self.value_is_natural_int(value) {
@@ -3520,7 +3517,7 @@ impl LoweringContext<'_> {
                             &mut diags,
                         );
                         let ty = self.resolved_aliases.convert(&tir_ty);
-                        (i, matches!(ty, Ty::Bigint { .. }))
+                        (i, Self::dest_widens_int_to_bigint(&ty))
                     })
                     .collect()
             } else {
@@ -4487,6 +4484,11 @@ impl LoweringContext<'_> {
                         Ty::Int { .. } | Ty::Literal(baml_type::Literal::Int(_), _)
                     )
                 } else {
+                    // TODO: captured int locals in lambdas aren't visible here
+                    // (binding_locals is fresh inside the lambda's context)
+                    // and `expr_ty` reports the TIR-coerced type. Returning
+                    // false means `x += captured_int` inside a closure won't
+                    // widen — tracked as a follow-up.
                     false
                 }
             }
@@ -4497,8 +4499,44 @@ impl LoweringContext<'_> {
         }
     }
 
+    /// Returns true if assigning an `int` RHS into a destination of type
+    /// `ty` should be widened to `bigint`. True for `bigint`, `bigint?`, and
+    /// unions that admit `bigint` but not `int`.
+    ///
+    /// Deliberately does *not* match `Ty::Literal(Bigint(_), _)`. A literal
+    /// like `1n` is a stricter destination than `bigint`, and an arbitrary
+    /// `int` won't generally satisfy it — type-checking that mismatch is the
+    /// TIR layer's job, and MIR shouldn't silently widen into a slot the
+    /// caller may not actually be allowed to write.
+    ///
+    /// Union rule: if the destination union also lists `int` as a member,
+    /// the int RHS lands as int (more specific) and no widening fires. We
+    /// only widen when `bigint` is the only sensible landing.
+    ///
+    /// Used by every widening site (`let`-init, `return`, `Assign`, `AssignOp`,
+    /// optional-chain assigns, call-arg flags).
+    fn dest_widens_int_to_bigint(ty: &Ty) -> bool {
+        match ty {
+            Ty::Bigint { .. } => true,
+            Ty::Optional(inner, _) => Self::dest_widens_int_to_bigint(inner),
+            Ty::Union(members, _) => {
+                let has_int = members.iter().any(|m| {
+                    matches!(
+                        m,
+                        Ty::Int { .. } | Ty::Literal(baml_type::Literal::Int(_), _)
+                    )
+                });
+                if has_int {
+                    return false;
+                }
+                members.iter().any(Self::dest_widens_int_to_bigint)
+            }
+            _ => false,
+        }
+    }
+
     fn needs_int_to_bigint_widen(&self, dest_ty: &Ty, src_expr_id: AstExprId) -> bool {
-        if !matches!(dest_ty, Ty::Bigint { .. }) {
+        if !Self::dest_widens_int_to_bigint(dest_ty) {
             return false;
         }
         let src_ty = self.expr_ty(src_expr_id);
@@ -5629,10 +5667,7 @@ impl LoweringContext<'_> {
                         Place::Local(l) => self.builder.local_ty(*l),
                         _ => self.expr_ty(target),
                     };
-                    let target_is_bigint = matches!(
-                        target_ty,
-                        Ty::Bigint { .. } | Ty::Literal(baml_type::Literal::Bigint(_), _)
-                    );
+                    let target_is_bigint = Self::dest_widens_int_to_bigint(&target_ty);
                     // TIR coerces an AssignOp's value to the target type, so
                     // `expr_ty(value)` reports `Bigint` even when the literal
                     // is `1`. Inspect the AST directly to catch the natural-int

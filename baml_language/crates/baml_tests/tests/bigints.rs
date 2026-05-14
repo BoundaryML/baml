@@ -78,6 +78,39 @@ async fn test_int_to_bigint_field_assign() {
 }
 
 #[tokio::test]
+async fn test_int_to_bigint_optional_let() {
+    // `let x: bigint? = 42` — int widens to bigint, then nests into Optional.
+    let output = baml_test!(
+        r#"
+        function main() -> bigint? {
+            let x: bigint? = 42;
+            x
+        }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Bigint(BigInt::from(42)))
+    );
+}
+
+#[tokio::test]
+async fn test_int_to_bigint_optional_arg() {
+    // Function param `bigint?` accepts an int via implicit widening.
+    let output = baml_test!(
+        baml: r#"
+        function Identity(x: bigint?) -> bigint? { x }
+        function Caller() -> bigint? { Identity(42) }
+    "#,
+        entry: "Caller",
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Bigint(BigInt::from(42)))
+    );
+}
+
+#[tokio::test]
 async fn test_int_to_bigint_alias_param() {
     // Param declared via a type alias still triggers int→bigint widening.
     let output = baml_test!(

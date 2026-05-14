@@ -495,9 +495,13 @@ fn null_to_end(variants: Vec<Ty>) -> Vec<Ty> {
 /// Check if `sub` is a subtype of `sup`, accounting for `TyAttr`.
 ///
 /// Uses a *restricted* structural check: only identical types and
-/// literal→base-type relationships count.  Cross-type widening
+/// literal→base-type relationships count.  Most cross-type widening
 /// (e.g. `int → float`) is intentionally excluded — SAP treats `int`
 /// and `float` as distinct parse candidates with different scoring.
+///
+/// The one exception is `int → bigint`, which is permitted because it is
+/// lossless (any `int` fits in `bigint`). See the inline comment on the
+/// `Ty::Int → Ty::Bigint` arm of [`is_sap_structural_subtype`].
 fn is_subtype_with_attrs(sub: &Ty, sup: &Ty) -> bool {
     is_sap_structural_subtype(sub, sup) && attr_is_subtype(sub.attr(), sup.attr())
 }
