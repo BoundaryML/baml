@@ -452,6 +452,43 @@ fn invalid_binary_op_bigint_eq_float() {
 }
 
 #[test]
+fn aliased_float_plus_bigint_is_rejected() {
+    // Aliases on either side must still trip the float×bigint reject —
+    // `infer_binary_op` peels them at entry before classifying.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "type FF = float\nfunction f(x: FF) -> bigint { return x + 100n; }",
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("operator `Add` cannot be applied"),
+        "expected InvalidBinaryOp diagnostic, got:\n{tir}"
+    );
+}
+
+#[test]
+fn aliased_int_arithmetic_resolves_to_int() {
+    // Plain aliased arithmetic must not get rejected just because the alias
+    // wraps the primitive — `infer_arithmetic` should classify aliased
+    // operands the same as bare ones after entry-level peeling.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "type II = int\nfunction f(x: II, y: int) -> int { return x + y; }",
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        !tir.contains("!!"),
+        "aliased int arithmetic should compile cleanly, got:\n{tir}"
+    );
+    assert!(
+        tir.contains("return x + y : int"),
+        "expected `int` result type, got:\n{tir}"
+    );
+}
+
+#[test]
 fn invalid_unary_op_neg_string() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> int { return -\"hello\"; }");

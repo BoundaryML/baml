@@ -7772,6 +7772,14 @@ impl<'db> TypeInferenceBuilder<'db> {
         if let Some(folded) = Self::try_fold_binary(op, lhs, rhs) {
             return folded;
         }
+        // Peel type aliases once at the entry so downstream classifiers
+        // (`infer_arithmetic`, `infer_bitwise`, `is_float_bigint_mix`) only
+        // need to recognise the underlying primitive shapes. Mirrors how
+        // `is_subtype` and other type-aware sites expand at their entry.
+        let expanded_lhs = self.expand_alias_chains(lhs.clone());
+        let expanded_rhs = self.expand_alias_chains(rhs.clone());
+        let lhs = &expanded_lhs;
+        let rhs = &expanded_rhs;
         match op {
             // Comparison / equality → bool
             BinaryOp::Eq
@@ -7878,9 +7886,20 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
 
         fn base_ty(ty: &Ty) -> Option<PrimitiveType> {
+            // Enumerate the specific primitives this op accepts (Int, Bigint,
+            // Float, String). Anything else returns `None`, which makes the
+            // outer match fall through to `Ty::Unknown` and surface as an
+            // `InvalidBinaryOp` diagnostic. Adding a new `PrimitiveType` or
+            // `Literal` variant forces a deliberate opt-in here.
             match ty {
-                Ty::Primitive(p, _) => Some(p.clone()),
-                Ty::Literal(lit, _, _) => Some(PrimitiveType::from_literal(lit)),
+                Ty::Primitive(PrimitiveType::Int, _) => Some(PrimitiveType::Int),
+                Ty::Primitive(PrimitiveType::Bigint, _) => Some(PrimitiveType::Bigint),
+                Ty::Primitive(PrimitiveType::Float, _) => Some(PrimitiveType::Float),
+                Ty::Primitive(PrimitiveType::String, _) => Some(PrimitiveType::String),
+                Ty::Literal(baml_base::Literal::Int(_), _, _) => Some(PrimitiveType::Int),
+                Ty::Literal(baml_base::Literal::Bigint(_), _, _) => Some(PrimitiveType::Bigint),
+                Ty::Literal(baml_base::Literal::Float(_), _, _) => Some(PrimitiveType::Float),
+                Ty::Literal(baml_base::Literal::String(_), _, _) => Some(PrimitiveType::String),
                 Ty::Union(members, _) => {
                     let mut result: Option<PrimitiveType> = None;
                     for m in members {
@@ -7934,9 +7953,13 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// arithmetic since bigint values past 2^53 don't round-trip through f64.
     fn is_float_bigint_mix(lhs: &Ty, rhs: &Ty) -> bool {
         fn base_ty(ty: &Ty) -> Option<PrimitiveType> {
+            // Only Float and Bigint matter here — every other shape returns
+            // `None` and short-circuits the mix-detection.
             match ty {
-                Ty::Primitive(p, _) => Some(p.clone()),
-                Ty::Literal(lit, _, _) => Some(PrimitiveType::from_literal(lit)),
+                Ty::Primitive(PrimitiveType::Bigint, _) => Some(PrimitiveType::Bigint),
+                Ty::Primitive(PrimitiveType::Float, _) => Some(PrimitiveType::Float),
+                Ty::Literal(baml_base::Literal::Bigint(_), _, _) => Some(PrimitiveType::Bigint),
+                Ty::Literal(baml_base::Literal::Float(_), _, _) => Some(PrimitiveType::Float),
                 _ => None,
             }
         }
@@ -7953,9 +7976,14 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// widening is handled in Phase 8.
     fn infer_bitwise(lhs: &Ty, rhs: &Ty) -> Ty {
         fn base_ty(ty: &Ty) -> Option<PrimitiveType> {
+            // Bitwise only accepts Int and Bigint. Float / String / Bool
+            // return `None` so the outer match falls through to `Unknown`
+            // (which surfaces as `InvalidBinaryOp`).
             match ty {
-                Ty::Primitive(p, _) => Some(p.clone()),
-                Ty::Literal(lit, _, _) => Some(PrimitiveType::from_literal(lit)),
+                Ty::Primitive(PrimitiveType::Int, _) => Some(PrimitiveType::Int),
+                Ty::Primitive(PrimitiveType::Bigint, _) => Some(PrimitiveType::Bigint),
+                Ty::Literal(baml_base::Literal::Int(_), _, _) => Some(PrimitiveType::Int),
+                Ty::Literal(baml_base::Literal::Bigint(_), _, _) => Some(PrimitiveType::Bigint),
                 Ty::Union(members, _) => {
                     let mut result: Option<PrimitiveType> = None;
                     for m in members {
