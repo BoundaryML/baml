@@ -77,6 +77,24 @@ impl BexProject {
         &self,
         sources: &std::collections::HashMap<crate::fs::FsPath, String>,
     ) {
+        self.apply_sources(sources);
+        // We don't care about the result here.
+        // If someone cares, they should get the diagnostics from the diagnostics_by_file method.
+        let _ = self.update_bex();
+    }
+
+    /// Same as `update_all_sources` but propagates the compile result. Used by
+    /// `new_lsp_with_initial_project` so embedded hosts (bridge_cffi) get the
+    /// same fail-fast semantics as the legacy `bex_project::new(...)` path.
+    pub(crate) fn update_all_sources_required(
+        &self,
+        sources: &std::collections::HashMap<crate::fs::FsPath, String>,
+    ) -> Result<(), RuntimeError> {
+        self.apply_sources(sources);
+        self.update_bex()
+    }
+
+    fn apply_sources(&self, sources: &std::collections::HashMap<crate::fs::FsPath, String>) {
         let mut db = self.db.lock().unwrap();
         let mut existing_paths: std::collections::HashSet<_> =
             db.non_builtin_file_paths().collect();
@@ -87,11 +105,6 @@ impl BexProject {
         for path in existing_paths {
             db.remove_file(&path);
         }
-        drop(db);
-
-        // We don't care about the result here.
-        // If someone cares, they should get the diagnostics from the diagnostics_by_file method.
-        let _ = self.update_bex();
     }
 
     /// Update some sources in the project (but doesn't remove any sources)

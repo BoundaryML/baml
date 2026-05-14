@@ -228,6 +228,47 @@ impl BexMultiProject {
         Ok(project)
     }
 
+    /// Register a project root without requiring the path to exist on disk.
+    ///
+    /// Diverges from `get_or_create_project` which checks `root_path.exists()` —
+    /// that check fails for in-memory VFS roots that haven't been populated yet.
+    /// Used only by `new_lsp_with_initial_project`.
+    fn get_or_create_initial_project(
+        &self,
+        root_path: vfs::VfsPath,
+    ) -> Result<std::sync::Arc<LiveProject>, LspError> {
+        let mut projects = self.projects.lock().unwrap();
+        if let Some(project) = projects.get(&crate::fs::FsPath::from_vfs(&root_path)) {
+            return Ok(project.clone());
+        }
+        let sys_ops = (self.sys_op_factory)(&root_path);
+        let project = crate::project::BexProject::new(&root_path, sys_ops, self.event_sink.clone());
+        let project = std::sync::Arc::new(LiveProject {
+            project,
+            in_memory_changes: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())),
+            last_published_files: std::sync::Arc::new(std::sync::Mutex::new(
+                std::collections::HashSet::new(),
+            )),
+        });
+        projects.insert(crate::fs::FsPath::from_vfs(&root_path), project.clone());
+        Ok(project)
+    }
+
+    /// Send the initial ListProjects + UpdateProject notifications for a
+    /// freshly registered embedded project. Does not load anything from disk.
+    fn refresh_initial_project(&self, project_root: &vfs::VfsPath) {
+        let Ok(project) = self.get_or_create_initial_project(project_root.to_owned()) else {
+            return;
+        };
+        let diagnostics = project.project.diagnostics_by_file(self.position_encoding);
+        let flat = Self::flatten_diagnostics(&diagnostics);
+        self.send_list_projects();
+        self.send_update_project(project_root, &project, flat);
+        if project.project.is_bex_current() {
+            self.request_collect_tests_impl(project_root.as_str());
+        }
+    }
+
     fn get_bex_for_project(
         &self,
         project_root: &crate::fs::FsPath,
@@ -1128,4 +1169,46 @@ pub fn new_lsp(
         event_sink,
         spawner,
     )
+}
+
+/// Build a `BexLsp` and immediately register one project with the given
+/// in-memory sources. The `root_path` becomes the project key; subsequent
+/// calls to `get_bex_for_project(&FsPath::from_vfs(&root_path))` route to
+/// this project.
+///
+/// Bypasses the LSP `initialized` / `didOpen` flow used by editor clients —
+/// intended for embedded hosts (bridge_cffi, tests) that already have the
+/// source set in memory.
+///
+/// **Compile errors fail eagerly.** If the BAML sources don't compile, this
+/// returns `Err(LspError::Runtime(RuntimeError::Compilation { .. }))` and the
+/// LSP is not handed back. This matches the legacy `bex_project::new(...)`
+/// semantics.
+pub fn new_lsp_with_initial_project(
+    sys_op_factory: SysOpFactory,
+    sender: std::sync::Arc<dyn LspClientSenderTrait + Send + Sync>,
+    playground_sender: std::sync::Arc<dyn crate::bex_lsp::PlaygroundSender>,
+    fs: crate::fs::BamlVFS,
+    event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
+    spawner: BackgroundSpawner,
+    root_path: vfs::VfsPath,
+    sources: std::collections::HashMap<crate::fs::FsPath, String>,
+) -> Result<impl crate::bex_lsp::BexLsp, LspError> {
+    let multi = BexMultiProject::new(
+        sys_op_factory,
+        sender,
+        playground_sender,
+        fs,
+        event_sink,
+        spawner,
+    );
+
+    let live = multi.get_or_create_initial_project(root_path.clone())?;
+    live.project
+        .update_all_sources_required(&sources)
+        .map_err(LspError::from)?;
+
+    multi.refresh_initial_project(&root_path);
+
+    Ok(multi)
 }
