@@ -1800,6 +1800,18 @@ impl BexEngine {
                         args.iter().map(|v| self.vm_arg_to_bex_value(v)).collect();
 
                     if cancel.is_cancelled() {
+                        // Inline the cancel-at-yield handling — see the
+                        // matching block in the `Await` arm below for the
+                        // rationale. Spawned children settle as Cancelled
+                        // so the heap Future no longer hangs at Pending.
+                        if let Some(future_id) = thread.vm_thread_settles_future() {
+                            let child_cancel = thread.vm_thread_cancel().clone();
+                            let mut guard = self.futures.acquire(thread.proof()).await;
+                            guard.cancel_future(future_id)?;
+                            drop(guard);
+                            child_cancel.cancel();
+                            return Ok(ThreadOutcome::SettledChild);
+                        }
                         return Err(cancelled_unhandled_throw());
                     }
 
@@ -1822,6 +1834,14 @@ impl BexEngine {
                             thread = inactive.acquire().await;
                             match outcome {
                                 SysOpOutcome::Cancelled => {
+                                    if let Some(future_id) = thread.vm_thread_settles_future() {
+                                        let child_cancel = thread.vm_thread_cancel().clone();
+                                        let mut guard = self.futures.acquire(thread.proof()).await;
+                                        guard.cancel_future(future_id)?;
+                                        drop(guard);
+                                        child_cancel.cancel();
+                                        return Ok(ThreadOutcome::SettledChild);
+                                    }
                                     return Err(cancelled_unhandled_throw());
                                 }
                                 SysOpOutcome::Result(r) => r,
@@ -1871,6 +1891,39 @@ impl BexEngine {
                 }
 
                 VmExecState::Await(future_id) => {
+                    // Fail-fast if the thread's own cancel token is
+                    // already fired (e.g. parent cascaded into us
+                    // between the previous yield and this await). The
+                    // BEP guarantees that the next `await` after the
+                    // token fires throws `Cancelled`; we honor that
+                    // even when the awaited future is unrelated to our
+                    // cancel chain (and would otherwise never settle
+                    // via cascade).
+                    //
+                    // For spawned children: route through `cancel_future`
+                    // so the heap Future settles instead of leaking as
+                    // Pending. Mirrors the `VmError::ThrownUnhandled`
+                    // arm above for a Cancelled panic from the VM side.
+                    if cancel.is_cancelled() {
+                        if let Some(future_id) = thread.vm_thread_settles_future() {
+                            let child_cancel = thread.vm_thread_cancel().clone();
+                            let mut guard = self.futures.acquire(thread.proof()).await;
+                            guard.cancel_future(future_id)?;
+                            drop(guard);
+                            child_cancel.cancel();
+                            return Ok(ThreadOutcome::SettledChild);
+                        }
+                        return Err(cancelled_unhandled_throw());
+                    }
+                    #[allow(clippy::items_after_statements)]
+                    // Outcome of the SetOnce-vs-cancel race below. Inline
+                    // here because moving it to module scope just for
+                    // clippy's preference would split the readers'
+                    // attention across two files.
+                    enum AwaitOutcome {
+                        Cancelled,
+                        Done(Result<(), EngineError>),
+                    }
                     // Tightly-scoped guard so the proof's borrow on `vm`
                     // ends before we release the VM permit below.
                     let future = {
@@ -1886,8 +1939,31 @@ impl BexEngine {
                     // While parked, run a heuristic-driven GC check (no
                     // permit dance needed since we're already released).
                     self.maybe_collect_garbage().await;
-                    future.await?;
+                    // Race the SetOnce wait against the thread's own
+                    // cancel token so an unrelated-future await
+                    // doesn't hang when the thread itself is cancelled
+                    // (cascade only saves us when the awaited future is
+                    // a descendant whose token derives from ours).
+                    let outcome = tokio::select! {
+                        biased;
+                        () = cancel.cancelled() => AwaitOutcome::Cancelled,
+                        r = future              => AwaitOutcome::Done(r),
+                    };
                     thread = inactive.acquire().await;
+                    match outcome {
+                        AwaitOutcome::Cancelled => {
+                            if let Some(future_id) = thread.vm_thread_settles_future() {
+                                let child_cancel = thread.vm_thread_cancel().clone();
+                                let mut guard = self.futures.acquire(thread.proof()).await;
+                                guard.cancel_future(future_id)?;
+                                drop(guard);
+                                child_cancel.cancel();
+                                return Ok(ThreadOutcome::SettledChild);
+                            }
+                            return Err(cancelled_unhandled_throw());
+                        }
+                        AwaitOutcome::Done(r) => r?,
+                    }
                 }
 
                 VmExecState::Event {

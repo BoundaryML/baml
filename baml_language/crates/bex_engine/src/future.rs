@@ -142,29 +142,32 @@ impl FutureManagerGuard<'_> {
     }
 
     pub fn fulfill_future(&mut self, id: FutureId, value: Value) -> Result<(), EngineError> {
-        let fut = self.take_pending(id)?;
-        // SAFETY: caller holds the heap permit (witnessed by `self.proof`).
-        // `settle_ready` CAS-transitions Pending → Ready; the producer is
-        // the unique writer reaching this path (cancel uses its own CAS).
-        let _ = unsafe { fut.settle_ready(value) };
+        if let Some(fut) = self.take_pending(id)? {
+            // SAFETY: caller holds the heap permit (witnessed by `self.proof`).
+            // `settle_ready` CAS-transitions Pending → Ready; the producer is
+            // the unique writer reaching this path (cancel uses its own CAS).
+            let _ = unsafe { fut.settle_ready(value) };
+        }
         Ok(())
     }
 
     /// Transition a future to `Future::Error(value)` with the given BAML
     /// error/panic value.
     pub fn err_future(&mut self, id: FutureId, err: Value) -> Result<(), EngineError> {
-        let fut = self.take_pending(id)?;
-        // SAFETY: see `fulfill_future`.
-        let _ = unsafe { fut.settle_error(err) };
+        if let Some(fut) = self.take_pending(id)? {
+            // SAFETY: see `fulfill_future`.
+            let _ = unsafe { fut.settle_error(err) };
+        }
         Ok(())
     }
 
     pub fn cancel_future(&mut self, id: FutureId) -> Result<(), EngineError> {
-        let fut = self.take_pending(id)?;
-        // `settle_cancelled` fires the cancel token and the wake signal
-        // internally. CAS-based, so this races safely with the producer's
-        // settle_ready/settle_error.
-        let _ = fut.settle_cancelled();
+        if let Some(fut) = self.take_pending(id)? {
+            // `settle_cancelled` fires the cancel token and the wake signal
+            // internally. CAS-based, so this races safely with the producer's
+            // settle_ready/settle_error.
+            let _ = fut.settle_cancelled();
+        }
         Ok(())
     }
 
@@ -209,40 +212,35 @@ impl FutureManagerGuard<'_> {
         Ok(())
     }
 
-    /// Remove and return the heap `Future` for `id`, asserting it is still
-    /// `Pending`. Used by the normal terminal helpers (fulfill/err/cancel)
-    /// to take a future out of the active set before settling.
+    /// Remove and return the heap `Future` for `id` if it's still
+    /// `Pending`. Returns `Ok(None)` if the future has already been
+    /// settled out-of-band (e.g. via BAML's `f.cancel()` which transitions
+    /// the heap state directly without going through `FutureManager`),
+    /// or if it's not in the active set at all.
     ///
-    /// In release builds, a non-`Pending` heap state surfaces as a
-    /// `TypeMismatch` rather than silently overwriting — protects against
-    /// reentrant settles.
-    fn take_pending(&mut self, id: FutureId) -> Result<&'static bex_vm_types::Future, EngineError> {
-        // Phase 1: peek.
-        {
-            let entry_ref = self
-                .holder()
-                .active_futures
-                .get(&id)
-                .ok_or(EngineError::FutureNotFound { future_id: id })?;
+    /// The cleanup-on-already-settled path also drops the leftover entry
+    /// from `active_futures` so the GC anchor doesn't leak.
+    fn take_pending(
+        &mut self,
+        id: FutureId,
+    ) -> Result<Option<&'static bex_vm_types::Future>, EngineError> {
+        // Phase 1: peek. Already-removed entries → Ok(None).
+        let already_settled = {
+            let Some(entry_ref) = self.holder().active_futures.get(&id) else {
+                return Ok(None);
+            };
             // SAFETY: caller holds the heap permit via `self.proof`.
             let fut = unsafe { entry_ref.future_ref() }?;
-            let observed = FutureType::of(fut);
-            if !matches!(fut.read(), FutureRead::Pending(_)) {
-                debug_assert!(
-                    false,
-                    "take_pending called with non-Pending state for {id:?} \
-                     (actual: {observed:?})"
-                );
-                return Err(EngineError::TypeMismatch {
-                    message: format!(
-                        "take_pending called with non-Pending state for {id:?} \
-                         (actual: {observed:?})"
-                    ),
-                });
-            }
+            !matches!(fut.read(), FutureRead::Pending(_))
+        };
+        if already_settled {
+            // Heap state moved on without us — drop the bookkeeping entry
+            // and return None so the caller treats this as a no-op.
+            let _ = self.holder_mut().active_futures.remove(&id);
+            return Ok(None);
         }
-        // Phase 2: remove and return the heap Future ref. Once removed,
-        // GC rooting is the responsibility of whoever holds the HeapPtr
+        // Phase 2: still Pending. Remove and return the heap Future ref.
+        // Once removed, GC rooting is whoever holds the HeapPtr
         // (typically `BexThread.settles_future` or the awaiter's stack).
         let entry = self
             .holder_mut()
@@ -257,7 +255,7 @@ impl FutureManagerGuard<'_> {
         // can't see through here; callers must not store the reference.
         let fut: &bex_vm_types::Future = unsafe { entry.future_ref() }?;
         let fut_static: &'static bex_vm_types::Future = unsafe { std::mem::transmute(fut) };
-        Ok(fut_static)
+        Ok(Some(fut_static))
     }
     /// Returns a Rust future that resolves when the BAML future is ready.
     /// Once it is resolved, the future on the heap will be in a terminal
