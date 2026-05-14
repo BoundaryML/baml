@@ -276,6 +276,13 @@ impl BexHeap {
         // This converts ConstValue (with ObjectIndex) to Value (with HeapPtr).
         Self::resolve_function_constants(&mut compile_time_objects);
 
+        // Resolve each Function's `package: HeapPtr` against the compile-time
+        // package pool. The engine appends one `Object::Package` per loaded
+        // package to `compile_time_objects` before calling `BexHeap::new`, so
+        // this pass has visibility into both the functions and their packages
+        // simultaneously.
+        Self::resolve_function_packages(&mut compile_time_objects);
+
         Arc::new(Self {
             compile_time: compile_time_objects,
             gen0: UnsafeCell::new(ChunkedVec::new()),
@@ -338,6 +345,58 @@ impl BexHeap {
                         other => other.to_value(resolve_idx),
                     })
                     .collect();
+            }
+        }
+    }
+
+    /// Resolve each `Object::Function`'s `package: HeapPtr` against the
+    /// `Object::Package` entries present in `compile_time_objects`.
+    ///
+    /// Must be called after [`Self::resolve_function_constants`] and before
+    /// the heap is wrapped in `Arc`. Both passes share the same `&mut`
+    /// invariant — the base pointer of the slice is stable for the
+    /// lifetime of the function. Together they bring every Function's
+    /// auxiliary HeapPtr-shaped data (resolved constants + owning
+    /// package) up to runtime form.
+    ///
+    /// The engine appends one `Object::Package` per loaded package
+    /// (`baml`, `log`, `reflect`, `user`, ...) to `compile_time_objects`
+    /// before `BexHeap::new`. Each Function carries its
+    /// `package_name: String` (set by emit), and that string is looked up
+    /// here against the packages we discover by scanning the slice.
+    ///
+    /// Functions whose `package_name` doesn't match any compile-time
+    /// `Object::Package` are left with `HeapPtr::null()` (the default).
+    /// This is benign — emit may leave a placeholder name on transient
+    /// synthesized functions that never reach dispatch.
+    fn resolve_function_packages(objects: &mut [Object]) {
+        let base_ptr = objects.as_ptr();
+        let resolve_idx = |idx: usize| -> bex_vm_types::HeapPtr {
+            let ptr = unsafe { base_ptr.add(idx) as *mut Object };
+            #[cfg(feature = "heap_debug")]
+            unsafe {
+                bex_vm_types::HeapPtr::from_ptr(ptr, 0)
+            }
+            #[cfg(not(feature = "heap_debug"))]
+            unsafe {
+                bex_vm_types::HeapPtr::from_ptr(ptr)
+            }
+        };
+
+        // Pass 1: build `name → HeapPtr` map by scanning for Object::Package.
+        let mut package_ptrs: HashMap<String, bex_vm_types::HeapPtr> = HashMap::new();
+        for (idx, obj) in objects.iter().enumerate() {
+            if let Object::Package(pkg) = obj {
+                package_ptrs.insert(pkg.name.clone(), resolve_idx(idx));
+            }
+        }
+
+        // Pass 2: set `function.package` from the map.
+        for obj in objects.iter_mut() {
+            if let Object::Function(func) = obj
+                && let Some(&pkg_ptr) = package_ptrs.get(func.package_name.as_str())
+            {
+                func.package = pkg_ptr;
             }
         }
     }

@@ -92,8 +92,8 @@ pub use bex_heap::GcStats;
 pub use bex_heap::{ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapPermit};
 use bex_vm::{BexVm, SpanNotification, VmExecState};
 use bex_vm_types::{
-    EnginePackages, FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, Package,
-    PackageGlobals, SharedGlobals, SysOp, Value, VmGlobals,
+    FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, Package, PackageGlobals,
+    SharedGlobals, SysOp, Value, VmGlobals,
 };
 pub use conversion::test_arg_to_external;
 // Re-export CancellationToken for callers.
@@ -414,19 +414,6 @@ pub struct BexEngine {
     /// purely so the GC's `collect_roots`/`forward_roots` walks reach the
     /// frozen globals pool.
     _globals_permit: bex_heap::InactiveHeapPermit<SharedGlobals>,
-    /// Engine-wide name → `Object::Package` `HeapPtr` index for every
-    /// loaded package (`baml`, `log`, `reflect`, `user`, ...).
-    ///
-    /// Each `Package` is allocated in the compile-time semi-space during
-    /// `BexEngine::new`, carrying `PackageGlobals::Static(globals.clone())`
-    /// — i.e. an Arc-clone of the engine's single `SharedGlobals`. The
-    /// `Package` objects themselves are immortal (compile-time pool), so
-    /// no permit registration is needed for this map.
-    ///
-    /// Cloned (cheap Arc bump) into every `BexVm` so frame pushes can
-    /// resolve `Function.package_name` → `Object::Package` `HeapPtr` and
-    /// cache it on `BytecodeFrame::package`.
-    packages: EnginePackages,
     /// Resolved function/class/enum names for lookup
     resolved_function_names: HashMap<String, (HeapPtr, bex_vm_types::FunctionKind)>,
     /// Resolved class names for instance allocation (`IndexMap` preserves definition order)
@@ -607,19 +594,18 @@ impl BexEngine {
         let globals = SharedGlobals::from_vec(vec![Value::Null; globals_count]);
 
         // Append one `Object::Package` per loaded package into the
-        // compile-time pool. Record each one's index so we can resolve to a
-        // stable `HeapPtr` once the heap is built.
-        let mut package_indices: Vec<(String, usize)> = Vec::with_capacity(package_names.len());
+        // compile-time pool. The `Function.package` `HeapPtr` is resolved
+        // post-`BexHeap::new` by `resolve_function_packages`, which scans
+        // the compile-time pool for `Object::Package` entries and matches
+        // each Function's `package_name` against them.
         for name in package_names {
-            let idx = compile_time_objects.len();
             let pkg = Package {
-                name: name.clone(),
+                name,
                 items: HashMap::new(),
                 globals: PackageGlobals::Static(globals.clone()),
                 function_slot_map: HashMap::new(),
             };
             compile_time_objects.push(Object::Package(Box::new(pkg)));
-            package_indices.push((name, idx));
         }
 
         // Create the unified heap with compile-time objects
@@ -649,16 +635,6 @@ impl BexEngine {
             .map(|(name, idx)| (name, heap.compile_time_ptr(idx)))
             .collect();
 
-        // Build the engine-wide name → `Object::Package` `HeapPtr` map.
-        // Every entry is a compile-time pointer (stable across GC), so the
-        // `EnginePackages` wrapper needs no `RootHaver` registration.
-        let packages = EnginePackages::from_map(
-            package_indices
-                .into_iter()
-                .map(|(name, idx)| (name, heap.compile_time_ptr(idx)))
-                .collect(),
-        );
-
         // Convert compile-time globals (ConstValue) to runtime globals (Value).
         // Object references are converted from ObjectIndex to HeapPtr.
         let globals_vec: Vec<Value> = bytecode
@@ -682,7 +658,6 @@ impl BexEngine {
                 let mut vm = BexVm::new(
                     Arc::clone(&heap),
                     VmGlobals::Owned(globals_pool.clone()),
-                    packages.clone(),
                     resolved_class_names
                         .iter()
                         .chain(resolved_enum_names.iter())
@@ -809,7 +784,6 @@ impl BexEngine {
             heap,
             globals,
             _globals_permit: globals_permit,
-            packages,
             resolved_function_names,
             resolved_class_names,
             resolved_enum_names,
@@ -1219,7 +1193,6 @@ impl BexEngine {
         let mut vm = BexVm::new(
             Arc::clone(&self.heap),
             VmGlobals::Shared(self.globals.clone()),
-            self.packages.clone(),
             self.resolved_class_names
                 .iter()
                 .chain(self.resolved_enum_names.iter())

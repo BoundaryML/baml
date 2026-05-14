@@ -127,6 +127,8 @@ fn baml.deep_copy = builtin(vm)
 
 fn baml.deep_equals = builtin(vm)
 
+fn baml.ref_equals = builtin(vm)
+
 fn baml.Float.abs = builtin(vm)
 
 fn baml.Float.acos = builtin(vm)

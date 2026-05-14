@@ -388,6 +388,18 @@ impl BexHeap {
                 for ptr in &f.aux_object_ptrs {
                     worklist.push(*ptr);
                 }
+                // `bytecode.resolved_constants` carries the `LoadConst`-readable
+                // `Value` form of each constant. For build-time functions every
+                // `Value::Object` here is a compile-time-pool HeapPtr (filled by
+                // `resolve_function_constants` against immortal storage), so this
+                // walk is a no-op. Runtime-lifted functions allocate fresh gen0
+                // strings and reference same-package gen0 function HeapPtrs in
+                // this slot — they must be traced through here.
+                for value in &f.bytecode.resolved_constants {
+                    if let Value::Object(ptr) = value {
+                        worklist.push(*ptr);
+                    }
+                }
             }
             Object::Package(pkg) => {
                 // Items are HeapPtrs to user-visible package members
@@ -534,6 +546,18 @@ impl BexHeap {
                 // Empty for build-time functions.
                 for ptr in &mut f.aux_object_ptrs {
                     if let Some(&new_ptr) = forwarding.get(ptr) {
+                        *ptr = new_ptr;
+                    }
+                }
+                // Forward `resolved_constants` Value::Object entries. For
+                // build-time functions these are compile-time-pool HeapPtrs
+                // (never moved), so `forwarding.get` returns None and the
+                // loop is a no-op. Runtime-lifted functions need their
+                // gen0 string / function refs forwarded across moves.
+                for value in &mut f.bytecode.resolved_constants {
+                    if let Value::Object(ptr) = value
+                        && let Some(&new_ptr) = forwarding.get(ptr)
+                    {
                         *ptr = new_ptr;
                     }
                 }
@@ -826,6 +850,17 @@ impl BexHeap {
                     f.aux_object_ptrs
                         .iter()
                         .copied()
+                        .filter(|ptr| self.generation_of(*ptr).is_young()),
+                );
+                // Runtime-lifted functions populate `resolved_constants` with
+                // gen0 string / function HeapPtrs; trace each. Build-time
+                // entries point into compile-time storage (never young) so
+                // the `is_young` filter drops them.
+                worklist.extend(
+                    f.bytecode
+                        .resolved_constants
+                        .iter()
+                        .filter_map(Value::as_object_ptr)
                         .filter(|ptr| self.generation_of(*ptr).is_young()),
                 );
             }
@@ -2845,6 +2880,7 @@ mod tests {
             trace: false,
             aux_object_ptrs: Vec::new(),
             package_name: String::new(),
+            package: bex_vm_types::HeapPtr::null(),
         }
     }
 

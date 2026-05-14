@@ -22,8 +22,7 @@ pub use bytecode::{
 };
 pub use heap_ptr::HeapPtr;
 pub use indexable::{
-    EnginePackages, GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, SharedGlobals, StackIndex,
-    VmGlobals,
+    GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, SharedGlobals, StackIndex, VmGlobals,
 };
 pub use roots::{PermitProof, RootHaver, WriteBarrier};
 pub use types::{

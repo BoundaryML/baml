@@ -60,6 +60,7 @@ fn make_minimal_function() -> Function {
         trace: false,
         aux_object_ptrs: Vec::new(),
         package_name: String::new(),
+        package: HeapPtr::null(),
     }
 }
 
@@ -183,4 +184,93 @@ fn gen0_function_in_flight_gc() {
         matches!(obj, Object::Function(_)),
         "forwarded pointer must still reference an Object::Function, got {obj:?}"
     );
+}
+
+/// `Object::Function.bytecode.resolved_constants` entries must participate in
+/// the GC root walk. Runtime-lifted functions allocate gen0 strings (and
+/// reference gen0 function `HeapPtr`s) here; if the GC doesn't trace them,
+/// they get reclaimed out from under the function on the next collection.
+///
+/// Setup: build a gen0 function whose `resolved_constants[0]` is a
+/// `Value::Object(<gen0 string>)`. Root only the function (not the string
+/// directly). Run a major GC. Expect:
+/// 1. The string `HeapPtr` is in the forwarding map (proves it was reached
+///    transitively through the function's `resolved_constants` walk).
+/// 2. After applying the forwarding map to the function's bytecode, the
+///    string `HeapPtr` is updated to the new (post-GC) address.
+/// 3. The new pointer still references a valid `Object::String`.
+#[test]
+fn gen0_function_resolved_constants_traced_by_gc() {
+    let mut vm = make_vm();
+
+    // Allocate a gen0 string we want to keep alive only via the function's
+    // resolved_constants slot.
+    let str_ptr = vm.tlab.alloc(Object::String("greeting".to_string()));
+    assert!(
+        !vm.heap.is_compile_time_ptr(str_ptr),
+        "freshly TLAB-allocated string must not be in compile_time region"
+    );
+
+    // Build a function whose bytecode has the string in resolved_constants.
+    let mut func = make_minimal_function();
+    func.bytecode.constants = vec![]; // `constants` doesn't carry runtime refs here
+    func.bytecode.resolved_constants = vec![Value::Object(str_ptr)];
+    let fn_ptr = vm.tlab.alloc(Object::Function(Box::new(func)));
+
+    // Push a frame so the function is rooted but the string is NOT (it's only
+    // reachable through `function.bytecode.resolved_constants`).
+    vm.set_entry_point(fn_ptr, &[]);
+
+    let mut all_roots = vm.collect_frame_roots();
+    let stack_roots: Vec<HeapPtr> = vm
+        .stack
+        .0
+        .iter()
+        .filter_map(|v| match v {
+            Value::Object(ptr) => Some(*ptr),
+            _ => None,
+        })
+        .collect();
+    all_roots.extend(stack_roots);
+    // Sanity: the string is NOT a direct root.
+    assert!(
+        !all_roots.contains(&str_ptr),
+        "the string should only be reachable via function.resolved_constants"
+    );
+
+    // SAFETY: single-threaded test, no other VMs running.
+    let (_stats, _remapped, forwarding) = unsafe { vm.heap.collect_garbage(&all_roots) };
+
+    // The string must have been reached and forwarded.
+    let new_str_ptr = forwarding.get(&str_ptr).copied().expect(
+        "gen0 string in function.resolved_constants must be in the forwarding map \
+         (reached transitively through the function root)",
+    );
+
+    vm.forward_roots(&forwarding);
+
+    // The function's resolved_constants[0] should be updated to point at the
+    // new string location.
+    let new_fn_ptr = forwarding
+        .get(&fn_ptr)
+        .copied()
+        .expect("function must be in forwarding map");
+    // SAFETY: GC has completed; new_fn_ptr is valid in the post-GC heap.
+    let Object::Function(post_func) = (unsafe { new_fn_ptr.get() }) else {
+        panic!("forwarded pointer must reference Object::Function");
+    };
+    match post_func.bytecode.resolved_constants.first() {
+        Some(Value::Object(p)) => assert_eq!(
+            *p, new_str_ptr,
+            "resolved_constants[0] must be forwarded to the post-GC string address"
+        ),
+        other => panic!("expected resolved_constants[0] = Value::Object, got {other:?}"),
+    }
+
+    // SAFETY: GC complete; new_str_ptr is valid.
+    let str_obj = unsafe { new_str_ptr.get() };
+    match str_obj {
+        Object::String(s) => assert_eq!(s, "greeting", "string contents must survive GC"),
+        other => panic!("forwarded string ptr must reference Object::String, got {other:?}"),
+    }
 }

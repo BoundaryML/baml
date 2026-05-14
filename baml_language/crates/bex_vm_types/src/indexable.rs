@@ -455,49 +455,6 @@ impl RootHaver for SharedGlobals {
     }
 }
 
-/// Engine-wide name → `Object::Package` `HeapPtr` index.
-///
-/// Each loaded package (`baml`, `log`, `reflect`, `user`, ...) is constructed
-/// during `BexEngine::new` and allocated into the compile-time semi-space.
-/// This map records the stable `HeapPtr` for each by name.
-///
-/// Because compile-time-pool entries never move, no `RootHaver` /
-/// forwarding-aware storage is required: the `HashMap` is built once during
-/// engine init and is immutable thereafter. Reads need no `PermitProof`.
-///
-/// Runtime-compiled packages (constructed via `reflect.Package.new`) live in
-/// gen0 and are NOT held by this map — they're heap values owned by user
-/// variables / VM frames and must remain GC-collectible when the last user
-/// reference drops.
-#[derive(Clone, Debug)]
-pub struct EnginePackages {
-    inner: Arc<HashMap<String, HeapPtr>>,
-}
-
-impl EnginePackages {
-    /// Build an `EnginePackages` from the engine-init package map.
-    pub fn from_map(map: HashMap<String, HeapPtr>) -> Self {
-        Self {
-            inner: Arc::new(map),
-        }
-    }
-
-    /// Look up a package by name.
-    pub fn get(&self, name: &str) -> Option<HeapPtr> {
-        self.inner.get(name).copied()
-    }
-
-    /// Number of registered packages.
-    pub fn len(&self) -> usize {
-        self.inner.len()
-    }
-
-    /// Whether the map is empty.
-    pub fn is_empty(&self) -> bool {
-        self.inner.is_empty()
-    }
-}
-
 /// The view of globals available to a [`crate::Object`]-aware VM.
 ///
 /// **Invariant**: only `$init` functions emit [`crate::Instruction::StoreGlobal`].

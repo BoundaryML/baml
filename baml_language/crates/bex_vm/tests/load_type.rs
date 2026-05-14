@@ -16,7 +16,7 @@ use baml_project::testing::compile_source;
 use baml_type::{Ty, TyAttr, TyTemplate};
 use bex_vm::{BexVm, VmExecState};
 use bex_vm_types::{
-    ConstValue, GlobalIndex, Instruction, Object, ObjectIndex, Value,
+    ConstValue, GlobalIndex, HeapPtr, Instruction, Object, ObjectIndex, Value,
     bytecode::Bytecode,
     types::{Function, FunctionKind, FunctionOrigin, Program},
 };
@@ -71,6 +71,7 @@ fn inject_function(
         trace: false,
         aux_object_ptrs: Vec::new(),
         package_name: "user".to_string(),
+        package: HeapPtr::null(),
     };
 
     let fn_obj_idx = program.add_object(Object::Function(Box::new(func)));

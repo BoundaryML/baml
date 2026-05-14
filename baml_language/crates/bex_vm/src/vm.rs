@@ -41,9 +41,8 @@ use ::core::any::TypeId;
 use ::core::sync::atomic::AtomicBool;
 use bex_heap::{BexHeap, Tlab};
 use bex_vm_types::{
-    BinOp, CmpOp, EnginePackages, FunctionKind, FutureRead, HeapPtr, Instruction, Object,
-    ObjectIndex, ObjectPool, ObjectType, PanicClass, PermitProof, StackIndex, UnaryOp, Value,
-    Variant, VmGlobals,
+    BinOp, CmpOp, FunctionKind, FutureRead, HeapPtr, Instruction, Object, ObjectIndex, ObjectPool,
+    ObjectType, PanicClass, PermitProof, StackIndex, UnaryOp, Value, Variant, VmGlobals,
     bytecode::{self, BlockNotification},
     types::{
         BoundMethod, Cell, Closure, ConstValue, Function, FunctionType, FutureType, Instance, Type,
@@ -328,17 +327,6 @@ pub struct BexVm {
     /// is constructed with `VmGlobals::Shared`; `StoreGlobal` against the
     /// shared view is a `VmInternalError`.
     pub globals: VmGlobals,
-
-    /// Engine-wide name → `Object::Package` `HeapPtr` index.
-    ///
-    /// Used at frame push to resolve `Function.package_name` → the owning
-    /// `Object::Package` `HeapPtr`, which is then cached on
-    /// [`BytecodeFrame::package`]. Cloning is a cheap Arc bump.
-    ///
-    /// For VMs constructed via `BexVm::from_program` (tests / standalone
-    /// analysis tools) this is empty; frame pushes then leave
-    /// `BytecodeFrame::package = None`.
-    pub packages: EnginePackages,
 
     /// Optional handle to the engine's `ProjectDatabase`, set by
     /// `BexEngine::set_project_db`. Reflection-bearing natives
@@ -719,25 +707,25 @@ impl BexVm {
     /// Resolve the `Object::Package` `HeapPtr` for a function this VM is
     /// about to push a bytecode frame for.
     ///
-    /// Reads the function's `package_name` (unwrapping `Closure` and
-    /// `BoundMethod` to their underlying `Function`) and looks it up in
-    /// `self.packages`. Returns `None` when the heap value isn't a function
-    /// or when no matching package is registered (typically `BexVm::from_program`
-    /// VMs that bypass `BexEngine::new`'s package construction).
+    /// Reads `function.package` directly (unwrapping `Closure` /
+    /// `BoundMethod` to their underlying `Function` first). Returns `None`
+    /// when the heap value isn't a function or when the function carries a
+    /// null sentinel (typically test-fixture-synthesized Functions that
+    /// bypass `BexHeap::resolve_function_packages`).
     fn resolve_frame_package(&self, function: HeapPtr) -> Option<HeapPtr> {
-        let name = match self.get_object(function) {
-            Object::Function(f) => &f.package_name,
+        let pkg = match self.get_object(function) {
+            Object::Function(f) => f.package,
             Object::Closure(c) => match self.get_object(c.function) {
-                Object::Function(f) => &f.package_name,
+                Object::Function(f) => f.package,
                 _ => return None,
             },
             Object::BoundMethod(bm) => match self.get_object(bm.function) {
-                Object::Function(f) => &f.package_name,
+                Object::Function(f) => f.package,
                 _ => return None,
             },
             _ => return None,
         };
-        self.packages.get(name)
+        if pkg.is_null() { None } else { Some(pkg) }
     }
 
     /// Create a new VM with a shared heap.
@@ -747,7 +735,6 @@ impl BexVm {
     pub fn new(
         heap: Arc<BexHeap>,
         globals: VmGlobals,
-        packages: EnginePackages,
         resolved_class_names: HashMap<String, HeapPtr>,
         #[cfg(not(target_arch = "wasm32"))] park_requested: Arc<AtomicBool>,
         argv: Arc<[String]>,
@@ -792,7 +779,6 @@ impl BexVm {
             early_yield,
             tlab,
             globals,
-            packages,
             project_db: None,
             runtime_pkg_counter: None,
             resolved_class_names,
@@ -1120,16 +1106,13 @@ impl BexVm {
         );
 
         // `from_program` is a test/standalone constructor that bypasses
-        // `BexEngine::new`'s package-construction pass, so no packages are
-        // registered. Frame pushes will leave `BytecodeFrame::package = None`,
-        // which the package-routed dispatch path handles by falling back to
+        // `BexEngine::new`'s package-construction pass — Functions in this
+        // program carry `package: HeapPtr::null()` so `resolve_frame_package`
+        // returns `None`, and the package-routed dispatch path falls back to
         // `self.globals` — preserving existing test semantics.
-        let packages = EnginePackages::from_map(HashMap::new());
-
         Ok(Self::new(
             heap,
             globals,
-            packages,
             resolved_class_names,
             #[cfg(not(target_arch = "wasm32"))]
             park_requested,

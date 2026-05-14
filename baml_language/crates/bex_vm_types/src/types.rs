@@ -421,15 +421,37 @@ pub struct Function {
     /// (first segment of `"baml.math.trunc"` is `"baml"`); runtime emit sets it
     /// from the owning runtime package's name.
     ///
-    /// At frame push the VM looks up this name in `BexEngine::packages` to
-    /// resolve the `Object::Package` handle and cache the package's globals
-    /// vec on `BytecodeFrame.package_globals`. Per-instruction dispatch
-    /// (`Call`, `LoadGlobal`) then reads from the frame-cached globals slice.
+    /// Used by:
+    /// - Build-time `BexHeap::resolve_function_packages` to populate
+    ///   [`Self::package`] with a stable `HeapPtr` from the compile-time
+    ///   package pool.
+    /// - Debug / diagnostic display.
+    /// - PPIR name resolution paths that consult the function's package by
+    ///   string.
     ///
-    /// Empty string means "host package" (the implicit `"user"` namespace) for
-    /// transitional build-time emit; will be filled in concretely by Phase 4b
-    /// emit changes.
+    /// At runtime dispatch, [`Self::package`] is the authoritative pointer;
+    /// this field is purely metadata.
     pub package_name: String,
+
+    /// Owning package `HeapPtr` — the dispatch-relevant identity for this
+    /// function.
+    ///
+    /// Set at heap-init time by `BexHeap::resolve_function_packages` (for
+    /// build-time functions) or by `lift_runtime_package` (for runtime-
+    /// compiled functions). At `BytecodeFrame` push, the VM reads this
+    /// directly to find the owning `Object::Package` and cache it on
+    /// the frame for fast per-instruction global-slot resolution.
+    ///
+    /// GC: walked by the `Object::Function` arm of
+    /// `add_references_to_worklist` / `fixup_object_references` /
+    /// `collect_young_references` so a runtime gen0 `Object::Package` stays
+    /// reachable while any of its functions is in scope.
+    ///
+    /// Defaults to `HeapPtr::null()` until `resolve_function_packages`
+    /// populates it. The sentinel is never observed at runtime dispatch
+    /// because the engine fills it before `BexHeap::new` wraps the heap
+    /// in `Arc`.
+    pub package: crate::HeapPtr,
 }
 
 impl std::fmt::Display for Function {

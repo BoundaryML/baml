@@ -4618,6 +4618,9 @@ function baml.panics.UserPanic.to_json(self: null) -> baml.json.json {
     return
 }
 
+function baml.ref_equals(a: unknown, b: unknown) -> bool {
+}
+
 function baml.stream.StreamFinished.from_json(j: baml.json.json) -> baml.stream.StreamFinished {
     alloc_instance baml.stream.StreamFinished
     return

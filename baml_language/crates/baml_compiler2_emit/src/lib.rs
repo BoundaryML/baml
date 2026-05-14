@@ -29,7 +29,7 @@ use baml_compiler2_ppir::file_item_tree;
 use baml_type::TyAttr;
 use bex_vm_types::{
     Bytecode, Class, ClassField, ConstValue, Enum, EnumVariant, Function, FunctionKind,
-    FunctionMeta, FunctionOrigin, Instruction, Object, ObjectIndex, ObjectPool, Program,
+    FunctionMeta, FunctionOrigin, HeapPtr, Instruction, Object, ObjectIndex, ObjectPool, Program,
 };
 
 /// Build a per-package `ResolvedAliases` cache, keyed by package name.
@@ -537,6 +537,7 @@ pub fn generate_project_bytecode_with_opt(
                         trace: false,
                         aux_object_ptrs: Vec::new(),
                         package_name: pkg_info_pass4.package.to_string(),
+                        package: HeapPtr::null(),
                     }
                 }
                 MirFunctionKind::Builtin(BuiltinKind::Vm) => Function {
@@ -566,6 +567,7 @@ pub fn generate_project_bytecode_with_opt(
                     trace: false,
                     aux_object_ptrs: Vec::new(),
                     package_name: pkg_info_pass4.package.to_string(),
+                    package: HeapPtr::null(),
                 },
             };
 
@@ -804,6 +806,7 @@ pub fn generate_project_bytecode_with_opt(
                 trace: false,
                 aux_object_ptrs: Vec::new(),
                 package_name: pkg_name.clone(),
+                package: HeapPtr::null(),
             };
 
             let chainer_name = if pkg_name.as_str() == "user" {
@@ -1392,6 +1395,7 @@ fn compile_init_function<'db>(
                     trace: false,
                     aux_object_ptrs: Vec::new(),
                     package_name: pkg_name.to_string(),
+                    package: HeapPtr::null(),
                 }
             }
         };
@@ -1468,6 +1472,7 @@ fn compile_init_function<'db>(
         trace: false,
         aux_object_ptrs: Vec::new(),
         package_name: pkg_name.to_string(),
+        package: HeapPtr::null(),
     })
 }
 

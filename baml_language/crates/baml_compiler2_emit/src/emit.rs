@@ -17,7 +17,7 @@ use baml_compiler2_mir::{
 use baml_type::{Ty, TyTemplate};
 use bex_vm_types::{
     BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionKind, FunctionOrigin,
-    GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp,
+    GlobalIndex, HeapPtr, Instruction, Object, ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp,
     bytecode::{
         BlockNotification, BlockNotificationType, DebugLocalScope, InstructionMeta, JumpTableData,
         LineTableEntry, MatchHashEntry, MatchHashTable, OperandMeta,
@@ -697,10 +697,17 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             // to compile-time pool resolution. Runtime-compiled functions get
             // this populated by `BexVm::alloc_function_gen0` (in a future commit).
             aux_object_ptrs: Vec::new(),
-            // Empty here — set by the caller (`compile_function` for top-level
-            // functions, `compile_lambdas_flat` for lambdas) once the function's
-            // FQN is known. For lambdas this is the containing function's package.
+            // `package_name` is empty here — the caller (`compile_function`
+            // for top-level functions, `compile_lambdas_flat` for lambdas)
+            // overwrites it once the function's FQN is known. For lambdas
+            // this is the containing function's package.
+            //
+            // `package` (the runtime HeapPtr) is `null()` until
+            // `BexHeap::resolve_function_packages` runs at engine init —
+            // it can't be resolved earlier because no heap exists yet at
+            // emit time.
             package_name: String::new(),
+            package: HeapPtr::null(),
         }
     }
 

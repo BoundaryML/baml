@@ -64,6 +64,7 @@ function baml.values(self: ?) -> baml.V[]  [builtin]
 --- <builtin>/baml/core.baml ---
 function baml.deep_copy(value: baml.T) -> baml.T  [builtin]
 function baml.deep_equals(a: baml.T, b: baml.T) -> bool  [builtin]
+function baml.ref_equals(a: unknown, b: unknown) -> bool  [builtin]
 
 --- <builtin>/baml/float.baml ---
 class baml.Float {

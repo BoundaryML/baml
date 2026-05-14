@@ -234,7 +234,11 @@ fn lift_runtime_package(
             .strip_prefix(pkg_dot.as_str())
             .unwrap_or(func.name.as_str())
             .to_string();
-        let ptr = vm.tlab.alloc(Object::Function(Box::new(func.clone())));
+        // Tag the function with its owning package so runtime dispatch
+        // (`resolve_frame_package`) reads `pkg.globals` for `Call`/`LoadGlobal`.
+        let mut func_clone = func.clone();
+        func_clone.package = pkg_ptr;
+        let ptr = vm.tlab.alloc(Object::Function(Box::new(func_clone)));
         name_to_ptr.insert(local_name.clone(), ptr);
         newly_allocated.push((local_name, ptr));
     }

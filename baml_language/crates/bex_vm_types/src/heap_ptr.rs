@@ -107,6 +107,17 @@ impl HeapPtr {
         self.ptr
     }
 
+    /// Returns `true` if this `HeapPtr` is the null sentinel produced by
+    /// [`Self::null`] — i.e., not yet resolved to a real heap object.
+    ///
+    /// Useful for fields like `Function.package` that may be a placeholder
+    /// before `BexHeap::resolve_function_packages` fills them in (and for
+    /// test-fixture-synthesized Functions that never go through that pass).
+    #[inline]
+    pub fn is_null(self) -> bool {
+        self.ptr.is_null()
+    }
+
     /// Dereference to get a reference to the object.
     ///
     /// # Safety
