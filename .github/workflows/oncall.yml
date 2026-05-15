@@ -80,7 +80,16 @@ jobs:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v8.1.0
       - run: ./tools/bctl oncall fill-schedule
+      - name: Check for changes
+        id: check_changes
+        run: |
+          if git diff --quiet; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
       - uses: peter-evans/create-pull-request@v6
+        if: steps.check_changes.outputs.has_changes == 'true'
         with:
           token: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE }}
           branch: oncall/fill-schedule
