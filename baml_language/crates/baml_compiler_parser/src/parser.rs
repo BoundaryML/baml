@@ -49,6 +49,7 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Throw => SyntaxKind::KW_THROW,
         TokenKind::Watch => SyntaxKind::KW_WATCH,
         TokenKind::Instanceof => SyntaxKind::KW_INSTANCEOF,
+        TokenKind::Is => SyntaxKind::KW_IS,
         TokenKind::Dynamic => SyntaxKind::KW_DYNAMIC,
         TokenKind::Match => SyntaxKind::KW_MATCH,
         TokenKind::Catch => SyntaxKind::KW_CATCH,
@@ -4142,6 +4143,18 @@ impl<'a> Parser<'a> {
                     // Don't consume the brace - it's likely a block/body for an outer construct
                     break;
                 }
+            } else if op == TokenKind::Is {
+                // `<expr> is <pattern>` — Rust `matches!`-style pattern test.
+                // Same binding power as comparison operators (18, 19).
+                let left_bp = 18u8;
+                if left_bp < min_bp {
+                    break;
+                }
+                let lhs_start = self.find_previous_expr_start_after(expr_start);
+                self.bump(); // is
+                self.parse_pattern();
+                self.wrap_events_in_node(lhs_start, SyntaxKind::IS_EXPR);
+                self.finish_node();
             } else if let Some((left_bp, right_bp)) = Self::infix_binding_power(op) {
                 // General infix operators (including < when it's not generic args)
                 if left_bp < min_bp {
@@ -5771,6 +5784,23 @@ mod tests {
             errors.is_empty(),
             "expected no parse errors, got: {errors:#?}"
         );
+    }
+
+    #[test]
+    fn is_expr_parses_at_comparison_precedence() {
+        // `<expr> is <pattern>` should produce an IS_EXPR node, parsed at the
+        // same binding power as comparison operators. Verifies the parser
+        // accepts a bare type-pattern RHS, an or-pattern RHS, and `is` chained
+        // with `&&` (where `&&` is lower precedence so wraps both `is` nodes).
+        let source =
+            "function f() -> bool {\n  let v: int | string = 1\n  v is int && v is int | bool\n}\n";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let is_count = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::IS_EXPR)
+            .count();
+        assert_eq!(is_count, 2, "expected two IS_EXPR nodes");
     }
 
     #[test]

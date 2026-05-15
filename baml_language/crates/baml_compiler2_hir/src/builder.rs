@@ -455,6 +455,13 @@ impl<'db> SemanticIndexBuilder<'db> {
                     self.walk_match_arm(arm_id, body, source_map);
                 }
             }
+            ast::Expr::Is { scrutinee, .. } => {
+                // `<expr> is <pattern>` is a one-shot pattern test that yields
+                // `bool`. Pattern bindings do NOT escape into the surrounding
+                // scope (use `match` / `let` if you need that). Type
+                // references inside the pattern are resolved later by TIR.
+                self.walk_expr(*scrutinee, body, source_map, true);
+            }
             ast::Expr::Catch { base, clauses } => {
                 self.walk_expr(*base, body, source_map, true);
                 for clause in clauses {

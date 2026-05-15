@@ -604,6 +604,10 @@ fn expr_desc_spans<'db>(
             spans.extend(expr_desc_spans(*scrutinee, body, inference));
             spans.push(DetailSpan::Code(") { ... }".into()));
         }
+        Expr::Is { scrutinee, .. } => {
+            spans.extend(expr_desc_spans(*scrutinee, body, inference));
+            spans.push(DetailSpan::Code(" is <pattern>".into()));
+        }
         Expr::Catch { base, clauses } => {
             spans.extend(expr_desc_spans(*base, body, inference));
             for clause in clauses {
@@ -2034,6 +2038,9 @@ impl CompilerRunner {
                     .join("."),
                 Expr::If { .. } => "if ...".into(),
                 Expr::Match { .. } => "match ...".into(),
+                Expr::Is { scrutinee, .. } => {
+                    format!("{} is <pattern>", expr_desc(*scrutinee, body))
+                }
                 Expr::Catch { .. } => "catch ...".into(),
                 Expr::Throw { value } => format!("throw {}", expr_desc(*value, body)),
                 Expr::Binary { op, .. } => format!("... {op:?} ..."),

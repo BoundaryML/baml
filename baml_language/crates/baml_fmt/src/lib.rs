@@ -173,3 +173,125 @@ mod pattern_format_tests {
         assert_eq!(formatted, second, "formatter should be idempotent");
     }
 }
+
+#[cfg(test)]
+mod is_format_tests {
+    //! Formatter tests for `<expr> is <pattern>`. Each case rounds the
+    //! source through `format` twice and asserts (a) the formatter
+    //! succeeds, (b) the keyword + pattern stay on one line when the
+    //! result fits, and (c) the formatter is idempotent.
+
+    use super::*;
+
+    fn assert_formats_to(source: &str, expected: &str) {
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed on `is`");
+        assert_eq!(
+            formatted, expected,
+            "formatter output didn't match expected\n--- got ---\n{formatted}\n--- want ---\n{expected}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn test_is_basic_type_pattern_one_line() {
+        let source = "function check(v: int | string) -> bool {\n    v is int\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_is_negation_stays_on_one_line() {
+        // Regression: when `IS_EXPR` was treated as `Expression::Unknown`,
+        // `!(v is string)` expanded across three lines. The dedicated
+        // formatter path keeps it inline.
+        let source = "function check(v: int | string) -> bool {\n    !(v is string)\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_is_inside_if_condition_stays_on_one_line() {
+        // Same root cause as the negation case — the unknown-fallback used
+        // to spread `if (v is int)` across multiple lines.
+        let source = "function classify(v: int | string) -> string {\n    if (v is int) {\n        \"number\"\n    } else {\n        \"text\"\n    }\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_is_or_pattern_keeps_or_inline() {
+        // The pattern side is rendered via `MatchPattern`'s printer, so
+        // or-patterns stay on one line when they fit.
+        let source = "function check(v: int | string | bool) -> bool {\n    v is int | bool\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_is_with_class_destructure_pattern() {
+        // Use already-formatted class syntax (`: type,` form) since this
+        // test is about the `is` expression, not class formatting.
+        let source = "class User {\n    name: string,\n    age: int,\n}\n\nfunction is_user(u: User) -> bool {\n    u is User { name, age }\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_is_chained_with_and_stays_on_one_line() {
+        let source = "function both(a: int | string, b: int | string) -> bool {\n    a is int && b is int\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_is_chained_on_itself_without_parens() {
+        // Left-associative chain without parens — the formatter must not
+        // insert any.
+        let source = "function check(v: int | string) -> bool {\n    v is int is bool\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_is_literal_pattern() {
+        let source = "function check(n: int) -> bool {\n    n is 0\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    // ── Trivia handling ─────────────────────────────────────────────────
+    //
+    // The single-line `is` printer mirrors `BinaryExpr`'s trivia rules:
+    // block comments between the scrutinee / keyword / pattern are kept
+    // verbatim, butted against neighboring tokens (no surrounding spaces),
+    // and the explicit ` ` between scrutinee/keyword/pattern is only
+    // emitted when there's no comment in that gap. The tests below pin
+    // each case so a regression that drops the comment surfaces here.
+
+    #[test]
+    fn test_is_block_comment_between_scrutinee_and_keyword() {
+        let source = "function check(v: int | string) -> bool {\n    v /* before */ is int\n}\n";
+        let expected = "function check(v: int | string) -> bool {\n    v/* before */is int\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    #[test]
+    fn test_is_block_comment_between_keyword_and_pattern() {
+        let source = "function check(v: int | string) -> bool {\n    v is /* after */ int\n}\n";
+        let expected = "function check(v: int | string) -> bool {\n    v is/* after */int\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    #[test]
+    fn test_is_block_comments_on_both_sides_of_keyword() {
+        // Both sides — confirms the keyword still appears between the two
+        // comments instead of being swallowed or duplicated.
+        let source = "function check(v: int | string) -> bool {\n    v /* a */ is /* b */ int\n}\n";
+        let expected = "function check(v: int | string) -> bool {\n    v/* a */is/* b */int\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    #[test]
+    fn test_is_trailing_line_comment_after_pattern() {
+        // A line comment after the pattern attaches as trailing trivia of
+        // the enclosing statement/block, not of the `is` expression. The
+        // expression itself still formats on one line; the comment is
+        // preserved by the block-level printer.
+        let source = "function check(v: int | string) -> bool {\n    v is int // a note\n}\n";
+        assert_formats_to(source, source);
+    }
+}
