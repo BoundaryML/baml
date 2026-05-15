@@ -716,6 +716,186 @@ async fn pkg_get_throws_on_missing_name() {
     );
 }
 
+/// `pkg.eval<T>(source)` compiles and runs a BAML expression in the
+/// package's namespace and returns the result type-checked against `T`.
+/// The simplest path: a pure arithmetic expression evaluates to an int.
+#[tokio::test]
+async fn pkg_eval_pure_expression() {
+    let source = r#"
+        function main() -> int {
+            let pkg = reflect.Package.new();
+            pkg.eval<int>("1 + 2 + 3")
+        }
+    "#;
+
+    let (program, db) = compile_source_with_opt_returning_db(source, OptLevel::One);
+    let db_handle = Arc::new(parking_lot::Mutex::new(db));
+
+    let engine = BexEngine::new(
+        program,
+        Arc::new(sys_ops::SysOps::native()),
+        None,
+        Vec::new(),
+    )
+    .expect("BexEngine::new");
+    engine
+        .set_project_db(Arc::clone(&db_handle))
+        .expect("set_project_db");
+    let engine = Arc::new(engine);
+
+    let result = engine
+        .call_function_bound_args(
+            "user.main",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+    assert_eq!(
+        result,
+        Ok(bex_engine::BexExternalValue::Int(6)),
+        "eval should compile `1 + 2 + 3` and return 6"
+    );
+}
+
+/// Successive `pkg.eval<T>` calls on the same package must use distinct
+/// wrapper-function names (the per-package eval counter increments). Two
+/// evals in the same `main()` exercise the counter wiring.
+#[tokio::test]
+async fn pkg_eval_multiple_calls_unique_wrappers() {
+    // Explicit `: int` annotations help TIR substitute T → int at each
+    // eval call site (same as the Phase 6 `pkg.get<F>` workaround).
+    let source = r#"
+        function main() -> int {
+            let pkg = reflect.Package.new();
+            let a: int = pkg.eval<int>("10");
+            let b: int = pkg.eval<int>("32");
+            a + b
+        }
+    "#;
+
+    let (program, db) = compile_source_with_opt_returning_db(source, OptLevel::One);
+    let db_handle = Arc::new(parking_lot::Mutex::new(db));
+
+    let engine = BexEngine::new(
+        program,
+        Arc::new(sys_ops::SysOps::native()),
+        None,
+        Vec::new(),
+    )
+    .expect("BexEngine::new");
+    engine
+        .set_project_db(Arc::clone(&db_handle))
+        .expect("set_project_db");
+    let engine = Arc::new(engine);
+
+    let result = engine
+        .call_function_bound_args(
+            "user.main",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+    assert_eq!(
+        result,
+        Ok(bex_engine::BexExternalValue::Int(42)),
+        "two evals (10 + 32) should produce 42"
+    );
+}
+
+/// `pkg.eval<T>` can reference items previously added via `add_compile`.
+/// The wrapper's body is compiled in the package's namespace, so functions,
+/// classes, and let-bindings in the package are visible.
+#[tokio::test]
+async fn pkg_eval_can_reference_added_items() {
+    let source = r#"
+        function main() -> int {
+            let pkg = reflect.Package.new();
+            let _ = pkg.add_compile({
+                "lib.baml": "function double(x: int) -> int { x * 2 }"
+            });
+            pkg.eval<int>("double(21)")
+        }
+    "#;
+
+    let (program, db) = compile_source_with_opt_returning_db(source, OptLevel::One);
+    let db_handle = Arc::new(parking_lot::Mutex::new(db));
+
+    let engine = BexEngine::new(
+        program,
+        Arc::new(sys_ops::SysOps::native()),
+        None,
+        Vec::new(),
+    )
+    .expect("BexEngine::new");
+    engine
+        .set_project_db(Arc::clone(&db_handle))
+        .expect("set_project_db");
+    let engine = Arc::new(engine);
+
+    let result = engine
+        .call_function_bound_args(
+            "user.main",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+    assert_eq!(
+        result,
+        Ok(bex_engine::BexExternalValue::Int(42)),
+        "eval should reach into the package and call `double(21)`"
+    );
+}
+
+/// `pkg.eval<T>` throws when the synthesized wrapper fails to compile.
+/// Here the expression references an undefined name.
+#[tokio::test]
+async fn pkg_eval_throws_on_compile_error() {
+    let source = r#"
+        function main() -> bool {
+            let pkg = reflect.Package.new();
+            let x: int = pkg.eval<int>("undefined_name + 1");
+            x > 0
+        }
+        function entry() -> bool {
+            main() catch (_e) {
+                _ => true
+            }
+        }
+    "#;
+
+    let (program, db) = compile_source_with_opt_returning_db(source, OptLevel::One);
+    let db_handle = Arc::new(parking_lot::Mutex::new(db));
+
+    let engine = BexEngine::new(
+        program,
+        Arc::new(sys_ops::SysOps::native()),
+        None,
+        Vec::new(),
+    )
+    .expect("BexEngine::new");
+    engine
+        .set_project_db(Arc::clone(&db_handle))
+        .expect("set_project_db");
+    let engine = Arc::new(engine);
+
+    let result = engine
+        .call_function_bound_args(
+            "user.entry",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+    assert_eq!(
+        result,
+        Ok(bex_engine::BexExternalValue::Bool(true)),
+        "entry should catch the eval compile-error throw"
+    );
+}
+
 /// Second `add_compile` with a path that already exists in the runtime
 /// Salsa input must throw a BAML-side `Unsupported`. The first batch's
 /// file remains; the second batch's mutation is reverted by the

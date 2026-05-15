@@ -973,6 +973,13 @@ pub struct Package {
     /// through the engine's flat `SharedGlobals` via
     /// `PackageGlobals::Static`.
     pub function_slot_map: HashMap<String, usize>,
+
+    /// Counter for minting unique wrapper-function names in `reflect.Package.eval`.
+    /// Each call increments by one and the result is interpolated into
+    /// `function $eval_N() -> T { source }` so successive eval calls don't
+    /// collide on path or item name. Zero for build-time packages (which
+    /// don't support `eval`).
+    pub eval_counter: u64,
 }
 
 /// Per-package globals storage.

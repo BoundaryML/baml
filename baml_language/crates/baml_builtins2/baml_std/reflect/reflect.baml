@@ -92,4 +92,24 @@ class Package {
     function get<F>(self, name: string) -> F throws root.errors.AccessError {
         $rust_function
     }
+
+    /// Compile and run a BAML expression in this package's namespace,
+    /// returning the result type-checked against `T`.
+    ///
+    /// Internally synthesizes `function $eval_N() -> T { source }`, adds
+    /// it to the package, compiles, and invokes it. The wrapper persists
+    /// in the package after evaluation; subsequent `eval` calls allocate
+    /// fresh wrappers. (Aggressive cleanup is a follow-up.)
+    ///
+    /// Throws `AccessError` on compile error, type mismatch, or any
+    /// runtime exception raised by `source`.
+    ///
+    /// Example:
+    ///   let pkg = reflect.Package.new();
+    ///   assert.equal(pkg.eval<int>("1 + 2"), 3)
+    //baml:mut_vm
+    //baml:may_yield
+    function eval<T>(self, source: string) -> T throws root.errors.AccessError {
+        $rust_function
+    }
 }

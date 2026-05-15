@@ -12,7 +12,7 @@ use bex_vm_types::{
 };
 use indexmap::IndexMap;
 
-use super::{BamlClassReflectPackage, BamlNamespaceReflect, PackageBamlImpl};
+use super::{BamlClassReflectPackage, BamlNamespaceReflect, NativeCallResult, PackageBamlImpl};
 use crate::{
     BexVm,
     errors::{VmBamlError, VmRustFnError},
@@ -715,6 +715,7 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             items: HashMap::new(),
             globals: PackageGlobals::Dynamic(Vec::new()),
             function_slot_map: HashMap::new(),
+            eval_counter: 0,
         };
         let pkg_ptr = vm.tlab.alloc(Object::Package(Box::new(pkg)));
 
@@ -1006,6 +1007,182 @@ impl BamlClassReflectPackage for PackageBamlImpl {
 
         Ok(Value::Object(item_ptr))
     }
+
+    /// Compile a BAML expression in the package's namespace and invoke it,
+    /// returning the result type-checked against `T`.
+    ///
+    /// The expression is wrapped as a synthetic `function $eval_N() -> T {
+    /// source }` (where `N` is the package's per-package eval counter),
+    /// added to the package's runtime files, compiled, lifted, and then
+    /// invoked via `YieldToCall`. The continuation returns the result to
+    /// the BAML caller.
+    ///
+    /// Throws `AccessError` if:
+    ///   - the project DB isn't attached (host didn't call `set_project_db`).
+    ///   - the package is build-time (Static globals).
+    ///   - `T` is missing from `current_call_type_args`.
+    ///   - the synthesized wrapper fails to compile.
+    ///   - the lift fails.
+    fn eval(vm: &mut BexVm, package: &Value, source: &str) -> NativeCallResult {
+        match eval_impl(vm, package, source) {
+            Ok(result) => result,
+            Err(e) => NativeCallResult::Error(e),
+        }
+    }
+}
+
+/// Continuation that flows the eval wrapper's return value back to the BAML
+/// caller of `pkg.eval<T>(...)`. The wrapper has the right return type by
+/// construction (we synthesized it with `-> T`), so we just hand the value
+/// straight back.
+struct EvalContinuation;
+
+impl super::Continuation for EvalContinuation {
+    fn call(self: Box<Self>, _vm: &mut BexVm, value: Value) -> NativeCallResult {
+        NativeCallResult::Done(value)
+    }
+
+    fn gc_roots(&self) -> Vec<HeapPtr> {
+        Vec::new()
+    }
+
+    fn apply_forwarding(&mut self, _forwarding: &HashMap<HeapPtr, HeapPtr>) {}
+}
+
+/// Core of `reflect.Package.eval` — separated so the trait impl can use
+/// `?` while still returning `NativeCallResult` at the top level.
+fn eval_impl(
+    vm: &mut BexVm,
+    package: &Value,
+    source: &str,
+) -> Result<NativeCallResult, VmRustFnError> {
+    let pkg_ptr = unwrap_package_handle(vm, package)?;
+
+    // Snapshot the package's name and bump its eval counter atomically (we
+    // hold the mutex briefly while doing both). The new counter value is
+    // baked into the wrapper function's name, so successive eval calls
+    // don't collide on path or item name.
+    let (pkg_name, eval_id) = match vm.get_object_mut(pkg_ptr) {
+        Object::Package(pkg) => {
+            // Reject Static-globals (build-time) packages — eval requires
+            // adding a runtime file, which the static globals can't host.
+            if matches!(pkg.globals, PackageGlobals::Static(_)) {
+                return Err(VmRustFnError::from(VmBamlError::AccessError {
+                    message: "reflect.Package.eval: cannot eval into a build-time package; \
+                              use a runtime package created via reflect.Package.new()"
+                        .to_string(),
+                }));
+            }
+            let id = pkg.eval_counter;
+            pkg.eval_counter += 1;
+            (pkg.name.clone(), id)
+        }
+        _ => unreachable!("unwrap_package_handle returned a non-Package ptr"),
+    };
+
+    // Resolve T. Its `Display` impl produces BAML-compatible type syntax
+    // (see [crates/baml_type/src/lib.rs](crates/baml_type/src/lib.rs)),
+    // which we splice into the synthesized wrapper's return type slot.
+    let t_ty = vm
+        .current_call_type_args()
+        .first()
+        .cloned()
+        .ok_or_else(|| {
+            VmRustFnError::from(VmBamlError::AccessError {
+                message: "reflect.Package.eval: missing type argument T".to_string(),
+            })
+        })?;
+    let t_str = t_ty.to_string();
+
+    let wrapper_local_name = format!("$eval_{eval_id}");
+    let wrapper_path = format!("$eval_{eval_id}.baml");
+    let wrapper_source = format!("function {wrapper_local_name}() -> {t_str} {{ {source} }}");
+
+    // Reuse `add_compile`'s mutation/rollback machinery: synthesize a
+    // one-file batch and run the same lift pipeline. On any failure the
+    // guard reverts the Salsa input.
+    let Some(db_handle) = vm.project_db.as_ref() else {
+        return Err(VmRustFnError::from(VmBamlError::AccessError {
+            message: "reflect.Package.eval requires the host engine to be constructed \
+                      with `set_project_db`; the current engine has no project-DB handle \
+                      attached"
+                .to_string(),
+        }));
+    };
+    let db_handle = std::sync::Arc::clone(db_handle);
+    let mut db_guard = db_handle.lock();
+
+    let snapshot = db_guard.runtime_files_snapshot().ok_or_else(|| {
+        VmRustFnError::from(VmBamlError::AccessError {
+            message: "reflect.Package.eval: runtime files input not initialized \
+                      (set_project_root has not run)"
+                .to_string(),
+        })
+    })?;
+    let batch = RuntimeBatchGuard {
+        db: &mut db_guard,
+        snapshot: Some(snapshot),
+    };
+
+    let full_path = format!("<runtime>/{pkg_name}/{wrapper_path}");
+    let new_file = batch
+        .db
+        .add_runtime_file(std::path::PathBuf::from(full_path), &wrapper_source)
+        .map_err(|e| {
+            VmRustFnError::from(VmBamlError::AccessError {
+                message: format!("reflect.Package.eval: {e}"),
+            })
+        })?;
+
+    // Diagnostic check restricted to the wrapper file (covers parse / name-
+    // resolution / type errors that `compile_project` itself won't return).
+    let new_file_id = new_file.file_id(&*batch.db);
+    let diags = baml_project::collect_compiler2_diagnostics(&*batch.db);
+    if let Some(err_diag) = diags.iter().find(|d| {
+        d.severity == baml_project::Severity::Error
+            && d.primary_span()
+                .is_some_and(|span| span.file_id == new_file_id)
+    }) {
+        return Err(VmRustFnError::from(VmBamlError::AccessError {
+            message: format!("reflect.Package.eval: compile error: {}", err_diag.message),
+        }));
+    }
+
+    let program = batch
+        .db
+        .compile_project(baml_project::OptLevel::One)
+        .map_err(|e| VmBamlError::AccessError {
+            message: format!("reflect.Package.eval: compile failed: {e:?}"),
+        })?;
+
+    lift_runtime_package(vm, pkg_ptr, &pkg_name, &program)?;
+
+    batch.commit();
+    drop(db_guard);
+
+    // Find the wrapper function in pkg.items. The lift just placed it
+    // there under its local name.
+    let wrapper_ptr = match vm.get_object(pkg_ptr) {
+        Object::Package(pkg) => *pkg.items.get(&wrapper_local_name).ok_or_else(|| {
+            VmRustFnError::from(VmBamlError::AccessError {
+                message: format!(
+                    "reflect.Package.eval: synthesized wrapper {wrapper_local_name} not \
+                     found in package items after lift"
+                ),
+            })
+        })?,
+        _ => unreachable!(),
+    };
+
+    // YieldToCall the wrapper. Its return value flows through the
+    // continuation back to the BAML caller. No args, no type args (the
+    // return type was baked into the wrapper's signature).
+    Ok(NativeCallResult::YieldToCall {
+        callee: wrapper_ptr,
+        args: vec![],
+        type_args: vec![],
+        continuation: Box::new(EvalContinuation),
+    })
 }
 
 impl BamlNamespaceReflect for PackageBamlImpl {}

@@ -605,6 +605,7 @@ impl BexEngine {
                 items: HashMap::new(),
                 globals: PackageGlobals::Static(globals.clone()),
                 function_slot_map: HashMap::new(),
+                eval_counter: 0,
             };
             compile_time_objects.push(Object::Package(Box::new(pkg)));
         }
