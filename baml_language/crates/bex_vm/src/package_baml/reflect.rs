@@ -847,23 +847,32 @@ impl BamlClassReflectPackage for PackageBamlImpl {
         // Compile-time error check. `compile_project` itself only fails on
         // internal lowering errors (e.g. circular let-binding deps), not on
         // parse / name-resolution / type errors — those are collected as
-        // diagnostics. We must surface error-severity diagnostics from the
-        // newly-added files so bad user source rejects the batch (and the
-        // guard reverts the Salsa input).
-        for file in &new_source_files {
-            let diags = batch.db.check_file(*file);
-            if let Some(err_diag) = diags
-                .iter()
-                .find(|d| d.severity == baml_project::Severity::Error)
-            {
-                return Err(VmRustFnError::from(VmBamlError::Unsupported {
-                    message: format!(
-                        "reflect.Package.add_compile: compile error in {}: {}",
-                        file.path(&*batch.db).display(),
-                        err_diag.message
-                    ),
-                }));
-            }
+        // diagnostics. We must surface error-severity diagnostics that affect
+        // the batch so bad user source rejects it (and the guard reverts the
+        // Salsa input).
+        //
+        // Uses the project-wide `collect_compiler2_diagnostics` rather than
+        // per-file `check_file` so that cross-file conflicts — most notably
+        // HIR `DuplicateName` (E0011) when a later batch redefines an item
+        // from an earlier one — are caught. Filters to diagnostics whose
+        // primary span lives in one of the newly-added file ids; pre-existing
+        // host diagnostics don't gate `add_compile`.
+        let new_file_ids: std::collections::HashSet<baml_project::FileId> = new_source_files
+            .iter()
+            .map(|f| f.file_id(&*batch.db))
+            .collect();
+        let all_diags = baml_project::collect_compiler2_diagnostics(&*batch.db);
+        if let Some(err_diag) = all_diags.iter().find(|d| {
+            d.severity == baml_project::Severity::Error
+                && d.primary_span()
+                    .is_some_and(|span| new_file_ids.contains(&span.file_id))
+        }) {
+            return Err(VmRustFnError::from(VmBamlError::Unsupported {
+                message: format!(
+                    "reflect.Package.add_compile: compile error: {}",
+                    err_diag.message
+                ),
+            }));
         }
 
         // Re-run the emit pipeline against the modified DB. The guard

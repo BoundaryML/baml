@@ -489,6 +489,82 @@ async fn add_compile_preserves_wrapper_identity() {
     );
 }
 
+/// A second `add_compile` batch that redefines an item already present in
+/// `pkg.items` must throw a BAML-side `Unsupported`. The HIR `namespace_items`
+/// query emits `DiagnosticId::DuplicateName` (E0011) when two files in the
+/// same package declare the same FQN; combined with the `RuntimeBatchGuard`
+/// rollback, the second `add_compile` rejects the batch and leaves
+/// `pkg.items` exactly as the first batch left it.
+#[tokio::test]
+async fn add_compile_rejects_redefinition() {
+    let source = r#"
+        function main() -> bool {
+            let pkg = reflect.Package.new();
+            let _ = pkg.add_compile({
+                "first.baml": "function hello() -> int { 1 }"
+            });
+            // Redefining `hello` in a second batch under a different file path
+            // — duplicate-path dedupe (F7) doesn't catch this; HIR's
+            // DuplicateName diagnostic does.
+            let _ = pkg.add_compile({
+                "second.baml": "function hello() -> int { 2 }"
+            });
+            false
+        }
+        function entry() -> bool {
+            main() catch (_e) {
+                _ => true
+            }
+        }
+    "#;
+
+    let (program, db) = compile_source_with_opt_returning_db(source, OptLevel::One);
+    let db_handle = Arc::new(parking_lot::Mutex::new(db));
+
+    let engine = BexEngine::new(
+        program,
+        Arc::new(sys_ops::SysOps::native()),
+        None,
+        Vec::new(),
+    )
+    .expect("BexEngine::new");
+    engine
+        .set_project_db(Arc::clone(&db_handle))
+        .expect("set_project_db");
+    let engine = Arc::new(engine);
+
+    let result = engine
+        .call_function_bound_args(
+            "user.entry",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+    assert_eq!(
+        result,
+        Ok(bex_engine::BexExternalValue::Bool(true)),
+        "entry() should catch the redefinition throw"
+    );
+
+    // The first batch's file must still be the only runtime file present —
+    // the second batch's `set_files(...).to(...)` was reverted by the guard.
+    let db = db_handle.lock();
+    let runtime_files = db
+        .compiler2_runtime_files()
+        .expect("runtime files input should exist");
+    let files = runtime_files.files(&*db);
+    let paths: Vec<String> = files
+        .iter()
+        .map(|f: &SourceFile| f.path(&*db).to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(
+        paths,
+        vec!["<runtime>/_pkg_0/first.baml".to_string()],
+        "after the redefinition rejection, only the first batch's file should remain"
+    );
+}
+
 /// Second `add_compile` with a path that already exists in the runtime
 /// Salsa input must throw a BAML-side `Unsupported`. The first batch's
 /// file remains; the second batch's mutation is reverted by the

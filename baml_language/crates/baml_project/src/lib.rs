@@ -32,7 +32,7 @@ pub mod testing;
 
 pub use baml_compiler_diagnostics::{Diagnostic, Severity};
 pub use baml_compiler2_emit::{LoweringError, OptLevel};
-pub use baml_db::SourceFile;
+pub use baml_db::{FileId, SourceFile};
 pub use check::{CheckResult, collect_compiler2_diagnostics, collect_diagnostics};
 pub use client_codegen::build_symbol_pool;
 pub use db::{AddRuntimeFileError, CursorContext, EventCallback, ProjectDatabase};
