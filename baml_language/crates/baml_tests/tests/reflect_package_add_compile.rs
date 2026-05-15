@@ -1,9 +1,11 @@
-//! Phase 5.2c sanity test: `reflect.Package.add_compile` accepts a map of
-//! files and stores each as a runtime source file under `<runtime>/{pkg}/…`
-//! in the engine's `Compiler2RuntimeFiles` Salsa input.
+//! End-to-end tests for the `reflect.Package` runtime-compilation API:
+//! `reflect.Package.new`, `add_compile`, `get<F>(name)`, and `eval<T>(source)`.
 //!
-//! Re-emit + item extraction land in later commits; this test just verifies
-//! the file-insertion plumbing.
+//! Covers the file-insertion plumbing, the lift pipeline (functions, classes,
+//! same-package and external callees, ConstValue resolution), GC tracing of
+//! runtime-allocated function/package objects, the `RuntimeBatchGuard`
+//! rollback on compile failures, structural type-checking on `get<F>`, and
+//! synthesized-wrapper invocation for `eval<T>`.
 
 use std::sync::Arc;
 
@@ -438,10 +440,8 @@ async fn add_compile_lifts_string_constant() {
 /// chained batches.
 ///
 /// This is the BAML-side proof that `Package` is a mutable, persistent
-/// handle: once Phase 6 adds `pkg.get<F>(name)`, the same approach extends
-/// to verifying that *items* keep their identity too. For now the items
-/// invariant is covered by `add_compile_lifts_items_and_remaps_slots`
-/// via heap inspection.
+/// handle. The items-identity invariant is covered by
+/// `add_compile_lifts_items_and_remaps_slots` via heap inspection.
 #[tokio::test]
 async fn add_compile_preserves_wrapper_identity() {
     let source = r#"
@@ -764,7 +764,7 @@ async fn pkg_eval_pure_expression() {
 #[tokio::test]
 async fn pkg_eval_multiple_calls_unique_wrappers() {
     // Explicit `: int` annotations help TIR substitute T → int at each
-    // eval call site (same as the Phase 6 `pkg.get<F>` workaround).
+    // eval call site (same workaround as for `pkg.get<F>(...)`).
     let source = r#"
         function main() -> int {
             let pkg = reflect.Package.new();
@@ -893,6 +893,60 @@ async fn pkg_eval_throws_on_compile_error() {
         result,
         Ok(bex_engine::BexExternalValue::Bool(true)),
         "entry should catch the eval compile-error throw"
+    );
+}
+
+/// `Instruction::IsType` against a parametric class reads its
+/// ObjectIndex out of `ConstValue::ClassWithTypeArgs.class_obj`. For
+/// runtime-lifted functions, that ObjectIndex must be rewritten from the
+/// program-pool index to an aux-pool slot during the lift; otherwise the
+/// VM's `resolve_obj_idx` either grabs the wrong slot or falls back to
+/// the compile-time pool with an out-of-range index.
+///
+/// This test defines a parametric class inside the runtime package and a
+/// function that exercises `is Box<int>` against a `Box<int>` instance and a
+/// `Box<string>` instance, then retrieves and invokes that function.
+#[tokio::test]
+async fn pkg_runtime_is_type_parametric_class() {
+    let source = r#"
+        function main() -> bool {
+            let pkg = reflect.Package.new();
+            let _ = pkg.add_compile({
+                "lib.baml": "class Box<T> { value T } function discriminates(b: Box<int> | Box<string>) -> bool { match (b) { Box<int> => true, Box<string> => false } } function check() -> bool { let a: Box<int> | Box<string> = Box<int> { value: 7 }; discriminates(a) }"
+            });
+            let check: () -> bool = pkg.get<() -> bool>("check");
+            check()
+        }
+    "#;
+
+    let (program, db) = compile_source_with_opt_returning_db(source, OptLevel::One);
+    let db_handle = Arc::new(parking_lot::Mutex::new(db));
+
+    let engine = BexEngine::new(
+        program,
+        Arc::new(sys_ops::SysOps::native()),
+        None,
+        Vec::new(),
+    )
+    .expect("BexEngine::new");
+    engine
+        .set_project_db(Arc::clone(&db_handle))
+        .expect("set_project_db");
+    let engine = Arc::new(engine);
+
+    let result = engine
+        .call_function_bound_args(
+            "user.main",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+    assert_eq!(
+        result,
+        Ok(bex_engine::BexExternalValue::Bool(true)),
+        "parametric `is Box<int>` must correctly route the ClassWithTypeArgs \
+         operand through the aux pool"
     );
 }
 
@@ -1244,10 +1298,11 @@ async fn add_compile_without_project_db_throws_baml_unsupported() {
     let (program, _db) = compile_source_with_opt_returning_db(source, OptLevel::One);
 
     // Note: NO call to `engine.set_project_db(...)`. `reflect.Package.new`
-    // also needs the project_db (to mint the `_pkg_N` name through the
-    // runtime counter), so we expect the throw to surface at `Package.new`
-    // — earlier than `add_compile`, but still a BAML throw caught by
-    // `entry`. Either way, no Rust panic.
+    // itself doesn't need the project DB (it mints names through the
+    // engine's `runtime_pkg_counter`, which is wired independently), so it
+    // succeeds. The throw surfaces inside `pkg.add_compile(...)`, which
+    // requires the DB handle to insert into the Salsa runtime input.
+    // Either way, no Rust panic — the BAML caller catches the throw.
     let engine = Arc::new(
         BexEngine::new(
             program,

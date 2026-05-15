@@ -341,9 +341,8 @@ impl ProjectDatabase {
         self.compiler2_extra_files = Some(compiler2_extra);
 
         // Create the runtime files Salsa input pre-populated empty. The native
-        // `reflect.Package.add_compile` builtin mutates this input as user code
-        // creates packages and adds files. Phase 3 sets it up but no consumer
-        // populates it yet — runtime packages land in Phase 4+.
+        // `reflect.Package.add_compile` / `Package.eval` builtins mutate this
+        // input as user code creates packages and adds (or synthesizes) files.
         let runtime_files = Compiler2RuntimeFiles::new(self, Vec::new());
         self.compiler2_runtime_files = Some(runtime_files);
 
@@ -448,12 +447,26 @@ impl ProjectDatabase {
     /// Replace the current set of runtime files. Used by `reflect.Package.add_compile`
     /// to revert mutations after a failed compile.
     ///
-    /// Panics if `set_project_root` hasn't been called.
+    /// # Panics
+    /// Panics if `set_project_root` hasn't been called. Callers are expected
+    /// to have obtained `files` from a successful
+    /// [`Self::runtime_files_snapshot`] call earlier in the same critical
+    /// section, which proves the input was initialized — so the panic is
+    /// structurally unreachable in correctly-paired snapshot/restore code.
     pub fn set_runtime_files(&mut self, files: Vec<SourceFile>) {
         let runtime = self
             .compiler2_runtime_files
             .unwrap_or_else(|| unreachable!("set_runtime_files: project root not set"));
         runtime.set_files(self).to(files);
+    }
+
+    /// Remove a `FileId → path` entry from the side-table written by
+    /// `add_runtime_file`. Used by `reflect.Package.add_compile`'s rollback
+    /// path to keep `file_id_to_path` consistent with the Salsa input —
+    /// failed batches restore the runtime files Vec but the side-table
+    /// otherwise retains orphan entries.
+    pub fn remove_file_id_to_path(&mut self, file_id: FileId) {
+        self.file_id_to_path.remove(&file_id);
     }
 
     /// Get all files currently in the database.

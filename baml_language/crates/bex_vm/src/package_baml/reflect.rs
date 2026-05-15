@@ -22,9 +22,11 @@ use crate::{
 ///
 /// Used by the `add_compile` lift to find every object-pool reference in a
 /// runtime function's bytecode so they can be lifted into the function's
-/// per-function `aux_object_ptrs` pool. `IsType` is omitted: its operand
-/// indexes into `bytecode.constants` (a `ConstValue`), not the object pool,
-/// so it's covered by `resolve_runtime_const` instead.
+/// per-function `aux_object_ptrs` pool. `IsType(const_idx)` is intentionally
+/// omitted here: its `ObjectIndex` operand lives inside the constants pool
+/// (`ConstValue::ClassWithTypeArgs { class_obj, .. }`), not in the
+/// instruction itself, so the lift handles it via a separate walk over
+/// `bytecode.constants`.
 fn instruction_object_idx(instr: &Instruction) -> Option<bex_vm_types::ObjectIndex> {
     match *instr {
         Instruction::AllocInstance { class_obj, .. } => Some(class_obj),
@@ -173,6 +175,25 @@ fn resolve_runtime_const(
             }
         }
     }
+}
+
+/// Returns `true` if any of `diag`'s annotated spans (primary, secondary, or
+/// related-info) point at a file in `file_ids`. Used by `add_compile` /
+/// `eval` to gate the batch on diagnostics that *touch* a newly-added file,
+/// even if the diagnostic's primary span is elsewhere (e.g. HIR cross-file
+/// duplicate-name where one occurrence is primary and the other is
+/// secondary).
+fn diagnostic_touches_files(
+    diag: &baml_project::Diagnostic,
+    file_ids: &std::collections::HashSet<baml_project::FileId>,
+) -> bool {
+    diag.annotations
+        .iter()
+        .any(|a| file_ids.contains(&a.span.file_id))
+        || diag
+            .related_info
+            .iter()
+            .any(|r| file_ids.contains(&r.span.file_id))
 }
 
 /// Object kind tag for `ObjectIndex` resolution during the lift. Carried in
@@ -398,8 +419,8 @@ fn lift_runtime_package(
                 return Err(VmBamlError::Unsupported {
                     message: format!(
                         "reflect.Package.add_compile: global slot {flat_idx} has \
-                         non-function value (kind: {cv:?}); only function targets are \
-                         supported in this commit"
+                         non-function value (kind: {cv:?}); only function targets in \
+                         global slots are currently supported"
                     ),
                 }
                 .into());
@@ -455,80 +476,96 @@ fn lift_runtime_package(
         }
 
         // ─── Pass B.2: ObjectIndex → aux pool ───
-        // For each AllocInstance/AllocVariant/MakeClosure operand, resolve
-        // the target HeapPtr and assign it a slot in the function's aux pool.
+        // For each AllocInstance/AllocVariant/MakeClosure operand AND each
+        // ConstValue::ClassWithTypeArgs.class_obj entry, resolve the target
+        // HeapPtr and assign it a slot in the function's aux pool.
         // `aux_index_for` deduplicates within a single function so multiple
         // references to the same target share one aux slot.
+        //
+        // `IsType(const_idx)` reads its ObjectIndex out of
+        // `bytecode.constants[const_idx]` (a `ConstValue::ClassWithTypeArgs`),
+        // not directly from the instruction operand, so it has to be handled
+        // through the constants walk rather than `instruction_object_idx`.
         let mut aux_pool: Vec<HeapPtr> = Vec::new();
         let mut aux_index_for: HashMap<usize, usize> = HashMap::new();
-        for instr in &instructions_snapshot {
-            let Some(obj_idx) = instruction_object_idx(instr) else {
-                continue;
-            };
-            let raw = obj_idx.into_raw();
-            if aux_index_for.contains_key(&raw) {
-                continue;
-            }
-            let (fqn, kind) =
-                object_index_lookup
-                    .get(&raw)
-                    .cloned()
-                    .ok_or_else(|| VmBamlError::Unsupported {
-                        message: format!(
-                            "reflect.Package.add_compile: ObjectIndex {raw} in instruction \
-                         {instr:?} doesn't match any Function/Class/Enum in the program \
-                         object pool"
-                        ),
-                    })?;
-            // Resolve same-package vs external:
-            //  - Same-package: look up local name in `name_to_ptr`.
-            //  - External: look up by FQN in the appropriate engine map.
-            let target_ptr = if let Some(local) = fqn.strip_prefix(pkg_dot.as_str()) {
-                *name_to_ptr
-                    .get(local)
-                    .ok_or_else(|| VmBamlError::Unsupported {
-                        message: format!(
-                            "reflect.Package.add_compile: same-package {kind:?} target {fqn} \
-                         not found in package items"
-                        ),
-                    })?
-            } else {
-                match kind {
-                    LiftedObjectKind::Function => {
-                        *external_fn_cache
-                            .get(&fqn)
-                            .ok_or_else(|| VmBamlError::Unsupported {
-                                message: format!(
-                                    "reflect.Package.add_compile: external function {fqn} \
-                             referenced via ObjectIndex not found in engine globals"
-                                ),
-                            })?
-                    }
-                    // BAML's runtime type namespace is unified — classes and
-                    // enums share `vm.resolved_class_names` (FQNs are unique
-                    // across both kinds; see [crates/bex_vm/src/vm.rs](crates/bex_vm/src/vm.rs)
-                    // where enum entries are folded into the same map).
-                    LiftedObjectKind::Class | LiftedObjectKind::Enum => *vm
-                        .resolved_class_names
-                        .get(&fqn)
-                        .ok_or_else(|| VmBamlError::Unsupported {
-                            message: format!(
-                                "reflect.Package.add_compile: external {kind:?} {fqn} not \
-                                 found in engine class/enum registry"
-                            ),
-                        })?,
-                }
-            };
-            let slot = aux_pool.len();
-            aux_pool.push(target_ptr);
-            aux_index_for.insert(raw, slot);
-        }
 
-        // Resolve constants for this function.
         let constants_snapshot: Vec<ConstValue> = match vm.get_object(*fn_ptr) {
             Object::Function(f) => f.bytecode.constants.clone(),
             _ => unreachable!(),
         };
+
+        // Helper: resolve `raw_obj_idx` (an index into the freshly-emitted
+        // program's object pool) to a HeapPtr and ensure it has an aux-pool
+        // slot. Returns the aux slot index.
+        let mut resolve_to_aux =
+            |vm: &BexVm, raw: usize, ctx: &str| -> Result<usize, VmRustFnError> {
+                if let Some(&slot) = aux_index_for.get(&raw) {
+                    return Ok(slot);
+                }
+                let (fqn, kind) = object_index_lookup.get(&raw).cloned().ok_or_else(|| {
+                    VmBamlError::Unsupported {
+                        message: format!(
+                            "reflect.Package.add_compile: ObjectIndex {raw} in {ctx} doesn't \
+                         match any Function/Class/Enum in the program object pool"
+                        ),
+                    }
+                })?;
+                let target_ptr =
+                    if let Some(local) = fqn.strip_prefix(pkg_dot.as_str()) {
+                        *name_to_ptr.get(local).ok_or_else(|| VmBamlError::Unsupported {
+                    message: format!(
+                        "reflect.Package.add_compile: same-package {kind:?} target {fqn} \
+                         not found in package items"
+                    ),
+                })?
+                    } else {
+                        match kind {
+                            LiftedObjectKind::Function => {
+                                *external_fn_cache.get(&fqn).ok_or_else(|| {
+                                    VmBamlError::Unsupported {
+                                        message: format!(
+                                            "reflect.Package.add_compile: external function {fqn} \
+                                     referenced via ObjectIndex not found in engine globals"
+                                        ),
+                                    }
+                                })?
+                            }
+                            // BAML's runtime type namespace is unified — classes and
+                            // enums share `vm.resolved_class_names` (FQNs are unique
+                            // across both kinds; see
+                            // [crates/bex_vm/src/vm.rs](crates/bex_vm/src/vm.rs) where
+                            // enum entries are folded into the same map).
+                            LiftedObjectKind::Class | LiftedObjectKind::Enum => *vm
+                                .resolved_class_names
+                                .get(&fqn)
+                                .ok_or_else(|| VmBamlError::Unsupported {
+                                    message: format!(
+                                        "reflect.Package.add_compile: external {kind:?} {fqn} not \
+                                 found in engine class/enum registry"
+                                    ),
+                                })?,
+                        }
+                    };
+                let slot = aux_pool.len();
+                aux_pool.push(target_ptr);
+                aux_index_for.insert(raw, slot);
+                Ok(slot)
+            };
+
+        // Instruction-operand ObjectIndexes (AllocInstance, AllocVariant,
+        // MakeClosure).
+        for instr in &instructions_snapshot {
+            if let Some(obj_idx) = instruction_object_idx(instr) {
+                resolve_to_aux(vm, obj_idx.into_raw(), "instruction")?;
+            }
+        }
+        // Constant-pool ObjectIndexes inside `ClassWithTypeArgs` (read by
+        // `IsType` against parametric class types).
+        for cv in &constants_snapshot {
+            if let ConstValue::ClassWithTypeArgs { class_obj, .. } = cv {
+                resolve_to_aux(vm, class_obj.into_raw(), "ClassWithTypeArgs constant")?;
+            }
+        }
         let mut resolved: Vec<Value> = Vec::with_capacity(constants_snapshot.len());
         for cv in &constants_snapshot {
             resolved.push(resolve_runtime_const(
@@ -542,7 +579,8 @@ fn lift_runtime_package(
 
         // Second pass: mutate the function in place.
         //   1. Rewrite each instruction's GlobalIndex from flat → per-pkg slot.
-        //   2. Rewrite each ObjectIndex operand from program-pool → aux-pool.
+        //   2. Rewrite each ObjectIndex operand (instruction + ClassWithTypeArgs
+        //      constants) from program-pool → aux-pool.
         //   3. Install `aux_object_ptrs` so `BexVm::resolve_obj_idx` routes
         //      ObjectIndex operands through it at runtime.
         //   4. Set resolved_constants.
@@ -566,6 +604,16 @@ fn lift_runtime_package(
                             instr,
                             bex_vm_types::ObjectIndex::from_raw(new_idx),
                         );
+                    }
+                }
+                // Rewrite ConstValue::ClassWithTypeArgs.class_obj operands
+                // from program-pool → aux-pool. `IsType` reads class_obj from
+                // here at runtime via `resolve_obj_idx`, which routes through
+                // the aux pool when `aux_object_ptrs` is non-empty.
+                for cv in &mut f.bytecode.constants {
+                    if let ConstValue::ClassWithTypeArgs { class_obj, .. } = cv {
+                        let new_idx = aux_index_for[&class_obj.into_raw()];
+                        *class_obj = bex_vm_types::ObjectIndex::from_raw(new_idx);
                     }
                 }
                 f.aux_object_ptrs = aux_pool;
@@ -613,16 +661,36 @@ fn lift_runtime_package(
 /// `commit()` was called. Makes `add_compile` atomic with respect to the
 /// project database: a failure (or panic) anywhere in the batch leaves the
 /// Salsa input exactly as it was before the call.
+///
+/// `added_file_ids` tracks every `FileId` minted by `add_runtime_file` during
+/// the batch. On rollback we also remove those ids from the database's
+/// `file_id_to_path` side-table; otherwise failed batches would leak orphan
+/// entries that point at files the Salsa input no longer references.
+///
+/// `#[must_use]` so a success path that forgets `.commit()` is caught at
+/// build time — the default `Drop` would silently roll back.
+#[must_use = "RuntimeBatchGuard reverts the Salsa input on drop unless .commit() is called"]
 struct RuntimeBatchGuard<'a> {
     db: &'a mut baml_project::ProjectDatabase,
     /// `Some` until committed; cleared by `commit()` to suppress the rollback.
     snapshot: Option<Vec<baml_project::SourceFile>>,
+    /// `FileId`s minted by `add_runtime_file` during this batch. Cleared on
+    /// commit; on drop without commit, each is removed from
+    /// `file_id_to_path`.
+    added_file_ids: Vec<baml_project::FileId>,
 }
 
 impl RuntimeBatchGuard<'_> {
+    /// Record a newly-added `FileId` so the rollback path can clean up
+    /// `file_id_to_path`.
+    fn track_added(&mut self, file: baml_project::SourceFile) {
+        self.added_file_ids.push(file.file_id(&*self.db));
+    }
+
     /// Mark the batch as committed so the rollback in `Drop` is skipped.
     fn commit(mut self) {
         self.snapshot = None;
+        self.added_file_ids.clear();
     }
 }
 
@@ -630,6 +698,9 @@ impl Drop for RuntimeBatchGuard<'_> {
     fn drop(&mut self) {
         if let Some(snapshot) = self.snapshot.take() {
             self.db.set_runtime_files(snapshot);
+            for file_id in self.added_file_ids.drain(..) {
+                self.db.remove_file_id_to_path(file_id);
+            }
         }
     }
 }
@@ -656,9 +727,24 @@ fn unwrap_package_handle(vm: &BexVm, package: &Value) -> Result<HeapPtr, VmRustF
         }
         .into());
     };
-    let Some(Value::Object(pkg_ptr)) = inst.fields.first().copied() else {
+    // Look up `_inner` by name rather than positional index, so the unwrap
+    // stays correct if the class layout ever gains a second field.
+    let Object::Class(class) = vm.get_object(inst.class) else {
         return Err(VmBamlError::InvalidArgument {
-            message: "reflect.Package instance has no `_inner` field".to_string(),
+            message: "reflect.Package receiver's class pointer is not an Object::Class".to_string(),
+        }
+        .into());
+    };
+    let inner_idx = class
+        .fields
+        .iter()
+        .position(|f| f.name == "_inner")
+        .ok_or_else(|| VmBamlError::InvalidArgument {
+            message: "reflect.Package class has no `_inner` field".to_string(),
+        })?;
+    let Some(Value::Object(pkg_ptr)) = inst.fields.get(inner_idx).copied() else {
+        return Err(VmBamlError::InvalidArgument {
+            message: "reflect.Package._inner is not an Object value".to_string(),
         }
         .into());
     };
@@ -734,14 +820,11 @@ impl BamlClassReflectPackage for PackageBamlImpl {
     /// Compile a batch of source files into this runtime package.
     ///
     /// For each `(path, source)` in `files`, inserts a runtime source
-    /// file at `<runtime>/{pkg_name}/{path}` into `Compiler2RuntimeFiles`.
-    /// The path prefix routes the file back to this package via the
-    /// existing `file_package` path resolver.
-    ///
-    /// This commit (Phase 5.2c) wires file insertion only — the re-emit
-    /// pipeline and item-extraction land in subsequent commits, so calls
-    /// after this one don't yet make the new items reachable via
-    /// `pkg.get<F>(...)` or `pkg.eval<T>(...)`.
+    /// file at `<runtime>/{pkg_name}/{path}` into `Compiler2RuntimeFiles`,
+    /// runs the compiler against the modified project, and lifts each
+    /// newly-defined item into the target `Object::Package`. The path
+    /// prefix routes the file back to this package via the existing
+    /// `file_package` path resolver.
     ///
     /// Throws `Unsupported` if:
     /// - The engine wasn't constructed with reflection support
@@ -827,9 +910,10 @@ impl BamlClassReflectPackage for PackageBamlImpl {
                     .to_string(),
             })
         })?;
-        let batch = RuntimeBatchGuard {
+        let mut batch = RuntimeBatchGuard {
             db: &mut db_guard,
             snapshot: Some(snapshot),
+            added_file_ids: Vec::new(),
         };
 
         // Materialize each `(path, source)` pair into a SourceFile. Errors
@@ -842,6 +926,7 @@ impl BamlClassReflectPackage for PackageBamlImpl {
                     message: format!("reflect.Package.add_compile: {e}"),
                 })
             })?;
+            batch.track_added(file);
             new_source_files.push(file);
         }
 
@@ -863,10 +948,16 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             .map(|f| f.file_id(&*batch.db))
             .collect();
         let all_diags = baml_project::collect_compiler2_diagnostics(&*batch.db);
+        // Match on ANY annotated span (primary, secondary, OR related-info)
+        // touching a newly-added file. HIR `DuplicateName` puts the
+        // duplicate (new file) in the primary position today, but other
+        // cross-file diagnostics may anchor primary on the original file
+        // and only mark the new file via secondary or related-info —
+        // covering all three keeps the filter robust to future diagnostic
+        // shapes.
         if let Some(err_diag) = all_diags.iter().find(|d| {
             d.severity == baml_project::Severity::Error
-                && d.primary_span()
-                    .is_some_and(|span| new_file_ids.contains(&span.file_id))
+                && diagnostic_touches_files(d, &new_file_ids)
         }) {
             return Err(VmRustFnError::from(VmBamlError::Unsupported {
                 message: format!(
@@ -879,8 +970,7 @@ impl BamlClassReflectPackage for PackageBamlImpl {
         // Re-run the emit pipeline against the modified DB. The guard
         // reverts the Salsa input on the early-return.
         //
-        // `OptLevel::One` mirrors the default test/runtime opt level;
-        // a future commit may expose this as an `add_compile` option.
+        // `OptLevel::One` mirrors the default test/runtime opt level.
         let program = batch
             .db
             .compile_project(baml_project::OptLevel::One)
@@ -904,15 +994,16 @@ impl BamlClassReflectPackage for PackageBamlImpl {
     /// Retrieve an item from a runtime package by name, type-checked against
     /// the reified `F` type argument.
     ///
-    /// Only function items are supported in this commit; class / enum
-    /// retrieval (via `F == type`) lands in a follow-up.
+    /// Function items only; class / enum retrieval (via `F == type`) is not
+    /// yet supported and is rejected with `AccessError`.
     ///
-    /// Throws BAML `Unsupported` if:
-    ///   - `F` is not a function type
-    ///   - the requested name is missing from `pkg.items`
-    ///   - the item is not a function
-    ///   - the function's `(param_types, return_type)` does not match
+    /// Throws BAML `AccessError` if:
+    ///   - the requested name is missing from `pkg.items`,
+    ///   - the item is not a function,
+    ///   - or the function's `(param_types, return_type)` does not match
     ///     `F.params` / `F.ret` structurally.
+    ///
+    /// Throws BAML `Unsupported` if `F` is not a function type or is missing.
     fn get(vm: &BexVm, package: &Value, name: &str) -> Result<Value, VmRustFnError> {
         let pkg_ptr = unwrap_package_handle(vm, package)?;
         let Object::Package(pkg) = vm.get_object(pkg_ptr) else {
@@ -958,8 +1049,8 @@ impl BamlClassReflectPackage for PackageBamlImpl {
                 return Err(VmRustFnError::from(VmBamlError::AccessError {
                     message: format!(
                         "reflect.Package.get: item {name:?} is a {other:?}; only functions \
-                         are supported by `get<F>` in this commit (class/enum retrieval \
-                         lands in a follow-up)"
+                         can be retrieved via `get<F>` today (class/enum retrieval is not \
+                         yet supported)"
                     ),
                 }));
             }
@@ -968,7 +1059,7 @@ impl BamlClassReflectPackage for PackageBamlImpl {
         // Structural type-check: parameter arity, parameter types, return
         // type. Uses `PartialEq` on `Ty` for equality. Throws-clause
         // mismatch is not checked here — runtime functions don't carry a
-        // declared throws type and a future commit will reconcile this.
+        // declared throws type.
         // Signature mismatches are `AccessError`: the named item exists but
         // its shape doesn't satisfy the requested type.
         if func.param_types.len() != expected_params.len() {
@@ -1035,18 +1126,39 @@ impl BamlClassReflectPackage for PackageBamlImpl {
 /// caller of `pkg.eval<T>(...)`. The wrapper has the right return type by
 /// construction (we synthesized it with `-> T`), so we just hand the value
 /// straight back.
-struct EvalContinuation;
+///
+/// As cleanup, the continuation removes the wrapper from `pkg.items` so
+/// successive evals don't accumulate `$eval_N` entries indefinitely. The
+/// wrapper's Salsa-input file and any per-package global slots it allocated
+/// remain — fuller cleanup (file removal, slot reclamation) is a follow-up.
+/// `pkg_ptr` is tracked through `gc_roots`/`apply_forwarding` so a GC
+/// between the wrapper invocation and the continuation doesn't dangle it.
+struct EvalContinuation {
+    pkg_ptr: HeapPtr,
+    wrapper_local_name: String,
+}
 
 impl super::Continuation for EvalContinuation {
-    fn call(self: Box<Self>, _vm: &mut BexVm, value: Value) -> NativeCallResult {
+    fn call(self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
+        // Best-effort cleanup: remove the wrapper from `pkg.items`. If the
+        // package was meanwhile re-bound (shouldn't be possible — the
+        // continuation is reentered synchronously after the wrapper returns)
+        // the removal is a no-op.
+        if let Object::Package(pkg) = vm.get_object_mut(self.pkg_ptr) {
+            pkg.items.remove(&self.wrapper_local_name);
+        }
         NativeCallResult::Done(value)
     }
 
     fn gc_roots(&self) -> Vec<HeapPtr> {
-        Vec::new()
+        vec![self.pkg_ptr]
     }
 
-    fn apply_forwarding(&mut self, _forwarding: &HashMap<HeapPtr, HeapPtr>) {}
+    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        if let Some(&new_ptr) = forwarding.get(&self.pkg_ptr) {
+            self.pkg_ptr = new_ptr;
+        }
+    }
 }
 
 /// Core of `reflect.Package.eval` — separated so the trait impl can use
@@ -1058,14 +1170,14 @@ fn eval_impl(
 ) -> Result<NativeCallResult, VmRustFnError> {
     let pkg_ptr = unwrap_package_handle(vm, package)?;
 
-    // Snapshot the package's name and bump its eval counter atomically (we
-    // hold the mutex briefly while doing both). The new counter value is
-    // baked into the wrapper function's name, so successive eval calls
-    // don't collide on path or item name.
-    let (pkg_name, eval_id) = match vm.get_object_mut(pkg_ptr) {
+    // First: shared read to validate the package kind and snapshot the name.
+    // Build-time packages live in the compile-time semi-space — calling
+    // `get_object_mut` on them is a `debug_assert!` failure in debug and
+    // briefly hands out `&mut` to immortal storage in release (UB-adjacent
+    // even though we wouldn't write). Validate first, then bump under
+    // `get_object_mut`. See `vm::BexVm::get_object_mut`.
+    let pkg_name = match vm.get_object(pkg_ptr) {
         Object::Package(pkg) => {
-            // Reject Static-globals (build-time) packages — eval requires
-            // adding a runtime file, which the static globals can't host.
             if matches!(pkg.globals, PackageGlobals::Static(_)) {
                 return Err(VmRustFnError::from(VmBamlError::AccessError {
                     message: "reflect.Package.eval: cannot eval into a build-time package; \
@@ -1073,9 +1185,7 @@ fn eval_impl(
                         .to_string(),
                 }));
             }
-            let id = pkg.eval_counter;
-            pkg.eval_counter += 1;
-            (pkg.name.clone(), id)
+            pkg.name.clone()
         }
         _ => unreachable!("unwrap_package_handle returned a non-Package ptr"),
     };
@@ -1083,6 +1193,12 @@ fn eval_impl(
     // Resolve T. Its `Display` impl produces BAML-compatible type syntax
     // (see [crates/baml_type/src/lib.rs](crates/baml_type/src/lib.rs)),
     // which we splice into the synthesized wrapper's return type slot.
+    //
+    // Reject `Ty` variants whose `Display` form doesn't round-trip cleanly
+    // as a BAML source-level type. `validate_runtime` catches Void/Future;
+    // `WatchAccessor` displays as `inner.$watch` which is a value accessor,
+    // not a type, and parses as an error. Failing fast here gives a clearer
+    // error than "synth-line parse error."
     let t_ty = vm
         .current_call_type_args()
         .first()
@@ -1092,36 +1208,72 @@ fn eval_impl(
                 message: "reflect.Package.eval: missing type argument T".to_string(),
             })
         })?;
+    if let Err(reason) = t_ty.validate_runtime() {
+        return Err(VmRustFnError::from(VmBamlError::AccessError {
+            message: format!(
+                "reflect.Package.eval: type argument T is not a valid runtime type: {reason}"
+            ),
+        }));
+    }
+    if matches!(t_ty, baml_type::Ty::WatchAccessor(_, _)) {
+        return Err(VmRustFnError::from(VmBamlError::AccessError {
+            message: "reflect.Package.eval: type argument T cannot be a `.$watch` accessor type"
+                .to_string(),
+        }));
+    }
     let t_str = t_ty.to_string();
-
-    let wrapper_local_name = format!("$eval_{eval_id}");
-    let wrapper_path = format!("$eval_{eval_id}.baml");
-    let wrapper_source = format!("function {wrapper_local_name}() -> {t_str} {{ {source} }}");
 
     // Reuse `add_compile`'s mutation/rollback machinery: synthesize a
     // one-file batch and run the same lift pipeline. On any failure the
     // guard reverts the Salsa input.
+    //
+    // "Project DB not attached" is `Unsupported` (configuration error,
+    // matches `add_compile`) — distinct from `AccessError` which is reserved
+    // for user-visible lookup / type-check failures.
     let Some(db_handle) = vm.project_db.as_ref() else {
-        return Err(VmRustFnError::from(VmBamlError::AccessError {
-            message: "reflect.Package.eval requires the host engine to be constructed \
-                      with `set_project_db`; the current engine has no project-DB handle \
-                      attached"
+        return Err(VmRustFnError::from(VmBamlError::Unsupported {
+            message: "reflect.Package.eval: this engine has no project-DB handle attached; \
+                      the host must call `BexEngine::set_project_db` before invoking \
+                      reflection methods"
                 .to_string(),
         }));
     };
     let db_handle = std::sync::Arc::clone(db_handle);
     let mut db_guard = db_handle.lock();
 
+    // Now-safe-to-mutate point: bump the per-package eval counter. Deferred
+    // to here so failures upstream (missing type arg, missing project_db,
+    // build-time package) don't consume counter values. `Package` is gen0
+    // (we already rejected `Static` above).
+    let eval_id = match vm.get_object_mut(pkg_ptr) {
+        Object::Package(pkg) => {
+            let id = pkg.eval_counter;
+            pkg.eval_counter += 1;
+            id
+        }
+        _ => unreachable!("unwrap_package_handle returned a non-Package ptr"),
+    };
+
+    let wrapper_local_name = format!("$eval_{eval_id}");
+    let wrapper_path = format!("$eval_{eval_id}.baml");
+    // Wrap `source` in parentheses so an unbalanced `}` in the user-provided
+    // source cannot escape the wrapper's body and turn the remainder of the
+    // synthesized file into top-level code (e.g. defining a sibling function).
+    // `}` is not legal inside `(...)`, so unbalanced injections fail to parse
+    // at the wrapper boundary rather than silently splicing into the file.
+    let wrapper_source = format!("function {wrapper_local_name}() -> {t_str} {{ ({source}) }}");
+
     let snapshot = db_guard.runtime_files_snapshot().ok_or_else(|| {
-        VmRustFnError::from(VmBamlError::AccessError {
+        VmRustFnError::from(VmBamlError::Unsupported {
             message: "reflect.Package.eval: runtime files input not initialized \
                       (set_project_root has not run)"
                 .to_string(),
         })
     })?;
-    let batch = RuntimeBatchGuard {
+    let mut batch = RuntimeBatchGuard {
         db: &mut db_guard,
         snapshot: Some(snapshot),
+        added_file_ids: Vec::new(),
     };
 
     let full_path = format!("<runtime>/{pkg_name}/{wrapper_path}");
@@ -1133,15 +1285,16 @@ fn eval_impl(
                 message: format!("reflect.Package.eval: {e}"),
             })
         })?;
+    batch.track_added(new_file);
 
     // Diagnostic check restricted to the wrapper file (covers parse / name-
     // resolution / type errors that `compile_project` itself won't return).
-    let new_file_id = new_file.file_id(&*batch.db);
+    // Matches any annotated span — see the parallel filter in `add_compile`.
+    let mut new_file_ids = std::collections::HashSet::new();
+    new_file_ids.insert(new_file.file_id(&*batch.db));
     let diags = baml_project::collect_compiler2_diagnostics(&*batch.db);
     if let Some(err_diag) = diags.iter().find(|d| {
-        d.severity == baml_project::Severity::Error
-            && d.primary_span()
-                .is_some_and(|span| span.file_id == new_file_id)
+        d.severity == baml_project::Severity::Error && diagnostic_touches_files(d, &new_file_ids)
     }) {
         return Err(VmRustFnError::from(VmBamlError::AccessError {
             message: format!("reflect.Package.eval: compile error: {}", err_diag.message),
@@ -1176,12 +1329,16 @@ fn eval_impl(
 
     // YieldToCall the wrapper. Its return value flows through the
     // continuation back to the BAML caller. No args, no type args (the
-    // return type was baked into the wrapper's signature).
+    // return type was baked into the wrapper's signature). The continuation
+    // also removes the wrapper from `pkg.items` after invocation completes.
     Ok(NativeCallResult::YieldToCall {
         callee: wrapper_ptr,
         args: vec![],
         type_args: vec![],
-        continuation: Box::new(EvalContinuation),
+        continuation: Box::new(EvalContinuation {
+            pkg_ptr,
+            wrapper_local_name,
+        }),
     })
 }
 

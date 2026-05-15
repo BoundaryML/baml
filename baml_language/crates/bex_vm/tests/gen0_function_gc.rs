@@ -1,6 +1,7 @@
-//! Tests verifying that `Object::Function` allocated into gen0 — as will
-//! happen when `baml.runtime.compile` returns a compiled lambda — is handled
-//! correctly by the GC root-collection and forwarding passes.
+//! Tests verifying that `Object::Function` allocated into gen0 — as happens
+//! when `reflect.Package.add_compile` lifts a freshly-compiled function into
+//! the heap — is handled correctly by the GC root-collection and forwarding
+//! passes.
 //!
 //! Specifically:
 //!
@@ -22,7 +23,8 @@ use baml_project::testing::compile_source;
 use baml_type::{Span, Ty, TyAttr};
 use bex_vm::{BexVm, Frame};
 use bex_vm_types::{
-    Bytecode, Function, FunctionKind, FunctionOrigin, HeapPtr, Object, RootHaver, Value,
+    Bytecode, Function, FunctionKind, FunctionOrigin, HeapPtr, Object, Package, PackageGlobals,
+    RootHaver, Value,
 };
 
 fn make_vm() -> BexVm {
@@ -272,5 +274,88 @@ fn gen0_function_resolved_constants_traced_by_gc() {
     match str_obj {
         Object::String(s) => assert_eq!(s, "greeting", "string contents must survive GC"),
         other => panic!("forwarded string ptr must reference Object::String, got {other:?}"),
+    }
+}
+
+/// An `Object::Function` allocated into gen0 with `function.package`
+/// pointing at a gen0 `Object::Package` must keep the package alive across
+/// GC. This is the failure mode where a user holds a runtime function
+/// returned by `pkg.get<F>(...)` after dropping the package wrapper — if
+/// the Function GC arm doesn't walk `f.package`, the package gets reclaimed
+/// and the next call dereferences a dangling pointer.
+#[test]
+fn gen0_function_package_traced_by_gc() {
+    let mut vm = make_vm();
+
+    // Allocate a gen0 Package we want to keep alive only via function.package.
+    let pkg = Package {
+        name: "_pkg_test".to_string(),
+        items: std::collections::HashMap::new(),
+        globals: PackageGlobals::Dynamic(Vec::new()),
+        function_slot_map: std::collections::HashMap::new(),
+        eval_counter: 0,
+    };
+    let pkg_ptr = vm.tlab.alloc(Object::Package(Box::new(pkg)));
+    assert!(
+        !vm.heap.is_compile_time_ptr(pkg_ptr),
+        "freshly TLAB-allocated package must not be in compile_time region"
+    );
+
+    // Build a function whose `package` points at the gen0 Package.
+    let mut func = make_minimal_function();
+    func.package = pkg_ptr;
+    let fn_ptr = vm.tlab.alloc(Object::Function(Box::new(func)));
+
+    // Push a frame so the function is rooted but the package is NOT
+    // (only reachable through `function.package`).
+    vm.set_entry_point(fn_ptr, &[]);
+
+    let mut all_roots = vm.collect_frame_roots();
+    let stack_roots: Vec<HeapPtr> = vm
+        .stack
+        .0
+        .iter()
+        .filter_map(|v| match v {
+            Value::Object(ptr) => Some(*ptr),
+            _ => None,
+        })
+        .collect();
+    all_roots.extend(stack_roots);
+    assert!(
+        !all_roots.contains(&pkg_ptr),
+        "the package should only be reachable via function.package"
+    );
+
+    // SAFETY: single-threaded test, no other VMs running.
+    let (_stats, _remapped, forwarding) = unsafe { vm.heap.collect_garbage(&all_roots) };
+
+    // The package must have been reached and forwarded.
+    let new_pkg_ptr = forwarding.get(&pkg_ptr).copied().expect(
+        "gen0 package referenced via function.package must be in the forwarding map \
+         (reached transitively through the function root)",
+    );
+
+    vm.forward_roots(&forwarding);
+
+    // The function's `package` field should be updated to the new address.
+    let new_fn_ptr = forwarding
+        .get(&fn_ptr)
+        .copied()
+        .expect("function must be in forwarding map");
+    // SAFETY: GC has completed; new_fn_ptr is valid in the post-GC heap.
+    let Object::Function(post_func) = (unsafe { new_fn_ptr.get() }) else {
+        panic!("forwarded pointer must reference Object::Function");
+    };
+    assert_eq!(
+        post_func.package, new_pkg_ptr,
+        "function.package must be forwarded to the post-GC package address"
+    );
+
+    // The new package address must still hold an Object::Package with our test name.
+    // SAFETY: GC complete; new_pkg_ptr is valid.
+    let pkg_obj = unsafe { new_pkg_ptr.get() };
+    match pkg_obj {
+        Object::Package(p) => assert_eq!(p.name, "_pkg_test", "package contents must survive GC"),
+        other => panic!("forwarded package ptr must reference Object::Package, got {other:?}"),
     }
 }

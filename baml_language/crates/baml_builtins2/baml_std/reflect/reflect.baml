@@ -37,8 +37,7 @@ class Package {
     /// is the most precise BAML type expressible.
     ///
     /// Direct access is not part of the public API — methods on `Package`
-    /// unwrap it as needed (e.g. `add_compile`, `get`, `eval` in upcoming
-    /// commits).
+    /// (`add_compile`, `get`, `eval`) unwrap it as needed.
     _inner: unknown
 
     /// Allocate a fresh, empty runtime-compiled `Package`.
@@ -78,8 +77,8 @@ class Package {
     ///
     /// Throws `AccessError` if:
     ///   - `name` is not present in `pkg.items`.
-    ///   - the item is not a function (class/enum retrieval lands in a
-    ///     follow-up commit).
+    ///   - the item is not a function (class/enum retrieval is not yet
+    ///     supported).
     ///   - the function's signature does not match `F`.
     ///
     /// Example:

@@ -437,12 +437,11 @@ pub struct BexEngine {
     /// `parking_lot::Mutex` so it can be mutated under exclusion from any
     /// thread.
     ///
-    /// Reflection-bearing operations — currently `reflect.Package.add_compile`
-    /// / `Package.eval` / `Package.get`, landing in upcoming commits — acquire
-    /// this lock to insert files into `Compiler2RuntimeFiles` and re-emit.
-    /// Unset for engines constructed without reflection support; in that case
-    /// `Package.add_compile` throws a runtime error rather than silently
-    /// failing.
+    /// Reflection-bearing operations (`reflect.Package.add_compile`,
+    /// `Package.eval`, `Package.get`) acquire this lock to insert files
+    /// into `Compiler2RuntimeFiles` and re-emit. Unset for engines
+    /// constructed without reflection support; in that case those methods
+    /// throw a BAML-level error rather than silently failing.
     ///
     /// `OnceLock` (not `Option`) so `set_project_db` can be called after the
     /// engine has been wrapped in `Arc` — production embedders construct the

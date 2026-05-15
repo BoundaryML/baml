@@ -377,10 +377,19 @@ impl BexHeap {
                 }));
             }
             Object::Function(f) => {
+                // Owning package — the dispatch-relevant HeapPtr read by
+                // `resolve_frame_package`. Walking it keeps a runtime
+                // package alive as long as ANY of its functions are reachable
+                // from outside (e.g. user holds a HeapPtr returned by
+                // `pkg.get<F>(name)`). Skip the null sentinel — test fixtures
+                // and `BexVm::from_program` leave package unset.
+                if !f.package.is_null() {
+                    worklist.push(f.package);
+                }
                 // Runtime-compiled functions carry a per-function aux pool of
                 // HeapPtrs referenced by `MakeClosure` / `AllocInstance` /
-                // `AllocVariant` operands (see `BexVm::resolve_obj_idx`). Walk
-                // it as outgoing references.
+                // `AllocVariant` / parametric `IsType` operands (see
+                // `BexVm::resolve_obj_idx`). Walk it as outgoing references.
                 //
                 // For build-time functions this vec is empty and the loop is
                 // a no-op; the function still has no other heap-allocated
@@ -553,6 +562,15 @@ impl BexHeap {
                 }
             }
             Object::Function(f) => {
+                // Forward the owning package pointer (build-time functions
+                // point at compile-time packages — `forwarding.get` returns
+                // None and the field stays put; runtime functions point at
+                // gen0 packages that may move). Skip the null sentinel.
+                if !f.package.is_null()
+                    && let Some(&new_pkg) = forwarding.get(&f.package)
+                {
+                    f.package = new_pkg;
+                }
                 // Update aux-pool entries (see add_references_to_worklist).
                 // Empty for build-time functions.
                 for ptr in &mut f.aux_object_ptrs {
@@ -855,6 +873,13 @@ impl BexHeap {
                 );
             }
             Object::Function(f) => {
+                // Owning package, scoped to young-gen as a minor-GC trace.
+                // Build-time functions reference compile-time packages
+                // (never young) so this drops; runtime functions reference
+                // gen0 packages. Skip the null sentinel.
+                if !f.package.is_null() && self.generation_of(f.package).is_young() {
+                    worklist.push(f.package);
+                }
                 // Per-function aux pool (runtime-compiled only). Empty for
                 // build-time functions.
                 worklist.extend(

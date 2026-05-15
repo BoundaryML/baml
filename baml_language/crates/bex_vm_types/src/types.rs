@@ -936,16 +936,21 @@ const _: () = assert!(
 #[derive(Clone, Debug)]
 pub struct Package {
     /// Package name (e.g. `"baml"`, `"user"`, `"reflect"`, `"_pkg_42"`).
-    /// Used as the lookup key in `BexEngine::packages` and matches
-    /// `Function.package_name` for build-time emit and runtime emit alike.
+    /// Matches `Function.package_name` for the package's own functions
+    /// (build-time emit and runtime lift alike). The dispatch-relevant
+    /// identity is `Function.package` (a `HeapPtr`); this string is used
+    /// for `package_name` matching during emit / lift and for debug
+    /// display.
     pub name: String,
 
     /// User-visible items (functions, classes, enums) defined in this package,
     /// keyed by unqualified name (e.g. `"main"`, `"MyClass"`). Populated at
     /// engine load (build-time packages) or `Package.add_compile` (runtime).
     ///
-    /// Phase 4b initial state: empty for build-time packages — Phase 5
-    /// populates entries when `pkg.get<F>(name)` becomes available.
+    /// Build-time packages currently start empty; future work may populate
+    /// build-time items so `reflect.Package.of(some_build_time_pkg).get<F>(...)`
+    /// resolves host functions through the same lookup path runtime packages
+    /// use.
     ///
     /// GC: each `HeapPtr` is an outgoing reference walked by
     /// `add_references_to_worklist`.

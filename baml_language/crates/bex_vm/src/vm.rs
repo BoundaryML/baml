@@ -675,12 +675,13 @@ impl BexVm {
     /// Read a global by slot through the package-routed dispatch path.
     ///
     /// Post-`$init` VMs route reads through the active bytecode frame's
-    /// `package`: the frame's owning `Object::Package` holds a
+    /// `package`: the frame's owning `Object::Package` holds either a
     /// `PackageGlobals::Static(SharedGlobals)` (build-time, an Arc-clone of
-    /// the engine's globals) or `PackageGlobals::Dynamic(Vec)` (runtime,
-    /// added in Phase 5). Both yield the same flat-slot semantics; per
-    /// the per-package slot-space invariant a `Call { slot=K }` always
-    /// reaches the correct global for the function's package.
+    /// the engine's globals) or `PackageGlobals::Dynamic(Vec)` (runtime-
+    /// compiled, owned by the package). Both yield the same flat-slot
+    /// semantics; per the per-package slot-space invariant a
+    /// `Call { slot=K }` always reaches the correct global for the
+    /// function's package.
     ///
     /// During `$init` (`VmGlobals::Owned`) the package's `Static`
     /// `SharedGlobals` still holds `Null` placeholders until
