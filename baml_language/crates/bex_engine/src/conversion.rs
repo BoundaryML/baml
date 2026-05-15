@@ -5,10 +5,9 @@
 //! representation (`BexValue`, `BexExternalValue`).
 
 use ::bex_heap::{BexValue, HeapPermit, PermitProof, TlabHolder};
-use ::bex_vm_types::{HeapPtr, Object, ObjectType, RootHaver, Value};
+use ::bex_vm_types::{HeapPtr, Object, RootHaver, Value};
 use baml_type::Literal;
 use bex_external_types::{BexExternalAdt, BexExternalValue, Ty, UnionMetadata};
-use bex_vm::BexVm;
 
 use crate::{BexEngine, EngineError};
 
@@ -443,15 +442,6 @@ impl BexEngine {
                 }),
         }
     }
-
-    /// Convert VM values to `BexExternalValues` for sys ops.
-    ///
-    /// This is simpler than `vm_value_to_external` because sys ops only receive
-    /// primitives, strings, arrays, maps, and resources - not instances/variants.
-    #[allow(unused)]
-    pub(crate) fn vm_args_to_external(vm: &BexVm, args: &[Value]) -> Vec<BexExternalValue> {
-        args.iter().map(|v| vm_arg_to_external(vm, v)).collect()
-    }
 }
 
 // ============================================================================
@@ -691,115 +681,6 @@ fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'
                 | Object::Package(_) => None,
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => None,
-            }
-        }
-    }
-}
-
-/// Convert a VM value to a `BexExternalValue` for sys op arguments.
-///
-/// This is simpler than `vm_value_to_external` because sys ops only receive
-/// primitives, strings, arrays, maps, and resources - not instances/variants.
-pub(crate) fn vm_arg_to_external(vm: &BexVm, value: &Value) -> BexExternalValue {
-    match value {
-        Value::OmittedArg => {
-            panic!("Cannot convert omitted argument sentinel to BexExternalValue")
-        }
-        Value::Null => BexExternalValue::Null,
-        Value::Int(i) => BexExternalValue::Int(*i),
-        Value::Float(f) => BexExternalValue::Float(*f),
-        Value::Bool(b) => BexExternalValue::Bool(*b),
-        Value::Object(idx) => {
-            let obj = vm.get_object(*idx);
-            match obj {
-                Object::String(s) => BexExternalValue::String(s.clone()),
-                Object::Array(arr) => {
-                    let items: Vec<BexExternalValue> =
-                        arr.iter().map(|v| vm_arg_to_external(vm, v)).collect();
-                    BexExternalValue::Array {
-                        element_type: bex_external_types::Ty::Null {
-                            attr: baml_type::TyAttr::default(),
-                        },
-                        items,
-                    }
-                }
-                Object::Map(map) => {
-                    let entries: indexmap::IndexMap<String, BexExternalValue> = map
-                        .iter()
-                        .map(|(k, v)| (k.clone(), vm_arg_to_external(vm, v)))
-                        .collect();
-                    BexExternalValue::Map {
-                        key_type: bex_external_types::Ty::String {
-                            attr: baml_type::TyAttr::default(),
-                        },
-                        value_type: bex_external_types::Ty::Null {
-                            attr: baml_type::TyAttr::default(),
-                        },
-                        entries,
-                    }
-                }
-                Object::Instance(instance) => {
-                    // Get class name from the class object
-                    let class_obj = vm.get_object(instance.class);
-                    let class_name = match class_obj {
-                        Object::Class(class) => class.name.to_string(),
-                        _ => panic!("Instance class pointer doesn't point to a Class"),
-                    };
-
-                    // Get field names from class and convert fields
-                    let class_fields = match class_obj {
-                        Object::Class(class) => &class.fields,
-                        _ => panic!("Instance class pointer doesn't point to a Class"),
-                    };
-
-                    let fields: indexmap::IndexMap<String, BexExternalValue> = class_fields
-                        .iter()
-                        .zip(instance.fields.iter())
-                        .map(|(class_field, value)| {
-                            (class_field.name.clone(), vm_arg_to_external(vm, value))
-                        })
-                        .collect();
-
-                    BexExternalValue::Instance { class_name, fields }
-                }
-                Object::Uint8Array(bytes) => BexExternalValue::Uint8Array(bytes.clone()),
-                Object::Variant(variant) => {
-                    let enum_obj = vm.get_object(variant.enm);
-                    let Object::Enum(enm) = enum_obj else {
-                        panic!("variant.enm doesn't point to an Enum");
-                    };
-                    let variant_name = enm
-                        .variants
-                        .get(variant.index)
-                        .map(|v| v.name.clone())
-                        .unwrap_or_else(|| format!("<variant {}>", variant.index));
-                    BexExternalValue::Variant {
-                        enum_name: enm.name.to_string(),
-                        variant_name,
-                    }
-                }
-                // These types should not appear as sys op arguments.
-                Object::Function(_)
-                | Object::Closure(_)
-                | Object::BoundMethod(_)
-                | Object::Cell(_)
-                | Object::Class(_)
-                | Object::Enum(_)
-                | Object::Future(_)
-                | Object::UnscheduledFuture(_)
-                | Object::RustData(_)
-                | Object::Collector(_)
-                | Object::Type(_)
-                | Object::Package(_) => {
-                    panic!(
-                        "Cannot convert object type to BexExternalValue for sys op: {:?}",
-                        ObjectType::of(obj)
-                    )
-                }
-                #[cfg(feature = "heap_debug")]
-                Object::Sentinel(_) => {
-                    panic!("Cannot convert sentinel to BexExternalValue")
-                }
             }
         }
     }

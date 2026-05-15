@@ -176,7 +176,7 @@ fn resolve_runtime_const(
 }
 
 /// Object kind tag for `ObjectIndex` resolution during the lift. Carried in
-/// the index map so AllocInstance/AllocVariant/MakeClosure ObjectIndex
+/// the index map so `AllocInstance`/`AllocVariant`/`MakeClosure` `ObjectIndex`
 /// operands route to the right same-package or external lookup table.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum LiftedObjectKind {
@@ -191,8 +191,8 @@ enum LiftedObjectKind {
 ///
 /// For each new function whose `package_name` matches this package:
 /// 1. Walk its bytecode for `GlobalIndex` operands → build per-package slot map.
-/// 2. Walk its bytecode for `ObjectIndex` operands (AllocInstance,
-///    AllocVariant, MakeClosure) → populate `aux_object_ptrs`. Same-package
+/// 2. Walk its bytecode for `ObjectIndex` operands (`AllocInstance`,
+///    `AllocVariant`, `MakeClosure`) → populate `aux_object_ptrs`. Same-package
 ///    targets resolve through `pkg.items`; external targets resolve through
 ///    the engine's resolved-name tables (functions / classes / enums).
 /// 3. Rewrite the bytecode's `GlobalIndex` operands from flat to per-package
@@ -896,6 +896,8 @@ impl BamlNamespaceReflect for PackageBamlImpl {}
 
 #[cfg(test)]
 mod tests {
+    use bex_vm_types::indexable::Index;
+
     use super::*;
 
     /// `StoreGlobal` must be recognized by both `instruction_global_slot`
@@ -907,7 +909,7 @@ mod tests {
     fn store_global_slot_helpers_round_trip() {
         let mut instr = Instruction::StoreGlobal(GlobalIndex::from_raw(7));
         assert_eq!(
-            instruction_global_slot(&instr).map(|g| g.into_raw()),
+            instruction_global_slot(&instr).map(Index::into_raw),
             Some(7)
         );
         assert!(set_instruction_global_slot(
