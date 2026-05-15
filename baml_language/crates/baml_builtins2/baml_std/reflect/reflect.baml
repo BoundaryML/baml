@@ -68,4 +68,28 @@ class Package {
     function add_compile(self, files: map<string, string>) -> reflect.Package throws root.errors.Unsupported {
         $rust_function
     }
+
+    /// Retrieve a function item from this package, type-checked against `F`.
+    ///
+    /// `F` must be a function type; the lifted item's signature
+    /// (parameter types and return type) must match `F` structurally.
+    /// On match, returns the function as a first-class value, callable via
+    /// the usual function-call syntax.
+    ///
+    /// Throws `AccessError` if:
+    ///   - `name` is not present in `pkg.items`.
+    ///   - the item is not a function (class/enum retrieval lands in a
+    ///     follow-up commit).
+    ///   - the function's signature does not match `F`.
+    ///
+    /// Example:
+    ///   let pkg = reflect.Package.new().add_compile({
+    ///       "lib.baml": "function add_one(x: int) -> int { x + 1 }"
+    ///   })
+    ///   let f = pkg.get<(int) -> int>("add_one")
+    ///   assert.equal(f(41), 42)
+    //baml:vm
+    function get<F>(self, name: string) -> F throws root.errors.AccessError {
+        $rust_function
+    }
 }

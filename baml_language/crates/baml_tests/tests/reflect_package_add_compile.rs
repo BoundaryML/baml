@@ -565,6 +565,157 @@ async fn add_compile_rejects_redefinition() {
     );
 }
 
+/// `pkg.get<F>(name)` retrieves a runtime-lifted function by name, with a
+/// structural type check against `F`. Invoking the returned function works
+/// end-to-end: the function's per-package globals are reached via its
+/// `Function.package` field, so same-package `Call` dispatch routes through
+/// `pkg.globals.Dynamic`.
+#[tokio::test]
+async fn pkg_get_returns_function_callable_end_to_end() {
+    // The explicit `let f: (int) -> int` annotation helps TIR substitute
+    // F → `(int) -> int` at the call site of `f`.
+    let source = r#"
+        function main() -> int {
+            let pkg = reflect.Package.new();
+            let _ = pkg.add_compile({
+                "lib.baml": "function add_one(x: int) -> int { x + 1 }"
+            });
+            let f: (int) -> int = pkg.get<(int) -> int>("add_one");
+            f(41)
+        }
+    "#;
+
+    let (program, db) = compile_source_with_opt_returning_db(source, OptLevel::One);
+    let db_handle = Arc::new(parking_lot::Mutex::new(db));
+
+    let engine = BexEngine::new(
+        program,
+        Arc::new(sys_ops::SysOps::native()),
+        None,
+        Vec::new(),
+    )
+    .expect("BexEngine::new");
+    engine
+        .set_project_db(Arc::clone(&db_handle))
+        .expect("set_project_db");
+    let engine = Arc::new(engine);
+
+    let result = engine
+        .call_function_bound_args(
+            "user.main",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+    assert_eq!(
+        result,
+        Ok(bex_engine::BexExternalValue::Int(42)),
+        "calling the retrieved function should produce 42"
+    );
+}
+
+/// `pkg.get<F>(name)` throws when the signature doesn't match. The lift
+/// produces an `add_one(int) -> int` function; requesting it with a different
+/// signature must reject with `Unsupported`.
+#[tokio::test]
+async fn pkg_get_throws_on_signature_mismatch() {
+    let source = r#"
+        function main() -> bool {
+            let pkg = reflect.Package.new();
+            let _ = pkg.add_compile({
+                "lib.baml": "function add_one(x: int) -> int { x + 1 }"
+            });
+            // Wrong return type — function returns int, F expects string.
+            let _f = pkg.get<(int) -> string>("add_one");
+            false
+        }
+        function entry() -> bool {
+            main() catch (_e) {
+                _ => true
+            }
+        }
+    "#;
+
+    let (program, db) = compile_source_with_opt_returning_db(source, OptLevel::One);
+    let db_handle = Arc::new(parking_lot::Mutex::new(db));
+
+    let engine = BexEngine::new(
+        program,
+        Arc::new(sys_ops::SysOps::native()),
+        None,
+        Vec::new(),
+    )
+    .expect("BexEngine::new");
+    engine
+        .set_project_db(Arc::clone(&db_handle))
+        .expect("set_project_db");
+    let engine = Arc::new(engine);
+
+    let result = engine
+        .call_function_bound_args(
+            "user.entry",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+    assert_eq!(
+        result,
+        Ok(bex_engine::BexExternalValue::Bool(true)),
+        "entry() should catch the signature-mismatch throw"
+    );
+}
+
+/// `pkg.get<F>(name)` throws when the named item doesn't exist.
+#[tokio::test]
+async fn pkg_get_throws_on_missing_name() {
+    let source = r#"
+        function main() -> bool {
+            let pkg = reflect.Package.new();
+            let _ = pkg.add_compile({
+                "lib.baml": "function add_one(x: int) -> int { x + 1 }"
+            });
+            let _f = pkg.get<(int) -> int>("does_not_exist");
+            false
+        }
+        function entry() -> bool {
+            main() catch (_e) {
+                _ => true
+            }
+        }
+    "#;
+
+    let (program, db) = compile_source_with_opt_returning_db(source, OptLevel::One);
+    let db_handle = Arc::new(parking_lot::Mutex::new(db));
+
+    let engine = BexEngine::new(
+        program,
+        Arc::new(sys_ops::SysOps::native()),
+        None,
+        Vec::new(),
+    )
+    .expect("BexEngine::new");
+    engine
+        .set_project_db(Arc::clone(&db_handle))
+        .expect("set_project_db");
+    let engine = Arc::new(engine);
+
+    let result = engine
+        .call_function_bound_args(
+            "user.entry",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+    assert_eq!(
+        result,
+        Ok(bex_engine::BexExternalValue::Bool(true)),
+        "entry() should catch the missing-name throw"
+    );
+}
+
 /// Second `add_compile` with a path that already exists in the runtime
 /// Salsa input must throw a BAML-side `Unsupported`. The first batch's
 /// file remains; the second batch's mutation is reverted by the

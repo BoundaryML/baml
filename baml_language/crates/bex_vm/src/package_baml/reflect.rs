@@ -899,6 +899,113 @@ impl BamlClassReflectPackage for PackageBamlImpl {
 
         Ok(*package)
     }
+
+    /// Retrieve an item from a runtime package by name, type-checked against
+    /// the reified `F` type argument.
+    ///
+    /// Only function items are supported in this commit; class / enum
+    /// retrieval (via `F == type`) lands in a follow-up.
+    ///
+    /// Throws BAML `Unsupported` if:
+    ///   - `F` is not a function type
+    ///   - the requested name is missing from `pkg.items`
+    ///   - the item is not a function
+    ///   - the function's `(param_types, return_type)` does not match
+    ///     `F.params` / `F.ret` structurally.
+    fn get(vm: &BexVm, package: &Value, name: &str) -> Result<Value, VmRustFnError> {
+        let pkg_ptr = unwrap_package_handle(vm, package)?;
+        let Object::Package(pkg) = vm.get_object(pkg_ptr) else {
+            unreachable!("unwrap_package_handle returned a non-Package ptr");
+        };
+        let Some(&item_ptr) = pkg.items.get(name) else {
+            return Err(VmRustFnError::from(VmBamlError::AccessError {
+                message: format!(
+                    "reflect.Package.get: no item named {name:?} in package {:?}",
+                    pkg.name
+                ),
+            }));
+        };
+
+        // Resolve F. `pkg.get<F>(name)` reifies the user's `F` argument as
+        // the first entry of `current_call_type_args`. For function-typed
+        // F it must be a `Ty::Function`.
+        let [f_ty] = vm.current_call_type_args() else {
+            return Err(VmRustFnError::from(VmBamlError::Unsupported {
+                message: "reflect.Package.get: missing type argument F".to_string(),
+            }));
+        };
+        let baml_type::Ty::Function {
+            params: expected_params,
+            ret: expected_ret,
+            ..
+        } = f_ty
+        else {
+            return Err(VmRustFnError::from(VmBamlError::Unsupported {
+                message: format!("reflect.Package.get<F>: F must be a function type, got {f_ty:?}"),
+            }));
+        };
+
+        // TODO: change check to ensure the item is a `subtype` of `F`
+        // instead of requiring exact match.
+
+        // Dispatch on the item kind. Only functions are supported here.
+        // Kind mismatch is also an `AccessError` (you asked for a function-
+        // shaped lookup but the slot holds a different kind).
+        let func = match vm.get_object(item_ptr) {
+            Object::Function(f) => f,
+            other => {
+                return Err(VmRustFnError::from(VmBamlError::AccessError {
+                    message: format!(
+                        "reflect.Package.get: item {name:?} is a {other:?}; only functions \
+                         are supported by `get<F>` in this commit (class/enum retrieval \
+                         lands in a follow-up)"
+                    ),
+                }));
+            }
+        };
+
+        // Structural type-check: parameter arity, parameter types, return
+        // type. Uses `PartialEq` on `Ty` for equality. Throws-clause
+        // mismatch is not checked here — runtime functions don't carry a
+        // declared throws type and a future commit will reconcile this.
+        // Signature mismatches are `AccessError`: the named item exists but
+        // its shape doesn't satisfy the requested type.
+        if func.param_types.len() != expected_params.len() {
+            return Err(VmRustFnError::from(VmBamlError::AccessError {
+                message: format!(
+                    "reflect.Package.get<F>: function {name:?} has {} parameters, F has {}",
+                    func.param_types.len(),
+                    expected_params.len(),
+                ),
+            }));
+        }
+        for (i, (got, expected)) in func
+            .param_types
+            .iter()
+            .zip(expected_params.iter())
+            .enumerate()
+        {
+            if got != expected {
+                return Err(VmRustFnError::from(VmBamlError::AccessError {
+                    message: format!(
+                        "reflect.Package.get<F>: function {name:?} parameter {i} type \
+                         mismatch: got {got:?}, F expects {expected:?}"
+                    ),
+                }));
+            }
+        }
+        if func.return_type != **expected_ret {
+            return Err(VmRustFnError::from(VmBamlError::AccessError {
+                message: format!(
+                    "reflect.Package.get<F>: function {name:?} return type mismatch: \
+                     got {:?}, F expects {expected_ret:?}",
+                    func.return_type
+                ),
+            }));
+        }
+
+        Ok(Value::Object(item_ptr))
+    }
 }
 
 impl BamlNamespaceReflect for PackageBamlImpl {}
