@@ -82,9 +82,7 @@ impl Printable for TopLevelDeclaration {
             }
             TopLevelDeclaration::Generator(generator_decl) => generator_decl.print(shape, printer),
             TopLevelDeclaration::Unknown(range) => {
-                // May not be idempotent due to whitespace changes, but that's okay because we shouldn't
-                // have unknown stuff anyway.
-                printer.print_input_range(*range);
+                printer.print_input_range_trimmed_start(*range);
                 PrintInfo::default_multi_lined()
             }
         }

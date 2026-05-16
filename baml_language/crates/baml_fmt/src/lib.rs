@@ -295,3 +295,207 @@ mod is_format_tests {
         assert_formats_to(source, source);
     }
 }
+
+#[cfg(test)]
+mod idempotency_tests {
+    use super::*;
+
+    fn assert_idempotent(source: &str) {
+        let options = FormatOptions::default();
+        let first = match format(source, &options) {
+            Ok(f) => f,
+            Err(_) => return,
+        };
+        let second = format(&first, &options).expect("second format pass should succeed");
+        assert_eq!(
+            first, second,
+            "formatter is not idempotent\n--- first pass ---\n{first}\n--- second pass ---\n{second}"
+        );
+    }
+
+    #[test]
+    fn trailing_newline() {
+        assert_idempotent("function main() -> int {\n    42\n}\n");
+    }
+
+    #[test]
+    fn no_trailing_newline() {
+        assert_idempotent("function main() -> int {\n    42\n}");
+    }
+
+    #[test]
+    fn multiple_trailing_newlines() {
+        assert_idempotent("function main() -> int {\n    42\n}\n\n\n");
+    }
+
+    #[test]
+    fn empty_source() {
+        assert_idempotent("");
+    }
+
+    #[test]
+    fn only_whitespace() {
+        assert_idempotent("   \n\n  \n");
+    }
+
+    #[test]
+    fn only_comment() {
+        assert_idempotent("// hello world\n");
+    }
+
+    #[test]
+    fn only_block_comment() {
+        assert_idempotent("/* hello world */\n");
+    }
+
+    #[test]
+    fn two_functions_no_blank_line() {
+        assert_idempotent("function a() -> int { 1 }\nfunction b() -> int { 2 }\n");
+    }
+
+    #[test]
+    fn two_functions_with_blank_line() {
+        assert_idempotent("function a() -> int {\n    1\n}\n\nfunction b() -> int {\n    2\n}\n");
+    }
+
+    #[test]
+    fn class_with_trailing_comma() {
+        assert_idempotent("class Foo {\n    x: int,\n    y: string,\n}\n");
+    }
+
+    #[test]
+    fn class_without_trailing_comma() {
+        assert_idempotent("class Foo {\n    x: int,\n    y: string\n}\n");
+    }
+
+    #[test]
+    fn enum_basic() {
+        assert_idempotent("enum Color {\n    Red,\n    Green,\n    Blue,\n}\n");
+    }
+
+    #[test]
+    fn function_unformatted_spacing() {
+        assert_idempotent("function main()->string {\n\"ok\"\n}\n");
+    }
+
+    #[test]
+    fn deeply_nested_blocks() {
+        assert_idempotent(
+            "function f(x: int) -> int {\n    if (x > 0) {\n        if (x > 10) {\n            100\n        } else {\n            x\n        }\n    } else {\n        0\n    }\n}\n",
+        );
+    }
+
+    #[test]
+    fn comment_between_declarations() {
+        assert_idempotent(
+            "function a() -> int {\n    1\n}\n\n// a comment\n\nfunction b() -> int {\n    2\n}\n",
+        );
+    }
+
+    #[test]
+    fn inline_comment() {
+        assert_idempotent("function f(x: int) -> int {\n    x + 1 // add one\n}\n");
+    }
+
+    #[test]
+    fn block_comment_inline() {
+        assert_idempotent("function f(x: int) -> int {\n    x /* inline */ + 1\n}\n");
+    }
+
+    #[test]
+    fn type_alias() {
+        assert_idempotent("type MyInt = int\n");
+    }
+
+    #[test]
+    fn complex_type_union() {
+        assert_idempotent("function f(x: int | string | bool) -> int {\n    0\n}\n");
+    }
+
+    #[test]
+    fn template_string_basic() {
+        assert_idempotent("template_string Greeting() #\"\n    Hello, World!\n\"#\n");
+    }
+
+    #[test]
+    fn multiple_blank_lines_between_decls() {
+        assert_idempotent(
+            "function a() -> int {\n    1\n}\n\n\n\nfunction b() -> int {\n    2\n}\n",
+        );
+    }
+
+    #[test]
+    fn let_binding() {
+        assert_idempotent("function f() -> int {\n    let x = 42;\n    x\n}\n");
+    }
+
+    #[test]
+    fn match_expression() {
+        assert_idempotent(
+            "function f(x: int | string) -> string {\n    match x {\n        i: int => \"int\",\n        s: string => s,\n    }\n}\n",
+        );
+    }
+
+    #[test]
+    fn client_block() {
+        assert_idempotent(
+            "client<llm> GPT4 {\n  provider openai\n  options {\n    model gpt-4o\n    api_key env.OPENAI_API_KEY\n  }\n}\n",
+        );
+    }
+
+    #[test]
+    fn retry_policy() {
+        assert_idempotent(
+            "retry_policy Bar {\n  max_retries 3\n  strategy {\n    type exponential_backoff\n  }\n}\n",
+        );
+    }
+
+    #[test]
+    fn function_with_prompt() {
+        assert_idempotent(
+            "function Foo(input: string) -> string {\n  client GPT4\n  prompt #\"\n    {{ _.role(\"user\") }}\n    {{ input }}\n  \"#\n}\n",
+        );
+    }
+
+    #[test]
+    fn test_block() {
+        assert_idempotent(
+            "test MyTest {\n  functions [Foo]\n  args {\n    input \"hello\"\n  }\n}\n",
+        );
+    }
+
+    #[test]
+    fn generator_block() {
+        assert_idempotent(
+            "generator lang_python {\n  output_type python/pydantic\n  output_dir \"../python\"\n  version \"0.64.0\"\n}\n",
+        );
+    }
+
+    #[test]
+    fn class_with_attributes() {
+        assert_idempotent(
+            "class Foo {\n    name string @alias(\"full_name\")\n    age int @description(\"The age\")\n}\n",
+        );
+    }
+
+    #[test]
+    fn enum_with_attributes() {
+        assert_idempotent(
+            "enum Color {\n    Red @alias(\"RED\")\n    Green\n    Blue @description(\"ocean\")\n}\n",
+        );
+    }
+
+    #[test]
+    fn template_string_multiline() {
+        assert_idempotent(
+            "template_string Greeting(name: string) #\"\n    Hello, {{ name }}!\n    Welcome aboard.\n\"#\n",
+        );
+    }
+
+    #[test]
+    fn mixed_file() {
+        assert_idempotent(
+            "class Input {\n    text: string,\n}\n\nfunction Classify(input: Input) -> string {\n    \"hello\"\n}\n\nenum Category {\n    A,\n    B,\n}\n",
+        );
+    }
+}
