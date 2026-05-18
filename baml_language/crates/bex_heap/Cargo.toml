@@ -18,6 +18,7 @@ tokio = { workspace = true, features = [ "sync" ] }
 
 [dev-dependencies]
 baml_type = { workspace = true }
+tokio = { workspace = true, features = [ "macros", "rt-multi-thread", "time" ] }
 
 [features]
 default = [  ]
