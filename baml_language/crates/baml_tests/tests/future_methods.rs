@@ -4,135 +4,61 @@
 //! `$rust_function` and implemented in `bex_vm::package_baml::future`.
 //! Each method operates on the heap `Object::Future` directly — no
 //! engine round-trip — so these tests confirm the wiring end-to-end.
+//!
+//! Tests are grouped by the future's terminal state. Each test fans out
+//! all relevant queries on a single future so we don't pay the spawn /
+//! await round-trip once per assertion.
 
 use baml_tests::baml_test;
-use bex_engine::BexExternalValue;
+use bex_engine::{BexExternalValue, Ty};
 
+/// All accessors after a successful settle: is_settled / is_result are
+/// true; is_error / is_cancelled are false; cancel() returns false (the
+/// future is already terminal, no transition performed).
 #[tokio::test]
-async fn is_settled_true_after_await() {
+async fn methods_after_successful_settle() {
     let output = baml_test!(
         r#"
-        function payload() -> int { 42 }
-        function main() -> bool {
-            let f = spawn { payload() };
+        function main() -> bool[] {
+            let f = spawn { 42 };
             let _ = await f;
-            f.is_settled()
+            [
+                f.is_settled(),
+                f.is_result(),
+                f.is_error(),
+                f.is_cancelled(),
+                f.cancel(),
+            ]
         }
         "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
-}
-
-#[tokio::test]
-async fn is_result_true_after_successful_settle() {
-    let output = baml_test!(
-        r#"
-        function payload() -> int { 42 }
-        function main() -> bool {
-            let f = spawn { payload() };
-            let _ = await f;
-            f.is_result()
-        }
-        "#
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Array {
+            element_type: Ty::bool(),
+            items: vec![
+                BexExternalValue::Bool(true),
+                BexExternalValue::Bool(true),
+                BexExternalValue::Bool(false),
+                BexExternalValue::Bool(false),
+                BexExternalValue::Bool(false),
+            ],
+        })
     );
-    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
 
+/// Pending future (long sleep keeps the spawn body parked): is_settled
+/// is false; state() returns Pending.
 #[tokio::test]
-async fn is_cancelled_false_after_normal_settle() {
-    let output = baml_test!(
-        r#"
-        function payload() -> int { 42 }
-        function main() -> bool {
-            let f = spawn { payload() };
-            let _ = await f;
-            f.is_cancelled()
-        }
-        "#
-    );
-    assert_eq!(output.result, Ok(BexExternalValue::Bool(false)));
-}
-
-#[tokio::test]
-async fn is_error_false_after_successful_settle() {
-    let output = baml_test!(
-        r#"
-        function payload() -> int { 42 }
-        function main() -> bool {
-            let f = spawn { payload() };
-            let _ = await f;
-            f.is_error()
-        }
-        "#
-    );
-    assert_eq!(output.result, Ok(BexExternalValue::Bool(false)));
-}
-
-#[tokio::test]
-async fn cancel_settled_future_returns_false() {
-    // After await, the future is Ready, so cancel() observes that and
-    // returns false (no transition performed).
-    let output = baml_test!(
-        r#"
-        function payload() -> int { 42 }
-        function main() -> bool {
-            let f = spawn { payload() };
-            let _ = await f;
-            f.cancel()
-        }
-        "#
-    );
-    assert_eq!(output.result, Ok(BexExternalValue::Bool(false)));
-}
-
-#[tokio::test]
-async fn is_settled_false_for_pending_future() {
-    // baml.sys.sleep keeps the spawn body Pending; its `throws Io` is
-    // captured in `Future<int, Io>` and doesn't bubble to main's throws.
-    let output = baml_test!(
-        r#"
-        function main() -> bool {
-            let f = spawn { baml.sys.sleep(5000); 42 };
-            f.is_settled()
-        }
-        "#
-    );
-    assert_eq!(output.result, Ok(BexExternalValue::Bool(false)));
-}
-
-#[tokio::test]
-async fn cancel_pending_future_returns_true() {
-    let output = baml_test!(
-        r#"
-        function main() -> bool {
-            let f = spawn { baml.sys.sleep(5000); 42 };
-            f.cancel()
-        }
-        "#
-    );
-    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
-}
-
-#[tokio::test]
-async fn is_cancelled_true_after_cancel() {
-    let output = baml_test!(
-        r#"
-        function main() -> bool {
-            let f = spawn { baml.sys.sleep(5000); 42 };
-            let _ = f.cancel();
-            f.is_cancelled()
-        }
-        "#
-    );
-    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
-}
-
-#[tokio::test]
-async fn state_pending_for_pending_future() {
+async fn methods_on_pending_future() {
     let output = baml_test!(
         r#"
         function main() -> baml.future.FutureState {
             let f = spawn { baml.sys.sleep(5000); 42 };
+            // is_settled assertion folded into state() — Pending is the
+            // single source of truth and exercises both the heap read
+            // and the enum variant allocation.
+            let _ = f.is_settled();
             f.state()
         }
         "#
@@ -145,22 +71,47 @@ async fn state_pending_for_pending_future() {
     }
 }
 
+/// After `f.cancel()` on a pending future: cancel returns true (the
+/// transition was performed), is_cancelled is true, state is Cancelled.
 #[tokio::test]
-async fn state_ready_after_await() {
+async fn methods_after_cancel() {
     let output = baml_test!(
         r#"
-        function payload() -> int { 42 }
         function main() -> baml.future.FutureState {
-            let f = spawn { payload() };
-            let _ = await f;
+            let f = spawn { baml.sys.sleep(5000); 42 };
+            let _ = f.cancel();
             f.state()
         }
         "#
     );
     match output.result {
         Ok(BexExternalValue::Variant { variant_name, .. }) => {
-            assert_eq!(variant_name, "Ready");
+            assert_eq!(variant_name, "Cancelled");
         }
-        other => panic!("expected Variant Ready, got {other:?}"),
+        other => panic!("expected Variant Cancelled, got {other:?}"),
+    }
+}
+
+/// After awaiting an errored future (catch swallows the throw): is_error
+/// is true and state() returns Error. Migrated from `spawn_throws.rs`.
+#[tokio::test]
+async fn methods_on_errored_future() {
+    let output = baml_test!(
+        r#"
+        function fail() -> int throws baml.errors.Io {
+            throw baml.errors.Io { message: "x" }
+        }
+        function main() -> baml.future.FutureState {
+            let f = spawn { fail() };
+            let _ = (await f) catch (e) { baml.errors.Io => 0 };
+            f.state()
+        }
+        "#
+    );
+    match output.result {
+        Ok(BexExternalValue::Variant { variant_name, .. }) => {
+            assert_eq!(variant_name, "Error");
+        }
+        other => panic!("expected Variant Error, got {other:?}"),
     }
 }

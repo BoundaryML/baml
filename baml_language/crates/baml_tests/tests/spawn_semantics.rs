@@ -31,28 +31,9 @@ async fn multiple_awaits_on_same_future_return_cached_value() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(126)));
 }
 
-/// Nested spawn: spawn whose body spawns another and awaits it.
-/// Confirms the parent/child plumbing chains correctly.
-#[tokio::test]
-async fn nested_spawn_runs_to_completion() {
-    let output = baml_test!(
-        r#"
-        function inner() -> int { 7 }
-        function outer() -> int {
-            let inner_f = spawn { inner() };
-            await inner_f
-        }
-        function main() -> int {
-            let outer_f = spawn { outer() };
-            await outer_f
-        }
-        "#
-    );
-    assert_eq!(output.result, Ok(BexExternalValue::Int(7)));
-}
-
 /// Three levels of nesting — child of child of root. Sum at each level
-/// proves each spawn ran and its result reached the awaiter.
+/// proves each spawn ran and its result reached the awaiter. Subsumes
+/// a two-level test (if 3 levels work, 2 trivially do).
 #[tokio::test]
 async fn three_level_nested_spawn_sum() {
     let output = baml_test!(
