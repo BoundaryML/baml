@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 21754
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -201,20 +200,21 @@ SOURCE_FILE
                     WORD "fetch"
                   CALL_ARGS
                     L_PAREN "("
-                    BINARY_EXPR
-                      STRING_LITERAL "http://localhost:8000/"
-                        QUOTE """
-                        WORD "http"
-                        COLON ":"
-                        SLASH "/"
-                        SLASH "/"
-                        WORD "localhost"
-                        COLON ":"
-                        INTEGER_LITERAL "8000"
-                        SLASH "/"
-                        QUOTE """
-                      PLUS "+"
-                      WORD "sentiments"
+                    CALL_ARG
+                      BINARY_EXPR
+                        STRING_LITERAL "http://localhost:8000/"
+                          QUOTE """
+                          WORD "http"
+                          COLON ":"
+                          SLASH "/"
+                          SLASH "/"
+                          WORD "localhost"
+                          COLON ":"
+                          INTEGER_LITERAL "8000"
+                          SLASH "/"
+                          QUOTE """
+                        PLUS "+"
+                        WORD "sentiments"
                     R_PAREN ")"
                 SEMICOLON ";"
               LET_STMT
@@ -240,9 +240,10 @@ SOURCE_FILE
                 EQUALS "="
                 CALL_EXPR
                   WORD "GenerateTests$parse"
-                  CALL_ARGS "(data)"
+                  CALL_ARGS
                     L_PAREN "("
-                    WORD "data"
+                    CALL_ARG "data"
+                      WORD "data"
                     R_PAREN ")"
                 SEMICOLON ";"
               FOR_EXPR
@@ -273,10 +274,11 @@ SOURCE_FILE
                           WORD "ClassifySentiment"
                           CALL_ARGS
                             L_PAREN "("
-                            STRING_LITERAL "hi"
-                              QUOTE """
-                              WORD "hi"
-                              QUOTE """
+                            CALL_ARG
+                              STRING_LITERAL "hi"
+                                QUOTE """
+                                WORD "hi"
+                                QUOTE """
                             R_PAREN ")"
                         SEMICOLON ";"
                       CALL_EXPR
@@ -286,15 +288,17 @@ SOURCE_FILE
                           WORD "equal"
                         CALL_ARGS
                           L_PAREN "("
-                          PATH_EXPR "result.feeling"
-                            WORD "result"
-                            DOT "."
-                            WORD "feeling"
+                          CALL_ARG
+                            PATH_EXPR "result.feeling"
+                              WORD "result"
+                              DOT "."
+                              WORD "feeling"
                           COMMA ","
-                          STRING_LITERAL "positive"
-                            QUOTE """
-                            WORD "positive"
-                            QUOTE """
+                          CALL_ARG
+                            STRING_LITERAL "positive"
+                              QUOTE """
+                              WORD "positive"
+                              QUOTE """
                           R_PAREN ")"
                       SEMICOLON ";"
                       R_BRACE "}"
@@ -354,11 +358,13 @@ SOURCE_FILE
                     EQUALS "="
                     CALL_EXPR
                       WORD "GenerateTests"
-                      CALL_ARGS "(5, sentiments)"
+                      CALL_ARGS
                         L_PAREN "("
-                        INTEGER_LITERAL "5"
+                        CALL_ARG "5"
+                          INTEGER_LITERAL "5"
                         COMMA ","
-                        WORD "sentiments"
+                        CALL_ARG "sentiments"
+                          WORD "sentiments"
                         R_PAREN ")"
                     SEMICOLON ";"
                   FOR_EXPR
@@ -389,10 +395,11 @@ SOURCE_FILE
                               WORD "ClassifySentiment"
                               CALL_ARGS
                                 L_PAREN "("
-                                STRING_LITERAL "hi"
-                                  QUOTE """
-                                  WORD "hi"
-                                  QUOTE """
+                                CALL_ARG
+                                  STRING_LITERAL "hi"
+                                    QUOTE """
+                                    WORD "hi"
+                                    QUOTE """
                                 R_PAREN ")"
                             SEMICOLON ";"
                           CALL_EXPR
@@ -402,15 +409,17 @@ SOURCE_FILE
                               WORD "equal"
                             CALL_ARGS
                               L_PAREN "("
-                              PATH_EXPR "result.feeling"
-                                WORD "result"
-                                DOT "."
-                                WORD "feeling"
+                              CALL_ARG
+                                PATH_EXPR "result.feeling"
+                                  WORD "result"
+                                  DOT "."
+                                  WORD "feeling"
                               COMMA ","
-                              STRING_LITERAL "positive"
-                                QUOTE """
-                                WORD "positive"
-                                QUOTE """
+                              CALL_ARG
+                                STRING_LITERAL "positive"
+                                  QUOTE """
+                                  WORD "positive"
+                                  QUOTE """
                               R_PAREN ")"
                           SEMICOLON ";"
                           R_BRACE "}"

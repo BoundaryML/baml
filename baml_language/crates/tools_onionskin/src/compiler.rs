@@ -27,6 +27,23 @@ fn hir2_type_expr_to_string(ty: &baml_compiler2_ast::TypeExpr) -> String {
     ty.to_string()
 }
 
+fn hir2_signature_param_to_string(
+    param: &baml_compiler2_hir::signature::SignatureParam,
+    default_ref: Option<&baml_compiler2_hir::item_tree::DefaultExprRef>,
+    defaults: &baml_compiler2_ast::FunctionDefaults,
+) -> String {
+    let default = default_ref
+        .map(|default| format!(" = {}", defaults.exprs.display_expr(default.expr.expr())))
+        .unwrap_or_default();
+
+    format!(
+        "{}: {}{}",
+        param.name,
+        hir2_type_expr_to_string(&param.ty),
+        default
+    )
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum CompilerPhase {
     Lexer,
@@ -490,7 +507,10 @@ fn expr_desc_spans<'db>(
                 if i > 0 {
                     spans.push(DetailSpan::Code(", ".into()));
                 }
-                spans.extend(expr_desc_spans(*arg, body, inference));
+                if let Some(label) = &arg.label {
+                    spans.push(DetailSpan::Code(format!("{label} = ")));
+                }
+                spans.extend(expr_desc_spans(arg.expr, body, inference));
             }
             spans.push(DetailSpan::Code(")".into()));
         }
@@ -567,7 +587,10 @@ fn expr_desc_spans<'db>(
                 if i > 0 {
                     spans.push(DetailSpan::Code(", ".into()));
                 }
-                spans.extend(expr_desc_spans(*arg, body, inference));
+                if let Some(label) = &arg.label {
+                    spans.push(DetailSpan::Code(format!("{label} = ")));
+                }
+                spans.extend(expr_desc_spans(arg.expr, body, inference));
             }
             spans.push(DetailSpan::Code(")".into()));
         }
@@ -580,6 +603,10 @@ fn expr_desc_spans<'db>(
             spans.push(DetailSpan::Code("match (".into()));
             spans.extend(expr_desc_spans(*scrutinee, body, inference));
             spans.push(DetailSpan::Code(") { ... }".into()));
+        }
+        Expr::Is { scrutinee, .. } => {
+            spans.extend(expr_desc_spans(*scrutinee, body, inference));
+            spans.push(DetailSpan::Code(" is <pattern>".into()));
         }
         Expr::Catch { base, clauses } => {
             spans.extend(expr_desc_spans(*base, body, inference));
@@ -2028,6 +2055,9 @@ impl CompilerRunner {
                     .join("."),
                 Expr::If { .. } => "if ...".into(),
                 Expr::Match { .. } => "match ...".into(),
+                Expr::Is { scrutinee, .. } => {
+                    format!("{} is <pattern>", expr_desc(*scrutinee, body))
+                }
                 Expr::Catch { .. } => "catch ...".into(),
                 Expr::Throw { value } => format!("throw {}", expr_desc(*value, body)),
                 Expr::Binary { op, .. } => format!("... {op:?} ..."),
@@ -2227,11 +2257,20 @@ impl CompilerRunner {
                             func_body =
                                 Some(baml_compiler2_ppir::function_body(&self.db, func_loc));
                             let sig = baml_compiler2_ppir::function_signature(&self.db, func_loc);
+                            let parameter_defaults =
+                                baml_compiler2_ppir::function_parameter_defaults(
+                                    &self.db, func_loc,
+                                );
                             let params: Vec<String> = sig
                                 .params
                                 .iter()
-                                .map(|(pname, ptype)| {
-                                    format!("{}: {}", pname, hir2_type_expr_to_string(ptype))
+                                .enumerate()
+                                .map(|(index, param)| {
+                                    hir2_signature_param_to_string(
+                                        param,
+                                        parameter_defaults.param_default(index),
+                                        &parameter_defaults.defaults,
+                                    )
                                 })
                                 .collect();
                             let ret = sig
@@ -2802,11 +2841,18 @@ impl CompilerRunner {
                     );
                     let sig = baml_compiler2_ppir::function_signature(&self.db, func_loc);
 
+                    let parameter_defaults =
+                        baml_compiler2_ppir::function_parameter_defaults(&self.db, func_loc);
                     let params: Vec<String> = sig
                         .params
                         .iter()
-                        .map(|(pname, ptype)| {
-                            format!("{}: {}", pname, hir2_type_expr_to_string(ptype))
+                        .enumerate()
+                        .map(|(index, param)| {
+                            hir2_signature_param_to_string(
+                                param,
+                                parameter_defaults.param_default(index),
+                                &parameter_defaults.defaults,
+                            )
                         })
                         .collect();
                     let ret = sig
@@ -4992,6 +5038,7 @@ fn format_vm_value(value: &bex_vm_types::Value, vm: &bex_vm::BexVm) -> String {
     use bex_vm_types::{Object, Value};
 
     match value {
+        Value::OmittedArg => "<omitted>".to_string(),
         Value::Null => "null".to_string(),
         Value::Int(i) => i.to_string(),
         Value::Float(f) => bex_vm_types::format_float(*f),

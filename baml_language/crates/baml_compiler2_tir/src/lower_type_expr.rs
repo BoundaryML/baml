@@ -8,7 +8,9 @@ use baml_compiler2_hir::{
 
 use crate::{
     infer_context::TirTypeError,
-    ty::{Freshness, PrimitiveType, QualifiedTypeName, Ty, TyAttr},
+    ty::{
+        Freshness, FunctionParamMode, FunctionParamTy, PrimitiveType, QualifiedTypeName, Ty, TyAttr,
+    },
 };
 
 /// Resolve an AST `TypeExpr` to a `Ty` using package-level name resolution.
@@ -361,18 +363,21 @@ pub fn lower_type_expr_in_ns(
         } => Ty::Function {
             params: params
                 .iter()
-                .map(|p| {
-                    (
-                        p.name.clone(),
-                        lower_type_expr_in_ns(
-                            db,
-                            &p.ty,
-                            package_items,
-                            ns_context,
-                            generic_params,
-                            diagnostics,
-                        ),
-                    )
+                .map(|p| FunctionParamTy {
+                    name: p.name.clone(),
+                    ty: lower_type_expr_in_ns(
+                        db,
+                        &p.ty,
+                        package_items,
+                        ns_context,
+                        generic_params,
+                        diagnostics,
+                    ),
+                    mode: if p.optional {
+                        FunctionParamMode::Optional
+                    } else {
+                        FunctionParamMode::Required
+                    },
                 })
                 .collect(),
             ret: Box::new(lower_type_expr_in_ns(
@@ -431,4 +436,93 @@ pub fn qualify_def(
     let file = def.file(db);
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     QualifiedTypeName::new(pkg_info.package, pkg_info.namespace_path, name.clone())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use baml_base::Name;
+    use baml_compiler2_ast::{FunctionTypeParam, TypeExpr};
+    use baml_compiler2_hir::package::PackageItems;
+    use baml_workspace::Project;
+    use rustc_hash::FxHashMap;
+
+    use super::*;
+
+    #[salsa::db]
+    #[derive(Clone, Default)]
+    struct TestDb {
+        storage: salsa::Storage<TestDb>,
+        project: Option<Project>,
+    }
+
+    impl TestDb {
+        fn init(&mut self) {
+            self.project = Some(Project::new(self, PathBuf::from("."), Vec::new()));
+        }
+    }
+
+    #[salsa::db]
+    impl salsa::Database for TestDb {}
+
+    #[salsa::db]
+    impl baml_workspace::Db for TestDb {
+        fn project(&self) -> Project {
+            self.project.expect("TestDb not initialized")
+        }
+    }
+
+    #[salsa::db]
+    impl baml_compiler2_hir::Db for TestDb {}
+
+    #[salsa::db]
+    impl baml_compiler2_ppir::Db for TestDb {}
+
+    #[salsa::db]
+    impl crate::Db for TestDb {}
+
+    #[test]
+    fn lower_function_type_preserves_parameter_optionality() {
+        let mut db = TestDb::default();
+        db.init();
+        let package_items = PackageItems {
+            namespaces: FxHashMap::default(),
+            extra: None,
+        };
+        let type_expr = TypeExpr::Function {
+            params: vec![
+                FunctionTypeParam {
+                    name: Some(Name::new("query")),
+                    optional: false,
+                    ty: TypeExpr::String { attrs: vec![] },
+                },
+                FunctionTypeParam {
+                    name: Some(Name::new("limit")),
+                    optional: true,
+                    ty: TypeExpr::Int { attrs: vec![] },
+                },
+            ],
+            ret: Box::new(TypeExpr::Bool { attrs: vec![] }),
+            throws: None,
+            attrs: vec![],
+        };
+        let mut diagnostics = Vec::new();
+
+        let ty = lower_type_expr_in_ns(&db, &type_expr, &package_items, &[], &[], &mut diagnostics);
+
+        assert!(
+            diagnostics.is_empty(),
+            "unexpected diagnostics: {diagnostics:?}"
+        );
+        let Ty::Function { params, .. } = ty else {
+            panic!("expected function type, got {ty:?}");
+        };
+        let params: Vec<&FunctionParamTy> = params.iter().collect();
+
+        assert_eq!(params[0].name.as_deref(), Some("query"));
+        assert_eq!(params[0].mode, FunctionParamMode::Required);
+        assert_eq!(params[1].name.as_deref(), Some("limit"));
+        assert_eq!(params[1].mode, FunctionParamMode::Optional);
+    }
 }

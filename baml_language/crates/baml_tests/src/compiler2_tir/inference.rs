@@ -4,8 +4,9 @@ use baml_base::Name;
 use baml_compiler2_hir::{package::PackageId, scope::ScopeKind};
 use baml_compiler2_tir::{
     inference::infer_scope_types,
-    package_interface::package_interface,
+    package_interface::{ExportedType, package_interface, package_resolution_context},
     resolve::{ResolvedName, resolve_name_at_in_scope},
+    ty::{FunctionParamMode, QualifiedTypeName, Ty},
 };
 use text_size::TextSize;
 
@@ -433,8 +434,83 @@ fn function_type_throws_package_interface_exports_effect_params() {
 
     assert_eq!(exported.generic_params, vec![Name::new("__effect_param_0")]);
     assert_eq!(
-        format!("{}", exported.params[0].1),
+        format!("{}", exported.params[0].ty),
         "(value: int) -> string throws __effect_param_0"
+    );
+}
+
+#[test]
+fn package_interface_exports_optional_param_mode() {
+    let mut db = make_db();
+    db.add_file(
+        "search.baml",
+        "function Search(query: string, limit: int = 10) -> int { limit }",
+    );
+
+    let iface = package_interface(&db, PackageId::new(&db, Name::new("user")));
+    let exported = iface
+        .lookup_function(&[], &Name::new("Search"))
+        .expect("exported function");
+
+    assert_eq!(
+        exported.params[0].name.as_ref().map(|name| name.as_str()),
+        Some("query")
+    );
+    assert_eq!(exported.params[0].mode, FunctionParamMode::Required);
+    assert_eq!(
+        exported.params[1].name.as_ref().map(|name| name.as_str()),
+        Some("limit")
+    );
+    assert_eq!(exported.params[1].mode, FunctionParamMode::Optional);
+}
+
+#[test]
+fn own_class_method_lookup_matches_exported_implicit_self_type() {
+    let mut db = make_db();
+    db.add_file(
+        "service.baml",
+        r#"
+class SearchService {
+    base string
+
+    function Run(self, query: string, limit: int = 20) -> int {
+        limit
+    }
+}
+"#,
+    );
+
+    let pkg_id = PackageId::new(&db, Name::new("user"));
+    let iface = package_interface(&db, pkg_id);
+    let Some(ExportedType::Class { methods, .. }) =
+        iface.lookup_type(&[], &Name::new("SearchService"))
+    else {
+        panic!("exported class");
+    };
+    let exported_method = methods
+        .iter()
+        .find(|method| method.name.as_str() == "Run")
+        .expect("exported method");
+
+    let res_ctx = package_resolution_context(&db, pkg_id);
+    let own_method = res_ctx
+        .lookup_class_method(
+            &db,
+            &QualifiedTypeName::new(Name::new("user"), vec![], Name::new("SearchService")),
+            &Name::new("Run"),
+        )
+        .expect("own method");
+
+    assert_eq!(&own_method.function.params, &exported_method.params);
+    assert!(
+        !matches!(own_method.function.params[0].ty, Ty::Unknown { .. }),
+        "implicit self should be reified before lowering"
+    );
+    assert_eq!(own_method.function.params[1].ty.to_string(), "string");
+    assert_eq!(own_method.function.params[2].ty.to_string(), "int");
+    assert_eq!(
+        own_method.function.params[2].mode,
+        FunctionParamMode::Optional
     );
 }
 

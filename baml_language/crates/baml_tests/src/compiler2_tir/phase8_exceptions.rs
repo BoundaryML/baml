@@ -616,6 +616,60 @@ fn function_type_throws_optional_call_propagates_callback_surface() {
 }
 
 #[test]
+fn named_reordered_callback_arg_instantiates_throws_from_call_plan() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function invoke(cb: (value: int) -> int, value: int = 1) -> int {
+  cb(value)
+}
+
+function risky(value: int) -> int throws string {
+  throw "boom"
+}
+
+function f() -> int throws never {
+  invoke(value = 1, cb = risky)
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("throws contract violation: `never` is missing string"),
+        "expected reordered named callback arg to instantiate concrete throws, got:\n{output}"
+    );
+}
+
+#[test]
+fn callable_throws_uses_call_plan_for_named_reordered_args() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function invoke(cb: (value: int) -> int, value: int = 1) -> int {
+  cb(value)
+}
+
+function forward(cb: (value: int) -> int) -> int {
+  invoke(value = 1, cb = cb)
+}
+
+function risky(value: int) -> int throws string {
+  throw "boom"
+}
+
+function f() -> int throws never {
+  forward(risky)
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("throws contract violation: `never` is missing string"),
+        "expected callable throws summary to use reordered named call binding, got:\n{output}"
+    );
+}
+
+#[test]
 fn unbound_method_call_propagates_callback_surface() {
     let mut db = make_db();
     let file = db.add_file(

@@ -24,7 +24,10 @@ use baml_base::SourceFile;
 use baml_compiler_syntax::{SyntaxToken, TokenAtOffset};
 use baml_compiler2_ast::TypeExpr;
 use baml_compiler2_hir::contributions::Definition;
-use baml_compiler2_tir::{ty::Ty, user_facing::humanize_type_string};
+use baml_compiler2_tir::{
+    ty::{FunctionParamTy, Ty},
+    user_facing::humanize_type_string,
+};
 use text_size::{TextRange, TextSize};
 
 use crate::Db;
@@ -128,6 +131,17 @@ fn display_ty_as_function_result(ty: &Ty) -> String {
     }
 }
 
+pub fn display_function_param_ty(param: &FunctionParamTy) -> String {
+    param
+        .name
+        .as_ref()
+        .map(|name| {
+            let optional = if param.is_optional() { "?" } else { "" };
+            format!("{}{}: {}", name, optional, display_ty(&param.ty))
+        })
+        .unwrap_or_else(|| display_ty(&param.ty))
+}
+
 /// Format a resolved `Ty` as a user-friendly string.
 ///
 /// Delegates to the `Display` impl on `Ty`. For user-visible output (hover,
@@ -186,14 +200,7 @@ pub fn display_ty(ty: &Ty) -> String {
             throws,
             ..
         } => {
-            let ps: Vec<String> = params
-                .iter()
-                .map(|(name, ty)| {
-                    name.as_ref()
-                        .map(|n| format!("{}: {}", n, display_ty(ty)))
-                        .unwrap_or_else(|| display_ty(ty))
-                })
-                .collect();
+            let ps: Vec<String> = params.iter().map(display_function_param_ty).collect();
             format!(
                 "({}) -> {} throws {}",
                 ps.join(", "),
@@ -287,7 +294,10 @@ pub fn display_type_expr(te: &TypeExpr) -> String {
                 .map(|p| {
                     p.name
                         .as_ref()
-                        .map(|n| format!("{}: {}", n, display_type_expr(&p.ty)))
+                        .map(|n| {
+                            let optional = if p.optional { "?" } else { "" };
+                            format!("{}{}: {}", n, optional, display_type_expr(&p.ty))
+                        })
                         .unwrap_or_else(|| display_type_expr(&p.ty))
                 })
                 .collect();

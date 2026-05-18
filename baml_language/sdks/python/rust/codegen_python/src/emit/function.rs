@@ -1,6 +1,6 @@
 //! `PyFunction` — top-level factory binding.
 
-use baml_codegen_types::Ty;
+use baml_codegen_types::{FunctionArgumentDefault, Ty};
 
 /// Async/sync marker carried by factory bindings. Each BAML
 /// `Function` (and each of its companions) fans out into one sync
@@ -33,6 +33,10 @@ pub(crate) struct PyFunction {
     /// the inner companion's `arguments` for companions; never from
     /// the parent for companion bindings.
     pub(crate) param_names: Vec<String>,
+    /// Default metadata matching `param_names`. `None` means the
+    /// parameter is required/positional-compatible; `Some` means it is
+    /// defaulted and therefore keyword-only in generated Python.
+    pub(crate) arg_defaults: Vec<Option<FunctionArgumentDefault>>,
     /// Parameter types in the same order as `param_names`. Used only
     /// by `.pyi` rendering; the `.py` factory binding doesn't reference
     /// types. For companions, these are the companion's own parameter

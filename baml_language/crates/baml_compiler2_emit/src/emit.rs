@@ -435,6 +435,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 Constant::String(_) => Some(Ty::string()),
                 Constant::Bool(_) => Some(Ty::bool()),
                 Constant::Null => Some(Ty::null()),
+                Constant::OmittedArg => None,
                 _ => None,
             },
             Operand::Copy(place) | Operand::Move(place) => self.resolve_place_type(place),
@@ -656,6 +657,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             },
             param_names: Vec::new(),
             param_types: Vec::new(),
+            param_has_default: Vec::new(),
             throws_type: None,
             origin: FunctionOrigin::Internal,
             body_meta: None,
@@ -1237,6 +1239,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let idx = self.add_constant(ConstValue::Null);
                 let inst = self.emit(Instruction::LoadConst(idx));
                 self.set_operand(inst, OperandMeta::Const("null".to_string()));
+            }
+            Constant::OmittedArg => {
+                let idx = self.add_constant(ConstValue::OmittedArg);
+                let inst = self.emit(Instruction::LoadConst(idx));
+                self.set_operand(inst, OperandMeta::Const("<omitted>".to_string()));
             }
             Constant::Function(item_ref) => {
                 let name_str = item_ref.to_string();

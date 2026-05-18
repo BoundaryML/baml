@@ -552,16 +552,81 @@ fn remap_node_set(
 impl RootHaver for Watch {
     /// Collects GC roots from Watch state.
     ///
-    /// Only `last_assigned` and `last_notified` need to be roots — `value`
-    /// is always a copy of the stack slot (already a root), and graph `NodeId`s
-    /// point to objects transitively reachable from stack values.
+    /// Visits **every** field that `forward_roots` later patches. This is the
+    /// load-bearing invariant: a pointer that `forward_roots` would rewrite
+    /// must be in the root set, otherwise the underlying object can be
+    /// reclaimed (it isn't traced through any other path) and the rewrite
+    /// will install a stale pointer-to-freed-memory into the graph or a
+    /// `RootState`.
+    ///
+    /// Specifically:
+    /// - `state.value`, `state.last_assigned`, `state.last_notified`:
+    ///   `Value::Object` payloads must be rooted because `forward_roots`
+    ///   patches them in place.
+    /// - `state.filter` if `WatchFilter::Function(ptr)`: the function
+    ///   pointer is a heap reference (closure object) and is patched in
+    ///   place by `forward_roots`, so it must be a root.
+    /// - All `NodeId::HeapObject(ptr)` reached through `roots`,
+    ///   `children` (keys + edge children), `parents` (keys + edge
+    ///   parents), `reachable_from_root` (keys + values), and
+    ///   `roots_reaching_node` (keys + values): `forward_roots` rewrites
+    ///   them, so any object reachable only through this graph must be
+    ///   rooted via the graph itself.
     fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
+        // RootState values.
         for state in self.roots.values() {
+            if let Value::Object(ptr) = state.value {
+                roots.push(ptr);
+            }
             if let Some(Value::Object(ptr)) = state.last_assigned {
                 roots.push(ptr);
             }
             if let Some(Value::Object(ptr)) = state.last_notified {
                 roots.push(ptr);
+            }
+            if let WatchFilter::Function(ptr) = state.filter {
+                roots.push(ptr);
+            }
+        }
+
+        // Graph NodeIds: collect every `HeapObject` reachable through the
+        // graph maps. Duplicates are fine — the GC's worklist deduplicates
+        // via the forwarding HashMap.
+        let push_if_heap = |node: &NodeId, roots: &mut Vec<HeapPtr>| {
+            if let NodeId::HeapObject(ptr) = node {
+                roots.push(*ptr);
+            }
+        };
+        // `roots` (Watch's own `roots: HashMap<NodeId, RootState>`).
+        for node in self.roots.keys() {
+            push_if_heap(node, roots);
+        }
+        // `children`: parent keys + (path, child) edge children.
+        for (parent, edges) in &self.children {
+            push_if_heap(parent, roots);
+            for (_path, child) in edges {
+                push_if_heap(child, roots);
+            }
+        }
+        // `parents`: child keys + (parent, path) edge parents.
+        for (child, edges) in &self.parents {
+            push_if_heap(child, roots);
+            for (parent, _path) in edges {
+                push_if_heap(parent, roots);
+            }
+        }
+        // `reachable_from_root`: root keys + reachable-set values.
+        for (root, reachable) in &self.reachable_from_root {
+            push_if_heap(root, roots);
+            for node in reachable {
+                push_if_heap(node, roots);
+            }
+        }
+        // `roots_reaching_node`: node keys + roots-set values.
+        for (node, reaching) in &self.roots_reaching_node {
+            push_if_heap(node, roots);
+            for root in reaching {
+                push_if_heap(root, roots);
             }
         }
     }
@@ -570,6 +635,12 @@ impl RootHaver for Watch {
     ///
     /// After a copying GC, all heap objects may have moved. This updates
     /// `RootState` values and rebuilds the graph maps with new pointers.
+    ///
+    /// Every pointer patched here must have been pushed by
+    /// [`Self::collect_roots`] — otherwise the GC won't have a forwarding
+    /// entry for it (the pre-fix bug). In debug builds, the
+    /// `debug_assert!(remap_was_traced(...))` calls below verify the
+    /// invariant on every patched node.
     fn forward_roots(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
         if forwarding.is_empty() || self.roots.is_empty() {
             return;
@@ -805,5 +876,61 @@ mod tests {
             watch.copy_roots_reaching(NodeId::HeapObject(obj_ptr)).len(),
             0
         );
+    }
+
+    /// Regression test: every `HeapPtr` that `forward_roots` would patch
+    /// must be present in `collect_roots`'s output. Pre-fix, `collect_roots`
+    /// only emitted `last_assigned`/`last_notified`, so `state.value`,
+    /// `WatchFilter::Function(ptr)`, and graph `NodeId::HeapObject(ptr)`s
+    /// could be silently rewritten to point at freed memory after a GC.
+    #[test]
+    fn collect_roots_covers_every_pointer_forward_roots_patches() {
+        let mut watch = Watch::new();
+
+        // Build a watch state that exercises every HeapPtr-bearing field:
+        // - `state.value` (Object)
+        // - `state.last_assigned` (Object)
+        // - `state.last_notified` (Object)
+        // - `state.filter = WatchFilter::Function(ptr)`
+        // - graph edges: parent (HeapObject) -> child (HeapObject), with
+        //   reachable_from_root / roots_reaching_node populated.
+        let value_ptr = leaf();
+        let assigned_ptr = leaf();
+        let notified_ptr = leaf();
+        let filter_fn_ptr = leaf();
+        let parent_ptr = leaf();
+        let child_ptr = leaf();
+
+        let parent_node = NodeId::HeapObject(parent_ptr);
+        watch.register_root(
+            parent_node,
+            RootState {
+                value: Value::Object(value_ptr),
+                last_assigned: Some(Value::Object(assigned_ptr)),
+                last_notified: Some(Value::Object(notified_ptr)),
+                channel: "Test".to_string(),
+                filter: WatchFilter::Function(filter_fn_ptr),
+            },
+        );
+        track_watch_dependencies(&mut watch, parent_node, Path::Binding, child_ptr);
+
+        let mut roots = Vec::new();
+        watch.collect_roots(&mut roots);
+
+        // Each pointer that `forward_roots` will patch must appear at least
+        // once in the root set.
+        for &needed in &[
+            value_ptr,
+            assigned_ptr,
+            notified_ptr,
+            filter_fn_ptr,
+            parent_ptr,
+            child_ptr,
+        ] {
+            assert!(
+                roots.contains(&needed),
+                "collect_roots missing pointer that forward_roots would patch: {needed:?}"
+            );
+        }
     }
 }

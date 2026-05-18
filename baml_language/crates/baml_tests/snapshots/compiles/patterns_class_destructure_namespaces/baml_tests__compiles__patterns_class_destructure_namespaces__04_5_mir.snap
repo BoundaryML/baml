@@ -223,32 +223,24 @@ fn user.GenericTypePatternNamespaceQualifiedMatch() -> int {
     let _0: int // _0 // return
     let _1: llm.openai.Box<int> | llm.openai.Box<string> // boxed
     let _2: bool
-    let _3: int
-    let _4: bool
 
     bb0: {
         _1 =  { const "ready" };
         _2 = is_type(copy _1, llm.openai.Box<int>);
-        branch copy _2 -> [bb1, bb2];
+        branch copy _2 -> [bb2, bb1];
     }
 
     bb1: {
-        _3 = copy _1.0;
-        _4 = is_type(copy _3, int);
-        branch copy _4 -> [bb3, bb2];
+        _0 = const 51_i64;
+        goto -> bb3;
     }
 
     bb2: {
-        _0 = const 51_i64;
-        goto -> bb4;
+        _0 = const 0_i64;
+        goto -> bb3;
     }
 
     bb3: {
-        _0 = const 0_i64;
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -258,32 +250,24 @@ fn user.GenericTypePatternQualifiedMatch() -> int {
     let _0: int // _0 // return
     let _1: llm.openai.Box<int> | llm.openai.Box<string> // boxed
     let _2: bool
-    let _3: string
-    let _4: bool
 
     bb0: {
         _1 =  { const 50_i64 };
         _2 = is_type(copy _1, llm.openai.Box<string>);
-        branch copy _2 -> [bb1, bb2];
+        branch copy _2 -> [bb2, bb1];
     }
 
     bb1: {
-        _3 = copy _1.0;
-        _4 = is_type(copy _3, string);
-        branch copy _4 -> [bb3, bb2];
+        _0 = const 50_i64;
+        goto -> bb3;
     }
 
     bb2: {
-        _0 = const 50_i64;
-        goto -> bb4;
+        _0 = const 0_i64;
+        goto -> bb3;
     }
 
     bb3: {
-        _0 = const 0_i64;
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }

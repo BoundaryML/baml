@@ -21,5 +21,25 @@ add_three_to_field_a = __define_function(
 add_three_to_field_a_async = __define_function(
     "user.lorem.add_three_to_field_a", "async", ["input_lorem"]
 )
+default_score = __define_function(
+    "user.lorem.default_score", "sync", ["query", "max_results", "filter"], 1
+)
+default_score_async = __define_function(
+    "user.lorem.default_score", "async", ["query", "max_results", "filter"], 1
+)
+mutate_default = __define_function(
+    "user.lorem.mutate_default", "sync", ["items"], 0
+)
+mutate_default_async = __define_function(
+    "user.lorem.mutate_default", "async", ["items"], 0
+)
 
-__all__ = ["MyLorem", "add_three_to_field_a", "add_three_to_field_a_async"]
+__all__ = [
+    "MyLorem",
+    "add_three_to_field_a",
+    "add_three_to_field_a_async",
+    "default_score",
+    "default_score_async",
+    "mutate_default",
+    "mutate_default_async",
+]

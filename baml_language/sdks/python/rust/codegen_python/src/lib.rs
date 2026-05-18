@@ -375,7 +375,8 @@ fn symbol_name(sym: &Symbol) -> Option<&Name> {
 mod tests {
     use baml_base::Name as BaseName;
     use baml_codegen_types::{
-        Class, ClassProperty, Enum, EnumVariant, Function, FunctionArgument, Origin, Ty, TypeAlias,
+        Class, ClassProperty, DefaultLiteral, Enum, EnumVariant, Function, FunctionArgument,
+        FunctionArgumentDefault, Origin, Ty, TypeAlias,
     };
 
     use super::*;
@@ -446,6 +447,7 @@ mod tests {
                 name: BaseName::new("x"),
                 docstring: None,
                 ty: Ty::Int,
+                default: None,
             }],
             return_type: Ty::Int,
             watchers: vec![],
@@ -899,6 +901,7 @@ mod tests {
             name: BaseName::new("self"),
             docstring: None,
             ty: Ty::Class(n.clone(), vec![]),
+            default: None,
         }];
         pool.insert(
             n.clone(),
@@ -1544,6 +1547,7 @@ mod tests {
                     name: BaseName::new(*n),
                     docstring: None,
                     ty: Ty::String,
+                    default: None,
                 })
                 .collect(),
             return_type: Ty::Int,
@@ -1622,6 +1626,139 @@ mod tests {
         ));
         assert!(leaf.contains(
             "make_async = _define_function(\"user.lorem.make\", \"async\", [\"a\", \"b\", \"c\"])\n"
+        ));
+    }
+
+    #[test]
+    fn function_defaults_render_keyword_only_signature_and_positional_limit() {
+        let mut pool: SymbolPool = HashMap::new();
+        let key = cg_name("user", &["lorem"], "search");
+        pool.insert(
+            key,
+            Symbol::Function(Function {
+                generic_params: Vec::new(),
+                name: BaseName::new("search"),
+                docstring: None,
+                arguments: vec![
+                    FunctionArgument {
+                        name: BaseName::new("query"),
+                        docstring: None,
+                        ty: Ty::String,
+                        default: None,
+                    },
+                    FunctionArgument {
+                        name: BaseName::new("max_results"),
+                        docstring: None,
+                        ty: Ty::Int,
+                        default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(
+                            baml_base::Literal::Int(10),
+                        ))),
+                    },
+                    FunctionArgument {
+                        name: BaseName::new("filter"),
+                        docstring: None,
+                        ty: Ty::String,
+                        default: Some(FunctionArgumentDefault::Expression {
+                            source: Some("default_filter()".to_string()),
+                        }),
+                    },
+                    FunctionArgument {
+                        name: BaseName::new("tags"),
+                        docstring: None,
+                        ty: Ty::List(Box::new(Ty::String)),
+                        default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::EmptyList)),
+                    },
+                    FunctionArgument {
+                        name: BaseName::new("metadata"),
+                        docstring: None,
+                        ty: Ty::Map {
+                            key: Box::new(Ty::String),
+                            value: Box::new(Ty::String),
+                        },
+                        default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::EmptyMap)),
+                    },
+                    FunctionArgument {
+                        name: BaseName::new("fallback"),
+                        docstring: None,
+                        ty: Ty::Union(vec![Ty::String, Ty::Null]),
+                        default: Some(FunctionArgumentDefault::Null),
+                    },
+                ],
+                return_type: Ty::String,
+                watchers: vec![],
+                origin: origin("x.baml", 0),
+            }),
+        );
+
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let py = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(py.contains(
+            "search       = _define_function(\"user.lorem.search\", \"sync\",  [\"query\", \"max_results\", \"filter\", \"tags\", \"metadata\", \"fallback\"], 1)\n"
+        ));
+        assert!(py.contains(
+            "search_async = _define_function(\"user.lorem.search\", \"async\", [\"query\", \"max_results\", \"filter\", \"tags\", \"metadata\", \"fallback\"], 1)\n"
+        ));
+
+        let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
+        assert!(!pyi.contains("UNSET"));
+        assert!(!pyi.contains("_UNSET"));
+        assert!(pyi.contains(
+            "def search(query: str, *, max_results: int = 10, filter: str = ..., tags: typing.List[str] = [], metadata: typing.Dict[str, str] = {}, fallback: typing.Union[str, None] = None) -> str: ...\n"
+        ));
+        assert!(pyi.contains(
+            "async def search_async(query: str, *, max_results: int = 10, filter: str = ..., tags: typing.List[str] = [], metadata: typing.Dict[str, str] = {}, fallback: typing.Union[str, None] = None) -> str: ...\n"
+        ));
+    }
+
+    #[test]
+    fn empty_collection_defaults_do_not_require_unset_import_in_pyi() {
+        let mut pool: SymbolPool = HashMap::new();
+        let key = cg_name("user", &["lorem"], "defaults");
+        pool.insert(
+            key,
+            Symbol::Function(Function {
+                generic_params: Vec::new(),
+                name: BaseName::new("defaults"),
+                docstring: None,
+                arguments: vec![
+                    FunctionArgument {
+                        name: BaseName::new("tags"),
+                        docstring: None,
+                        ty: Ty::List(Box::new(Ty::String)),
+                        default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::EmptyList)),
+                    },
+                    FunctionArgument {
+                        name: BaseName::new("metadata"),
+                        docstring: None,
+                        ty: Ty::Map {
+                            key: Box::new(Ty::String),
+                            value: Box::new(Ty::Int),
+                        },
+                        default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::EmptyMap)),
+                    },
+                    FunctionArgument {
+                        name: BaseName::new("fallback"),
+                        docstring: None,
+                        ty: Ty::Union(vec![Ty::String, Ty::Null]),
+                        default: Some(FunctionArgumentDefault::Null),
+                    },
+                ],
+                return_type: Ty::String,
+                watchers: vec![],
+                origin: origin("x.baml", 0),
+            }),
+        );
+
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
+
+        assert!(!pyi.contains("from baml_core import UNSET as _UNSET\n"));
+        assert!(!pyi.contains("_UNSET"));
+        assert!(pyi.contains(
+            "def defaults(*, tags: typing.List[str] = [], metadata: typing.Dict[str, int] = {}, fallback: typing.Union[str, None] = None) -> str: ...\n"
+        ));
+        assert!(pyi.contains(
+            "async def defaults_async(*, tags: typing.List[str] = [], metadata: typing.Dict[str, int] = {}, fallback: typing.Union[str, None] = None) -> str: ...\n"
         ));
     }
 
@@ -1807,6 +1944,7 @@ mod tests {
                     name: BaseName::new(*n),
                     docstring: None,
                     ty: Ty::Int,
+                    default: None,
                 })
                 .collect(),
             return_type: Ty::Int,
@@ -2101,6 +2239,7 @@ mod tests {
                     name: BaseName::new("text"),
                     docstring: None,
                     ty: Ty::String,
+                    default: None,
                 }],
                 return_type: Ty::Class(resume, vec![]),
                 watchers: vec![],
@@ -2147,6 +2286,7 @@ mod tests {
                     name: BaseName::new("json"),
                     docstring: None,
                     ty: Ty::String,
+                    default: None,
                 }],
                 return_type: Ty::Class(resume.clone(), vec![]),
                 watchers: vec![],
@@ -2164,6 +2304,7 @@ mod tests {
                     name: BaseName::new("text"),
                     docstring: None,
                     ty: Ty::String,
+                    default: None,
                 }],
                 return_type: Ty::Class(resume, vec![]),
                 watchers: vec![],
@@ -2746,6 +2887,7 @@ mod tests {
                     name: BaseName::new("text"),
                     docstring: None,
                     ty: Ty::String,
+                    default: None,
                 }],
                 return_type: Ty::Enum(sentiment),
                 watchers: vec![],
@@ -2918,6 +3060,7 @@ mod tests {
                     name: BaseName::new("value"),
                     docstring: None,
                     ty: Ty::TypeVar(BaseName::new("T")),
+                    default: None,
                 }],
                 return_type: Ty::TypeVar(BaseName::new("T")),
                 watchers: vec![],

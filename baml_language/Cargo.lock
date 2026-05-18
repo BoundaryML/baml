@@ -1593,6 +1593,7 @@ dependencies = [
  "bex_resource_types",
  "bex_vm_types",
  "indexmap 2.13.0",
+ "parking_lot",
  "thiserror 2.0.18",
  "tokio",
 ]

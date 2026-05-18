@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 196
 ---
 Slash "/"
 Slash "/"
@@ -90,7 +89,7 @@ Word "_"
 Colon ":"
 Word "B"
 Error "`"
-Word "is"
+Is "is"
 Word "NOT"
 Word "supported"
 Slash "/"

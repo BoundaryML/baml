@@ -367,7 +367,7 @@ fn user.fn_return_widens(cb: (int) -> int | string throws never) -> int {
     }
 
     bb1: {
-        _3 = is_type(copy _1, string);
+        _3 = is_type(copy _1, void);
         branch copy _3 -> [bb2, bb4];
     }
 

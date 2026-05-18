@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 20378
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -95,12 +94,14 @@ SOURCE_FILE
           WORD "equal"
         CALL_ARGS
           L_PAREN "("
-          PATH_EXPR "h.with"
-            WORD "h"
-            DOT "."
-            WORD "with"
+          CALL_ARG
+            PATH_EXPR "h.with"
+              WORD "h"
+              DOT "."
+              WORD "with"
           COMMA ","
-          INTEGER_LITERAL "1"
+          CALL_ARG "1"
+            INTEGER_LITERAL "1"
           R_PAREN ")"
       R_BRACE "}"
 

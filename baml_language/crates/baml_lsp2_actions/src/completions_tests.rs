@@ -2,7 +2,7 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::{completions::completions_at, testing::CursorTest};
+    use crate::{CompletionKind, completions::completions_at, testing::CursorTest};
 
     #[test]
     fn test_field_access_after_dot() {
@@ -727,6 +727,155 @@ function GuessGameAgent() -> string {
         assert!(
             completions.iter().any(|c| c.label == "history"),
             "expected local completion after malformed log call, got: {completions:?}"
+        );
+    }
+
+    #[test]
+    fn test_call_argument_completion_suggests_optional_params() {
+        let test = CursorTest::new(
+            r#"
+function Search(query: string, max_results: int = 10, filter: string? = null) -> int {
+    max_results
+}
+
+function Test() -> int {
+    Search("cats", <[CURSOR])
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let max_results = completions
+            .iter()
+            .find(|completion| completion.label == "max_results")
+            .expect("max_results completion");
+        let filter = completions
+            .iter()
+            .find(|completion| completion.label == "filter")
+            .expect("filter completion");
+
+        assert_eq!(max_results.insert_text.as_deref(), Some("max_results = "));
+        assert_eq!(max_results.kind, CompletionKind::Parameter);
+        assert_eq!(filter.insert_text.as_deref(), Some("filter = "));
+        assert_eq!(filter.kind, CompletionKind::Parameter);
+        assert!(
+            completions
+                .iter()
+                .all(|completion| completion.label != "query"),
+            "Should not suggest parameter already provided positionally, got: {completions:?}"
+        );
+    }
+
+    #[test]
+    fn test_call_argument_completion_hides_already_provided_labels() {
+        let test = CursorTest::new(
+            r#"
+function Search(query: string, max_results: int = 10, filter: string? = null) -> int {
+    max_results
+}
+
+function Test() -> int {
+    Search("cats", max_results = 5, <[CURSOR])
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+        assert!(
+            !labels.contains(&"max_results"),
+            "Should not suggest already provided label, got: {labels:?}"
+        );
+        assert!(
+            labels.contains(&"filter"),
+            "Should still suggest remaining optional label, got: {labels:?}"
+        );
+    }
+
+    #[test]
+    fn test_call_argument_completion_keeps_required_named_params_available() {
+        let test = CursorTest::new(
+            r#"
+function Search(query: string, max_results: int = 10, filter: string? = null) -> int {
+    max_results
+}
+
+function Test() -> int {
+    Search(max_results = 5, <[CURSOR])
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+        assert!(
+            labels.contains(&"query"),
+            "Required named params should remain available, got: {labels:?}"
+        );
+        assert!(
+            labels.contains(&"filter"),
+            "Remaining optional params should remain available, got: {labels:?}"
+        );
+    }
+
+    #[test]
+    fn test_call_argument_completion_hides_multiple_positional_params() {
+        let test = CursorTest::new(
+            r#"
+function Search(query: string, limit: int, filter: string? = null) -> int {
+    limit
+}
+
+function Test() -> int {
+    Search("cats", 5, <[CURSOR])
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+        assert!(
+            !labels.contains(&"query"),
+            "Should not suggest first positional parameter, got: {labels:?}"
+        );
+        assert!(
+            !labels.contains(&"limit"),
+            "Should not suggest second positional parameter, got: {labels:?}"
+        );
+        assert!(
+            labels.contains(&"filter"),
+            "Should still suggest remaining parameter, got: {labels:?}"
+        );
+    }
+
+    #[test]
+    fn test_call_argument_completion_does_not_apply_inside_argument_expression() {
+        let test = CursorTest::new(
+            r#"
+function Search(query: string, max_results: int = 10, filter: string? = null) -> int {
+    max_results
+}
+
+function Test() -> int {
+    let local_value = 2
+    Search("cats", local_value + <[CURSOR])
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+        assert!(
+            labels.contains(&"local_value"),
+            "Should use value completions inside argument expressions, got: {labels:?}"
+        );
+        assert!(
+            !labels.contains(&"max_results"),
+            "Should not suggest outer call labels inside argument expressions, got: {labels:?}"
         );
     }
 }

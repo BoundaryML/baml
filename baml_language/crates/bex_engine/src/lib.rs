@@ -91,7 +91,8 @@ pub use bex_heap::GcStats;
 pub use bex_heap::{ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapPermit};
 use bex_vm::{BexVm, SpanNotification, VmExecState};
 use bex_vm_types::{
-    FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SysOp, Value, VmGlobals,
+    FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp, Value,
+    VmGlobals,
 };
 pub use conversion::test_arg_to_external;
 // Re-export CancellationToken for callers.
@@ -133,7 +134,17 @@ pub struct UserFunctionInfo {
     pub origin: FunctionOrigin,
     pub param_names: Vec<String>,
     pub param_types: Vec<Ty>,
+    pub param_has_default: Vec<bool>,
     pub return_type: Ty,
+}
+
+/// Internal call argument after host binding has distinguished omission from
+/// explicit null. This is intentionally not part of the external bridge value
+/// surface.
+#[derive(Debug, Clone)]
+pub enum BexCallArg {
+    Provided(Box<BexExternalValue>),
+    OmittedDefault,
 }
 
 // ============================================================================
@@ -409,7 +420,19 @@ pub struct BexEngine {
     /// Populated once during `$init` and immutable thereafter; cloning is a
     /// cheap refcount bump (see `VmGlobals::Shared`). The VM rejects any
     /// `StoreGlobal` against this view as a `VmInternalError`.
-    globals: Arc<[Value]>,
+    ///
+    /// Stored as a [`SharedGlobals`] (rather than a plain `Arc<[Value]>`)
+    /// so the GC can trace + forward `Value::Object(HeapPtr)` entries: the
+    /// engine registers a clone of this `SharedGlobals` as a [`RootHaver`]
+    /// permit holder during `BexEngine::new`. Without that registration any
+    /// runtime heap object stored in a top-level `let` global was invisible
+    /// to GC and could be reclaimed mid-call.
+    globals: SharedGlobals,
+    /// Permit holder that keeps `globals` registered with the
+    /// `HeapPermitManager`. The engine never `acquire()`s this — it exists
+    /// purely so the GC's `collect_roots`/`forward_roots` walks reach the
+    /// frozen globals pool.
+    _globals_permit: bex_heap::InactiveHeapPermit<SharedGlobals>,
     /// Resolved function/class/enum names for lookup
     resolved_function_names: HashMap<String, (HeapPtr, bex_vm_types::FunctionKind)>,
     /// Resolved class names for instance allocation (`IndexMap` preserves definition order)
@@ -638,11 +661,13 @@ impl BexEngine {
             }
         }
 
-        // Freeze the now-populated globals into a shared `Arc<[Value]>`. Every
-        // post-`$init` VM cloned into a `call_function` invocation reads from
-        // this exact `Arc`. `StoreGlobal` against this shared view is rejected
-        // by the VM as `VmInternalError::StoreGlobalAfterInit`.
-        let globals: Arc<[Value]> = Arc::from(globals_pool.0);
+        // Freeze the now-populated globals into a `SharedGlobals` so the GC
+        // can trace + forward `Value::Object(HeapPtr)` entries. Every
+        // post-`$init` VM cloned into a `call_function` invocation reads
+        // from this shared instance via `VmGlobals::Shared(globals.clone())`.
+        // `StoreGlobal` against the shared view is rejected by the VM as
+        // `VmInternalError::StoreGlobalAfterInit`.
+        let globals = SharedGlobals::from_vec(globals_pool.0);
 
         // Build SysOpContext by pre-extracting LLM function metadata from the heap.
         // This avoids passing raw HeapPtrs to sys_ops.
@@ -667,6 +692,16 @@ impl BexEngine {
                 .new_permit(FutureManagerInner::new(Tlab::new_empty(Arc::clone(&heap)))),
         );
 
+        // Register the frozen globals pool as its own permit holder so the
+        // GC traces and forwards `Value::Object(HeapPtr)` entries (e.g.
+        // top-level `let g = [1, 2, 3]` populated during `$init`). The
+        // permit is never `acquire()`d — its sole job is to participate in
+        // `HeapGuard::collect_roots` / `forward_roots` walks. The
+        // `SharedGlobals` is `Clone` (Arc bump), so the holder and the
+        // engine's own field point at the same `UnsafeCell<Box<[Value]>>`.
+        let globals_permit =
+            futures::executor::block_on(heap_permit_manager.new_permit(globals.clone()));
+
         // Build a default RuntimeIo from the SysOps table with an empty context.
         // This is replaced per-call in execute_sys_op with a live context that
         // carries the correct cancellation token and spawner.
@@ -690,6 +725,7 @@ impl BexEngine {
         Ok(Self {
             heap,
             globals,
+            _globals_permit: globals_permit,
             resolved_function_names,
             resolved_class_names,
             resolved_enum_names,
@@ -924,10 +960,44 @@ impl BexEngine {
         // Run GC — always returns the forwarding map so we can update parked VM stacks.
         let (stats, _remapped_roots, forwarding) =
             unsafe { self.heap.collect_garbage_generational(&all_roots, level) };
+
+        // Bug H, check 1 (heap_debug only): every pointer the GC was told
+        // about (`all_roots`) must end up in the forwarding map. If a
+        // holder's `collect_roots` produces a pointer the GC's BFS does
+        // not reach, the subsequent `forward_roots` will leave a stale
+        // reference behind. This assertion turns that silent class of
+        // bug into an immediate panic during stress tests.
+        #[cfg(feature = "heap_debug")]
+        for &ptr in &all_roots {
+            assert!(
+                forwarding.contains_key(&ptr),
+                "heap_debug: post-GC integrity sweep — root {ptr:?} was not \
+                 reached by the GC BFS (collect_roots produced it but it is \
+                 not in the forwarding map)"
+            );
+        }
+
         // Update all parked VM stacks with forwarding pointers and invalidate TLABs
         // SAFETY: VMs are still parked (gc_complete not yet notified), we have
         // exclusive access via the parked_vms lock we're still holding
         heap_guard.forward_roots(&forwarding);
+
+        // Bug H, check 3 (heap_debug only): after `forward_roots`, no
+        // holder root should still point into the inactive (former
+        // active) space. If any does, `forward_roots` missed it — the
+        // stale pointer would dereference into freed/poisoned memory.
+        #[cfg(feature = "heap_debug")]
+        {
+            let mut roots_after = self.heap.collect_handle_roots();
+            heap_guard.collect_roots(&mut roots_after);
+            for &ptr in &roots_after {
+                assert!(
+                    !self.heap.debug_ptr_in_inactive(ptr),
+                    "heap_debug: post-forward_roots — root {ptr:?} still points \
+                     into the inactive space (forward_roots missed it)"
+                );
+            }
+        }
 
         self.heap.verify_quick();
 
@@ -983,12 +1053,51 @@ impl BexEngine {
         }: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexExternalValue, EngineError> {
+        let args = args
+            .into_iter()
+            .map(|arg| BexCallArg::Provided(Box::new(arg)))
+            .collect();
+        self.call_function_bound_args(
+            function_name,
+            args,
+            FunctionCallContext {
+                call_id,
+                host_ctx,
+                collectors,
+                cancel,
+            },
+            copy_objects,
+        )
+        .await
+    }
+
+    pub async fn call_function_bound_args(
+        self: &Arc<Self>,
+        function_name: &str,
+        args: Vec<BexCallArg>,
+        FunctionCallContext {
+            call_id,
+            host_ctx,
+            collectors,
+            cancel,
+        }: FunctionCallContext,
+        copy_objects: bool,
+    ) -> Result<BexExternalValue, EngineError> {
         // Fail fast if already cancelled — guarantees pre-cancelled tokens
         // always produce a `baml.panics.Cancelled` panic regardless of
         // function contents.
         if cancel.is_cancelled() {
             return Err(cancelled_unhandled_throw());
         }
+
+        let function_index = self.lookup_function(function_name)?;
+        self.validate_bound_args(function_name, &args)?;
+        let return_type = self
+            .function_return_type(function_name)
+            .unwrap_or(Ty::Null {
+                attr: baml_type::TyAttr::default(),
+            });
+        let throws_type = self.function_throws_type(function_name);
 
         // Register this call so `cancel_function_call(call_id)` can target
         // it. The RAII guard removes the entry on drop (including panic
@@ -1000,7 +1109,7 @@ impl BexEngine {
         // Globals are shared as a frozen `Arc<[Value]>` — cloning is a refcount bump.
         let vm = BexVm::new(
             Arc::clone(&self.heap),
-            VmGlobals::Shared(Arc::clone(&self.globals)),
+            VmGlobals::Shared(self.globals.clone()),
             self.resolved_class_names
                 .iter()
                 .chain(self.resolved_enum_names.iter())
@@ -1017,20 +1126,21 @@ impl BexEngine {
         let inactive = self.heap_permit_manager.new_permit(root_thread).await;
         let mut thread = inactive.acquire().await;
 
-        let function_index = self.lookup_function(function_name)?;
-        let return_type = self
-            .function_return_type(function_name)
-            .unwrap_or(Ty::Null {
-                attr: baml_type::TyAttr::default(),
-            });
-        let throws_type = self.function_throws_type(function_name);
-
         // Snapshot args for the root FunctionStart event before converting to VM values
-        let args_snapshot = args.clone();
+        let args_snapshot = args
+            .iter()
+            .filter_map(|arg| match arg {
+                BexCallArg::Provided(value) => Some(value.as_ref().clone()),
+                BexCallArg::OmittedDefault => None,
+            })
+            .collect();
 
         let vm_args: Vec<Value> = args
             .into_iter()
-            .map(|arg| self.convert_external_to_vm_value(&mut thread, arg))
+            .map(|arg| match arg {
+                BexCallArg::Provided(arg) => self.convert_external_to_vm_value(&mut thread, *arg),
+                BexCallArg::OmittedDefault => Ok(Value::OmittedArg),
+            })
             .collect::<Result<Vec<_>, _>>()?;
 
         thread.vm.set_entry_point(function_index, &vm_args);
@@ -1155,6 +1265,36 @@ impl BexEngine {
         }
     }
 
+    fn validate_bound_args(
+        &self,
+        function_name: &str,
+        args: &[BexCallArg],
+    ) -> Result<(), EngineError> {
+        let params = self.function_params(function_name)?;
+        if args.len() != params.len() {
+            return Err(EngineError::TypeMismatch {
+                message: format!(
+                    "Function `{function_name}` expects {} argument(s), got {}",
+                    params.len(),
+                    args.len()
+                ),
+            });
+        }
+
+        for (idx, arg) in args.iter().enumerate() {
+            if matches!(arg, BexCallArg::OmittedDefault) && !params[idx].2 {
+                return Err(EngineError::TypeMismatch {
+                    message: format!(
+                        "Argument `{}` for function `{function_name}` cannot be omitted; only parameters with defaults may use omitted defaults",
+                        params[idx].0
+                    ),
+                });
+            }
+        }
+
+        Ok(())
+    }
+
     /// Look up a function by name and return its heap pointer.
     ///
     /// Tries the exact name first, then falls back to `"user.{name}"` to handle
@@ -1233,7 +1373,7 @@ impl BexEngine {
     }
 
     /// Get parameter names and types for a function by dereferencing its heap object.
-    pub fn function_params(&self, name: &str) -> Result<Vec<(&str, &Ty)>, EngineError> {
+    pub fn function_params(&self, name: &str) -> Result<Vec<(&str, &Ty, bool)>, EngineError> {
         let resolved = self
             .resolve_function_name(name)
             .ok_or(EngineError::FunctionNotFound {
@@ -1252,7 +1392,14 @@ impl BexEngine {
                 .param_names
                 .iter()
                 .zip(func.param_types.iter())
-                .map(|(name, ty)| (name.as_str(), ty))
+                .enumerate()
+                .map(|(idx, (name, ty))| {
+                    (
+                        name.as_str(),
+                        ty,
+                        func.param_has_default.get(idx).copied().unwrap_or(false),
+                    )
+                })
                 .collect()),
             other => Err(EngineError::TypeMismatch {
                 message: format!("Expected Function, got {other:?}"),
@@ -1283,6 +1430,7 @@ impl BexEngine {
                             origin: func.origin,
                             param_names: func.param_names.clone(),
                             param_types: func.param_types.clone(),
+                            param_has_default: func.param_has_default.clone(),
                             return_type: func.return_type.clone(),
                         })
                     }
@@ -1540,7 +1688,7 @@ impl BexEngine {
         // permit only holds Send values across yield points.
         let mut child_vm = BexVm::new(
             Arc::clone(&self.heap),
-            VmGlobals::Shared(Arc::clone(&self.globals)),
+            VmGlobals::Shared(self.globals.clone()),
             self.resolved_class_names
                 .iter()
                 .chain(self.resolved_enum_names.iter())

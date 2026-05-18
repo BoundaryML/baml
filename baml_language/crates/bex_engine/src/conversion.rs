@@ -30,6 +30,11 @@ impl BexEngine {
         let effective_type = resolve_effective_type(value, declared_type);
 
         let external = match value {
+            Value::OmittedArg => {
+                return Err(EngineError::TypeMismatch {
+                    message: "internal omitted argument escaped to external conversion".to_string(),
+                });
+            }
             Value::Null => BexExternalValue::Null,
             Value::Int(i) => BexExternalValue::Int(*i),
             Value::Float(f) => BexExternalValue::Float(*f),
@@ -358,16 +363,24 @@ impl BexEngine {
                 Value::Object(holder.holder_mut().tlab_mut().alloc_rust_data(arc))
             }
             BexExternalValue::FunctionRef { global_index } => {
-                if global_index >= self.globals.len() {
+                // `convert_external_to_vm_value` runs while `holder`'s
+                // active heap permit is held, so we route through the
+                // permit-proof-gated `SharedGlobals` API. The slice's
+                // lifetime is tied to the proof, which is bounded by
+                // `holder.proof()`'s borrow of `holder` — both end at the
+                // close of this function call.
+                let proof = holder.proof();
+                let len = self.globals.len(proof);
+                let slice = self.globals.as_slice(proof);
+                if global_index >= len {
                     return Err(EngineError::TypeMismatch {
                         message: format!(
-                            "FunctionRef global_index {} out of bounds (globals len {})",
-                            global_index,
-                            self.globals.len()
+                            "FunctionRef global_index {global_index} out of \
+                             bounds (globals len {len})"
                         ),
                     });
                 }
-                self.globals[global_index]
+                slice[global_index]
             }
         })
     }
@@ -380,6 +393,9 @@ impl BexEngine {
 impl BexEngine {
     pub(crate) fn vm_arg_to_bex_value(&self, value: &Value) -> BexExternalValue {
         match value {
+            Value::OmittedArg => {
+                panic!("Cannot convert omitted argument sentinel to BexExternalValue")
+            }
             Value::Null => BexExternalValue::Null,
             Value::Int(i) => BexExternalValue::Int(*i),
             Value::Float(f) => BexExternalValue::Float(*f),
@@ -402,6 +418,9 @@ impl BexEngine {
         value: &Value,
     ) -> BexExternalValue {
         match value {
+            Value::OmittedArg => {
+                panic!("Cannot convert omitted argument sentinel to BexExternalValue")
+            }
             Value::Null => BexExternalValue::Null,
             Value::Int(i) => BexExternalValue::Int(*i),
             Value::Float(f) => BexExternalValue::Float(*f),
@@ -587,6 +606,7 @@ fn resolve_effective_type<'a>(value: &Value, declared_type: &'a Ty) -> &'a Ty {
 /// Find the union member that matches the runtime value's type.
 fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'a Ty> {
     match value {
+        Value::OmittedArg => None,
         Value::Null => members.iter().find(|m| matches!(m, Ty::Null { .. })),
         Value::Int(_) => members
             .iter()
@@ -678,6 +698,9 @@ fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'
 /// primitives, strings, arrays, maps, and resources - not instances/variants.
 pub(crate) fn vm_arg_to_external(vm: &BexVm, value: &Value) -> BexExternalValue {
     match value {
+        Value::OmittedArg => {
+            panic!("Cannot convert omitted argument sentinel to BexExternalValue")
+        }
         Value::Null => BexExternalValue::Null,
         Value::Int(i) => BexExternalValue::Int(*i),
         Value::Float(f) => BexExternalValue::Float(*f),

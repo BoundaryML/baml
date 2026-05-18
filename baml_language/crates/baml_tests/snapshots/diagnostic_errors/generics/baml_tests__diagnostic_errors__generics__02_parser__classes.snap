@@ -158,10 +158,11 @@ SOURCE_FILE
             WORD "of"
           CALL_ARGS
             L_PAREN "("
-            STRING_LITERAL "hello"
-              QUOTE """
-              WORD "hello"
-              QUOTE """
+            CALL_ARG
+              STRING_LITERAL "hello"
+                QUOTE """
+                WORD "hello"
+                QUOTE """
             R_PAREN ")"
         R_BRACE "}"
   CLASS_DEF
@@ -502,9 +503,10 @@ SOURCE_FILE
                 GREATER ">"
             DOT "."
             WORD "from_value"
-          CALL_ARGS "(42)"
+          CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "42"
+            CALL_ARG "42"
+              INTEGER_LITERAL "42"
             R_PAREN ")"
         R_BRACE "}"
   CLASS_DEF
@@ -965,9 +967,10 @@ SOURCE_FILE
                   GREATER ">"
               DOT "."
               WORD "create"
-            CALL_ARGS "(42)"
+            CALL_ARGS
               L_PAREN "("
-              INTEGER_LITERAL "42"
+              CALL_ARG "42"
+                INTEGER_LITERAL "42"
               R_PAREN ")"
         CALL_EXPR
           PATH_EXPR "f.get"
@@ -1082,9 +1085,10 @@ SOURCE_FILE
             WORD "b"
             DOT "."
             WORD "get_or_default"
-          CALL_ARGS "(0)"
+          CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "0"
+            CALL_ARG "0"
+              INTEGER_LITERAL "0"
             R_PAREN ")"
         R_BRACE "}"
   CLASS_DEF

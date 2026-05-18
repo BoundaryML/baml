@@ -260,6 +260,7 @@ pub(crate) fn display_value(value: &Value) -> String {
 /// If `ObjectPool` is provided, we can resolve object indices to actual values.
 fn display_const_value(value: &bex_vm_types::ConstValue, objects: Option<&ObjectPool>) -> String {
     match value {
+        bex_vm_types::ConstValue::OmittedArg => "<omitted>".to_string(),
         bex_vm_types::ConstValue::Null => "null".to_string(),
         bex_vm_types::ConstValue::Int(i) => i.to_string(),
         bex_vm_types::ConstValue::Float(f) => bex_vm_types::format_float(*f),

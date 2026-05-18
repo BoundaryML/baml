@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function $init_test() -> null {
+function $init_test(registry: unknown) -> null {
     load_var ?1
     call ?
     pop 1

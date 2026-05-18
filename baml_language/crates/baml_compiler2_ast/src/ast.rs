@@ -270,7 +270,8 @@ impl std::fmt::Display for TypeExpr {
                         write!(f, ", ")?;
                     }
                     if let Some(name) = &p.name {
-                        write!(f, "{}: {}", name.as_str(), p.ty)?;
+                        let optional = if p.optional { "?" } else { "" };
+                        write!(f, "{}{}: {}", name.as_str(), optional, p.ty)?;
                     } else {
                         write!(f, "{}", p.ty)?;
                     }
@@ -299,6 +300,7 @@ impl std::fmt::Display for TypeExpr {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionTypeParam {
     pub name: Option<Name>,
+    pub optional: bool,
     pub ty: TypeExpr,
 }
 
@@ -336,6 +338,20 @@ pub struct ExprBody {
     pub type_annotations: Arena<TypeExpr>,
     /// Root expression of the function body.
     pub root_expr: Option<ExprId>,
+}
+
+impl Default for ExprBody {
+    fn default() -> Self {
+        Self {
+            exprs: Arena::new(),
+            stmts: Arena::new(),
+            patterns: Arena::new(),
+            match_arms: Arena::new(),
+            catch_arms: Arena::new(),
+            type_annotations: Arena::new(),
+            root_expr: None,
+        }
+    }
 }
 
 impl ExprBody {
@@ -388,7 +404,13 @@ impl ExprBody {
                 };
                 let args_str: Vec<_> = args
                     .iter()
-                    .map(|a| self.display_expr_inner(*a, depth + 1))
+                    .map(|a| {
+                        let value = self.display_expr_inner(a.expr, depth + 1);
+                        match &a.label {
+                            Some(label) => format!("{label} = {value}"),
+                            None => value,
+                        }
+                    })
                     .collect();
                 format!(
                     "{}{}({})",
@@ -400,7 +422,13 @@ impl ExprBody {
             Expr::OptionalCall { callee, args } => {
                 let args_str: Vec<_> = args
                     .iter()
-                    .map(|a| self.display_expr_inner(*a, depth + 1))
+                    .map(|a| {
+                        let value = self.display_expr_inner(a.expr, depth + 1);
+                        match &a.label {
+                            Some(label) => format!("{label} = {value}"),
+                            None => value,
+                        }
+                    })
                     .collect();
                 format!(
                     "{}?.({})",
@@ -439,6 +467,9 @@ pub struct AstSourceMap {
     /// For multi-segment `Path` expressions, per-segment spans.
     /// `path_segment_spans[expr_id][i]` is the `TextRange` of `segments[i]`.
     pub path_segment_spans: HashMap<ExprId, Vec<TextRange>>,
+    /// For labeled call arguments, the span of the label name keyed by
+    /// `(call_expr_id, argument_expr_id)`.
+    pub call_arg_label_spans: HashMap<(ExprId, ExprId), TextRange>,
 }
 
 impl AstSourceMap {
@@ -452,6 +483,7 @@ impl AstSourceMap {
             catch_arm_spans: Arena::new(),
             member_access_member_spans: HashMap::new(),
             path_segment_spans: HashMap::new(),
+            call_arg_label_spans: HashMap::new(),
         }
     }
 
@@ -495,6 +527,14 @@ impl AstSourceMap {
             .get(&id)
             .and_then(|spans| spans.get(segment_idx).copied())
             .unwrap_or_else(|| self.expr_span(id))
+    }
+
+    /// Look up a labeled call argument's label span.
+    pub fn call_arg_label_span(&self, call: ExprId, arg_expr: ExprId) -> TextRange {
+        self.call_arg_label_spans
+            .get(&(call, arg_expr))
+            .copied()
+            .unwrap_or_else(|| self.expr_span(call))
     }
 
     /// Look up the source span of a pattern by its `PatId`.
@@ -564,6 +604,17 @@ pub enum Expr {
         scrutinee_type: Option<TypeAnnotId>,
         arms: Vec<MatchArmId>,
     },
+    /// `<expr> is <pattern>` — Rust `matches!`-style pattern test.
+    ///
+    /// Always evaluates to `bool`: `true` if the scrutinee matches the
+    /// pattern, `false` otherwise. Unlike `Match`, a pattern that cannot
+    /// match the scrutinee's static type is **not** a compile error here —
+    /// it just always evaluates to `false`. Treat it as a one-arm
+    /// pattern-test, not as an exhaustive match.
+    Is {
+        scrutinee: ExprId,
+        pattern: PatId,
+    },
     Catch {
         base: ExprId,
         clauses: Vec<CatchClause>,
@@ -602,7 +653,7 @@ pub enum Expr {
         /// Explicit type arguments at the call site, e.g. `foo<int, string>(x)`.
         /// Empty vec when no `<...>` was written.
         type_args: Vec<TypeExpr>,
-        args: Vec<ExprId>,
+        args: Vec<CallArg>,
     },
     Object {
         type_name: Option<TypePath>,
@@ -650,7 +701,7 @@ pub enum Expr {
     /// Optional call: `func?.(args)` — short-circuits to null if callee is null.
     OptionalCall {
         callee: ExprId,
-        args: Vec<ExprId>,
+        args: Vec<CallArg>,
     },
     /// Wraps an expression chain containing `?.` operators.
     /// Delimits the scope of null short-circuiting.
@@ -659,6 +710,25 @@ pub enum Expr {
         expr: ExprId,
     },
     Missing,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CallArg {
+    pub label: Option<Name>,
+    pub expr: ExprId,
+}
+
+impl CallArg {
+    pub fn positional(expr: ExprId) -> Self {
+        Self { label: None, expr }
+    }
+
+    pub fn named(label: impl Into<Name>, expr: ExprId) -> Self {
+        Self {
+            label: Some(label.into()),
+            expr,
+        }
+    }
 }
 
 /// Statements — modeled after `Stmt` in `body.rs`.
@@ -1047,6 +1117,7 @@ pub struct FunctionDef {
     /// Generic type parameters (e.g., `["T", "U"]`). Empty for non-generic functions.
     pub generic_params: Vec<Name>,
     pub params: Vec<Param>,
+    pub defaults: FunctionDefaults,
     pub return_type: Option<SpannedTypeExpr>,
     pub throws: Option<SpannedTypeExpr>,
     pub body: Option<FunctionBodyDef>,
@@ -1057,6 +1128,25 @@ pub struct FunctionDef {
     pub docstring: Option<std::string::String>,
     pub span: TextRange,
     pub name_span: TextRange,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FunctionDefaults {
+    pub exprs: ExprBody,
+    pub source_map: AstSourceMap,
+}
+
+impl FunctionDefaults {
+    pub fn empty() -> Self {
+        Self {
+            exprs: ExprBody::default(),
+            source_map: AstSourceMap::new(),
+        }
+    }
+
+    pub fn expr(&self, id: DefaultExprId) -> &Expr {
+        &self.exprs.exprs[id.expr()]
+    }
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -1105,8 +1195,22 @@ pub struct Interpolation {
 pub struct Param {
     pub name: Name,
     pub type_expr: Option<SpannedTypeExpr>,
+    pub default: Option<DefaultExprId>,
     pub span: TextRange,
     pub name_span: TextRange,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct DefaultExprId(ExprId);
+
+impl DefaultExprId {
+    pub fn new(expr: ExprId) -> Self {
+        Self(expr)
+    }
+
+    pub fn expr(self) -> ExprId {
+        self.0
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

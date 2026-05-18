@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 22098
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -54,20 +53,23 @@ SOURCE_FILE
               WORD "assert"
               DOT "."
               WORD "not_null"
-            CALL_ARGS "(base_url)"
+            CALL_ARGS
               L_PAREN "("
-              WORD "base_url"
+              CALL_ARG "base_url"
+                WORD "base_url"
               R_PAREN ")"
           CALL_EXPR
             PATH_EXPR "assert.equal"
               WORD "assert"
               DOT "."
               WORD "equal"
-            CALL_ARGS "(timeout, 5000)"
+            CALL_ARGS
               L_PAREN "("
-              WORD "timeout"
+              CALL_ARG "timeout"
+                WORD "timeout"
               COMMA ","
-              INTEGER_LITERAL "5000"
+              CALL_ARG "5000"
+                INTEGER_LITERAL "5000"
               R_PAREN ")"
           R_BRACE "}"
       TEST_EXPR_DEF
@@ -87,12 +89,14 @@ SOURCE_FILE
               WORD "contains"
             CALL_ARGS
               L_PAREN "("
-              WORD "base_url"
+              CALL_ARG "base_url"
+                WORD "base_url"
               COMMA ","
-              STRING_LITERAL "example"
-                QUOTE """
-                WORD "example"
-                QUOTE """
+              CALL_ARG
+                STRING_LITERAL "example"
+                  QUOTE """
+                  WORD "example"
+                  QUOTE """
               R_PAREN ")"
           R_BRACE "}"
       R_BRACE "}"

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 8442
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -24,9 +23,10 @@ SOURCE_FILE
           EQUALS "="
           CALL_EXPR
             WORD "Foo"
-            CALL_ARGS "(1)"
+            CALL_ARGS
               L_PAREN "("
-              INTEGER_LITERAL "1"
+              CALL_ARG "1"
+                INTEGER_LITERAL "1"
               R_PAREN ")"
           SEMICOLON ";"
         WORD "x"

@@ -67,9 +67,10 @@ SOURCE_FILE
                 GREATER ">"
             DOT "."
             WORD "from_json"
-          CALL_ARGS "(j)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "j"
+            CALL_ARG "j"
+              WORD "j"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -136,9 +137,10 @@ SOURCE_FILE
                 GREATER ">"
             DOT "."
             WORD "from_json"
-          CALL_ARGS "(j)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "j"
+            CALL_ARG "j"
+              WORD "j"
             R_PAREN ")"
         R_BRACE "}"
 

@@ -129,13 +129,7 @@ function user.GenericTypePatternNamespaceQualifiedMatch() -> int {
     load_const null /* unknown class:  */
     load_const "ready"
     init_field .0
-    store_var boxed
-    load_var boxed
     is_type llm.openai.Box<...>
-    pop_jump_if_false L0
-    load_var boxed
-    load_field .0
-    is_type int
     pop_jump_if_false L0
     jump L1
 
@@ -154,13 +148,7 @@ function user.GenericTypePatternQualifiedMatch() -> int {
     load_const null /* unknown class:  */
     load_const 50
     init_field .0
-    store_var boxed
-    load_var boxed
     is_type llm.openai.Box<...>
-    pop_jump_if_false L0
-    load_var boxed
-    load_field .0
-    is_type string
     pop_jump_if_false L0
     jump L1
 

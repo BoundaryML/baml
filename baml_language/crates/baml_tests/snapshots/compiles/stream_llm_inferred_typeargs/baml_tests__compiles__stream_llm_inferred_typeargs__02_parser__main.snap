@@ -119,26 +119,29 @@ SOURCE_FILE
             WORD "stream_llm_function"
           CALL_ARGS
             L_PAREN "("
-            WORD "TestClient"
+            CALL_ARG "TestClient"
+              WORD "TestClient"
             COMMA ","
-            STRING_LITERAL "TestFunc"
-              QUOTE """
-              WORD "TestFunc"
-              QUOTE """
+            CALL_ARG
+              STRING_LITERAL "TestFunc"
+                QUOTE """
+                WORD "TestFunc"
+                QUOTE """
             COMMA ","
-            MAP_LITERAL
-              L_BRACE "{"
-              OBJECT_FIELD
-                STRING_LITERAL "input"
-                  QUOTE """
-                  WORD "input"
-                  QUOTE """
-                COLON ":"
-                STRING_LITERAL "world"
-                  QUOTE """
-                  WORD "world"
-                  QUOTE """
-              R_BRACE "}"
+            CALL_ARG
+              MAP_LITERAL
+                L_BRACE "{"
+                OBJECT_FIELD
+                  STRING_LITERAL "input"
+                    QUOTE """
+                    WORD "input"
+                    QUOTE """
+                  COLON ":"
+                  STRING_LITERAL "world"
+                    QUOTE """
+                    WORD "world"
+                    QUOTE """
+                R_BRACE "}"
             R_PAREN ")"
         R_BRACE "}"
 

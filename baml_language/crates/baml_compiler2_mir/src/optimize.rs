@@ -740,6 +740,12 @@ fn propagate_copies(body: &mut MirFunctionBody, arity: usize) {
                     continue;
                 }
 
+                // Captured locals need a stable slot so emit can wrap them in a
+                // cell and closure construction can pass that cell pointer.
+                if body.locals[dest.0].is_captured {
+                    continue;
+                }
+
                 // Skip locals with multiple definition sites (phi-like).
                 if defs[dest.0] != 1 {
                     continue;

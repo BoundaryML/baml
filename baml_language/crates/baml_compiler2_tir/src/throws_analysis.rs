@@ -152,8 +152,9 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
         }
         Expr::Call { callee, args, .. } => {
             collect_from_expr(context, *callee, body, out);
+            let arg_exprs: Vec<_> = args.iter().map(|arg| arg.expr).collect();
             for arg in args {
-                collect_from_expr(context, *arg, body, out);
+                collect_from_expr(context, arg.expr, body, out);
             }
             // When the callee is an `OptionalMemberAccess` (`obj?.method`), the
             // inferred callee type is `Ty::Optional(Ty::Function { ... })`.
@@ -163,14 +164,22 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
             // `Call { callee: OptionalMemberAccess }` through
             // `finalize_optional_callee_call`.
             let unwrap_optional = matches!(&body.exprs[*callee], Expr::OptionalMemberAccess { .. });
-            collect_callee_escaping_throws(context, *callee, args, body, unwrap_optional, out);
+            collect_callee_escaping_throws(
+                context,
+                *callee,
+                &arg_exprs,
+                body,
+                unwrap_optional,
+                out,
+            );
         }
         Expr::OptionalCall { callee, args } => {
             collect_from_expr(context, *callee, body, out);
+            let arg_exprs: Vec<_> = args.iter().map(|arg| arg.expr).collect();
             for arg in args {
-                collect_from_expr(context, *arg, body, out);
+                collect_from_expr(context, arg.expr, body, out);
             }
-            collect_callee_escaping_throws(context, *callee, args, body, true, out);
+            collect_callee_escaping_throws(context, *callee, &arg_exprs, body, true, out);
         }
         Expr::Catch { base, clauses } => {
             if let Some(residual) = context.catch_residual_throws(expr_id) {
@@ -207,6 +216,9 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
                 }
                 collect_from_expr(context, arm.body, body, out);
             }
+        }
+        Expr::Is { scrutinee, .. } => {
+            collect_from_expr(context, *scrutinee, body, out);
         }
         Expr::Binary { lhs, rhs, .. } => {
             collect_from_expr(context, *lhs, body, out);

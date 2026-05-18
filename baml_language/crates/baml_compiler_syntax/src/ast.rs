@@ -2,7 +2,7 @@
 
 use rowan::ast::AstNode;
 
-use crate::{SyntaxKind, SyntaxNode, SyntaxToken};
+use crate::{SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken};
 
 /// Extract a dotted name from a token sequence (e.g., `baml.http.Request` → `"baml.http.Request"`).
 ///
@@ -169,6 +169,7 @@ ast_node!(TypeAliasDef, TYPE_ALIAS_DEF);
 
 ast_node!(ParameterList, PARAMETER_LIST);
 ast_node!(Parameter, PARAMETER);
+ast_node!(CallArg, CALL_ARG);
 ast_node!(FunctionBody, FUNCTION_BODY);
 ast_node!(LlmFunctionBody, LLM_FUNCTION_BODY);
 ast_node!(ExprFunctionBody, EXPR_FUNCTION_BODY);
@@ -791,11 +792,28 @@ impl FunctionTypeParam {
             self.syntax
                 .children_with_tokens()
                 .filter_map(rowan::NodeOrToken::into_token)
-                .find(|t| t.kind() == SyntaxKind::WORD)
+                .find(|t| t.kind() == SyntaxKind::WORD || t.kind() == SyntaxKind::KW_CLIENT)
                 .map(|t| t.text().to_string())
         } else {
             None
         }
+    }
+
+    /// Whether this parameter uses function-type optional syntax: `name?: T`.
+    pub fn is_optional(&self) -> bool {
+        let mut tokens = self
+            .syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| !token.kind().is_trivia());
+
+        matches!(
+            (tokens.next(), tokens.next(), tokens.next()),
+            (Some(first), Some(second), Some(third))
+                if (first.kind() == SyntaxKind::WORD || first.kind() == SyntaxKind::KW_CLIENT)
+                    && second.kind() == SyntaxKind::QUESTION
+                    && third.kind() == SyntaxKind::COLON
+        )
     }
 
     /// Get the type of this parameter.
@@ -1132,6 +1150,53 @@ impl Parameter {
     /// Get the parameter type.
     pub fn ty(&self) -> Option<TypeExpr> {
         self.syntax.children().find_map(TypeExpr::cast)
+    }
+
+    /// Get the default expression syntax element, if present.
+    pub fn default_expr_syntax(&self) -> Option<SyntaxElement> {
+        let mut seen_equals = false;
+        for element in self.syntax.children_with_tokens() {
+            match element {
+                rowan::NodeOrToken::Token(token) => {
+                    if token.kind() == SyntaxKind::EQUALS {
+                        seen_equals = true;
+                    } else if seen_equals && !token.kind().is_trivia() {
+                        return Some(rowan::NodeOrToken::Token(token));
+                    }
+                }
+                rowan::NodeOrToken::Node(node) if seen_equals => {
+                    return Some(rowan::NodeOrToken::Node(node));
+                }
+                rowan::NodeOrToken::Node(_) => {}
+            }
+        }
+        None
+    }
+}
+
+impl CallArg {
+    /// Get the call argument label token from `label = expr`, if present.
+    pub fn label(&self) -> Option<SyntaxToken> {
+        let tokens: Vec<_> = self
+            .syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| !token.kind().is_trivia())
+            .collect();
+
+        if tokens.len() >= 2
+            && (tokens[0].kind() == SyntaxKind::WORD || tokens[0].kind() == SyntaxKind::KW_CLIENT)
+            && tokens[1].kind() == SyntaxKind::EQUALS
+        {
+            Some(tokens[0].clone())
+        } else {
+            None
+        }
+    }
+
+    /// Get the expression node for this call argument, if it was wrapped in a node.
+    pub fn expr_syntax(&self) -> Option<SyntaxNode> {
+        self.syntax.children().next()
     }
 }
 
@@ -2504,6 +2569,7 @@ impl BlockExpr {
                         // Expression nodes
                         SyntaxKind::EXPR
                         | SyntaxKind::BINARY_EXPR
+                        | SyntaxKind::IS_EXPR
                         | SyntaxKind::UNARY_EXPR
                         | SyntaxKind::CALL_EXPR
                         | SyntaxKind::IF_EXPR

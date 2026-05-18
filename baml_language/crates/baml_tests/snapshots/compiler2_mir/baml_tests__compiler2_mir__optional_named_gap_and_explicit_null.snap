@@ -1,0 +1,104 @@
+---
+source: crates/baml_tests/src/compiler2_mir/mod.rs
+---
+fn user.explicit_null() -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+
+    bb0: {
+        _0 = call const fn user.is_null(const null) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.omitted_middle() -> int {
+    // Locals:
+    let _0: int // _0 // return
+
+    bb0: {
+        _0 = call const fn user.score(const "cats", const <omitted>, const "recent") -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.score(query: string, max_results: int, filter: string?) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: string // query // param
+    let _2: int // max_results // param
+    let _3: string? // filter // param
+    let _4: bool
+    let _5: bool
+    let _6: bool
+
+    bb0: {
+        _4 = copy _2 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const 10_i64;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _5 = copy _3 == const <omitted>;
+        branch copy _5 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _3 = const null;
+        goto -> bb4;
+    }
+
+    bb4: {
+        _6 = copy _3 == const null;
+        branch copy _6 -> [bb6, bb5];
+    }
+
+    bb5: {
+        _0 = copy _2 + const 1_i64;
+        goto -> bb7;
+    }
+
+    bb6: {
+        _0 = copy _2;
+        goto -> bb7;
+    }
+
+    bb7: {
+        return;
+    }
+}
+
+fn user.is_null(value: int?) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: int? // value // param
+    let _2: bool
+
+    bb0: {
+        _2 = copy _1 == const <omitted>;
+        branch copy _2 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _1 = const 7_i64;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _0 = copy _1 == const null;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}

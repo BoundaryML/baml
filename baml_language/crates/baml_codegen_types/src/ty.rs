@@ -59,9 +59,17 @@ impl fmt::Display for Name {
     }
 }
 
-pub enum DefaultValue {
-    Null,
-    Literal(baml_base::Literal),
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct CallableParam {
+    pub name: Option<baml_base::Name>,
+    pub ty: Ty,
+    pub mode: CodegenFunctionParamMode,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CodegenFunctionParamMode {
+    Required,
+    Optional,
 }
 
 /// A resolved type in BAML.
@@ -119,7 +127,7 @@ pub enum Ty {
 
     /// Callable type, e.g. `callable<[int, string], bool>`.
     Callable {
-        params: Vec<Ty>,
+        params: Vec<CallableParam>,
         ret: Box<Ty>,
     },
 
@@ -135,31 +143,6 @@ pub enum Ty {
 }
 
 impl Ty {
-    pub fn default_value(&self) -> Option<DefaultValue> {
-        match self {
-            Ty::BamlOptions => None,
-            Ty::Int => None,
-            Ty::Float => None,
-            Ty::String => None,
-            Ty::Bool => None,
-            Ty::Uint8Array => None,
-            Ty::Media(_) => None,
-            Ty::Class(_, _) => None,
-            Ty::Enum(_) => None,
-            Ty::TypeAlias(_) => None,
-            Ty::TypeVar(_) => None,
-            Ty::List(_) => None,
-            Ty::Map { .. } => None,
-            Ty::Union(_) => None,
-            Ty::BuiltinUnknown => None,
-            Ty::Callable { .. } => None,
-            Ty::Unit => None,
-            Ty::RustType => None,
-            Ty::Literal(lit) => Some(DefaultValue::Literal(lit.clone())),
-            Ty::Optional(_) | Ty::Null => Some(DefaultValue::Null),
-        }
-    }
-
     pub(crate) fn validate(&self) -> Result<(), super::CodegenTypeError> {
         match self {
             Ty::BamlOptions => Ok(()),
@@ -176,7 +159,7 @@ impl Ty {
             | Ty::BuiltinUnknown => Ok(()),
             Ty::Class(_, args) => args.iter().try_for_each(Ty::validate),
             Ty::Callable { params, ret } => {
-                params.iter().try_for_each(Ty::validate)?;
+                params.iter().try_for_each(|param| param.ty.validate())?;
                 ret.validate()
             }
             Ty::Null => Ok(()),
@@ -275,7 +258,18 @@ impl fmt::Display for Ty {
             Ty::Callable { params, ret } => {
                 let param_strs: Vec<std::string::String> = params
                     .iter()
-                    .map(std::string::ToString::to_string)
+                    .map(|param| {
+                        let ty = &param.ty;
+                        match (&param.name, param.mode) {
+                            (Some(name), CodegenFunctionParamMode::Optional) => {
+                                format!("{name}?: {ty}")
+                            }
+                            (Some(name), CodegenFunctionParamMode::Required) => {
+                                format!("{name}: {ty}")
+                            }
+                            (None, _) => ty.to_string(),
+                        }
+                    })
                     .collect();
                 write!(f, "callable<[{}], {ret}>", param_strs.join(", "))
             }

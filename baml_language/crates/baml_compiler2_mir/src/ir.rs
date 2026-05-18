@@ -763,6 +763,11 @@ pub enum Constant {
     String(String),
     Bool(bool),
     Null,
+    /// Internal sentinel used for omitted defaulted function parameters.
+    ///
+    /// User BAML code cannot construct this value. Callee-entry default
+    /// prologues replace it before user body code observes the parameter.
+    OmittedArg,
     /// A function reference with structured item identification.
     ///
     /// Carried from TIR resolution through lowering. Converted to a

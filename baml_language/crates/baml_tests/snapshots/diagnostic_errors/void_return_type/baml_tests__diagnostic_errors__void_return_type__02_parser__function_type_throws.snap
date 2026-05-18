@@ -77,9 +77,10 @@ SOURCE_FILE
         L_BRACE "{"
         CALL_EXPR
           WORD "handler"
-          CALL_ARGS "(value)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "value"
+            CALL_ARG "value"
+              WORD "value"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -107,9 +108,10 @@ SOURCE_FILE
         L_BRACE "{"
         CALL_EXPR
           WORD "handler"
-          CALL_ARGS "(value)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "value"
+            CALL_ARG "value"
+              WORD "value"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -146,9 +148,10 @@ SOURCE_FILE
         L_BRACE "{"
         CALL_EXPR
           WORD "handler"
-          CALL_ARGS "(value)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "value"
+            CALL_ARG "value"
+              WORD "value"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -192,9 +195,10 @@ SOURCE_FILE
         OPTIONAL_CALL_EXPR
           WORD "handler"
           QUESTION_DOT "?."
-          CALL_ARGS "(value)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "value"
+            CALL_ARG "value"
+              WORD "value"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -222,9 +226,10 @@ SOURCE_FILE
         L_BRACE "{"
         CALL_EXPR
           WORD "handler"
-          CALL_ARGS "(value)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "value"
+            CALL_ARG "value"
+              WORD "value"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -280,9 +285,10 @@ SOURCE_FILE
               L_BRACE "{"
               CALL_EXPR
                 WORD "handler"
-                CALL_ARGS "(value)"
+                CALL_ARGS
                   L_PAREN "("
-                  WORD "value"
+                  CALL_ARG "value"
+                    WORD "value"
                   R_PAREN ")"
               R_BRACE "}"
         R_BRACE "}"

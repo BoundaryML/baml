@@ -238,9 +238,13 @@ pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
                 continue;
             }
 
-            for (arg_expr_id, (param_name, _param_ty)) in args.iter().zip(params.iter()) {
+            for (arg, param) in args.iter().zip(params.iter()) {
+                if arg.label.is_some() {
+                    continue;
+                }
+
                 // Only emit hints for named parameters.
-                let Some(name) = param_name else {
+                let Some(name) = &param.name else {
                     continue;
                 };
 
@@ -252,7 +256,7 @@ pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
                 }
 
                 // Position hint at the start of the argument's span.
-                let arg_span = source_map.expr_span(*arg_expr_id);
+                let arg_span = source_map.expr_span(arg.expr);
                 if arg_span.is_empty() {
                     continue;
                 }

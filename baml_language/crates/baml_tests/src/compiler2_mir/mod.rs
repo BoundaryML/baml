@@ -8,7 +8,6 @@ use std::fmt::Write;
 use baml_compiler2_hir::{file_item_tree, loc::FunctionLoc};
 use baml_compiler2_mir::{OptLevel, lower_function, pretty::display_function};
 use baml_project::ProjectDatabase;
-use insta::{assert_snapshot, with_settings};
 
 const SNAPSHOT_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/compiler2_mir");
 
@@ -34,9 +33,7 @@ fn render_mir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
 
 macro_rules! mir_snapshot {
     ($name:expr, $output:expr) => {
-        with_settings!({ snapshot_path => SNAPSHOT_PATH, omit_expression => true }, {
-            assert_snapshot!($name, $output);
-        });
+        assert_compiler2_snapshot!(SNAPSHOT_PATH, $name, $output);
     };
 }
 
@@ -94,6 +91,108 @@ fn function_call() {
         "#,
     );
     mir_snapshot!("function_call", render_mir(&db, file));
+}
+
+#[test]
+fn optional_default_prologue_and_source_omission() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+        function add(base: int, amount: int = base + 2) -> int {
+          base + amount
+        }
+
+        function main() -> int {
+          add(5)
+        }
+        "#,
+    );
+    mir_snapshot!(
+        "optional_default_prologue_and_source_omission",
+        render_mir(&db, file)
+    );
+}
+
+#[test]
+fn optional_named_gap_and_explicit_null() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+        function score(query: string, max_results: int = 10, filter: string? = null) -> int {
+          if filter == null {
+            max_results
+          } else {
+            max_results + 1
+          }
+        }
+
+        function is_null(value: int? = 7) -> bool {
+          value == null
+        }
+
+        function omitted_middle() -> int {
+          score("cats", filter = "recent")
+        }
+
+        function explicit_null() -> bool {
+          is_null(value = null)
+        }
+        "#,
+    );
+    mir_snapshot!(
+        "optional_named_gap_and_explicit_null",
+        render_mir(&db, file)
+    );
+}
+
+#[test]
+fn optional_named_reordered_args_evaluate_in_source_order() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+        function text(value: string) -> string {
+          value
+        }
+
+        function number(value: int) -> int {
+          value
+        }
+
+        function score(query: string, max_results: int = 10, filter: string = "none") -> int {
+          max_results
+        }
+
+        function main() -> int {
+          score(filter = text("first"), query = text("second"), max_results = number(3))
+        }
+        "#,
+    );
+    mir_snapshot!(
+        "optional_named_reordered_args_evaluate_in_source_order",
+        render_mir(&db, file)
+    );
+}
+
+#[test]
+fn optional_dropping_adapter() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+        function combine(x: int, a: int = 10, b: int = 100) -> int {
+          x + a + b
+        }
+
+        function main() -> int {
+          let f: (x: int, b?: int) -> int = combine;
+          f(1, b = 5)
+        }
+        "#,
+    );
+    mir_snapshot!("optional_dropping_adapter", render_mir(&db, file));
 }
 
 #[test]

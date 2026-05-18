@@ -249,9 +249,10 @@ SOURCE_FILE
             FAT_ARROW "=>"
             CALL_EXPR
               WORD "f"
-              CALL_ARGS "(10)"
+              CALL_ARGS
                 L_PAREN "("
-                INTEGER_LITERAL "10"
+                CALL_ARG "10"
+                  INTEGER_LITERAL "10"
                 R_PAREN ")"
           R_BRACE "}"
         R_BRACE "}"
@@ -322,9 +323,10 @@ SOURCE_FILE
             FAT_ARROW "=>"
             CALL_EXPR
               WORD "f"
-              CALL_ARGS "(0)"
+              CALL_ARGS
                 L_PAREN "("
-                INTEGER_LITERAL "0"
+                CALL_ARG "0"
+                  INTEGER_LITERAL "0"
                 R_PAREN ")"
             COMMA ","
           MATCH_ARM
@@ -563,9 +565,10 @@ SOURCE_FILE
             FAT_ARROW "=>"
             CALL_EXPR
               WORD "f"
-              CALL_ARGS "(0)"
+              CALL_ARGS
                 L_PAREN "("
-                INTEGER_LITERAL "0"
+                CALL_ARG "0"
+                  INTEGER_LITERAL "0"
                 R_PAREN ")"
             COMMA ","
           MATCH_ARM
@@ -590,9 +593,10 @@ SOURCE_FILE
               WORD "f"
               CALL_ARGS
                 L_PAREN "("
-                STRING_LITERAL ""
-                  QUOTE """
-                  QUOTE """
+                CALL_ARG
+                  STRING_LITERAL ""
+                    QUOTE """
+                    QUOTE """
                 R_PAREN ")"
           R_BRACE "}"
         R_BRACE "}"
@@ -700,17 +704,20 @@ SOURCE_FILE
               CALL_EXPR
                 CALL_EXPR
                   WORD "triple"
-                  CALL_ARGS "(1)"
+                  CALL_ARGS
                     L_PAREN "("
-                    INTEGER_LITERAL "1"
+                    CALL_ARG "1"
+                      INTEGER_LITERAL "1"
                     R_PAREN ")"
-                CALL_ARGS "(2)"
+                CALL_ARGS
                   L_PAREN "("
-                  INTEGER_LITERAL "2"
+                  CALL_ARG "2"
+                    INTEGER_LITERAL "2"
                   R_PAREN ")"
-              CALL_ARGS "(3)"
+              CALL_ARGS
                 L_PAREN "("
-                INTEGER_LITERAL "3"
+                CALL_ARG "3"
+                  INTEGER_LITERAL "3"
                 R_PAREN ")"
             COMMA ","
           MATCH_ARM
@@ -831,25 +838,26 @@ SOURCE_FILE
               WORD "r"
               CALL_ARGS
                 L_PAREN "("
-                LAMBDA_EXPR
-                  PARAMETER_LIST
-                    L_PAREN "("
-                    PARAMETER
-                      WORD "x"
-                      COLON ":"
-                      TYPE_EXPR "int"
-                        WORD "int"
-                    R_PAREN ")"
-                  ARROW "->"
-                  TYPE_EXPR "int"
-                    WORD "int"
-                  BLOCK_EXPR
-                    L_BRACE "{"
-                    BINARY_EXPR "x + 1"
-                      WORD "x"
-                      PLUS "+"
-                      INTEGER_LITERAL "1"
-                    R_BRACE "}"
+                CALL_ARG
+                  LAMBDA_EXPR
+                    PARAMETER_LIST
+                      L_PAREN "("
+                      PARAMETER
+                        WORD "x"
+                        COLON ":"
+                        TYPE_EXPR "int"
+                          WORD "int"
+                      R_PAREN ")"
+                    ARROW "->"
+                    TYPE_EXPR "int"
+                      WORD "int"
+                    BLOCK_EXPR
+                      L_BRACE "{"
+                      BINARY_EXPR "x + 1"
+                        WORD "x"
+                        PLUS "+"
+                        INTEGER_LITERAL "1"
+                      R_BRACE "}"
                 R_PAREN ")"
             COMMA ","
           MATCH_ARM
@@ -881,22 +889,23 @@ SOURCE_FILE
               WORD "r"
               CALL_ARGS
                 L_PAREN "("
-                LAMBDA_EXPR
-                  PARAMETER_LIST
-                    L_PAREN "("
-                    PARAMETER
-                      WORD "s"
-                      COLON ":"
-                      TYPE_EXPR "string"
-                        WORD "string"
-                    R_PAREN ")"
-                  ARROW "->"
-                  TYPE_EXPR "int"
-                    WORD "int"
-                  BLOCK_EXPR "{ 0 }"
-                    L_BRACE "{"
-                    INTEGER_LITERAL "0"
-                    R_BRACE "}"
+                CALL_ARG
+                  LAMBDA_EXPR
+                    PARAMETER_LIST
+                      L_PAREN "("
+                      PARAMETER
+                        WORD "s"
+                        COLON ":"
+                        TYPE_EXPR "string"
+                          WORD "string"
+                      R_PAREN ")"
+                    ARROW "->"
+                    TYPE_EXPR "int"
+                      WORD "int"
+                    BLOCK_EXPR "{ 0 }"
+                      L_BRACE "{"
+                      INTEGER_LITERAL "0"
+                      R_BRACE "}"
                 R_PAREN ")"
           R_BRACE "}"
         R_BRACE "}"
@@ -1151,9 +1160,10 @@ SOURCE_FILE
             FAT_ARROW "=>"
             CALL_EXPR
               WORD "f"
-              CALL_ARGS "(0)"
+              CALL_ARGS
                 L_PAREN "("
-                INTEGER_LITERAL "0"
+                CALL_ARG "0"
+                  INTEGER_LITERAL "0"
                 R_PAREN ")"
           R_BRACE "}"
         R_BRACE "}"
@@ -1334,9 +1344,10 @@ SOURCE_FILE
               PLUS_EQUALS "+="
               CALL_EXPR
                 WORD "f"
-                CALL_ARGS "(0)"
+                CALL_ARGS
                   L_PAREN "("
-                  INTEGER_LITERAL "0"
+                  CALL_ARG "0"
+                    INTEGER_LITERAL "0"
                   R_PAREN ")"
             R_BRACE "}"
         WORD "total"
@@ -1424,9 +1435,10 @@ SOURCE_FILE
         CATCH_EXPR
           CALL_EXPR
             WORD "risky_error"
-            CALL_ARGS "(mode)"
+            CALL_ARGS
               L_PAREN "("
-              WORD "mode"
+              CALL_ARG "mode"
+                WORD "mode"
               R_PAREN ")"
           CATCH_CLAUSE
             KW_CATCH "catch"
@@ -1469,9 +1481,10 @@ SOURCE_FILE
         CATCH_EXPR
           CALL_EXPR
             WORD "risky_error"
-            CALL_ARGS "(mode)"
+            CALL_ARGS
               L_PAREN "("
-              WORD "mode"
+              CALL_ARG "mode"
+                WORD "mode"
               R_PAREN ")"
           CATCH_CLAUSE
             KW_CATCH "catch"
@@ -1522,9 +1535,10 @@ SOURCE_FILE
         CATCH_EXPR
           CALL_EXPR
             WORD "risky_error"
-            CALL_ARGS "(mode)"
+            CALL_ARGS
               L_PAREN "("
-              WORD "mode"
+              CALL_ARG "mode"
+                WORD "mode"
               R_PAREN ")"
           CATCH_CLAUSE
             KW_CATCH "catch"

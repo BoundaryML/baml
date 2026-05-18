@@ -13,7 +13,9 @@ mod tests {
         loc::FunctionLoc,
         namespace::NamespaceId,
         package::{PackageId, package_items},
-        signature::elaborated_function_signature,
+        signature::{
+            elaborated_function_signature, function_parameter_defaults, function_signature,
+        },
     };
     use baml_project::ProjectDatabase;
     use salsa::Setter;
@@ -540,6 +542,77 @@ mod tests {
         assert!(sites.iter().all(|s| s.kind == DefinitionKind::Variant));
     }
 
+    /// Duplicate parameter names within a function signature — across any
+    /// combination of positional and defaulted parameters — produce a
+    /// `DuplicateDefinition` diagnostic.
+    #[test]
+    fn duplicate_function_param_produces_diagnostic() {
+        use baml_compiler2_hir::{contributions::DefinitionKind, diagnostic::Hir2Diagnostic};
+
+        let cases: &[(&str, &str, &str)] = &[
+            (
+                "positional/positional",
+                "dup_param_pos_pos.baml",
+                "function Foo(x: int, x: string) -> string { x }",
+            ),
+            (
+                "positional/defaulted",
+                "dup_param_pos_opt.baml",
+                "function Foo(x: int, x: string = \"hi\") -> string { x }",
+            ),
+            (
+                "defaulted/defaulted",
+                "dup_param_opt_opt.baml",
+                "function Foo(x: int = 0, x: string = \"hi\") -> string { x }",
+            ),
+        ];
+
+        for (label, file_name, source) in cases {
+            let mut db = make_db();
+            let file = db.add_file(file_name, source);
+            let index = file_semantic_index(&db, file);
+            let diags = index.diagnostics();
+            let dups: Vec<_> = diags
+                .iter()
+                .filter(|d| matches!(d, Hir2Diagnostic::DuplicateDefinition { name, .. } if name == &Name::new("x")))
+                .collect();
+            assert_eq!(
+                dups.len(),
+                1,
+                "{label}: expected 1 duplicate diagnostic for 'x'"
+            );
+            let Hir2Diagnostic::DuplicateDefinition { scope, sites, .. } = dups[0] else {
+                panic!("{label}: expected DuplicateDefinition diagnostic");
+            };
+            assert_eq!(scope.as_ref().unwrap(), &Name::new("Foo"), "{label}");
+            assert_eq!(sites.len(), 2, "{label}");
+            assert!(
+                sites.iter().all(|s| s.kind == DefinitionKind::Parameter),
+                "{label}: all sites should be Parameter kind"
+            );
+        }
+    }
+
+    /// Distinct parameter names in a function signature do not produce a
+    /// duplicate diagnostic — regression guard against over-firing.
+    #[test]
+    fn distinct_function_params_have_no_duplicate_diagnostic() {
+        use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
+
+        let mut db = make_db();
+        let file = db.add_file(
+            "distinct_params.baml",
+            "function Foo(x: int, y: string = \"hi\") -> string { y }",
+        );
+        let index = file_semantic_index(&db, file);
+        let diags = index.diagnostics();
+        assert!(
+            !diags
+                .iter()
+                .any(|d| matches!(d, Hir2Diagnostic::DuplicateDefinition { .. }))
+        );
+    }
+
     /// Same-scope let shadowing is legal and does not produce duplicate diagnostics.
     #[test]
     fn same_scope_let_shadowing_has_no_duplicate_diagnostic() {
@@ -704,6 +777,34 @@ function foo(user: User) -> string {
                 .captures
                 .is_empty(),
             "lambda-local block binding should not be recorded as a capture"
+        );
+    }
+
+    #[test]
+    fn lambda_default_capture_is_owned_by_lambda_scope() {
+        use baml_compiler2_hir::scope::ScopeKind;
+
+        let mut db = make_db();
+        let file = db.add_file(
+            "lambda_default_capture.baml",
+            "function foo() -> int {\n  let seed = 1;\n  let f = (x: int = seed) -> int { x };\n  f()\n}",
+        );
+
+        let index = file_semantic_index(&db, file);
+        let lambda_scope = index
+            .scopes
+            .iter()
+            .enumerate()
+            .find_map(|(idx, scope)| {
+                matches!(scope.kind, ScopeKind::Lambda)
+                    .then_some(baml_compiler2_hir::scope::FileScopeId::new(idx as u32))
+            })
+            .expect("lambda scope");
+
+        let captures = &index.scope_bindings[lambda_scope.index() as usize].captures;
+        assert!(
+            captures.iter().any(|(name, _)| name == &Name::new("seed")),
+            "lambda default should record `seed` as a lambda capture, got: {captures:?}"
         );
     }
 
@@ -1138,7 +1239,57 @@ function foo(user: User) -> string {
         );
     }
 
-    // ── 9. Elaborated function signatures ───────────────────────────────────
+    // ── 9. Function signatures ──────────────────────────────────────────────
+
+    #[test]
+    fn function_signature_tracks_default_presence_not_default_expression() {
+        let mut db = make_db();
+        let file = db.add_file(
+            "defaults.baml",
+            "function f(required: string, optional: int = 41) -> string { return required; }",
+        );
+
+        let loc = find_function_loc(&db, file, "f");
+        let sig_before = function_signature(&db, loc);
+        assert!(!sig_before.params[0].has_default);
+        assert!(sig_before.params[1].has_default);
+
+        let defaults_before = function_parameter_defaults(&db, loc);
+        assert!(defaults_before.param_default(0).is_none());
+        let default_before = defaults_before
+            .param_default(1)
+            .expect("optional parameter default");
+        assert_eq!(
+            defaults_before
+                .defaults
+                .exprs
+                .display_expr(default_before.expr.expr()),
+            "41"
+        );
+
+        file.set_text(&mut db).to(
+            "function f(required: string, optional: int = 42) -> string { return required; }"
+                .to_string(),
+        );
+
+        let loc = find_function_loc(&db, file, "f");
+        let sig_after = function_signature(&db, loc);
+        assert_eq!(sig_before, sig_after);
+
+        let defaults_after = function_parameter_defaults(&db, loc);
+        let default_after = defaults_after
+            .param_default(1)
+            .expect("optional parameter default");
+        assert_eq!(
+            defaults_after
+                .defaults
+                .exprs
+                .display_expr(default_after.expr.expr()),
+            "42"
+        );
+    }
+
+    // ── 10. Elaborated function signatures ──────────────────────────────────
 
     #[test]
     fn function_type_throws_immediate_callback_param_opens() {
@@ -1156,7 +1307,7 @@ function foo(user: User) -> string {
             vec![Name::new("__effect_param_0")]
         );
         assert_eq!(
-            sig.params[0].1.to_string(),
+            sig.params[0].ty.to_string(),
             "(value: int) -> string throws __effect_param_0"
         );
     }
@@ -1172,7 +1323,7 @@ function foo(user: User) -> string {
         let sig = elaborated_function_signature(&db, find_function_loc(&db, file, "use_alias"));
 
         assert!(sig.synthetic_effect_params.is_empty());
-        assert_eq!(sig.params[0].1.to_string(), "Handler");
+        assert_eq!(sig.params[0].ty.to_string(), "Handler");
     }
 
     #[test]
@@ -1190,7 +1341,7 @@ function foo(user: User) -> string {
             vec![Name::new("__effect_param_0")]
         );
         assert_eq!(
-            sig.params[0].1.to_string(),
+            sig.params[0].ty.to_string(),
             "((value: int) -> string throws never) -> string throws __effect_param_0"
         );
     }
@@ -1270,7 +1421,7 @@ function foo(user: User) -> string {
             vec![Name::new("__effect_param_0")]
         );
         assert_eq!(
-            sig.params[0].1.to_string(),
+            sig.params[0].ty.to_string(),
             "(value: T) -> string throws __effect_param_0"
         );
     }

@@ -207,6 +207,15 @@ macro_rules! baml_test_optimized {
 }
 
 #[cfg(test)]
+macro_rules! assert_compiler2_snapshot {
+    ($snapshot_path:expr, $name:expr, $output:expr) => {
+        insta::with_settings!({ snapshot_path => $snapshot_path, omit_expression => true }, {
+            insta::assert_snapshot!($name, $output);
+        });
+    };
+}
+
+#[cfg(test)]
 pub mod compiler2_hir;
 
 #[cfg(test)]

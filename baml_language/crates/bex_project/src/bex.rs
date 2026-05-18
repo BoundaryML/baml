@@ -2,7 +2,7 @@ use ::bex_heap::HeapPermit as _;
 use ::std::sync::Arc;
 use async_trait::async_trait;
 use baml_type::Ty;
-use bex_engine::{BexEngine, FunctionCallContext};
+use bex_engine::{BexCallArg, BexEngine, FunctionCallContext};
 use bex_heap::{BexExternalValue, BexValue};
 use sys_types::CallId;
 
@@ -110,14 +110,20 @@ impl Bex for BexEngine {
             .function_params(function_name)
             .map_err(RuntimeError::from)?;
 
-        let ordered_args: Vec<BexExternalValue> = params
+        let ordered_args: Vec<BexCallArg> = params
             .into_iter()
-            .map(|(name, ty)| {
-                args.remove(name)
-                    .map(|value| coerce_arg_to_declared_type(value, ty))
-                    .ok_or_else(|| RuntimeError::InvalidArgument {
+            .map(|(name, ty, has_default)| {
+                if let Some(value) = args.remove(name) {
+                    Ok(BexCallArg::Provided(Box::new(coerce_arg_to_declared_type(
+                        value, ty,
+                    ))))
+                } else if has_default {
+                    Ok(BexCallArg::OmittedDefault)
+                } else {
+                    Err(RuntimeError::InvalidArgument {
                         name: name.to_string(),
                     })
+                }
             })
             .collect::<Result<_, _>>()?;
 
@@ -129,7 +135,8 @@ impl Bex for BexEngine {
         }
 
         let result =
-            BexEngine::call_function(&self, function_name, ordered_args, call_ctx, true).await?;
+            BexEngine::call_function_bound_args(&self, function_name, ordered_args, call_ctx, true)
+                .await?;
 
         let permit = self
             .heap_permit_manager()

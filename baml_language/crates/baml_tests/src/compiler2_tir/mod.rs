@@ -27,10 +27,12 @@ pub(crate) mod support {
     use std::fmt::Write;
 
     use baml_compiler2_ast::{
-        CatchClauseKind, Expr, ExprBody, ExprId, Literal, PatId, Stmt, StmtId,
+        CatchClauseKind, DefaultExprId, Expr, ExprBody, ExprId, FunctionDefaults, Literal, PatId,
+        Stmt, StmtId,
     };
     use baml_compiler2_hir::{
-        body::FunctionBody, contributions::Definition, loc::FunctionLoc, scope::ScopeKind,
+        body::FunctionBody, contributions::Definition, item_tree::DefaultExprRef, loc::FunctionLoc,
+        scope::ScopeKind,
     };
     use baml_compiler2_tir::{
         inference::{
@@ -42,6 +44,21 @@ pub(crate) mod support {
     use baml_project::ProjectDatabase;
 
     // ── Rendering helpers ────────────────────────────────────────────────────
+
+    fn default_expr_suffix(default: Option<DefaultExprId>, defaults: &FunctionDefaults) -> String {
+        default
+            .map(|default| format!(" = {}", defaults.exprs.display_expr(default.expr())))
+            .unwrap_or_default()
+    }
+
+    fn default_ref_suffix(default: Option<&DefaultExprRef>, defaults: &FunctionDefaults) -> String {
+        default
+            .map(|default| {
+                let default_expr_id = default.expr.expr();
+                format!(" = {}", defaults.exprs.display_expr(default_expr_id))
+            })
+            .unwrap_or_default()
+    }
 
     fn pat_desc(pat_id: PatId, body: &ExprBody) -> String {
         use baml_compiler2_ast::Pattern;
@@ -161,6 +178,13 @@ pub(crate) mod support {
                     .collect();
                 format!("match ({scrut}) {{ {} }}", arm_strs.join(", "))
             }
+            Expr::Is { scrutinee, pattern } => {
+                format!(
+                    "{} is {}",
+                    expr_desc(*scrutinee, body),
+                    pat_desc(*pattern, body)
+                )
+            }
             Expr::Catch { base, clauses } => {
                 let base_desc = expr_desc(*base, body);
                 let clause_descs: Vec<String> = clauses
@@ -207,7 +231,13 @@ pub(crate) mod support {
                     let tys: Vec<_> = type_args.iter().map(|t| t.to_string()).collect();
                     format!("<{}>", tys.join(", "))
                 };
-                let arg_strs: Vec<String> = args.iter().map(|a| expr_desc(*a, body)).collect();
+                let arg_strs: Vec<String> = args
+                    .iter()
+                    .map(|a| match &a.label {
+                        Some(label) => format!("{label} = {}", expr_desc(a.expr, body)),
+                        None => expr_desc(a.expr, body),
+                    })
+                    .collect();
                 format!("{callee_str}{ty_args_str}({})", arg_strs.join(", "))
             }
             Expr::Object {
@@ -254,7 +284,13 @@ pub(crate) mod support {
             }
             Expr::OptionalCall { callee, args } => {
                 let callee_str = expr_desc(*callee, body);
-                let args_str: Vec<String> = args.iter().map(|a| expr_desc(*a, body)).collect();
+                let args_str: Vec<String> = args
+                    .iter()
+                    .map(|a| match &a.label {
+                        Some(label) => format!("{label} = {}", expr_desc(a.expr, body)),
+                        None => expr_desc(a.expr, body),
+                    })
+                    .collect();
                 format!("{}?.({})", callee_str, args_str.join(", "))
             }
             Expr::OptionalChain { expr } => expr_desc(*expr, body),
@@ -273,10 +309,11 @@ pub(crate) mod support {
             .params
             .iter()
             .map(|p| {
+                let default_suffix = default_expr_suffix(p.default, &func_def.defaults);
                 if let Some(ref te) = p.type_expr {
-                    format!("{}: {}", p.name, te.expr)
+                    format!("{}: {}{}", p.name, te.expr, default_suffix)
                 } else {
-                    p.name.to_string()
+                    format!("{}{}", p.name, default_suffix)
                 }
             })
             .collect();
@@ -327,10 +364,11 @@ pub(crate) mod support {
             .params
             .iter()
             .map(|p| {
+                let default_suffix = default_expr_suffix(p.default, &func_def.defaults);
                 if let Some(ref te) = p.type_expr {
-                    format!("{}: {}", p.name, qualify(&te.expr))
+                    format!("{}: {}{}", p.name, qualify(&te.expr), default_suffix)
                 } else {
-                    p.name.to_string()
+                    format!("{}{}", p.name, default_suffix)
                 }
             })
             .collect();
@@ -368,7 +406,13 @@ pub(crate) mod support {
         let expr = &body.exprs[expr_id];
         if let Expr::Call { callee, args, .. } = expr {
             let callee_str = expr_desc(*callee, body);
-            let arg_strs: Vec<String> = args.iter().map(|a| expr_desc(*a, body)).collect();
+            let arg_strs: Vec<String> = args
+                .iter()
+                .map(|a| match &a.label {
+                    Some(label) => format!("{label} = {}", expr_desc(a.expr, body)),
+                    None => expr_desc(a.expr, body),
+                })
+                .collect();
             let type_params = if let Some(callee_ty) = inference.expression_type(*callee) {
                 collect_typevars(callee_ty)
             } else {
@@ -493,7 +537,13 @@ pub(crate) mod support {
             Expr::Call { callee, args, .. } => {
                 // Show type params at call site when callee has TypeVars
                 let callee_desc = expr_desc(*callee, body);
-                let arg_strs: Vec<String> = args.iter().map(|a| expr_desc(*a, body)).collect();
+                let arg_strs: Vec<String> = args
+                    .iter()
+                    .map(|a| match &a.label {
+                        Some(label) => format!("{label} = {}", expr_desc(a.expr, body)),
+                        None => expr_desc(a.expr, body),
+                    })
+                    .collect();
                 let type_params = if let Some(callee_ty) = inference.expression_type(*callee) {
                     collect_typevars(callee_ty)
                 } else {
@@ -512,8 +562,8 @@ pub(crate) mod support {
                 .ok();
                 // Expand compound arguments (e.g. lambdas) below the call
                 for arg in args {
-                    if is_compound(&body.exprs[*arg]) {
-                        render_expr(*arg, body, inference, indent + 2, output);
+                    if is_compound(&body.exprs[arg.expr]) {
+                        render_expr(arg.expr, body, inference, indent + 2, output);
                     }
                 }
             }
@@ -696,8 +746,8 @@ pub(crate) mod support {
                 throws,
                 ..
             } => {
-                for (_, p) in params {
-                    collect_typevars_inner(p, out);
+                for param in params {
+                    collect_typevars_inner(&param.ty, out);
                 }
                 collect_typevars_inner(ret, out);
                 collect_typevars_inner(throws, out);
@@ -1035,13 +1085,18 @@ pub(crate) mod support {
                             format!("<{}>", names.join(", "))
                         };
 
+                        let parameter_defaults =
+                            baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
                         let params: Vec<String> = sig
                             .params
                             .iter()
-                            .map(|(pname, ptype)| {
-                                let ty = if pname.as_str() == "self"
-                                    && matches!(ptype, baml_compiler2_ast::TypeExpr::Unknown { .. })
-                                {
+                            .enumerate()
+                            .map(|(index, param)| {
+                                let ty = if param.name.as_str() == "self"
+                                    && matches!(
+                                        param.ty,
+                                        baml_compiler2_ast::TypeExpr::Unknown { .. }
+                                    ) {
                                     enclosing_class_ty.clone().unwrap_or(
                                         baml_compiler2_tir::ty::Ty::Unknown {
                                             attr: Default::default(),
@@ -1049,9 +1104,15 @@ pub(crate) mod support {
                                     )
                                 } else {
                                     let mut diags = Vec::new();
-                                    lower_type_expr_in_ns(db, ptype, pkg_items, ns, gp, &mut diags)
+                                    lower_type_expr_in_ns(
+                                        db, &param.ty, pkg_items, ns, gp, &mut diags,
+                                    )
                                 };
-                                format!("{}: {}", pname, ty)
+                                let default_suffix = default_ref_suffix(
+                                    parameter_defaults.param_default(index),
+                                    &parameter_defaults.defaults,
+                                );
+                                format!("{}: {}{}", param.name, ty, default_suffix)
                             })
                             .collect();
                         let ret = sig
@@ -1230,9 +1291,11 @@ pub(crate) mod support {
                             p.name
                                 .as_ref()
                                 .map(|n| {
+                                    let optional_marker = if p.optional { "?" } else { "" };
                                     format!(
-                                        "{}: {}",
+                                        "{}{}: {}",
                                         n.as_str(),
+                                        optional_marker,
                                         type_expr_to_string_hir(
                                             &p.ty,
                                             pkg_prefix,
@@ -1415,6 +1478,11 @@ pub(crate) mod support {
                         .collect();
                     format!("match ({scrut}) {{ {} }}", arm_strs.join(", "))
                 }
+                Expr::Is { scrutinee, pattern } => format!(
+                    "{} is {}",
+                    expr_desc_hir(*scrutinee, body, prefix, local_type_names),
+                    pat_desc_hir(*pattern, body, prefix, local_type_names),
+                ),
                 Expr::Catch { base, clauses } => {
                     let base_desc = expr_desc_hir(*base, body, prefix, local_type_names);
                     let clause_descs: Vec<String> = clauses
@@ -1466,7 +1534,15 @@ pub(crate) mod support {
                     let callee_str = expr_desc_hir(*callee, body, prefix, local_type_names);
                     let arg_strs: Vec<String> = args
                         .iter()
-                        .map(|a| expr_desc_hir(*a, body, prefix, local_type_names))
+                        .map(|a| match &a.label {
+                            Some(label) => {
+                                format!(
+                                    "{label} = {}",
+                                    expr_desc_hir(a.expr, body, prefix, local_type_names)
+                                )
+                            }
+                            None => expr_desc_hir(a.expr, body, prefix, local_type_names),
+                        })
                         .collect();
                     format!("{callee_str}({})", arg_strs.join(", "))
                 }
@@ -1539,7 +1615,15 @@ pub(crate) mod support {
                     let callee_str = expr_desc_hir(*callee, body, prefix, local_type_names);
                     let arg_strs: Vec<String> = args
                         .iter()
-                        .map(|a| expr_desc_hir(*a, body, prefix, local_type_names))
+                        .map(|a| match &a.label {
+                            Some(label) => {
+                                format!(
+                                    "{label} = {}",
+                                    expr_desc_hir(a.expr, body, prefix, local_type_names)
+                                )
+                            }
+                            None => expr_desc_hir(a.expr, body, prefix, local_type_names),
+                        })
                         .collect();
                     format!("{callee_str}?.({})", arg_strs.join(", "))
                 }
@@ -1737,12 +1821,13 @@ pub(crate) mod support {
                 .params
                 .iter()
                 .map(|p| {
+                    let default_suffix = default_ref_suffix(p.default.as_ref(), &func.defaults);
                     let ty = p
                         .type_expr
                         .as_ref()
                         .map(|te| type_expr_to_string_hir(&te.expr, &prefix, &local_type_names))
                         .unwrap_or_else(|| "?".into());
-                    format!("{}: {}", p.name, ty)
+                    format!("{}: {}{}", p.name, ty, default_suffix)
                 })
                 .collect();
             let ret = func

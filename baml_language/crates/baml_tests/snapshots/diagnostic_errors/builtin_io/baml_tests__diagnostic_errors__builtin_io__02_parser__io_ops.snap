@@ -24,14 +24,15 @@ SOURCE_FILE
             WORD "input"
           CALL_ARGS
             L_PAREN "("
-            STRING_LITERAL "What is your name? "
-              QUOTE """
-              WORD "What"
-              WORD "is"
-              WORD "your"
-              WORD "name"
-              QUESTION "?"
-              QUOTE """
+            CALL_ARG
+              STRING_LITERAL "What is your name? "
+                QUOTE """
+                WORD "What"
+                KW_IS "is"
+                WORD "your"
+                WORD "name"
+                QUESTION "?"
+                QUOTE """
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -53,9 +54,10 @@ SOURCE_FILE
             WORD "io"
             DOT "."
             WORD "input"
-          CALL_ARGS "(null)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "null"
+            CALL_ARG "null"
+              WORD "null"
             R_PAREN ")"
         R_BRACE "}"
 

@@ -77,6 +77,22 @@ pub enum TirTypeError {
     },
     /// Wrong number of arguments in a function call.
     ArgumentCountMismatch { expected: usize, got: usize },
+    /// A positional argument appeared after a named argument in the same call.
+    PositionalArgumentAfterNamed,
+    /// A named argument was supplied more than once.
+    DuplicateNamedArgument { name: Name },
+    /// A call supplied a named argument that is not present in the callable type.
+    UnknownNamedArgument { name: Name },
+    /// A defaulted parameter was supplied positionally instead of by name.
+    DefaultedParamPassedPositionally { name: Name },
+    /// A required parameter was omitted.
+    MissingRequiredArgument { name: Name },
+    /// A required parameter appeared after a defaulted parameter in a declaration.
+    RequiredParamAfterDefault { name: Name },
+    /// The special `self` receiver cannot declare a default.
+    SelfParamDefault,
+    /// A default expression referenced a later parameter from the same signature.
+    DefaultParamForwardReference { param: Name, referenced: Name },
     /// Function body ends without returning a value.
     MissingReturn { expected: Ty },
     /// Type alias participates in an invalid (unguarded) cycle.
@@ -281,6 +297,39 @@ impl fmt::Display for TirTypeError {
             }
             TirTypeError::ArgumentCountMismatch { expected, got } => {
                 write!(f, "expected {expected} argument(s), got {got}")
+            }
+            TirTypeError::PositionalArgumentAfterNamed => {
+                write!(
+                    f,
+                    "positional arguments cannot appear after named arguments"
+                )
+            }
+            TirTypeError::DuplicateNamedArgument { name } => {
+                write!(f, "duplicate named argument `{name}`")
+            }
+            TirTypeError::UnknownNamedArgument { name } => {
+                write!(f, "unknown named argument `{name}`")
+            }
+            TirTypeError::DefaultedParamPassedPositionally { name } => {
+                write!(f, "defaulted parameter `{name}` must be passed by name")
+            }
+            TirTypeError::MissingRequiredArgument { name } => {
+                write!(f, "missing required argument `{name}`")
+            }
+            TirTypeError::RequiredParamAfterDefault { name } => {
+                write!(
+                    f,
+                    "required parameter `{name}` cannot appear after a defaulted parameter"
+                )
+            }
+            TirTypeError::SelfParamDefault => {
+                write!(f, "`self` cannot have a default value")
+            }
+            TirTypeError::DefaultParamForwardReference { param, referenced } => {
+                write!(
+                    f,
+                    "default for parameter `{param}` cannot reference later parameter `{referenced}`"
+                )
             }
             TirTypeError::MissingReturn { expected } => {
                 write!(f, "missing return: expected `{}`", humanize_ty(expected))

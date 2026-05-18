@@ -23,11 +23,25 @@
 use std::sync::Arc;
 
 pub use baml_project::testing::{OptLevel, compile_source, compile_source_with_opt};
-use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
+use bex_engine::{BexCallArg, BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use bex_vm::debug::{BytecodeFormat, display_program};
 use bex_vm_types::{Function, FunctionOrigin, Object, Program};
 pub use indexmap::IndexMap;
+#[cfg(test)]
+use insta::{assert_snapshot, with_settings};
 use sys_native::SysOpsExt;
+
+#[cfg(test)]
+const SNAPSHOT_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/engine");
+
+#[cfg(test)]
+macro_rules! engine_snapshot {
+    ($name:expr, $output:expr) => {
+        with_settings!({ snapshot_path => SNAPSHOT_PATH, omit_expression => true }, {
+            assert_snapshot!($name, $output);
+        });
+    };
+}
 
 /// Output of a unified test: bytecode display + execution result.
 pub struct TestOutput {
@@ -105,7 +119,7 @@ fn resolve_args(
     program: &Program,
     entry: &str,
     args: IndexMap<&str, BexExternalValue>,
-) -> Vec<BexExternalValue> {
+) -> Vec<BexCallArg> {
     let resolved_entry = resolve_entry_name(program, entry);
     let function_idx = program
         .function_index(&resolved_entry)
@@ -125,9 +139,23 @@ fn resolve_args(
         }
     }
 
-    if args.len() != function.param_names.len() {
+    let required_count = function
+        .param_names
+        .iter()
+        .enumerate()
+        .filter(|(idx, _)| {
+            !function
+                .param_has_default
+                .get(*idx)
+                .copied()
+                .unwrap_or(false)
+        })
+        .count();
+
+    if args.len() < required_count || args.len() > function.param_names.len() {
         panic!(
-            "argument count mismatch for function '{entry}': expected {}, got {}",
+            "argument count mismatch for function '{entry}': expected between {} and {}, got {}",
+            required_count,
             function.param_names.len(),
             args.len()
         );
@@ -136,10 +164,20 @@ fn resolve_args(
     function
         .param_names
         .iter()
-        .map(|param_name| {
-            args.get(param_name.as_str())
-                .cloned()
-                .unwrap_or_else(|| panic!("missing argument '{param_name}' for function '{entry}'"))
+        .enumerate()
+        .map(|(idx, param_name)| {
+            if let Some(value) = args.get(param_name.as_str()).cloned() {
+                BexCallArg::Provided(Box::new(value))
+            } else if function
+                .param_has_default
+                .get(idx)
+                .copied()
+                .unwrap_or(false)
+            {
+                BexCallArg::OmittedDefault
+            } else {
+                panic!("missing argument '{param_name}' for function '{entry}'")
+            }
         })
         .collect()
 }
@@ -191,7 +229,7 @@ pub async fn run_test_with_options(
     let engine = Arc::new(engine);
 
     let result = engine
-        .call_function(
+        .call_function_bound_args(
             &resolved_entry,
             positional_args,
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
@@ -209,4 +247,210 @@ pub async fn run_test_mir_optimized(
     args: IndexMap<&str, BexExternalValue>,
 ) -> TestOutput {
     run_test(source, entry, args, OptLevel::Two).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn source_call_omitted_default_executes_in_callee_scope() {
+        let output = run_test(
+            r#"
+            function add(base: int, amount: int = base + 2) -> int {
+              base + amount
+            }
+
+            function main() -> int {
+              add(5)
+            }
+            "#,
+            "main",
+            IndexMap::new(),
+            OptLevel::One,
+        )
+        .await;
+
+        assert_eq!(output.result, Ok(BexExternalValue::Int(12)));
+        engine_snapshot!(
+            "source_call_omitted_default_executes_in_callee_scope_bytecode",
+            output.bytecode
+        );
+    }
+
+    #[tokio::test]
+    async fn host_call_omission_is_distinct_from_explicit_null() {
+        let source = r#"
+        function is_null(value: int? = 7) -> bool {
+          value == null
+        }
+        "#;
+
+        let omitted = run_test(source, "is_null", IndexMap::new(), OptLevel::One).await;
+        assert_eq!(omitted.result, Ok(BexExternalValue::Bool(false)));
+
+        let mut args = IndexMap::new();
+        args.insert("value", BexExternalValue::Null);
+        let explicit_null = run_test(source, "is_null", args, OptLevel::One).await;
+        assert_eq!(explicit_null.result, Ok(BexExternalValue::Bool(true)));
+    }
+
+    #[tokio::test]
+    async fn bound_args_reject_argument_count_mismatch() {
+        let program = compile_source_with_opt(
+            "function main(x: int, y: int = 1) -> int { x + y }",
+            OptLevel::One,
+        );
+        let engine = Arc::new(
+            BexEngine::new(
+                program,
+                Arc::new(sys_ops::SysOps::native()),
+                None,
+                Vec::new(),
+            )
+            .expect("engine"),
+        );
+
+        let err = engine
+            .call_function_bound_args(
+                "main",
+                vec![BexCallArg::Provided(Box::new(BexExternalValue::Int(1)))],
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
+            )
+            .await
+            .expect_err("argument count mismatch should be rejected");
+
+        assert!(
+            matches!(&err, bex_engine::EngineError::TypeMismatch { message } if message.contains("expects 2 argument(s), got 1")),
+            "{err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn bound_args_reject_omitted_default_for_required_param() {
+        let program = compile_source_with_opt("function main(x: int) -> int { x }", OptLevel::One);
+        let engine = Arc::new(
+            BexEngine::new(
+                program,
+                Arc::new(sys_ops::SysOps::native()),
+                None,
+                Vec::new(),
+            )
+            .expect("engine"),
+        );
+
+        let err = engine
+            .call_function_bound_args(
+                "main",
+                vec![BexCallArg::OmittedDefault],
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
+            )
+            .await
+            .expect_err("omitted required argument should be rejected");
+
+        assert!(
+            matches!(&err, bex_engine::EngineError::TypeMismatch { message } if message.contains("cannot be omitted")),
+            "{err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn optional_dropping_adapter_preserves_source_defaults() {
+        let output = run_test(
+            r#"
+            function combine(x: int, a: int = 10, b: int = 100) -> int {
+              x + a + b
+            }
+
+            function main() -> int {
+              let f: (x: int, b?: int) -> int = combine;
+              f(1, b = 5)
+            }
+            "#,
+            "main",
+            IndexMap::new(),
+            OptLevel::One,
+        )
+        .await;
+
+        assert_eq!(output.result, Ok(BexExternalValue::Int(16)));
+        engine_snapshot!(
+            "optional_dropping_adapter_preserves_source_defaults_bytecode",
+            output.bytecode
+        );
+    }
+
+    #[tokio::test]
+    async fn optional_adapter_reorders_named_optional_params() {
+        let output = run_test(
+            r#"
+            function combine(x: int, a: int = 10, b: int = 100) -> int {
+              (x * 100) + (a * 10) + b
+            }
+
+            function main() -> int {
+              let f: (x: int, b?: int, a?: int) -> int = combine;
+              f(1, b = 5, a = 2)
+            }
+            "#,
+            "main",
+            IndexMap::new(),
+            OptLevel::One,
+        )
+        .await;
+
+        assert_eq!(output.result, Ok(BexExternalValue::Int(125)));
+    }
+
+    #[tokio::test]
+    async fn optional_adapter_applies_to_concrete_call_argument() {
+        let output = run_test(
+            r#"
+            function combine(x: int, a: int = 10, b: int = 100) -> int {
+              x + a + b
+            }
+
+            function apply(f: (x: int, b?: int) -> int) -> int {
+              f(1, b = 5)
+            }
+
+            function main() -> int {
+              apply(combine)
+            }
+            "#,
+            "main",
+            IndexMap::new(),
+            OptLevel::One,
+        )
+        .await;
+
+        assert_eq!(output.result, Ok(BexExternalValue::Int(16)));
+    }
+
+    #[tokio::test]
+    async fn optional_adapter_applies_to_generic_call_argument() {
+        let output = run_test(
+            r#"
+            function combine(x: int, a: int = 10, b: int = 100) -> int {
+              x + a + b
+            }
+
+            function apply<T>(f: (x: T, b?: int) -> T, value: T) -> T {
+              f(value, b = 5)
+            }
+
+            function main() -> int {
+              apply(combine, 1)
+            }
+            "#,
+            "main",
+            IndexMap::new(),
+            OptLevel::One,
+        )
+        .await;
+
+        assert_eq!(output.result, Ok(BexExternalValue::Int(16)));
+    }
 }

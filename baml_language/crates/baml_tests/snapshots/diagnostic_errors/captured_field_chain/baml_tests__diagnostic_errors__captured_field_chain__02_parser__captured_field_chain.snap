@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 27261
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -59,22 +58,23 @@ SOURCE_FILE
               WORD "map"
             CALL_ARGS
               L_PAREN "("
-              LAMBDA_EXPR
-                PARAMETER_LIST
-                  L_PAREN "("
-                  PARAMETER "x"
-                    WORD "x"
-                  R_PAREN ")"
-                ARROW "->"
-                BLOCK_EXPR
-                  L_BRACE "{"
-                  PATH_EXPR "outer.inner.value"
-                    WORD "outer"
-                    DOT "."
-                    WORD "inner"
-                    DOT "."
-                    WORD "value"
-                  R_BRACE "}"
+              CALL_ARG
+                LAMBDA_EXPR
+                  PARAMETER_LIST
+                    L_PAREN "("
+                    PARAMETER "x"
+                      WORD "x"
+                    R_PAREN ")"
+                  ARROW "->"
+                  BLOCK_EXPR
+                    L_BRACE "{"
+                    PATH_EXPR "outer.inner.value"
+                      WORD "outer"
+                      DOT "."
+                      WORD "inner"
+                      DOT "."
+                      WORD "value"
+                    R_BRACE "}"
               R_PAREN ")"
         INDEX_EXPR "result[0]"
           WORD "result"
@@ -115,20 +115,21 @@ SOURCE_FILE
               WORD "map"
             CALL_ARGS
               L_PAREN "("
-              LAMBDA_EXPR
-                PARAMETER_LIST
-                  L_PAREN "("
-                  PARAMETER "x"
-                    WORD "x"
-                  R_PAREN ")"
-                ARROW "->"
-                BLOCK_EXPR
-                  L_BRACE "{"
-                  PATH_EXPR "outer.name"
-                    WORD "outer"
-                    DOT "."
-                    WORD "name"
-                  R_BRACE "}"
+              CALL_ARG
+                LAMBDA_EXPR
+                  PARAMETER_LIST
+                    L_PAREN "("
+                    PARAMETER "x"
+                      WORD "x"
+                    R_PAREN ")"
+                  ARROW "->"
+                  BLOCK_EXPR
+                    L_BRACE "{"
+                    PATH_EXPR "outer.name"
+                      WORD "outer"
+                      DOT "."
+                      WORD "name"
+                    R_BRACE "}"
               R_PAREN ")"
         INDEX_EXPR "result[0]"
           WORD "result"

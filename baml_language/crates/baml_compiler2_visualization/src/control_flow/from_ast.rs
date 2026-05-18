@@ -831,7 +831,13 @@ fn render_expr_compact_ast(body: &ast::ExprBody, id: ast::ExprId) -> String {
             let callee_str = render_expr_compact_ast(body, *callee);
             let args_str: Vec<_> = args
                 .iter()
-                .map(|a| render_expr_compact_ast(body, *a))
+                .map(|a| {
+                    let expr = render_expr_compact_ast(body, a.expr);
+                    match &a.label {
+                        Some(label) => format!("{label} = {expr}"),
+                        None => expr,
+                    }
+                })
                 .collect();
             format!("{}({})", callee_str, args_str.join(", "))
         }
@@ -839,7 +845,13 @@ fn render_expr_compact_ast(body: &ast::ExprBody, id: ast::ExprId) -> String {
             let callee_str = render_expr_compact_ast(body, *callee);
             let args_str: Vec<_> = args
                 .iter()
-                .map(|a| render_expr_compact_ast(body, *a))
+                .map(|a| {
+                    let expr = render_expr_compact_ast(body, a.expr);
+                    match &a.label {
+                        Some(label) => format!("{label} = {expr}"),
+                        None => expr,
+                    }
+                })
                 .collect();
             format!("{}?.({})", callee_str, args_str.join(", "))
         }
@@ -1305,7 +1317,7 @@ mod tests {
             let call = exprs.alloc(ast::Expr::Call {
                 callee,
                 type_args: vec![],
-                args: vec![arg],
+                args: vec![ast::CallArg::positional(arg)],
             });
             Some(call)
         });
@@ -1320,6 +1332,49 @@ mod tests {
             call_node.source_expr.is_some(),
             "call scope should have source_expr set"
         );
+    }
+
+    #[test]
+    fn named_call_scope_preserves_label() {
+        let body = make_ast_body(|exprs, _, _, _| {
+            let callee = exprs.alloc(ast::Expr::Path(vec!["Summarize".into()]));
+            let arg = exprs.alloc(ast::Expr::Path(vec!["text".into()]));
+            let call = exprs.alloc(ast::Expr::Call {
+                callee,
+                args: vec![ast::CallArg::named("query", arg)],
+                type_args: vec![],
+            });
+            Some(call)
+        });
+        let graph = build_control_flow_graph_from_ast("Func", &body);
+        let call_node = graph
+            .nodes
+            .values()
+            .find(|n| matches!(n.node_type, NodeType::OtherScope))
+            .expect("should have OtherScope for call");
+        assert!(call_node.source_expr.is_some());
+        assert_eq!(call_node.label, "Summarize(query = text)");
+    }
+
+    #[test]
+    fn named_optional_call_scope_preserves_label() {
+        let body = make_ast_body(|exprs, _, _, _| {
+            let callee = exprs.alloc(ast::Expr::Path(vec!["client".into()]));
+            let arg = exprs.alloc(ast::Expr::Path(vec!["text".into()]));
+            let call = exprs.alloc(ast::Expr::OptionalCall {
+                callee,
+                args: vec![ast::CallArg::named("query", arg)],
+            });
+            Some(call)
+        });
+        let graph = build_control_flow_graph_from_ast("Func", &body);
+        let call_node = graph
+            .nodes
+            .values()
+            .find(|n| matches!(n.node_type, NodeType::OtherScope))
+            .expect("should have OtherScope for optional call");
+        assert!(call_node.source_expr.is_some());
+        assert_eq!(call_node.label, "client?.(query = text)");
     }
 
     #[test]
@@ -1470,7 +1525,7 @@ mod tests {
             let call = exprs.alloc(ast::Expr::Call {
                 callee,
                 type_args: vec![],
-                args: vec![arg],
+                args: vec![ast::CallArg::positional(arg)],
             });
             let ret = stmts.alloc(ast::Stmt::Return(Some(call)));
             Some(exprs.alloc(ast::Expr::Block {

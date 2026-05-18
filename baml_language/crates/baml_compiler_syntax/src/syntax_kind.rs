@@ -41,6 +41,7 @@ pub enum SyntaxKind {
     // Other keywords
     KW_WATCH,
     KW_INSTANCEOF,
+    KW_IS,
     KW_DYNAMIC,
     KW_WITH,
 
@@ -199,6 +200,10 @@ pub enum SyntaxKind {
     // Expressions (for attributes and function bodies)
     EXPR,
     BINARY_EXPR,
+    /// `<expr> is <pattern>` — Rust `matches!`-style pattern test, returns bool.
+    ///
+    /// Structure: `<expr> KW_IS <PATTERN>`
+    IS_EXPR,
     UNARY_EXPR,
     CALL_EXPR,
     INDEX_EXPR,
@@ -322,6 +327,7 @@ pub enum SyntaxKind {
 
     // Expression components
     CALL_ARGS,
+    CALL_ARG,
     GENERIC_ARGS,
     /// Declaration-site generic type parameter list: `<T>` or `<K, V>` on class/function defs.
     GENERIC_PARAM_LIST,

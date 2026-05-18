@@ -58,8 +58,8 @@ use la_arena::Arena;
 use text_size::TextRange;
 
 use crate::ast::{
-    AstSourceMap, ClassDef, Expr, ExprBody, ExprId, FunctionBodyDef, FunctionDef, FunctionOrigin,
-    Param, SpannedTypeExpr, TypeExpr,
+    AstSourceMap, CallArg, ClassDef, Expr, ExprBody, ExprId, FunctionBodyDef, FunctionDef,
+    FunctionDefaults, FunctionOrigin, Param, SpannedTypeExpr, TypeExpr,
 };
 
 /// Run the auto-derive pass on a class. Appends a synthesized `to_json` and
@@ -136,6 +136,7 @@ fn synthesize_to_json(class: &ClassDef, span: TextRange) -> FunctionDef {
     let self_param = Param {
         name: Name::new("self"),
         type_expr: None,
+        default: None,
         span,
         name_span: span,
     };
@@ -146,6 +147,7 @@ fn synthesize_to_json(class: &ClassDef, span: TextRange) -> FunctionDef {
         name: Name::new("to_json"),
         generic_params: vec![],
         params: vec![self_param],
+        defaults: FunctionDefaults::empty(),
         return_type: Some(spanned(json_type(), span)),
         throws: Some(spanned(
             union(vec![
@@ -171,6 +173,7 @@ fn synthesize_from_json(class: &ClassDef, span: TextRange) -> FunctionDef {
     let j_param = Param {
         name: Name::new("j"),
         type_expr: Some(spanned(json_type(), span)),
+        default: None,
         span,
         name_span: span,
     };
@@ -183,6 +186,7 @@ fn synthesize_from_json(class: &ClassDef, span: TextRange) -> FunctionDef {
         // generic params are in scope via the enclosing class.
         generic_params: vec![],
         params: vec![j_param],
+        defaults: FunctionDefaults::empty(),
         return_type: Some(spanned(class_self_type(class), span)),
         throws: Some(spanned(
             union(vec![
@@ -338,7 +342,7 @@ fn build_to_json_wrapper_body(class: &ClassDef, span: TextRange) -> (ExprBody, A
     let to_string_call = alloc(Expr::Call {
         callee: to_string_callee,
         type_args: vec![class_self_type(class)],
-        args: vec![self_arg],
+        args: vec![CallArg::positional(self_arg)],
     });
 
     // `baml.json.parse`
@@ -351,7 +355,7 @@ fn build_to_json_wrapper_body(class: &ClassDef, span: TextRange) -> (ExprBody, A
     let parse_call = alloc(Expr::Call {
         callee: parse_callee,
         type_args: vec![],
-        args: vec![to_string_call],
+        args: vec![CallArg::positional(to_string_call)],
     });
 
     let body = ExprBody {
@@ -372,6 +376,7 @@ fn build_to_json_wrapper_body(class: &ClassDef, span: TextRange) -> (ExprBody, A
         catch_arm_spans: Arena::new(),
         member_access_member_spans: std::collections::HashMap::new(),
         path_segment_spans: std::collections::HashMap::new(),
+        call_arg_label_spans: std::collections::HashMap::new(),
     };
     (body, source_map)
 }
@@ -471,7 +476,7 @@ fn build_to_json_body(class: &ClassDef, span: TextRange) -> (ExprBody, AstSource
             alloc(Expr::Call {
                 callee: to_json_path,
                 type_args: vec![],
-                args: vec![field_access],
+                args: vec![CallArg::positional(field_access)],
             })
         } else if is_nullable {
             // Nullable field: `self.<field>?.to_json()`
@@ -533,6 +538,7 @@ fn build_to_json_body(class: &ClassDef, span: TextRange) -> (ExprBody, AstSource
         catch_arm_spans: Arena::new(),
         member_access_member_spans: std::collections::HashMap::new(),
         path_segment_spans: std::collections::HashMap::new(),
+        call_arg_label_spans: std::collections::HashMap::new(),
     };
     (body, source_map)
 }
@@ -564,7 +570,7 @@ fn build_from_json_wrapper_body(class: &ClassDef, span: TextRange) -> (ExprBody,
     let stringify_call = alloc(Expr::Call {
         callee: stringify_callee,
         type_args: vec![],
-        args: vec![j_arg],
+        args: vec![CallArg::positional(j_arg)],
     });
 
     // `baml.json.from_string`
@@ -577,7 +583,7 @@ fn build_from_json_wrapper_body(class: &ClassDef, span: TextRange) -> (ExprBody,
     let from_string_call = alloc(Expr::Call {
         callee: from_string_callee,
         type_args: vec![class_self_type(class)],
-        args: vec![stringify_call],
+        args: vec![CallArg::positional(stringify_call)],
     });
 
     let body = ExprBody {
@@ -598,6 +604,7 @@ fn build_from_json_wrapper_body(class: &ClassDef, span: TextRange) -> (ExprBody,
         catch_arm_spans: Arena::new(),
         member_access_member_spans: std::collections::HashMap::new(),
         path_segment_spans: std::collections::HashMap::new(),
+        call_arg_label_spans: std::collections::HashMap::new(),
     };
     (body, source_map)
 }
@@ -668,7 +675,7 @@ fn build_from_json_body(class: &ClassDef, span: TextRange) -> (ExprBody, AstSour
         let field_json = alloc(Expr::Call {
             callee: field_helper,
             type_args: vec![],
-            args: vec![j_path, key_lit],
+            args: vec![CallArg::positional(j_path), CallArg::positional(key_lit)],
         });
 
         // `baml.json.from_json`
@@ -681,7 +688,7 @@ fn build_from_json_body(class: &ClassDef, span: TextRange) -> (ExprBody, AstSour
         let value_expr = alloc(Expr::Call {
             callee: from_json_callee,
             type_args: vec![field_ty],
-            args: vec![field_json],
+            args: vec![CallArg::positional(field_json)],
         });
 
         entries.push((field.name.clone(), value_expr));
@@ -722,6 +729,7 @@ fn build_from_json_body(class: &ClassDef, span: TextRange) -> (ExprBody, AstSour
         catch_arm_spans: Arena::new(),
         member_access_member_spans: std::collections::HashMap::new(),
         path_segment_spans: std::collections::HashMap::new(),
+        call_arg_label_spans: std::collections::HashMap::new(),
     };
     (body, source_map)
 }

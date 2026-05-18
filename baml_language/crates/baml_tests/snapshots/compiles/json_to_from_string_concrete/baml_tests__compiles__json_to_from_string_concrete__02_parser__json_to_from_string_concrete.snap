@@ -54,9 +54,10 @@ SOURCE_FILE
               TYPE_EXPR "User"
                 WORD "User"
               GREATER ">"
-          CALL_ARGS "(u)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "u"
+            CALL_ARG "u"
+              WORD "u"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -103,9 +104,10 @@ SOURCE_FILE
               TYPE_EXPR "User"
                 WORD "User"
               GREATER ">"
-          CALL_ARGS "(s)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "s"
+            CALL_ARG "s"
+              WORD "s"
             R_PAREN ")"
         R_BRACE "}"
 

@@ -4,7 +4,7 @@
 //! emitter-internal `MethodKind` that drives the `staticmethod(...)`
 //! wrap in `render_method_binding`.
 
-use baml_codegen_types::Ty;
+use baml_codegen_types::{FunctionArgumentDefault, Ty};
 
 use crate::emit::function::SyncAsync;
 
@@ -21,6 +21,9 @@ pub(crate) struct PyMethodBinding {
     /// already prepended at expand time so the renderer is a straight
     /// walk.
     pub(crate) param_names: Vec<String>,
+    /// Default metadata matching `arg_tys` (receiver `self` is not included
+    /// for instance methods).
+    pub(crate) arg_defaults: Vec<Option<FunctionArgumentDefault>>,
     /// Drives the `staticmethod(...)` wrap and the choice of factory
     /// alias (`__define_static_method` vs. `__define_instance_method`).
     pub(crate) kind: MethodKind,

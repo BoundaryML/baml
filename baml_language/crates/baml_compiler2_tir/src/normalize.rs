@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 
 use baml_base::Name;
 
-use crate::ty::{LiteralValue, PrimitiveType, QualifiedTypeName, Ty};
+use crate::ty::{FunctionParamMode, LiteralValue, PrimitiveType, QualifiedTypeName, Ty};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PUBLIC API
@@ -72,7 +72,7 @@ enum StructuralTy {
     },
     Union(Vec<StructuralTy>),
     Function {
-        params: Vec<StructuralTy>,
+        params: Vec<StructuralFunctionParam>,
         ret: Box<StructuralTy>,
         throws: Box<StructuralTy>,
     },
@@ -93,6 +93,13 @@ enum StructuralTy {
     BuiltinUnknown,
     Unknown,
     Error,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct StructuralFunctionParam {
+    name: Option<Name>,
+    ty: StructuralTy,
+    mode: FunctionParamMode,
 }
 
 impl StructuralTy {
@@ -255,15 +262,7 @@ impl StructuralTy {
                 if !throws1.is_subtype_of(throws2, assumptions) {
                     return false;
                 }
-                if params1.len() != params2.len() {
-                    return false;
-                }
-                for (p1, p2) in params1.iter().zip(params2.iter()) {
-                    if !p2.is_subtype_of(p1, assumptions) {
-                        return false;
-                    }
-                }
-                true
+                function_params_subtype(params1, params2, assumptions)
             }
 
             // TypeVar (generic parameter) is opaque — only subtypes itself
@@ -278,6 +277,50 @@ impl StructuralTy {
         assumptions.remove(&pair);
         result
     }
+}
+
+fn function_params_subtype(
+    sub_params: &[StructuralFunctionParam],
+    sup_params: &[StructuralFunctionParam],
+    assumptions: &mut HashSet<(StructuralTy, StructuralTy)>,
+) -> bool {
+    let sub_required: Vec<_> = sub_params
+        .iter()
+        .filter(|param| matches!(param.mode, FunctionParamMode::Required))
+        .collect();
+    let sup_required: Vec<_> = sup_params
+        .iter()
+        .filter(|param| matches!(param.mode, FunctionParamMode::Required))
+        .collect();
+
+    if sub_required.len() != sup_required.len() {
+        return false;
+    }
+
+    for (sub, sup) in sub_required.iter().zip(sup_required.iter()) {
+        if !sup.ty.is_subtype_of(&sub.ty, assumptions) {
+            return false;
+        }
+    }
+
+    for sup in sup_params
+        .iter()
+        .filter(|param| matches!(param.mode, FunctionParamMode::Optional))
+    {
+        let Some(name) = &sup.name else {
+            return false;
+        };
+        let Some(sub) = sub_params.iter().find(|param| {
+            matches!(param.mode, FunctionParamMode::Optional) && param.name.as_ref() == Some(name)
+        }) else {
+            return false;
+        };
+        if !sup.ty.is_subtype_of(&sub.ty, assumptions) {
+            return false;
+        }
+    }
+
+    true
 }
 
 /// Substitute `TyVar` with replacement in type.
@@ -311,7 +354,11 @@ fn substitute(
         } => StructuralTy::Function {
             params: params
                 .iter()
-                .map(|t| substitute(t, var, replacement))
+                .map(|param| StructuralFunctionParam {
+                    name: param.name.clone(),
+                    ty: substitute(&param.ty, var, replacement),
+                    mode: param.mode,
+                })
                 .collect(),
             ret: Box::new(substitute(ret, var, replacement)),
             throws: Box::new(substitute(throws, var, replacement)),
@@ -424,7 +471,11 @@ fn normalize_impl(
         } => StructuralTy::Function {
             params: params
                 .iter()
-                .map(|(_, t)| normalize_impl(t, aliases, recursive, expanding))
+                .map(|param| StructuralFunctionParam {
+                    name: param.name.clone(),
+                    ty: normalize_impl(&param.ty, aliases, recursive, expanding),
+                    mode: param.mode,
+                })
                 .collect(),
             ret: Box::new(normalize_impl(ret, aliases, recursive, expanding)),
             throws: Box::new(normalize_impl(throws, aliases, recursive, expanding)),
@@ -498,7 +549,7 @@ fn ty_has_cycle(
         } => {
             params
                 .iter()
-                .any(|(_, t)| ty_has_cycle(t, aliases, visited, stack))
+                .any(|param| ty_has_cycle(&param.ty, aliases, visited, stack))
                 || ty_has_cycle(ret, aliases, visited, stack)
                 || ty_has_cycle(throws, aliases, visited, stack)
         }
@@ -647,8 +698,14 @@ fn extract_type_alias_deps(
                 throws,
                 ..
             } => {
-                for (_, t) in params {
-                    visit(t, aliases, non_structural, structural, in_structural);
+                for param in params {
+                    visit(
+                        &param.ty,
+                        aliases,
+                        non_structural,
+                        structural,
+                        in_structural,
+                    );
                 }
                 visit(ret, aliases, non_structural, structural, in_structural);
                 visit(throws, aliases, non_structural, structural, in_structural);
@@ -996,7 +1053,7 @@ fn format_cycle_path(cycle: &[QualifiedTypeName]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ty::{Freshness, TyAttr};
+    use crate::ty::{Freshness, FunctionParamTy, TyAttr};
 
     fn qn(name: &str) -> QualifiedTypeName {
         QualifiedTypeName::new(Name::new("test"), vec![], Name::new(name))
@@ -1004,6 +1061,14 @@ mod tests {
 
     fn type_alias(name: &str) -> Ty {
         Ty::TypeAlias(qn(name), TyAttr::default())
+    }
+
+    fn required_param(ty: Ty) -> FunctionParamTy {
+        FunctionParamTy::required(None, ty)
+    }
+
+    fn optional_param(name: &str, ty: Ty) -> FunctionParamTy {
+        FunctionParamTy::optional(Some(Name::new(name)), ty)
     }
 
     #[test]
@@ -1215,7 +1280,10 @@ mod tests {
     fn test_function_covariant_return() {
         let aliases = HashMap::new();
         let f1 = Ty::Function {
-            params: vec![(None, Ty::Primitive(PrimitiveType::Int, TyAttr::default()))],
+            params: vec![required_param(Ty::Primitive(
+                PrimitiveType::Int,
+                TyAttr::default(),
+            ))],
             ret: Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
             throws: Box::new(Ty::Never {
                 attr: TyAttr::default(),
@@ -1223,7 +1291,10 @@ mod tests {
             attr: TyAttr::default(),
         };
         let f2 = Ty::Function {
-            params: vec![(None, Ty::Primitive(PrimitiveType::Int, TyAttr::default()))],
+            params: vec![required_param(Ty::Primitive(
+                PrimitiveType::Int,
+                TyAttr::default(),
+            ))],
             ret: Box::new(Ty::Primitive(PrimitiveType::Float, TyAttr::default())),
             throws: Box::new(Ty::Never {
                 attr: TyAttr::default(),
@@ -1238,7 +1309,10 @@ mod tests {
     fn test_function_contravariant_params() {
         let aliases = HashMap::new();
         let f1 = Ty::Function {
-            params: vec![(None, Ty::Primitive(PrimitiveType::Float, TyAttr::default()))],
+            params: vec![required_param(Ty::Primitive(
+                PrimitiveType::Float,
+                TyAttr::default(),
+            ))],
             ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
             throws: Box::new(Ty::Never {
                 attr: TyAttr::default(),
@@ -1246,7 +1320,10 @@ mod tests {
             attr: TyAttr::default(),
         };
         let f2 = Ty::Function {
-            params: vec![(None, Ty::Primitive(PrimitiveType::Int, TyAttr::default()))],
+            params: vec![required_param(Ty::Primitive(
+                PrimitiveType::Int,
+                TyAttr::default(),
+            ))],
             ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
             throws: Box::new(Ty::Never {
                 attr: TyAttr::default(),
@@ -1261,7 +1338,10 @@ mod tests {
     fn test_function_covariant_throws() {
         let aliases = HashMap::new();
         let f1 = Ty::Function {
-            params: vec![(None, Ty::Primitive(PrimitiveType::Int, TyAttr::default()))],
+            params: vec![required_param(Ty::Primitive(
+                PrimitiveType::Int,
+                TyAttr::default(),
+            ))],
             ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
             throws: Box::new(Ty::Never {
                 attr: TyAttr::default(),
@@ -1269,7 +1349,10 @@ mod tests {
             attr: TyAttr::default(),
         };
         let f2 = Ty::Function {
-            params: vec![(None, Ty::Primitive(PrimitiveType::Int, TyAttr::default()))],
+            params: vec![required_param(Ty::Primitive(
+                PrimitiveType::Int,
+                TyAttr::default(),
+            ))],
             ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
             throws: Box::new(Ty::Union(
                 vec![
@@ -1282,6 +1365,119 @@ mod tests {
         };
         assert!(is_subtype_of(&f1, &f2, &aliases));
         assert!(!is_subtype_of(&f2, &f1, &aliases));
+    }
+
+    #[test]
+    fn test_function_optional_param_dropping_subtyping() {
+        let aliases = HashMap::new();
+        let with_two_optionals = Ty::Function {
+            params: vec![
+                required_param(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+                optional_param("max", Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
+                optional_param(
+                    "filter",
+                    Ty::Primitive(PrimitiveType::String, TyAttr::default()),
+                ),
+            ],
+            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        };
+        let with_one_optional = Ty::Function {
+            params: vec![
+                required_param(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+                optional_param(
+                    "filter",
+                    Ty::Primitive(PrimitiveType::String, TyAttr::default()),
+                ),
+            ],
+            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        };
+
+        assert!(is_subtype_of(
+            &with_two_optionals,
+            &with_one_optional,
+            &aliases
+        ));
+        assert!(!is_subtype_of(
+            &with_one_optional,
+            &with_two_optionals,
+            &aliases
+        ));
+    }
+
+    #[test]
+    fn test_function_optional_param_order_is_insignificant() {
+        let aliases = HashMap::new();
+        let f1 = Ty::Function {
+            params: vec![
+                required_param(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+                optional_param("max", Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
+                optional_param(
+                    "filter",
+                    Ty::Primitive(PrimitiveType::String, TyAttr::default()),
+                ),
+            ],
+            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        };
+        let f2 = Ty::Function {
+            params: vec![
+                required_param(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+                optional_param(
+                    "filter",
+                    Ty::Primitive(PrimitiveType::String, TyAttr::default()),
+                ),
+                optional_param("max", Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
+            ],
+            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        };
+
+        assert!(is_subtype_of(&f1, &f2, &aliases));
+        assert!(is_subtype_of(&f2, &f1, &aliases));
+    }
+
+    #[test]
+    fn test_function_optional_and_required_params_are_incomparable() {
+        let aliases = HashMap::new();
+        let optional = Ty::Function {
+            params: vec![optional_param(
+                "value",
+                Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
+            )],
+            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        };
+        let required = Ty::Function {
+            params: vec![FunctionParamTy::required(
+                Some(Name::new("value")),
+                Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
+            )],
+            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        };
+
+        assert!(!is_subtype_of(&optional, &required, &aliases));
+        assert!(!is_subtype_of(&required, &optional, &aliases));
     }
 
     #[test]

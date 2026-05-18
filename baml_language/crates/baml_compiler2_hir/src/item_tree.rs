@@ -64,6 +64,8 @@ pub struct Function {
     pub generic_params: Vec<Name>,
     /// Function parameters with optional type annotations and spans.
     pub params: Vec<FunctionParam>,
+    /// Function parameter default expression arena.
+    pub defaults: ast::FunctionDefaults,
     /// Return type with its source span.
     pub return_type: Option<ast::SpannedTypeExpr>,
     /// Throws contract type with its source span.
@@ -84,7 +86,14 @@ pub struct Function {
 pub struct FunctionParam {
     pub name: Name,
     pub type_expr: Option<ast::SpannedTypeExpr>,
+    pub default: Option<DefaultExprRef>,
     pub span: TextRange,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DefaultExprRef {
+    pub function: LocalItemId<FunctionMarker>,
+    pub expr: ast::DefaultExprId,
 }
 
 /// A class field stored in the `ItemTree`.
@@ -333,6 +342,7 @@ impl ItemTree {
             .map(|p| FunctionParam {
                 name: p.name.clone(),
                 type_expr: p.type_expr.clone(),
+                default: p.default.map(|expr| DefaultExprRef { function: id, expr }),
                 span: p.span,
             })
             .collect();
@@ -342,6 +352,7 @@ impl ItemTree {
                 name: f.name.clone(),
                 generic_params: f.generic_params.clone(),
                 params,
+                defaults: f.defaults.clone(),
                 return_type: f.return_type.clone(),
                 throws: f.throws.clone(),
                 body: f.body.clone(),
@@ -565,6 +576,7 @@ impl ItemTree {
             .map(|p| FunctionParam {
                 name: p.name.clone(),
                 type_expr: p.type_expr.clone(),
+                default: None,
                 span: p.span,
             })
             .collect();

@@ -246,6 +246,24 @@ impl<'db> SemanticIndexBuilder<'db> {
         }
     }
 
+    /// Emit a `DuplicateDefinition` diagnostic for any parameter name that
+    /// appears more than once in a function or lambda signature. Applies
+    /// uniformly to positional and defaulted parameters — both share the
+    /// same `params` vector, and any name collision among them would make
+    /// later references to the name ambiguous within the body.
+    fn emit_duplicate_param_diagnostics(&mut self, params: &[ast::Param]) {
+        let mut seen: FxHashMap<Name, Vec<MemberSite>> = FxHashMap::default();
+        for param in params {
+            seen.entry(param.name.clone())
+                .or_default()
+                .push(MemberSite {
+                    range: param.name_span,
+                    kind: DefinitionKind::Parameter,
+                });
+        }
+        self.emit_duplicate_diagnostics(seen);
+    }
+
     /// Emit `DuplicateDefinition` diagnostics for any name with more than one site.
     fn emit_duplicate_diagnostics(&mut self, seen: FxHashMap<Name, Vec<MemberSite>>) {
         let scope = self.current_scope_path();
@@ -437,6 +455,13 @@ impl<'db> SemanticIndexBuilder<'db> {
                     self.walk_match_arm(arm_id, body, source_map);
                 }
             }
+            ast::Expr::Is { scrutinee, .. } => {
+                // `<expr> is <pattern>` is a one-shot pattern test that yields
+                // `bool`. Pattern bindings do NOT escape into the surrounding
+                // scope (use `match` / `let` if you need that). Type
+                // references inside the pattern are resolved later by TIR.
+                self.walk_expr(*scrutinee, body, source_map, true);
+            }
             ast::Expr::Catch { base, clauses } => {
                 self.walk_expr(*base, body, source_map, true);
                 for clause in clauses {
@@ -472,8 +497,8 @@ impl<'db> SemanticIndexBuilder<'db> {
             }
             ast::Expr::Call { callee, args, .. } | ast::Expr::OptionalCall { callee, args } => {
                 self.walk_expr(*callee, body, source_map, true);
-                for &arg in args {
-                    self.walk_expr(arg, body, source_map, true);
+                for arg in args {
+                    self.walk_expr(arg.expr, body, source_map, true);
                 }
             }
             ast::Expr::Object {
@@ -810,12 +835,23 @@ impl<'db> SemanticIndexBuilder<'db> {
                 .params
                 .push((param.name.clone(), idx));
         }
+        self.emit_duplicate_param_diagnostics(&func_def.params);
+        self.lambda_stack.push(scope_id);
+        for param in &func_def.params {
+            if let Some(default) = param.default {
+                self.walk_expr(
+                    default.expr(),
+                    &func_def.defaults.exprs,
+                    &func_def.defaults.source_map,
+                    true,
+                );
+            }
+        }
         if let Some(ast::FunctionBodyDef::Expr(lambda_body, lambda_source_map)) = &func_def.body {
-            self.lambda_stack.push(scope_id);
             self.walk_expr_body(lambda_body, lambda_source_map);
             self.analyze_lambda_captures(scope_id, lambda_body, lambda_source_map);
-            self.lambda_stack.pop();
         }
+        self.lambda_stack.pop();
         self.pop_scope();
     }
 
@@ -956,6 +992,17 @@ impl<'db> SemanticIndexBuilder<'db> {
             self.scope_bindings[scope_id.index() as usize]
                 .params
                 .push((param.name.clone(), idx));
+        }
+        self.emit_duplicate_param_diagnostics(&f.params);
+        for param in &f.params {
+            if let Some(default) = param.default {
+                self.walk_expr(
+                    default.expr(),
+                    &f.defaults.exprs,
+                    &f.defaults.source_map,
+                    true,
+                );
+            }
         }
 
         if let Some(ast::FunctionBodyDef::Expr(ref body, ref source_map)) = f.body {

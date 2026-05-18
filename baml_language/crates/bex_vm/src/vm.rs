@@ -42,7 +42,7 @@ use ::core::sync::atomic::AtomicBool;
 use bex_heap::{BexHeap, Tlab};
 use bex_vm_types::{
     BinOp, CmpOp, FunctionKind, FutureRead, HeapPtr, Instruction, Object, ObjectIndex, ObjectPool,
-    ObjectType, PanicClass, StackIndex, UnaryOp, Value, Variant, VmGlobals,
+    ObjectType, PanicClass, PermitProof, StackIndex, UnaryOp, Value, Variant, VmGlobals,
     bytecode::{self, BlockNotification},
     types::{
         BoundMethod, Cell, Closure, ConstValue, Function, FunctionType, FutureType, Instance, Type,
@@ -128,6 +128,28 @@ impl Frame {
             Frame::Bytecode(f) => f.function,
             Frame::Native(f) => f.function,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use bex_vm_types::{Value, types::type_tags};
+
+    use super::value_type_tag;
+
+    #[test]
+    fn omitted_arg_uses_unknown_type_tag() {
+        let value = Value::OmittedArg;
+
+        assert_eq!(value_type_tag(&value), type_tags::UNKNOWN);
+        assert!(matches!(
+            Value::Int(type_tags::UNKNOWN),
+            Value::Int(tag) if value_type_tag(&value) == tag
+        ));
+        assert!(!matches!(
+            Value::Int(type_tags::INT),
+            Value::Int(tag) if value_type_tag(&value) == tag
+        ));
     }
 }
 
@@ -564,6 +586,7 @@ fn value_type_tag(value: &Value) -> i64 {
     use bex_vm_types::types::type_tags;
 
     match value {
+        Value::OmittedArg => type_tags::UNKNOWN,
         Value::Int(_) => type_tags::INT,
         Value::Float(_) => type_tags::FLOAT,
         Value::Bool(_) => type_tags::BOOL,
@@ -603,6 +626,40 @@ fn value_type_tag(value: &Value) -> i64 {
 }
 
 impl BexVm {
+    /// Construct a [`PermitProof`] tied to `&self`'s borrow.
+    ///
+    /// # Why this is safe
+    ///
+    /// A `&BexVm` is only ever obtained inside an
+    /// `bex_heap::ActiveHeapPermit<BexVm>` deref context — every
+    /// caller of any `&BexVm` method is therefore already inside an
+    /// active heap permit. The returned `PermitProof<'_>`'s lifetime is
+    /// bounded by `&self`, which is bounded by the wrapping permit's,
+    /// so the proof witnesses a genuinely-held permit.
+    ///
+    /// The internal `PermitProof::new()` is `unsafe` because in general
+    /// minting a proof from nothing breaks the type-level
+    /// permit-exclusion guarantee. Here the borrow of `&self` *is* the
+    /// runtime witness; we just need to repackage it as the canonical
+    /// proof token. This is the VM-internal mirror of
+    /// `bex_heap::ActiveHeapPermit::proof`.
+    #[inline]
+    #[must_use]
+    #[allow(
+        clippy::unused_self,
+        reason = "the `&self` borrow is load-bearing — it ties the returned \
+                  proof's lifetime to a valid `&BexVm` borrow, which only \
+                  exists inside an active permit deref"
+    )]
+    pub(crate) fn proof(&self) -> PermitProof<'_> {
+        // SAFETY: `&self` is only obtainable inside an active permit
+        // deref; see the method-level "Why this is safe" argument.
+        #[allow(unsafe_code, reason = "PermitProof::new is the unsafe boundary")]
+        unsafe {
+            PermitProof::new()
+        }
+    }
+
     /// Create a new VM with a shared heap.
     ///
     /// The heap is shared across all VMs. Each VM gets its own TLAB
@@ -614,7 +671,13 @@ impl BexVm {
         #[cfg(not(target_arch = "wasm32"))] park_requested: Arc<AtomicBool>,
         argv: Arc<[String]>,
     ) -> Self {
-        let tlab = Tlab::new(Arc::clone(&heap));
+        // Defer the first TLAB chunk reservation until the first `tlab.alloc`,
+        // which the engine reaches only after the VM has been registered as a
+        // permit holder via `HeapPermitManager::new_permit` and a permit is
+        // active. Eagerly calling `Tlab::new` here would reserve a chunk
+        // *before* registration, leaving the cursor stale across any GC that
+        // fires in the engine's pre-permit window.
+        let tlab = Tlab::new_empty(Arc::clone(&heap));
 
         // Pre-resolve error class pointers indexed by Error discriminant.
         let error_class_ptrs: Vec<HeapPtr> = ErrorClass::ALL
@@ -1139,7 +1202,7 @@ impl BexVm {
     /// suitable for hot paths; callers that need repeated lookups should cache
     /// the result.
     pub fn find_function_by_name(&self, name: &str) -> Option<HeapPtr> {
-        for v in self.globals.as_slice() {
+        for v in self.globals.as_slice(self.proof()) {
             if let Value::Object(ptr) = v {
                 if let Object::Function(f) = self.get_object(*ptr) {
                     if f.name == name {
@@ -2242,7 +2305,7 @@ impl BexVm {
                     let (instruction, metadata) = crate::debug::display_instruction(
                         instruction_ptr,
                         function,
-                        self.globals.as_slice(),
+                        self.globals.as_slice(self.proof()),
                         None,
                         None,
                     );
@@ -2428,7 +2491,7 @@ impl BexVm {
             }
 
             Instruction::LoadGlobal(index) => {
-                let value = self.globals.get(index);
+                let value = self.globals.get(self.proof(), index);
                 self.stack.push(value);
             }
 
@@ -3568,7 +3631,7 @@ impl BexVm {
             }
 
             Instruction::SysOp(callee) => {
-                let callee_value = self.globals[callee];
+                let callee_value = self.globals.get(self.proof(), callee);
                 let expected_type = FunctionType::SysOp;
                 let callee_ptr = self.as_object_ptr(&callee_value, expected_type.into())?;
 
@@ -3824,7 +3887,7 @@ impl BexVm {
             }
 
             Instruction::Call { callee, ntypeargs } => {
-                let callee_value = self.globals[callee];
+                let callee_value = self.globals.get(self.proof(), callee);
                 let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
 
                 // Pop `ntypeargs` Object::Type values from the stack into a Vec<Ty>.
@@ -4392,7 +4455,7 @@ impl BexVm {
 
             Instruction::MakeBoundMethod(global_idx) => {
                 let receiver = self.stack.ensure_pop();
-                let callee_value = self.globals[global_idx];
+                let callee_value = self.globals.get(self.proof(), global_idx);
                 let function_ptr =
                     self.as_object_ptr(&callee_value, FunctionType::Callable.into())?;
                 debug_assert!(
@@ -5238,7 +5301,7 @@ impl BexVm {
                 OpCode::LoadGlobal => {
                     let raw = { read_u32_unchecked(code, pc) };
                     let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
-                    let value = self.globals[global_idx];
+                    let value = self.globals.get(self.proof(), global_idx);
                     self.stack.push(value);
                 }
 
@@ -5463,7 +5526,7 @@ impl BexVm {
                 OpCode::SysOp => {
                     let raw = { read_u32_unchecked(code, pc) };
                     let callee = bex_vm_types::GlobalIndex::from_raw(raw as usize);
-                    let callee_value = self.globals[callee];
+                    let callee_value = self.globals.get(self.proof(), callee);
                     let expected_type = FunctionType::SysOp;
                     let callee_ptr = self.as_object_ptr(&callee_value, expected_type.into())?;
                     let Object::Function(callable_future) = self.get_object(callee_ptr) else {
@@ -5652,7 +5715,7 @@ impl BexVm {
                     let raw = read_u32_unchecked(code, pc);
                     let ntypeargs = read_u16_unchecked(code, pc) as usize;
                     let callee_global = bex_vm_types::GlobalIndex::from_raw(raw as usize);
-                    let callee_value = self.globals[callee_global];
+                    let callee_value = self.globals.get(self.proof(), callee_global);
                     let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
 
                     // Pop `ntypeargs` Object::Type values from the stack into a Vec<Ty>.
@@ -6179,7 +6242,7 @@ impl BexVm {
                     let raw = { read_u32_unchecked(code, pc) };
                     let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                     let receiver = self.stack.ensure_pop();
-                    let callee_value = self.globals[global_idx];
+                    let callee_value = self.globals.get(self.proof(), global_idx);
                     let function_ptr =
                         self.as_object_ptr(&callee_value, FunctionType::Callable.into())?;
                     let bound = Object::BoundMethod(BoundMethod {

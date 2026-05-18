@@ -83,22 +83,25 @@ SOURCE_FILE
                     GREATER ">"
                 CALL_ARGS
                   L_PAREN "("
-                  CALL_EXPR
-                    PATH_EXPR "baml.json.field"
-                      WORD "baml"
-                      DOT "."
-                      WORD "json"
-                      DOT "."
-                      WORD "field"
-                    CALL_ARGS
-                      L_PAREN "("
-                      WORD "j"
-                      COMMA ","
-                      STRING_LITERAL "value"
-                        QUOTE """
-                        WORD "value"
-                        QUOTE """
-                      R_PAREN ")"
+                  CALL_ARG
+                    CALL_EXPR
+                      PATH_EXPR "baml.json.field"
+                        WORD "baml"
+                        DOT "."
+                        WORD "json"
+                        DOT "."
+                        WORD "field"
+                      CALL_ARGS
+                        L_PAREN "("
+                        CALL_ARG "j"
+                          WORD "j"
+                        COMMA ","
+                        CALL_ARG
+                          STRING_LITERAL "value"
+                            QUOTE """
+                            WORD "value"
+                            QUOTE """
+                        R_PAREN ")"
                   R_PAREN ")"
             R_BRACE "}"
           R_BRACE "}"

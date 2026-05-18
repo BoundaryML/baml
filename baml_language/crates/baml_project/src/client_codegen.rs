@@ -7,16 +7,17 @@
 use std::collections::HashMap;
 
 use baml_codegen_types::{self as cg, Origin, SymbolPool};
-use baml_compiler2_ast::FunctionOrigin;
+use baml_compiler2_ast::{self as ast, FunctionOrigin};
 use baml_compiler2_hir::{
     compiler2_all_files, file_package,
     ids::{FunctionMarker, LocalItemId},
+    loc::FunctionLoc,
     package::PackageId,
 };
 use baml_compiler2_tir::{
     lower_type_expr,
     normalize::find_recursive_aliases,
-    ty::{PrimitiveType, QualifiedTypeName, Ty as TirTy},
+    ty::{FunctionParamMode, PrimitiveType, QualifiedTypeName, Ty as TirTy},
 };
 use baml_db::Name;
 
@@ -33,6 +34,36 @@ fn name_from_qtn(qtn: &QualifiedTypeName) -> cg::Name {
         pkg: qtn.package().clone(),
         namespace_path: qtn.namespace().clone(),
         name: qtn.name().clone(),
+    }
+}
+
+fn lower_codegen_default(
+    default_ref: Option<&baml_compiler2_hir::item_tree::DefaultExprRef>,
+    defaults: &ast::FunctionDefaults,
+) -> Option<cg::FunctionArgumentDefault> {
+    let default_ref = default_ref?;
+    let expr = defaults.expr(default_ref.expr);
+    match expr {
+        ast::Expr::Null => Some(cg::FunctionArgumentDefault::Null),
+        ast::Expr::Literal(lit) => Some(cg::FunctionArgumentDefault::Literal(
+            cg::DefaultLiteral::Scalar(lit.clone()),
+        )),
+        ast::Expr::Array { elements } if elements.is_empty() => Some(
+            cg::FunctionArgumentDefault::Literal(cg::DefaultLiteral::EmptyList),
+        ),
+        ast::Expr::Map { entries } if entries.is_empty() => Some(
+            cg::FunctionArgumentDefault::Literal(cg::DefaultLiteral::EmptyMap),
+        ),
+        // Only empty array/map defaults become structured
+        // cg::FunctionArgumentDefault::Literal values
+        // (cg::DefaultLiteral::EmptyList / cg::DefaultLiteral::EmptyMap).
+        // Non-empty array/map AST literals intentionally fall through here and
+        // are emitted via defaults.exprs.display_expr(DEFAULT_REF_EXPR), because
+        // downstream backends treat non-empty
+        // literal defaults as opaque source expressions.
+        _ => Some(cg::FunctionArgumentDefault::Expression {
+            source: Some(defaults.exprs.display_expr(default_ref.expr.expr())),
+        }),
     }
 }
 
@@ -177,12 +208,16 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 // declaration: class-level first, method-level second.
                 let mut method_scope_generics: Vec<Name> = class_generic_params.clone();
                 method_scope_generics.extend(method.generic_params.iter().cloned());
+                let method_loc = FunctionLoc::new(db, source_file, *method_id);
+                let method_defaults =
+                    baml_compiler2_ppir::function_parameter_defaults(db, method_loc);
 
                 let arguments: Vec<cg::FunctionArgument> = method
                     .params
                     .iter()
+                    .enumerate()
                     .skip(usize::from(is_instance))
-                    .filter_map(|param| {
+                    .filter_map(|(index, param)| {
                         let ty = resolve_type_expr(
                             db,
                             param.type_expr.as_ref(),
@@ -196,6 +231,10 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                             name: param.name.clone(),
                             docstring: None,
                             ty,
+                            default: lower_codegen_default(
+                                method_defaults.param_default(index),
+                                &method_defaults.defaults,
+                            ),
                         })
                     })
                     .collect();
@@ -342,10 +381,13 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             // already filtered above.
 
             let func_generic_params: Vec<Name> = func.generic_params.clone();
+            let func_loc = FunctionLoc::new(db, source_file, *id);
+            let func_defaults = baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
             let arguments: Vec<cg::FunctionArgument> = func
                 .params
                 .iter()
-                .filter_map(|param| {
+                .enumerate()
+                .filter_map(|(index, param)| {
                     let ty = resolve_type_expr(
                         db,
                         param.type_expr.as_ref(),
@@ -359,6 +401,10 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                         name: param.name.clone(),
                         docstring: None,
                         ty,
+                        default: lower_codegen_default(
+                            func_defaults.param_default(index),
+                            &func_defaults.defaults,
+                        ),
                     })
                 })
                 .collect();
@@ -538,7 +584,14 @@ fn convert_tir_leaf(
         TirTy::Function { params, ret, .. } => cg::Ty::Callable {
             params: params
                 .iter()
-                .map(|(_, p)| convert_tir_to_codegen_ty(p, alias_map, recursive_aliases))
+                .map(|param| cg::CallableParam {
+                    name: param.name.clone(),
+                    ty: convert_tir_to_codegen_ty(&param.ty, alias_map, recursive_aliases),
+                    mode: match param.mode {
+                        FunctionParamMode::Required => cg::CodegenFunctionParamMode::Required,
+                        FunctionParamMode::Optional => cg::CodegenFunctionParamMode::Optional,
+                    },
+                })
                 .collect(),
             ret: Box::new(convert_tir_to_codegen_ty(ret, alias_map, recursive_aliases)),
         },
@@ -810,6 +863,72 @@ mod tests {
             happy.docstring.as_deref(),
             Some("Smiling face."),
             "variant /// must reach pool",
+        );
+    }
+
+    #[test]
+    fn test_function_defaults_populate_codegen_metadata() {
+        fn alloc_default(
+            defaults: &mut ast::FunctionDefaults,
+            function: LocalItemId<FunctionMarker>,
+            expr: ast::Expr,
+        ) -> baml_compiler2_hir::item_tree::DefaultExprRef {
+            let expr = ast::DefaultExprId::new(defaults.exprs.exprs.alloc(expr));
+            baml_compiler2_hir::item_tree::DefaultExprRef { function, expr }
+        }
+
+        let function = LocalItemId::<FunctionMarker>::new(1, 0);
+        let mut defaults = ast::FunctionDefaults::empty();
+
+        let literal_int = alloc_default(
+            &mut defaults,
+            function,
+            ast::Expr::Literal(ast::Literal::Int(10)),
+        );
+        let callee = defaults
+            .exprs
+            .exprs
+            .alloc(ast::Expr::Path(vec![Name::new("default_filter")]));
+        let expression = alloc_default(
+            &mut defaults,
+            function,
+            ast::Expr::Call {
+                callee,
+                args: Vec::new(),
+                type_args: Vec::new(),
+            },
+        );
+        let empty_list = alloc_default(
+            &mut defaults,
+            function,
+            ast::Expr::Array {
+                elements: Vec::new(),
+            },
+        );
+        let nullable_null = alloc_default(&mut defaults, function, ast::Expr::Null);
+
+        assert_eq!(lower_codegen_default(None, &defaults), None);
+        assert_eq!(
+            lower_codegen_default(Some(&literal_int), &defaults),
+            Some(cg::FunctionArgumentDefault::Literal(
+                cg::DefaultLiteral::Scalar(ast::Literal::Int(10))
+            ))
+        );
+        assert_eq!(
+            lower_codegen_default(Some(&expression), &defaults),
+            Some(cg::FunctionArgumentDefault::Expression {
+                source: Some("default_filter()".to_string())
+            })
+        );
+        assert_eq!(
+            lower_codegen_default(Some(&empty_list), &defaults),
+            Some(cg::FunctionArgumentDefault::Literal(
+                cg::DefaultLiteral::EmptyList
+            ))
+        );
+        assert_eq!(
+            lower_codegen_default(Some(&nullable_null), &defaults),
+            Some(cg::FunctionArgumentDefault::Null)
         );
     }
 

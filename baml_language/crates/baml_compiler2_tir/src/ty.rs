@@ -165,7 +165,7 @@ pub enum Ty {
     EvolvingMap(Box<Ty>, Box<Ty>, TyAttr),
     /// Function type: (params) -> return.
     Function {
-        params: Vec<(Option<Name>, Ty)>,
+        params: Vec<FunctionParamTy>,
         ret: Box<Ty>,
         throws: Box<Ty>,
         attr: TyAttr,
@@ -235,6 +235,45 @@ pub enum Ty {
     /// call before `await`. Carries both the resolved value type and the
     /// errors the producing computation may throw.
     Future(Box<Ty>, Box<Ty>, TyAttr),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct FunctionParamTy {
+    pub name: Option<Name>,
+    pub ty: Ty,
+    pub mode: FunctionParamMode,
+}
+
+impl FunctionParamTy {
+    pub fn required(name: Option<Name>, ty: Ty) -> Self {
+        Self {
+            name,
+            ty,
+            mode: FunctionParamMode::Required,
+        }
+    }
+
+    pub fn optional(name: Option<Name>, ty: Ty) -> Self {
+        Self {
+            name,
+            ty,
+            mode: FunctionParamMode::Optional,
+        }
+    }
+
+    pub fn is_required(&self) -> bool {
+        matches!(self.mode, FunctionParamMode::Required)
+    }
+
+    pub fn is_optional(&self) -> bool {
+        matches!(self.mode, FunctionParamMode::Optional)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum FunctionParamMode {
+    Required,
+    Optional,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -557,10 +596,15 @@ impl fmt::Display for Ty {
             } => {
                 let ps: Vec<String> = params
                     .iter()
-                    .map(|(name, ty)| {
-                        name.as_ref()
-                            .map(|n| format!("{n}: {ty}"))
-                            .unwrap_or_else(|| ty.to_string())
+                    .map(|param| {
+                        let ty = &param.ty;
+                        match (&param.name, param.mode) {
+                            (Some(name), FunctionParamMode::Optional) => {
+                                format!("{name}?: {ty}")
+                            }
+                            (Some(name), FunctionParamMode::Required) => format!("{name}: {ty}"),
+                            (None, _) => ty.to_string(),
+                        }
                     })
                     .collect();
                 write!(f, "({}) -> ", ps.join(", "))?;

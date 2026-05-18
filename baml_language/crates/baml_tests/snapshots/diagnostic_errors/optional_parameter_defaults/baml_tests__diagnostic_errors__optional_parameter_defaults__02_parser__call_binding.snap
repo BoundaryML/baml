@@ -1,0 +1,329 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "Search"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "query"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "max_results"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+        EQUALS "="
+        INTEGER_LITERAL "10"
+      COMMA ","
+      PARAMETER
+        WORD "filter"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+        EQUALS "="
+        STRING_LITERAL "none"
+          QUOTE """
+          WORD "none"
+          QUOTE """
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+  query
+}"
+        L_BRACE "{"
+        WORD "query"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "OkOmit"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "Search"
+          CALL_ARGS
+            L_PAREN "("
+            CALL_ARG
+              STRING_LITERAL "cats"
+                QUOTE """
+                WORD "cats"
+                QUOTE """
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "OkNamedDefault"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "Search"
+          CALL_ARGS
+            L_PAREN "("
+            CALL_ARG
+              STRING_LITERAL "cats"
+                QUOTE """
+                WORD "cats"
+                QUOTE """
+            COMMA ","
+            CALL_ARG "max_results = 5"
+              WORD "max_results"
+              EQUALS "="
+              INTEGER_LITERAL "5"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "OkNamedRequired"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "Search"
+          CALL_ARGS
+            L_PAREN "("
+            CALL_ARG
+              WORD "query"
+              EQUALS "="
+              STRING_LITERAL "cats"
+                QUOTE """
+                WORD "cats"
+                QUOTE """
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "OkSkipFirstDefault"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "Search"
+          CALL_ARGS
+            L_PAREN "("
+            CALL_ARG
+              STRING_LITERAL "cats"
+                QUOTE """
+                WORD "cats"
+                QUOTE """
+            COMMA ","
+            CALL_ARG
+              WORD "filter"
+              EQUALS "="
+              STRING_LITERAL "recent"
+                QUOTE """
+                WORD "recent"
+                QUOTE """
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "BadDefaultPositional"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "Search"
+          CALL_ARGS
+            L_PAREN "("
+            CALL_ARG
+              STRING_LITERAL "cats"
+                QUOTE """
+                WORD "cats"
+                QUOTE """
+            COMMA ","
+            CALL_ARG "5"
+              INTEGER_LITERAL "5"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "BadPositionalAfterNamed"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "Search"
+          CALL_ARGS
+            L_PAREN "("
+            CALL_ARG
+              WORD "query"
+              EQUALS "="
+              STRING_LITERAL "cats"
+                QUOTE """
+                WORD "cats"
+                QUOTE """
+            COMMA ","
+            CALL_ARG "5"
+              INTEGER_LITERAL "5"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "BadDuplicateNamed"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "Search"
+          CALL_ARGS
+            L_PAREN "("
+            CALL_ARG
+              WORD "query"
+              EQUALS "="
+              STRING_LITERAL "cats"
+                QUOTE """
+                WORD "cats"
+                QUOTE """
+            COMMA ","
+            CALL_ARG "max_results = 1"
+              WORD "max_results"
+              EQUALS "="
+              INTEGER_LITERAL "1"
+            COMMA ","
+            CALL_ARG "max_results = 2"
+              WORD "max_results"
+              EQUALS "="
+              INTEGER_LITERAL "2"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "BadUnknownNamed"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "Search"
+          CALL_ARGS
+            L_PAREN "("
+            CALL_ARG
+              WORD "q"
+              EQUALS "="
+              STRING_LITERAL "cats"
+                QUOTE """
+                WORD "cats"
+                QUOTE """
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "BadForwardRef"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "a"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+        EQUALS "="
+        WORD "b"
+      COMMA ","
+      PARAMETER
+        WORD "b"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+        EQUALS "="
+        INTEGER_LITERAL "1"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+  a
+}"
+        L_BRACE "{"
+        WORD "a"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "BadRequiredAfterDefault"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "a"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+        EQUALS "="
+        INTEGER_LITERAL "1"
+      COMMA ","
+      PARAMETER
+        WORD "b"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+  b
+}"
+        L_BRACE "{"
+        WORD "b"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

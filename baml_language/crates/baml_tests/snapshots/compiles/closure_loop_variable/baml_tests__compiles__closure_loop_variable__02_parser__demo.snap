@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 5624
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -61,19 +60,20 @@ SOURCE_FILE
                 WORD "push"
               CALL_ARGS
                 L_PAREN "("
-                LAMBDA_EXPR
-                  PARAMETER_LIST "()"
-                    L_PAREN "("
-                    R_PAREN ")"
-                  ARROW "->"
-                  BLOCK_EXPR
-                    L_BRACE "{"
-                    BINARY_EXPR "sum += i"
-                      WORD "sum"
-                      PLUS_EQUALS "+="
-                      WORD "i"
-                    SEMICOLON ";"
-                    R_BRACE "}"
+                CALL_ARG
+                  LAMBDA_EXPR
+                    PARAMETER_LIST "()"
+                      L_PAREN "("
+                      R_PAREN ")"
+                    ARROW "->"
+                    BLOCK_EXPR
+                      L_BRACE "{"
+                      BINARY_EXPR "sum += i"
+                        WORD "sum"
+                        PLUS_EQUALS "+="
+                        WORD "i"
+                      SEMICOLON ";"
+                      R_BRACE "}"
                 R_PAREN ")"
             R_BRACE "}"
         FOR_EXPR

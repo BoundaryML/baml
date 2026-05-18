@@ -6,9 +6,9 @@
 
 use baml_type::Ty;
 use bex_external_types::{BexExternalAdt, BexExternalValue, WeakHeapRef};
-use bex_vm_types::{HeapPtr, Object, Value};
+use bex_vm_types::{HeapPtr, Object, PermitProof, Value};
 
-use crate::{BexHeap, heap_guard::PermitProof};
+use crate::BexHeap;
 
 #[derive(Debug, PartialEq, thiserror::Error, Clone)]
 pub enum AccessError {
@@ -678,6 +678,7 @@ fn owned_inner(
                 }
             }
         }
+        BexValue::Value(Value::OmittedArg) => unconvertible("omitted argument"),
         BexValue::Value(Value::Null) => Ok(BexExternalValue::Null),
         BexValue::Value(Value::Int(i)) => Ok(BexExternalValue::Int(*i)),
         BexValue::Value(Value::Float(f)) => Ok(BexExternalValue::Float(*f)),

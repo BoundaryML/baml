@@ -8,11 +8,11 @@
 use std::sync::Arc;
 
 use baml_base::Name;
-use baml_compiler2_ast::{FunctionTypeParam, TypeExpr};
+use baml_compiler2_ast::{FunctionDefaults, FunctionTypeParam, TypeExpr};
 use rustc_hash::FxHashSet;
 use text_size::TextRange;
 
-use crate::loc::FunctionLoc;
+use crate::{item_tree::DefaultExprRef, loc::FunctionLoc};
 
 /// Compiler2 function signature — param names + unresolved `TypeExpr`.
 ///
@@ -23,11 +23,33 @@ use crate::loc::FunctionLoc;
 pub struct FunctionSignature {
     pub name: baml_base::Name,
     /// Parameter names paired with their unresolved type expressions.
-    pub params: Vec<(baml_base::Name, TypeExpr)>,
+    pub params: Vec<SignatureParam>,
     /// Return type (None if omitted).
     pub return_type: Option<TypeExpr>,
     /// Declared throws contract type (None if omitted).
     pub throws: Option<TypeExpr>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SignatureParam {
+    pub name: Name,
+    pub ty: TypeExpr,
+    pub has_default: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FunctionParameterDefaults {
+    /// One default-expression reference per parameter, parallel to
+    /// `FunctionSignature::params`.
+    pub params: Vec<Option<DefaultExprRef>>,
+    /// The definition-local default expression arena and source map.
+    pub defaults: FunctionDefaults,
+}
+
+impl FunctionParameterDefaults {
+    pub fn param_default(&self, index: usize) -> Option<&DefaultExprRef> {
+        self.params.get(index).and_then(Option::as_ref)
+    }
 }
 
 /// Canonical callable-signature view used by TIR.
@@ -44,7 +66,7 @@ pub struct ElaboratedFunctionSignature {
     pub name: Name,
     pub user_generic_params: Vec<Name>,
     pub synthetic_effect_params: Vec<Name>,
-    pub params: Vec<(Name, TypeExpr)>,
+    pub params: Vec<SignatureParam>,
     pub return_type: Option<TypeExpr>,
     pub throws: Option<TypeExpr>,
 }
@@ -87,7 +109,11 @@ fn function_signature_with_source_map<'db>(
                 .as_ref()
                 .map(|te| te.expr.clone())
                 .unwrap_or(TypeExpr::Unknown { attrs: vec![] });
-            (p.name.clone(), type_expr)
+            SignatureParam {
+                name: p.name.clone(),
+                ty: type_expr,
+                has_default: p.default.is_some(),
+            }
         })
         .collect();
 
@@ -182,6 +208,7 @@ fn fill_omitted_nested_throws_with_never(type_expr: TypeExpr) -> TypeExpr {
                 .into_iter()
                 .map(|param| FunctionTypeParam {
                     name: param.name,
+                    optional: param.optional,
                     ty: fill_omitted_nested_throws_with_never(param.ty),
                 })
                 .collect(),
@@ -208,6 +235,7 @@ fn elaborate_immediate_callback_param(
             .into_iter()
             .map(|param| FunctionTypeParam {
                 name: param.name,
+                optional: param.optional,
                 ty: fill_omitted_nested_throws_with_never(param.ty),
             })
             .collect(),
@@ -259,6 +287,7 @@ fn elaborate_immediate_function_return_root(
                             .into_iter()
                             .map(|param| FunctionTypeParam {
                                 name: param.name,
+                                optional: param.optional,
                                 ty: fill_omitted_nested_throws_with_never(param.ty),
                             })
                             .collect(),
@@ -271,6 +300,7 @@ fn elaborate_immediate_function_return_root(
             };
             FunctionTypeParam {
                 name: param.name,
+                optional: param.optional,
                 ty,
             }
         })
@@ -292,7 +322,7 @@ pub fn elaborate_function_signature_parts(
     name: Name,
     user_generic_params: Vec<Name>,
     reserved_effect_param_names: &[Name],
-    params: Vec<(Name, TypeExpr)>,
+    params: Vec<SignatureParam>,
     return_type: Option<TypeExpr>,
     throws: Option<TypeExpr>,
 ) -> ElaboratedFunctionSignature {
@@ -302,8 +332,8 @@ pub fn elaborate_function_signature_parts(
     let mut synthetic_effect_params = Vec::new();
     let params = params
         .into_iter()
-        .map(|(param_name, param_ty)| {
-            let elaborated = match param_ty {
+        .map(|param| {
+            let elaborated = match param.ty {
                 TypeExpr::Function {
                     params,
                     ret,
@@ -316,7 +346,11 @@ pub fn elaborate_function_signature_parts(
                 }
                 other => fill_omitted_nested_throws_with_never(other),
             };
-            (param_name, elaborated)
+            SignatureParam {
+                name: param.name,
+                ty: elaborated,
+                has_default: param.has_default,
+            }
         })
         .collect();
     let return_type = return_type.map(|return_type| match return_type {
@@ -374,7 +408,11 @@ fn elaborated_function_signature_with_source_map<'db>(
                 .as_ref()
                 .map(|te| te.expr.clone())
                 .unwrap_or(TypeExpr::Unknown { attrs: vec![] });
-            (p.name.clone(), type_expr)
+            SignatureParam {
+                name: p.name.clone(),
+                ty: type_expr,
+                has_default: p.default.is_some(),
+            }
         })
         .collect();
 
@@ -428,6 +466,29 @@ pub fn function_signature_source_map<'db>(
 ) -> SignatureSourceMap {
     let (_, source_map) = function_signature_with_source_map(db, function);
     source_map
+}
+
+/// Salsa query: function parameter default-expression data.
+///
+/// Kept separate from `FunctionSignature` so changing a default expression does
+/// not invalidate consumers that only need callable shape or optionality.
+#[salsa::tracked]
+pub fn function_parameter_defaults<'db>(
+    db: &'db dyn crate::Db,
+    function: FunctionLoc<'db>,
+) -> Arc<FunctionParameterDefaults> {
+    let file = function.file(db);
+    let item_tree = crate::file_item_tree(db, file);
+    let func_data = &item_tree[function.id(db)];
+
+    Arc::new(FunctionParameterDefaults {
+        params: func_data
+            .params
+            .iter()
+            .map(|param| param.default.clone())
+            .collect(),
+        defaults: func_data.defaults.clone(),
+    })
 }
 
 /// Salsa query: elaborated callable signature used by TIR consumers.

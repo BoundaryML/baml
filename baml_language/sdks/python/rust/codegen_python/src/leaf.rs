@@ -7,7 +7,8 @@ use std::{
     fmt::Write as _,
 };
 
-use baml_codegen_types::Ty;
+use baml_base::Literal;
+use baml_codegen_types::{DefaultLiteral, FunctionArgumentDefault, Ty};
 
 use crate::{
     emit::{
@@ -116,7 +117,8 @@ impl LeafBody {
                 Ty::Union(items) => items.iter().any(ty_uses_rust_type),
                 Ty::Class(_, args) => args.iter().any(ty_uses_rust_type),
                 Ty::Callable { params, ret } => {
-                    params.iter().any(ty_uses_rust_type) || ty_uses_rust_type(ret)
+                    params.iter().any(|param| ty_uses_rust_type(&param.ty))
+                        || ty_uses_rust_type(ret)
                 }
                 _ => false,
             }
@@ -318,7 +320,7 @@ fn collect_root_imports(ty: &Ty, current: &LeafPath, out: &mut RootImportSets) {
         }
         Ty::Callable { params, ret } => {
             for p in params {
-                collect_root_imports(p, current, out);
+                collect_root_imports(&p.ty, current, out);
             }
             collect_root_imports(ret, current, out);
         }
@@ -787,8 +789,11 @@ fn render_factory_binding(f: &crate::emit::function::PyFunction) -> String {
         SyncAsync::Async => ("", "\"async\","),
     };
     let params = render_param_list(&f.param_names);
+    let required_positional_count = required_positional_count(&f.arg_defaults, 0);
+    let default_arg =
+        render_required_positional_arg(required_positional_count, f.param_names.len());
     format!(
-        "{name}{lhs_pad} = _define_function({fqn}, {mode_str} {params})",
+        "{name}{lhs_pad} = _define_function({fqn}, {mode_str} {params}{default_arg})",
         name = f.py_name,
         fqn = py_string(&f.baml_fqn),
     )
@@ -803,12 +808,16 @@ fn render_method_binding(m: &PyMethodBinding) -> String {
         SyncAsync::Async => ("", "\"async\","),
     };
     let params = render_param_list(&m.param_names);
+    let receiver_count = usize::from(matches!(m.kind, MethodKind::Instance));
+    let required_positional_count = required_positional_count(&m.arg_defaults, receiver_count);
+    let default_arg =
+        render_required_positional_arg(required_positional_count, m.param_names.len());
     let factory = match m.kind {
         MethodKind::Static => "_define_static_method",
         MethodKind::Instance => "_define_instance_method",
     };
     let inner = format!(
-        "{factory}({fqn}, {mode_str} {params})",
+        "{factory}({fqn}, {mode_str} {params}{default_arg})",
         fqn = py_string(&m.baml_fqn),
     );
     // `staticmethod(...)` wrap stops Python's descriptor protocol from
@@ -834,6 +843,25 @@ fn render_param_list(names: &[String]) -> String {
     }
     s.push(']');
     s
+}
+
+fn required_positional_count(
+    arg_defaults: &[Option<FunctionArgumentDefault>],
+    receiver_count: usize,
+) -> usize {
+    receiver_count
+        + arg_defaults
+            .iter()
+            .take_while(|default| default.is_none())
+            .count()
+}
+
+fn render_required_positional_arg(required: usize, total: usize) -> String {
+    if required == total {
+        String::new()
+    } else {
+        format!(", {required}")
+    }
 }
 
 /// Leaf body: imports + symbol bodies + `__all__`. Empty string when
@@ -1193,14 +1221,23 @@ fn render_symbol_pyi(s: &EmittedSymbol, leaf: &LeafPath) -> String {
 /// methods (`self` takes no annotation).
 fn render_method_params_pyi(m: &PyMethodBinding, ctx: &TranslateCtx) -> String {
     match m.kind {
-        MethodKind::Static => render_typed_params(&m.param_names, &m.arg_tys, ctx),
+        MethodKind::Static => render_typed_params(&m.param_names, &m.arg_tys, &m.arg_defaults, ctx),
         MethodKind::Instance => {
             let mut s = String::from("self");
-            for (n, t) in m.param_names.iter().skip(1).zip(m.arg_tys.iter()) {
+            let mut inserted_kw_marker = false;
+            for ((n, t), default) in m
+                .param_names
+                .iter()
+                .skip(1)
+                .zip(m.arg_tys.iter())
+                .zip(m.arg_defaults.iter())
+            {
+                if default.is_some() && !inserted_kw_marker {
+                    s.push_str(", *");
+                    inserted_kw_marker = true;
+                }
                 s.push_str(", ");
-                s.push_str(n);
-                s.push_str(": ");
-                s.push_str(&translate_ty(t, ctx));
+                s.push_str(&render_param_pyi(n, t, default.as_ref(), ctx));
             }
             s
         }
@@ -1213,7 +1250,7 @@ fn render_function_signature_pyi(f: &PyFunction, ctx: &TranslateCtx) -> String {
     } else {
         ""
     };
-    let typed_params = render_typed_params(&f.param_names, &f.arg_tys, ctx);
+    let typed_params = render_typed_params(&f.param_names, &f.arg_tys, &f.arg_defaults, ctx);
     let ret_py = translate_ty(&f.return_ty, ctx);
     match f.docstring.as_deref() {
         Some(doc) => {
@@ -1230,17 +1267,69 @@ fn render_function_signature_pyi(f: &PyFunction, ctx: &TranslateCtx) -> String {
     }
 }
 
-fn render_typed_params(names: &[String], tys: &[Ty], ctx: &TranslateCtx) -> String {
+fn render_typed_params(
+    names: &[String],
+    tys: &[Ty],
+    defaults: &[Option<FunctionArgumentDefault>],
+    ctx: &TranslateCtx,
+) -> String {
     let mut s = String::new();
-    for (i, (n, t)) in names.iter().zip(tys.iter()).enumerate() {
-        if i > 0 {
+    let mut inserted_kw_marker = false;
+    for (i, ((n, t), default)) in names
+        .iter()
+        .zip(tys.iter())
+        .zip(defaults.iter())
+        .enumerate()
+    {
+        if default.is_some() && !inserted_kw_marker {
+            if !s.is_empty() {
+                s.push_str(", ");
+            }
+            s.push('*');
+            inserted_kw_marker = true;
+        }
+        if i > 0 || inserted_kw_marker {
             s.push_str(", ");
         }
-        s.push_str(n);
-        s.push_str(": ");
-        s.push_str(&translate_ty(t, ctx));
+        s.push_str(&render_param_pyi(n, t, default.as_ref(), ctx));
     }
     s
+}
+
+fn render_param_pyi(
+    name: &str,
+    ty: &Ty,
+    default: Option<&FunctionArgumentDefault>,
+    ctx: &TranslateCtx,
+) -> String {
+    let mut s = format!("{name}: {}", translate_ty(ty, ctx));
+    if let Some(default) = default {
+        s.push_str(" = ");
+        s.push_str(&render_default_pyi(default));
+    }
+    s
+}
+
+fn render_default_pyi(default: &FunctionArgumentDefault) -> String {
+    match default {
+        FunctionArgumentDefault::Null => "None".to_string(),
+        FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(lit)) => {
+            render_literal_default(lit)
+        }
+        FunctionArgumentDefault::Literal(DefaultLiteral::EmptyList) => "[]".to_string(),
+        FunctionArgumentDefault::Literal(DefaultLiteral::EmptyMap) => "{}".to_string(),
+        FunctionArgumentDefault::Expression { .. } => "...".to_string(),
+    }
+}
+
+fn render_literal_default(lit: &Literal) -> String {
+    match lit {
+        Literal::Int(value) => value.to_string(),
+        Literal::Float(value) => value.clone(),
+        Literal::String(value) => py_string(value),
+        Literal::Bool(true) => "True".to_string(),
+        Literal::Bool(false) => "False".to_string(),
+    }
 }
 
 /// Mirrors `render_leaf_body` with these differences: no

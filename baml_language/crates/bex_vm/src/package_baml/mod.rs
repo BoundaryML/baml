@@ -44,7 +44,7 @@ use indexmap::IndexMap;
 
 use crate::{
     BexVm,
-    errors::{VmInternalError, VmRustFnError},
+    errors::{VmBamlError, VmInternalError, VmRustFnError},
 };
 
 /// Result type for native functions.
@@ -141,6 +141,11 @@ pub(super) fn make_to_json_callee(vm: &mut BexVm, v: Value) -> Result<HeapPtr, V
         Value::Bool(_) => "baml.Bool.to_json".to_string(),
         Value::Int(_) => "baml.Int.to_json".to_string(),
         Value::Float(_) => "baml.Float.to_json".to_string(),
+        Value::OmittedArg => {
+            return Err(VmRustFnError::BamlError(VmBamlError::InvalidArgument {
+                message: "omitted argument cannot be converted to json".to_string(),
+            }));
+        }
         Value::Object(ptr) => match vm.get_object(ptr) {
             Object::String(_) => "baml.String.to_json".to_string(),
             Object::Array(_) => "baml.Array.to_json".to_string(),
@@ -236,6 +241,7 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 stream_return_type: function.stream_return_type,
                 param_names: function.param_names,
                 param_types: function.param_types,
+                param_has_default: function.param_has_default,
                 throws_type: function.throws_type,
                 origin: function.origin,
                 body_meta: function.body_meta,

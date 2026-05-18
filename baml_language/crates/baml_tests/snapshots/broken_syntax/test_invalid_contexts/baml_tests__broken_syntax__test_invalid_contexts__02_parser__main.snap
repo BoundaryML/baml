@@ -29,9 +29,10 @@ SOURCE_FILE
                 WORD "assert"
                 DOT "."
                 WORD "is_true"
-              CALL_ARGS "(true)"
+              CALL_ARGS
                 L_PAREN "("
-                WORD "true"
+                CALL_ARG "true"
+                  WORD "true"
                 R_PAREN ")"
             R_BRACE "}"
         R_BRACE "}"
@@ -70,9 +71,10 @@ SOURCE_FILE
                     WORD "assert"
                     DOT "."
                     WORD "is_true"
-                  CALL_ARGS "(true)"
+                  CALL_ARGS
                     L_PAREN "("
-                    WORD "true"
+                    CALL_ARG "true"
+                      WORD "true"
                     R_PAREN ")"
                 R_BRACE "}"
             R_BRACE "}"
@@ -83,7 +85,7 @@ SOURCE_FILE
       QUOTE """
       WORD "top"
       WORD "level"
-      WORD "is"
+      KW_IS "is"
       WORD "fine"
       QUOTE """
     BLOCK_EXPR
@@ -93,9 +95,10 @@ SOURCE_FILE
           WORD "assert"
           DOT "."
           WORD "is_true"
-        CALL_ARGS "(true)"
+        CALL_ARGS
           L_PAREN "("
-          WORD "true"
+          CALL_ARG "true"
+            WORD "true"
           R_PAREN ")"
       R_BRACE "}"
   TESTSET_DEF
@@ -105,7 +108,7 @@ SOURCE_FILE
       WORD "top"
       WORD "level"
       WORD "set"
-      WORD "is"
+      KW_IS "is"
       WORD "fine"
       QUOTE """
     BLOCK_EXPR
@@ -115,7 +118,7 @@ SOURCE_FILE
         STRING_LITERAL "nested is fine"
           QUOTE """
           WORD "nested"
-          WORD "is"
+          KW_IS "is"
           WORD "fine"
           QUOTE """
         BLOCK_EXPR
@@ -125,9 +128,10 @@ SOURCE_FILE
               WORD "assert"
               DOT "."
               WORD "is_true"
-            CALL_ARGS "(true)"
+            CALL_ARGS
               L_PAREN "("
-              WORD "true"
+              CALL_ARG "true"
+                WORD "true"
               R_PAREN ")"
           R_BRACE "}"
       R_BRACE "}"

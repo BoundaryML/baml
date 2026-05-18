@@ -26,6 +26,7 @@ fn format_value_recursive(
     }
 
     match value {
+        Value::OmittedArg => Ok("<omitted>".to_string()),
         Value::Null => Ok("null".to_string()),
         Value::Int(i) => Ok(i.to_string()),
         Value::Float(f) => Ok(format_float(*f)),

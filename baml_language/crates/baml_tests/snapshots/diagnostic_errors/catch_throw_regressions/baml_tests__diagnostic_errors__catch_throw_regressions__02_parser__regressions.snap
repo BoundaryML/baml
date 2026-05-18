@@ -81,9 +81,10 @@ SOURCE_FILE
         L_BRACE "{"
         CALL_EXPR
           WORD "AlwaysThrowsStatus"
-          CALL_ARGS "(n)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "n"
+            CALL_ARG "n"
+              WORD "n"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -106,9 +107,10 @@ SOURCE_FILE
         CATCH_EXPR
           CALL_EXPR
             WORD "WrapperAlwaysThrows"
-            CALL_ARGS "(n)"
+            CALL_ARGS
               L_PAREN "("
-              WORD "n"
+              CALL_ARG "n"
+                WORD "n"
               R_PAREN ")"
           CATCH_CLAUSE
             KW_CATCH "catch"
@@ -244,9 +246,10 @@ SOURCE_FILE
         CATCH_EXPR
           CALL_EXPR
             WORD "ThrowsAllStatusVariants"
-            CALL_ARGS "(n)"
+            CALL_ARGS
               L_PAREN "("
-              WORD "n"
+              CALL_ARG "n"
+                WORD "n"
               R_PAREN ")"
           CATCH_CLAUSE
             KW_CATCH "catch"
@@ -376,9 +379,10 @@ SOURCE_FILE
             FAT_ARROW "=>"
             CALL_EXPR
               WORD "RecB"
-              CALL_ARGS "(n)"
+              CALL_ARGS
                 L_PAREN "("
-                WORD "n"
+                CALL_ARG "n"
+                  WORD "n"
                 R_PAREN ")"
           R_BRACE "}"
         R_BRACE "}"
@@ -401,9 +405,10 @@ SOURCE_FILE
         L_BRACE "{"
         CALL_EXPR
           WORD "RecA"
-          CALL_ARGS "(n)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "n"
+            CALL_ARG "n"
+              WORD "n"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -426,9 +431,10 @@ SOURCE_FILE
         CATCH_EXPR
           CALL_EXPR
             WORD "RecB"
-            CALL_ARGS "(n)"
+            CALL_ARGS
               L_PAREN "("
-              WORD "n"
+              CALL_ARG "n"
+                WORD "n"
               R_PAREN ")"
           CATCH_CLAUSE
             KW_CATCH "catch"

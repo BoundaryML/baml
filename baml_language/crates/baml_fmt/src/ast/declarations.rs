@@ -484,6 +484,7 @@ pub struct FunctionParam {
     pub name: t::Word,
     /// Type annotation with optional colon (colon is optional per BEP-019).
     pub ty: Option<(Option<t::Colon>, Type)>,
+    pub default: Option<(t::Equals, Expression)>,
 }
 
 impl FromCST for FunctionParam {
@@ -512,9 +513,20 @@ impl FromCST for FunctionParam {
             None
         };
 
+        let default = if let Some(equals) = it.next_if_kind(SyntaxKind::EQUALS) {
+            let equals = t::Equals::from_cst(equals)?;
+            let expr_elem = it
+                .next()
+                .ok_or_else(|| StrongAstError::missing_desc("default expression", it.parent))?;
+            let expr = Expression::from_cst(expr_elem)?;
+            Some((equals, expr))
+        } else {
+            None
+        };
+
         it.expect_end()?;
 
-        Ok(FunctionParam { name, ty })
+        Ok(FunctionParam { name, ty, default })
     }
 }
 
@@ -527,7 +539,7 @@ impl KnownKind for FunctionParam {
 impl Printable for FunctionParam {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.print_raw_token(&self.name);
-        if let Some((colon, ty)) = &self.ty {
+        let mut info = if let Some((colon, ty)) = &self.ty {
             let mut trivia_len = 0;
             // Colon is optional per BEP-019; synthesize if absent
             if let Some(colon) = colon {
@@ -549,15 +561,39 @@ impl Printable for FunctionParam {
             ty.print(ty_shape, printer)
         } else {
             PrintInfo::default_single_line()
+        };
+
+        if let Some((equals, default)) = &self.default {
+            let prev_token = self
+                .ty
+                .as_ref()
+                .map_or_else(|| self.name.span(), |(_, ty)| ty.rightmost_token());
+            let (_, prev_trailing) = printer.trivia.get_for_range_split(prev_token);
+            let (equals_leading, equals_trailing) =
+                printer.trivia.get_for_range_split(equals.span());
+            printer.print_trivia_squished(prev_trailing);
+            printer.print_trivia_squished(equals_leading);
+            printer.print_str(" = ");
+            printer.print_trivia_squished(equals_trailing);
+            let leading = printer.trivia.get_leading_for_element(default);
+            printer.print_trivia_squished(leading);
+            info = printer.print(default, shape);
         }
+
+        info
     }
     fn leftmost_token(&self) -> TextRange {
         self.name.span()
     }
     fn rightmost_token(&self) -> TextRange {
-        self.ty
-            .as_ref()
-            .map_or(self.name.span(), |(_, ty)| ty.rightmost_token())
+        self.default.as_ref().map_or_else(
+            || {
+                self.ty
+                    .as_ref()
+                    .map_or(self.name.span(), |(_, ty)| ty.rightmost_token())
+            },
+            |(_, default)| default.rightmost_token(),
+        )
     }
 }
 

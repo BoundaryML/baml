@@ -86,7 +86,21 @@ pub struct Tlab {
 }
 
 impl Tlab {
-    /// Create a new TLAB with an initial chunk from the heap.
+    /// Create a new TLAB with an initial chunk eagerly reserved from the
+    /// heap.
+    ///
+    /// **Avoid in production code paths.** Reserving a chunk here happens
+    /// outside any [`HeapPermitManager`](crate::HeapPermitManager) permit;
+    /// if a concurrent GC clears Gen0 before the caller registers as a
+    /// holder and acquires its permit, this TLAB's cursor is left pointing
+    /// into a freed/cleared region. Subsequent allocations panic with
+    /// `index N out of bounds (len=0)` (debug) or segfault (release).
+    ///
+    /// Permit-managed holders (`BexVm`, `FutureManagerInner`, …) must use
+    /// [`Tlab::new_empty`] so the first refill happens under a held permit.
+    /// `Tlab::new` is retained for standalone heap tests that exercise
+    /// TLAB mechanics without the permit infrastructure (those tests
+    /// guarantee single-threaded access).
     pub fn new(heap: Arc<BexHeap>) -> Self {
         let chunk = heap.alloc_tlab_chunk();
         Self {
@@ -98,7 +112,11 @@ impl Tlab {
 
     /// Create a TLAB without allocating an initial chunk.
     ///
-    /// The first allocation will trigger a refill.
+    /// The first allocation will trigger a refill. This is the right
+    /// constructor for permit-managed holders: it defers the
+    /// `alloc_tlab_chunk` call until the holder has been registered with
+    /// [`HeapPermitManager`](crate::HeapPermitManager) and acquired its
+    /// permit, so a concurrent GC cannot strand the TLAB cursor.
     pub fn new_empty(heap: Arc<BexHeap>) -> Self {
         Self {
             alloc_ptr: 0,

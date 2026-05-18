@@ -110,6 +110,136 @@ fn unresolved_variable_in_let() {
     ");
 }
 
+// ── Optional function parameters ─────────────────────────────────────────
+
+#[test]
+fn optional_params_accept_omission_and_named_override() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function search(query: string, max: int = 10) -> string { query }
+function f() -> string {
+    let a = search("cats")
+    return search("dogs", max = 5)
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    insta::assert_snapshot!("optional_params_accept_omission_and_named_override", tir);
+    assert!(
+        tir.contains("function user.search(query: string, max: int = 10) -> string"),
+        "{tir}"
+    );
+    assert!(tir.contains("let a = search(\"cats\") : string"), "{tir}");
+    assert!(
+        tir.contains("return search(\"dogs\", max = 5) : string"),
+        "{tir}"
+    );
+    assert!(!tir.contains("!!"), "unexpected diagnostics:\n{tir}");
+}
+
+#[test]
+fn optional_param_call_binding_diagnostics() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function search(query: string, max: int = 10) -> string { query }
+function positional_default() -> string { search("cats", 5) }
+function positional_after_named() -> string { search(query = "cats", 5) }
+function duplicate_named() -> string { search(query = "cats", max = 1, max = 2) }
+function unknown_named() -> string { search(q = "cats") }
+"#,
+    );
+    let tir = render_tir(&db, file);
+    insta::assert_snapshot!("optional_param_call_binding_diagnostics", tir);
+    assert!(tir.contains("defaulted parameter `max` must be passed by name"));
+    assert!(tir.contains("positional arguments cannot appear after named arguments"));
+    assert!(tir.contains("duplicate named argument `max`"));
+    assert!(tir.contains("unknown named argument `q`"));
+    assert!(tir.contains("missing required argument `query`"));
+}
+
+#[test]
+fn optional_param_default_declaration_diagnostics() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function type_mismatch(a: int = "bad") -> int { a }
+function forward_ref(a: int = b, b: int = 1) -> int { a }
+function forward_ref_in_match(seed: int, a: int = match (seed) { 1 => b, _ => 0 }, b: int = 1) -> int { a }
+function required_after_default(a: int = 1, b: int) -> int { b }
+"#,
+    );
+    let tir = render_tir(&db, file);
+    insta::assert_snapshot!("optional_param_default_declaration_diagnostics", tir);
+    assert!(tir.contains("type mismatch: expected int, got \"bad\""));
+    assert!(tir.contains("default for parameter `a` cannot reference later parameter `b`"));
+    assert!(tir.contains("function user.forward_ref_in_match"));
+    assert!(tir.contains("required parameter `b` cannot appear after a defaulted parameter"));
+}
+
+#[test]
+fn optional_param_default_forward_reference_is_scope_aware() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function shadow_later_param(a: int = { let b = 1; b }, b: int = 2) -> int { a }
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        !tir.contains("default for parameter `a` cannot reference later parameter `b`"),
+        "{tir}"
+    );
+}
+
+#[test]
+fn optional_param_default_forward_reference_checks_lambda_bodies() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function lambda_capture_later_param(a: int = { let f = () -> int { b }; f() }, b: int = 1) -> int { a }
+"#,
+    );
+    let tir = render_tir(&db, file);
+    insta::assert_snapshot!(
+        "optional_param_default_forward_reference_checks_lambda_bodies",
+        tir.as_str()
+    );
+    assert!(
+        tir.contains("default for parameter `a` cannot reference later parameter `b`"),
+        "{tir}"
+    );
+}
+
+#[test]
+fn self_param_default_reports_single_semantic_error() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Counter {
+  value int
+
+  function Current(self = null) -> int {
+    self.value
+  }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert_eq!(tir.matches("`self` cannot have a default value").count(), 1);
+    assert!(
+        !tir.contains("type mismatch: expected user.Counter, got null"),
+        "{tir}"
+    );
+}
+
 // ── 3A-4. ArgumentCountMismatch diagnostic ───────────────────────────────
 
 #[test]

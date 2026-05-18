@@ -8,6 +8,22 @@
 //!   to inactive, swaps inactive↔Gen2, clears Gen0 and Gen1
 //! - **Compacting**: No fragmentation; all live objects are contiguous in Gen2
 //! - **Handle-aware**: Handles updated to point to new object locations
+//!
+//! # Invariant: compile-time objects do not contain runtime `HeapPtr`s
+//!
+//! When the BFS in `copy_collection` / `collect_garbage_minor` encounters a
+//! compile-time pointer it identity-maps it into `forwarding` and stops —
+//! it does **not** call `add_references_to_worklist` on the compile-time
+//! object's payload. This shortcut is sound only because every compile-time
+//! `Object` variant (`Function`, `Class`, `Enum`, `Type`) is a leaf with no
+//! `HeapPtr` fields. If a future change adds a runtime-`HeapPtr` field to
+//! one of those variants, the BFS would silently miss anything reachable
+//! only through it and the GC would reclaim live objects.
+//!
+//! `add_references_to_worklist` carries a `debug_assert!` that fires if it
+//! is ever handed a compile-time pointer whose payload would have produced
+//! a runtime reference, so a regression of this invariant surfaces as an
+//! immediate panic in debug builds (and under `heap_debug`).
 
 use std::{cell::UnsafeCell, collections::HashMap};
 
@@ -156,8 +172,25 @@ impl BexHeap {
                 continue;
             }
 
-            // Compile-time objects are permanent — keep their pointer unchanged.
+            // Compile-time objects are permanent — keep their pointer
+            // unchanged and skip tracing their outgoing references (see
+            // the module-level "compile-time objects do not contain
+            // runtime HeapPtrs" invariant).
             if self.is_compile_time_ptr(old_ptr) {
+                #[cfg(debug_assertions)]
+                {
+                    // SAFETY: GC runs at safepoints; the compile-time
+                    // object's payload is stable for the program lifetime.
+                    let obj = unsafe { old_ptr.get() };
+                    let mut tmp = Vec::new();
+                    self.add_references_to_worklist(obj, &mut tmp);
+                    debug_assert!(
+                        tmp.iter().all(|p| self.is_compile_time_ptr(*p)),
+                        "compile-time object {old_ptr:?} contains a runtime \
+                         HeapPtr — module-level invariant violated; the GC's \
+                         compile-time shortcut would silently miss it"
+                    );
+                }
                 forwarding.insert(old_ptr, old_ptr);
                 continue;
             }
@@ -207,6 +240,19 @@ impl BexHeap {
 
         // Poison or clear the inactive space (now holds old-space debris).
         self.finalize_inactive_space();
+
+        // Bug H, check 2 (heap_debug only): after a Major GC, every live
+        // object lives in compile_time or Gen2 (Gen0 and Gen1 were just
+        // cleared). Walk every Gen2 object's outgoing references and
+        // assert each lands in compile_time or Gen2 — anything else means
+        // a write barrier was missed when the reference was originally
+        // installed, so `value_mut_for_fixup` / dirty-card scan didn't
+        // patch it and it now points into a cleared region.
+        #[cfg(feature = "heap_debug")]
+        // SAFETY: GC safepoint, all permits parked.
+        unsafe {
+            self.debug_assert_post_major_no_dead_refs();
+        }
 
         // Remap each root to its new location (or keep it if it was compile-time).
         let remapped_roots: Vec<HeapPtr> = roots
@@ -341,6 +387,41 @@ impl BexHeap {
             | Object::RustData(_)
             | Object::Collector(_)
             | Object::Type(_) => {}
+        }
+    }
+
+    /// Bug H, check 2 (heap_debug only): after a Major GC, every Gen2
+    /// object's outgoing heap references must land in compile_time or
+    /// Gen2. Anything else means the reference was installed without
+    /// firing a write barrier (so dirty-card scan didn't surface it),
+    /// and now points into the cleared Gen0/Gen1.
+    ///
+    /// # Safety
+    /// Must be called only at a GC safepoint (all permits parked).
+    #[cfg(feature = "heap_debug")]
+    unsafe fn debug_assert_post_major_no_dead_refs(&self) {
+        // SAFETY: caller is at a GC safepoint.
+        unsafe {
+            let gen2 = &*self.gen2.get();
+            let mut refs = Vec::new();
+            for runtime_idx in 0..gen2.len() {
+                let obj = gen2.get(runtime_idx);
+                refs.clear();
+                self.add_references_to_worklist(obj, &mut refs);
+                for &ref_ptr in &refs {
+                    let generation = self.generation_of(ref_ptr);
+                    assert!(
+                        matches!(
+                            generation,
+                            crate::heap::Generation::CompileTime | crate::heap::Generation::Gen2
+                        ),
+                        "heap_debug: post-Major Gen2 object at runtime_idx={runtime_idx} \
+                         (variant {:?}) holds a reference to {ref_ptr:?} in {generation:?} — \
+                         a write barrier was missed when this reference was stored",
+                        bex_vm_types::ObjectType::of(obj),
+                    );
+                }
+            }
         }
     }
 
@@ -1803,14 +1884,18 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         let result = tlab.alloc_string("result".to_string());
-        let future = Future::pending(
+        // Allocate the Future in `Pending` state first so we have a real
+        // `HeapPtr` to pass to `settle_ready` for its write-barrier hook.
+        let future_ptr = tlab.alloc(Object::Future(Future::pending(
             FutureId::from_usize(0),
             bex_vm_types::types::CancellationToken::new(),
-        );
+        )));
+        let Object::Future(future) = (unsafe { future_ptr.get() }) else {
+            panic!("expected Object::Future");
+        };
         // SAFETY: this Future is local and not yet visible; CAS will win.
-        let ok = unsafe { future.settle_ready(Value::Object(result)) };
+        let ok = unsafe { future.settle_ready(heap.as_ref(), future_ptr, Value::Object(result)) };
         assert!(ok);
-        let future_ptr = tlab.alloc(Object::Future(future));
 
         let roots = vec![future_ptr];
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&roots) };
@@ -1835,14 +1920,16 @@ mod tests {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
-        let future = Future::pending(
+        let future_ptr = tlab.alloc(Object::Future(Future::pending(
             FutureId::from_usize(0),
             bex_vm_types::types::CancellationToken::new(),
-        );
+        )));
+        let Object::Future(future) = (unsafe { future_ptr.get() }) else {
+            panic!("expected Object::Future");
+        };
         // SAFETY: this Future is local and not yet visible; CAS will win.
-        let ok = unsafe { future.settle_ready(Value::Int(99)) };
+        let ok = unsafe { future.settle_ready(heap.as_ref(), future_ptr, Value::Int(99)) };
         assert!(ok);
-        let future_ptr = tlab.alloc(Object::Future(future));
         let roots = vec![future_ptr];
         let (stats, _, _) = unsafe { heap.collect_garbage(&roots) };
 

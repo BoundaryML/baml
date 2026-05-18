@@ -49,6 +49,7 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Throw => SyntaxKind::KW_THROW,
         TokenKind::Watch => SyntaxKind::KW_WATCH,
         TokenKind::Instanceof => SyntaxKind::KW_INSTANCEOF,
+        TokenKind::Is => SyntaxKind::KW_IS,
         TokenKind::Dynamic => SyntaxKind::KW_DYNAMIC,
         TokenKind::Match => SyntaxKind::KW_MATCH,
         TokenKind::Catch => SyntaxKind::KW_CATCH,
@@ -436,6 +437,41 @@ impl<'a> Parser<'a> {
             i += 1;
         }
         i
+    }
+
+    fn previous_non_trivia_span(&self) -> Option<Span> {
+        let mut i = self.current;
+        while i > 0 {
+            i -= 1;
+            let token = &self.tokens[i];
+            if !self.is_basic_trivia(token.kind) {
+                return Some(token.span);
+            }
+        }
+        None
+    }
+
+    fn span_from_to(start: Span, end: Span) -> Span {
+        if start.file_id != end.file_id {
+            return start;
+        }
+        Span::new(
+            start.file_id,
+            TextRange::new(start.range.start(), end.range.end()),
+        )
+    }
+
+    fn parse_default_expr(&mut self) -> Span {
+        let start = self.current().map(|token| token.span);
+        // Same invariant as let initializers: assignment-like operators do not
+        // bind inside parameter default expressions.
+        self.parse_expr_bp(3);
+        match (start, self.previous_non_trivia_span()) {
+            (Some(start), Some(end)) => Self::span_from_to(start, end),
+            (Some(start), None) => start,
+            (None, Some(end)) => end,
+            (None, None) => Span::default(),
+        }
     }
 
     /// Skip a parenthesized argument list starting at `(`, returning the index after it.
@@ -2115,14 +2151,25 @@ impl<'a> Parser<'a> {
         // Check if this is `name: type` by looking ahead
         // If we see WORD followed by COLON (skipping trivia), it's a named param
         let is_named = (self.at(TokenKind::Word) || self.at(TokenKind::Client))
-            && self.peek(1).map(|t| t.kind) == Some(TokenKind::Colon);
+            && matches!(
+                (self.peek(1).map(|t| t.kind), self.peek(2).map(|t| t.kind)),
+                (Some(TokenKind::Colon), _) | (Some(TokenKind::Question), Some(TokenKind::Colon))
+            );
 
         if is_named {
             // Named parameter: `name: type`
             self.with_node(SyntaxKind::FUNCTION_TYPE_PARAM, |p| {
                 p.bump(); // name
-                p.bump(); // :
+                p.eat(TokenKind::Question); // optional parameter marker: `name?: T`
+                p.expect(TokenKind::Colon);
                 p.parse_type();
+                if p.eat(TokenKind::Equals) {
+                    let span = p.parse_default_expr();
+                    p.error(
+                        "default expressions are not allowed in function types".to_string(),
+                        span,
+                    );
+                }
             });
             true
         } else {
@@ -2500,7 +2547,11 @@ impl<'a> Parser<'a> {
             // Type annotation - colon is optional per BEP-019
             // 'self' parameter does not have a type annotation
             if is_self {
-                // No type annotation for self
+                // No type annotation for self, but consume an optional default
+                // for recovery so lowering can emit a context-specific diagnostic.
+                if p.eat(TokenKind::Equals) {
+                    p.parse_default_expr();
+                }
                 return;
             }
 
@@ -2514,6 +2565,10 @@ impl<'a> Parser<'a> {
                 p.parse_type();
             } else {
                 p.error_unexpected_token("type annotation".to_string());
+            }
+
+            if p.eat(TokenKind::Equals) {
+                p.parse_default_expr();
             }
         });
     }
@@ -2782,6 +2837,10 @@ impl<'a> Parser<'a> {
             // Optional type annotation: "name: type"
             if p.eat(TokenKind::Colon) {
                 p.parse_type();
+            }
+
+            if p.eat(TokenKind::Equals) {
+                p.parse_default_expr();
             }
         });
     }
@@ -4086,6 +4145,18 @@ impl<'a> Parser<'a> {
                     // Don't consume the brace - it's likely a block/body for an outer construct
                     break;
                 }
+            } else if op == TokenKind::Is {
+                // `<expr> is <pattern>` — Rust `matches!`-style pattern test.
+                // Same binding power as comparison operators (18, 19).
+                let left_bp = 18u8;
+                if left_bp < min_bp {
+                    break;
+                }
+                let lhs_start = self.find_previous_expr_start_after(expr_start);
+                self.bump(); // is
+                self.parse_pattern();
+                self.wrap_events_in_node(lhs_start, SyntaxKind::IS_EXPR);
+                self.finish_node();
             } else if let Some((left_bp, right_bp)) = Self::infix_binding_power(op) {
                 // General infix operators (including < when it's not generic args)
                 if left_bp < min_bp {
@@ -4402,17 +4473,29 @@ impl<'a> Parser<'a> {
             p.expect(TokenKind::LParen);
 
             if !p.at(TokenKind::RParen) {
-                p.parse_expr();
+                p.parse_call_arg();
 
                 while p.eat(TokenKind::Comma) {
                     if p.at(TokenKind::RParen) {
                         break; // Trailing comma
                     }
-                    p.parse_expr();
+                    p.parse_call_arg();
                 }
             }
 
             p.expect(TokenKind::RParen);
+        });
+    }
+
+    fn parse_call_arg(&mut self) {
+        self.with_node(SyntaxKind::CALL_ARG, |p| {
+            if (p.at(TokenKind::Word) || p.at(TokenKind::Client))
+                && p.peek(1).map(|t| t.kind) == Some(TokenKind::Equals)
+            {
+                p.bump();
+                p.expect(TokenKind::Equals);
+            }
+            p.parse_expr();
         });
     }
 
@@ -5738,6 +5821,23 @@ mod tests {
             errors.is_empty(),
             "expected no parse errors, got: {errors:#?}"
         );
+    }
+
+    #[test]
+    fn is_expr_parses_at_comparison_precedence() {
+        // `<expr> is <pattern>` should produce an IS_EXPR node, parsed at the
+        // same binding power as comparison operators. Verifies the parser
+        // accepts a bare type-pattern RHS, an or-pattern RHS, and `is` chained
+        // with `&&` (where `&&` is lower precedence so wraps both `is` nodes).
+        let source =
+            "function f() -> bool {\n  let v: int | string = 1\n  v is int && v is int | bool\n}\n";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let is_count = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::IS_EXPR)
+            .count();
+        assert_eq!(is_count, 2, "expected two IS_EXPR nodes");
     }
 
     #[test]
@@ -7141,5 +7241,167 @@ function Demo() -> int {
             )
         });
         assert!(!has_in, "C-style for must not contain KW_IN");
+    }
+
+    #[test]
+    fn function_parameter_defaults_parse() {
+        let source = r#"
+function Search(query: string, max_results: int = 10, filter: string = "none") -> int {
+  1
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let params: Vec<_> = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::PARAMETER)
+            .collect();
+        assert_eq!(params.len(), 3);
+        assert!(
+            params[1].children_with_tokens().any(
+                |it| matches!(it, rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::EQUALS)
+            ),
+            "expected second parameter to preserve default equals token"
+        );
+        assert!(
+            params[2].children_with_tokens().any(
+                |it| matches!(it, rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::EQUALS)
+            ),
+            "expected third parameter to preserve default equals token"
+        );
+    }
+
+    #[test]
+    fn self_parameter_default_recovery_parse() {
+        let source = r#"
+class Response {
+  function text(self = default_self()) -> string {
+    "ok"
+  }
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let self_param = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::PARAMETER && n.text().to_string().contains("self"))
+            .expect("expected self PARAMETER node");
+        assert!(
+            self_param.children_with_tokens().any(
+                |it| matches!(it, rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::EQUALS)
+            ),
+            "expected self parameter recovery to preserve default equals token"
+        );
+    }
+
+    #[test]
+    fn lambda_parameter_defaults_parse_for_recovery() {
+        let source = r#"
+function Demo() -> int {
+  let f = (x: int = 1) -> int {
+    x
+  }
+  f()
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let lambda_param = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::LAMBDA_EXPR)
+            .and_then(|lambda| {
+                lambda
+                    .descendants()
+                    .find(|n| n.kind() == SyntaxKind::PARAMETER)
+            })
+            .expect("expected lambda PARAMETER node");
+        assert!(
+            lambda_param.children_with_tokens().any(
+                |it| matches!(it, rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::EQUALS)
+            ),
+            "expected lambda parameter default equals token"
+        );
+    }
+
+    #[test]
+    fn function_type_parameter_default_reports_error_and_recovers() {
+        let source = r#"
+type Searcher = (query: string = make_default("cats"), limit?: int) -> int
+"#;
+        let (root, errors) = parse_source(source);
+
+        let default_error_span = errors.iter().find_map(|error| match error {
+            ParseError::InvalidSyntax { message, span }
+                if message == "default expressions are not allowed in function types" =>
+            {
+                Some(span.range)
+            }
+            _ => None,
+        });
+        assert!(
+            default_error_span.is_some(),
+            "expected function type default diagnostic, got: {errors:#?}"
+        );
+        let default_error_span = default_error_span.unwrap();
+        let default_start = source.find("make_default").unwrap();
+        let default_end = source.find(", limit").unwrap();
+        assert_eq!(
+            u32::from(default_error_span.start()) as usize,
+            default_start
+        );
+        assert_eq!(u32::from(default_error_span.end()) as usize, default_end);
+        assert!(
+            root.descendants()
+                .any(|n| n.kind() == SyntaxKind::TYPE_ALIAS_DEF),
+            "expected parser to recover through the type alias"
+        );
+        assert_eq!(
+            root.descendants()
+                .filter(|n| n.kind() == SyntaxKind::FUNCTION_TYPE_PARAM)
+                .count(),
+            2,
+            "expected parser to recover and keep both function type params"
+        );
+    }
+
+    #[test]
+    fn named_call_arguments_parse_as_call_args() {
+        let source = r#"
+function Demo() -> int {
+  Search(query = "cats", max_results = 5)
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let call_args: Vec<_> = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::CALL_ARG)
+            .collect();
+        assert_eq!(call_args.len(), 2);
+        assert!(call_args.iter().all(|arg| arg.children_with_tokens().any(
+            |it| matches!(it, rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::EQUALS)
+        )));
+    }
+
+    #[test]
+    fn function_type_optional_params_parse() {
+        let source = r#"
+type Searcher = (query: string, max_results?: int) -> int
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let optional_param = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::FUNCTION_TYPE_PARAM)
+            .nth(1)
+            .expect("expected second function type parameter");
+        assert!(optional_param.children_with_tokens().any(
+            |it| matches!(it, rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::QUESTION)
+        ));
     }
 }

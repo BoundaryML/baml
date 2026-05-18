@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 19690
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -81,9 +80,10 @@ SOURCE_FILE
           WORD "assert"
           DOT "."
           WORD "not_null"
-        CALL_ARGS "(result)"
+        CALL_ARGS
           L_PAREN "("
-          WORD "result"
+          CALL_ARG "result"
+            WORD "result"
           R_PAREN ")"
       R_BRACE "}"
 

@@ -144,7 +144,7 @@ SOURCE_FILE
           STRING_LITERAL "This is an extremely detailed description of the variant that pushes the line well past the default formatter line width of one hundred columns"
             QUOTE """
             WORD "This"
-            WORD "is"
+            KW_IS "is"
             WORD "an"
             WORD "extremely"
             WORD "detailed"
