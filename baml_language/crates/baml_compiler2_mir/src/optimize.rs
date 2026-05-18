@@ -956,7 +956,6 @@ fn apply_subst_to_terminator(term: &mut Terminator, subst: &HashMap<Local, Opera
         | Terminator::Unreachable
         | Terminator::Await { .. } => {}
     }
-    // Spawn carries operands but no callee, handled above.
 }
 
 // ============================================================================

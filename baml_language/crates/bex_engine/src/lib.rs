@@ -104,7 +104,7 @@ use web_time::{Instant, SystemTime};
 
 pub use crate::{
     future::{FutureManager, FutureManagerGuard, FutureManagerInner},
-    thread::{BexThread, ChildErrorQueue, ThreadId},
+    thread::{BexThread, ChildErrorQueue},
 };
 
 /// Outcome of running a single [`BexThread`] to termination.
@@ -1429,24 +1429,63 @@ impl BexEngine {
         // is permit-released, so they're not blocking that wait.
     }
 
+    /// Transition the child future settled by `thread` to `Cancelled`
+    /// and fire its cancel token so descendants cascade-cancel.
+    ///
+    /// Cancellations are user-initiated, not unhandled errors, so we
+    /// don't push onto the parent's fire-and-forget queue.
+    async fn settle_child_cancelled(
+        &self,
+        thread: &mut ActiveHeapPermit<BexThread>,
+        future_id: FutureId,
+    ) -> Result<(), EngineError> {
+        let child_cancel = thread.vm_thread_cancel().clone();
+        let mut guard = self.futures.acquire(thread.proof()).await;
+        guard.cancel_future(future_id)?;
+        drop(guard);
+        child_cancel.cancel();
+        Ok(())
+    }
+
+    /// Transition the child future settled by `thread` to `Error(value)`,
+    /// fire its cancel token, and push our settled future ptr onto our
+    /// parent's fire-and-forget error queue per BEP-034 — without this,
+    /// errors on un-awaited children would silently vanish.
+    async fn settle_child_errored(
+        &self,
+        thread: &mut ActiveHeapPermit<BexThread>,
+        future_id: FutureId,
+        value: Value,
+    ) -> Result<(), EngineError> {
+        let child_cancel = thread.vm_thread_cancel().clone();
+        let mut guard = self.futures.acquire(thread.proof()).await;
+        // Snapshot the heap ptr while we still hold the guard — once
+        // the terminal transition runs, the entry is gone.
+        let settled_ptr = guard.future_heap_ptr(future_id);
+        guard.err_future(future_id, value)?;
+        drop(guard);
+        child_cancel.cancel();
+        if let Some(ptr) = settled_ptr {
+            thread.vm_thread_notify_parent_of_error(ptr);
+        }
+        Ok(())
+    }
+
     /// True if `value` is an `Object::Instance` whose class is
     /// `baml.panics.Cancelled`. Used to differentiate cancellation panics
     /// from regular errors when settling a spawned thread that unwound.
-    fn is_cancelled_panic(value: &Value) -> bool {
+    fn is_cancelled_panic(&self, value: &Value) -> bool {
         let Value::Object(ptr) = value else {
+            return false;
+        };
+        let Some(&cancelled_class_ptr) = self.resolved_class_names.get(CANCELLED_PANIC_CLASS)
+        else {
             return false;
         };
         // SAFETY: a Value::Object that escaped a VM exec step is alive on
         // the heap; this read is gated by the caller's active heap permit.
         match unsafe { ptr.get() } {
-            Object::Instance(instance) => {
-                let class_obj = unsafe { instance.class.get() };
-                if let Object::Class(class) = class_obj {
-                    class.name.display_name.as_str() == CANCELLED_PANIC_CLASS
-                } else {
-                    false
-                }
-            }
+            Object::Instance(instance) => instance.class == cancelled_class_ptr,
             _ => false,
         }
     }
@@ -1628,7 +1667,6 @@ impl BexEngine {
             child_cancel,
             name,
             future_id,
-            ThreadId::next(),
             parent_pending_errors,
         );
         let inactive = self.heap_permit_manager.new_permit(child_thread).await;
@@ -1676,42 +1714,17 @@ impl BexEngine {
                     // so the awaiter sees `FutureRead::Cancelled` instead
                     // of an error.
                     if let Some(future_id) = thread.vm_thread_settles_future() {
-                        // Fire the child cancel token so this thread's own
-                        // descendants cascade-cancel on the way down.
-                        let child_cancel = thread.vm_thread_cancel().clone();
-                        let is_cancel_panic =
-                            child_cancel.is_cancelled() && Self::is_cancelled_panic(&value);
-                        // Snapshot the heap ptr that the FutureManager
-                        // entry roots, BEFORE the terminal transition
-                        // removes the entry. Used to notify our parent
-                        // of an unhandled error per BEP-034
-                        // ("propagates to the parent task at its next
-                        // `await` point") — fire-and-forget cases where
-                        // nobody else holds the future would otherwise
-                        // see the error vanish into a tracing log.
-                        let mut guard = self.futures.acquire(thread.proof()).await;
-                        // Snapshot the heap ptr *while we hold the guard*
-                        // — once the terminal helper runs, the entry is
-                        // gone. Used to notify our parent of an unhandled
-                        // error per BEP-034.
-                        let settled_ptr = guard.future_heap_ptr(future_id);
+                        let is_cancel_panic = thread.vm_thread_cancel().is_cancelled()
+                            && self.is_cancelled_panic(&value);
                         if is_cancel_panic {
-                            guard.cancel_future(future_id)?;
+                            self.settle_child_cancelled(&mut thread, future_id).await?;
                         } else {
-                            guard.err_future(future_id, value)?;
-                        }
-                        drop(guard);
-                        child_cancel.cancel();
-                        // Notify parent of the unhandled error so it
-                        // surfaces at the parent's next await checkpoint.
-                        // Cancellation panics are NOT propagated — they
-                        // are user-initiated, not unhandled errors.
-                        if !is_cancel_panic && let Some(ptr) = settled_ptr {
-                            thread.vm_thread_notify_parent_of_error(ptr);
+                            self.settle_child_errored(&mut thread, future_id, value)
+                                .await?;
                         }
                         // Trace info for the child is dropped on the floor
-                        // here — Phase B keeps it engine-local since v1
-                        // spans for spawned bodies are TODO.
+                        // — Phase B keeps it engine-local since v1 spans
+                        // for spawned bodies are TODO.
                         let _ = trace;
                         return Ok(ThreadOutcome::SettledChild);
                     }
@@ -1729,20 +1742,13 @@ impl BexEngine {
                     // Internal throw that escaped without unwinding — treat as
                     // unhandled with no trace.
                     if let Some(future_id) = thread.vm_thread_settles_future() {
-                        let child_cancel = thread.vm_thread_cancel().clone();
-                        let is_cancel_panic =
-                            child_cancel.is_cancelled() && Self::is_cancelled_panic(&value);
-                        let mut guard = self.futures.acquire(thread.proof()).await;
-                        let settled_ptr = guard.future_heap_ptr(future_id);
+                        let is_cancel_panic = thread.vm_thread_cancel().is_cancelled()
+                            && self.is_cancelled_panic(&value);
                         if is_cancel_panic {
-                            guard.cancel_future(future_id)?;
+                            self.settle_child_cancelled(&mut thread, future_id).await?;
                         } else {
-                            guard.err_future(future_id, value)?;
-                        }
-                        drop(guard);
-                        child_cancel.cancel();
-                        if !is_cancel_panic && let Some(ptr) = settled_ptr {
-                            thread.vm_thread_notify_parent_of_error(ptr);
+                            self.settle_child_errored(&mut thread, future_id, value)
+                                .await?;
                         }
                         return Ok(ThreadOutcome::SettledChild);
                     }
@@ -1875,16 +1881,12 @@ impl BexEngine {
                         args.iter().map(|v| self.vm_arg_to_bex_value(v)).collect();
 
                     if cancel.is_cancelled() {
-                        // Inline the cancel-at-yield handling — see the
-                        // matching block in the `Await` arm below for the
-                        // rationale. Spawned children settle as Cancelled
-                        // so the heap Future no longer hangs at Pending.
+                        // Cancel-at-yield: spawned children settle as
+                        // Cancelled so the heap Future no longer hangs
+                        // at Pending; root threads surface the cancel
+                        // to the host.
                         if let Some(future_id) = thread.vm_thread_settles_future() {
-                            let child_cancel = thread.vm_thread_cancel().clone();
-                            let mut guard = self.futures.acquire(thread.proof()).await;
-                            guard.cancel_future(future_id)?;
-                            drop(guard);
-                            child_cancel.cancel();
+                            self.settle_child_cancelled(&mut thread, future_id).await?;
                             return Ok(ThreadOutcome::SettledChild);
                         }
                         return Err(cancelled_unhandled_throw());
@@ -1910,11 +1912,7 @@ impl BexEngine {
                             match outcome {
                                 SysOpOutcome::Cancelled => {
                                     if let Some(future_id) = thread.vm_thread_settles_future() {
-                                        let child_cancel = thread.vm_thread_cancel().clone();
-                                        let mut guard = self.futures.acquire(thread.proof()).await;
-                                        guard.cancel_future(future_id)?;
-                                        drop(guard);
-                                        child_cancel.cancel();
+                                        self.settle_child_cancelled(&mut thread, future_id).await?;
                                         return Ok(ThreadOutcome::SettledChild);
                                     }
                                     return Err(cancelled_unhandled_throw());
@@ -2001,15 +1999,8 @@ impl BexEngine {
                         // error, and our parent's queue gets us too);
                         // otherwise surface as unhandled to the host.
                         if let Some(our_future_id) = thread.vm_thread_settles_future() {
-                            let our_cancel = thread.vm_thread_cancel().clone();
-                            let mut guard = self.futures.acquire(thread.proof()).await;
-                            let our_settled_ptr = guard.future_heap_ptr(our_future_id);
-                            guard.err_future(our_future_id, value)?;
-                            drop(guard);
-                            our_cancel.cancel();
-                            if let Some(ptr) = our_settled_ptr {
-                                thread.vm_thread_notify_parent_of_error(ptr);
-                            }
+                            self.settle_child_errored(&mut thread, our_future_id, value)
+                                .await?;
                             return Ok(ThreadOutcome::SettledChild);
                         }
                         let external = self.vm_value_to_owned(thread.proof(), &value);
@@ -2033,11 +2024,7 @@ impl BexEngine {
                     // arm above for a Cancelled panic from the VM side.
                     if cancel.is_cancelled() {
                         if let Some(future_id) = thread.vm_thread_settles_future() {
-                            let child_cancel = thread.vm_thread_cancel().clone();
-                            let mut guard = self.futures.acquire(thread.proof()).await;
-                            guard.cancel_future(future_id)?;
-                            drop(guard);
-                            child_cancel.cancel();
+                            self.settle_child_cancelled(&mut thread, future_id).await?;
                             return Ok(ThreadOutcome::SettledChild);
                         }
                         return Err(cancelled_unhandled_throw());
@@ -2080,11 +2067,7 @@ impl BexEngine {
                     match outcome {
                         AwaitOutcome::Cancelled => {
                             if let Some(future_id) = thread.vm_thread_settles_future() {
-                                let child_cancel = thread.vm_thread_cancel().clone();
-                                let mut guard = self.futures.acquire(thread.proof()).await;
-                                guard.cancel_future(future_id)?;
-                                drop(guard);
-                                child_cancel.cancel();
+                                self.settle_child_cancelled(&mut thread, future_id).await?;
                                 return Ok(ThreadOutcome::SettledChild);
                             }
                             return Err(cancelled_unhandled_throw());
@@ -2110,15 +2093,8 @@ impl BexEngine {
                     }
                     if let Some(value) = Self::read_pending_child_error_value(&mut thread) {
                         if let Some(our_future_id) = thread.vm_thread_settles_future() {
-                            let our_cancel = thread.vm_thread_cancel().clone();
-                            let mut guard = self.futures.acquire(thread.proof()).await;
-                            let our_settled_ptr = guard.future_heap_ptr(our_future_id);
-                            guard.err_future(our_future_id, value)?;
-                            drop(guard);
-                            our_cancel.cancel();
-                            if let Some(ptr) = our_settled_ptr {
-                                thread.vm_thread_notify_parent_of_error(ptr);
-                            }
+                            self.settle_child_errored(&mut thread, our_future_id, value)
+                                .await?;
                             return Ok(ThreadOutcome::SettledChild);
                         }
                         let external = self.vm_value_to_owned(thread.proof(), &value);

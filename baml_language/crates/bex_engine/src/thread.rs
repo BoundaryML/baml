@@ -6,19 +6,9 @@
 //! B adds child threads and routes child completions through
 //! `settles_future`.
 
-#![allow(dead_code, unreachable_pub)]
-
-#[allow(dead_code)]
-fn _assert_send<T: Send>() {}
-#[allow(dead_code)]
-fn _assert_sync<T: Sync>() {}
-
 use std::{
     collections::{HashMap, VecDeque},
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicU64, Ordering},
-    },
+    sync::{Arc, Mutex},
 };
 
 use ::bex_heap::{Tlab, TlabHolder};
@@ -104,39 +94,13 @@ impl ChildErrorQueue {
     }
 }
 
-/// Identifier for a BEX-level green thread.
-///
-/// Distinct from a tokio task id: stable across the lifetime of a single
-/// `BexThread` and used to track parent/child relationships.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-pub struct ThreadId(u64);
-
-impl ThreadId {
-    pub fn next() -> Self {
-        static NEXT: AtomicU64 = AtomicU64::new(0);
-        ThreadId(NEXT.fetch_add(1, Ordering::Relaxed))
-    }
-
-    pub fn raw(self) -> u64 {
-        self.0
-    }
-}
-
-impl std::fmt::Display for ThreadId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "thread#{}", self.0)
-    }
-}
-
 /// A BEX virtual-machine instance plus the scheduling metadata that
 /// distinguishes a root call from a spawned child.
 pub struct BexThread {
     pub vm: BexVm,
-    pub id: ThreadId,
     pub name: Option<String>,
     pub cancel: CancellationToken,
     pub settles_future: Option<FutureId>,
-    pub parent: Option<ThreadId>,
     /// Queue of errored child futures (heap ptrs) that this thread's
     /// children push onto when they terminate fire-and-forget with an
     /// unhandled throw. Drained at this thread's next engine yield to
@@ -148,9 +112,6 @@ pub struct BexThread {
     /// the engine pushes our settled future ptr here so the parent
     /// observes the error at its next await.
     pub parent_pending_errors: Option<Arc<ChildErrorQueue>>,
-    // v2 expansion points (intentionally left commented):
-    // pub group: Option<TaskGroupHandle>,
-    // pub detach: bool,
 }
 
 impl BexThread {
@@ -158,11 +119,9 @@ impl BexThread {
     pub fn new_root(vm: BexVm, cancel: CancellationToken) -> Self {
         Self {
             vm,
-            id: ThreadId::next(),
             name: None,
             cancel,
             settles_future: None,
-            parent: None,
             pending_child_errors: ChildErrorQueue::new(),
             parent_pending_errors: None,
         }
@@ -176,16 +135,13 @@ impl BexThread {
         cancel: CancellationToken,
         name: Option<String>,
         settles_future: FutureId,
-        parent: ThreadId,
         parent_pending_errors: Arc<ChildErrorQueue>,
     ) -> Self {
         Self {
             vm,
-            id: ThreadId::next(),
             name,
             cancel,
             settles_future: Some(settles_future),
-            parent: Some(parent),
             pending_child_errors: ChildErrorQueue::new(),
             parent_pending_errors: Some(parent_pending_errors),
         }
