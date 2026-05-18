@@ -292,12 +292,18 @@ impl HeapPermitManager {
         permit
     }
     pub async fn request_park(&self) -> HeapGuard<'_> {
-        let mut guard = self.holders.lock().await;
+        // Drain the semaphore BEFORE taking the holders mutex. The semaphore
+        // is the stop-the-world barrier: once we hold all MAX_PERMITS, no
+        // ActiveHeapPermit::acquire() can complete, so no mutator can run.
+        // Taking the mutex first (and then awaiting acquire_many) deadlocks
+        // against new_permit(): a VM mid-spawn holds an active permit and
+        // wants the mutex; we hold the mutex and want its permit.
         let permits = self
             .active
             .acquire_many(MAX_PERMITS)
             .await
             .unwrap_or_else(|_| unreachable!("We do not close the semaphore"));
+        let mut guard = self.holders.lock().await;
         guard.retain(|holder| holder.strong_count() > 0);
         HeapGuard {
             guard,
