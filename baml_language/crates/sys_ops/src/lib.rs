@@ -1000,11 +1000,42 @@ impl io::IoClassNetSocket for DefaultIoOps {
     ) -> SysOpOutput<String> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
+    fn write(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _s: io::owned::net::Socket,
+        _data: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
     fn close(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _s: io::owned::net::Socket,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+}
+
+impl io::IoClassNetTcpListener for DefaultIoOps {
+    fn accept(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _l: io::owned::net::TcpListener,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::net::Socket> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn close(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _l: io::owned::net::TcpListener,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         SysOpOutput::err(OpErrorKind::Unsupported)
@@ -1019,6 +1050,15 @@ impl io::IoNamespaceNet for DefaultIoOps {
         _addr: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::net::Socket> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn listen(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _addr: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::net::TcpListener> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
 }
@@ -1043,6 +1083,42 @@ impl io::IoNamespaceIo for DefaultIoOps {
         _prompt: Option<String>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn print(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _s: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn println(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _s: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn eprint(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _s: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn eprintln(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _s: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
 }
@@ -1177,9 +1253,33 @@ impl IoSysOpsBuilder {
         instance: Arc<dyn io::IoNamespaceIo + Send + Sync + 'static>,
     ) -> Self {
         self.inner.baml_io_input = {
-            let t = instance;
+            let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_io_input(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_io_print = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_io_print(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_io_println = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_io_println(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_io_eprint = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_io_eprint(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_io_eprintln = {
+            let t = instance;
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_io_eprintln(heap, permit, args, ctx, call_id)
             })
         };
         self
@@ -1410,16 +1510,40 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_net_connect(heap, permit, args, ctx, call_id)
             })
         };
+        self.inner.baml_net_listen = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_net_listen(heap, permit, args, ctx, call_id)
+            })
+        };
         self.inner.baml_net_socket_read = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_net_socket_read(heap, permit, args, ctx, call_id)
             })
         };
+        self.inner.baml_net_socket_write = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_net_socket_write(heap, permit, args, ctx, call_id)
+            })
+        };
         self.inner.baml_net_socket_close = {
-            let t = instance;
+            let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_net_socket_close(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_net_tcplistener_accept = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_net_tcplistener_accept(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_net_tcplistener_close = {
+            let t = instance;
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_net_tcplistener_close(heap, permit, args, ctx, call_id)
             })
         };
         self

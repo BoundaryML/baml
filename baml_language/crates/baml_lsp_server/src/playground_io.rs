@@ -106,4 +106,43 @@ impl sys_ops::io::IoNamespaceIo for PlaygroundIo {
             }
         })
     }
+
+    fn print(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _s: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        // Playground UI currently has no stdout channel; surface as Unsupported
+        // so user code can `catch` and fall back.
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn println(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _s: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn eprint(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _s: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn eprintln(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _s: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
 }
