@@ -10,8 +10,6 @@ use std::{sync::Arc, time::Duration};
 use bex_heap::HeapPermitManager;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-#[ignore = "reproducer for the open GC park / new_permit AB-BA deadlock; \
-            un-ignore once heap_guard.rs:294 ordering is fixed — see gc_deadlock_bug.md"]
 async fn request_park_must_not_block_new_permit() {
     let mgr = Arc::new(HeapPermitManager::new());
 
