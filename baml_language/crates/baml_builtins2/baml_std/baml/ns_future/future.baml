@@ -1,9 +1,13 @@
 /// BEP-034 — concurrency via `spawn` / `await`.
 ///
-/// `Future<T, E>` is the handle returned by `spawn { body }` and by
-/// sys-op calls. Awaiting a future blocks the current thread until the
-/// future settles; on settle, `await` either yields the value or
-/// re-throws the future's error.
+/// `Future<T, E>` is the handle returned by `spawn { body }`. Awaiting
+/// a future blocks the current thread until the future settles; on
+/// settle, `await` either yields the value or re-throws the future's
+/// error.
+///
+/// Sys-op calls (e.g. `http.fetch`, `fs.read`) are not futures — they
+/// return their value directly and yield cooperatively under the hood.
+/// To run one concurrently, wrap it in `spawn { ... }`.
 ///
 /// The class is opaque to user code — its fields are runtime-managed.
 /// All operations on a future go through the methods declared below.
