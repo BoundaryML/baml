@@ -352,12 +352,10 @@ fn function_suggestions(engine: &BexEngine, query: &str) -> Vec<String> {
 }
 
 fn canonicalize_function_name(engine: &BexEngine, name: &str) -> String {
-    for info in engine.user_functions() {
-        if info.qualified_name == name || info.display_name == name {
-            return info.qualified_name;
-        }
-    }
-    name.to_string()
+    engine
+        .find_user_function(name)
+        .map(|info| info.qualified_name)
+        .unwrap_or_else(|| name.to_string())
 }
 
 fn read_host_binary(target_triple: &str) -> Result<Vec<u8>> {

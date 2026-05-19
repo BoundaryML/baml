@@ -64,10 +64,12 @@ namespace baml.json:
   class JsonParseError { methods: [to_json, from_json] }
   class JsonSerializationError { methods: [to_json, from_json] }
   type json
+  function deserialize<T>
   function field
   function from_json<T>
   function from_string<T>
   function parse
+  function serialize<T>
   function stringify
   function stringify_pretty
   function to_json<T>
@@ -117,6 +119,7 @@ namespace baml.panics:
   class AssertionFailed { methods: [to_json, from_json] }
   class Cancelled { methods: [to_json, from_json] }
   class DivisionByZero { methods: [to_json, from_json] }
+  class Exit { methods: [to_json, from_json] }
   class HostUnavailable { methods: [to_json, from_json] }
   class IndexOutOfBounds { methods: [to_json, from_json] }
   class MapKeyNotFound { methods: [to_json, from_json] }
@@ -132,6 +135,7 @@ namespace baml.sys:
   class ShellOutput { methods: [ok, to_json, from_json] }
   function argv
   function exec
+  function exit
   function now_ms
   function panic
   function shell

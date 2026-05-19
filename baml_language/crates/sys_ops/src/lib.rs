@@ -106,34 +106,21 @@ impl<T> io::IoClassLlmClient for T {
         // — clients are required to be unique within a package, so two
         // matches mean a synthesis bug.
         let resolve_fn_name = format!("{}$new", client.name);
-        let global_index = ctx
-            .function_global_indices
-            .get(&resolve_fn_name)
-            .or_else(|| {
-                ctx.function_global_indices
-                    .get(&format!("user.{resolve_fn_name}"))
-            });
-        let global_index = match global_index {
-            Some(idx) => Some(idx),
-            None => {
-                let suffix = format!(".{resolve_fn_name}");
-                let mut matches = ctx
-                    .function_global_indices
-                    .iter()
-                    .filter(|(k, _)| k.ends_with(&suffix));
-                let first = matches.next();
-                if matches.next().is_some() {
-                    return SysOpOutput::err(OpErrorKind::Other(format!(
-                        "Client resolve function {resolve_fn_name} matches multiple namespaced entries"
-                    )));
-                }
-                first.map(|(_, idx)| idx)
+        let global_index = match sys_types::resolve_name(
+            &ctx.function_global_indices,
+            &resolve_fn_name,
+        ) {
+            sys_types::ResolveOutcome::Found(_, idx) => idx,
+            sys_types::ResolveOutcome::Ambiguous => {
+                return SysOpOutput::err(OpErrorKind::Other(format!(
+                    "Client resolve function {resolve_fn_name} matches multiple namespaced entries"
+                )));
             }
-        };
-        let Some(global_index) = global_index else {
-            return SysOpOutput::err(OpErrorKind::Other(format!(
-                "Client resolve function not found: {resolve_fn_name}"
-            )));
+            sys_types::ResolveOutcome::NotFound => {
+                return SysOpOutput::err(OpErrorKind::Other(format!(
+                    "Client resolve function not found: {resolve_fn_name}"
+                )));
+            }
         };
         SysOpOutput::ok(
             FunctionRef::<io::owned::llm::PrimitiveClient>::new(*global_index).into_external(),
@@ -350,31 +337,21 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
     }
 }
 
-/// Look up an LLM function by name, trying the bare name first, then
-/// `user.{name}`, then a suffix scan over `.{name}` to handle functions
-/// declared inside a user namespace (e.g. `ns_lorem/`) — the synthesized
-/// companion passes the bare BAML identifier, not the FQN, so without
-/// the suffix scan a namespaced LLM function fails to resolve. Two
-/// matches mean a synthesis bug; surface that as a hard error.
+/// Look up an LLM function by name via the canonical
+/// [`sys_types::resolve_name`] rule. The suffix-scan step handles
+/// functions declared inside a user namespace (e.g. `ns_lorem/`) — the
+/// synthesized companion passes the bare BAML identifier, not the FQN,
+/// so without it a namespaced LLM function fails to resolve. Ambiguity
+/// collapses to `None` so the caller's "not found" error path surfaces.
 fn lookup_llm_function<'a>(
     function_name: &str,
     llm_functions: &'a std::collections::HashMap<String, LlmFunctionInfo>,
 ) -> Option<&'a LlmFunctionInfo> {
-    if let Some(info) = llm_functions.get(function_name) {
-        return Some(info);
-    }
-    if let Some(info) = llm_functions.get(&format!("user.{function_name}")) {
-        return Some(info);
-    }
-    let suffix = format!(".{function_name}");
-    let mut matches = llm_functions.iter().filter(|(k, _)| k.ends_with(&suffix));
-    let first = matches.next()?;
-    if matches.next().is_some() {
-        // Ambiguous — let the caller treat this as "not found" so the
-        // existing error path surfaces. Cleaner than silently picking one.
-        return None;
-    }
-    Some(first.1)
+    // Ambiguity collapses to `None` so the existing "function not found"
+    // error path surfaces — cleaner than silently picking one match.
+    sys_types::resolve_name(llm_functions, function_name)
+        .found()
+        .map(|(_k, info)| info)
 }
 
 /// Blanket impl — all types get real `StreamAccumulator` behavior via `sys_llm` delegation.

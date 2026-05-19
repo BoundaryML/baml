@@ -57,12 +57,7 @@ pub async fn dispatch_target(
     output_format: OutputFormat,
 ) -> Result<DispatchResult> {
     let func_info = engine
-        .user_functions()
-        .into_iter()
-        .find(|f| {
-            f.qualified_name == target_name
-                || f.display_name == target_name.strip_prefix("user.").unwrap_or(target_name)
-        })
+        .find_user_function(target_name)
         .ok_or_else(|| anyhow!("Function `{target_name}` not found"))?;
 
     // BEP-027 §"Auto-CLI conventions": `help` is reserved at entry-point

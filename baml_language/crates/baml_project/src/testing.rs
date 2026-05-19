@@ -70,3 +70,21 @@ pub fn compile_source_with_opt(source: &str, opt: OptLevel) -> Program {
     generate_project_bytecode_with_opt(&db, &opts, opt)
         .expect("generate_project_bytecode should succeed for valid test source")
 }
+
+/// Compile multiple BAML files at the given relative paths in one project.
+/// Use when a test needs cross-file or namespaced (`ns_<name>/`) layout,
+/// which `compile_source`'s single-file helper can't express.
+pub fn compile_multi_file(files: &[(&str, &str)]) -> Program {
+    let mut db = ProjectDatabase::new();
+    db.set_project_root(Path::new("."));
+    for (path, content) in files {
+        db.add_file(*path, content);
+    }
+    assert_no_diagnostic_errors(&db);
+
+    let opts = CompileOptions {
+        emit_test_cases: false,
+    };
+    generate_project_bytecode_with_opt(&db, &opts, OptLevel::One)
+        .expect("generate_project_bytecode should succeed for valid test source")
+}

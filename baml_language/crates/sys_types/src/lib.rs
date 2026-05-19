@@ -23,6 +23,74 @@ pub use tokio_util::sync::CancellationToken;
 
 pub mod sse;
 
+/// Outcome of [`resolve_name`].
+pub enum ResolveOutcome<'a, T> {
+    /// A unique match was found via exact, `user.{name}`, or unambiguous
+    /// suffix lookup. The `&str` is the canonical key in the map.
+    Found(&'a str, &'a T),
+    /// No exact or `user.{name}` match, and two or more keys end with
+    /// `.{name}` — caller should treat as not found *or* as an error,
+    /// depending on the surface (CLI: not found; client `$new`: error,
+    /// since clients must be unique within a package).
+    Ambiguous,
+    /// No match at all.
+    NotFound,
+}
+
+impl<'a, T> ResolveOutcome<'a, T> {
+    /// Treat `Ambiguous` and `NotFound` identically. Right for surfaces
+    /// where suffix-scan ambiguity is just "no match" UX.
+    pub fn found(self) -> Option<(&'a str, &'a T)> {
+        match self {
+            Self::Found(k, v) => Some((k, v)),
+            Self::Ambiguous | Self::NotFound => None,
+        }
+    }
+}
+
+/// Canonical function-name resolver shared by every lookup surface
+/// (engine call dispatch, `baml run`/`baml pack` CLI, sysop LLM-function
+/// + client-`$new` lookups).
+///
+/// All user code is namespaced under the `user` package, so user-defined
+/// identifiers can be referred to either by their qualified name
+/// (`user.main`) or their bare display name (`main`). LLM functions
+/// declared inside a namespace (e.g. `ns_lorem/`) also need to resolve
+/// from bare-name companion calls that pre-date the namespace prefix.
+///
+/// The rule, applied in order, is:
+///   1. Exact match.
+///   2. Try `user.{name}` (compiler2 always namespaces user code under
+///      `user`).
+///   3. Unambiguous suffix match on `.{name}`. Two or more suffix matches
+///      yield `Ambiguous` so callers can choose between "not found" UX
+///      and a hard error (synthesized constructors require uniqueness).
+///
+/// Lookups that pass a fully qualified name hit step 1 and never observe
+/// 2 or 3. Lookups that pass a bare name fall through to whichever step
+/// matches.
+pub fn resolve_name<'a, T>(
+    map: &'a std::collections::HashMap<String, T>,
+    name: &str,
+) -> ResolveOutcome<'a, T> {
+    if let Some((k, v)) = map.get_key_value(name) {
+        return ResolveOutcome::Found(k.as_str(), v);
+    }
+    let qualified = format!("user.{name}");
+    if let Some((k, v)) = map.get_key_value(&qualified) {
+        return ResolveOutcome::Found(k.as_str(), v);
+    }
+    let suffix = format!(".{name}");
+    let mut matches = map.iter().filter(|(k, _)| k.ends_with(&suffix));
+    let Some(first) = matches.next() else {
+        return ResolveOutcome::NotFound;
+    };
+    if matches.next().is_some() {
+        return ResolveOutcome::Ambiguous;
+    }
+    ResolveOutcome::Found(first.0.as_str(), first.1)
+}
+
 /// Types generated from `llm_types.baml`.
 /// NOTE: sys_ops also generates the same code via its own build.rs because the
 /// generated IO traits contain blanket impls that must live in the crate that
@@ -708,7 +776,86 @@ impl SysOpResult {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::*;
+
+    fn map(pairs: &[(&str, i32)]) -> HashMap<String, i32> {
+        pairs.iter().map(|(k, v)| ((*k).to_string(), *v)).collect()
+    }
+
+    #[test]
+    fn resolve_name_exact_match_wins() {
+        let m = map(&[("main", 1), ("user.main", 2)]);
+        match resolve_name(&m, "main") {
+            ResolveOutcome::Found(k, v) => {
+                assert_eq!(k, "main");
+                assert_eq!(*v, 1);
+            }
+            _ => panic!("expected Found(main, 1)"),
+        }
+    }
+
+    #[test]
+    fn resolve_name_user_prefix_fallback() {
+        let m = map(&[("user.main", 2), ("baml.json.serialize", 3)]);
+        match resolve_name(&m, "main") {
+            ResolveOutcome::Found(k, v) => {
+                assert_eq!(k, "user.main");
+                assert_eq!(*v, 2);
+            }
+            _ => panic!("expected Found(user.main, 2)"),
+        }
+    }
+
+    #[test]
+    fn resolve_name_suffix_scan_unique() {
+        // Namespaced function — bare lookup falls through to suffix scan.
+        let m = map(&[("user.lorem.Summarize", 7), ("baml.json.serialize", 3)]);
+        match resolve_name(&m, "Summarize") {
+            ResolveOutcome::Found(k, v) => {
+                assert_eq!(k, "user.lorem.Summarize");
+                assert_eq!(*v, 7);
+            }
+            _ => panic!("expected Found(user.lorem.Summarize, 7)"),
+        }
+    }
+
+    #[test]
+    fn resolve_name_suffix_scan_ambiguous() {
+        let m = map(&[("a.Foo", 1), ("b.Foo", 2)]);
+        assert!(matches!(resolve_name(&m, "Foo"), ResolveOutcome::Ambiguous));
+    }
+
+    #[test]
+    fn resolve_name_not_found() {
+        let m = map(&[("user.main", 1)]);
+        assert!(matches!(resolve_name(&m, "Nope"), ResolveOutcome::NotFound));
+    }
+
+    /// Exact match must win over a suffix collision elsewhere in the map,
+    /// so a fully qualified call can't be diverted by an unrelated `.{name}`
+    /// key. Regression: this is the property `BexEngine::lookup_function`
+    /// relies on for stdlib calls like `baml.json.serialize`.
+    #[test]
+    fn resolve_name_exact_beats_suffix() {
+        let m = map(&[("baml.json.serialize", 1), ("user.lorem.serialize", 2)]);
+        match resolve_name(&m, "baml.json.serialize") {
+            ResolveOutcome::Found(k, v) => {
+                assert_eq!(k, "baml.json.serialize");
+                assert_eq!(*v, 1);
+            }
+            _ => panic!("expected Found(baml.json.serialize, 1)"),
+        }
+    }
+
+    #[test]
+    fn resolve_outcome_found_collapses_ambiguous_to_none() {
+        let m = map(&[("a.Foo", 1), ("b.Foo", 2)]);
+        assert!(resolve_name(&m, "Foo").found().is_none());
+        assert!(resolve_name(&m, "Nope").found().is_none());
+        assert!(resolve_name(&m, "a.Foo").found().is_some());
+    }
 
     #[tokio::test]
     async fn test_completion_handle() {

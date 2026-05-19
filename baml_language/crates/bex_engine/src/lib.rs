@@ -1297,43 +1297,26 @@ impl BexEngine {
         Ok(())
     }
 
-    /// Look up a function by name and return its heap pointer.
-    ///
-    /// Tries the exact name first, then falls back to `"user.{name}"` to handle
-    /// the compiler2 pipeline which qualifies user-defined functions with the
-    /// package prefix (e.g. `"main"` → `"user.main"`).
+    /// Look up a function by name and return its heap pointer. Resolution
+    /// follows the canonical [`sys_types::resolve_name`] rule (exact →
+    /// `user.{name}` → unambiguous suffix match), shared with `baml run`,
+    /// `baml pack`, and the sysop LLM/`$new` resolvers.
     fn lookup_function(&self, function_name: &str) -> Result<HeapPtr, EngineError> {
-        // Try exact match first
-        if let Some((ptr, _kind)) = self.resolved_function_names.get(function_name) {
-            return Ok(*ptr);
-        }
-        // Fall back to "user." prefix (compiler2 qualifies user functions)
-        let qualified = format!("user.{function_name}");
-        self.resolved_function_names
-            .get(&qualified)
-            .map(|(ptr, _kind)| *ptr)
+        sys_types::resolve_name(&self.resolved_function_names, function_name)
+            .found()
+            .map(|(_k, (ptr, _kind))| *ptr)
             .ok_or_else(|| EngineError::FunctionNotFound {
                 name: function_name.to_string(),
             })
     }
 
-    /// Resolve a function name to the key actually present in `resolved_function_names`.
-    ///
-    /// Returns `Some(key)` where `key` is either `name` or `"user.{name}"`,
-    /// or `None` if neither is found.
+    /// Resolve a function name to the key actually present in
+    /// `resolved_function_names`. Uses [`sys_types::resolve_name`] so the
+    /// rule matches `lookup_function` exactly.
     fn resolve_function_name<'a>(&'a self, name: &str) -> Option<&'a str> {
-        if self.resolved_function_names.contains_key(name) {
-            return Some(
-                self.resolved_function_names
-                    .get_key_value(name)
-                    .map(|(k, _)| k.as_str())
-                    .unwrap(),
-            );
-        }
-        let qualified = format!("user.{name}");
-        self.resolved_function_names
-            .get_key_value(&qualified)
-            .map(|(k, _)| k.as_str())
+        sys_types::resolve_name(&self.resolved_function_names, name)
+            .found()
+            .map(|(k, _)| k)
     }
 
     /// Get the return type for a function by dereferencing its heap object.
@@ -1429,6 +1412,20 @@ impl BexEngine {
     /// script-alias name for the resolved function it expanded to).
     pub fn argv(&self) -> &[String] {
         &self.argv
+    }
+
+    /// Find a user-callable function by qualified name (`user.main`),
+    /// display name (`main`), or unambiguous namespace-leaf suffix
+    /// (`lorem.Func` resolving to `user.ns_lorem.Func`). Uses the
+    /// shared [`sys_types::resolve_name`] rule and post-filters to
+    /// user-callable bytecode functions.
+    pub fn find_user_function(&self, name: &str) -> Option<UserFunctionInfo> {
+        let (qualified, _) =
+            sys_types::resolve_name(&self.resolved_function_names, name).found()?;
+        let qualified = qualified.to_string();
+        self.user_functions()
+            .into_iter()
+            .find(|f| f.qualified_name == qualified)
     }
 
     /// List all user-callable functions with signature info.

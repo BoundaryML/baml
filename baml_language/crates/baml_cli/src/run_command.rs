@@ -360,11 +360,7 @@ impl RunArgs {
         //     user.llm.X` and `--function llm.X` both surface as
         //     `argv[1] = "llm.X"`.
         if self.target.is_none() && self.function.is_none() && self.expression.is_none() {
-            if let Some(main_info) = engine
-                .user_functions()
-                .into_iter()
-                .find(|f| f.qualified_name == "user.main" || f.display_name == "main")
-            {
+            if let Some(main_info) = engine.find_user_function("main") {
                 if !main_info.source_file.is_empty() {
                     let mut patched = argv.clone();
                     if patched.len() >= 2 {
@@ -374,11 +370,7 @@ impl RunArgs {
                 }
             }
         } else if let Some(func) = &self.function {
-            if let Some(info) = engine
-                .user_functions()
-                .into_iter()
-                .find(|f| f.qualified_name == *func || f.display_name == *func)
-            {
+            if let Some(info) = engine.find_user_function(func) {
                 let display = info.display_name;
                 if display != *func && argv.len() >= 2 {
                     let mut patched = argv.clone();
@@ -404,7 +396,7 @@ impl RunArgs {
             ResolvedTarget::Function(name) => (name, self.target_args.clone(), false),
             ResolvedTarget::Script(expansion) => {
                 let func = expansion.function.unwrap_or_else(|| "main".to_string());
-                if find_user_function(&engine, &func).is_none() {
+                if engine.find_user_function(&func).is_none() {
                     // Script body's --function target is unresolvable.
                     // `validate_scripts` already catches this at load time;
                     // this is defensive in case validation is bypassed.
@@ -428,11 +420,7 @@ impl RunArgs {
         //   - Script expands to a named function → the function's
         //     display name (`user.` prefix stripped).
         if was_script {
-            if let Some(info) = engine
-                .user_functions()
-                .into_iter()
-                .find(|f| f.qualified_name == function_name || f.display_name == function_name)
-            {
+            if let Some(info) = engine.find_user_function(&function_name) {
                 let resolved_label = if info.display_name == "main" && !info.source_file.is_empty()
                 {
                     // Root main case: use the file path so script-aliased
@@ -450,7 +438,8 @@ impl RunArgs {
             }
         }
 
-        let func_info = find_user_function(&engine, &function_name)
+        let func_info = engine
+            .find_user_function(&function_name)
             .ok_or_else(|| anyhow!("Function `{function_name}` not found"))?;
 
         // BEP-027 §"Auto-CLI conventions": `help` is reserved at entry-point
@@ -801,7 +790,7 @@ impl RunArgs {
         scripts: &HashMap<String, Vec<String>>,
     ) -> Result<ResolvedTarget> {
         if let Some(func) = &self.function {
-            if find_user_function(engine, func).is_some() {
+            if engine.find_user_function(func).is_some() {
                 return Ok(ResolvedTarget::function(func.clone()));
             }
             // `--function` only dispatches to functions, so the
@@ -960,7 +949,7 @@ impl RunArgs {
             match parse_script_body(tokens) {
                 Ok(expansion) => {
                     let target_func = if let Some(func) = &expansion.function {
-                        if find_user_function(engine, func).is_none() {
+                        if engine.find_user_function(func).is_none() {
                             errors.push(Self::script_error(
                                 &toml_path,
                                 toml_content,
@@ -1405,14 +1394,6 @@ fn collect_namespaces(engine: &BexEngine) -> HashSet<String> {
                 .map(|i| f.display_name[..i].to_string())
         })
         .collect()
-}
-
-fn find_user_function(engine: &BexEngine, name: &str) -> Option<UserFunctionInfo> {
-    let display_name = name.strip_prefix("user.").unwrap_or(name);
-    engine
-        .user_functions()
-        .into_iter()
-        .find(|f| f.qualified_name == name || f.display_name == display_name)
 }
 
 // ============================================================================
