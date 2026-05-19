@@ -946,9 +946,10 @@ impl std::fmt::Display for Object {
 ///
 /// Type-erased so this crate doesn't have to pull in `bex_engine`'s
 /// `EngineError` (which would form a cycle). The engine boxes its
-/// `EngineError` into this shape when transitioning a future to
-/// [`FutureTag::InternalError`]; consumers (on the await side) downcast
-/// when surfacing the error to the host.
+/// `EngineError` into this shape when transitioning a future to the
+/// `InternalError` terminal state (see `FutureRead::InternalError`);
+/// consumers (on the await side) downcast when surfacing the error to
+/// the host.
 pub type FutureInternalError = Box<dyn std::error::Error + Send + Sync>;
 
 /// A future heap object.
