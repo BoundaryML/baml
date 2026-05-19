@@ -643,6 +643,15 @@ const [copied, setCopied] = useState(false);
     }
   };
 
+  const contentLinkContext = useMemo(() => ({
+    bepNumber,
+    isHistorical: isViewingHistorical,
+    versionNumber:
+      isViewingHistorical && routeInfo.versionNumber !== latestVersionNumber
+        ? routeInfo.versionNumber
+        : null,
+  }), [bepNumber, isViewingHistorical, routeInfo.versionNumber, latestVersionNumber]);
+
   if (userLoading || bep === undefined) {
     return (
       <div className="min-h-screen bg-background">
@@ -966,14 +975,7 @@ const [copied, setCopied] = useState(false);
                         <div className="relative">
                           <BepContent
                             content={currentContent}
-                            linkContext={{
-                              bepNumber,
-                              isHistorical: isViewingHistorical,
-                              versionNumber:
-                                isViewingHistorical && routeInfo.versionNumber !== latestVersionNumber
-                                  ? routeInfo.versionNumber
-                                  : null,
-                            }}
+                            linkContext={contentLinkContext}
                           />
                           {effectiveVersionId && (
                             <CommentSidebar
@@ -1014,14 +1016,7 @@ const [copied, setCopied] = useState(false);
                       pageId={currentPageId}
                       viewingVersionId={viewingVersionId ?? undefined}
                       readOnly={isViewingHistorical}
-                      linkContext={{
-                        bepNumber,
-                        isHistorical: isViewingHistorical,
-                        versionNumber:
-                          isViewingHistorical && routeInfo.versionNumber !== latestVersionNumber
-                            ? routeInfo.versionNumber
-                            : null,
-                      }}
+                      linkContext={contentLinkContext}
                       onNavigateToIssue={handleNavigateToIssue}
                       onNavigateToDecision={handleNavigateToDecision}
                     />

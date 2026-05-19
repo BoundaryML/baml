@@ -1,6 +1,6 @@
 "use client";
 
-import { MarkdownHooks } from "react-markdown";
+import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import { ShikiCodeBlock } from "@/components/ui/shiki-code-block";
@@ -8,6 +8,9 @@ import Link from "next/link";
 import { ReactNode, isValidElement, useMemo } from "react";
 import type { Components } from "react-markdown";
 import { BepLinkContext, resolveBepLink } from "@/lib/bep-link-resolver";
+
+const remarkPlugins = [remarkGfm];
+const rehypePlugins = [rehypeRaw];
 
 interface BepContentProps {
   content: string;
@@ -59,8 +62,8 @@ function createHeadingComponent(
   className: string,
   getId: (headingText: string) => string | undefined
 ): Components["h1"] {
-  const Heading = ({ children }: { children?: ReactNode }) => {
-    const headingText = getHeadingText(children);
+  const Heading = ({ children, node }: { children?: ReactNode; node?: unknown }) => {
+    const headingText = (node ? getTextContent(node) : "") || getHeadingText(children);
     const id = headingText ? getId(headingText) : undefined;
     const Tag = tag;
     return (
@@ -175,13 +178,13 @@ export function BepContent({ content, linkContext }: BepContentProps) {
       data-bep-content
       className="prose prose-sm sm:prose-base lg:prose-lg dark:prose-invert max-w-none prose-code:before:content-none prose-code:after:content-none"
     >
-      <MarkdownHooks 
-        remarkPlugins={[remarkGfm]} 
-        rehypePlugins={[rehypeRaw]}
+      <Markdown 
+        remarkPlugins={remarkPlugins} 
+        rehypePlugins={rehypePlugins}
         components={components}
       >
         {contentWithoutFrontmatter}
-      </MarkdownHooks>
+      </Markdown>
     </article>
   );
 }

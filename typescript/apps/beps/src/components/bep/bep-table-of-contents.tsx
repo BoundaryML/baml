@@ -15,6 +15,14 @@ interface BepTableOfContentsProps {
   className?: string;
 }
 
+function stripMarkdownInline(text: string): string {
+  return text
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\[([^\]]*)\]\[[^\]]*\]/g, "$1")
+    .replace(/<\/?[^>]+>/g, "");
+}
+
 function slugifyHeading(value: string): string {
   return value
     .toLowerCase()
@@ -36,7 +44,8 @@ function extractHeadings(content: string): TocItem[] {
   let match;
   while ((match = headingRegex.exec(contentWithoutFrontmatter)) !== null) {
     const level = match[1].length;
-    const text = match[2].trim();
+    const rawText = match[2].trim();
+    const text = stripMarkdownInline(rawText);
     const baseSlug = slugifyHeading(text);
 
     if (!baseSlug) continue;
@@ -158,12 +167,14 @@ export function BepTableOfContents({ content, className }: BepTableOfContentsPro
   }, [headings, getActiveHeading]);
 
   const handleClick = useCallback((id: string) => {
-    const element = document.getElementById(id);
-    if (element) {
-      element.scrollIntoView({ behavior: "smooth", block: "start" });
-      setActiveId(id);
-      setIsMobileExpanded(false);
-    }
+    setActiveId(id);
+    setIsMobileExpanded(false);
+    requestAnimationFrame(() => {
+      const element = document.getElementById(id);
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
   }, []);
 
   if (headings.length === 0) {
