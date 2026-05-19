@@ -41,8 +41,8 @@ class            fs.DirEntry                      <builtin>/baml/ns_fs/fs.baml:6
 class            fs.MkdirOptions                  <builtin>/baml/ns_fs/fs.baml:72
 function         fs.read_dir                      <builtin>/baml/ns_fs/fs.baml:76
 function         fs.mkdir                         <builtin>/baml/ns_fs/fs.baml:80
-enum             future.FutureState               <builtin>/baml/ns_future/future.baml:17
-class            future.Future                    <builtin>/baml/ns_future/future.baml:24
+enum             future.FutureState               <builtin>/baml/ns_future/future.baml:21
+class            future.Future                    <builtin>/baml/ns_future/future.baml:28
 class            glob.ScanOptions                 <builtin>/baml/ns_glob/glob.baml:1
 class            glob.Glob                        <builtin>/baml/ns_glob/glob.baml:10
 function         glob.new                         <builtin>/baml/ns_glob/glob.baml:22
@@ -53,6 +53,10 @@ function         http.fetch                       <builtin>/baml/ns_http/http.ba
 function         http.send                        <builtin>/baml/ns_http/http.baml:46
 function         http.fetch_sse                   <builtin>/baml/ns_http/http.baml:50
 function         io.input                         <builtin>/baml/ns_io/io.baml:1
+function         io.print                         <builtin>/baml/ns_io/io.baml:7
+function         io.println                       <builtin>/baml/ns_io/io.baml:12
+function         io.eprint                        <builtin>/baml/ns_io/io.baml:17
+function         io.eprintln                      <builtin>/baml/ns_io/io.baml:22
 type             json.json                        <builtin>/baml/ns_json/json.baml:1
 class            json.JsonParseError              <builtin>/baml/ns_json/json.baml:3
 class            json.JsonDecodeError             <builtin>/baml/ns_json/json.baml:6
@@ -100,7 +104,9 @@ class            media.Audio                      <builtin>/baml/ns_media/media.
 class            media.Video                      <builtin>/baml/ns_media/media.baml:83
 class            media.Image                      <builtin>/baml/ns_media/media.baml:124
 class            net.Socket                       <builtin>/baml/ns_net/net.baml:1
-function         net.connect                      <builtin>/baml/ns_net/net.baml:13
+class            net.TcpListener                  <builtin>/baml/ns_net/net.baml:21
+function         net.connect                      <builtin>/baml/ns_net/net.baml:34
+function         net.listen                       <builtin>/baml/ns_net/net.baml:40
 class            panics.DivisionByZero            <builtin>/baml/ns_panics/panics.baml:1
 class            panics.IndexOutOfBounds          <builtin>/baml/ns_panics/panics.baml:5
 class            panics.MapKeyNotFound            <builtin>/baml/ns_panics/panics.baml:10
