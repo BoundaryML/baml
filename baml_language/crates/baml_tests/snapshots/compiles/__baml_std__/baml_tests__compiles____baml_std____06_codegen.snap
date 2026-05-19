@@ -1545,7 +1545,19 @@ function baml.http.fetch_sse(request: baml.http.Request) -> baml.http.SseStream 
 function baml.http.send(request: baml.http.Request) -> baml.http.Response {
 }
 
+function baml.io.eprint(s: string) -> null {
+}
+
+function baml.io.eprintln(s: string) -> null {
+}
+
 function baml.io.input(prompt: string?) -> string {
+}
+
+function baml.io.print(s: string) -> null {
+}
+
+function baml.io.println(s: string) -> null {
 }
 
 function baml.json.JsonDecodeError.from_json(j: baml.json.json) -> baml.json.JsonDecodeError {
@@ -4320,7 +4332,37 @@ function baml.net.Socket.to_json(self: null) -> baml.json.json {
     return
 }
 
+function baml.net.Socket.write(self: null, data: string) -> null {
+}
+
+function baml.net.TcpListener.accept(self: null) -> baml.net.Socket {
+}
+
+function baml.net.TcpListener.close(self: null) -> null {
+}
+
+function baml.net.TcpListener.from_json(j: baml.json.json) -> baml.net.TcpListener {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type baml.net.TcpListener
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function baml.net.TcpListener.to_json(self: null) -> baml.json.json {
+    load_type baml.net.TcpListener
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
 function baml.net.connect(addr: string) -> baml.net.Socket {
+}
+
+function baml.net.listen(addr: string) -> baml.net.TcpListener {
 }
 
 function baml.panics.AllocFailure.from_json(j: baml.json.json) -> baml.panics.AllocFailure {
