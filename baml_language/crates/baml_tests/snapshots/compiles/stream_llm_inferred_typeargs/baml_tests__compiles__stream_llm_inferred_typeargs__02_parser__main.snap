@@ -99,12 +99,12 @@ SOURCE_FILE
       WORD "Stream"
       TYPE_ARGS
         LESS "<"
-        TYPE_EXPR "string"
-          WORD "string"
-        COMMA ","
         TYPE_EXPR "null | string"
           WORD "null"
           PIPE "|"
+          WORD "string"
+        COMMA ","
+        TYPE_EXPR "string"
           WORD "string"
         GREATER ">"
     EXPR_FUNCTION_BODY

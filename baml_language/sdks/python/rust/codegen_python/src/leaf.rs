@@ -444,15 +444,17 @@ fn render_class_bases(generic_params: &[String]) -> String {
 /// re-export, return the (module path, exported name) pair.
 ///
 /// `baml.media.{Image,Video,Audio,Pdf}` (15b §lines 14-19): re-exports
-/// of PyO3 types holding `Arc<MediaValue>` directly — live in
-/// `baml_core.baml_py` (the PyO3 extension module).
+/// of `PyO3` types holding `Arc<MediaValue>` directly — live in
+/// `baml_core.baml_py` (the `PyO3` extension module).
 ///
 /// `baml.llm.Stream`: pure-Python wrapper re-exported from `baml_core`
-/// (`sdks/python/src/baml_core/_stream.py`). Lives outside the PyO3
+/// (`sdks/python/src/baml_core/_stream.py`). Lives outside the `PyO3`
 /// module because nothing on the call path needed Rust — the args
 /// encoder, runtime accessor, and result decoder are all already
 /// exposed to Python.
-fn media_reexport_rust_name(c: &crate::emit::class::PyClass) -> Option<(&'static str, &'static str)> {
+fn media_reexport_rust_name(
+    c: &crate::emit::class::PyClass,
+) -> Option<(&'static str, &'static str)> {
     match c.source.to_string().as_str() {
         "baml.media.Image" => Some(("baml_core.baml_py", "BamlImage")),
         "baml.media.Video" => Some(("baml_core.baml_py", "BamlVideo")),

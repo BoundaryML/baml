@@ -201,9 +201,11 @@ def _set_inbound_value(inbound_value: baml_inbound_pb2.InboundValue, value: Any,
     # `BamlStream` (21b §"Phase 4"): lifted to a bare `handle_value` on
     # the wire — the engine intercepts the outer Stream class at
     # `convert_heap_ptr_to_external_with_type` and reconstructs the heap
-    # pointer in `convert_external_to_vm_value`'s `Adt(Stream)` arm. So
-    # encode as `handle_value(ADT_STREAM)` rather than the media-style
-    # `class_value(name, _data: handle_value)` wrap.
+    # pointer in `convert_external_to_vm_value`'s `Adt(TaggedHeapHandle)`
+    # arm. So encode as `handle_value(ADT_TAGGED_HEAP_HANDLE)` rather
+    # than the media-style `class_value(name, _data: handle_value)` wrap.
+    # Inbound stays a bare `BamlHandle` (key + type only) since the
+    # engine's `HANDLE_TABLE` row already carries the receiver's `ty`.
     if isinstance(value, BamlStream):
         return _set_inbound_value(
             inbound_value, value._to_pyhandle(), kwarg_name=kwarg_name
@@ -456,6 +458,12 @@ def _decode_handle(handle) -> Any:
     it round-trips on inbound encode without needing to consult the
     table; we read directly from the wire here to avoid a redundant
     field access.
+
+    `handle` is either an outbound `BamlOutboundHandle` (carries `name`
+    for `ADT_TAGGED_HEAP_HANDLE` dispatch — see 23a) or an inbound
+    `BamlHandle` shape (no `name`). The tests pass the inbound shape
+    directly; the production path goes through `_decode_value_holder`,
+    which hands us the outbound shape.
     """
     from .baml_py import take_pyhandle_from_table
     HT = baml_inbound_pb2.BamlHandleType
@@ -470,8 +478,16 @@ def _decode_handle(handle) -> Any:
         return BamlVideo._from_pyhandle(pyhandle)
     if ht == HT.ADT_MEDIA_PDF:
         return BamlPdf._from_pyhandle(pyhandle)
-    if ht == HT.ADT_STREAM:
-        return BamlStream._from_pyhandle(pyhandle)
+    if ht == HT.ADT_TAGGED_HEAP_HANDLE:
+        # Dispatch on `handle.name.name` to pick the typed wrapper.
+        # Future tagged-handle classes register an arm here.
+        name = getattr(handle, "name", None)
+        class_fqn = name.name if name is not None else ""
+        if class_fqn == "baml.llm.Stream":
+            return BamlStream._from_pyhandle(pyhandle)
+        raise BamlError(
+            f"Unknown tagged heap handle class: {class_fqn!r}"
+        )
     if ht == HT.HANDLE_UNSPECIFIED:
         raise BamlError("BEX emitted HANDLE_UNSPECIFIED (Rust-side bug)")
 

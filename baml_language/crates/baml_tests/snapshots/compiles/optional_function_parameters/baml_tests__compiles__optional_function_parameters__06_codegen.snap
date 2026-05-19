@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 18510
 ---
 function $init() -> null {
     call $init_let_0
@@ -107,7 +106,7 @@ function user.AskDocs$parse(json: string) -> string {
     return
 }
 
-function user.AskDocs$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> {
+function user.AskDocs$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<null | string, string> {
     load_var sse
     load_const "AskDocs"
     load_const null
@@ -145,7 +144,7 @@ function user.AskDocs$render_prompt(query: string, max_results: int, filter: str
     return
 }
 
-function user.AskDocs$stream(query: string, max_results: int, filter: string) -> baml.llm.Stream<string, null | string> {
+function user.AskDocs$stream(query: string, max_results: int, filter: string) -> baml.llm.Stream<null | string, string> {
     load_var max_results
     load_const <omitted>
     cmp_op ==

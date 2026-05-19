@@ -90,12 +90,21 @@ pub enum BexExternalAdt {
     PromptAst(std::sync::Arc<baml_builtins2::PromptAst>),
     /// A media value (image, audio, etc.) passed as a function argument.
     Media(std::sync::Arc<baml_builtins2::MediaValue>),
-    /// Opaque GC-rooted reference to a `baml.llm.Stream` instance on the
-    /// engine heap. Carries only a `Handle` because the four-field
-    /// (_client/_acc/_sse/_cache) representation has to stay on the heap
-    /// so the BAML interpreter can keep walking it during `Stream.next`
-    /// / `Stream.final` calls.
-    Stream(crate::Handle),
+    /// GC-rooted reference to a heap instance, paired with the full
+    /// type identity of the instance (class FQN + concrete generic args).
+    ///
+    /// `ty` is canonically a `Ty::Class { name, args }` — the same shape
+    /// the wire encoder projects to `BamlTyName`. The `heap_handle` keeps
+    /// the instance alive on the heap so the engine can re-enter it for
+    /// instance-method calls (`Stream.next`, `Stream.final`, …).
+    ///
+    /// Currently used by `baml.llm.Stream`; any future stdlib generic
+    /// class that wants typed-handle round-trip treatment uses this same
+    /// variant.
+    TaggedHeapHandle {
+        ty: baml_type::Ty,
+        heap_handle: crate::Handle,
+    },
 }
 
 /// A deep-copied value tree with no heap references.
@@ -330,7 +339,7 @@ impl BexExternalAdt {
             BexExternalAdt::Type(_) => "type",
             BexExternalAdt::PromptAst(_) => "prompt_ast",
             BexExternalAdt::Media(_) => "media",
-            BexExternalAdt::Stream(_) => "stream",
+            BexExternalAdt::TaggedHeapHandle { .. } => "tagged_heap_handle",
         }
     }
 }

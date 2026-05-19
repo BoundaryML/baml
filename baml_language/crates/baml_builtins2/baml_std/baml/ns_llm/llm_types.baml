@@ -119,11 +119,11 @@ class Client {
     }
   }
 
-  function execute_stream<T, S>(
+  function execute_stream<TStream, TFinal>(
     self,
     context: ExecutionContext,
     inherited_delay_ms: int,
-  ) -> Stream<T, S> {
+  ) -> Stream<TStream, TFinal> {
     match (self.retry) {
       let r: RetryPolicy => {
         let current_delay = r.initial_delay_ms + 0.0
@@ -144,7 +144,7 @@ class Client {
             attempt_delay = inherited_delay_ms
           }
 
-          let result2: Stream<T, S> = self.execute_once_stream<T, S>(
+          let result2: Stream<TStream, TFinal> = self.execute_once_stream<TStream, TFinal>(
             context,
             attempt_delay,
           ) catch (e) {
@@ -157,7 +157,7 @@ class Client {
         throw root.errors.DevOther { message: "All orchestration steps failed" };
       }
       null => {
-        let result: Stream<T, S> = self.execute_once_stream<T, S>(
+        let result: Stream<TStream, TFinal> = self.execute_once_stream<TStream, TFinal>(
           context,
           inherited_delay_ms,
         );
@@ -166,28 +166,28 @@ class Client {
     }
   }
 
-  function execute_once_stream<T, S>(
+  function execute_once_stream<TStream, TFinal>(
     self,
     context: ExecutionContext,
     active_delay_ms: int,
-  ) -> Stream<T, S> {
+  ) -> Stream<TStream, TFinal> {
     match (self.client_type) {
       ClientType.Primitive => {
         let primitive = self.to_primitive_client();
-        let return_type = reflect.type_of<T>();
+        let return_type = reflect.type_of<TFinal>();
 
         let prompt = primitive.render_prompt(context.jinja_string, context.args, return_type);
         let specialized = primitive.specialize_prompt(prompt);
 
         let http_request = primitive.build_request_stream(specialized, return_type);
         let sse = root.http.fetch_sse(http_request);
-        let stream: Stream<T, S> = self.__make_stream(sse, context.function_name);
+        let stream: Stream<TStream, TFinal> = self.__make_stream(sse, context.function_name);
         return stream;
       }
 
       ClientType.Fallback => {
         for (let sub in self.sub_clients) {
-          let result2: Stream<T, S> = sub.execute_stream<T, S>(
+          let result2: Stream<TStream, TFinal> = sub.execute_stream<TStream, TFinal>(
             context,
             active_delay_ms,
           ) catch (e) {
@@ -204,7 +204,7 @@ class Client {
         }
         let idx = self.counter % self.sub_clients.length()
         self.counter += 1
-        let result3: Stream<T, S> = self.sub_clients[idx].execute_stream<T, S>(
+        let result3: Stream<TStream, TFinal> = self.sub_clients[idx].execute_stream<TStream, TFinal>(
           context,
           active_delay_ms,
         );
@@ -214,12 +214,12 @@ class Client {
   }
 
   /// DO NOT CALL FROM USER CODE
-  function __make_stream<T, S>(self, sse: root.http.SseStream, function_name: string) -> Stream<T, S> {
+  function __make_stream<TStream, TFinal>(self, sse: root.http.SseStream, function_name: string) -> Stream<TStream, TFinal> {
     let primitive = self.to_primitive_client()
     let return_type = get_return_type(function_name)
     let stream_return_type = get_stream_return_type(function_name)
     let acc = primitive.new_stream_accumulator()
-    let cache: StreamCache<T, S> = StreamCache.new(return_type, stream_return_type)
+    let cache: StreamCache<TStream, TFinal> = StreamCache.new(return_type, stream_return_type)
     Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache }
   }
 
@@ -453,11 +453,11 @@ class StreamAccumulator {
 /// Cached data for a stream. Contains type information, assert check cache, etc.
 ///
 /// Intended for use in `baml.llm.Stream`
-class StreamCache<T, S> {
+class StreamCache<TStream, TFinal> {
   _data $rust_type
 
   /// DO NOT CALL FROM USER CODE
-  function new(target: type, streaming: type) -> StreamCache<T, S> {
+  function new(target: type, streaming: type) -> StreamCache<TStream, TFinal> {
     $rust_io_function
   }
 }
@@ -469,16 +469,16 @@ class StreamCache<T, S> {
 ///
 /// Created by `<LLM function>$stream` companion functions,
 /// internally using `baml.llm.stream_llm_function`.
-class Stream<T, S> {
+class Stream<TStream, TFinal> {
   _client: PrimitiveClient
   _acc: StreamAccumulator
   _sse: root.http.SseStream
-  _cache: StreamCache<T, S>
+  _cache: StreamCache<TStream, TFinal>
 
   /// Return the next partial value, or a `StreamFinished` value if the stream is done.
   /// Will only return partial values: if the stream is done, use `final()` to get the final value.
   /// Blocks until a partial value is available.
-  function next(self) -> S | root.stream.StreamFinished {
+  function next(self) -> TStream | root.stream.StreamFinished {
     while (true) {
       let next = match (self._sse.next()) {
         null => {
@@ -493,12 +493,12 @@ class Stream<T, S> {
       }
 
       let content = self._acc.content();
-      let parsed: S | root.stream.StreamNoYield = __sap_parse_partial<T, S>(content, self._cache);
+      let parsed: TStream | root.stream.StreamNoYield = __sap_parse_partial<TStream, TFinal>(content, self._cache);
       match (parsed) {
         root.stream.StreamNoYield => {
           continue;
         }
-        let parsed: S => {
+        let parsed: TStream => {
           return parsed;
         }
       }
@@ -508,7 +508,7 @@ class Stream<T, S> {
   /// Return the final value of the stream.
   /// If the final value is not yet available, this will block until the stream is done.
   /// Calling this twice will return the same value.
-  function final(self) -> T {
+  function final(self) -> TFinal {
     while (!self._acc.is_done()) {
       let next = match (self._sse.next()) {
         null => {
@@ -530,7 +530,7 @@ class Stream<T, S> {
     }
 
     let content = self._acc.content();
-    __sap_parse_final<T, S>(content, self._cache)
+    __sap_parse_final<TStream, TFinal>(content, self._cache)
   }
 }
 
@@ -620,11 +620,11 @@ function get_stream_return_type(function_name: string) -> type throws root.error
 }
 
 /// DO NOT CALL FROM USER CODE
-function __sap_parse_final<T, S>(json: string, cache: StreamCache<T, S>) -> T throws root.errors.LlmClient {
+function __sap_parse_final<TStream, TFinal>(json: string, cache: StreamCache<TStream, TFinal>) -> TFinal throws root.errors.LlmClient {
     $rust_io_function
 }
 
 /// DO NOT CALL FROM USER CODE
-function __sap_parse_partial<T, S>(json: string, cache: StreamCache<T, S>) -> S | root.stream.StreamNoYield throws root.errors.LlmClient {
+function __sap_parse_partial<TStream, TFinal>(json: string, cache: StreamCache<TStream, TFinal>) -> TStream | root.stream.StreamNoYield throws root.errors.LlmClient {
     $rust_io_function
 }

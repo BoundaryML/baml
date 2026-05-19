@@ -28,6 +28,6 @@ function TestFunc(input: string) -> string {
     prompt #"hi {{ input }}"#
 }
 
-function call_stream_inferred() -> baml.llm.Stream<string, null | string> {
+function call_stream_inferred() -> baml.llm.Stream<null | string, string> {
     baml.llm.stream_llm_function(TestClient, "TestFunc", { "input": "world" })
 }

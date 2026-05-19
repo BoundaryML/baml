@@ -59,6 +59,7 @@ $root.baml_core = (function() {
              * @property {number} ADT_PROMPT_AST=11 ADT_PROMPT_AST value
              * @property {number} ADT_COLLECTOR=12 ADT_COLLECTOR value
              * @property {number} ADT_TYPE=13 ADT_TYPE value
+             * @property {number} ADT_TAGGED_HEAP_HANDLE=14 ADT_TAGGED_HEAP_HANDLE value
              */
             v1.BamlHandleType = (function() {
                 var valuesById = {}, values = Object.create(valuesById);
@@ -74,6 +75,7 @@ $root.baml_core = (function() {
                 values[valuesById[11] = "ADT_PROMPT_AST"] = 11;
                 values[valuesById[12] = "ADT_COLLECTOR"] = 12;
                 values[valuesById[13] = "ADT_TYPE"] = 13;
+                values[valuesById[14] = "ADT_TAGGED_HEAP_HANDLE"] = 14;
                 return values;
             })();
 
@@ -244,6 +246,7 @@ $root.baml_core = (function() {
                         case 11:
                         case 12:
                         case 13:
+                        case 14:
                             break;
                         }
                     return null;
@@ -324,6 +327,10 @@ $root.baml_core = (function() {
                     case "ADT_TYPE":
                     case 13:
                         message.handleType = 13;
+                        break;
+                    case "ADT_TAGGED_HEAP_HANDLE":
+                    case 14:
+                        message.handleType = 14;
                         break;
                     }
                     return message;
@@ -2668,7 +2675,7 @@ $root.baml_core = (function() {
                  * @property {baml_core.cffi.v1.IBamlValueList|null} [listValue] BamlOutboundValue listValue
                  * @property {baml_core.cffi.v1.IBamlValueMap|null} [mapValue] BamlOutboundValue mapValue
                  * @property {baml_core.cffi.v1.IBamlValueUnionVariant|null} [unionVariantValue] BamlOutboundValue unionVariantValue
-                 * @property {baml_core.cffi.v1.IBamlHandle|null} [handleValue] BamlOutboundValue handleValue
+                 * @property {baml_core.cffi.v1.IBamlOutboundHandle|null} [handleValue] BamlOutboundValue handleValue
                  * @property {baml_core.cffi.v1.IBamlValueMedia|null} [mediaValue] BamlOutboundValue mediaValue
                  * @property {baml_core.cffi.v1.IBamlValuePromptAst|null} [promptAstValue] BamlOutboundValue promptAstValue
                  * @property {Uint8Array|null} [uint8arrayValue] BamlOutboundValue uint8arrayValue
@@ -2779,7 +2786,7 @@ $root.baml_core = (function() {
 
                 /**
                  * BamlOutboundValue handleValue.
-                 * @member {baml_core.cffi.v1.IBamlHandle|null|undefined} handleValue
+                 * @member {baml_core.cffi.v1.IBamlOutboundHandle|null|undefined} handleValue
                  * @memberof baml_core.cffi.v1.BamlOutboundValue
                  * @instance
                  */
@@ -2870,7 +2877,7 @@ $root.baml_core = (function() {
                     if (message.unionVariantValue != null && Object.hasOwnProperty.call(message, "unionVariantValue"))
                         $root.baml_core.cffi.v1.BamlValueUnionVariant.encode(message.unionVariantValue, writer.uint32(/* id 13, wireType 2 =*/106).fork()).ldelim();
                     if (message.handleValue != null && Object.hasOwnProperty.call(message, "handleValue"))
-                        $root.baml_core.cffi.v1.BamlHandle.encode(message.handleValue, writer.uint32(/* id 16, wireType 2 =*/130).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlOutboundHandle.encode(message.handleValue, writer.uint32(/* id 16, wireType 2 =*/130).fork()).ldelim();
                     if (message.mediaValue != null && Object.hasOwnProperty.call(message, "mediaValue"))
                         $root.baml_core.cffi.v1.BamlValueMedia.encode(message.mediaValue, writer.uint32(/* id 17, wireType 2 =*/138).fork()).ldelim();
                     if (message.promptAstValue != null && Object.hasOwnProperty.call(message, "promptAstValue"))
@@ -2958,7 +2965,7 @@ $root.baml_core = (function() {
                                 break;
                             }
                         case 16: {
-                                message.handleValue = $root.baml_core.cffi.v1.BamlHandle.decode(reader, reader.uint32());
+                                message.handleValue = $root.baml_core.cffi.v1.BamlOutboundHandle.decode(reader, reader.uint32());
                                 break;
                             }
                         case 17: {
@@ -3110,7 +3117,7 @@ $root.baml_core = (function() {
                             return "value: multiple values";
                         properties.value = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlHandle.verify(message.handleValue);
+                            var error = $root.baml_core.cffi.v1.BamlOutboundHandle.verify(message.handleValue);
                             if (error)
                                 return "handleValue." + error;
                         }
@@ -3210,7 +3217,7 @@ $root.baml_core = (function() {
                     if (object.handleValue != null) {
                         if (typeof object.handleValue !== "object")
                             throw TypeError(".baml_core.cffi.v1.BamlOutboundValue.handleValue: object expected");
-                        message.handleValue = $root.baml_core.cffi.v1.BamlHandle.fromObject(object.handleValue);
+                        message.handleValue = $root.baml_core.cffi.v1.BamlOutboundHandle.fromObject(object.handleValue);
                     }
                     if (object.mediaValue != null) {
                         if (typeof object.mediaValue !== "object")
@@ -3302,7 +3309,7 @@ $root.baml_core = (function() {
                             object.value = "unionVariantValue";
                     }
                     if (message.handleValue != null && message.hasOwnProperty("handleValue")) {
-                        object.handleValue = $root.baml_core.cffi.v1.BamlHandle.toObject(message.handleValue, options);
+                        object.handleValue = $root.baml_core.cffi.v1.BamlOutboundHandle.toObject(message.handleValue, options);
                         if (options.oneofs)
                             object.value = "handleValue";
                     }
@@ -3351,6 +3358,351 @@ $root.baml_core = (function() {
                 };
 
                 return BamlOutboundValue;
+            })();
+
+            v1.BamlOutboundHandle = (function() {
+
+                /**
+                 * Properties of a BamlOutboundHandle.
+                 * @memberof baml_core.cffi.v1
+                 * @interface IBamlOutboundHandle
+                 * @property {number|Long|null} [key] BamlOutboundHandle key
+                 * @property {baml_core.cffi.v1.BamlHandleType|null} [handleType] BamlOutboundHandle handleType
+                 * @property {baml_core.cffi.v1.IBamlTyName|null} [name] BamlOutboundHandle name
+                 */
+
+                /**
+                 * Constructs a new BamlOutboundHandle.
+                 * @memberof baml_core.cffi.v1
+                 * @classdesc Represents a BamlOutboundHandle.
+                 * @implements IBamlOutboundHandle
+                 * @constructor
+                 * @param {baml_core.cffi.v1.IBamlOutboundHandle=} [properties] Properties to set
+                 */
+                function BamlOutboundHandle(properties) {
+                    if (properties)
+                        for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                            if (properties[keys[i]] != null)
+                                this[keys[i]] = properties[keys[i]];
+                }
+
+                /**
+                 * BamlOutboundHandle key.
+                 * @member {number|Long} key
+                 * @memberof baml_core.cffi.v1.BamlOutboundHandle
+                 * @instance
+                 */
+                BamlOutboundHandle.prototype.key = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
+
+                /**
+                 * BamlOutboundHandle handleType.
+                 * @member {baml_core.cffi.v1.BamlHandleType} handleType
+                 * @memberof baml_core.cffi.v1.BamlOutboundHandle
+                 * @instance
+                 */
+                BamlOutboundHandle.prototype.handleType = 0;
+
+                /**
+                 * BamlOutboundHandle name.
+                 * @member {baml_core.cffi.v1.IBamlTyName|null|undefined} name
+                 * @memberof baml_core.cffi.v1.BamlOutboundHandle
+                 * @instance
+                 */
+                BamlOutboundHandle.prototype.name = null;
+
+                /**
+                 * Creates a new BamlOutboundHandle instance using the specified properties.
+                 * @function create
+                 * @memberof baml_core.cffi.v1.BamlOutboundHandle
+                 * @static
+                 * @param {baml_core.cffi.v1.IBamlOutboundHandle=} [properties] Properties to set
+                 * @returns {baml_core.cffi.v1.BamlOutboundHandle} BamlOutboundHandle instance
+                 */
+                BamlOutboundHandle.create = function create(properties) {
+                    return new BamlOutboundHandle(properties);
+                };
+
+                /**
+                 * Encodes the specified BamlOutboundHandle message. Does not implicitly {@link baml_core.cffi.v1.BamlOutboundHandle.verify|verify} messages.
+                 * @function encode
+                 * @memberof baml_core.cffi.v1.BamlOutboundHandle
+                 * @static
+                 * @param {baml_core.cffi.v1.IBamlOutboundHandle} message BamlOutboundHandle message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlOutboundHandle.encode = function encode(message, writer) {
+                    if (!writer)
+                        writer = $Writer.create();
+                    if (message.key != null && Object.hasOwnProperty.call(message, "key"))
+                        writer.uint32(/* id 1, wireType 0 =*/8).uint64(message.key);
+                    if (message.handleType != null && Object.hasOwnProperty.call(message, "handleType"))
+                        writer.uint32(/* id 2, wireType 0 =*/16).int32(message.handleType);
+                    if (message.name != null && Object.hasOwnProperty.call(message, "name"))
+                        $root.baml_core.cffi.v1.BamlTyName.encode(message.name, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+                    return writer;
+                };
+
+                /**
+                 * Encodes the specified BamlOutboundHandle message, length delimited. Does not implicitly {@link baml_core.cffi.v1.BamlOutboundHandle.verify|verify} messages.
+                 * @function encodeDelimited
+                 * @memberof baml_core.cffi.v1.BamlOutboundHandle
+                 * @static
+                 * @param {baml_core.cffi.v1.IBamlOutboundHandle} message BamlOutboundHandle message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlOutboundHandle.encodeDelimited = function encodeDelimited(message, writer) {
+                    return this.encode(message, writer).ldelim();
+                };
+
+                /**
+                 * Decodes a BamlOutboundHandle message from the specified reader or buffer.
+                 * @function decode
+                 * @memberof baml_core.cffi.v1.BamlOutboundHandle
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @param {number} [length] Message length if known beforehand
+                 * @returns {baml_core.cffi.v1.BamlOutboundHandle} BamlOutboundHandle
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlOutboundHandle.decode = function decode(reader, length, error) {
+                    if (!(reader instanceof $Reader))
+                        reader = $Reader.create(reader);
+                    var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlOutboundHandle();
+                    while (reader.pos < end) {
+                        var tag = reader.uint32();
+                        if (tag === error)
+                            break;
+                        switch (tag >>> 3) {
+                        case 1: {
+                                message.key = reader.uint64();
+                                break;
+                            }
+                        case 2: {
+                                message.handleType = reader.int32();
+                                break;
+                            }
+                        case 3: {
+                                message.name = $root.baml_core.cffi.v1.BamlTyName.decode(reader, reader.uint32());
+                                break;
+                            }
+                        default:
+                            reader.skipType(tag & 7);
+                            break;
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Decodes a BamlOutboundHandle message from the specified reader or buffer, length delimited.
+                 * @function decodeDelimited
+                 * @memberof baml_core.cffi.v1.BamlOutboundHandle
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @returns {baml_core.cffi.v1.BamlOutboundHandle} BamlOutboundHandle
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlOutboundHandle.decodeDelimited = function decodeDelimited(reader) {
+                    if (!(reader instanceof $Reader))
+                        reader = new $Reader(reader);
+                    return this.decode(reader, reader.uint32());
+                };
+
+                /**
+                 * Verifies a BamlOutboundHandle message.
+                 * @function verify
+                 * @memberof baml_core.cffi.v1.BamlOutboundHandle
+                 * @static
+                 * @param {Object.<string,*>} message Plain object to verify
+                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
+                 */
+                BamlOutboundHandle.verify = function verify(message) {
+                    if (typeof message !== "object" || message === null)
+                        return "object expected";
+                    if (message.key != null && message.hasOwnProperty("key"))
+                        if (!$util.isInteger(message.key) && !(message.key && $util.isInteger(message.key.low) && $util.isInteger(message.key.high)))
+                            return "key: integer|Long expected";
+                    if (message.handleType != null && message.hasOwnProperty("handleType"))
+                        switch (message.handleType) {
+                        default:
+                            return "handleType: enum value expected";
+                        case 0:
+                        case 1:
+                        case 2:
+                        case 5:
+                        case 6:
+                        case 7:
+                        case 8:
+                        case 9:
+                        case 10:
+                        case 11:
+                        case 12:
+                        case 13:
+                        case 14:
+                            break;
+                        }
+                    if (message.name != null && message.hasOwnProperty("name")) {
+                        var error = $root.baml_core.cffi.v1.BamlTyName.verify(message.name);
+                        if (error)
+                            return "name." + error;
+                    }
+                    return null;
+                };
+
+                /**
+                 * Creates a BamlOutboundHandle message from a plain object. Also converts values to their respective internal types.
+                 * @function fromObject
+                 * @memberof baml_core.cffi.v1.BamlOutboundHandle
+                 * @static
+                 * @param {Object.<string,*>} object Plain object
+                 * @returns {baml_core.cffi.v1.BamlOutboundHandle} BamlOutboundHandle
+                 */
+                BamlOutboundHandle.fromObject = function fromObject(object) {
+                    if (object instanceof $root.baml_core.cffi.v1.BamlOutboundHandle)
+                        return object;
+                    var message = new $root.baml_core.cffi.v1.BamlOutboundHandle();
+                    if (object.key != null)
+                        if ($util.Long)
+                            (message.key = $util.Long.fromValue(object.key)).unsigned = true;
+                        else if (typeof object.key === "string")
+                            message.key = parseInt(object.key, 10);
+                        else if (typeof object.key === "number")
+                            message.key = object.key;
+                        else if (typeof object.key === "object")
+                            message.key = new $util.LongBits(object.key.low >>> 0, object.key.high >>> 0).toNumber(true);
+                    switch (object.handleType) {
+                    default:
+                        if (typeof object.handleType === "number") {
+                            message.handleType = object.handleType;
+                            break;
+                        }
+                        break;
+                    case "HANDLE_UNSPECIFIED":
+                    case 0:
+                        message.handleType = 0;
+                        break;
+                    case "UNTAGGED_RUST_DATA":
+                    case 1:
+                        message.handleType = 1;
+                        break;
+                    case "UNTAGGED_BEX_HEAP":
+                    case 2:
+                        message.handleType = 2;
+                        break;
+                    case "FUNCTION_REF":
+                    case 5:
+                        message.handleType = 5;
+                        break;
+                    case "ADT_MEDIA_IMAGE":
+                    case 6:
+                        message.handleType = 6;
+                        break;
+                    case "ADT_MEDIA_AUDIO":
+                    case 7:
+                        message.handleType = 7;
+                        break;
+                    case "ADT_MEDIA_VIDEO":
+                    case 8:
+                        message.handleType = 8;
+                        break;
+                    case "ADT_MEDIA_PDF":
+                    case 9:
+                        message.handleType = 9;
+                        break;
+                    case "ADT_MEDIA_GENERIC":
+                    case 10:
+                        message.handleType = 10;
+                        break;
+                    case "ADT_PROMPT_AST":
+                    case 11:
+                        message.handleType = 11;
+                        break;
+                    case "ADT_COLLECTOR":
+                    case 12:
+                        message.handleType = 12;
+                        break;
+                    case "ADT_TYPE":
+                    case 13:
+                        message.handleType = 13;
+                        break;
+                    case "ADT_TAGGED_HEAP_HANDLE":
+                    case 14:
+                        message.handleType = 14;
+                        break;
+                    }
+                    if (object.name != null) {
+                        if (typeof object.name !== "object")
+                            throw TypeError(".baml_core.cffi.v1.BamlOutboundHandle.name: object expected");
+                        message.name = $root.baml_core.cffi.v1.BamlTyName.fromObject(object.name);
+                    }
+                    return message;
+                };
+
+                /**
+                 * Creates a plain object from a BamlOutboundHandle message. Also converts values to other types if specified.
+                 * @function toObject
+                 * @memberof baml_core.cffi.v1.BamlOutboundHandle
+                 * @static
+                 * @param {baml_core.cffi.v1.BamlOutboundHandle} message BamlOutboundHandle
+                 * @param {$protobuf.IConversionOptions} [options] Conversion options
+                 * @returns {Object.<string,*>} Plain object
+                 */
+                BamlOutboundHandle.toObject = function toObject(message, options) {
+                    if (!options)
+                        options = {};
+                    var object = {};
+                    if (options.defaults) {
+                        if ($util.Long) {
+                            var long = new $util.Long(0, 0, true);
+                            object.key = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                        } else
+                            object.key = options.longs === String ? "0" : 0;
+                        object.handleType = options.enums === String ? "HANDLE_UNSPECIFIED" : 0;
+                        object.name = null;
+                    }
+                    if (message.key != null && message.hasOwnProperty("key"))
+                        if (typeof message.key === "number")
+                            object.key = options.longs === String ? String(message.key) : message.key;
+                        else
+                            object.key = options.longs === String ? $util.Long.prototype.toString.call(message.key) : options.longs === Number ? new $util.LongBits(message.key.low >>> 0, message.key.high >>> 0).toNumber(true) : message.key;
+                    if (message.handleType != null && message.hasOwnProperty("handleType"))
+                        object.handleType = options.enums === String ? $root.baml_core.cffi.v1.BamlHandleType[message.handleType] === undefined ? message.handleType : $root.baml_core.cffi.v1.BamlHandleType[message.handleType] : message.handleType;
+                    if (message.name != null && message.hasOwnProperty("name"))
+                        object.name = $root.baml_core.cffi.v1.BamlTyName.toObject(message.name, options);
+                    return object;
+                };
+
+                /**
+                 * Converts this BamlOutboundHandle to JSON.
+                 * @function toJSON
+                 * @memberof baml_core.cffi.v1.BamlOutboundHandle
+                 * @instance
+                 * @returns {Object.<string,*>} JSON object
+                 */
+                BamlOutboundHandle.prototype.toJSON = function toJSON() {
+                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+                };
+
+                /**
+                 * Gets the default type url for BamlOutboundHandle
+                 * @function getTypeUrl
+                 * @memberof baml_core.cffi.v1.BamlOutboundHandle
+                 * @static
+                 * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns {string} The default type url
+                 */
+                BamlOutboundHandle.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                    if (typeUrlPrefix === undefined) {
+                        typeUrlPrefix = "type.googleapis.com";
+                    }
+                    return typeUrlPrefix + "/baml_core.cffi.v1.BamlOutboundHandle";
+                };
+
+                return BamlOutboundHandle;
             })();
 
             v1.BamlTyName = (function() {

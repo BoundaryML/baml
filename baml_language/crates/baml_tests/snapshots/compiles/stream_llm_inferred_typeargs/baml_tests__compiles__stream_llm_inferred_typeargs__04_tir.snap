@@ -18,16 +18,16 @@ function user.TestFunc$build_request_stream(input: string) -> baml.http.Request 
   baml.llm.build_request_stream(TestClient, "TestFunc", map { "input": input }) : baml.http.Request
 }
 function user.TestFunc$parse(json: string) -> string throws never {
-  baml.llm.parse<T>("TestFunc", json) : string
+  baml.llm.parse<TFinal>("TestFunc", json) : string
 }
-function user.call_stream_inferred() -> baml.llm.Stream<string, null | string> throws never {
-  { : baml.llm.Stream<string, null | string>
-    baml.llm.stream_llm_function(TestClient, "TestFunc", map { "input": "world" }) : baml.llm.Stream<string, null | string>
+function user.call_stream_inferred() -> baml.llm.Stream<null | string, string> throws never {
+  { : baml.llm.Stream<null | string, string>
+    baml.llm.stream_llm_function(TestClient, "TestFunc", map { "input": "world" }) : baml.llm.Stream<null | string, string>
   }
 }
-function user.TestFunc$stream(input: string) -> baml.llm.Stream<string, null | string> throws never {
-  baml.llm.stream_llm_function(TestClient, "TestFunc", map { "input": input }) : baml.llm.Stream<string, null | string>
+function user.TestFunc$stream(input: string) -> baml.llm.Stream<null | string, string> throws never {
+  baml.llm.stream_llm_function(TestClient, "TestFunc", map { "input": input }) : baml.llm.Stream<null | string, string>
 }
-function user.TestFunc$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> throws never {
+function user.TestFunc$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<null | string, string> throws never {
   TestClient.__make_stream(sse, "TestFunc") : unknown
 }

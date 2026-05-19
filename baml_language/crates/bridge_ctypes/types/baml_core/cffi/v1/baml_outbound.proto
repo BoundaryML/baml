@@ -1,3 +1,5 @@
+// See crates/bridge_ctypes/README.md for the list of consumers and the
+// commands used to regenerate each language's proto client.
 syntax = "proto3";
 package baml_core.cffi.v1;
 
@@ -29,11 +31,21 @@ message BamlOutboundValue {
     BamlValueList list_value = 11;
     BamlValueMap map_value = 12;
     BamlValueUnionVariant union_variant_value = 13;
-    BamlHandle handle_value = 16;
+    BamlOutboundHandle handle_value = 16;
     BamlValueMedia media_value = 17;
     BamlValuePromptAst prompt_ast_value = 18;
     bytes uint8array_value = 19;
   }
+}
+
+// Outbound handle envelope. Mirrors `BamlHandle` (inbound) but carries
+// an extra `BamlTyName` naming the underlying class + concrete generic
+// args. Currently only `ADT_TAGGED_HEAP_HANDLE` populates `name`
+// meaningfully; other handle types leave it as the default empty name.
+message BamlOutboundHandle {
+  uint64 key = 1;
+  BamlHandleType handle_type = 2;
+  BamlTyName name = 3;
 }
 
 // wrapper for the name of a type

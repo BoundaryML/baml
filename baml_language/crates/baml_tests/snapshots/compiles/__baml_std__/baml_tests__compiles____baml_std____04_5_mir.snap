@@ -2416,10 +2416,10 @@ fn baml.llm.parse(function_name: string, json: string) -> void {
     let _2: string // json // param
     let _3: type // return_type
     let _4: type // stream_return_type
-    let _5: baml.llm.StreamCache<void, void> // cache
+    let _5: baml.llm.StreamCache<unknown, unknown> // cache
     let _6: type
     let _7: type
-    let _8: baml.llm.StreamCache<void, void>
+    let _8: baml.llm.StreamCache<unknown, unknown>
     let _9: type
     let _10: type
 
@@ -2591,7 +2591,7 @@ fn baml.llm.stream_llm_function(client: baml.llm.Client, function_name: string, 
     let _4: string // jinja_string
     let _5: baml.llm.ExecutionContext // context
     let _6: string
-    let _7: baml.llm.Stream<void, void> // result
+    let _7: baml.llm.Stream<unknown, unknown> // result
     let _8: baml.llm.ExecutionContext
     let _9: type
     let _10: type
@@ -2707,12 +2707,12 @@ fn baml.llm.Client.__make_stream(self: baml.llm.Client, sse: baml.http.SseStream
     let _5: type // return_type
     let _6: type // stream_return_type
     let _7: baml.llm.StreamAccumulator // acc
-    let _8: baml.llm.StreamCache<void, void> // cache
+    let _8: baml.llm.StreamCache<unknown, unknown> // cache
     let _9: type
     let _10: type
     let _11: baml.llm.PrimitiveClient
     let _12: baml.llm.StreamAccumulator
-    let _13: baml.llm.StreamCache<void, void>
+    let _13: baml.llm.StreamCache<unknown, unknown>
 
     bb0: {
         _4 = call const fn baml.llm.Client.to_primitive_client(copy _1) -> [bb1];
@@ -3369,7 +3369,7 @@ fn baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: baml.llm.
     let _16: type
     let _17: baml.http.SseStream // sse
     let _18: baml.http.Request
-    let _19: baml.llm.Stream<void, void> // stream
+    let _19: baml.llm.Stream<unknown, unknown> // stream
     let _20: baml.http.SseStream
     let _21: string
     let _22: baml.llm.Client[]
@@ -3378,7 +3378,7 @@ fn baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: baml.llm.
     let _25: bool
     let _26: baml.llm.Client
     let _27: baml.llm.Client // sub
-    let _28: baml.llm.Stream<void, void> // result2
+    let _28: baml.llm.Stream<unknown, unknown> // result2
     let _29: unknown // e
     let _30: type
     let _31: type
@@ -3443,7 +3443,7 @@ fn baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: baml.llm.
     }
 
     bb10: {
-        _7 = load_type(#0);
+        _7 = load_type(#1);
         goto -> bb11;
     }
 
@@ -3695,13 +3695,13 @@ fn baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm.Execu
     let _25: bool
     let _26: int
     let _27: int
-    let _28: baml.llm.Stream<void, void> // result2
+    let _28: baml.llm.Stream<unknown, unknown> // result2
     let _29: unknown // e
     let _30: int
     let _31: type
     let _32: type
     let _33: baml.errors.DevOther
-    let _34: baml.llm.Stream<void, void> // result
+    let _34: baml.llm.Stream<unknown, unknown> // result
     let _35: type
     let _36: type
 
@@ -3844,7 +3844,7 @@ fn baml.llm.Stream.final(self: baml.llm.Stream) -> void {
     let _25: string // content
     let _26: () -> string throws baml.errors.LlmClient
     let _27: string
-    let _28: baml.llm.StreamCache<void, void>
+    let _28: baml.llm.StreamCache<unknown, unknown>
     let _29: type
     let _30: type
 
@@ -3953,7 +3953,7 @@ fn baml.llm.Stream.from_json(j: baml.json.json) -> baml.llm.Stream<void, void> {
     let _8: baml.http.SseStream
     let _9: baml.json.json
     let _10: type
-    let _11: baml.llm.StreamCache<void, void>
+    let _11: baml.llm.StreamCache<unknown, unknown>
     let _12: baml.json.json
     let _13: type
 
@@ -4665,9 +4665,9 @@ fn baml.llm.Stream.next(self: baml.llm.Stream) -> void | baml.stream.StreamFinis
     let _13: () -> null throws never
     let _14: string // content
     let _15: () -> string throws baml.errors.LlmClient
-    let _16: void | baml.stream.StreamNoYield // parsed
+    let _16: unknown | baml.stream.StreamNoYield // parsed
     let _17: string
-    let _18: baml.llm.StreamCache<void, void>
+    let _18: baml.llm.StreamCache<unknown, unknown>
     let _19: type
     let _20: type
     let _21: bool
@@ -4782,7 +4782,7 @@ fn baml.llm.Stream.to_json(self: baml.llm.Stream) -> baml.json.json {
     let _9: baml.http.SseStream
     let _10: baml.llm.Stream
     let _11: baml.json.json
-    let _12: baml.llm.StreamCache<void, void>
+    let _12: baml.llm.StreamCache<unknown, unknown>
     let _13: baml.llm.Stream
     let _14: type
     let _15: type

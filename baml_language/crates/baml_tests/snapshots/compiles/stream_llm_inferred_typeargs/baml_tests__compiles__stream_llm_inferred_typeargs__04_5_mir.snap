@@ -104,9 +104,9 @@ fn user.TestFunc$render_prompt(input: string) -> baml.llm.PromptAst {
     }
 }
 
-fn user.call_stream_inferred() -> baml.llm.Stream<string, null | string> {
+fn user.call_stream_inferred() -> baml.llm.Stream<null | string, string> {
     // Locals:
-    let _0: baml.llm.Stream<string, null | string> // _0 // return
+    let _0: baml.llm.Stream<null | string, string> // _0 // return
     let _1: map<string, unknown>
 
     bb0: {
