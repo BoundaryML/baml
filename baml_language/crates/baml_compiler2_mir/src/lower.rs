@@ -274,7 +274,7 @@ pub fn tir2_to_template(
             if let Some(n) = generic_params.iter().position(|p| p == name) {
                 TyTemplate::TypeArgRef(u32::try_from(n).expect("generic param index fits in u32"))
             } else {
-                TyTemplate::Concrete(Ty::Void {
+                TyTemplate::Concrete(Ty::String {
                     attr: baml_type::TyAttr::default(),
                 })
             }
