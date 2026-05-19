@@ -2477,10 +2477,30 @@ impl LoweringContext<'_> {
         let future_place = Place::Local(future_local);
         self.lower_expr(future, future_place.clone());
 
+        // `Terminator::Await` requires its destination to be `Place::Local`.
+        // If the caller handed us a projection (field/index), await into a
+        // temp local and then assign through to the projection — mirrors
+        // how `lower_call` normalizes its destination.
+        let (await_dest, projection_dest) = match dest {
+            Place::Local(_) => (dest, None),
+            projection => {
+                let tmp = self.builder.temp(Ty::Null {
+                    attr: TyAttr::default(),
+                });
+                (Place::Local(tmp), Some(projection))
+            }
+        };
+
         let resume = self.builder.create_block();
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
-        self.builder.await_(future_place, dest, resume, unwind);
+        self.builder
+            .await_(future_place, await_dest.clone(), resume, unwind);
         self.builder.set_current_block(resume);
+
+        if let Some(projection) = projection_dest {
+            self.builder
+                .assign(projection, Rvalue::Use(Operand::Copy(await_dest)));
+        }
     }
 }
 

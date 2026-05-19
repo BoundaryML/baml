@@ -3151,9 +3151,30 @@ impl<'db> TypeInferenceBuilder<'db> {
                 match fut_ty {
                     Ty::Future(value, _error, _) => *value,
                     Ty::Unknown { .. } | Ty::Error { .. } => fut_ty,
-                    _ => Ty::Unknown {
-                        attr: TyAttr::default(),
-                    },
+                    other => {
+                        // `await` requires a Future operand. Emit a
+                        // TypeMismatch with `Future<unknown, unknown>` as
+                        // the expected shape so the user sees what `await`
+                        // wanted instead of silently getting `Unknown`.
+                        self.context.report_simple(
+                            TirTypeError::TypeMismatch {
+                                expected: Ty::Future(
+                                    Box::new(Ty::Unknown {
+                                        attr: TyAttr::default(),
+                                    }),
+                                    Box::new(Ty::Unknown {
+                                        attr: TyAttr::default(),
+                                    }),
+                                    TyAttr::default(),
+                                ),
+                                got: other,
+                            },
+                            *future,
+                        );
+                        Ty::Unknown {
+                            attr: TyAttr::default(),
+                        }
+                    }
                 }
             }
             Expr::Missing => Ty::Unknown {
@@ -5212,22 +5233,25 @@ impl<'db> TypeInferenceBuilder<'db> {
                 name,
                 body: spawn_body,
             } => {
-                // A spawn body's throws are scoped to the spawned thread;
-                // they reach the surrounding function only when the
-                // future is `await`ed. We still walk the name expression
-                // (it can throw) and recurse into the body so that any
-                // throws facts coming from `await` inside the body
-                // bubble through normally.
+                // Spawn-body throws do NOT escape the spawning function
+                // — they are captured into the resulting `Future<T, E>`'s
+                // E parameter and only re-thrown at an `await` site. The
+                // name expression itself can throw, so walk it; do not
+                // walk spawn_body.
                 if let Some(name_id) = name {
                     self.collect_throw_facts_from_expr(*name_id, body, out);
                 }
-                self.collect_throw_facts_from_expr(*spawn_body, body, out);
+                let _ = spawn_body;
             }
             Expr::Await { future } => {
-                // `await` re-throws the future's error. The error type
-                // lives on the `Future<T, E>` annotation; for v1 we
-                // treat the future expression itself as the source.
+                // `await` re-throws the future's error. Walk the future
+                // expression (its construction can throw), AND add the
+                // future's E parameter to the throws set so the
+                // surrounding function's effective throws includes it.
                 self.collect_throw_facts_from_expr(*future, body, out);
+                if let Some(Ty::Future(_value, error, _)) = self.expressions.get(future) {
+                    out.extend(crate::throw_inference::flatten_ty_to_facts(error));
+                }
             }
             Expr::Lambda(_)
             | Expr::Literal(_)

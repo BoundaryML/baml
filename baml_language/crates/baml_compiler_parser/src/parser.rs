@@ -190,6 +190,12 @@ pub(crate) struct Parser<'a> {
     /// Track nesting depth inside testset bodies where `test`/`testset` statements
     /// are valid. Incremented by `parse_testset_body`, checked by `parse_stmt`.
     testset_body_depth: u32,
+    /// Track contexts where a postfix `{ … }` must NOT be consumed as an
+    /// object-literal constructor. Set while parsing the optional name
+    /// expression of `spawn name { body }` so the body's brace stays
+    /// available to `parse_spawn_expr`. Counter so nested spawns nest
+    /// correctly.
+    suppress_object_literal_depth: u32,
 }
 
 impl<'a> Parser<'a> {
@@ -203,6 +209,7 @@ impl<'a> Parser<'a> {
             type_args_depth: 0,
             suppress_catch_depth: 0,
             testset_body_depth: 0,
+            suppress_object_literal_depth: 0,
         }
     }
 
@@ -4131,8 +4138,16 @@ impl<'a> Parser<'a> {
             } else if op == TokenKind::LBrace {
                 // Object literal/constructor
                 // Check if we have a preceding expression (constructor name/expression)
-                // by checking if we've emitted any events since expr_start
-                if self.events.len() > expr_start && self.looks_like_object_constructor() {
+                // by checking if we've emitted any events since expr_start.
+                //
+                // `suppress_object_literal_depth > 0` is set by `parse_spawn_expr`
+                // while parsing the optional name expression — without it,
+                // `spawn nm { y: 1 }` would consume the body's `{ y: 1 }` as
+                // a struct literal and then fail to find a body brace.
+                if self.suppress_object_literal_depth == 0
+                    && self.events.len() > expr_start
+                    && self.looks_like_object_constructor()
+                {
                     // We have a preceding expression that looks like a type/constructor,
                     // treat as object literal/constructor
                     let lhs_start = self.find_previous_expr_start_after(expr_start);
@@ -4354,10 +4369,13 @@ impl<'a> Parser<'a> {
             // power of 0 (no infix beyond what naturally terminates at
             // `{`), then the brace-block.
             if !p.at(TokenKind::LBrace) {
-                // The name is a regular expression; restrict binding
-                // power so we stop at `{` rather than try to interpret
-                // the block as a body of a function call.
+                // Suppress object-literal postfix so the body brace
+                // isn't consumed as a struct constructor — without
+                // this, `spawn nm { y: 1 }` parses `nm { y: 1 }` as
+                // an OBJECT_LITERAL and the body is missing.
+                p.suppress_object_literal_depth += 1;
                 p.parse_expr_bp(1);
+                p.suppress_object_literal_depth -= 1;
             }
             if p.at(TokenKind::LBrace) {
                 p.parse_block_expr();

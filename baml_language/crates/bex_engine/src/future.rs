@@ -222,7 +222,25 @@ impl FutureManagerGuard<'_> {
         // Type-erase the EngineError into the SetOnce payload (the SetOnce
         // type lives in bex_vm_types and can't reference EngineError directly).
         // `future_ready` downcasts back when the awaiter resumes.
-        let _ = fut.settle_internal_error(Box::new(err));
+        //
+        // The CAS can lose if a concurrent `f.cancel()` (or, in the future,
+        // any other non-FutureManager writer) transitioned `Pending` →
+        // `Cancelled` between the pre-check on line 209 and this call. In
+        // that case the user-initiated cancellation already represents an
+        // intentional terminal state and the awaiter will see `Cancelled`
+        // — the engine error is dropped on the floor. We log it instead of
+        // returning an `Err` because returning an error from this helper
+        // would itself need to be wrapped in another `internal_error_future`,
+        // and we'd recurse on the same race.
+        if !fut.settle_internal_error(Box::new(err)) {
+            let actual = FutureType::of(fut);
+            tracing::warn!(
+                ?id,
+                ?actual,
+                "internal_error_future CAS lost to a concurrent terminal \
+                 transition (likely f.cancel()); engine error discarded"
+            );
+        }
         Ok(())
     }
 

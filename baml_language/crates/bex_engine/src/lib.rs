@@ -1614,7 +1614,7 @@ impl BexEngine {
         drop(guard);
         child_cancel.cancel();
         if let Some(ptr) = settled_ptr {
-            thread.vm_thread_notify_parent_of_error(ptr);
+            thread.vm_thread_notify_parent_of_error(future_id, ptr);
         }
         Ok(())
     }
@@ -1765,7 +1765,7 @@ impl BexEngine {
     fn read_pending_child_error_value(
         thread: &mut bex_heap::ActiveHeapPermit<BexThread>,
     ) -> Option<Value> {
-        let errored_future_ptr = thread.vm_thread_pop_pending_child_error()?;
+        let (_id, errored_future_ptr) = thread.vm_thread_pop_pending_child_error()?;
         // SAFETY: the ptr was rooted via the BexThread's
         // `pending_child_errors` queue, so GC has kept the heap object
         // alive and forward-updated the ptr if it moved. We hold the
@@ -2132,13 +2132,13 @@ impl BexEngine {
                     // errored fire-and-forget would have its error
                     // pre-empted here as `EngineError::UnhandledThrow`
                     // and bypass the catch.
-                    let awaiting_ptr = {
-                        let g = self.futures.acquire(thread.proof()).await;
-                        g.future_heap_ptr(future_id)
-                    };
-                    if let Some(ptr) = awaiting_ptr {
-                        thread.vm_thread_consume_pending_child_error_for(ptr);
-                    }
+                    //
+                    // We key the carve-out on the `FutureId` (not the
+                    // heap ptr) so the match works even if the
+                    // producer already removed the `active_futures`
+                    // entry: the queue still has our entry tagged with
+                    // the same id.
+                    thread.vm_thread_consume_pending_child_error_for(future_id);
                     if let Some(value) = Self::read_pending_child_error_value(&mut thread) {
                         // Same propagation pattern as
                         // `VmError::ThrownUnhandled` for a non-cancel
@@ -2229,16 +2229,11 @@ impl BexEngine {
                     // drain caught errors that were ready going in;
                     // this catches errors that arrived during the wait.
                     //
-                    // Same catch-natural carve-out as pre-drain: if
-                    // the awaited future itself errored during the
-                    // wait and pushed to our queue, consume that
-                    // entry so the VM's re-execution of Await throws
-                    // via the heap state (catchable) rather than
-                    // surfacing here as `EngineError::UnhandledThrow`
-                    // (uncatchable).
-                    if let Some(ptr) = awaiting_ptr {
-                        thread.vm_thread_consume_pending_child_error_for(ptr);
-                    }
+                    // Same catch-natural carve-out as pre-drain. Key
+                    // by `future_id` for the same reason: stable
+                    // across GC moves and across producer settles
+                    // that remove the `active_futures` bookkeeping.
+                    thread.vm_thread_consume_pending_child_error_for(future_id);
                     if let Some(value) = Self::read_pending_child_error_value(&mut thread) {
                         if let Some(our_future_id) = thread.vm_thread_settles_future() {
                             self.settle_child_errored(&mut thread, our_future_id, value)
