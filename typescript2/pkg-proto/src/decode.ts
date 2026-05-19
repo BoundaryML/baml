@@ -30,6 +30,24 @@ export function handleTypeName(handleType: number): string {
 
 export type WrapHandleFn<T> = (key: bigint, handleType: number, typeName: string) => T;
 
+/**
+ * Decode a base-sixteen hex string (the wire format for bigint values and
+ * literals, produced by Rust's `format!("{:x}")`) into a `bigint`. A leading
+ * `-` denotes a negative value; there is no `0x` prefix on the wire.
+ *
+ * Guards against empty or sign-only input: `BigInt('0x')` throws an opaque
+ * `SyntaxError`, so we surface a clearer error for malformed wire data.
+ */
+function hexToBigInt(hex: string): bigint {
+  const negative = hex.startsWith('-');
+  const magnitude = negative ? hex.slice(1) : hex;
+  if (magnitude.length === 0 || !/^[0-9a-fA-F]+$/.test(magnitude)) {
+    throw new Error(`Invalid bigint hex on the wire: ${JSON.stringify(hex)}`);
+  }
+  const value = BigInt(`0x${magnitude}`);
+  return negative ? -value : value;
+}
+
 const MEDIA_TYPE_NAMES: Record<number, BamlJsMedia['media_type']> = {
   [MediaTypeEnum.MEDIA_TYPE_UNSPECIFIED]: 'other',
   [MediaTypeEnum.IMAGE]: 'image',
@@ -175,6 +193,8 @@ function deserializeValue<T>(
           return lit.literal.intLiteral.value;
         case 'boolLiteral':
           return lit.literal.boolLiteral.value;
+        case 'bigintLiteral':
+          return hexToBigInt(lit.literal.bigintLiteral.value);
         default: {
           const _exhaustive: never = lit.literal;
           return null;
@@ -205,6 +225,9 @@ function deserializeValue<T>(
 
     case 'uint8arrayValue':
       return holder.value.uint8arrayValue;
+
+    case 'bigintValue':
+      return hexToBigInt(holder.value.bigintValue);
 
     default:
       return null;

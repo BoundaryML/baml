@@ -91,6 +91,21 @@ function encodeCallArgs(kwargs) {
     return Buffer.from(CallFunctionArgs.encode(msg).finish());
 }
 // ─── Outbound (Rust → TS) ───
+// Hex / base sixteen on the wire (see Phase 10 of the bigint plan). Shared
+// by `bigint_value` (runtime values) and `bigint_literal` (type literals)
+// since both fields use the same wire format. BigInt() accepts a "0x"-prefixed
+// hex literal; strip a leading minus so we can parse the magnitude. Guard
+// against empty or sign-only inputs — `BigInt("0x")` throws `SyntaxError`,
+// so we surface a clearer error instead.
+function parseHexBigint(s) {
+    const magnitude = s.startsWith('-') ? s.slice(1) : s;
+    if (magnitude.length === 0 || !/^[0-9a-fA-F]+$/.test(magnitude)) {
+        throw new Error(`Invalid bigint hex on the wire: ${JSON.stringify(s)}`);
+    }
+    return s.startsWith('-')
+        ? -BigInt(`0x${magnitude}`)
+        : BigInt(`0x${magnitude}`);
+}
 function decodeValueHolder(holder) {
     if (holder.nullValue != null)
         return null;
@@ -99,19 +114,7 @@ function decodeValueHolder(holder) {
     if (holder.intValue != null)
         return Number(holder.intValue);
     if (holder.bigintValue != null) {
-        // Hex / base sixteen on the wire (see Phase 10 of the bigint plan).
-        // BigInt() accepts a "0x"-prefixed hex literal; strip a leading
-        // minus so we can parse the magnitude. Guard against empty or
-        // sign-only inputs — `BigInt("0x")` throws `SyntaxError`, so we
-        // surface a clearer error instead.
-        const s = holder.bigintValue;
-        const magnitude = s.startsWith('-') ? s.slice(1) : s;
-        if (magnitude.length === 0 || !/^[0-9a-fA-F]+$/.test(magnitude)) {
-            throw new Error(`Invalid bigint hex on the wire: ${JSON.stringify(s)}`);
-        }
-        return s.startsWith('-')
-            ? -BigInt(`0x${magnitude}`)
-            : BigInt(`0x${magnitude}`);
+        return parseHexBigint(holder.bigintValue);
     }
     if (holder.floatValue != null)
         return holder.floatValue;
@@ -137,12 +140,12 @@ function decodeValueHolder(holder) {
             return Number(holder.literalValue.intLiteral.value);
         if (holder.literalValue.boolLiteral != null)
             return holder.literalValue.boolLiteral.value;
-        // Decimal string with an optional leading minus sign; preserve full
-        // precision by returning a JS `BigInt`. `value` is a required proto
-        // field so the wire form always carries a string; coalesce defensively
-        // for missing-field decoding.
+        // Hex / base sixteen on the wire, matching `bigint_value`. `value` is
+        // a required proto field so the wire form always carries a string;
+        // coalesce defensively for missing-field decoding (an empty `'0'`
+        // decodes as `0n`).
         if (holder.literalValue.bigintLiteral != null) {
-            return BigInt(holder.literalValue.bigintLiteral.value ?? '0');
+            return parseHexBigint(holder.literalValue.bigintLiteral.value ?? '0');
         }
     }
     if (holder.listValue) {
