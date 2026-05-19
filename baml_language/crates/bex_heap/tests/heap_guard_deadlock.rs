@@ -1,5 +1,5 @@
 //! Regression test for the GC-park / new-permit AB-BA deadlock in
-//! `HeapPermitManager`. See `bex_heap/src/heap_guard.rs:294`.
+//! `HeapPermitManager`. See `bex_heap/src/heap_guard.rs` `request_park`.
 //!
 //! With the buggy ordering (mutex acquired before `acquire_many`), this
 //! test times out. With the fix (drain semaphore before taking mutex), it
@@ -30,26 +30,30 @@ async fn request_park_must_not_block_new_permit() {
     // Give B time to enter request_park and grab the holders mutex.
     tokio::time::sleep(Duration::from_millis(50)).await;
 
-    // Thread C: another VM hitting a `spawn` opcode — it tries to allocate
-    // a new permit. With the buggy ordering this blocks on the holders
-    // mutex (held by B) forever. With the fix this returns immediately
-    // because B is waiting on the semaphore, not on the mutex.
+    // Thread C: another VM wants a fresh permit (e.g. for a spawned
+    // child). With the buggy ordering, this hangs on `holders.lock()`
+    // because B is holding it across the semaphore await.
     let mgr_c = Arc::clone(&mgr);
-    let new_permit = tokio::spawn(async move {
-        let _ = mgr_c.new_permit(()).await;
+    let new_permit_handle = tokio::spawn(async move {
+        let _p = mgr_c.new_permit(()).await;
     });
 
-    let result = tokio::time::timeout(Duration::from_secs(1), new_permit).await;
+    // Bound the wait — without the fix this never resolves. Generous
+    // enough to absorb CI scheduler jitter; the correct path takes
+    // microseconds.
+    match tokio::time::timeout(Duration::from_secs(2), new_permit_handle).await {
+        Ok(Ok(())) => { /* new_permit returned promptly — fix is in place */ }
+        Ok(Err(join_err)) => panic!("new_permit task panicked: {join_err}"),
+        Err(_) => panic!(
+            "new_permit deadlocked waiting on the holders mutex while \
+             request_park was holding it across acquire_many — see \
+             baml_language/crates/bex_heap/src/heap_guard.rs request_park"
+        ),
+    }
 
-    // Drop A's permit so B (and the runtime) can shut down cleanly even on
-    // the buggy path — otherwise the test process would leak the park task.
+    // Drop A so the GC park can finally complete (otherwise the test
+    // process leaks the parked task).
     drop(active_a);
-    let _ = park.await;
-
-    assert!(
-        result.is_ok(),
-        "new_permit deadlocked waiting on the holders mutex while \
-         request_park was holding it across acquire_many — see \
-         baml_language/crates/bex_heap/src/heap_guard.rs:294"
-    );
+    park.await
+        .expect("park task should complete after permit released");
 }

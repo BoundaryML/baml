@@ -299,9 +299,7 @@ impl HeapPermitManager {
         // ActiveHeapPermit::acquire() can complete, so no mutator can run.
         // Taking the mutex first (and then awaiting acquire_many) deadlocks
         // against new_permit(): a VM mid-spawn holds an active permit and
-        // wants the mutex; we hold the mutex and want its permit. Latent
-        // since #3386 ("New garbage collector"); BEP-034 surfaces it under
-        // any spawn-heavy workload.
+        // wants the mutex; we hold the mutex and want its permit.
         let permits = self
             .active
             .acquire_many(MAX_PERMITS)
