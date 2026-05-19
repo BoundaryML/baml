@@ -46,6 +46,9 @@ namespace baml.fs:
   function size
   function write
   function write_bytes
+namespace baml.future:
+  class Future<T, E> { methods: [cancel, is_settled, is_cancelled, is_result, is_error, state, to_json, from_json] }
+  enum FutureState
 namespace baml.glob:
   class Glob { methods: [scan, matches, to_json, from_json] }
   class ScanOptions { methods: [to_json, from_json] }
@@ -58,7 +61,11 @@ namespace baml.http:
   function fetch_sse
   function send
 namespace baml.io:
+  function eprint
+  function eprintln
   function input
+  function print
+  function println
 namespace baml.json:
   class JsonDecodeError { methods: [to_json, from_json] }
   class JsonParseError { methods: [to_json, from_json] }
@@ -110,8 +117,10 @@ namespace baml.media:
   class Pdf { methods: [to_json, url, file, base64, mime_type, from_url, from_file, from_base64, from_json] }
   class Video { methods: [to_json, url, file, base64, mime_type, from_url, from_file, from_base64, from_json] }
 namespace baml.net:
-  class Socket { methods: [read, close, to_json, from_json] }
+  class Socket { methods: [read, write, close, to_json, from_json] }
+  class TcpListener { methods: [accept, close, to_json, from_json] }
   function connect
+  function listen
 namespace baml.panics:
   class AllocFailure { methods: [to_json, from_json] }
   class AssertionFailed { methods: [to_json, from_json] }

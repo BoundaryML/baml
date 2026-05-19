@@ -645,6 +645,8 @@ impl LoweringContext {
             SyntaxKind::OBJECT_LITERAL => self.lower_object_literal(node),
             SyntaxKind::MAP_LITERAL => self.lower_map_literal(node),
             SyntaxKind::LAMBDA_EXPR => self.lower_lambda_expr(node),
+            SyntaxKind::SPAWN_EXPR => self.lower_spawn_expr(node),
+            SyntaxKind::AWAIT_EXPR => self.lower_await_expr(node),
             _ => {
                 if let Some(literal) = self.try_lower_literal_token(node) {
                     literal
@@ -653,6 +655,89 @@ impl LoweringContext {
                 }
             }
         }
+    }
+
+    /// Lower `spawn name_expr? { body }`. The CST shape is
+    /// `SPAWN_EXPR [ KW_SPAWN [expr] BLOCK_EXPR ]`.
+    ///
+    /// To reuse the existing lambda machinery, the body is lowered as a
+    /// fresh 0-arg lambda (its own `ExprBody` + source map). The
+    /// `Expr::Spawn { body }` ID points at an `Expr::Lambda(func_def)`,
+    /// which the MIR lowering then handles via `lower_lambda` to emit
+    /// the proper `MakeClosure`. The name expression is parsed in the
+    /// outer context (where it can reference outer bindings).
+    fn lower_spawn_expr(&mut self, node: &SyntaxNode) -> ExprId {
+        use baml_compiler_syntax::ast as cst_ast;
+
+        let mut name: Option<ExprId> = None;
+        let mut body_lambda: Option<ExprId> = None;
+
+        for child in node.children() {
+            if child.kind() == SyntaxKind::BLOCK_EXPR {
+                // Synthesize a 0-arg lambda whose body is this block —
+                // mirroring `lower_lambda_expr` so the existing
+                // capture / scope / MIR plumbing applies unchanged.
+                let block = cst_ast::BlockExpr::cast(child.clone());
+                let func_def = block.map(|block| {
+                    let mut lambda_ctx = LoweringContext::new();
+                    let root_expr = lambda_ctx.lower_block_expr(&block);
+                    let (lbody, source_map, lambda_diags, lambda_env_refs) =
+                        lambda_ctx.finish(Some(root_expr));
+                    self.diags.extend(lambda_diags);
+                    self.env_var_refs.extend(lambda_env_refs);
+                    FunctionDef {
+                        name: Name::new("<spawn>"),
+                        generic_params: Vec::new(),
+                        params: Vec::new(),
+                        defaults: crate::ast::FunctionDefaults::empty(),
+                        return_type: None,
+                        throws: None,
+                        body: Some(FunctionBodyDef::Expr(lbody, source_map)),
+                        declarative_meta: None,
+                        origin: crate::ast::FunctionOrigin::Internal,
+                        attributes: Vec::new(),
+                        docstring: None,
+                        span: child.text_range(),
+                        name_span: child.text_range(),
+                    }
+                });
+                if let Some(fd) = func_def {
+                    body_lambda =
+                        Some(self.alloc_expr(Expr::Lambda(Box::new(fd)), child.text_range()));
+                }
+            } else if name.is_none() {
+                name = Some(self.lower_expr(&child));
+            }
+        }
+
+        let body = body_lambda.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+        self.alloc_expr(Expr::Spawn { name, body }, node.text_range())
+    }
+
+    /// Lower `await expr`. The CST shape is `AWAIT_EXPR [ KW_AWAIT
+    /// (expr_node | ident_token | literal_token) ]`.
+    ///
+    /// Bare identifiers like `await f` are emitted by the parser as a
+    /// raw `WORD` token (not a `PATH_EXPR` node), so we have to scan
+    /// both child nodes and child tokens — analogous to how
+    /// `BlockElement` handles `ExprToken`.
+    fn lower_await_expr(&mut self, node: &SyntaxNode) -> ExprId {
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Node(child) if child.kind() != SyntaxKind::KW_AWAIT => {
+                    let future = self.lower_expr(&child);
+                    return self.alloc_expr(Expr::Await { future }, node.text_range());
+                }
+                rowan::NodeOrToken::Token(token) if token.kind() != SyntaxKind::KW_AWAIT => {
+                    if let Some(future) = self.try_lower_bare_token(&token) {
+                        return self.alloc_expr(Expr::Await { future }, node.text_range());
+                    }
+                }
+                _ => {}
+            }
+        }
+        let future = self.alloc_expr(Expr::Missing, node.text_range());
+        self.alloc_expr(Expr::Await { future }, node.text_range())
     }
 
     fn lower_binary_expr(&mut self, node: &SyntaxNode) -> ExprId {

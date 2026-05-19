@@ -519,7 +519,7 @@ fn ty_value_to_serde(
             path,
             "function",
         )),
-        Ty::Future(_, _) => Err(raise_serialize(
+        Ty::Future(_, _, _) => Err(raise_serialize(
             vm,
             "cannot serialize future values",
             path,
@@ -878,7 +878,7 @@ fn ty_serde_to_value(
         )),
 
         Ty::Function { .. }
-        | Ty::Future(_, _)
+        | Ty::Future(_, _, _)
         | Ty::WatchAccessor(_, _)
         | Ty::BuiltinUnknown { .. }
         | Ty::Void { .. } => {

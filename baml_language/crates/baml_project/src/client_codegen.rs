@@ -610,6 +610,13 @@ fn convert_tir_leaf(
         | TirTy::Unknown { .. }
         | TirTy::Error { .. }
         | TirTy::Type { .. } => cg::Ty::Unit,
+
+        // BEP-034: surface a `Future<T, E>` as the codegen-side `Unit`
+        // for v1 — codegen for the host-side `Future` shape is a
+        // follow-up. The error path is acceptable since BAML code that
+        // returns futures must `await` them before crossing the host
+        // boundary in v1.
+        TirTy::Future(_, _, _) => cg::Ty::Unit,
     }
 }
 

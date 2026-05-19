@@ -487,6 +487,11 @@ fn normalize_impl(
         Ty::RustType { .. } => StructuralTy::Unknown,
         // `type` — the BAML metatype keyword. Strict: only compatible with `type`.
         Ty::Type { .. } => StructuralTy::Type,
+        // Phase C lowers `Future<T, E>` structurally as `Unknown`; the
+        // pattern-matching machinery treats futures as opaque (they have
+        // no destructure syntax). The dedicated Ty::Future variant still
+        // carries the value/error types for the MIR lowering of `await`.
+        Ty::Future(..) => StructuralTy::Unknown,
     }
 }
 

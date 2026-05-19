@@ -936,6 +936,22 @@ impl<'db> TypeInferenceBuilder<'db> {
             (ty, throws.span, true)
         } else if let Some(contextual) = contextual_throws {
             (contextual.clone(), func_def.span, false)
+        } else if Self::is_spawn_body_lambda(func_def) {
+            // BEP-034: a `spawn { body }` body is wrapped in a synthetic
+            // 0-arg lambda whose throws are captured into the resulting
+            // `Future<T, E>`'s E parameter, not propagated to the
+            // enclosing function. Use `Unknown` here so
+            // `check_throws_surface`'s open-slot check skips the
+            // declared-vs-effective comparison; the effective throws are
+            // still computed and read by `infer_expr`'s Spawn arm to
+            // build the Future's E.
+            (
+                Ty::Unknown {
+                    attr: TyAttr::default(),
+                },
+                func_def.span,
+                false,
+            )
         } else {
             (
                 Ty::Never {
@@ -945,6 +961,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 false,
             )
         }
+    }
+
+    /// Synthetic lambda produced by `lower_spawn_expr` carries the name
+    /// `<spawn>`. The marker is the only safe way to distinguish a
+    /// user-written `() => { ... }` from spawn's body wrapper at this
+    /// layer (their `FunctionDef`s are otherwise identical).
+    fn is_spawn_body_lambda(func_def: &baml_compiler2_ast::FunctionDef) -> bool {
+        func_def.name.as_str() == "<spawn>"
     }
 
     fn throws_surface_has_open_slot(throws_facts: &BTreeSet<Ty>) -> bool {
@@ -2004,6 +2028,36 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
                 shadowed.truncate(saved_len);
             }
+            Expr::Spawn {
+                name,
+                body: spawn_body,
+            } => {
+                if let Some(name_id) = name {
+                    Self::collect_default_expr_forward_references(
+                        *name_id,
+                        body,
+                        later_params,
+                        shadowed,
+                        refs,
+                    );
+                }
+                Self::collect_default_expr_forward_references(
+                    *spawn_body,
+                    body,
+                    later_params,
+                    shadowed,
+                    refs,
+                );
+            }
+            Expr::Await { future } => {
+                Self::collect_default_expr_forward_references(
+                    *future,
+                    body,
+                    later_params,
+                    shadowed,
+                    refs,
+                );
+            }
             Expr::Literal(_) | Expr::ByteStringLiteral(_) | Expr::Null | Expr::Missing => {}
         }
     }
@@ -3051,6 +3105,77 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.nested_lambda_types.insert(fsi, result.clone());
                 }
                 result
+            }
+            Expr::Spawn {
+                name,
+                body: spawn_body,
+            } => {
+                // BEP-034: `spawn name? { body } : Future<T, E>` where
+                // `body` has type `T throws E`. After AST lowering the
+                // body is wrapped in a synthetic 0-arg lambda; we infer
+                // the lambda's type, peel out its return as `T`, and
+                // pull its effective throws (computed and stored by
+                // `infer_lambda_body`) as `E`.
+                if let Some(name_id) = name {
+                    let _ = self.infer_expr(*name_id, body);
+                }
+                let lambda_ty = self.infer_expr(*spawn_body, body);
+                let value_ty = match &lambda_ty {
+                    Ty::Function { ret, .. } => ret.as_ref().clone(),
+                    _ => lambda_ty.clone(),
+                };
+                // Read the body's effective throws from the side table
+                // populated by `infer_lambda_body`. `Never` means the
+                // body throws nothing; BAML lacks a `never` type
+                // variant, so approximate with `Null` (per the BEP's
+                // "Future<T, never> ≈ Future<T, null> in v1" note).
+                let throws_ty = self
+                    .lambda_effective_throws
+                    .get(spawn_body)
+                    .cloned()
+                    .map_or_else(
+                        || Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
+                        |t| {
+                            if matches!(t, Ty::Never { .. }) {
+                                Ty::Primitive(PrimitiveType::Null, TyAttr::default())
+                            } else {
+                                t
+                            }
+                        },
+                    );
+                Ty::Future(Box::new(value_ty), Box::new(throws_ty), TyAttr::default())
+            }
+            Expr::Await { future } => {
+                // BEP-034: `await e : T` where `e : Future<T, E>`.
+                let fut_ty = self.infer_expr(*future, body);
+                match fut_ty {
+                    Ty::Future(value, _error, _) => *value,
+                    Ty::Unknown { .. } | Ty::Error { .. } => fut_ty,
+                    other => {
+                        // `await` requires a Future operand. Emit a
+                        // TypeMismatch with `Future<unknown, unknown>` as
+                        // the expected shape so the user sees what `await`
+                        // wanted instead of silently getting `Unknown`.
+                        self.context.report_simple(
+                            TirTypeError::TypeMismatch {
+                                expected: Ty::Future(
+                                    Box::new(Ty::Unknown {
+                                        attr: TyAttr::default(),
+                                    }),
+                                    Box::new(Ty::Unknown {
+                                        attr: TyAttr::default(),
+                                    }),
+                                    TyAttr::default(),
+                                ),
+                                got: other,
+                            },
+                            *future,
+                        );
+                        Ty::Unknown {
+                            attr: TyAttr::default(),
+                        }
+                    }
+                }
             }
             Expr::Missing => Ty::Unknown {
                 attr: TyAttr::default(),
@@ -4458,6 +4583,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                     || Self::ty_contains_recovery_unknown(ret)
                     || Self::ty_contains_recovery_unknown(throws)
             }
+            Ty::Future(value, error, _) => {
+                Self::ty_contains_recovery_unknown(value)
+                    || Self::ty_contains_recovery_unknown(error)
+            }
             Ty::Enum(..)
             | Ty::EnumVariant(..)
             | Ty::TypeAlias(..)
@@ -4498,6 +4627,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .any(|param| Self::ty_contains_unfilled_generic_class(&param.ty))
                     || Self::ty_contains_unfilled_generic_class(ret)
                     || Self::ty_contains_unfilled_generic_class(throws)
+            }
+            Ty::Future(value, error, _) => {
+                Self::ty_contains_unfilled_generic_class(value)
+                    || Self::ty_contains_unfilled_generic_class(error)
             }
             Ty::Enum(..)
             | Ty::EnumVariant(..)
@@ -5095,6 +5228,30 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             Expr::OptionalChain { expr } => {
                 self.collect_throw_facts_from_expr(*expr, body, out);
+            }
+            Expr::Spawn {
+                name,
+                body: spawn_body,
+            } => {
+                // Spawn-body throws do NOT escape the spawning function
+                // — they are captured into the resulting `Future<T, E>`'s
+                // E parameter and only re-thrown at an `await` site. The
+                // name expression itself can throw, so walk it; do not
+                // walk spawn_body.
+                if let Some(name_id) = name {
+                    self.collect_throw_facts_from_expr(*name_id, body, out);
+                }
+                let _ = spawn_body;
+            }
+            Expr::Await { future } => {
+                // `await` re-throws the future's error. Walk the future
+                // expression (its construction can throw), AND add the
+                // future's E parameter to the throws set so the
+                // surrounding function's effective throws includes it.
+                self.collect_throw_facts_from_expr(*future, body, out);
+                if let Some(Ty::Future(_value, error, _)) = self.expressions.get(future) {
+                    out.extend(crate::throw_inference::flatten_ty_to_facts(error));
+                }
             }
             Expr::Lambda(_)
             | Expr::Literal(_)
@@ -6017,6 +6174,27 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 })
             }
+            Ty::Future(value_ty, error_ty, _) => {
+                // Bridge: Future<T, E> → baml.future.Future class
+                self.resolve_builtin_member(
+                    &["future", "Future"],
+                    &[value_ty.as_ref().clone(), error_ty.as_ref().clone()],
+                    member,
+                    at,
+                )
+                .unwrap_or_else(|| {
+                    self.context.report_at_member_simple(
+                        TirTypeError::UnresolvedMember {
+                            base_type: base_ty.clone(),
+                            member: member.clone(),
+                        },
+                        at,
+                    );
+                    Ty::Unknown {
+                        attr: TyAttr::default(),
+                    }
+                })
+            }
             Ty::Primitive(PrimitiveType::String, _)
             | Ty::Literal(baml_base::Literal::String(_), _, _) => {
                 // Bridge: string / string-literal → String class
@@ -6412,6 +6590,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                 .resolve_builtin_method(
                     &["Map"],
                     &[key_ty.as_ref().clone(), val_ty.as_ref().clone()],
+                    member,
+                )
+                .map(BuiltinResolution::into_ty),
+            Ty::Future(value_ty, error_ty, _) => self
+                .resolve_builtin_method(
+                    &["future", "Future"],
+                    &[value_ty.as_ref().clone(), error_ty.as_ref().clone()],
                     member,
                 )
                 .map(BuiltinResolution::into_ty),
@@ -8244,6 +8429,10 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
                 })
                 .collect(),
             Ty::Class(qtn, _, _) => vec![Ctor::Class(qtn.clone())],
+            // Futures are non-exhaustive at the pattern level: there is
+            // no surface syntax to match against `Future<T, E>` other
+            // than a wildcard.
+            Ty::Future(..) => vec![Ctor::NonExhaustive],
             // Slice path in `split_ctors` enumerates length classes from
             // the matrix; this branch is only reached if the algorithm
             // calls into us with a List directly, in which case empty

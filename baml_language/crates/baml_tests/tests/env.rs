@@ -69,8 +69,7 @@ async fn env_get_existing_var() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string? {
         load_const "BAML_TEST_ENV_GET"
-        dispatch_future baml.env.get
-        await
+        sys_op baml.env.get
         return
     }
     "#);
@@ -94,8 +93,7 @@ async fn env_get_missing_var_returns_null() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string? {
         load_const "BAML_TEST_NONEXISTENT_VAR"
-        dispatch_future baml.env.get
-        await
+        sys_op baml.env.get
         return
     }
     "#);

@@ -7,22 +7,17 @@ fn user.test_type_annotation(function_name: string) -> string {
     let _0: string // _0 // return
     let _1: string // function_name // param
     let _2: type // t
-    let _3: future<type>
 
     bb0: {
-        _3 = dispatch_future const fn baml.llm.get_return_type(copy _1) -> bb1;
+        _2 = sys_op const fn baml.llm.get_return_type(copy _1) -> bb1;
     }
 
     bb1: {
-        _2 = await _3 -> [bb2];
+        _0 = const "ok";
+        goto -> bb2;
     }
 
     bb2: {
-        _0 = const "ok";
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -155,22 +150,17 @@ fn user.test_let_binding(function_name: string) -> string {
     let _0: string // _0 // return
     let _1: string // function_name // param
     let _2: type // t
-    let _3: future<type>
 
     bb0: {
-        _3 = dispatch_future const fn baml.llm.get_return_type(copy _1) -> bb1;
+        _2 = sys_op const fn baml.llm.get_return_type(copy _1) -> bb1;
     }
 
     bb1: {
-        _2 = await _3 -> [bb2];
+        _0 = const "ok";
+        goto -> bb2;
     }
 
     bb2: {
-        _0 = const "ok";
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -239,17 +229,12 @@ fn user.test_return_type(function_name: string) -> type {
     // Locals:
     let _0: type // _0 // return
     let _1: string // function_name // param
-    let _2: future<type>
 
     bb0: {
-        _2 = dispatch_future const fn baml.llm.get_return_type(copy _1) -> bb1;
+        _0 = sys_op const fn baml.llm.get_return_type(copy _1) -> bb1;
     }
 
     bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
         return;
     }
 }

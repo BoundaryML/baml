@@ -371,10 +371,10 @@ impl BexHeap {
                 }
             }
             Object::UnscheduledFuture(future) => {
-                worklist.extend(future.args.iter().filter_map(|v| match v {
-                    Value::Object(ptr) => Some(*ptr),
-                    _ => None,
-                }));
+                if let Some(name_ptr) = future.name {
+                    worklist.push(name_ptr);
+                }
+                worklist.push(future.closure);
             }
             // Primitives have no references
             #[cfg(feature = "heap_debug")]
@@ -494,8 +494,13 @@ impl BexHeap {
                 }
             }
             Object::UnscheduledFuture(future) => {
-                for value in &mut future.args {
-                    self.fixup_value(value, forwarding);
+                if let Some(name_ptr) = &mut future.name
+                    && let Some(&new_ptr) = forwarding.get(name_ptr)
+                {
+                    *name_ptr = new_ptr;
+                }
+                if let Some(&new_ptr) = forwarding.get(&future.closure) {
+                    future.closure = new_ptr;
                 }
             }
             // Primitives have no references
@@ -751,13 +756,14 @@ impl BexHeap {
                 }
             }
             Object::UnscheduledFuture(future) => {
-                worklist.extend(
-                    future
-                        .args
-                        .iter()
-                        .filter_map(Value::as_object_ptr)
-                        .filter(|ptr| self.generation_of(*ptr).is_young()),
-                );
+                if let Some(name_ptr) = future.name
+                    && self.generation_of(name_ptr).is_young()
+                {
+                    worklist.push(name_ptr);
+                }
+                if self.generation_of(future.closure).is_young() {
+                    worklist.push(future.closure);
+                }
             }
             // Primitives/leaf variants have no heap references.
             #[cfg(feature = "heap_debug")]
@@ -1848,23 +1854,26 @@ mod tests {
     }
 
     #[test]
-    fn test_gc_traces_future_pending_args() {
-        use bex_vm_types::{SysOp, UnscheduledFuture};
+    fn test_gc_traces_unscheduled_spawn_closure() {
+        use bex_vm_types::UnscheduledFuture;
 
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
-        let arg1 = tlab.alloc_string("arg1".to_string());
-        let arg2 = tlab.alloc_string("arg2".to_string());
+        // The closure pointer is just a dummy String for tracing
+        // purposes — the GC only needs a valid HeapPtr to walk.
+        let closure = tlab.alloc_string("closure-stand-in".to_string());
+        let name = tlab.alloc_string("spawn-name".to_string());
         let future_ptr = tlab.alloc(Object::UnscheduledFuture(UnscheduledFuture {
-            operation: SysOp::BamlEnvGet,
-            args: vec![Value::Object(arg1), Value::Object(arg2)],
+            closure,
+            name: Some(name),
         }));
 
         let roots = vec![future_ptr];
         let (stats, _new_roots, _) = unsafe { heap.collect_garbage(&roots) };
 
-        assert_eq!(stats.live_count, 3); // future + 2 args
+        // future + closure + name
+        assert_eq!(stats.live_count, 3);
     }
 
     #[test]
@@ -1876,13 +1885,17 @@ mod tests {
 
         let result = tlab.alloc_string("result".to_string());
         // Allocate the Future in `Pending` state first so we have a real
-        // `HeapPtr` to pass to `set_ready` for its write-barrier hook.
-        let future_ptr = tlab.alloc(Object::Future(Future::pending(FutureId::from_usize(0))));
+        // `HeapPtr` to pass to `settle_ready` for its write-barrier hook.
+        let future_ptr = tlab.alloc(Object::Future(Future::pending(
+            FutureId::from_usize(0),
+            bex_vm_types::types::CancellationToken::new(),
+        )));
         let Object::Future(future) = (unsafe { future_ptr.get() }) else {
             panic!("expected Object::Future");
         };
-        // SAFETY: single-writer; the heap object was just allocated locally.
-        unsafe { future.set_ready(heap.as_ref(), future_ptr, Value::Object(result)) };
+        // SAFETY: this Future is local and not yet visible; CAS will win.
+        let ok = unsafe { future.settle_ready(heap.as_ref(), future_ptr, Value::Object(result)) };
+        assert!(ok);
 
         let roots = vec![future_ptr];
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&roots) };
@@ -1907,14 +1920,16 @@ mod tests {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
-        // Allocate the Future in `Pending` state first so we have a real
-        // `HeapPtr` to pass to `set_ready`.
-        let future_ptr = tlab.alloc(Object::Future(Future::pending(FutureId::from_usize(0))));
+        let future_ptr = tlab.alloc(Object::Future(Future::pending(
+            FutureId::from_usize(0),
+            bex_vm_types::types::CancellationToken::new(),
+        )));
         let Object::Future(future) = (unsafe { future_ptr.get() }) else {
             panic!("expected Object::Future");
         };
-        // SAFETY: single-writer; the heap object was just allocated locally.
-        unsafe { future.set_ready(heap.as_ref(), future_ptr, Value::Int(99)) };
+        // SAFETY: this Future is local and not yet visible; CAS will win.
+        let ok = unsafe { future.settle_ready(heap.as_ref(), future_ptr, Value::Int(99)) };
+        assert!(ok);
         let roots = vec![future_ptr];
         let (stats, _, _) = unsafe { heap.collect_garbage(&roots) };
 
@@ -2323,7 +2338,7 @@ mod tests {
     fn test_tracing_and_fixup_consistency_all_variants() {
         use baml_type::{Name, TyAttr, TypeName};
         use bex_vm_types::{
-            Class, Enum, SysOp, UnscheduledFuture,
+            Class, Enum, UnscheduledFuture,
             types::{Cell, Closure, Instance, Variant},
         };
 
@@ -2362,9 +2377,11 @@ mod tests {
         }));
 
         // --- Container: Object::UnscheduledFuture ---
+        // After BEP-034 phase D′ the spawn case is all that's left;
+        // the closure pointer stands in as the traced HeapPtr.
         let future_container = tlab.alloc(Object::UnscheduledFuture(UnscheduledFuture {
-            operation: SysOp::BamlEnvGet,
-            args: vec![Value::Object(leaf_for_future)],
+            closure: leaf_for_future,
+            name: None,
         }));
 
         // --- Container: Object::Instance ---
@@ -2472,15 +2489,13 @@ mod tests {
         };
         assert_eq!(s, "cell_value");
 
-        // Future: args[0] should be the (forwarded) future arg string.
+        // Future: closure HeapPtr should be the (forwarded) leaf string
+        // we used as a stand-in for the spawn-body closure.
         let Object::UnscheduledFuture(pending) = (unsafe { new_roots[4].get() }) else {
             panic!("new_roots[4] not UnscheduledFuture")
         };
-        let Value::Object(fut_leaf) = pending.args[0] else {
-            panic!("future.args[0] not Object")
-        };
-        let Object::String(s) = (unsafe { fut_leaf.get() }) else {
-            panic!("future arg leaf not String")
+        let Object::String(s) = (unsafe { pending.closure.get() }) else {
+            panic!("future closure leaf not String")
         };
         assert_eq!(s, "future_arg");
 

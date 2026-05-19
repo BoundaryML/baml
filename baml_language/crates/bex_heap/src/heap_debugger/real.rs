@@ -338,9 +338,10 @@ impl BexHeap {
                 FutureRead::Pending(_) | FutureRead::Cancelled | FutureRead::InternalError(_) => {}
             },
             Object::UnscheduledFuture(future) => {
-                for value in &future.args {
-                    self.debug_assert_valid_value(value);
+                if let Some(name_ptr) = future.name {
+                    self.debug_assert_valid_index(name_ptr);
                 }
+                self.debug_assert_valid_index(future.closure);
             }
             Object::Closure(closure) => {
                 self.debug_assert_valid_index(closure.function);

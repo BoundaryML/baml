@@ -642,9 +642,11 @@ impl Printable for RawString {
 
         let interior = &text[start_quote + 1..end_quote].trim();
         let mut lines = interior.lines();
-        let first_line = lines
-            .next()
-            .unwrap_or_else(|| unreachable!("split always has at least one element"));
+        let Some(first_line) = lines.next() else {
+            // Interior is empty after trim (e.g. `#"\n"#`) — print as-is.
+            printer.print_raw_token(self);
+            return PrintInfo { multi_lined };
+        };
         let min_indent = lines
             .clone()
             .map(|line| {

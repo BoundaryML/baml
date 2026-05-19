@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.$init_test_32(registry: testing.TestCollector) -> null {
+fn user.$init_test_33(registry: testing.TestCollector) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.TestCollector // registry // param
@@ -25,7 +25,7 @@ fn user.$init_test_32(registry: testing.TestCollector) -> null {
 }
 
 // lambda[0]
-fn .<lambda($init_test_32, 0)>(testset: testing.TestCollector) -> null {
+fn .<lambda($init_test_33, 0)>(testset: testing.TestCollector) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.TestCollector // testset // param
@@ -85,89 +85,79 @@ fn .<lambda($init_test_32, 0)>(testset: testing.TestCollector) -> null {
 }
 
 // lambda[0]
-fn .<lambda(<lambda($init_test_32, 0)>, 1)>(testset: testing.TestCollector) -> null {
+fn .<lambda(<lambda($init_test_33, 0)>, 1)>(testset: testing.TestCollector) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.TestCollector // testset // param
     let _2: baml.http.Response // req
     let _3: string
     let _4: string
-    let _5: future<baml.http.Response>
-    let _6: string // data
-    let _7: future<string>
-    let _8: string[] // tests
-    let _9: string
-    let _10: string[]
-    let _11: int // __for_idx_1
-    let _12: int
-    let _13: bool
-    let _14: string
-    let _15: string // ex
-    let _16: void
-    let _17: string
-    let _18: () -> void throws unknown
+    let _5: string // data
+    let _6: string[] // tests
+    let _7: string
+    let _8: string[]
+    let _9: int // __for_idx_1
+    let _10: int
+    let _11: bool
+    let _12: string
+    let _13: string // ex
+    let _14: void
+    let _15: string
+    let _16: () -> void throws unknown
 
     bb0: {
         _4 = copy capture[0];
         _3 = const "http://localhost:8000/" + copy _4;
-        _5 = dispatch_future const fn baml.http.fetch(copy _3) -> bb1;
+        _2 = sys_op const fn baml.http.fetch(copy _3) -> bb1;
     }
 
     bb1: {
-        _2 = await _5 -> [bb2];
+        _5 = sys_op const fn baml.http.Response.text(copy _2) -> bb2;
     }
 
     bb2: {
-        _7 = dispatch_future const fn baml.http.Response.text(copy _2) -> bb3;
+        _7 = copy _5;
+        _6 = call const fn user.GenerateTests$parse(copy _7) -> [bb3];
     }
 
     bb3: {
-        _6 = await _7 -> [bb4];
+        _8 = copy _6;
+        _9 = const 0_i64;
+        goto -> bb4;
     }
 
     bb4: {
-        _9 = copy _6;
-        _8 = call const fn user.GenerateTests$parse(copy _9) -> [bb5];
+        _10 = len(_8);
+        _11 = copy _9 < copy _10;
+        branch copy _11 -> [bb7, bb5];
     }
 
     bb5: {
-        _10 = copy _8;
-        _11 = const 0_i64;
+        _0 = const null;
         goto -> bb6;
     }
 
     bb6: {
-        _12 = len(_10);
-        _13 = copy _11 < copy _12;
-        branch copy _13 -> [bb9, bb7];
-    }
-
-    bb7: {
-        _0 = const null;
-        goto -> bb8;
-    }
-
-    bb8: {
         return;
     }
 
-    bb9: {
-        _14 = copy _10[_11];
-        fresh_cell(_15);
-        _15 = copy _14;
-        _17 = copy _15;
-        _18 = make_closure lambda[0]();
-        _16 = call const fn testing.TestCollector.register_test(copy _1, copy _17, copy _18, const null) -> [bb10];
+    bb7: {
+        _12 = copy _8[_9];
+        fresh_cell(_13);
+        _13 = copy _12;
+        _15 = copy _13;
+        _16 = make_closure lambda[0]();
+        _14 = call const fn testing.TestCollector.register_test(copy _1, copy _15, copy _16, const null) -> [bb8];
     }
 
-    bb10: {
-        _11 = copy _11 + const 1_i64;
-        goto -> bb6;
+    bb8: {
+        _9 = copy _9 + const 1_i64;
+        goto -> bb4;
     }
 }
 
 // lambda[0]
-fn .<lambda(<lambda(<lambda($init_test_32, 0)>, 1)>, 2)>() -> null {
+fn .<lambda(<lambda(<lambda($init_test_33, 0)>, 1)>, 2)>() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: Sentiment // result
@@ -194,7 +184,7 @@ fn .<lambda(<lambda(<lambda($init_test_32, 0)>, 1)>, 2)>() -> null {
 }
 
 // lambda[1]
-fn .<lambda(<lambda($init_test_32, 0)>, 3)>(testset: testing.TestCollector) -> null {
+fn .<lambda(<lambda($init_test_33, 0)>, 3)>(testset: testing.TestCollector) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.TestCollector // testset // param
@@ -247,7 +237,7 @@ fn .<lambda(<lambda($init_test_32, 0)>, 3)>(testset: testing.TestCollector) -> n
 }
 
 // lambda[0]
-fn .<lambda(<lambda(<lambda($init_test_32, 0)>, 3)>, 4)>(testset: testing.TestCollector) -> null {
+fn .<lambda(<lambda(<lambda($init_test_33, 0)>, 3)>, 4)>(testset: testing.TestCollector) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.TestCollector // testset // param
@@ -305,7 +295,7 @@ fn .<lambda(<lambda(<lambda($init_test_32, 0)>, 3)>, 4)>(testset: testing.TestCo
 }
 
 // lambda[0]
-fn .<lambda(<lambda(<lambda(<lambda($init_test_32, 0)>, 3)>, 4)>, 5)>() -> null {
+fn .<lambda(<lambda(<lambda(<lambda($init_test_33, 0)>, 3)>, 4)>, 5)>() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: Sentiment // result

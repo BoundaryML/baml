@@ -1482,11 +1482,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.emit(Instruction::Unreachable);
             }
 
-            Terminator::DispatchFuture {
+            Terminator::SysOp {
                 callee,
                 args,
-                future,
-                resume,
+                destination,
+                target,
+                unwind: _,
             } => {
                 let func_name = pull_semantics::resolve_constant_function_name(
                     callee,
@@ -1499,15 +1500,30 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     .map(GlobalIndex::from_raw)
                     .unwrap_or_else(|| {
                         panic!(
-                            "dispatch_future callee must resolve to a statically-known global function: {callee:?}"
+                            "sys_op callee must resolve to a statically-known global function: {callee:?}"
                         )
                     });
 
                 unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
-                let inst = self.emit(Instruction::DispatchFuture(global_callee));
+                let inst = self.emit(Instruction::SysOp(global_callee));
                 if let Some(name) = &func_name {
                     self.set_operand(inst, OperandMeta::Callable(name.clone()));
                 }
+                self.emit_store_place(destination);
+                self.emit_jump_unless_fallthrough(*target);
+            }
+
+            Terminator::Spawn {
+                closure,
+                name,
+                future,
+                resume,
+            } => {
+                // Push closure then name. The runtime `OpCode::Spawn`
+                // pops them in reverse: name first, then closure.
+                self.emit_operand_pull(closure);
+                self.emit_operand_pull(name);
+                self.emit(Instruction::Spawn);
                 self.emit_store_place(future);
                 self.emit_jump_unless_fallthrough(*resume);
             }

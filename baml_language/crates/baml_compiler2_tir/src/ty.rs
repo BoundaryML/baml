@@ -231,6 +231,10 @@ pub enum Ty {
     Unknown { attr: TyAttr },
     /// Error sentinel — a hard error was emitted for this expression.
     Error { attr: TyAttr },
+    /// BEP-034 `Future<T, E>` — the result of `spawn { ... }` or a sys-op
+    /// call before `await`. Carries both the resolved value type and the
+    /// errors the producing computation may throw.
+    Future(Box<Ty>, Box<Ty>, TyAttr),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -385,7 +389,8 @@ impl Ty {
             | Ty::Literal(_, _, a)
             | Ty::EvolvingList(_, a)
             | Ty::EvolvingMap(_, _, a)
-            | Ty::TypeVar(_, a) => a,
+            | Ty::TypeVar(_, a)
+            | Ty::Future(_, _, a) => a,
             Ty::Function { attr, .. }
             | Ty::Never { attr }
             | Ty::Void { attr }
@@ -413,7 +418,8 @@ impl Ty {
             | Ty::Literal(_, _, a)
             | Ty::EvolvingList(_, a)
             | Ty::EvolvingMap(_, _, a)
-            | Ty::TypeVar(_, a) => *a = new_attr,
+            | Ty::TypeVar(_, a)
+            | Ty::Future(_, _, a) => *a = new_attr,
             Ty::Function { attr, .. }
             | Ty::Never { attr }
             | Ty::Void { attr }
@@ -613,6 +619,7 @@ impl fmt::Display for Ty {
             Ty::Type { .. } => write!(f, "type"),
             Ty::Unknown { .. } => write!(f, "unknown"),
             Ty::Error { .. } => write!(f, "!error"),
+            Ty::Future(value, error, _) => write!(f, "Future<{value}, {error}>"),
         }
     }
 }
