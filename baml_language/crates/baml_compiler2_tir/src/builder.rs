@@ -7952,28 +7952,30 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// `bigint`-rooted. Used to reject ambiguous numeric comparisons /
     /// arithmetic since bigint values past 2^53 don't round-trip through f64.
     fn is_float_bigint_mix(lhs: &Ty, rhs: &Ty) -> bool {
-        fn base_ty(ty: &Ty) -> Option<PrimitiveType> {
-            // Only Float and Bigint matter here — every other shape returns
-            // `None` and short-circuits the mix-detection.
+        /// `(could_be_float, could_be_bigint)` for a primitive/literal/union
+        /// type. Recurses into unions so a mixed operand like `float | int`
+        /// is seen as possibly-float when paired against a `bigint` side.
+        fn shape(ty: &Ty) -> (bool, bool) {
             match ty {
-                Ty::Primitive(PrimitiveType::Bigint, _) => Some(PrimitiveType::Bigint),
-                Ty::Primitive(PrimitiveType::Float, _) => Some(PrimitiveType::Float),
-                Ty::Literal(baml_base::Literal::Bigint(_), _, _) => Some(PrimitiveType::Bigint),
-                Ty::Literal(baml_base::Literal::Float(_), _, _) => Some(PrimitiveType::Float),
-                _ => None,
+                Ty::Primitive(PrimitiveType::Float, _)
+                | Ty::Literal(baml_base::Literal::Float(_), _, _) => (true, false),
+                Ty::Primitive(PrimitiveType::Bigint, _)
+                | Ty::Literal(baml_base::Literal::Bigint(_), _, _) => (false, true),
+                Ty::Union(members, _) => members.iter().fold((false, false), |(f, b), m| {
+                    let (mf, mb) = shape(m);
+                    (f || mf, b || mb)
+                }),
+                _ => (false, false),
             }
         }
-        matches!(
-            (base_ty(lhs), base_ty(rhs)),
-            (Some(PrimitiveType::Float), Some(PrimitiveType::Bigint))
-                | (Some(PrimitiveType::Bigint), Some(PrimitiveType::Float))
-        )
+        let (lhs_float, lhs_bigint) = shape(lhs);
+        let (rhs_float, rhs_bigint) = shape(rhs);
+        (lhs_float && rhs_bigint) || (lhs_bigint && rhs_float)
     }
 
     /// Determine the result type of a bitwise operation.
     ///
-    /// `(int, int) -> int`, `(bigint, bigint) -> bigint`. Mixed `(int, bigint)`
-    /// widening is handled in Phase 8.
+    /// `(int, int) -> int`, `(bigint, bigint) -> bigint`, `(int, bigint) -> bigint`.
     fn infer_bitwise(lhs: &Ty, rhs: &Ty) -> Ty {
         fn base_ty(ty: &Ty) -> Option<PrimitiveType> {
             // Bitwise only accepts Int and Bigint. Float / String / Bool
@@ -7991,6 +7993,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                         result = Some(match (result, p) {
                             (None, p) => p,
                             (Some(a), b) if a == b => a,
+                            // `int | bigint` members widen to `bigint`, matching
+                            // the mixed-operand rule in the outer match below.
+                            (Some(PrimitiveType::Int), PrimitiveType::Bigint)
+                            | (Some(PrimitiveType::Bigint), PrimitiveType::Int) => {
+                                PrimitiveType::Bigint
+                            }
                             _ => return None,
                         });
                     }
