@@ -115,6 +115,13 @@ aws-smithy-runtime-api = { git = "https://github.com/boundaryml/aws-sdk-rust.git
 aws-smithy-types = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac" }
 aws-types = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac" }
 axum = { version = "0.8.4", features = [ "ws" ] }
+# `serde` mode rather than bitcode's native Encode/Decode: Program and its
+# transitive type graph (bex_vm_types + baml_type) are already serde-derived,
+# and Encode/Decode would require derives on ~60 types plus custom impls for
+# IndexMap (not built into bitcode-derive) and FunctionKind::Native (raw fn
+# pointer). Native would shave ~2-20 ms off packed-binary cold start and
+# ~30-50% off artifact size — worth it only when cold start or artifact size
+# becomes a measured user-facing complaint, not as a precautionary refactor.
 bitcode = { version = "0.6", features = [ "serde" ] }
 bytes = "1"
 cargo_metadata = { version = "0.23.1" }

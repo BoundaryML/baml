@@ -150,16 +150,28 @@ impl HeapPtr {
     }
 }
 
+// `HeapPtr` is a runtime-only address into the live heap. It must never
+// reach a serialized payload (e.g. a bitcode-encoded `Program` in a pack
+// envelope) — the addresses are meaningless outside the originating
+// process, and a deserialized non-null `HeapPtr` would be undefined
+// behavior on first deref. The serde impls below therefore *fail* at the
+// boundary instead of round-tripping to `null()`: every type the compiler
+// actually puts into a serialized `Program` (`Object::{Function, Class,
+// Enum, String}`) is HeapPtr-free, so any path that does encounter one
+// reflects a real bug we want to surface immediately rather than mask.
 impl Serialize for HeapPtr {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_unit()
+    fn serialize<S: serde::Serializer>(&self, _serializer: S) -> Result<S::Ok, S::Error> {
+        Err(serde::ser::Error::custom(
+            "HeapPtr is a runtime-only pointer and must not be serialized",
+        ))
     }
 }
 
 impl<'de> Deserialize<'de> for HeapPtr {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        <()>::deserialize(deserializer)?;
-        Ok(HeapPtr::null())
+    fn deserialize<D: serde::Deserializer<'de>>(_deserializer: D) -> Result<Self, D::Error> {
+        Err(serde::de::Error::custom(
+            "HeapPtr cannot be deserialized: runtime pointer leaked into serialized data",
+        ))
     }
 }
 
@@ -205,5 +217,30 @@ impl std::fmt::Debug for HeapPtr {
 impl std::fmt::Display for HeapPtr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:p}", self.ptr)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Serializing a `HeapPtr` (including null) must fail at the serde
+    /// boundary rather than emit `unit`. The previous round-trip-to-null
+    /// behavior silently produced bogus pointers on deserialization and
+    /// turned the first deref into UB instead of a clean failure.
+    #[test]
+    fn serialize_heap_ptr_errors() {
+        let ptr = HeapPtr::null();
+        let err = serde_json::to_string(&ptr).unwrap_err();
+        assert!(err.to_string().contains("runtime-only"), "got: {err}");
+    }
+
+    #[test]
+    fn deserialize_heap_ptr_errors() {
+        // `null` would have round-tripped to `HeapPtr::null()` under the
+        // old impl. Now it surfaces as an error so callers can't silently
+        // resurrect a runtime pointer from serialized data.
+        let err = serde_json::from_str::<HeapPtr>("null").unwrap_err();
+        assert!(err.to_string().contains("leaked"), "got: {err}");
     }
 }

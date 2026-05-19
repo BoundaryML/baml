@@ -117,3 +117,47 @@ fn find_user_function_does_not_expose_stdlib() {
         .expect("user.main should resolve via display name");
     assert_eq!(main_info.qualified_name, "user.main");
 }
+
+/// `BexEngine::call_function*` requires a [`FunctionKind::Bytecode`]
+/// callee — `$rust_function` natives, sysops, and unresolved natives
+/// have no enclosing bytecode frame to `YieldToCall` back into, so
+/// dispatch can't honor a yield. Without the gate, a future host
+/// calling e.g. `baml.json.to_string<T>` directly would crash deep in
+/// the VM with a misleading internal error. Catching it at the engine
+/// boundary surfaces a clean, documented `NotInvokableAsEntry`.
+#[tokio::test]
+async fn call_function_rejects_non_bytecode_entry() {
+    let eng = engine(&[("main.baml", "function main() -> int { 1 }")]);
+
+    // `baml.json.to_string` is a `$rust_function` native (see
+    // baml_builtins2/baml_std/baml/ns_json/json.baml). Invoking it as
+    // an entry must be rejected up-front.
+    let result = eng
+        .call_function(
+            "baml.json.to_string",
+            vec![],
+            FunctionCallContextBuilder::new(CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    match result {
+        Err(EngineError::NotInvokableAsEntry { name, .. }) => {
+            assert_eq!(name, "baml.json.to_string");
+        }
+        other => panic!("expected NotInvokableAsEntry, got {other:?}"),
+    }
+
+    // Sanity: bytecode entries (including LLM-typed bytecode, which is
+    // `FunctionKind::Bytecode + FunctionMeta::Llm`) still work — this
+    // gate only blocks `Native`/`SysOp`/`NativeUnresolved`.
+    let ok = eng
+        .call_function(
+            "user.main",
+            vec![],
+            FunctionCallContextBuilder::new(CallId::next()).build(),
+            true,
+        )
+        .await;
+    assert!(ok.is_ok(), "bytecode entry must still resolve: {ok:?}");
+}

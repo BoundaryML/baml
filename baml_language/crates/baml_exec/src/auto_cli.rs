@@ -66,7 +66,13 @@ pub fn parse_auto_cli_args(
             (&raw[..eq_pos], &raw[eq_pos + 1..])
         } else {
             i += 1;
-            if i >= tokens.len() {
+            // A following `--`-prefixed token is the next flag, not the
+            // value for this one — `--name --other=…` is a missing-value
+            // typo, not a request to bind `name = "--other=…"`. Users who
+            // want a literal value that starts with `--` use the
+            // `--name=<value>` equals form (covered by
+            // parse_auto_cli_args_equals_form_allows_dashed_value).
+            if i >= tokens.len() || tokens[i].starts_with("--") {
                 anyhow::bail!("Missing value for `--{raw}`");
             }
             (raw, tokens[i].as_str())
@@ -527,6 +533,34 @@ mod tests {
         let out =
             parse_auto_cli_args(&tokens, &["name".to_string()], &[ty_string()], &[false]).unwrap();
         assert_string(&out["name"], "value");
+    }
+
+    /// `--name --other=...` is a missing-value typo, not a request to bind
+    /// `name = "--other=..."`. Silently accepting the next flag as the
+    /// value hides the real CLI mistake (especially for `string` params,
+    /// where the type-coerce step doesn't reject it). To pass a literal
+    /// value starting with `--`, users use the `--name=<value>` form.
+    #[test]
+    fn parse_auto_cli_args_rejects_following_flag_as_value() {
+        let tokens = vec!["--name".to_string(), "--other=value".to_string()];
+        let err = parse_auto_cli_args(
+            &tokens,
+            &["name".to_string(), "other".to_string()],
+            &[ty_string(), ty_string()],
+            &[false, false],
+        )
+        .unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("Missing value for `--name`"), "got: {msg}");
+    }
+
+    /// Equals form is the escape hatch for values that start with `--`.
+    #[test]
+    fn parse_auto_cli_args_equals_form_allows_dashed_value() {
+        let tokens = vec!["--name=--literal-dashes".to_string()];
+        let out =
+            parse_auto_cli_args(&tokens, &["name".to_string()], &[ty_string()], &[false]).unwrap();
+        assert_string(&out["name"], "--literal-dashes");
     }
 
     #[test]

@@ -33,3 +33,9 @@ native-tls = [ "sys_native/native-tls" ]
 [[bin]]
 name = "baml-pack-host"
 path = "src/main.rs"
+
+# Standalone host binary for packed `baml pack` outputs — depends on
+# `sys_native` (tokio + mio) and `libsui` (native ELF/Mach-O/PE patching).
+# Both are inherently non-wasm. Excluded from `clippy-wasm` / wasm CI.
+[package.metadata.ci]
+wasm_support = false

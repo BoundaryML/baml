@@ -29,14 +29,15 @@ pub enum DispatchResult {
 
 /// Reject targets whose signature declares a parameter named `help`.
 pub fn validate_help_param(engine: &BexEngine, function_name: &str) -> Result<()> {
-    if let Ok(params) = engine.function_params(function_name) {
-        if params.iter().any(|(name, _, _)| *name == "help") {
-            anyhow::bail!(
-                "Target `{function_name}` declares a parameter named `help`, \
-                 which collides with the auto-derived `--help` flag. \
-                 Rename this parameter to be used as an entry point."
-            );
-        }
+    let params = engine
+        .function_params(function_name)
+        .with_context(|| format!("Failed to resolve target `{function_name}`"))?;
+    if params.iter().any(|(name, _, _)| *name == "help") {
+        anyhow::bail!(
+            "Target `{function_name}` declares a parameter named `help`, \
+             which collides with the auto-derived `--help` flag. \
+             Rename this parameter to be used as an entry point."
+        );
     }
     Ok(())
 }
@@ -63,8 +64,10 @@ pub async fn dispatch_target(
     // BEP-027 §"Auto-CLI conventions": `help` is reserved at entry-point
     // resolution under both `baml run` and `baml pack`. Pack catches this
     // at pack time; checking again here covers the run side and is a
-    // belt-and-suspenders against future host callers.
-    validate_help_param(&engine, target_name)?;
+    // belt-and-suspenders against future host callers. Pass the canonical
+    // post-resolved name so the validator sees the same identifier that
+    // `find_user_function` matched, not the raw user input.
+    validate_help_param(&engine, &func_info.qualified_name)?;
 
     let args = build_args_from_signature(
         &engine,
@@ -290,6 +293,18 @@ mod tests {
     async fn validate_help_param_parameterless_passes() {
         let eng = engine("function main() -> int { 1 }");
         validate_help_param(&eng, "user.main").unwrap();
+    }
+
+    /// An unresolvable name must surface as an error rather than silently
+    /// passing validation. The previous `if let Ok(_)` form swallowed the
+    /// lookup failure — defense-in-depth against future host callers that
+    /// pass a name `find_user_function` didn't resolve.
+    #[tokio::test]
+    async fn validate_help_param_propagates_lookup_failure() {
+        let eng = engine("function main() -> int { 1 }");
+        let err = validate_help_param(&eng, "DoesNotExist").unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("DoesNotExist"), "got: {msg}");
     }
 
     // ── build_args_from_signature: defaults / required / merge ──────────

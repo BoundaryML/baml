@@ -220,6 +220,15 @@ pub enum EngineError {
     #[error("Function not found: {name}")]
     FunctionNotFound { name: String },
 
+    /// Function exists, but its `FunctionKind` is not invokable as an
+    /// engine entry point. Only bytecode functions can be called via
+    /// [`BexEngine::call_function`] / [`BexEngine::call_function_bound_args`]:
+    /// native (`$rust_function`) entries would re-enter the VM through
+    /// `YieldToCall` with no bytecode frame to return to. Sysops + builtins
+    /// reach their natives from inside a calling bytecode body.
+    #[error("Function `{name}` is not invokable as an entry point (kind: {kind})")]
+    NotInvokableAsEntry { name: String, kind: String },
+
     #[error("{0}")]
     ExternalOpFailed(#[from] OpError),
 
@@ -1106,7 +1115,17 @@ impl BexEngine {
             return Err(cancelled_unhandled_throw());
         }
 
-        let function_index = self.lookup_function(function_name)?;
+        let (function_index, kind) = self.lookup_function(function_name)?;
+        // Only bytecode functions can be invoked as engine entry points.
+        // Sysops + `$rust_function` natives reach their handlers through
+        // an enclosing bytecode frame's `Call` / `YieldToCall` — there's
+        // no frame for them to return into at the top level.
+        if !matches!(kind, bex_vm_types::FunctionKind::Bytecode) {
+            return Err(EngineError::NotInvokableAsEntry {
+                name: function_name.to_string(),
+                kind: format!("{kind:?}"),
+            });
+        }
         self.validate_bound_args(function_name, &args)?;
         let return_type = self
             .function_return_type(function_name)
@@ -1297,14 +1316,21 @@ impl BexEngine {
         Ok(())
     }
 
-    /// Look up a function by name and return its heap pointer. Resolution
-    /// follows the canonical [`sys_types::resolve_name`] rule (exact →
-    /// `user.{name}` → unambiguous suffix match), shared with `baml run`,
-    /// `baml pack`, and the sysop LLM/`$new` resolvers.
-    fn lookup_function(&self, function_name: &str) -> Result<HeapPtr, EngineError> {
+    /// Look up a function by name and return its heap pointer + kind.
+    /// Resolution follows the canonical [`sys_types::resolve_name`] rule
+    /// (exact → `user.{name}` → unambiguous suffix match), shared with
+    /// `baml run`, `baml pack`, and the sysop LLM/`$new` resolvers.
+    ///
+    /// Returning the kind lets call-site gates (e.g.
+    /// `call_function_bound_args` rejecting non-Bytecode entries) avoid a
+    /// second heap dereference.
+    fn lookup_function(
+        &self,
+        function_name: &str,
+    ) -> Result<(HeapPtr, bex_vm_types::FunctionKind), EngineError> {
         sys_types::resolve_name(&self.resolved_function_names, function_name)
             .found()
-            .map(|(_k, (ptr, _kind))| *ptr)
+            .map(|(_k, (ptr, kind))| (*ptr, *kind))
             .ok_or_else(|| EngineError::FunctionNotFound {
                 name: function_name.to_string(),
             })

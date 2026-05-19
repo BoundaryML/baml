@@ -356,32 +356,7 @@ pub struct BexVm {
     /// re-enter the VM (via `YieldToCall`) therefore see their own type-args
     /// even if the inner callback uses different ones.
     pending_call_type_args: Vec<baml_type::Ty>,
-
-    /// Set when the host invokes a `$rust_function` callee as the entry
-    /// point. Such callees have no bytecode body, so the exec loop's first
-    /// step dispatches this native call directly and produces a `Complete`
-    /// state with its return value instead of reading bytecode.
-    pending_native_entry: Option<PendingNativeEntry>,
 }
-
-/// Native entry-point dispatch deferred to the first `exec()` step.
-/// See [`BexVm::set_entry_point_with_type_args`].
-///
-/// SAFETY: `func_ptr` is a Rust function pointer cast to `*const ()` by
-/// `attach_builtins` (see `package_baml/mod.rs`). Function pointers are
-/// immutable code addresses, safe to share across threads.
-#[derive(Debug)]
-pub(crate) struct PendingNativeEntry {
-    #[allow(dead_code)] // kept for diagnostics and future tracing
-    pub function: HeapPtr,
-    pub func_ptr: *const (),
-    pub args: Vec<Value>,
-}
-
-#[allow(unsafe_code)]
-unsafe impl Send for PendingNativeEntry {}
-#[allow(unsafe_code)]
-unsafe impl Sync for PendingNativeEntry {}
 
 /// VM execution state.
 ///
@@ -719,7 +694,6 @@ impl BexVm {
             current_span_context: None,
             argv,
             pending_call_type_args: Vec::new(),
-            pending_native_entry: None,
         }
     }
 
@@ -1018,12 +992,15 @@ impl BexVm {
 
     /// Like [`Self::set_entry_point`], but seeds the entry frame's
     /// `type_args` slot. Use when the host invokes a generic function
-    /// (e.g. `baml.json.to_string<T>`) and needs to thread `T` through.
+    /// (e.g. a user function with `<T>`) and needs to thread `T` through.
     ///
-    /// Native (`$rust_function`) callees have no bytecode body, so for
-    /// those we synthesize a single-frame stub that produces the native
-    /// call's return value on the first `exec()` step instead of pushing
-    /// a bytecode frame that would read an empty instruction stream.
+    /// Entry points must be [`bex_vm_types::FunctionKind::Bytecode`]. The
+    /// engine boundary
+    /// ([`bex_engine::BexEngine::call_function_bound_args`]) rejects
+    /// `SysOp` / `Native` / `NativeUnresolved` callees with
+    /// `EngineError::NotInvokableAsEntry` before reaching this method,
+    /// because there's no enclosing bytecode frame for a native to
+    /// `YieldToCall` back into at the top level.
     pub fn set_entry_point_with_type_args(
         &mut self,
         function: HeapPtr,
@@ -1035,24 +1012,16 @@ impl BexVm {
             "expect function as entry point, got {:?}",
             self.get_object(function)
         );
+        debug_assert!(
+            matches!(
+                self.get_object(function),
+                Object::Function(f) if matches!(f.kind, bex_vm_types::FunctionKind::Bytecode)
+            ),
+            "entry points must be Bytecode; engine boundary should have \
+             rejected this — see EngineError::NotInvokableAsEntry"
+        );
 
         self.pending_call_type_args.clone_from(&type_args);
-
-        // Detect native entry-point so the exec loop bypasses bytecode
-        // (which is empty for `$rust_function` callees).
-        let kind = match self.get_object(function) {
-            Object::Function(f) => f.kind,
-            _ => unreachable!(),
-        };
-        if let bex_vm_types::FunctionKind::Native(func_ptr) = kind {
-            // Stash the native dispatch so the next `exec()` invokes it.
-            self.pending_native_entry = Some(PendingNativeEntry {
-                function,
-                func_ptr,
-                args: args.to_vec(),
-            });
-            return;
-        }
 
         self.stack.extend(args.iter().copied());
 
@@ -2161,36 +2130,6 @@ impl BexVm {
         }
     }
 
-    /// Dispatch a deferred native entry point (see [`PendingNativeEntry`]).
-    /// Returns `Complete(value)` on success, propagates native errors as
-    /// `Thrown` so the engine's panic-handling path catches them.
-    #[allow(unsafe_code)]
-    fn dispatch_native_entry(
-        &mut self,
-        entry: &PendingNativeEntry,
-    ) -> Result<VmExecState, VmError> {
-        use crate::package_baml::{NativeCallResult, NativeFunction};
-
-        // SAFETY: `func_ptr` came from `attach_builtins` (see
-        // `package_baml::attach_builtins`), which cast a real `NativeFunction`
-        // to `*const ()`. Casting back is sound under the same lifetime
-        // contract used by the bytecode `Call` instruction's Native branch
-        // (vm.rs:1774).
-        let func: NativeFunction =
-            unsafe { std::mem::transmute::<*const (), NativeFunction>(entry.func_ptr) };
-        match func(self, &entry.args) {
-            NativeCallResult::Done(v) => Ok(VmExecState::Complete(v)),
-            NativeCallResult::Error(e) => Err(self.native_error_to_vm_error(e)),
-            NativeCallResult::YieldToCall { .. } => Err(VmError::InternalError(
-                crate::errors::VmInternalError::MissingNativeFunction {
-                    name: "native entry-point YieldToCall is not supported \
-                           (the callee must be a non-yielding `$rust_function`)"
-                        .to_string(),
-                },
-            )),
-        }
-    }
-
     /// Main VM execution loop.
     ///
     /// Each "cycle" (loop iteration) executes a single instruction.
@@ -2203,15 +2142,6 @@ impl BexVm {
         // `EarlyYield`, etc.), which is the right granularity for the
         // counter to reset at.
         self.early_yield.reset();
-
-        // Native (`$rust_function`) entry point set by
-        // `set_entry_point_with_type_args` — no bytecode to interpret, so
-        // dispatch the native call here and surface its result as
-        // `Complete`. Errors flow through the panic/throw machinery just
-        // like a bytecode-dispatched native call would.
-        if let Some(entry) = self.pending_native_entry.take() {
-            return self.dispatch_native_entry(&entry);
-        }
 
         match self.exec_inner() {
             Err(VmError::InternalError(err)) => {
