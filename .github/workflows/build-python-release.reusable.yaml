@@ -93,12 +93,12 @@ jobs:
           clang -v
           cmake --version
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # Setup Python for non-ARM64 Windows targets and other OS
       - name: Setup Python (default)
         if: matrix._.target != 'aarch64-pc-windows-msvc'
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.8"
           architecture: ${{ matrix._.architecture }}
@@ -106,7 +106,7 @@ jobs:
       # Setup Python versions for ARM64 Windows
       - name: Setup Python 3.11 (ARM64 Windows)
         if: matrix._.target == 'aarch64-pc-windows-msvc'
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         id: py311
         with:
           python-version: "3.11"
@@ -114,7 +114,7 @@ jobs:
           allow-prereleases: true
       - name: Setup Python 3.12 (ARM64 Windows)
         if: matrix._.target == 'aarch64-pc-windows-msvc'
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         id: py312
         with:
           python-version: "3.12"
@@ -122,7 +122,7 @@ jobs:
           allow-prereleases: true
       - name: Setup Python 3.13 (ARM64 Windows)
         if: matrix._.target == 'aarch64-pc-windows-msvc'
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         id: py313
         with:
           python-version: "3.13"
@@ -151,7 +151,7 @@ jobs:
             fi
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
 
       - name: Test LICENSE packaging
         if: matrix._.license_test != 'skip'
@@ -171,7 +171,7 @@ jobs:
           grep 'baml.*Apache-2.0' license-audit.log >/dev/null
 
       - name: Upload wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wheels-${{ matrix._.target }}
           path: engine/language_client_python/dist
