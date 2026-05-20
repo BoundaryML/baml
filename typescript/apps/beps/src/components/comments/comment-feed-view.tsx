@@ -284,7 +284,8 @@ function FeedCommentCard({
         authorId: userId,
         type: "discussion",
         content: content.trim(),
-        // Don't pass anchor for replies - they inherit thread context
+        // Pass anchor so reply shows in sidebar view (sidebar filters by anchor)
+        anchor: comment.anchor,
       });
       setReplyContent("");
       replyEditorRef.current?.setMarkdown("");
@@ -589,6 +590,8 @@ function FeedThreadCard({
         authorId: userId,
         type: "discussion",
         content: content.trim(),
+        // Pass anchor so reply shows in sidebar view (sidebar filters by anchor)
+        anchor: rootComment.anchor,
       });
       setReplyContent("");
       replyEditorRef.current?.setMarkdown("");
