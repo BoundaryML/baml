@@ -6568,23 +6568,21 @@ impl BexVm {
                 OpCode::GtEq => self.exec_cmpop(CmpOp::GtEq)?,
 
                 // ── Specialized int arithmetic (skip type dispatch) ───────────
+                //
+                // Add / Sub use [`Value::tagged_int_add`] / `_sub` which
+                // operates directly on the tagged bit pattern, skipping
+                // the shift-right / shift-left round-trip through
+                // `as_int` + `Value::int`. Saves ~3 instructions per op
+                // on the hot loop (`i += 1` in `loop_50m` etc.).
                 OpCode::AddInt => {
-                    let Some(r) = self.stack.ensure_pop().as_int() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Some(l) = self.stack.ensure_pop().as_int() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    self.stack.push(Value::int(l + r));
+                    let r = self.stack.ensure_pop();
+                    let l = self.stack.ensure_pop();
+                    self.stack.push(Value::tagged_int_add(l, r));
                 }
                 OpCode::SubInt => {
-                    let Some(r) = self.stack.ensure_pop().as_int() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Some(l) = self.stack.ensure_pop().as_int() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    self.stack.push(Value::int(l - r));
+                    let r = self.stack.ensure_pop();
+                    let l = self.stack.ensure_pop();
+                    self.stack.push(Value::tagged_int_sub(l, r));
                 }
                 OpCode::MulInt => {
                     let Some(r) = self.stack.ensure_pop().as_int() else {
@@ -6683,59 +6681,39 @@ impl BexVm {
                 }
 
                 // ── Specialized int comparison (skip type dispatch) ───────────
+                // CmpInt* skip untagging by comparing tagged bits directly
+                // as i64. The `(real << 1) | 1` encoding preserves signed
+                // ordering (sign bit moves left but both operands share
+                // the same tag bit, so they cancel in the comparison).
                 OpCode::CmpIntEq => {
-                    let Some(r) = self.stack.ensure_pop().as_int() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Some(l) = self.stack.ensure_pop().as_int() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    self.stack.push(Value::bool(l == r));
+                    let r = self.stack.ensure_pop();
+                    let l = self.stack.ensure_pop();
+                    self.stack.push(Value::bool(l.bits() == r.bits()));
                 }
                 OpCode::CmpIntNotEq => {
-                    let Some(r) = self.stack.ensure_pop().as_int() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Some(l) = self.stack.ensure_pop().as_int() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    self.stack.push(Value::bool(l != r));
+                    let r = self.stack.ensure_pop();
+                    let l = self.stack.ensure_pop();
+                    self.stack.push(Value::bool(l.bits() != r.bits()));
                 }
                 OpCode::CmpIntLt => {
-                    let Some(r) = self.stack.ensure_pop().as_int() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Some(l) = self.stack.ensure_pop().as_int() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    self.stack.push(Value::bool(l < r));
+                    let r = self.stack.ensure_pop();
+                    let l = self.stack.ensure_pop();
+                    self.stack.push(Value::bool((l.bits() as i64) < (r.bits() as i64)));
                 }
                 OpCode::CmpIntLtEq => {
-                    let Some(r) = self.stack.ensure_pop().as_int() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Some(l) = self.stack.ensure_pop().as_int() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    self.stack.push(Value::bool(l <= r));
+                    let r = self.stack.ensure_pop();
+                    let l = self.stack.ensure_pop();
+                    self.stack.push(Value::bool((l.bits() as i64) <= (r.bits() as i64)));
                 }
                 OpCode::CmpIntGt => {
-                    let Some(r) = self.stack.ensure_pop().as_int() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Some(l) = self.stack.ensure_pop().as_int() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    self.stack.push(Value::bool(l > r));
+                    let r = self.stack.ensure_pop();
+                    let l = self.stack.ensure_pop();
+                    self.stack.push(Value::bool((l.bits() as i64) > (r.bits() as i64)));
                 }
                 OpCode::CmpIntGtEq => {
-                    let Some(r) = self.stack.ensure_pop().as_int() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Some(l) = self.stack.ensure_pop().as_int() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    self.stack.push(Value::bool(l >= r));
+                    let r = self.stack.ensure_pop();
+                    let l = self.stack.ensure_pop();
+                    self.stack.push(Value::bool((l.bits() as i64) >= (r.bits() as i64)));
                 }
 
                 // ── Specialized float comparison (skip type dispatch) ─────────

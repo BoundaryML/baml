@@ -639,6 +639,63 @@ impl Value {
     /// Smallest representable BAML integer (`-2^62 = -4_611_686_018_427_387_904`).
     pub const INT_MIN: i64 = !Self::INT_MAX;
 
+    // ── Tagged-int fast-path arithmetic ───────────────────────────────────
+    //
+    // Both operands' bit patterns are `(real << 1) | 1` (low bit = tag).
+    // We can do arithmetic directly on the tagged bits without the
+    // shift-right / shift-left / or sequence that goes through `as_int`
+    // and `Value::int`. The tag bit is preserved by these tricks.
+    //
+    // Add: (ra<<1|1) + (rb<<1|1) - 1 = ((ra+rb)<<1) | 1
+    // Sub: (ra<<1|1) - (rb<<1|1) + 1 = ((ra-rb)<<1) | 1
+    //
+    // Wrapping is correct: i63 ranges produce results that fit in i63
+    // (modulo wrap, same as the previous `l + r` on i64s).
+    //
+    // For comparison, `(ra<<1)|1` < `(rb<<1)|1` iff `ra < rb` (shift-left
+    // preserves signed ordering; the tag bit is the same in both so it
+    // doesn't affect the comparison). Bits interpreted as i64 yield the
+    // signed ordering of the underlying i63 values.
+
+    /// Sum of two `Int`-tagged Values, computed without untagging.
+    ///
+    /// # Safety contract
+    ///
+    /// Caller must guarantee both inputs are `Int`-tagged (caller has
+    /// already type-checked, e.g. via the `OpCode::AddInt` specialization).
+    /// Mis-tagged inputs produce nonsense results; the type system does
+    /// not enforce this — it's a perf shortcut for the hot path.
+    #[inline(always)]
+    pub const fn tagged_int_add(a: Value, b: Value) -> Value {
+        debug_assert!(a.is_int() && b.is_int(), "tagged_int_add: both inputs must be Int");
+        Value(a.0.wrapping_add(b.0).wrapping_sub(1))
+    }
+
+    /// Difference of two `Int`-tagged Values, computed without untagging.
+    ///
+    /// See [`Value::tagged_int_add`] for the safety contract.
+    #[inline(always)]
+    pub const fn tagged_int_sub(a: Value, b: Value) -> Value {
+        debug_assert!(a.is_int() && b.is_int(), "tagged_int_sub: both inputs must be Int");
+        Value(a.0.wrapping_sub(b.0).wrapping_add(1))
+    }
+
+    /// Signed comparison of two `Int`-tagged Values, computed without
+    /// untagging. Returns the same ordering as `a.as_int().unwrap()`
+    /// vs `b.as_int().unwrap()`.
+    ///
+    /// See [`Value::tagged_int_add`] for the safety contract.
+    #[inline(always)]
+    pub const fn tagged_int_cmp(a: Value, b: Value) -> core::cmp::Ordering {
+        debug_assert!(a.is_int() && b.is_int(), "tagged_int_cmp: both inputs must be Int");
+        // i64 cmp on the bits respects the shift-left-by-1 of the i63
+        // payload (sign bit is preserved through the shift).
+        let (a, b) = (a.0 as i64, b.0 as i64);
+        if a < b { core::cmp::Ordering::Less }
+        else if a > b { core::cmp::Ordering::Greater }
+        else { core::cmp::Ordering::Equal }
+    }
+
     // ── Constructors ──────────────────────────────────────────────────────
 
     /// Build a `Value` carrying an `i63` integer. Values outside the
