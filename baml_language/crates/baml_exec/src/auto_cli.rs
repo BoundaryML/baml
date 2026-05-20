@@ -1,121 +1,33 @@
-// Auto-CLI argument parser for typed BAML entry points.
+// Type-driven coercion for individual auto-CLI parameter values.
+//
+// The argv-level parser lives in `clap_target`; this module owns the
+// per-value coercion step (`"42" + Ty::Int` -> `BexExternalValue::Int(42)`).
+// Split this way because the clap path and the (much) simpler "single
+// raw token" path both need the same semantic conversion, but only the
+// clap path needs full argv parsing.
 
-#![allow(clippy::print_stdout)]
+use anyhow::{Context, Result};
+use bex_engine::{BexExternalValue, Ty};
 
-use std::collections::HashMap;
-
-use anyhow::{Context, Result, anyhow};
-use bex_engine::{BexExternalValue, Ty, UserFunctionInfo};
-
-use crate::output::example_value;
-
-/// Parse tokens into a map of parameter name → typed value.
+/// Whether a parameter of type `ty` can be passed directly as a
+/// `--name value` flag via auto-CLI. Mirrors the accepted arms of
+/// [`parse_cli_value`] — keep the two in sync. Anything that returns
+/// `false` must arrive via `--json-args` (or in a mixed call, can come
+/// through either, since `--json-args` is universal).
 ///
-/// `param_has_default` is parallel to `param_names`/`param_types` and is
-/// consulted for the single-required-param positional-sugar branch (a
-/// function with exactly one required parameter accepts a bare token,
-/// regardless of how many other defaulted parameters it has).
-///
-/// BEP-027 §"Open questions" #5: class parameters can't be passed
-/// through auto-CLI; `parse_cli_value` rejects structured types (Class,
-/// List, Map, Union) with a pointer to `--json-args`.
-pub fn parse_auto_cli_args(
-    tokens: &[String],
-    param_names: &[String],
-    param_types: &[Ty],
-    param_has_default: &[bool],
-) -> Result<HashMap<String, BexExternalValue>> {
-    if tokens.is_empty() || param_names.is_empty() {
-        return Ok(HashMap::new());
+/// `Optional<T>` unwraps to the inner type — `string?` is still a
+/// primitive (the user just passes `--name null` or the value).
+pub fn is_auto_cli_primitive(ty: &Ty) -> bool {
+    match ty {
+        Ty::String { .. }
+        | Ty::Int { .. }
+        | Ty::Float { .. }
+        | Ty::Bool { .. }
+        | Ty::Null { .. }
+        | Ty::Enum(..) => true,
+        Ty::Optional(inner, _) => is_auto_cli_primitive(inner),
+        _ => false,
     }
-
-    // BEP-027 §"Calling a function: `--function`":
-    //   # Single-required-param positional sugar
-    //   baml run --function llm.Summarize -- "the text to summarize"
-    //
-    // The sugar fires when (a) there is exactly one bare token after `--`
-    // and (b) exactly one parameter is *required* — defaulted parameters
-    // are skipped so a function like `Summarize(text, max_words = 50,
-    // style = "Concise")` still accepts a bare positional for `text`.
-    if tokens.len() == 1 && !tokens[0].starts_with("--") {
-        let required: Vec<usize> = (0..param_names.len())
-            .filter(|i| !param_has_default.get(*i).copied().unwrap_or(false))
-            .collect();
-        if required.len() == 1 {
-            let idx = required[0];
-            let value = parse_cli_value(&tokens[0], &param_types[idx]).with_context(|| {
-                format!("Invalid value for `{}`: {}", param_names[idx], tokens[0])
-            })?;
-            let mut map = HashMap::new();
-            map.insert(param_names[idx].clone(), value);
-            return Ok(map);
-        }
-    }
-
-    let mut args = HashMap::new();
-    let mut i = 0;
-    while i < tokens.len() {
-        let token = &tokens[i];
-        if !token.starts_with("--") {
-            i += 1;
-            continue;
-        }
-        let raw = &token[2..];
-
-        let (key, val_str) = if let Some(eq_pos) = raw.find('=') {
-            (&raw[..eq_pos], &raw[eq_pos + 1..])
-        } else {
-            i += 1;
-            // A following `--`-prefixed token is the next flag, not the
-            // value for this one — `--name --other=…` is a missing-value
-            // typo, not a request to bind `name = "--other=…"`. Users who
-            // want a literal value that starts with `--` use the
-            // `--name=<value>` equals form (covered by
-            // parse_auto_cli_args_equals_form_allows_dashed_value).
-            if i >= tokens.len() || tokens[i].starts_with("--") {
-                anyhow::bail!("Missing value for `--{raw}`");
-            }
-            (raw, tokens[i].as_str())
-        };
-
-        let param_idx = find_param_index(key, param_names)?;
-        let value = parse_cli_value(val_str, &param_types[param_idx])
-            .with_context(|| format!("Invalid value for `--{key}`: {val_str}"))?;
-        args.insert(key.to_string(), value);
-        i += 1;
-    }
-
-    Ok(args)
-}
-
-fn find_param_index(key: &str, param_names: &[String]) -> Result<usize> {
-    param_names.iter().position(|n| n == key).ok_or_else(|| {
-        let available: Vec<&str> = param_names.iter().map(String::as_str).collect();
-        anyhow!(
-            "Unknown parameter `--{key}`.\nAvailable parameters: {}",
-            available.join(", ")
-        )
-    })
-}
-
-/// Extract flag names from a token list, skipping bare tokens.
-pub fn extract_flag_keys(tokens: &[String]) -> Vec<String> {
-    let mut keys = Vec::new();
-    let mut i = 0;
-    while i < tokens.len() {
-        let token = &tokens[i];
-        if let Some(raw) = token.strip_prefix("--") {
-            let key = raw.split('=').next().unwrap_or(raw);
-            if !key.is_empty() {
-                keys.push(key.to_string());
-            }
-            if !raw.contains('=') {
-                i += 1;
-            }
-        }
-        i += 1;
-    }
-    keys
 }
 
 /// Convert a CLI string value to a typed [`BexExternalValue`] based on
@@ -187,105 +99,6 @@ pub fn parse_cli_value(raw: &str, ty: &Ty) -> Result<BexExternalValue> {
              (or `--json-args @file` / `--json-args -` for stdin)"
         ),
     }
-}
-
-/// Render per-target `--help` text from a function's signature, returning
-/// a `String` the caller decides how to emit (print to stdout, send over
-/// a socket, attach to a diagnostic, etc.).
-///
-/// `invocation_example` is the prefix shown in the example line. For
-/// `baml run` pass something like `"baml run --function llm.X -- "` so
-/// the example renders as `baml run --function llm.X -- --text "value"`.
-/// For a packaged binary pass the binary path + a trailing space.
-///
-/// Renders `[optional]` markers for defaulted parameters and includes
-/// only the *required* params in the usage example, matching the auto-CLI
-/// model: the user can always supply optional flags, but only the
-/// required ones must appear for the call to succeed.
-pub fn target_help_text(
-    function_name: &str,
-    func_info: &UserFunctionInfo,
-    invocation_example: &str,
-) -> String {
-    use std::fmt::Write as _;
-
-    let display = function_name.strip_prefix("user.").unwrap_or(function_name);
-    let param_names = &func_info.param_names;
-    let param_types = &func_info.param_types;
-    let param_has_default = &func_info.param_has_default;
-    let ret_str = func_info.return_type.to_string();
-
-    let params_str: Vec<String> = param_names
-        .iter()
-        .zip(param_types.iter())
-        .enumerate()
-        .map(|(idx, (n, t))| {
-            if param_has_default.get(idx).copied().unwrap_or(false) {
-                format!("{n}: {t} [optional]")
-            } else {
-                format!("{n}: {t}")
-            }
-        })
-        .collect();
-
-    let mut out = String::new();
-    writeln!(
-        out,
-        "function {display}({}) -> {ret_str}",
-        params_str.join(", ")
-    )
-    .unwrap();
-    writeln!(out).unwrap();
-
-    if param_names.is_empty() {
-        writeln!(out, "  This function takes no arguments.").unwrap();
-    } else {
-        writeln!(out, "  Arguments:\n").unwrap();
-        for (idx, (name, ty)) in param_names.iter().zip(param_types.iter()).enumerate() {
-            let type_hint = match ty {
-                Ty::Bool { .. } => " (use --name=true or --name=false)".to_string(),
-                Ty::Enum(tn, _) => format!(" (enum {tn})"),
-                Ty::Class(..) | Ty::Map { .. } | Ty::List(..) => " (pass JSON)".to_string(),
-                _ => String::new(),
-            };
-            let optional = if param_has_default.get(idx).copied().unwrap_or(false) {
-                " [optional]"
-            } else {
-                ""
-            };
-            writeln!(out, "    --{name} <{ty}>{optional}{type_hint}").unwrap();
-        }
-    }
-
-    let example_args = param_names
-        .iter()
-        .zip(param_types.iter())
-        .enumerate()
-        .filter(|(idx, _)| !param_has_default.get(*idx).copied().unwrap_or(false))
-        .map(|(_, (n, t))| format!("--{n} {}", example_value(t)))
-        .collect::<Vec<_>>()
-        .join(" ");
-    writeln!(out).unwrap();
-    if example_args.is_empty() {
-        writeln!(out, "  Example: {invocation_example}").unwrap();
-    } else {
-        writeln!(out, "  Example: {invocation_example}{example_args}").unwrap();
-    }
-
-    out
-}
-
-/// Print [`target_help_text`] to stdout. Convenience wrapper for hosts
-/// that just want the text on stdout (e.g. the pack-host binary).
-pub fn print_target_help(
-    function_name: &str,
-    func_info: &UserFunctionInfo,
-    invocation_example: &str,
-) {
-    print!(
-        "{}",
-        target_help_text(function_name, func_info, invocation_example)
-    );
 }
 
 #[cfg(test)]
@@ -510,174 +323,29 @@ mod tests {
         );
     }
 
-    // ── parse_auto_cli_args: empty/named/positional/equals ──────────────
+    // ── is_auto_cli_primitive ────────────────────────────────────────────
 
     #[test]
-    fn parse_auto_cli_args_empty_tokens_yields_empty_map() {
-        let out = parse_auto_cli_args(&[], &["x".to_string()], &[ty_int()], &[false]).unwrap();
-        assert!(out.is_empty());
+    fn is_auto_cli_primitive_recognizes_scalars() {
+        assert!(is_auto_cli_primitive(&ty_string()));
+        assert!(is_auto_cli_primitive(&ty_int()));
+        assert!(is_auto_cli_primitive(&ty_float()));
+        assert!(is_auto_cli_primitive(&ty_bool()));
+        assert!(is_auto_cli_primitive(&ty_null()));
+        assert!(is_auto_cli_primitive(&ty_enum("Color")));
     }
 
     #[test]
-    fn parse_auto_cli_args_named_two_token_form() {
-        let tokens = vec!["--name".to_string(), "value".to_string()];
-        let out =
-            parse_auto_cli_args(&tokens, &["name".to_string()], &[ty_string()], &[false]).unwrap();
-        assert_eq!(out.len(), 1);
-        assert_string(&out["name"], "value");
+    fn is_auto_cli_primitive_rejects_structural() {
+        assert!(!is_auto_cli_primitive(&ty_class("User")));
+        assert!(!is_auto_cli_primitive(&ty_list(ty_int())));
     }
 
+    /// `int?` is still a primitive in CLI terms — `--name null` or
+    /// `--name 7` both work. `User?` is not, since `User` isn't.
     #[test]
-    fn parse_auto_cli_args_named_equals_form() {
-        let tokens = vec!["--name=value".to_string()];
-        let out =
-            parse_auto_cli_args(&tokens, &["name".to_string()], &[ty_string()], &[false]).unwrap();
-        assert_string(&out["name"], "value");
-    }
-
-    /// `--name --other=...` is a missing-value typo, not a request to bind
-    /// `name = "--other=..."`. Silently accepting the next flag as the
-    /// value hides the real CLI mistake (especially for `string` params,
-    /// where the type-coerce step doesn't reject it). To pass a literal
-    /// value starting with `--`, users use the `--name=<value>` form.
-    #[test]
-    fn parse_auto_cli_args_rejects_following_flag_as_value() {
-        let tokens = vec!["--name".to_string(), "--other=value".to_string()];
-        let err = parse_auto_cli_args(
-            &tokens,
-            &["name".to_string(), "other".to_string()],
-            &[ty_string(), ty_string()],
-            &[false, false],
-        )
-        .unwrap_err();
-        let msg = format!("{err}");
-        assert!(msg.contains("Missing value for `--name`"), "got: {msg}");
-    }
-
-    /// Equals form is the escape hatch for values that start with `--`.
-    #[test]
-    fn parse_auto_cli_args_equals_form_allows_dashed_value() {
-        let tokens = vec!["--name=--literal-dashes".to_string()];
-        let out =
-            parse_auto_cli_args(&tokens, &["name".to_string()], &[ty_string()], &[false]).unwrap();
-        assert_string(&out["name"], "--literal-dashes");
-    }
-
-    #[test]
-    fn parse_auto_cli_args_positional_sugar_single_param() {
-        let tokens = vec!["hello".to_string()];
-        let out =
-            parse_auto_cli_args(&tokens, &["text".to_string()], &[ty_string()], &[false]).unwrap();
-        assert_string(&out["text"], "hello");
-    }
-
-    /// BEP-027 §"Calling a function: `--function`" — single-required-
-    /// param positional sugar: `Summarize(text: string, max_words: int =
-    /// 50, style: SummaryStyle = "Concise")` accepts `-- "the text"` and
-    /// binds the bare token to `text`.
-    #[test]
-    fn parse_auto_cli_args_positional_sugar_with_defaulted_params() {
-        let tokens = vec!["the text to summarize".to_string()];
-        let out = parse_auto_cli_args(
-            &tokens,
-            &[
-                "text".to_string(),
-                "max_words".to_string(),
-                "style".to_string(),
-            ],
-            &[ty_string(), ty_int(), ty_string()],
-            &[false, true, true],
-        )
-        .unwrap();
-        assert_eq!(out.len(), 1, "only the required param is bound");
-        assert_string(&out["text"], "the text to summarize");
-    }
-
-    /// Positional sugar does NOT fire when there are multiple required
-    /// params — the user has to name them explicitly.
-    #[test]
-    fn parse_auto_cli_args_positional_sugar_skipped_when_multiple_required() {
-        let tokens = vec!["x".to_string()];
-        let out = parse_auto_cli_args(
-            &tokens,
-            &["a".to_string(), "b".to_string()],
-            &[ty_string(), ty_string()],
-            &[false, false],
-        )
-        .unwrap();
-        // The bare token is skipped (it'll show up as a missing-required
-        // error in build_args_from_signature) rather than guessed.
-        assert!(out.is_empty(), "bare token without sugar must not bind");
-    }
-
-    /// BEP-027 §"Auto-CLI conventions": *"Unbound tokens after `--` pass
-    /// through to `baml.argv` without binding."*
-    #[test]
-    fn parse_auto_cli_args_bare_tokens_skipped() {
-        let tokens = vec![
-            "--name".to_string(),
-            "ada".to_string(),
-            "extra".to_string(),
-            "data".to_string(),
-        ];
-        let out =
-            parse_auto_cli_args(&tokens, &["name".to_string()], &[ty_string()], &[false]).unwrap();
-        assert_eq!(out.len(), 1);
-        assert!(out.contains_key("name"));
-    }
-
-    #[test]
-    fn parse_auto_cli_args_unknown_flag_errors() {
-        let tokens = vec!["--unknown".to_string(), "v".to_string()];
-        let err = parse_auto_cli_args(&tokens, &["name".to_string()], &[ty_string()], &[false])
-            .unwrap_err();
-        assert!(format!("{err}").contains("Unknown parameter"));
-    }
-
-    #[test]
-    fn parse_auto_cli_args_missing_value_for_flag_errors() {
-        let tokens = vec!["--name".to_string()];
-        let err = parse_auto_cli_args(&tokens, &["name".to_string()], &[ty_string()], &[false])
-            .unwrap_err();
-        assert!(format!("{err}").contains("Missing value"));
-    }
-
-    /// BEP-027 §"Auto-CLI conventions": *"Flag names mirror parameter
-    /// names verbatim … No kebab translation."*
-    #[test]
-    fn parse_auto_cli_args_preserves_underscores_no_kebab_translation() {
-        let tokens = vec!["--start_date".to_string(), "2024-01-01".to_string()];
-        let out = parse_auto_cli_args(
-            &tokens,
-            &["start_date".to_string()],
-            &[ty_string()],
-            &[false],
-        )
-        .unwrap();
-        assert!(out.contains_key("start_date"));
-    }
-
-    // ── extract_flag_keys ───────────────────────────────────────────────
-
-    #[test]
-    fn extract_flag_keys_handles_both_forms_and_skips_bare() {
-        let tokens = vec![
-            "--alpha".to_string(),
-            "1".to_string(),
-            "--beta=2".to_string(),
-            "bare".to_string(),
-            "--gamma".to_string(),
-            "3".to_string(),
-        ];
-        assert_eq!(
-            extract_flag_keys(&tokens),
-            vec!["alpha".to_string(), "beta".to_string(), "gamma".to_string()]
-        );
-    }
-
-    #[test]
-    fn extract_flag_keys_skips_empty_keys() {
-        let tokens = vec!["--".to_string(), "--=foo".to_string()];
-        assert!(extract_flag_keys(&tokens).is_empty());
+    fn is_auto_cli_primitive_unwraps_optional() {
+        assert!(is_auto_cli_primitive(&ty_optional(ty_string())));
+        assert!(!is_auto_cli_primitive(&ty_optional(ty_class("User"))));
     }
 }

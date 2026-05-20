@@ -14,7 +14,7 @@ pub(crate) const fn release_version() -> &'static str {
 
 #[derive(Parser, Debug)]
 #[command(author, version = release_version(), about = "A CLI tool for working with BAML. Learn more at https://docs.boundaryml.com.", long_about = None)]
-#[command(styles = clap_cargo::style::CLAP_STYLING)]
+#[command(styles = crate::reporter::CLAP_STYLING)]
 #[command(propagate_version = true)]
 pub(crate) struct RuntimeCli {
     /// Enable specific features (can be specified multiple times)
@@ -148,10 +148,7 @@ impl RuntimeCli {
             Commands::LanguageServer(args) => match args.run() {
                 Ok(()) => Ok(crate::ExitCode::Success),
                 Err(e) => {
-                    #[allow(clippy::print_stderr)]
-                    {
-                        eprintln!("Error: {e}");
-                    }
+                    crate::reporter::print_error(e);
                     Ok(crate::ExitCode::Other)
                 }
             },

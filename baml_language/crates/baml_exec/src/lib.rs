@@ -14,14 +14,23 @@
 // for it in the host binary.
 
 pub mod auto_cli;
+pub mod clap_target;
+pub mod diag_print;
 pub mod dispatch;
 pub mod envelope;
 pub mod json_coerce;
 pub mod output;
 
-pub use auto_cli::{
-    extract_flag_keys, parse_auto_cli_args, parse_cli_value, print_target_help, target_help_text,
-};
+pub use auto_cli::{is_auto_cli_primitive, parse_cli_value};
+pub use clap_target::{CLAP_STYLING, ParsedTargetArgs, parse_target_argv};
+pub use diag_print::{print_anyhow_error, print_error, print_warning};
+
+/// Subset of `clap` re-exported so downstream binaries (pack-host) can
+/// classify [`parse_target_argv`] errors without taking a direct clap
+/// dep — keeps the host's dependency footprint trimmed to `baml_exec`.
+pub mod clap_reexport {
+    pub use clap::{Error, error::ErrorKind};
+}
 pub use dispatch::{
     DispatchResult, build_args_from_signature, clamp_exit_code, dispatch_target,
     validate_help_param,

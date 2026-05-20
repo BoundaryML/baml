@@ -10,10 +10,7 @@ use bex_engine::{
     BexCallArg, BexEngine, BexExternalValue, CallId, EngineError, FunctionCallContextBuilder, Ty,
 };
 
-use crate::{
-    auto_cli::parse_auto_cli_args,
-    output::{OutputFormat, write_output},
-};
+use crate::output::{OutputFormat, write_output};
 
 /// Result of dispatching a target.
 pub enum DispatchResult {
@@ -48,12 +45,18 @@ pub fn clamp_exit_code(code: i64) -> i32 {
     i32::try_from(code).unwrap_or(if code < 0 { i32::MIN } else { i32::MAX })
 }
 
-/// Invoke `target_name` with parameters drawn from `cli_tokens` (and
+/// Invoke `target_name` with parameters drawn from `cli_values` (and
 /// optionally `json_args`), then write the return value to stdout.
+///
+/// `cli_values` is the already-typed map produced by
+/// [`crate::parse_target_argv`] — by the time we reach dispatch, clap has
+/// done structural validation and `parse_cli_value` has converted each
+/// raw string to a `BexExternalValue`. Dispatch only has to merge the
+/// CLI flags with `--json-args`, build the ordered call vector, and run.
 pub async fn dispatch_target(
     engine: Arc<BexEngine>,
     target_name: &str,
-    cli_tokens: &[String],
+    cli_values: HashMap<String, BexExternalValue>,
     json_args: Option<serde_json::Value>,
     output_format: OutputFormat,
 ) -> Result<DispatchResult> {
@@ -71,7 +74,7 @@ pub async fn dispatch_target(
 
     let args = build_args_from_signature(
         &engine,
-        cli_tokens,
+        cli_values,
         json_args.as_ref(),
         &func_info.param_names,
         &func_info.param_types,
@@ -99,7 +102,10 @@ pub async fn dispatch_target(
         }
         Err(EngineError::Exit { code }) => Ok(DispatchResult::Exit(code)),
         Err(e) => {
-            eprintln!("Error: {e:#}");
+            // Bold-red `error:` matching ariadne / cargo. Same renderer
+            // used by `baml run`'s top-level error path so target-side
+            // runtime failures look the same as anything else.
+            crate::print_error(format_args!("{e:#}"));
             Ok(DispatchResult::TargetError)
         }
     }
@@ -130,12 +136,13 @@ enum RawArg {
 /// skip the engine and bind directly.
 pub async fn build_args_from_signature(
     engine: &Arc<BexEngine>,
-    cli_tokens: &[String],
+    cli_values: HashMap<String, BexExternalValue>,
     json_args: Option<&serde_json::Value>,
     param_names: &[String],
     param_types: &[Ty],
     param_has_default: &[bool],
 ) -> Result<Vec<BexCallArg>> {
+    let _ = param_types;
     let mut merged: HashMap<String, RawArg> = HashMap::new();
 
     // `--json-args` first (lower priority — CLI overrides).
@@ -152,11 +159,11 @@ pub async fn build_args_from_signature(
         }
     }
 
-    // Auto-CLI flags override. After the spec-strict refactor, auto-CLI
-    // only produces typed primitives (string/int/float/bool/null/enum) —
-    // structured types must come through `--json-args`.
-    let cli_map = parse_auto_cli_args(cli_tokens, param_names, param_types, param_has_default)?;
-    for (key, value) in cli_map {
+    // Auto-CLI flags override. By this point the clap parser has already
+    // validated structure (required flags, unknown flags) and converted
+    // each raw string to a typed primitive — structured types arrive via
+    // `--json-args` only.
+    for (key, value) in cli_values {
         merged.insert(key, RawArg::Primitive(Box::new(value)));
     }
 
@@ -174,14 +181,25 @@ pub async fn build_args_from_signature(
             }
             None if has_default => ordered.push(BexCallArg::OmittedDefault),
             None => {
-                // BEP-027 §"Auto-CLI conventions": flags live after `--`
-                // under `baml run`. Spell that out so first-time users
-                // don't trip on the separator. Packaged binaries have no
-                // `--`, so the suggestion's `--name <value>` still
-                // applies as-is when the host is a packed binary.
+                // Primitive params should have been caught by clap as
+                // required flags — if we get here, either the caller
+                // (test) bypassed clap or the param is non-primitive
+                // (class/list/map/union/etc.), which has no `--name`
+                // flag and is only deliverable via `--json-args`. Point
+                // at `--json-args` for non-primitives so the hint
+                // matches the help-block guidance; keep the legacy
+                // `--name`-after-`--` hint for primitives so test
+                // expectations and bare engine callers stay friendly.
+                if crate::is_auto_cli_primitive(ty) {
+                    anyhow::bail!(
+                        "Missing required argument `--{name}` (type: {ty}).\n\
+                         Pass it after `--`: ... -- --{name} <value>"
+                    );
+                }
                 anyhow::bail!(
-                    "Missing required argument `--{name}` (type: {ty}).\n\
-                     Pass it after `--`: ... -- --{name} <value>"
+                    "Missing required argument `{name}` (type: {ty}).\n\
+                     Pass it via `--json-args '{{\"{name}\": ...}}'` \
+                     (or `--json-args @file` / `--json-args -` for stdin)."
                 );
             }
         }
@@ -189,10 +207,10 @@ pub async fn build_args_from_signature(
 
     if !merged.is_empty() {
         let unknown: Vec<&str> = merged.keys().map(String::as_str).collect();
-        eprintln!(
-            "Warning: unknown argument(s) ignored: {}",
+        crate::print_warning(format_args!(
+            "unknown argument(s) ignored: {}",
             unknown.join(", ")
-        );
+        ));
     }
 
     Ok(ordered)
@@ -309,12 +327,19 @@ mod tests {
 
     // ── build_args_from_signature: defaults / required / merge ──────────
 
+    fn cli_values(pairs: &[(&str, BexExternalValue)]) -> HashMap<String, BexExternalValue> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.clone()))
+            .collect()
+    }
+
     #[tokio::test]
     async fn build_args_primitive_via_cli() {
         let eng = engine(r#"function main(text: string) -> string { text }"#);
         let args = build_args_from_signature(
             &eng,
-            &["--text".into(), "hi".into()],
+            cli_values(&[("text", BexExternalValue::String("hi".into()))]),
             None,
             &["text".to_string()],
             &[ty_string()],
@@ -330,7 +355,7 @@ mod tests {
         let eng = engine(r#"function main(text: string) -> string { text }"#);
         let err = build_args_from_signature(
             &eng,
-            &[],
+            HashMap::new(),
             None,
             &["text".to_string()],
             &[ty_string()],
@@ -351,7 +376,7 @@ mod tests {
         let eng = engine(r#"function main(text: string, count: int = 10) -> string { text }"#);
         let args = build_args_from_signature(
             &eng,
-            &["--text".into(), "hi".into()],
+            cli_values(&[("text", BexExternalValue::String("hi".into()))]),
             None,
             &["text".to_string(), "count".to_string()],
             &[ty_string(), ty_int()],
@@ -376,7 +401,7 @@ mod tests {
         let json: serde_json::Value = serde_json::json!({"text": "from-json"});
         let args = build_args_from_signature(
             &eng,
-            &["--text".into(), "from-cli".into()],
+            cli_values(&[("text", BexExternalValue::String("from-cli".into()))]),
             Some(&json),
             &["text".to_string()],
             &[ty_string()],
@@ -400,7 +425,7 @@ mod tests {
         let json: serde_json::Value = serde_json::json!("just a string");
         let err = build_args_from_signature(
             &eng,
-            &[],
+            HashMap::new(),
             Some(&json),
             &["text".to_string()],
             &[ty_string()],

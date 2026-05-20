@@ -35,9 +35,11 @@ anyhow = { workspace = true }
 bitcode = { workspace = true }
 clap = { workspace = true, features = [ "color", "env" ] }
 clap-cargo = { workspace = true }
+console = { workspace = true }
 ctrlc = { workspace = true }
 flate2 = { workspace = true }
 indexmap = { workspace = true }
+indicatif = { workspace = true }
 libsui = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true, features = [ "blocking" ] }

@@ -7,12 +7,12 @@
 //        argv[1] = target identifier baked in at pack time
 //        argv[2+] = every token on the command line after the binary name
 //   3. Initialize the BAML engine with the embedded program and argv.
-//   4. If the baked-in target is typed, short-circuit on `--help` and
-//      print auto-derived help.
-//   5. Otherwise dispatch to the target via `baml_exec::dispatch_target`,
-//      which parses argv[2..] as auto-CLI flags against the target
-//      signature and writes the return value to stdout in the baked-in
-//      output format.
+//   4. Parse argv[2..] through the runtime clap parser
+//      ([`baml_exec::parse_target_argv`]) — this gives `--help` /
+//      unknown-flag / missing-required handling for free, with the same
+//      brand-purple styling as `baml run`'s top-level clap.
+//   5. Dispatch to the target via `baml_exec::dispatch_target` and write
+//      the return value in the baked-in output format.
 //
 // Exit codes: 0 on success, non-zero on error. To set a non-zero exit
 // code from BAML, the program calls `baml.sys.exit(code)`.
@@ -22,7 +22,8 @@
 use std::{process::ExitCode, sync::Arc};
 
 use baml_exec::{
-    DispatchResult, PackEnvelope, clamp_exit_code, dispatch_target, print_target_help,
+    DispatchResult, PackEnvelope, clamp_exit_code, dispatch_target, load_json_source,
+    parse_target_argv, print_error,
 };
 use bex_engine::BexEngine;
 use sys_native::SysOpsExt;
@@ -52,7 +53,7 @@ fn build_argv(target_identifier: &str) -> Vec<String> {
 
 /// Whether the target is typed — i.e. has one or more parameters whose
 /// types drive the auto-CLI. Parameterless targets own their full argv
-/// and receive no injected `--help`.
+/// and bypass the clap layer entirely.
 fn target_is_typed(engine: &BexEngine, target_name: &str) -> bool {
     engine
         .function_params(target_name)
@@ -60,26 +61,11 @@ fn target_is_typed(engine: &BexEngine, target_name: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn handle_help(engine: &BexEngine, target_name: &str) -> bool {
-    let info = engine.user_functions().into_iter().find(|f| {
-        f.qualified_name == target_name
-            || f.display_name == target_name.strip_prefix("user.").unwrap_or(target_name)
-    });
-    let Some(info) = info else { return false };
-
-    let exe = std::env::args()
-        .next()
-        .unwrap_or_else(|| "./binary".to_string());
-    let prefix = format!("{exe} ");
-    print_target_help(target_name, &info, &prefix);
-    true
-}
-
 fn main() -> ExitCode {
     let envelope = match extract_envelope() {
         Ok(e) => e,
         Err(e) => {
-            eprintln!("error: {e}");
+            print_error(e);
             return ExitCode::FAILURE;
         }
     };
@@ -94,26 +80,64 @@ fn main() -> ExitCode {
     ) {
         Ok(e) => Arc::new(e),
         Err(e) => {
-            eprintln!("error: failed to initialize engine: {e}");
+            print_error(format_args!("failed to initialize engine: {e}"));
             return ExitCode::FAILURE;
         }
     };
 
-    let cli_tokens: &[String] = if argv.len() > 2 { &argv[2..] } else { &[] };
+    let raw_cli_tokens: &[String] = if argv.len() > 2 { &argv[2..] } else { &[] };
 
-    // `--help` is reserved on typed targets only; parameterless `main()`
-    // owns its full argv and can handle `--help` itself.
-    if target_is_typed(&engine, &envelope.target_name)
-        && cli_tokens.iter().any(|t| t == "--help" || t == "-h")
-        && handle_help(&engine, &envelope.target_name)
-    {
-        return ExitCode::SUCCESS;
-    }
+    // Parameterless targets own their full argv — including `--help`,
+    // which they're free to interpret however they like. Skip the clap
+    // layer for them. Typed targets route through clap so help/parse
+    // errors are uniformly rendered.
+    let parsed = if target_is_typed(&engine, &envelope.target_name) {
+        let Some(func_info) = engine.find_user_function(&envelope.target_name) else {
+            print_error(format_args!(
+                "function `{}` not found",
+                envelope.target_name
+            ));
+            return ExitCode::FAILURE;
+        };
+        let bin_name = std::env::args()
+            .next()
+            .unwrap_or_else(|| "./binary".to_string());
+        match parse_target_argv(&bin_name, &envelope.target_name, &func_info, raw_cli_tokens) {
+            Ok(parsed) => parsed,
+            Err(err) => {
+                // Clap classifies help/version requests as `Err` with a
+                // specific kind; route those to stdout + success so
+                // `./packed-bin --help` exits cleanly. Other kinds
+                // (missing required, unknown arg, etc.) print to stderr
+                // and fail.
+                use baml_exec::clap_reexport::ErrorKind;
+                let kind = err.kind();
+                let _ = err.print();
+                return match kind {
+                    ErrorKind::DisplayHelp | ErrorKind::DisplayVersion => ExitCode::SUCCESS,
+                    _ => ExitCode::FAILURE,
+                };
+            }
+        }
+    } else {
+        baml_exec::ParsedTargetArgs::default()
+    };
+
+    let json_args = match parsed.json_source {
+        Some(source) => match load_json_source(&source) {
+            Ok(v) => Some(v),
+            Err(e) => {
+                print_error(e);
+                return ExitCode::FAILURE;
+            }
+        },
+        None => None,
+    };
 
     let rt = match tokio::runtime::Runtime::new() {
         Ok(rt) => rt,
         Err(e) => {
-            eprintln!("error: failed to create runtime: {e}");
+            print_error(format_args!("failed to create runtime: {e}"));
             return ExitCode::FAILURE;
         }
     };
@@ -121,8 +145,8 @@ fn main() -> ExitCode {
     let result = rt.block_on(dispatch_target(
         engine,
         &envelope.target_name,
-        cli_tokens,
-        None,
+        parsed.cli_values,
+        json_args,
         envelope.output_format,
     ));
 
@@ -134,7 +158,7 @@ fn main() -> ExitCode {
         // problem.
         Ok(DispatchResult::Exit(code)) => std::process::exit(clamp_exit_code(code)),
         Err(e) => {
-            eprintln!("error: {e}");
+            print_error(e);
             ExitCode::FAILURE
         }
     }

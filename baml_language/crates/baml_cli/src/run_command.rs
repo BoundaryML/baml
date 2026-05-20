@@ -18,7 +18,7 @@ use bex_engine::{BexEngine, FunctionCallContextBuilder, UserFunctionInfo};
 use clap::Args;
 use sys_native::{CallId, SysOpsExt};
 
-use crate::project_load::load_project_from;
+use crate::{project_load::load_project_from_reporting, reporter::Reporter};
 
 // ============================================================================
 // Script expansion types
@@ -184,9 +184,14 @@ pub use baml_exec::OutputFormat;
 // ============================================================================
 
 impl RunArgs {
-    fn emit_format_hint_if_needed(needs_format_hint: bool) {
+    /// Emit the "your code is unformatted" advisory above the active
+    /// spinner. Routed through the reporter (rather than a raw
+    /// `eprintln!`) so the message both takes the bold-yellow
+    /// `warning:` header — matching ariadne — *and* doesn't interleave
+    /// with the spinner ticks that would otherwise still be running.
+    fn emit_format_hint_if_needed(reporter: &Reporter, needs_format_hint: bool) {
         if needs_format_hint {
-            eprintln!("{FORMAT_HINT}");
+            reporter.warning(FORMAT_HINT);
         }
     }
 
@@ -199,7 +204,16 @@ impl RunArgs {
 
     /// Collect diagnostics on `db` and bail with `bail_context` if any are errors.
     /// Warnings are surfaced only in verbose mode.
-    fn check_project_diagnostics(&self, db: &ProjectDatabase, bail_context: &str) -> Result<()> {
+    ///
+    /// When a [`Reporter`] is active, diagnostic output is routed through
+    /// `reporter.suspend()` so the multi-line ariadne block doesn't
+    /// interleave with the spinner.
+    fn check_project_diagnostics(
+        &self,
+        db: &ProjectDatabase,
+        bail_context: &str,
+        reporter: &Reporter,
+    ) -> Result<()> {
         let project = db
             .get_project()
             .ok_or_else(|| anyhow!("No project context"))?;
@@ -234,9 +248,9 @@ impl RunArgs {
                 &warnings.iter().copied().cloned().collect::<Vec<_>>(),
                 &sources,
                 &file_paths,
-                &render::RenderConfig::cli(),
+                &render::RenderConfig::cli_auto(),
             );
-            eprintln!("{rendered}");
+            reporter.suspend(|| eprintln!("{rendered}"));
         }
 
         if !errors.is_empty() {
@@ -244,8 +258,9 @@ impl RunArgs {
                 &errors.iter().copied().cloned().collect::<Vec<_>>(),
                 &sources,
                 &file_paths,
-                &render::RenderConfig::cli(),
+                &render::RenderConfig::cli_auto(),
             );
+            reporter.abandon();
             eprintln!("{rendered}");
             anyhow::bail!("{bail_context}");
         }
@@ -276,6 +291,22 @@ impl RunArgs {
     }
 
     pub fn run(&self) -> Result<crate::ExitCode> {
+        // Short-circuit verb-level `--help` (no target / function /
+        // expression given) before constructing the Reporter, so the
+        // spinner doesn't briefly draw a frame above the help text.
+        if self.help
+            && self.function.is_none()
+            && self.target.is_none()
+            && self.expression.is_none()
+        {
+            Self::print_run_help();
+            return Ok(crate::ExitCode::Success);
+        }
+        let reporter = Reporter::new();
+        self.run_with_reporter(&reporter)
+    }
+
+    fn run_with_reporter(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
         // BEP-027 §"Target resolution": `--function <ns>.<name>` and
         // `-e '<expr>'` are alternative dispatch modes that "replace the
         // positional target entirely." Either of them is mutually
@@ -331,7 +362,7 @@ impl RunArgs {
             // string) and use the loaded body for both `argv[1]` and the
             // synthetic compilation unit.
             let expr_body = load_expression_source(expr_source)?;
-            return self.run_expression(&expr_body, event_sink);
+            return self.run_expression(&expr_body, event_sink, reporter);
         }
 
         let argv = self.build_argv();
@@ -342,12 +373,13 @@ impl RunArgs {
                     self.target.as_ref().unwrap(),
                     event_sink.clone(),
                     argv.clone(),
+                    reporter,
                 )?
             } else {
-                self.load_and_compile(event_sink.clone(), argv.clone())?
+                self.load_and_compile(event_sink.clone(), argv.clone(), reporter)?
             };
         let _ = db; // keep db alive for engine lifetime
-        Self::emit_format_hint_if_needed(needs_format_hint);
+        Self::emit_format_hint_if_needed(reporter, needs_format_hint);
 
         // BEP-027 §"`baml.argv`": patch `argv[1]` post-compile so it
         // matches the spec's "however the user named the target" rule
@@ -385,7 +417,7 @@ impl RunArgs {
         let namespaces = collect_namespaces(&engine);
 
         if self.list {
-            return Self::print_list(&engine, &scripts, &namespaces, &self.output_format);
+            return self.print_list(&engine, &scripts, &namespaces, &self.output_format);
         }
 
         self.validate_scripts(&engine, &scripts, &namespaces, &toml_content)?;
@@ -449,27 +481,70 @@ impl RunArgs {
         // safety net for non-help invocations.
         baml_exec::validate_help_param(&engine, &function_name)?;
 
-        // BEP-027 §"What `baml pack` changes" reserves `--help` only on typed
-        // targets — parameterless `main()` owns its full argv. Mirror that
-        // here so `baml run -- --help` reaches a parameterless `main()` via
-        // `baml.argv` instead of being intercepted as auto-derived help.
-        // Run-verb `--help` (before `--`) always wins, since it's a verb flag.
+        // BEP-027 §"What `baml pack` changes" reserves `--help` only on
+        // typed targets — parameterless `main()` owns its full argv.
+        // The verb-level `--help` (before `--`) is handled upfront via
+        // `print_run_help`; per-target `--help` arrives in
+        // `effective_target_args` and is classified by clap's parser
+        // below.
         let target_is_typed = !func_info.param_names.is_empty();
-        if self.help
-            || (target_is_typed
-                && effective_target_args.len() == 1
-                && effective_target_args[0] == "--help")
-        {
-            Self::print_target_help(&function_name, &func_info);
-            return Ok(crate::ExitCode::Success);
-        }
 
+        // Route post-`--` tokens through the same clap-driven parser
+        // that the packed binary uses. Help requests and parse errors
+        // come back as `clap::Error`; we distinguish them by `kind()`
+        // so `--help` exits cleanly and bad flags exit non-zero.
+        let parsed = if target_is_typed {
+            let display = function_name
+                .strip_prefix("user.")
+                .unwrap_or(&function_name);
+            let bin_name = format!("baml run --function {display} --");
+            match baml_exec::parse_target_argv(
+                &bin_name,
+                &function_name,
+                &func_info,
+                &effective_target_args,
+            ) {
+                Ok(p) => p,
+                Err(err) => {
+                    use baml_exec::clap_reexport::ErrorKind;
+                    let kind = err.kind();
+                    // Help / version: render to stdout and exit success.
+                    // Parse errors: stderr + non-zero. Suspend the
+                    // spinner first so the multi-line clap block lands
+                    // intact instead of intermixed with ticks.
+                    reporter.abandon();
+                    let _ = err.print();
+                    return match kind {
+                        ErrorKind::DisplayHelp | ErrorKind::DisplayVersion => {
+                            Ok(crate::ExitCode::Success)
+                        }
+                        _ => Ok(crate::ExitCode::Other),
+                    };
+                }
+            }
+        } else {
+            baml_exec::ParsedTargetArgs::default()
+        };
+
+        // `--json-args` can come from the verb-level flag (parsed by
+        // clap on the run command) OR from the per-target clap parser.
+        // The verb-level form wins because it's the explicit override.
         let json_args = match &self.json_args {
             Some(source) => Some(baml_exec::load_json_source(source)?),
-            None => None,
+            None => match parsed.json_source.as_deref() {
+                Some(source) => Some(baml_exec::load_json_source(source)?),
+                None => None,
+            },
         };
 
         self.vlog(format_args!("Calling {function_name}"));
+
+        // Cargo emits `     Running …` right before the program's
+        // stdout starts. Same shape here: persist a `Running <name>`
+        // line, then clear the spinner so the target's stdout writes
+        // don't collide with a still-ticking lamb below.
+        reporter.status("Running", &function_name);
+        reporter.abandon();
 
         let rt = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
         let engine = Arc::new(engine);
@@ -478,7 +553,7 @@ impl RunArgs {
         let dispatch_result = rt.block_on(baml_exec::dispatch_target(
             Arc::clone(&engine),
             &function_name,
-            &effective_target_args,
+            parsed.cli_values,
             json_args,
             output_format,
         ));
@@ -490,7 +565,10 @@ impl RunArgs {
         }
 
         match dispatch_result {
-            Ok(baml_exec::DispatchResult::Ok) => Ok(crate::ExitCode::Success),
+            Ok(baml_exec::DispatchResult::Ok) => {
+                reporter.finish("Finished", &function_name);
+                Ok(crate::ExitCode::Success)
+            }
             Ok(baml_exec::DispatchResult::TargetError) => Ok(crate::ExitCode::TargetError),
             // `baml.sys.exit(code)` short-circuits the engine; honor the user's
             // code as the process exit code, clamped to the C `int` range.
@@ -498,7 +576,7 @@ impl RunArgs {
                 std::process::exit(baml_exec::clamp_exit_code(code));
             }
             Err(e) => {
-                eprintln!("Error: {e:#}");
+                crate::reporter::print_error(format_args!("{e:#}"));
                 Ok(crate::ExitCode::TargetError)
             }
         }
@@ -584,8 +662,12 @@ impl RunArgs {
         &self,
         event_sink: Option<Arc<dyn bex_events::EventSink>>,
         argv: Vec<String>,
+        reporter: &Reporter,
     ) -> Result<(ProjectDatabase, BexEngine, bool)> {
-        let (db, from, baml_files) = load_project_from(&self.from)?;
+        // `load_project_from_reporting` emits one `Loading <file>`
+        // line per discovered source file (cargo-style per-unit
+        // progress) — no aggregate `Loading <project>` needed.
+        let (db, from, baml_files) = load_project_from_reporting(&self.from, reporter)?;
         self.vlog(format_args!("Loading project from {}", from.display()));
         if baml_files.is_empty() {
             anyhow::bail!("No .baml files found in {}", from.display());
@@ -597,7 +679,16 @@ impl RunArgs {
                 .unwrap_or(false)
         });
 
-        self.check_project_diagnostics(&db, "Cannot run: compilation errors found")?;
+        reporter.spin("Checking", format!("{} file(s)", baml_files.len()));
+        self.check_project_diagnostics(&db, "Cannot run: compilation errors found", reporter)?;
+        // For `--list` the bytecode emit isn't preparing the program
+        // for execution — it's just there so we can call
+        // `engine.user_functions()` to enumerate signatures. Showing
+        // "Compiling" in that case is technically true but misleading
+        // ("am I about to run something?"). Use "Resolving" so the
+        // verb reflects what the user is actually waiting on.
+        let compile_verb = if self.list { "Resolving" } else { "Compiling" };
+        reporter.spin(compile_verb, format!("{} file(s)", baml_files.len()));
         self.vlog(format_args!("Compiling..."));
         let engine = self.compile_to_engine(&db, event_sink, argv)?;
         self.vlog(format_args!(
@@ -616,7 +707,9 @@ impl RunArgs {
         file_path: &str,
         event_sink: Option<Arc<dyn bex_events::EventSink>>,
         argv: Vec<String>,
+        reporter: &Reporter,
     ) -> Result<(ProjectDatabase, BexEngine, bool)> {
+        reporter.spin("Loading", file_path);
         let canonical = std::fs::canonicalize(Path::new(file_path))
             .with_context(|| format!("File not found: {file_path}"))?;
         self.vlog(format_args!(
@@ -635,10 +728,16 @@ impl RunArgs {
         db.set_project_root(parent);
         db.add_or_update_file(&canonical, &content);
 
+        reporter.spin("Checking", file_path);
         self.check_project_diagnostics(
             &db,
             &format!("Cannot run: compilation errors in {file_path}"),
+            reporter,
         )?;
+        // See note in `load_and_compile`: "Resolving" is the honest
+        // verb when --list is the destination, "Compiling" otherwise.
+        let compile_verb = if self.list { "Resolving" } else { "Compiling" };
+        reporter.spin(compile_verb, file_path);
         let engine = self.compile_to_engine(&db, event_sink, argv)?;
         self.vlog(format_args!(
             "Compiled {} function(s) from standalone file",
@@ -663,7 +762,9 @@ impl RunArgs {
         &self,
         expr_body: &str,
         event_sink: Option<Arc<dyn bex_events::EventSink>>,
+        reporter: &Reporter,
     ) -> Result<crate::ExitCode> {
+        reporter.spin("Compiling", "expression");
         self.vlog(format_args!(
             "Expression mode: evaluating {} byte(s)",
             expr_body.len()
@@ -716,7 +817,11 @@ impl RunArgs {
 
         db.add_or_update_file(&project_root.join("__expr__.baml"), &synthetic);
 
-        self.check_project_diagnostics(&db, "Cannot evaluate expression: compilation errors")?;
+        self.check_project_diagnostics(
+            &db,
+            "Cannot evaluate expression: compilation errors",
+            reporter,
+        )?;
         // BEP-027 §"`baml.argv`": `argv[1]` for `-e` is "the expression
         // source" — the loaded body text, not the `@path` reference. This
         // matches the inline case: `-e '2 + 2'` and `-e @file` (with
@@ -726,6 +831,12 @@ impl RunArgs {
             event_sink.clone(),
             self.build_argv_for_expression(expr_body),
         )?;
+
+        // Cargo-shape `     Running …` before the program's stdout
+        // starts; then clear the spinner so the evaluated expression's
+        // output doesn't collide with a still-ticking lamb.
+        reporter.status("Running", "expression");
+        reporter.abandon();
 
         let rt = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
         let engine = Arc::new(engine);
@@ -749,7 +860,7 @@ impl RunArgs {
                 if let Err(e) =
                     baml_exec::write_output(&engine, value, &return_type, output_format).await
                 {
-                    eprintln!("Error: failed to serialize output: {e}");
+                    crate::reporter::print_error(format_args!("failed to serialize output: {e}"));
                 }
             }
             Ok(())
@@ -760,12 +871,15 @@ impl RunArgs {
         }
 
         match result {
-            Ok(()) => Ok(crate::ExitCode::Success),
+            Ok(()) => {
+                reporter.finish("Finished", "expression");
+                Ok(crate::ExitCode::Success)
+            }
             Err(bex_engine::EngineError::Exit { code }) => {
                 std::process::exit(baml_exec::clamp_exit_code(code));
             }
             Err(e) => {
-                eprintln!("Error: {e:#}");
+                crate::reporter::print_error(format_args!("{e:#}"));
                 Ok(crate::ExitCode::TargetError)
             }
         }
@@ -842,18 +956,20 @@ impl RunArgs {
 
     /// Parse `[scripts]` from raw `baml.toml` content.
     ///
-    /// Emits a stderr warning on TOML parse failures so a typo in
+    /// Emits a styled `Warning:` on TOML parse failures so a typo in
     /// `baml.toml` doesn't silently disable every script. A missing
-    /// `baml.toml` (empty content) is normal and stays quiet.
+    /// `baml.toml` (empty content) is normal and stays quiet. Routed
+    /// through `print_warning` so the bold-yellow `Warning:` prefix
+    /// matches every other advisory the CLI emits.
     fn parse_scripts(content: &str) -> HashMap<String, Vec<String>> {
         let trimmed = content.trim();
         let table = match content.parse::<toml::Table>() {
             Ok(t) => t,
             Err(e) => {
                 if !trimmed.is_empty() {
-                    eprintln!(
-                        "warning: failed to parse `baml.toml` ({e}); [scripts] entries will be ignored"
-                    );
+                    crate::reporter::print_warning(format_args!(
+                        "failed to parse `baml.toml` ({e}); [scripts] entries will be ignored"
+                    ));
                 }
                 return HashMap::new();
             }
@@ -940,10 +1056,10 @@ impl RunArgs {
                 let loc = Self::find_script_line(toml_content, name)
                     .map(|l| format!("{}:{l}", toml_path.display()))
                     .unwrap_or_else(|| toml_path.display().to_string());
-                eprintln!(
-                    "warning: {loc}: [scripts] `{name}` shadows namespace `{name}` — \
+                crate::reporter::print_warning(format_args!(
+                    "{loc}: [scripts] `{name}` shadows namespace `{name}` — \
                      the script takes precedence"
-                );
+                ));
             }
 
             match parse_script_body(tokens) {
@@ -1133,6 +1249,7 @@ impl RunArgs {
     // ========================================================================
 
     fn print_list(
+        &self,
         engine: &BexEngine,
         scripts: &HashMap<String, Vec<String>>,
         namespaces: &HashSet<String>,
@@ -1154,96 +1271,123 @@ impl RunArgs {
         }
 
         match output {
-            OutputFormat::Debug => Self::print_list_debug(&functions, scripts, namespaces),
+            OutputFormat::Debug => {
+                Self::print_list_debug(&functions, scripts, namespaces, self.verbose);
+            }
             OutputFormat::Json => Self::print_list_json(&functions, scripts, namespaces),
         }
 
         Ok(crate::ExitCode::Success)
     }
 
+    /// Just/npm-style flat list of runnable targets, grouped by kind
+    /// (scripts → namespaces → functions) under bold-purple section
+    /// headers. Auto-derived `to_json` / `from_json`, companion
+    /// constructors, and other compiler-synthesized helpers are hidden
+    /// by default — `--verbose` shows them.
     fn print_list_debug(
         functions: &[UserFunctionInfo],
         scripts: &HashMap<String, Vec<String>>,
         namespaces: &HashSet<String>,
+        verbose: bool,
     ) {
-        println!("Available targets:\n");
+        use bex_vm_types::FunctionOrigin;
+        use console::Style;
 
-        if !scripts.is_empty() {
-            println!("  Scripts:");
-            let mut names: Vec<&String> = scripts.keys().collect();
-            names.sort();
-            for name in names {
-                println!("    {name}");
-            }
-            println!();
-        }
+        let header_style = Style::new()
+            .fg(console::Color::TrueColor(0xA8, 0x55, 0xF7))
+            .bold();
+        let dim = Style::new().color256(244);
+        let header = |s: &str| println!("{}", header_style.apply_to(s));
 
-        // BEP-027 §"Auto-CLI conventions" / `--list` describes three
-        // categories: scripts, *namespace mains*, and functions. A
-        // namespace appears here only when it has a `main` — that's
-        // the contract for `baml run <namespace>`. Plain namespaces
-        // (no `main`) aren't directly runnable, so we don't list them
-        // as a separate category.
-        let namespace_mains: Vec<&str> = functions
+        // Visible by default: user-authored entries only. Pass
+        // `--verbose` to expose compiler-synthesized helpers
+        // (autoderive `to_json` / `from_json` per class, companion
+        // `$new` constructors per client, internal `$init` etc).
+        let visible: Vec<&UserFunctionInfo> = if verbose {
+            functions.iter().collect()
+        } else {
+            functions
+                .iter()
+                .filter(|f| matches!(f.origin, FunctionOrigin::UserDefined))
+                .collect()
+        };
+
+        // BEP-027 §"Auto-CLI conventions" / `--list`: a namespace
+        // shows up here only when it has a `main`, since `baml run
+        // <ns>` runs `<ns>.main`. Plain namespaces with no `main`
+        // aren't directly runnable so we leave them out.
+        let mut namespace_mains: Vec<&str> = visible
             .iter()
-            .filter(|f| f.display_name.ends_with(".main"))
             .filter_map(|f| {
-                let display = &f.display_name;
-                display
+                f.display_name
                     .strip_suffix(".main")
                     .filter(|ns| namespaces.contains(*ns))
             })
             .collect();
+        namespace_mains.sort();
+        namespace_mains.dedup();
+
+        if !scripts.is_empty() {
+            header("Scripts");
+            let mut names: Vec<&String> = scripts.keys().collect();
+            names.sort();
+            for name in names {
+                println!("  {name}");
+            }
+            println!();
+        }
 
         if !namespace_mains.is_empty() {
-            println!("  Namespace mains (run via `baml run <name>`):");
-            let mut sorted: Vec<&&str> = namespace_mains.iter().collect();
-            sorted.sort();
-            sorted.dedup();
-            for ns in sorted {
-                println!("    {ns}");
+            header("Namespaces");
+            for ns in &namespace_mains {
+                println!("  {ns}");
             }
             println!();
         }
 
-        let mut grouped: std::collections::BTreeMap<String, Vec<&UserFunctionInfo>> =
-            std::collections::BTreeMap::new();
-        for func in functions {
-            let ns = if let Some(dot) = func.display_name.rfind('.') {
-                func.display_name[..dot].to_string()
-            } else {
-                String::new()
-            };
-            grouped.entry(ns).or_default().push(func);
-        }
-
-        if !functions.is_empty() {
-            println!("  Functions (call via `baml run --function <name>`):");
-            for (ns, funcs) in &grouped {
-                let label = if ns.is_empty() { "(root)" } else { ns.as_str() };
-                println!("    {label}:");
-                for func in funcs {
-                    let short_name = if let Some(dot) = func.display_name.rfind('.') {
-                        &func.display_name[dot + 1..]
-                    } else {
-                        &func.display_name
-                    };
-
-                    let params: Vec<String> = func
-                        .param_names
-                        .iter()
-                        .zip(func.param_types.iter())
-                        .map(|(name, ty)| format!("{name}: {ty}"))
-                        .collect();
-
-                    println!(
-                        "      {short_name}({}) -> {}",
-                        params.join(", "),
-                        func.return_type
-                    );
-                }
+        if !visible.is_empty() {
+            header("Functions");
+            for func in &visible {
+                let params: Vec<String> = func
+                    .param_names
+                    .iter()
+                    .zip(func.param_types.iter())
+                    .enumerate()
+                    .map(|(idx, (name, ty))| {
+                        let opt = if func.param_has_default.get(idx).copied().unwrap_or(false) {
+                            " [optional]"
+                        } else {
+                            ""
+                        };
+                        format!("{name}: {ty}{opt}")
+                    })
+                    .collect();
+                let suffix = if func.is_llm {
+                    format!("  {}", dim.apply_to("[llm]"))
+                } else {
+                    String::new()
+                };
+                println!(
+                    "  {}({}) -> {}{suffix}",
+                    func.display_name,
+                    params.join(", "),
+                    func.return_type,
+                );
             }
             println!();
+        }
+
+        // When the default filter hid everything, surface that fact
+        // rather than leaving the user staring at an empty section.
+        if !verbose && visible.is_empty() && !functions.is_empty() {
+            println!(
+                "{}",
+                dim.apply_to(format!(
+                    "(hiding {} compiler-synthesized function(s); pass --verbose to show them)",
+                    functions.len()
+                ))
+            );
         }
     }
 
@@ -1333,28 +1477,19 @@ impl RunArgs {
         })
     }
 
-    // ========================================================================
-    // Per-target --help
-    // ========================================================================
-
-    /// Render auto-derived target help via the shared formatter in
-    /// `baml_exec`. The invocation example uses `baml run --function ...
-    /// -- ` so the example line reproduces the exact `baml run` shell
-    /// syntax (the `--` separator hint is implicit in the example).
-    fn print_target_help(function_name: &str, func_info: &UserFunctionInfo) {
-        let display = function_name.strip_prefix("user.").unwrap_or(function_name);
-        let example_prefix = format!("baml run --function {display} -- ");
-        baml_exec::print_target_help(function_name, func_info, &example_prefix);
-    }
-
     fn print_run_help() {
         use clap::CommandFactory;
-        let mut cmd = crate::commands::RuntimeCli::command();
-        for sub in cmd.get_subcommands_mut() {
-            if sub.get_name() == "run" {
-                let _ = sub.print_help();
-                return;
-            }
+        let cmd = crate::commands::RuntimeCli::command();
+        if let Some(sub) = cmd.find_subcommand("run") {
+            // Clap propagates `styles = …` from the root command to
+            // subcommands at parse time, not when a subcommand
+            // reference is grabbed directly via `find_subcommand`.
+            // Re-apply `CLAP_STYLING` explicitly so `run --help` keeps
+            // the same green/cyan ariadne-adjacent palette as
+            // `baml-cli --help`, instead of falling back to clap's
+            // default bold+underline-no-color treatment.
+            let mut sub = sub.clone().styles(crate::reporter::CLAP_STYLING);
+            let _ = sub.print_help();
         }
     }
 }
@@ -1363,9 +1498,10 @@ impl RunArgs {
 // Reserved verbs & namespace helpers
 // ============================================================================
 
-const FORMAT_HINT: &str = "[INFO] Your code is unformatted, but will continue to run. You can fix this whenever you'd like by running `baml fmt`.";
+pub(crate) const FORMAT_HINT: &str =
+    "Your code is unformatted — run `baml fmt` to format it. Continuing.";
 
-fn source_needs_format_hint(source: &str) -> bool {
+pub(crate) fn source_needs_format_hint(source: &str) -> bool {
     let options = baml_fmt::FormatOptions::default();
     match baml_fmt::format(source, &options) {
         Ok(formatted) => formatted != source,
@@ -1490,9 +1626,11 @@ mod tests {
 
     #[test]
     fn format_hint_text_matches_ticket() {
+        // Pinned because the wording is user-facing copy: any change
+        // here is a deliberate UX call, not a casual refactor.
         assert_eq!(
             FORMAT_HINT,
-            "[INFO] Your code is unformatted, but will continue to run. You can fix this whenever you'd like by running `baml fmt`."
+            "Your code is unformatted — run `baml fmt` to format it. Continuing."
         );
     }
 
@@ -1505,14 +1643,6 @@ mod tests {
         let n = COUNTER.fetch_add(1, Ordering::Relaxed);
         std::env::temp_dir().join(format!("{prefix}_{}_{n}", std::process::id()))
     }
-
-    // ── parse_cli_value ────────────────────────────────────────────
-
-    // ── parse_auto_cli_args ────────────────────────────────────────
-
-    // ── json_to_external ───────────────────────────────────────────
-
-    // ── parse_script_body ──────────────────────────────────────────
 
     /// Helper: split a string the same way load_scripts does for string-form entries.
     fn tokens(s: &str) -> Vec<String> {

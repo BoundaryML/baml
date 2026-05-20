@@ -165,7 +165,7 @@ impl DescribeArgs {
         // ── --symbols deprecation ───────────────────────────────────────────
         if self.symbols {
             eprintln!(
-                "Warning: --symbols is deprecated. Use `baml describe` with no arguments instead."
+                "warning: --symbols is deprecated. Use `baml describe` with no arguments instead."
             );
         }
 

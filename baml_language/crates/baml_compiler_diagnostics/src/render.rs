@@ -136,11 +136,37 @@ impl Default for RenderConfig {
 }
 
 impl RenderConfig {
-    /// Configuration for CLI output (colored Ariadne).
+    /// Configuration for CLI output, always colored (Ariadne).
+    ///
+    /// Prefer [`Self::cli_auto`] for actual CLI surfaces — that variant
+    /// strips ANSI codes when stderr isn't a TTY (e.g. when the user pipes
+    /// to a file, redirects in CI, or runs through `less`) and when the
+    /// `NO_COLOR` env var is set (<https://no-color.org>).
     pub fn cli() -> Self {
         Self {
             format: DiagnosticFormat::Ariadne,
             color: true,
+            show_error_codes: true,
+        }
+    }
+
+    /// Configuration for CLI output with auto-detected color.
+    ///
+    /// Color is enabled when *both* of:
+    ///   - the `NO_COLOR` env var is unset (per <https://no-color.org>), and
+    ///   - `stderr` is a TTY.
+    ///
+    /// Use this from any `baml` subcommand that renders diagnostics so
+    /// `baml run 2> errors.log` (or piping through `less`/CI) doesn't get
+    /// raw ANSI codes embedded.
+    pub fn cli_auto() -> Self {
+        use std::io::IsTerminal;
+        Self {
+            format: DiagnosticFormat::Ariadne,
+            color: Self::pure_color_decision(
+                std::env::var_os("NO_COLOR").is_some(),
+                std::io::stderr().is_terminal(),
+            ),
             show_error_codes: true,
         }
     }
@@ -152,6 +178,13 @@ impl RenderConfig {
             color: false,
             show_error_codes: true,
         }
+    }
+
+    /// Pure helper underlying [`Self::cli_auto`]. Extracted so the
+    /// behavior can be unit-tested without manipulating process env or
+    /// terminal state.
+    fn pure_color_decision(no_color_set: bool, stderr_is_tty: bool) -> bool {
+        !no_color_set && stderr_is_tty
     }
 
     /// Configuration for concise one-line output.
@@ -232,10 +265,17 @@ fn render_ariadne(
     file_paths: &HashMap<FileId, PathBuf>,
     color: bool,
 ) -> String {
+    // BAML CLI uses lowercase `error:` / `warning:` everywhere (matching
+    // cargo, rustc, clap) — ariadne's built-in `ReportKind::Error` /
+    // `Warning` render capitalized, so swap to `Custom(name, color)`
+    // with the same colors ariadne would have chosen anyway. Keeps the
+    // visual treatment identical, just lowercases the keyword so it
+    // matches `print_error` / `print_warning` everywhere else.
     let report_kind = match diagnostic.severity {
-        Severity::Error => ReportKind::Error,
-        Severity::Warning => ReportKind::Warning,
-        Severity::Info => ReportKind::Advice,
+        Severity::Error => ReportKind::Custom("error", ariadne::Color::Red),
+        Severity::Warning => ReportKind::Custom("warning", ariadne::Color::Yellow),
+        // `Advice` (info) keeps ariadne's default 147 (a soft blue/purple).
+        Severity::Info => ReportKind::Custom("info", ariadne::Color::Fixed(147)),
     };
 
     // Get the primary span for the report location
@@ -348,6 +388,35 @@ mod tests {
 
     use super::*;
     use crate::diagnostic::DiagnosticId;
+
+    // ── cli_auto color-decision logic ─────────────────────────────────
+
+    /// `NO_COLOR=…` always wins over TTY detection. (<https://no-color.org>)
+    #[test]
+    fn no_color_env_disables_color_even_on_tty() {
+        assert!(!RenderConfig::pure_color_decision(true, true));
+    }
+
+    /// Piped/redirected stderr disables color even with `NO_COLOR` unset.
+    /// Catches the original symptom: `baml run 2> errors.log` was getting
+    /// raw ANSI codes embedded in the log file.
+    #[test]
+    fn non_tty_stderr_disables_color() {
+        assert!(!RenderConfig::pure_color_decision(false, false));
+    }
+
+    /// The only path that produces colored output: stderr is a TTY AND
+    /// the user hasn't opted out via `NO_COLOR`.
+    #[test]
+    fn tty_without_no_color_enables_color() {
+        assert!(RenderConfig::pure_color_decision(false, true));
+    }
+
+    /// Defense in depth: both signals say "no" → definitely no color.
+    #[test]
+    fn no_color_and_non_tty_disables_color() {
+        assert!(!RenderConfig::pure_color_decision(true, false));
+    }
 
     fn make_source() -> HashMap<FileId, String> {
         let mut sources = HashMap::new();

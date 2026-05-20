@@ -124,6 +124,12 @@ pub struct UserFunctionInfo {
     /// Exposed for BEP-027 §"`baml.argv`": `argv[1]` under root-main `baml run`
     /// is the path to the file containing `main`.
     pub source_file: String,
+    /// `true` when the function carries `FunctionMeta::Llm` — i.e. it
+    /// was declared with `client X { ... } prompt #"..."#` and the
+    /// compiler synthesized the LLM dispatch body. Surfaced here so
+    /// `baml run --list` can annotate LLM functions inline without
+    /// reaching back into the heap to inspect `body_meta`.
+    pub is_llm: bool,
 }
 
 /// Internal call argument after host binding has distinguished omission from
@@ -1466,6 +1472,8 @@ impl BexEngine {
                 match obj {
                     Object::Function(func) if func.origin.is_user_callable() => {
                         let display_name = name.strip_prefix("user.").unwrap_or(name).to_string();
+                        let is_llm =
+                            matches!(func.body_meta, Some(bex_vm_types::FunctionMeta::Llm { .. }));
                         Some(UserFunctionInfo {
                             qualified_name: name.clone(),
                             display_name,
@@ -1475,6 +1483,7 @@ impl BexEngine {
                             param_has_default: func.param_has_default.clone(),
                             return_type: func.return_type.clone(),
                             source_file: func.source_file.clone(),
+                            is_llm,
                         })
                     }
                     _ => None,

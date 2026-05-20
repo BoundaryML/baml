@@ -30,7 +30,9 @@ use clap::Args;
 use sha2::{Digest, Sha256};
 use sys_native::SysOpsExt;
 
-use crate::{commands::release_version, project_load::load_project_from};
+use crate::{
+    commands::release_version, project_load::load_project_from_reporting, reporter::Reporter,
+};
 
 /// Section name where the packed envelope lives inside the host binary.
 /// Kept in sync with `baml_pack_host::SECTION_NAME`.
@@ -90,6 +92,11 @@ struct ResolvedPackTarget {
 
 impl PackArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
+        let reporter = Reporter::new();
+        self.run_with_reporter(&reporter)
+    }
+
+    fn run_with_reporter(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
         if self.expression.is_some() {
             return Err(anyhow!(
                 "expression mode (`-e` / `--expression`) is not packageable; \
@@ -98,8 +105,16 @@ impl PackArgs {
                  See BEP-027 §\"Expression mode is not packageable\"."
             ));
         }
-        let (db, program) = self.load_and_compile()?;
+        let (db, program, needs_format_hint) = self.load_and_compile(reporter)?;
         let _ = db;
+        // Mirror `baml run`'s format advisory: if any source file
+        // round-trips through `baml fmt` differently, surface a
+        // non-fatal warning so users learn to keep packaged
+        // projects formatted. Pack is a release-shaped operation,
+        // so a clean tree matters at least as much as for run.
+        if needs_format_hint {
+            reporter.warning(crate::run_command::FORMAT_HINT);
+        }
 
         // Signature info for target resolution / reserved `help` check.
         let engine = BexEngine::new(
@@ -112,6 +127,12 @@ impl PackArgs {
 
         let resolved = self.resolve_target(&engine)?;
         validate_help_param(&engine, &resolved.qualified_name)?;
+        let display_name = resolved
+            .qualified_name
+            .strip_prefix("user.")
+            .unwrap_or(&resolved.qualified_name)
+            .to_string();
+        reporter.spin("Packaging", &display_name);
 
         let envelope = PackEnvelope {
             program,
@@ -123,7 +144,7 @@ impl PackArgs {
             .map_err(|e| anyhow!("Failed to serialize pack envelope: {e}"))?;
 
         let target_triple = self.resolved_target_triple()?;
-        let host_bytes = read_host_binary(target_triple)?;
+        let host_bytes = read_host_binary(target_triple, reporter)?;
         let output_path = self
             .output
             .clone()
@@ -142,13 +163,19 @@ impl PackArgs {
                 })?;
         }
 
-        eprintln!(
-            "Packaged {} → {}",
-            resolved
-                .qualified_name
-                .strip_prefix("user.")
-                .unwrap_or(&resolved.qualified_name),
-            output_path.display()
+        // Cargo's `Finished` is `<artifact-or-profile> [metadata]
+        // in <elapsed>`. Mirror that: the artifact location is the
+        // primary fact, with target name + triple in brackets so
+        // the user can see what was packed and for which platform
+        // without parsing an ambiguous arrow.
+        reporter.finish(
+            "Finished",
+            format!(
+                "{} [{}, {}]",
+                output_path.display(),
+                display_name,
+                target_triple,
+            ),
         );
         Ok(crate::ExitCode::Success)
     }
@@ -160,14 +187,26 @@ impl PackArgs {
         }
     }
 
-    fn load_and_compile(&self) -> Result<(ProjectDatabase, Program)> {
-        let db = match self.target.as_deref() {
-            Some(t) if t.ends_with(".baml") => self.load_standalone(t)?,
-            _ => self.load_project()?,
+    fn load_and_compile(&self, reporter: &Reporter) -> Result<(ProjectDatabase, Program, bool)> {
+        // Per-file `Loading <path>` lines come from
+        // `load_project_from_reporting` (cargo-shaped per-unit
+        // progress) — no aggregate `Loading <project>` needed.
+        let (db, needs_format_hint) = match self.target.as_deref() {
+            Some(t) if t.ends_with(".baml") => {
+                reporter.spin("Loading", t);
+                self.load_standalone(t)?
+            }
+            _ => self.load_project(reporter)?,
         };
 
-        check_diagnostics(&db, "Cannot pack: compilation errors found")?;
+        // File count is the meaningful unit here — `self.from` is
+        // usually `.` and reads as noise. Matches the `Checking N
+        // file(s)` shape that `baml run` uses.
+        let file_count = db.get_source_files().len();
+        reporter.spin("Checking", format!("{file_count} file(s)"));
+        check_diagnostics(&db, "Cannot pack: compilation errors found", reporter)?;
 
+        reporter.spin("Compiling", format!("{file_count} file(s)"));
         let program = baml_compiler2_emit::generate_project_bytecode(
             &db,
             &baml_compiler2_emit::CompileOptions {
@@ -176,27 +215,38 @@ impl PackArgs {
         )
         .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
 
-        Ok((db, program))
+        Ok((db, program, needs_format_hint))
     }
 
-    fn load_project(&self) -> Result<ProjectDatabase> {
-        let (db, from, baml_files) = load_project_from(&self.from)?;
+    fn load_project(&self, reporter: &Reporter) -> Result<(ProjectDatabase, bool)> {
+        let (db, from, baml_files) = load_project_from_reporting(&self.from, reporter)?;
         if baml_files.is_empty() {
             anyhow::bail!("No .baml files found in {}", from.display());
         }
-        Ok(db)
+        // Mirror `baml run`'s per-file format check: probe each source
+        // through the formatter and emit a single advisory if any file
+        // would change. Cheap enough at compile time (we already read
+        // each file from disk during discovery) and matches the
+        // warning surfaces `baml run` already provides.
+        let needs_format_hint = baml_files.iter().any(|path| {
+            std::fs::read_to_string(path)
+                .map(|source| crate::run_command::source_needs_format_hint(&source))
+                .unwrap_or(false)
+        });
+        Ok((db, needs_format_hint))
     }
 
-    fn load_standalone(&self, file_path: &str) -> Result<ProjectDatabase> {
+    fn load_standalone(&self, file_path: &str) -> Result<(ProjectDatabase, bool)> {
         let canonical = std::fs::canonicalize(Path::new(file_path))
             .with_context(|| format!("File not found: {file_path}"))?;
         let content = std::fs::read_to_string(&canonical)
             .with_context(|| format!("Failed to read {}", canonical.display()))?;
+        let needs_format_hint = crate::run_command::source_needs_format_hint(&content);
         let parent = canonical.parent().unwrap_or_else(|| Path::new("."));
         let mut db = ProjectDatabase::new();
         db.set_project_root(parent);
         db.add_or_update_file(&canonical, &content);
-        Ok(db)
+        Ok((db, needs_format_hint))
     }
 
     /// Resolve the pack target to `(qualified_name, identifier, default_basename)`.
@@ -297,7 +347,11 @@ impl PackArgs {
 }
 
 /// Collect diagnostics; render errors to stderr and bail with `ctx`.
-fn check_diagnostics(db: &ProjectDatabase, ctx: &str) -> Result<()> {
+///
+/// When `reporter` has an active spinner, abandon it before printing so
+/// the multi-line ariadne block lands cleanly instead of getting
+/// interleaved with the tick character.
+fn check_diagnostics(db: &ProjectDatabase, ctx: &str, reporter: &Reporter) -> Result<()> {
     use baml_db::baml_compiler_diagnostics::render;
 
     let project = db
@@ -323,8 +377,9 @@ fn check_diagnostics(db: &ProjectDatabase, ctx: &str) -> Result<()> {
         &errors.iter().copied().cloned().collect::<Vec<_>>(),
         &sources,
         &file_paths,
-        &render::RenderConfig::cli(),
+        &render::RenderConfig::cli_auto(),
     );
+    reporter.abandon();
     eprintln!("{rendered}");
     anyhow::bail!("{ctx}");
 }
@@ -358,7 +413,7 @@ fn canonicalize_function_name(engine: &BexEngine, name: &str) -> String {
         .unwrap_or_else(|| name.to_string())
 }
 
-fn read_host_binary(target_triple: &str) -> Result<Vec<u8>> {
+fn read_host_binary(target_triple: &str, reporter: &Reporter) -> Result<Vec<u8>> {
     let exe = std::env::current_exe().context("Failed to locate current executable")?;
     let dir = exe
         .parent()
@@ -370,16 +425,11 @@ fn read_host_binary(target_triple: &str) -> Result<Vec<u8>> {
             .with_context(|| format!("Failed to read {}", host_path.display()));
     }
 
-    if target_triple == release_host_target_triple()? {
-        eprintln!(
-            "`{host_name}` was not found next to the current binary at {}; downloading from GitHub release artifacts...",
-            dir.display()
-        );
-    } else {
-        eprintln!(
-            "Packaging for `{target_triple}`; downloading `{host_name}` from GitHub release artifacts..."
-        );
-    }
+    // Cargo emits `Downloading <crate>` when it has to fetch a missing
+    // dependency from crates.io; same shape here so users see *why*
+    // pack just paused. Routed through `reporter.spin` so the line
+    // persists to scrollback above the still-ticking spinner.
+    reporter.spin("Downloading", &host_name);
     download_host_binary_from_release(target_triple, &host_name)
 }
 
@@ -1069,7 +1119,8 @@ mod tests {
 
         let mut args = pack_args();
         args.from = tmp.path().to_path_buf();
-        let err = args.load_project().unwrap_err();
+        let reporter = Reporter::new();
+        let err = args.load_project(&reporter).unwrap_err();
         assert!(
             format!("{err}").contains("No .baml files"),
             "expected no-files error; got: {err}",
