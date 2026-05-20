@@ -36,6 +36,95 @@ export const byBep = query({
   },
 });
 
+// Get all comments for a BEP sorted by newest first (for comment feed view)
+export const allByBepNewestFirst = query({
+  args: {
+    bepId: v.id("beps"),
+    versionId: v.optional(v.id("bepVersions")),
+    includeResolved: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    let comments;
+
+    if (args.versionId) {
+      // Filter by version
+      comments = await ctx.db
+        .query("comments")
+        .withIndex("by_bep_version", (q) =>
+          q.eq("bepId", args.bepId).eq("versionId", args.versionId)
+        )
+        .collect();
+    } else {
+      // Get all comments for this BEP
+      comments = await ctx.db
+        .query("comments")
+        .withIndex("by_bep", (q) => q.eq("bepId", args.bepId))
+        .collect();
+    }
+
+    // Filter out resolved if not requested
+    if (!args.includeResolved) {
+      comments = comments.filter((c) => !c.resolved);
+    }
+
+    // Sort by createdAt descending (newest first)
+    comments.sort((a, b) => b.createdAt - a.createdAt);
+
+    // Enrich with author info and page info
+    const enrichedComments = await Promise.all(
+      comments.map(async (comment) => {
+        const author = await ctx.db.get(comment.authorId);
+        const resolvedByUser = comment.resolvedBy
+          ? await ctx.db.get(comment.resolvedBy)
+          : null;
+
+        // Get page info if comment is on a page
+        let pageName: string | undefined;
+        let pageSlug: string | undefined;
+        if (comment.pageId) {
+          const page = await ctx.db.get(comment.pageId);
+          if (page) {
+            pageName = page.title;
+            pageSlug = page.slug;
+          }
+        }
+
+        // Get version info
+        let versionNumber: number | undefined;
+        if (comment.versionId) {
+          const version = await ctx.db.get(comment.versionId);
+          if (version) {
+            versionNumber = version.version;
+          }
+        }
+
+        // Get parent comment info for replies
+        let parentAuthorName: string | undefined;
+        if (comment.parentId) {
+          const parentComment = await ctx.db.get(comment.parentId);
+          if (parentComment) {
+            const parentAuthor = await ctx.db.get(parentComment.authorId);
+            parentAuthorName = parentAuthor?.name ?? "Unknown";
+          }
+        }
+
+        return {
+          ...comment,
+          authorName: author?.name ?? "Unknown",
+          authorAvatarUrl: author?.avatarUrl,
+          resolvedByName: resolvedByUser?.name,
+          pageName,
+          pageSlug,
+          versionNumber,
+          parentAuthorName,
+        };
+      })
+    );
+
+    return enrichedComments;
+  },
+});
+
 export const byBepPage = query({
   args: {
     bepId: v.id("beps"),

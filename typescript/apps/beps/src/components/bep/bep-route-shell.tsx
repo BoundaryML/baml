@@ -29,6 +29,7 @@ import { BepPresence } from "@/components/bep/bep-presence";
 import { MDXEditorComponent, MDXEditorHandle } from "@/components/editor/mdx";
 import { CommentThread } from "@/components/comments/comment-thread";
 import { CommentSidebar } from "@/components/comments/comment-sidebar";
+import { CommentFeedView } from "@/components/comments/comment-feed-view";
 import { DecisionList } from "@/components/decisions/decision-list";
 import { IssueList } from "@/components/issues/issue-list";
 import { AIAssistantPanel } from "@/components/ai-assistant/ai-assistant-panel";
@@ -157,6 +158,17 @@ const [copied, setCopied] = useState(false);
       ? {
           bepId: bep._id,
           versionId: viewingVersionId ?? currentVersionId ?? undefined,
+        }
+      : "skip"
+  );
+
+  const allComments = useQuery(
+    api.comments.allByBepNewestFirst,
+    bep
+      ? {
+          bepId: bep._id,
+          versionId: viewingVersionId ?? currentVersionId ?? undefined,
+          includeResolved: false,
         }
       : "skip"
   );
@@ -407,6 +419,8 @@ const [copied, setCopied] = useState(false);
         path = buildBepPath({ bepNumber, section: "decisions" });
       } else if (section === "ai") {
         path = buildBepPath({ bepNumber, section: "ai" });
+      } else if (section === "comments") {
+        path = buildBepPath({ bepNumber, section: "comments" });
       } else {
         path = buildBepPath({
           bepNumber,
@@ -484,7 +498,8 @@ const [copied, setCopied] = useState(false);
     const isMetaSection =
       routeInfo.section === "issues" ||
       routeInfo.section === "decisions" ||
-      routeInfo.section === "ai";
+      routeInfo.section === "ai" ||
+      routeInfo.section === "comments";
     if (isMetaSection && targetVersionNumber !== null) {
       navigateToSection(MAIN_CONTENT_ID, targetVersionNumber);
       return;
@@ -912,6 +927,7 @@ const [copied, setCopied] = useState(false);
                 activeSection={activeSection}
                 onSectionClick={handleSectionChange}
                 commentCounts={commentCounts ?? {}}
+                totalCommentCount={isViewingHistorical ? 0 : (allComments?.length ?? 0)}
                 openIssueCount={isViewingHistorical ? 0 : openIssueCount}
                 decisionCount={isViewingHistorical ? 0 : bep.decisions.length}
                 hideMetaSections={isViewingHistorical}
@@ -934,6 +950,24 @@ const [copied, setCopied] = useState(false);
                 bepId={bep._id}
                 currentVersionNumber={latestVersionNumber}
                 onNavigateToComment={handleNavigateToComment}
+              />
+            ) : !isViewingHistorical && routeInfo.section === "comments" ? (
+              <CommentFeedView
+                bepId={bep._id}
+                versionId={effectiveVersionId ?? undefined}
+                currentVersionNumber={latestVersionNumber}
+                linkContext={{
+                  bepNumber,
+                  isHistorical: false,
+                  versionNumber: null,
+                }}
+                onNavigateToPage={(pageSlug) => {
+                  if (pageSlug) {
+                    navigateToSection(pageSlug);
+                  } else {
+                    navigateToSection(MAIN_CONTENT_ID);
+                  }
+                }}
               />
             ) : !isViewingHistorical && routeInfo.section === "ai" ? (
               <AIAssistantPanel
