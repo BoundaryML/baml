@@ -6674,9 +6674,9 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// Look up class fields from the package items (via item tree).
     ///
     /// `class_type_args` are the concrete type arguments for the class (e.g.
-    /// `[Sentiment, Sentiment$stream]` for `Stream<Sentiment, Sentiment$stream>`).
+    /// `[Sentiment$stream, Sentiment]` for `Stream<Sentiment$stream, Sentiment>`).
     /// When non-empty, field types are resolved with `lower_type_expr_with_generics`
-    /// so that type variables like `T` and `S` are substituted with concrete types.
+    /// so that type variables like `TStream` and `TFinal` are substituted with concrete types.
     ///
     /// Returns a map of field name → resolved field type.
     fn lookup_class_fields(
@@ -6871,9 +6871,9 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// so callers can record a `MemberResolution`.
     ///
     /// `class_type_args` are the concrete type arguments for the class (e.g.
-    /// `[Sentiment, Sentiment$stream]` for `Stream<Sentiment, Sentiment$stream>`).
+    /// `[Sentiment$stream, Sentiment]` for `Stream<Sentiment$stream, Sentiment>`).
     /// When non-empty, return types are resolved with `lower_type_expr_with_generics`
-    /// so that type variables like `T` and `S` are substituted with concrete types.
+    /// so that type variables like `TStream` and `TFinal` are substituted with concrete types.
     fn lookup_class_method(
         &self,
         class_name: &crate::ty::QualifiedTypeName,

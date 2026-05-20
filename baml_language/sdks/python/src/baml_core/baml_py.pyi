@@ -3,6 +3,7 @@
 
 import builtins
 import typing
+
 __all__ = [
     "AbortController",
     "BamlAudio",
@@ -440,7 +441,7 @@ def get_runtime() -> BamlRuntime:
     Return the process-global `BamlRuntime`, or raise `BamlError` if
     `BamlRuntime.initialize_runtime(...)` has not been called yet.
     
-    Used by the pure-Python factories in `baml.baml_core` so generated
+    Used by the pure-Python factories in `baml_core` so generated
     leaves don't have to thread a runtime reference through every call
     site.
     """

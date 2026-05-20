@@ -2220,7 +2220,7 @@ function baml.llm.BedrockOptions.to_json(self: null) -> baml.json.json {
     return
 }
 
-function baml.llm.Client.__make_stream(self: null, sse: baml.http.SseStream, function_name: string) -> baml.llm.Stream<void, void> {
+function baml.llm.Client.__make_stream(self: null, sse: baml.http.SseStream, function_name: string) -> baml.llm.Stream<unknown, unknown> {
     load_var self
     call baml.llm.Client.to_primitive_client
     store_var primitive
@@ -2696,7 +2696,7 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: baml.llm.Exec
     unreachable
 }
 
-function baml.llm.Client.execute_once_stream(self: null, context: baml.llm.ExecutionContext, active_delay_ms: int) -> baml.llm.Stream<void, void> {
+function baml.llm.Client.execute_once_stream(self: null, context: baml.llm.ExecutionContext, active_delay_ms: int) -> baml.llm.Stream<unknown, unknown> {
     load_var self
     load_field .client_type
     discriminant
@@ -2791,7 +2791,7 @@ function baml.llm.Client.execute_once_stream(self: null, context: baml.llm.Execu
     load_var self
     call baml.llm.Client.to_primitive_client
     store_var primitive
-    load_type #0
+    load_type #1
     store_var return_type
     load_var primitive
     load_var context
@@ -2930,7 +2930,7 @@ function baml.llm.Client.execute_oneshot(self: null, context: baml.llm.Execution
     return
 }
 
-function baml.llm.Client.execute_stream(self: null, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> baml.llm.Stream<void, void> {
+function baml.llm.Client.execute_stream(self: null, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> baml.llm.Stream<unknown, unknown> {
     load_var self
     load_field .retry
     store_var _4
@@ -3642,7 +3642,7 @@ function baml.llm.RetryPolicy.to_json(self: null) -> baml.json.json {
     return
 }
 
-function baml.llm.Stream.final(self: null) -> void {
+function baml.llm.Stream.final(self: null) -> unknown {
   L0:
     load_var self
     load_field ._acc
@@ -3708,7 +3708,7 @@ function baml.llm.Stream.final(self: null) -> void {
     throw
 }
 
-function baml.llm.Stream.from_json(j: baml.json.json) -> baml.llm.Stream<void, void> {
+function baml.llm.Stream.from_json(j: baml.json.json) -> baml.llm.Stream<unknown, unknown> {
     load_var j
     load_const "_client"
     call baml.json.field
@@ -3755,7 +3755,7 @@ function baml.llm.Stream.from_json(j: baml.json.json) -> baml.llm.Stream<void, v
     return
 }
 
-function baml.llm.Stream.next(self: null) -> void | baml.stream.StreamFinished {
+function baml.llm.Stream.next(self: null) -> unknown | baml.stream.StreamFinished {
   L0:
     load_const true
     pop_jump_if_false L1
@@ -3893,7 +3893,7 @@ function baml.llm.StreamAccumulator.to_json(self: null) -> baml.json.json {
     return
 }
 
-function baml.llm.StreamCache.from_json(j: baml.json.json) -> baml.llm.StreamCache<void, void> {
+function baml.llm.StreamCache.from_json(j: baml.json.json) -> baml.llm.StreamCache<unknown, unknown> {
     load_var j
     call baml.json.stringify
     store_var _2
@@ -3903,7 +3903,7 @@ function baml.llm.StreamCache.from_json(j: baml.json.json) -> baml.llm.StreamCac
     return
 }
 
-function baml.llm.StreamCache.new(target: type, streaming: type) -> baml.llm.StreamCache<void, void> {
+function baml.llm.StreamCache.new(target: type, streaming: type) -> baml.llm.StreamCache<unknown, unknown> {
 }
 
 function baml.llm.StreamCache.to_json(self: null) -> baml.json.json {
@@ -4052,10 +4052,10 @@ function baml.llm.VertexAiOptions.to_json(self: null) -> baml.json.json {
     return
 }
 
-function baml.llm.__sap_parse_final(json: string, cache: baml.llm.StreamCache<void, void>) -> void {
+function baml.llm.__sap_parse_final(json: string, cache: baml.llm.StreamCache<unknown, unknown>) -> unknown {
 }
 
-function baml.llm.__sap_parse_partial(json: string, cache: baml.llm.StreamCache<void, void>) -> void | baml.stream.StreamNoYield {
+function baml.llm.__sap_parse_partial(json: string, cache: baml.llm.StreamCache<unknown, unknown>) -> unknown | baml.stream.StreamNoYield {
 }
 
 function baml.llm.build_request(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.http.Request {
@@ -4126,7 +4126,7 @@ function baml.llm.get_return_type(function_name: string) -> type {
 function baml.llm.get_stream_return_type(function_name: string) -> type {
 }
 
-function baml.llm.parse(function_name: string, json: string) -> void {
+function baml.llm.parse(function_name: string, json: string) -> unknown {
     load_var function_name
     sys_op baml.llm.get_return_type
     store_var return_type
@@ -4168,7 +4168,7 @@ function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, 
     return
 }
 
-function baml.llm.stream_llm_function(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.Stream<void, void> {
+function baml.llm.stream_llm_function(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.Stream<unknown, unknown> {
     load_var function_name
     sys_op baml.llm.get_jinja_template
     store_var jinja_string

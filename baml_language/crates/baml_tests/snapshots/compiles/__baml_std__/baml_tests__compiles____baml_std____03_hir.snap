@@ -509,7 +509,7 @@ function baml.llm.from_json(j: baml.json.json) -> baml.llm.PlannerState  [expr] 
 function baml.llm.from_json(j: baml.json.json) -> baml.llm.ExecutionContext  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
-function baml.llm.parse(function_name: string, json: string) -> baml.llm.T  [expr] {
+function baml.llm.parse(function_name: string, json: string) -> baml.llm.TFinal  [expr] {
   { let return_type = get_return_type(function_name); let stream_return_type = get_stream_return_type(function_name); let cache = StreamCache.new(return_type, stream_return_type) } __sap_parse_final(json, cache)
 }
 function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.PromptAst  [expr] {
@@ -622,8 +622,8 @@ enum baml.llm.ClientType {Primitive, Fallback, RoundRobin}
 function baml.llm.__make_stream(self: ?, sse: root.http.SseStream, function_name: string) -> baml.llm.Stream  [expr] {
   { let primitive = self.to_primitive_client(); let return_type = get_return_type(function_name); let stream_return_type = get_stream_return_type(function_name); let acc = primitive.new_stream_accumulator(); let cache: baml.llm.StreamCache = StreamCache.new(return_type, stream_return_type) } baml.llm.Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache }
 }
-function baml.llm.__sap_parse_final(json: string, cache: baml.llm.StreamCache) -> baml.llm.T  [builtin]
-function baml.llm.__sap_parse_partial(json: string, cache: baml.llm.StreamCache) -> baml.llm.S | root.stream.StreamNoYield  [builtin]
+function baml.llm.__sap_parse_final(json: string, cache: baml.llm.StreamCache) -> baml.llm.TFinal  [builtin]
+function baml.llm.__sap_parse_partial(json: string, cache: baml.llm.StreamCache) -> baml.llm.TStream | root.stream.StreamNoYield  [builtin]
 function baml.llm.add_events(self: ?, events: string) -> null  [builtin]
 function baml.llm.build_attempt(self: ?) -> baml.llm.OrchestrationStep[]  [expr] {
   { let planner_state = PlannerState { rr_client_names: [] } } self.build_attempt_with_state(planner_state)
@@ -652,7 +652,7 @@ function baml.llm.execute_oneshot(self: ?, context: baml.llm.ExecutionContext, i
 function baml.llm.execute_stream(self: ?, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> baml.llm.Stream  [expr] {
   {  } match (self.retry) { r: baml.llm.RetryPolicy => { let current_delay = r.initial_delay_ms Add 0.0; { let attempt = 0; while attempt Le r.max_retries { let attempt_delay = inherited_delay_ms; if (attempt Gt 0) { attempt_delay = root.math.trunc(current_delay); let next = current_delay Mul r.multiplier } if (next Gt r.max_delay_ms Add 0.0) { current_delay = r.max_delay_ms Add 0.0 } else { current_delay = next }; if (attempt Eq r.max_retries) { attempt_delay = inherited_delay_ms }; let result2: baml.llm.Stream = self.execute_once_stream(context, attempt_delay) catch (e) { _ => { continue } }; return result2 } }; throw root.errors.DevOther { message: "All orchestration..." } }, null => { let result: baml.llm.Stream = self.execute_once_stream(context, inherited_delay_ms); return result } }
 }
-function baml.llm.final(self: ?) -> baml.llm.T  [expr] {
+function baml.llm.final(self: ?) -> baml.llm.TFinal  [expr] {
   { while Not self._acc.is_done() { let next = match (self._sse.next()) { null => { break }, next: string => next }; self._acc.add_events(next) } if (self._acc.is_done()) { self._sse.close(); break }; match (self._acc.finish_reason()) { null => { throw root.errors.LlmClientError { message: "Streaming finishe..." } }, reason: string => self._client.validate_finish_reason(reason) }; let content = self._acc.content() } __sap_parse_final(content, self._cache)
 }
 function baml.llm.finish_reason(self: ?) -> string?  [builtin]
@@ -705,8 +705,8 @@ function baml.llm.is_done(self: ?) -> bool  [builtin]
 function baml.llm.model(self: ?) -> string?  [builtin]
 function baml.llm.new(target: type, streaming: type) -> baml.llm.StreamCache  [builtin]
 function baml.llm.new_stream_accumulator(self: ?) -> baml.llm.StreamAccumulator  [builtin]
-function baml.llm.next(self: ?) -> baml.llm.S | root.stream.StreamFinished  [expr] {
-  { while true { let next = match (self._sse.next()) { null => { return root.stream.StreamFinished {  } }, next: string => next }; self._acc.add_events(next); if (self._acc.is_done()) { self._sse.close(); return root.stream.StreamFinished {  } }; let content = self._acc.content(); let parsed: baml.llm.S | root.stream.StreamNoYield = __sap_parse_partial(content, self._cache) } match (parsed) { root.stream.StreamNoYield => { continue }, parsed: baml.llm.S => { return parsed } } } root.sys.panic("Unreachable")
+function baml.llm.next(self: ?) -> baml.llm.TStream | root.stream.StreamFinished  [expr] {
+  { while true { let next = match (self._sse.next()) { null => { return root.stream.StreamFinished {  } }, next: string => next }; self._acc.add_events(next); if (self._acc.is_done()) { self._sse.close(); return root.stream.StreamFinished {  } }; let content = self._acc.content(); let parsed: baml.llm.TStream | root.stream.StreamNoYield = __sap_parse_partial(content, self._cache) } match (parsed) { root.stream.StreamNoYield => { continue }, parsed: baml.llm.TStream => { return parsed } } } root.sys.panic("Unreachable")
 }
 function baml.llm.output_tokens(self: ?) -> int?  [builtin]
 function baml.llm.parse(self: ?, http_response_body: string) -> baml.llm.T  [builtin]

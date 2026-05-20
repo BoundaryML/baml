@@ -58,11 +58,11 @@ function build_request_stream(client: Client, function_name: string, args: map<s
 ///
 /// Used by LLM function companion functions.
 /// Only parses full responses, not partials.
-function parse<T, S>(function_name: string, json: string) -> T {
+function parse<TStream, TFinal>(function_name: string, json: string) -> TFinal {
   let return_type = get_return_type(function_name);
   let stream_return_type = get_stream_return_type(function_name);
   let cache = StreamCache.new(return_type, stream_return_type);
-  __sap_parse_final<T, S>(json, cache)
+  __sap_parse_final<TStream, TFinal>(json, cache)
 }
 
 /// UNSAFE: do not call from user code
@@ -85,8 +85,8 @@ function call_llm_function<T>(client: Client, function_name: string, args: map<s
 ///
 /// The streaming counterpart of `call_llm_function`.
 ///
-/// Sends the request and returns a `Stream<T, S>` which can be used to consume the data as it arrives.
-function stream_llm_function<T, S>(client: Client, function_name: string, args: map<string, unknown>) -> Stream<T, S> {
+/// Sends the request and returns a `Stream<TStream, TFinal>` which can be used to consume the data as it arrives.
+function stream_llm_function<TStream, TFinal>(client: Client, function_name: string, args: map<string, unknown>) -> Stream<TStream, TFinal> {
     let jinja_string = get_jinja_template(function_name);
 
     let context = ExecutionContext {
@@ -95,6 +95,6 @@ function stream_llm_function<T, S>(client: Client, function_name: string, args: 
         function_name: function_name,
     };
 
-    let result: Stream<T, S> = client.execute_stream<T, S>(context, 0);
+    let result: Stream<TStream, TFinal> = client.execute_stream<TStream, TFinal>(context, 0);
     result
 }

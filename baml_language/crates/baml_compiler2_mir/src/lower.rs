@@ -227,6 +227,20 @@ pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
         }
         Tir2Ty::Unknown { attr } => Ty::Void { attr: attr.clone() }, // error recovery
         Tir2Ty::Error { attr } => Ty::Void { attr: attr.clone() },   // error recovery
+        // Demonstration-only hardcode for `baml.llm.Stream<TStream, TFinal>`'s
+        // typevars (see thoughts/sam-projects/bridge-python/21d…).
+        // The two stdlib names lower to `Ty::BuiltinUnknown` so the
+        // host-driven streaming smokes can prove the rest of the streaming
+        // wiring is intact, without yet solving general generics-through-FFI.
+        // `BuiltinUnknown` is the engine's "any value matches" sentinel at
+        // the FFI boundary (see `value_matches_type` in
+        // `bex_engine/src/conversion.rs`), so a `string` return for
+        // `Stream.next() -> TStream | StreamFinished` decodes as the
+        // `TStream` arm of the union.
+        // Every other TypeVar still falls through to the defensive Ty::Void.
+        Tir2Ty::TypeVar(name, _) if name.as_str() == "TStream" || name.as_str() == "TFinal" => {
+            Ty::BuiltinUnknown { attr }
+        }
         // TypeVar should never reach MIR — it is erased to Unknown before VIR.
         // Map defensively to Void as error recovery.
         Tir2Ty::TypeVar(..) => Ty::Void { attr },
