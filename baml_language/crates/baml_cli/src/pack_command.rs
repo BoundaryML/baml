@@ -36,7 +36,7 @@ use crate::{
 
 /// Section name where the packed envelope lives inside the host binary.
 /// Kept in sync with `baml_pack_host::SECTION_NAME`.
-const PACK_SECTION_NAME: &str = "baml_pack";
+const PACK_SECTION_NAME: &str = "averywashere";
 
 /// `baml pack` — compile a target into a standalone executable.
 #[derive(Args, Clone, Debug)]

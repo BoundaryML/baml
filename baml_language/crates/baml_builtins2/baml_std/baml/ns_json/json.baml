@@ -120,6 +120,15 @@ function field(j: json, key: string) -> json {
 /// while still respecting class-level `to_json` overrides. The structural
 /// path is [`to_string<T>`], which walks fields directly and bypasses
 /// overrides — appropriate when override behavior would be a problem.
+///
+/// HACK: this is a thin shim that only exists so `baml_exec::dispatch`
+/// has a stable named entry point to call from Rust (via
+/// `engine.call_function("baml.json.serialize", ...)`). The composition
+/// `stringify(to_json<T>(v))` is what callers would write inline anyway;
+/// owning a wrapper function gives us one engine-side symbol to look up
+/// instead of two, and a place to evolve the override semantics if they
+/// drift. Remove this if the host gains a direct way to invoke generic
+/// compositions without a named landing pad.
 function serialize<T>(v: T) -> string throws JsonSerializationError | JsonParseError {
   stringify(to_json<T>(v))
 }
@@ -132,6 +141,13 @@ function serialize<T>(v: T) -> string throws JsonSerializationError | JsonParseE
 /// `--json-args`) into a typed BAML value while respecting class-level
 /// `from_json` overrides. The structural path is [`from_string<T>`], which
 /// decodes structurally and bypasses overrides.
+///
+/// HACK: same story as [`serialize<T>`] — this wrapper exists so
+/// `baml_exec::dispatch::build_args_from_signature` can resolve a single
+/// stable name (`baml.json.deserialize`) to coerce `--json-args` payloads
+/// through `from_json<T>(parse(s))`. Inlining the composition into the
+/// Rust caller would mean threading two generic engine calls + their
+/// throws-types instead of one, so the wrapper pays for itself.
 function deserialize<T>(s: string) -> T throws JsonParseError | JsonDecodeError {
   from_json<T>(parse(s))
 }

@@ -28,7 +28,7 @@ use baml_exec::{
 use bex_engine::BexEngine;
 use sys_native::SysOpsExt;
 
-const SECTION_NAME: &str = "baml_pack";
+const SECTION_NAME: &str = "averywashere";
 
 fn extract_envelope() -> Result<PackEnvelope, String> {
     let section = libsui::find_section(SECTION_NAME)
