@@ -69,8 +69,8 @@ function         json.to_json                     <builtin>/baml/ns_json/json.ba
 function         json.from_string                 <builtin>/baml/ns_json/json.baml:75
 function         json.from_json                   <builtin>/baml/ns_json/json.baml:101
 function         json.field                       <builtin>/baml/ns_json/json.baml:112
-function         json.serialize                   <builtin>/baml/ns_json/json.baml:123
-function         json.deserialize                 <builtin>/baml/ns_json/json.baml:135
+function         json.serialize                   <builtin>/baml/ns_json/json.baml:132
+function         json.deserialize                 <builtin>/baml/ns_json/json.baml:151
 class            llm.OrchestrationStep            <builtin>/baml/ns_llm/llm.baml:1
 class            llm.ExecutionContext             <builtin>/baml/ns_llm/llm.baml:6
 class            llm.PlannerState                 <builtin>/baml/ns_llm/llm.baml:12
