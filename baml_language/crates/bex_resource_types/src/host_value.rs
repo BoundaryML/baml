@@ -72,6 +72,10 @@ pub mod host_release_dispatch {
             let p = TEST_OVERRIDE.load(Ordering::Acquire);
             if !p.is_null() {
                 // SAFETY: writers of TEST_OVERRIDE put a fn pointer here.
+                #[expect(
+                    unsafe_code,
+                    reason = "test-only AtomicPtr → fn-pointer transmute for the release-dispatch override"
+                )]
                 let f: HostReleaseFn = unsafe { std::mem::transmute(p) };
                 f(key);
                 return;

@@ -1246,10 +1246,25 @@ impl BexEngine {
             })
             .collect();
 
+        // Snapshot the declared parameter types so we can thread the
+        // expected `Ty` into per-arg conversion. This is needed by Phase 5
+        // (`HostValue` → `Object::HostClosure`): the closure carries the
+        // declared `Ty::Function`'s arity and return type, and we need the
+        // parameter type to extract them.
+        let param_types: Vec<Ty> = self
+            .function_params(function_name)?
+            .into_iter()
+            .map(|(_, ty, _)| ty.clone())
+            .collect();
         let vm_args: Vec<Value> = args
             .into_iter()
-            .map(|arg| match arg {
-                BexCallArg::Provided(arg) => self.convert_external_to_vm_value(&mut thread, *arg),
+            .enumerate()
+            .map(|(idx, arg)| match arg {
+                BexCallArg::Provided(arg) => self.convert_external_to_vm_value_with_ty(
+                    &mut thread,
+                    *arg,
+                    param_types.get(idx),
+                ),
                 BexCallArg::OmittedDefault => Ok(Value::OmittedArg),
             })
             .collect::<Result<Vec<_>, _>>()?;

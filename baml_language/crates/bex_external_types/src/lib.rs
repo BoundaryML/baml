@@ -23,12 +23,13 @@
 
 mod bex_external_value;
 mod handle;
-pub mod host_value;
 
 pub use baml_type::MediaKind;
 pub use bex_external_value::{
     AsBexExternalValue, BexExternalAdt, BexExternalValue, ToBexExternalValue, Ty, TyAttr, TypeName,
     UnionMetadata, try_convert_rust_data,
 };
+pub use bex_resource_types::{
+    HostReleaseFn, HostValueArc, HostValueKind, host_release_dispatch, host_value,
+};
 pub use handle::{Handle, HandleInner, WeakHeapRef};
-pub use host_value::{HostReleaseFn, HostValueArc, HostValueKind, host_release_dispatch};

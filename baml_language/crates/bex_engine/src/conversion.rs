@@ -235,6 +235,9 @@ impl BexEngine {
             Object::BoundMethod(_) => Err(EngineError::CannotConvert {
                 type_name: "bound_method".to_string(),
             }),
+            Object::HostClosure(_) => Err(EngineError::CannotConvert {
+                type_name: "host_closure".to_string(),
+            }),
             Object::Cell(_) => Err(EngineError::CannotConvert {
                 type_name: "cell".to_string(),
             }),
@@ -262,6 +265,30 @@ impl BexEngine {
         &self,
         holder: &mut impl HeapPermit<T>,
         external: BexExternalValue,
+    ) -> Result<Value, EngineError> {
+        // Default: no declared-type context. Inbound `HostValue` arguments
+        // need the declared `Ty::Function` to materialize an
+        // `Object::HostClosure` — callers that thread the type in should
+        // use `convert_external_to_vm_value_with_ty`.
+        self.convert_external_to_vm_value_with_ty(holder, external, None)
+    }
+
+    /// Like [`Self::convert_external_to_vm_value`], but threads the declared
+    /// parameter `Ty` for the top-level value so a `BexExternalValue::HostValue`
+    /// can be bound to its function signature as an [`Object::HostClosure`].
+    ///
+    /// `expected_ty` is honoured only at the top level — nested array
+    /// elements / map values / instance fields fall back to the untyped path
+    /// (`None`). Adding type-driven element handling here would require
+    /// re-traversing the declared `Ty` in lockstep with the value; we don't
+    /// yet support host callables in collection positions, so the
+    /// type-context is dropped on entry into containers and any nested
+    /// `HostValue` is rejected with `EngineError::CannotConvert`.
+    pub(crate) fn convert_external_to_vm_value_with_ty<T: RootHaver + TlabHolder>(
+        &self,
+        holder: &mut impl HeapPermit<T>,
+        external: BexExternalValue,
+        expected_ty: Option<&Ty>,
     ) -> Result<Value, EngineError> {
         Ok(match external {
             BexExternalValue::Handle(handle) => Value::Object(
@@ -369,7 +396,7 @@ impl BexEngine {
                 )
             }
             BexExternalValue::Union { value, .. } => {
-                return self.convert_external_to_vm_value(holder, *value);
+                return self.convert_external_to_vm_value_with_ty(holder, *value, expected_ty);
             }
             BexExternalValue::Adt(BexExternalAdt::Collector(c)) => {
                 Value::Object(holder.holder_mut().tlab_mut().alloc_collector(c))
@@ -410,10 +437,47 @@ impl BexEngine {
                 }
                 slice[global_index]
             }
-            BexExternalValue::HostValue(_) => {
-                return Err(EngineError::CannotConvert {
-                    type_name: "host_value".to_string(),
-                });
+            BexExternalValue::HostValue(arc) => {
+                // A `HostValue` argument materializes a callable
+                // `Object::HostClosure` bound to the declared parameter's
+                // function signature. The declared `Ty::Function` must be
+                // available at this site so the closure carries the arity
+                // (drained from the stack on `CallIndirect`) and the return
+                // type (handed to `SysOp::BamlHostCallHostValue` as
+                // `type_arg_0`).
+                let ty = expected_ty.ok_or_else(|| EngineError::CannotConvert {
+                    type_name: "host_value (no declared function type in context)".to_string(),
+                })?;
+                // Peel through Optional / Union to land on the function type.
+                let function_ty =
+                    peel_function_ty(ty).ok_or_else(|| EngineError::TypeMismatch {
+                        message: format!(
+                            "host callable cannot be passed where the declared type \
+                             is `{ty}`; expected a function type",
+                        ),
+                    })?;
+                let (params, ret) = match function_ty {
+                    Ty::Function { params, ret, .. } => (params, ret.as_ref().clone()),
+                    other => {
+                        return Err(EngineError::TypeMismatch {
+                            message: format!(
+                                "host callable cannot be passed where the declared type \
+                                 is `{other}`; expected a function type",
+                            ),
+                        });
+                    }
+                };
+                let host_closure = bex_vm_types::HostClosure {
+                    handle: arc,
+                    ret_ty: Box::new(ret),
+                    arity: params.len(),
+                };
+                Value::Object(
+                    holder
+                        .holder_mut()
+                        .tlab_mut()
+                        .alloc(bex_vm_types::Object::HostClosure(host_closure)),
+                )
             }
         })
     }
@@ -512,6 +576,36 @@ pub(crate) fn maybe_wrap_union(
             }
         }
         _ => Ok(value),
+    }
+}
+
+/// Peel `Optional` and singleton-`Union` wrappers off `ty`, returning the
+/// underlying `Ty::Function` if there is one. Returns `None` if the type is
+/// not a function (after peeling).
+///
+/// Used by `convert_external_to_vm_value_with_ty` to find the function
+/// signature behind, e.g., `(int) -> int` and `((int) -> int)?` so that an
+/// inbound `BexExternalValue::HostValue` can be bound to it as an
+/// `Object::HostClosure`.
+pub(crate) fn peel_function_ty(ty: &Ty) -> Option<&Ty> {
+    match ty {
+        Ty::Function { .. } => Some(ty),
+        Ty::Optional(inner, _) => peel_function_ty(inner),
+        Ty::Union(members, _) => {
+            // Find the single function member, if any. If there are multiple
+            // function members or none, we can't pick deterministically.
+            let mut found: Option<&Ty> = None;
+            for m in members {
+                if let Some(f) = peel_function_ty(m) {
+                    if found.is_some() {
+                        return None;
+                    }
+                    found = Some(f);
+                }
+            }
+            found
+        }
+        _ => None,
     }
 }
 
@@ -726,6 +820,7 @@ fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'
                 Object::Function(_)
                 | Object::Closure(_)
                 | Object::BoundMethod(_)
+                | Object::HostClosure(_)
                 | Object::Cell(_)
                 | Object::Class(_)
                 | Object::Enum(_)
@@ -827,6 +922,7 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: &Value) -> BexExternalValue 
                 Object::Function(_)
                 | Object::Closure(_)
                 | Object::BoundMethod(_)
+                | Object::HostClosure(_)
                 | Object::Cell(_)
                 | Object::Class(_)
                 | Object::Enum(_)

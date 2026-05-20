@@ -674,6 +674,15 @@ fn owned_inner(
                     .unwrap_or_else(|| BexExternalValue::RustData(data.clone()))),
                 Object::Closure(_) => unconvertible("closure"),
                 Object::BoundMethod(_) => unconvertible("bound_method"),
+                // `HostClosure` is a callable wrapper for a host-owned value.
+                // The native sysop impl matches on `BexExternalValue::HostValue`
+                // and extracts the `Arc<HostValueArc>` from it, so unwrap the
+                // closure here to its underlying handle. The `ret_ty` field is
+                // *not* surfaced through this conversion (it flows separately
+                // via the type-arg channel of `SysOp::BamlHostCallHostValue`).
+                Object::HostClosure(hc) => Ok(BexExternalValue::HostValue(std::sync::Arc::clone(
+                    &hc.handle,
+                ))),
                 Object::Cell(_) => unconvertible("cell"),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(sentinel_kind) => {

@@ -206,8 +206,8 @@ pub enum BexExternalValue {
     /// Reference to a value owned by the host language.
     ///
     /// `Drop` of the last clone fires the registered `HostReleaseFn`.
-    /// See `crate::host_value::HostValueArc`.
-    HostValue(std::sync::Arc<crate::host_value::HostValueArc>),
+    /// See [`bex_resource_types::HostValueArc`].
+    HostValue(std::sync::Arc<bex_resource_types::HostValueArc>),
 }
 
 impl std::fmt::Debug for BexExternalValue {

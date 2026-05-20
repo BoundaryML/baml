@@ -603,6 +603,7 @@ fn value_type_tag(value: &Value) -> i64 {
                 Object::Function(_) => type_tags::FUNCTION,
                 Object::Closure(_) => type_tags::FUNCTION,
                 Object::BoundMethod(_) => type_tags::FUNCTION,
+                Object::HostClosure(_) => type_tags::FUNCTION,
                 Object::Cell(_) => type_tags::UNKNOWN,
                 Object::Future(_) => type_tags::FUTURE,
                 Object::UnscheduledFuture(_) => type_tags::FUTURE,
@@ -4077,7 +4078,56 @@ impl BexVm {
                     self.as_object_ptr(&callee_value, FunctionType::Callable.into())?;
                 let obj = self.get_object(callee_ptr);
 
-                if let Object::BoundMethod(bm) = obj {
+                if let Object::HostClosure(host_closure) = obj {
+                    // Host-callable dispatch: build the args vector for
+                    // `SysOp::BamlHostCallHostValue` and yield. The engine's
+                    // BEP-034 `VmExecState::SysOp` handler runs the op
+                    // (firing the bridge's `HostDispatchFn`, awaiting the
+                    // host's response, racing cancellation) and pushes the
+                    // result back on the VM stack.
+                    //
+                    // Sys-op arg layout (mirrors the codegen-generated glue
+                    // for `baml.host.call_host_value` in
+                    // `sys_ops/.../io_generated.rs`):
+                    //
+                    //   args[0] = handle        (BexExternalValue::HostValue)
+                    //   args[1] = args_array    (Object::Array<Value>)
+                    //   args[2] = type_arg_0    (Object::Type<Ty>)
+                    let arity = host_closure.arity;
+                    let ret_ty = host_closure.ret_ty.as_ref().clone();
+                    // Pop the callee (HostClosure pointer) off the top.
+                    let _popped_callee = self.stack.ensure_pop();
+                    // Drain the N call arguments.
+                    let args_offset = self
+                        .stack
+                        .len()
+                        .checked_sub(arity)
+                        .ok_or(VmInternalError::NotEnoughItemsOnStack(arity))?;
+                    let user_args: Vec<Value> = self
+                        .stack
+                        .drain(StackIndex::from_raw(args_offset)..)
+                        .collect();
+
+                    // Allocate the args array and the ret_ty on the TLAB.
+                    let args_array_ptr = self.tlab.alloc(Object::Array(user_args));
+                    let ret_ty_ptr = self.tlab.alloc(Object::Type(Box::new(ret_ty)));
+
+                    let sysop_args: Vec<Value> = vec![
+                        // Pass the HostClosure pointer itself as the handle.
+                        // The engine's `vm_arg_to_bex_value` wraps it in a
+                        // Handle; `as_owned_but_very_slow` resolves the
+                        // handle and converts `Object::HostClosure` into
+                        // `BexExternalValue::HostValue(Arc::clone(handle))`.
+                        Value::Object(callee_ptr),
+                        Value::Object(args_array_ptr),
+                        Value::Object(ret_ty_ptr),
+                    ];
+
+                    return Ok(Some(VmExecState::SysOp {
+                        operation: bex_vm_types::SysOp::BamlHostCallHostValue,
+                        args: sysop_args,
+                    }));
+                } else if let Object::BoundMethod(bm) = obj {
                     // BoundMethod: insert receiver as `self` before the visible args.
                     //
                     // Stack before: [arg1, ..., argN, bound_method]
@@ -5845,7 +5895,34 @@ impl BexVm {
                         self.as_object_ptr(&callee_value, FunctionType::Callable.into())?;
                     let obj = self.get_object(callee_ptr);
 
-                    if let Object::BoundMethod(bm) = obj {
+                    if let Object::HostClosure(host_closure) = obj {
+                        // Host-callable dispatch via BEP-034 single-yield
+                        // sys-op. See `Instruction::CallIndirect` for the
+                        // args-layout rationale.
+                        let arity = host_closure.arity;
+                        let ret_ty = host_closure.ret_ty.as_ref().clone();
+                        let _popped_callee = self.stack.ensure_pop();
+                        let args_offset = self
+                            .stack
+                            .len()
+                            .checked_sub(arity)
+                            .ok_or(VmInternalError::NotEnoughItemsOnStack(arity))?;
+                        let user_args: Vec<Value> = self
+                            .stack
+                            .drain(StackIndex::from_raw(args_offset)..)
+                            .collect();
+                        let args_array_ptr = self.tlab.alloc(Object::Array(user_args));
+                        let ret_ty_ptr = self.tlab.alloc(Object::Type(Box::new(ret_ty)));
+                        let sysop_args: Vec<Value> = vec![
+                            Value::Object(callee_ptr),
+                            Value::Object(args_array_ptr),
+                            Value::Object(ret_ty_ptr),
+                        ];
+                        return Ok(Some(VmExecState::SysOp {
+                            operation: bex_vm_types::SysOp::BamlHostCallHostValue,
+                            args: sysop_args,
+                        }));
+                    } else if let Object::BoundMethod(bm) = obj {
                         let func_obj = unsafe { bm.function.get() };
                         let full_arity = match func_obj {
                             Object::Function(f) => f.arity,
