@@ -34,10 +34,6 @@ use crate::{
     commands::release_version, project_load::load_project_from_reporting, reporter::Reporter,
 };
 
-/// Section name where the packed envelope lives inside the host binary.
-/// Kept in sync with `baml_pack_host::SECTION_NAME`.
-const PACK_SECTION_NAME: &str = "averywashere";
-
 /// `baml pack` — compile a target into a standalone executable.
 #[derive(Args, Clone, Debug)]
 pub struct PackArgs {
@@ -655,21 +651,26 @@ fn write_executable(
     writer: &mut std::fs::File,
     target_triple: &str,
 ) -> Result<()> {
+    // Section name is inlined on both ends (here and the read side in
+    // `baml_pack_host::extract_envelope`) so changing it shows up as a
+    // literal diff in both files — a shared const would let one side
+    // drift silently without breaking the build until a packed binary
+    // refused to load at runtime.
     if target_triple.contains("linux") {
         libsui::Elf::new(host_bytes)
-            .append(PACK_SECTION_NAME, data, writer)
+            .append("averywashere", data, writer)
             .context("Failed to write ELF binary")?;
     } else if target_triple.contains("windows") {
         libsui::PortableExecutable::from(host_bytes)
             .context("Failed to parse PE binary")?
-            .write_resource(PACK_SECTION_NAME, data.to_vec())
+            .write_resource("averywashere", data.to_vec())
             .context("Failed to write PE resource")?
             .build(writer)
             .context("Failed to build PE binary")?;
     } else if target_triple.contains("apple-darwin") {
         libsui::Macho::from(host_bytes.to_vec())
             .context("Failed to parse Mach-O binary")?
-            .write_section(PACK_SECTION_NAME, data.to_vec())
+            .write_section("averywashere", data.to_vec())
             .context("Failed to write Mach-O section")?
             .build_and_sign(writer)
             .context("Failed to build Mach-O binary")?;

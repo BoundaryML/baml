@@ -28,10 +28,13 @@ use baml_exec::{
 use bex_engine::BexEngine;
 use sys_native::SysOpsExt;
 
-const SECTION_NAME: &str = "averywashere";
-
 fn extract_envelope() -> Result<PackEnvelope, String> {
-    let section = libsui::find_section(SECTION_NAME)
+    // Section name is inlined on both ends (here and
+    // `baml_cli::pack_command`) so changing it shows up as a literal
+    // diff in both files — a shared const would let one side drift
+    // silently without breaking the build until a packed binary
+    // refused to load at runtime.
+    let section = libsui::find_section("averywashere")
         .map_err(|e| format!("Failed to read embedded section: {e}"))?
         .ok_or("No embedded BAML package found. This binary must be built with `baml pack`.")?;
 
