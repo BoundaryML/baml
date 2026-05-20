@@ -196,6 +196,30 @@ impl OpError {
     pub fn new(fn_name: SysOp, kind: OpErrorKind) -> Self {
         Self { fn_name, kind }
     }
+
+    /// Construct a structured host-callable error.
+    ///
+    /// Used by `complete_host_call` when the host returns `is_error != 0`
+    /// with a `HostCallableError` proto payload.
+    pub fn host_callable(
+        fn_name: SysOp,
+        class_name: String,
+        message: String,
+        traceback: Option<String>,
+        language: Option<String>,
+        category: i32,
+    ) -> Self {
+        Self {
+            fn_name,
+            kind: OpErrorKind::HostCallable {
+                class_name,
+                message,
+                traceback,
+                language,
+                category,
+            },
+        }
+    }
 }
 
 pub use bex_vm_types::{SysOpErrorCategory, SysOpPanicCategory};
@@ -255,6 +279,15 @@ pub enum OpErrorKind {
 
     #[error("LLM client error: {message}")]
     LlmClientError { message: String },
+
+    #[error("Host callable error ({category}): {message} [class={class_name}, lang={language:?}]")]
+    HostCallable {
+        class_name: String,
+        message: String,
+        traceback: Option<String>,
+        language: Option<String>,
+        category: i32,
+    },
 }
 
 impl OpErrorKind {
@@ -274,6 +307,7 @@ impl OpErrorKind {
             Self::Timeout { .. } => SysOpErrorCategory::Timeout,
             Self::NotImplemented { .. } => SysOpErrorCategory::NotImplemented,
             Self::LlmClientError { .. } => SysOpErrorCategory::LlmClient,
+            Self::HostCallable { .. } => SysOpErrorCategory::HostCallable,
         }
     }
 }

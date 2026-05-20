@@ -98,7 +98,7 @@ pub use conversion::test_arg_to_external;
 // Re-export CancellationToken for callers.
 pub use function_call_context::{FunctionCallContext, FunctionCallContextBuilder};
 pub use sys_types::{CallId, ClassDefinition, ClassFieldDefinition};
-use sys_types::{OpError, SysOpResult};
+use sys_types::{OpError, OpErrorKind, SysOpResult};
 use thiserror::Error;
 pub use tokio_util::sync::CancellationToken;
 use web_time::{Instant, SystemTime};
@@ -530,6 +530,56 @@ fn _default_round_robin_start() -> usize {
     #[allow(clippy::cast_possible_truncation)]
     {
         nanos as usize
+    }
+}
+
+/// Convert a `HostCallable` `OpError` into a `BexExternalValue::Instance`
+/// that can be routed through `err_future` as a catchable BAML throw.
+///
+/// Returns `Some(instance)` only for `OpErrorKind::HostCallable` errors.
+/// All other error kinds return `None` and should be routed through
+/// `internal_error_future` as fatal engine errors.
+///
+/// This is a free function (not an `&self` method) because it depends only on
+/// the error argument — it constructs a `BexExternalValue` from pure data and
+/// does not need access to engine state.
+pub(crate) fn op_error_to_catchable_throw(op_err: &OpError) -> Option<BexExternalValue> {
+    if let OpErrorKind::HostCallable {
+        class_name,
+        message: _,
+        traceback,
+        language,
+        category,
+    } = &op_err.kind
+    {
+        // The `message` field is NOT exposed in the BAML `HostCallable` class
+        // (the proto's `message` field is used for diagnostics only; the
+        // BAML class has class_name, language, traceback, category per errors.baml).
+        let mut fields = indexmap::IndexMap::new();
+        fields.insert(
+            "class_name".to_string(),
+            BexExternalValue::String(class_name.clone()),
+        );
+        fields.insert(
+            "language".to_string(),
+            BexExternalValue::String(language.clone().unwrap_or_default()),
+        );
+        fields.insert(
+            "traceback".to_string(),
+            traceback.as_ref().map_or(BexExternalValue::Null, |t| {
+                BexExternalValue::String(t.clone())
+            }),
+        );
+        fields.insert(
+            "category".to_string(),
+            BexExternalValue::Int(i64::from(*category)),
+        );
+        Some(BexExternalValue::Instance {
+            class_name: "baml.errors.HostCallable".to_string(),
+            fields,
+        })
+    } else {
+        None
     }
 }
 
@@ -2193,6 +2243,21 @@ impl BexEngine {
                             thread.vm.stack.push(value);
                         }
                         Err(op_err) => {
+                            // `OpErrorKind::HostCallable` is meant to be a
+                            // catchable BAML throw via `throws
+                            // root.errors.HostCallable`. Surface it as an
+                            // `UnhandledThrow` carrying the structured value
+                            // so the host sees a real `HostCallable` instance
+                            // rather than an opaque engine error. (Once
+                            // sys-op calls move to explicit `await` per
+                            // BEP-034 phase D, this can route through the
+                            // future-error path instead.)
+                            if let Some(throw_value) = op_error_to_catchable_throw(&op_err) {
+                                return Err(EngineError::UnhandledThrow {
+                                    value: Box::new(throw_value),
+                                    trace: Vec::new(),
+                                });
+                            }
                             return Err(EngineError::from(op_err));
                         }
                     }
@@ -2621,6 +2686,117 @@ impl sys_types::VmSpawner for BexEngine {
         )
         .await
         .map_err(|e| Box::new(e) as Box<dyn Send + Sync + 'static>)
+    }
+}
+
+/// Unit tests for the `call_host_value` sysop error routing.
+///
+/// These tests verify that `OpErrorKind::HostCallable` errors are converted
+/// to a `BexExternalValue::Instance` (catchable BAML throw) rather than
+/// being routed as fatal `internal_error_future` errors.
+#[cfg(test)]
+mod call_host_value_tests {
+    use sys_types::{OpError, OpErrorKind, SysOp};
+
+    use super::*;
+
+    #[test]
+    fn call_host_value_host_callable_error_converts_to_instance() {
+        let op_err = OpError::new(
+            SysOp::BamlHostCallHostValue,
+            OpErrorKind::HostCallable {
+                class_name: "ValueError".to_string(),
+                message: "host raised".to_string(),
+                traceback: Some("at line 1".to_string()),
+                language: Some("python".to_string()),
+                category: 2,
+            },
+        );
+
+        let result = op_error_to_catchable_throw(&op_err);
+        assert!(
+            result.is_some(),
+            "HostCallable error should convert to catchable throw"
+        );
+
+        let instance = result.unwrap();
+        match &instance {
+            BexExternalValue::Instance { class_name, fields } => {
+                assert_eq!(class_name, "baml.errors.HostCallable");
+                assert!(matches!(
+                    fields.get("class_name"),
+                    Some(BexExternalValue::String(s)) if s == "ValueError"
+                ));
+                assert!(matches!(
+                    fields.get("language"),
+                    Some(BexExternalValue::String(s)) if s == "python"
+                ));
+                assert!(matches!(
+                    fields.get("traceback"),
+                    Some(BexExternalValue::String(s)) if s == "at line 1"
+                ));
+                assert!(matches!(
+                    fields.get("category"),
+                    Some(BexExternalValue::Int(2))
+                ));
+            }
+            other => panic!("expected Instance, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn call_host_value_host_callable_error_null_traceback() {
+        let op_err = OpError::new(
+            SysOp::BamlHostCallHostValue,
+            OpErrorKind::HostCallable {
+                class_name: "KeyError".to_string(),
+                message: "key not found".to_string(),
+                traceback: None,
+                language: None,
+                category: 0,
+            },
+        );
+
+        let result = op_error_to_catchable_throw(&op_err);
+        let instance = result.expect("should convert");
+        if let BexExternalValue::Instance { fields, .. } = &instance {
+            assert!(
+                matches!(fields.get("traceback"), Some(BexExternalValue::Null)),
+                "null traceback should map to Null"
+            );
+            // language: None → empty string
+            assert!(
+                matches!(fields.get("language"), Some(BexExternalValue::String(s)) if s.is_empty()),
+                "missing language should map to empty string"
+            );
+        } else {
+            panic!("expected Instance");
+        }
+    }
+
+    #[test]
+    fn call_host_value_other_error_kinds_return_none() {
+        let io_err = OpError::new(
+            SysOp::BamlHostCallHostValue,
+            OpErrorKind::Io {
+                message: "disk full".to_string(),
+            },
+        );
+        assert!(
+            op_error_to_catchable_throw(&io_err).is_none(),
+            "Io error should NOT convert to catchable throw"
+        );
+
+        let not_impl = OpError::new(
+            SysOp::BamlHostCallHostValue,
+            OpErrorKind::NotImplemented {
+                message: "unsupported".to_string(),
+            },
+        );
+        assert!(
+            op_error_to_catchable_throw(&not_impl).is_none(),
+            "NotImplemented error should NOT convert to catchable throw"
+        );
     }
 }
 

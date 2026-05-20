@@ -172,6 +172,8 @@ pub enum SysOpErrorCategory {
     /// Wildcard for development convenience. Must be explicitly declared in
     /// `#[throws(DevOther)]` and should be migrated to named categories.
     DevOther,
+    /// A host-language callable raised an exception or invalid-argument error.
+    HostCallable,
 }
 
 impl std::fmt::Display for SysOpErrorCategory {
@@ -186,6 +188,7 @@ impl std::fmt::Display for SysOpErrorCategory {
             Self::RenderPrompt => write!(f, "RenderPrompt"),
             Self::LlmClient => write!(f, "LlmClient"),
             Self::DevOther => write!(f, "DevOther"),
+            Self::HostCallable => write!(f, "HostCallable"),
         }
     }
 }

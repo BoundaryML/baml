@@ -1171,6 +1171,20 @@ impl io::IoNamespaceGlob for DefaultIoOps {
     }
 }
 
+impl io::IoNamespaceHost for DefaultIoOps {
+    fn call_host_value(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _handle: BexExternalValue,
+        _args: Vec<BexExternalValue>,
+        _type_arg_0: baml_type::Ty,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<BexExternalValue> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+}
+
 impl io::IoPackageBaml for DefaultIoOps {}
 
 /// Builder for composing an [`io::SysOps`] table by overriding namespaces.

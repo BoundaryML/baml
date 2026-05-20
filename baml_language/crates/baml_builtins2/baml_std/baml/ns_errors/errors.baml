@@ -54,3 +54,10 @@ class DevOther {
 class HostPanic {
   message string
 }
+
+class HostCallable {
+  class_name string
+  language string
+  traceback string?
+  category int
+}

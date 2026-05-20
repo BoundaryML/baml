@@ -7,7 +7,6 @@ pub mod collector;
 pub mod engine;
 pub mod error;
 mod ffi;
-pub mod host_call_table;
 pub mod host_spans;
 mod panic;
 

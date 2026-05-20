@@ -9,8 +9,12 @@
 //!   pointer that fires when the last Rust clone of a `HostValueArc` is
 //!   dropped, telling the bridge it can remove its entry.
 //! - `complete_host_call` — host bridge calls this to resolve an in-flight
-//!   dispatch (either with a success `BamlOutboundValue` or a
-//!   `HostCallableError`).
+//!   dispatch (either with a success `InboundValue` or a `HostCallableError`).
+//!
+//! The dispatch fn pointer and in-flight call table live in
+//! `sys_native::host_dispatch` (not here) to avoid a circular dependency:
+//! the `call_host_value` sysop impl (also in `sys_native`) needs them,
+//! and bridge_cffi → sys_native is the one-way dependency direction.
 
 use bex_project::{BexExternalValue, HostReleaseFn, host_release_dispatch};
 use bridge_ctypes::{
@@ -18,37 +22,27 @@ use bridge_ctypes::{
     baml_core::cffi::{HostCallableError, InboundValue},
     inbound_to_external,
 };
-use once_cell::sync::OnceCell;
 use prost::Message;
-use sys_types::{OpError, OpErrorKind, SysOp};
-
-use crate::host_call_table;
-
+use sys_native::host_dispatch;
 /// Signature for invocation requests from BAML to the host.
 ///
-/// `args` is a protobuf-encoded `BamlOutboundValue` (engine→host direction,
-/// carries type metadata) whose underlying shape is a list of the typed
-/// call arguments. The host decodes, invokes the user function, encodes
-/// the result as `InboundValue` (host→engine direction; engine re-validates
-/// against the declared return type), and calls
-/// `complete_host_call(call_id, 0, result_ptr, result_len)`.
-///
-/// On error, the host encodes a `HostCallableError` proto and calls
-/// `complete_host_call(call_id, 1, error_ptr, error_len)`.
-pub type HostDispatchFn =
-    extern "C" fn(host_value_key: u64, call_id: u32, args: *const u8, length: usize);
-
-static HOST_DISPATCH_FN: OnceCell<HostDispatchFn> = OnceCell::new();
+/// Re-exported from `sys_native::host_dispatch::HostDispatchFn` for
+/// external consumers (cbindgen header generation, etc.).
+pub use sys_native::host_dispatch::HostDispatchFn;
+use sys_types::{OpError, OpErrorKind, SysOp};
 
 /// Register the host dispatch callback. First call wins; subsequent calls
 /// are silently ignored (consistent with `register_callback` semantics).
+///
+/// Delegates to `sys_native::host_dispatch::set_dispatch_fn` so the
+/// `call_host_value` sysop (implemented in `sys_native`) can read it.
 ///
 /// # Safety
 ///
 /// `cb` must remain valid for the lifetime of the process.
 #[unsafe(no_mangle)]
 pub extern "C" fn register_host_dispatch_callback(cb: HostDispatchFn) {
-    let _ = HOST_DISPATCH_FN.set(cb);
+    host_dispatch::set_dispatch_fn(cb);
 }
 
 /// Register the host release callback. First call wins; subsequent calls
@@ -65,32 +59,6 @@ pub extern "C" fn register_host_dispatch_callback(cb: HostDispatchFn) {
 pub extern "C" fn register_host_release_callback(cb: HostReleaseFn) {
     if host_release_dispatch::install(cb).is_err() {
         eprintln!("BAML internal: register_host_release_callback called twice");
-    }
-}
-
-/// Engine-side helper: invoke the registered dispatch callback.
-///
-/// Returns `true` if the callback was installed and fired, `false` if
-/// no bridge has registered a dispatcher. The caller is responsible for
-/// resolving the in-flight `CompletionHandle` on `false`.
-///
-/// Called by the `call_host_value` sysop (Phase 4).
-#[expect(dead_code, reason = "used by call_host_value sysop added in Phase 4")]
-pub(crate) fn fire_host_dispatch(host_value_key: u64, call_id: u32, args: &[u8]) -> bool {
-    match HOST_DISPATCH_FN.get() {
-        Some(f) => {
-            tokio::task::block_in_place(|| {
-                f(host_value_key, call_id, args.as_ptr(), args.len());
-            });
-            true
-        }
-        None => {
-            eprintln!(
-                "BAML internal: call_host_value invoked before \
-                 register_host_dispatch_callback"
-            );
-            false
-        }
     }
 }
 
@@ -129,16 +97,16 @@ pub extern "C" fn complete_host_call(
         // Success: decode InboundValue → BexExternalValue.
         if bytes.is_empty() {
             // No payload → Null return.
-            host_call_table::complete_with_value(call_id, BexExternalValue::Null);
+            host_dispatch::complete_with_value(call_id, BexExternalValue::Null);
             return;
         }
         let inbound = match InboundValue::decode(bytes) {
             Ok(v) => v,
             Err(e) => {
-                host_call_table::complete_with_error(
+                host_dispatch::complete_with_error(
                     call_id,
                     OpError::new(
-                        SysOp::BamlSysShell, // placeholder; replaced by BamlHostCallHostValue in Phase 4
+                        SysOp::BamlHostCallHostValue,
                         OpErrorKind::Other(format!("complete_host_call decode failure: {e}")),
                     ),
                 );
@@ -146,11 +114,11 @@ pub extern "C" fn complete_host_call(
             }
         };
         match inbound_to_external(inbound, &HANDLE_TABLE) {
-            Ok(v) => host_call_table::complete_with_value(call_id, v),
-            Err(e) => host_call_table::complete_with_error(
+            Ok(v) => host_dispatch::complete_with_value(call_id, v),
+            Err(e) => host_dispatch::complete_with_error(
                 call_id,
                 OpError::new(
-                    SysOp::BamlSysShell, // placeholder; replaced by BamlHostCallHostValue in Phase 4
+                    SysOp::BamlHostCallHostValue,
                     OpErrorKind::Other(format!("complete_host_call decode failure: {e}")),
                 ),
             ),
@@ -159,27 +127,34 @@ pub extern "C" fn complete_host_call(
         // Error: decode HostCallableError → OpError.
         let mapped = if bytes.is_empty() {
             OpError::new(
-                SysOp::BamlSysShell, // placeholder; replaced by BamlHostCallHostValue in Phase 4
-                OpErrorKind::Other("host callable returned error with no payload".to_string()),
+                SysOp::BamlHostCallHostValue,
+                OpErrorKind::HostCallable {
+                    class_name: String::new(),
+                    message: "host callable returned error with no payload".to_string(),
+                    traceback: None,
+                    language: None,
+                    category: 0,
+                },
             )
         } else {
             match HostCallableError::decode(bytes) {
-                Ok(err) => OpError::new(
-                    SysOp::BamlSysShell, // placeholder; replaced by BamlHostCallHostValue in Phase 4
-                    OpErrorKind::Other(format!(
-                        "host callable error ({}): {} [class={}, lang={:?}]",
-                        err.category, err.message, err.class_name, err.language,
-                    )),
+                Ok(err) => OpError::host_callable(
+                    SysOp::BamlHostCallHostValue,
+                    err.class_name,
+                    err.message,
+                    err.traceback,
+                    err.language,
+                    err.category,
                 ),
                 Err(e) => OpError::new(
-                    SysOp::BamlSysShell, // placeholder; replaced by BamlHostCallHostValue in Phase 4
+                    SysOp::BamlHostCallHostValue,
                     OpErrorKind::Other(format!(
                         "complete_host_call error-payload decode failure: {e}"
                     )),
                 ),
             }
         };
-        host_call_table::complete_with_error(call_id, mapped);
+        host_dispatch::complete_with_error(call_id, mapped);
     }
 }
 
@@ -195,8 +170,8 @@ mod tests {
 
         // Use a fresh OnceCell by calling through the public API.
         // We cannot reset OnceCell so we just verify the second call doesn't panic.
-        let _ = HOST_DISPATCH_FN.set(dispatch_a);
-        let _ = HOST_DISPATCH_FN.set(dispatch_b); // must not panic
+        register_host_dispatch_callback(dispatch_a);
+        register_host_dispatch_callback(dispatch_b); // must not panic
 
         // The installed value is dispatch_a (first call wins).
         // We can't easily assert the pointer identity in a unit test without
@@ -208,9 +183,9 @@ mod tests {
     async fn complete_host_call_empty_success_completes_null() {
         use sys_types::{SysOp, SysOpResult};
 
-        let (result, completion) = SysOpResult::pending(SysOp::BamlSysShell);
-        let id = host_call_table::next_call_id();
-        host_call_table::insert(id, completion);
+        let (result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
+        let id = host_dispatch::next_call_id();
+        host_dispatch::insert(id, completion);
 
         // Fire complete_host_call with empty success.
         complete_host_call(id, 0, std::ptr::null(), 0);
@@ -241,9 +216,9 @@ mod tests {
         };
         let encoded = err_proto.encode_to_vec();
 
-        let (result, completion) = SysOpResult::pending(SysOp::BamlSysShell);
-        let id = host_call_table::next_call_id();
-        host_call_table::insert(id, completion);
+        let (result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
+        let id = host_dispatch::next_call_id();
+        host_dispatch::insert(id, completion);
 
         complete_host_call(id, 1, encoded.as_ptr() as *const i8, encoded.len());
 

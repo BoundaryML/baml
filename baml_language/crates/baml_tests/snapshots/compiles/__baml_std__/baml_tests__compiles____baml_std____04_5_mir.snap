@@ -429,6 +429,69 @@ fn baml.errors.InvalidArgument.from_json(j: baml.json.json) -> baml.errors.Inval
     }
 }
 
+fn baml.errors.HostCallable.from_json(j: baml.json.json) -> baml.errors.HostCallable {
+    // Locals:
+    let _0: baml.errors.HostCallable // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: baml.json.json
+    let _4: type
+    let _5: string
+    let _6: baml.json.json
+    let _7: type
+    let _8: string?
+    let _9: baml.json.json
+    let _10: type
+    let _11: int
+    let _12: baml.json.json
+    let _13: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "class_name") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(string);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _6 = call const fn baml.json.field(copy _1, const "language") -> [bb3];
+    }
+
+    bb3: {
+        _7 = load_type(string);
+        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
+    }
+
+    bb4: {
+        _9 = call const fn baml.json.field(copy _1, const "traceback") -> [bb5];
+    }
+
+    bb5: {
+        _10 = load_type(string?);
+        _8 = call const fn baml.json.from_json<copy _10>(copy _9) -> [bb6];
+    }
+
+    bb6: {
+        _12 = call const fn baml.json.field(copy _1, const "category") -> [bb7];
+    }
+
+    bb7: {
+        _13 = load_type(int);
+        _11 = call const fn baml.json.from_json<copy _13>(copy _12) -> [bb8];
+    }
+
+    bb8: {
+        _0 = baml.errors.HostCallable { copy _2, copy _5, copy _8, copy _11 };
+        goto -> bb9;
+    }
+
+    bb9: {
+        return;
+    }
+}
+
 fn baml.errors.Timeout.from_json(j: baml.json.json) -> baml.errors.Timeout {
     // Locals:
     let _0: baml.errors.Timeout // _0 // return
@@ -755,6 +818,74 @@ fn baml.errors.InvalidArgument.to_json(self: baml.errors.InvalidArgument) -> bam
     }
 
     bb2: {
+        return;
+    }
+}
+
+fn baml.errors.HostCallable.to_json(self: baml.errors.HostCallable) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.errors.HostCallable // self // param
+    let _2: baml.json.json
+    let _3: string
+    let _4: baml.errors.HostCallable
+    let _5: baml.json.json
+    let _6: string
+    let _7: baml.errors.HostCallable
+    let _8: baml.json.json?
+    let _9: ((baml.String) -> baml.json.json throws never)?
+    let _10: string?
+    let _11: baml.errors.HostCallable
+    let _12: bool
+    let _13: string?
+    let _14: baml.errors.HostCallable
+    let _15: baml.json.json
+    let _16: int
+    let _17: baml.errors.HostCallable
+
+    bb0: {
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _7 = copy _1;
+        _6 = copy _7.1;
+        _5 = call const fn baml.String.to_json(copy _6) -> [bb2];
+    }
+
+    bb2: {
+        _11 = copy _1;
+        _10 = copy _11.2;
+        _12 = copy _10 == const null;
+        branch copy _12 -> [bb4, bb3];
+    }
+
+    bb3: {
+        _14 = copy _1;
+        _13 = copy _14.2;
+        _9 = make_bound_method baml.String.to_json(copy _13);
+        _8 = call copy _9() -> [bb5];
+    }
+
+    bb4: {
+        _8 = const null;
+        goto -> bb5;
+    }
+
+    bb5: {
+        _17 = copy _1;
+        _16 = copy _17.3;
+        _15 = call const fn baml.Int.to_json(copy _16) -> [bb6];
+    }
+
+    bb6: {
+        _0 = { const "class_name": copy _2, const "language": copy _5, const "traceback": copy _8, const "category": copy _15 };
+        goto -> bb7;
+    }
+
+    bb7: {
         return;
     }
 }
@@ -1734,6 +1865,38 @@ fn baml.glob.ScanOptions.to_json(self: baml.glob.ScanOptions) -> baml.json.json 
     }
 
     bb19: {
+        return;
+    }
+}
+
+fn baml.host.call_host_value = builtin(io)
+
+fn baml.host.HostValue.from_json(j: baml.json.json) -> baml.host.HostValue {
+    // Locals:
+    let _0: baml.host.HostValue // _0 // return
+    let _1: baml.json.json // j // param
+
+    bb0: {
+        _0 = baml.host.HostValue {  };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.host.HostValue.to_json(self: baml.host.HostValue) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.host.HostValue // self // param
+
+    bb0: {
+        _0 = {  };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }

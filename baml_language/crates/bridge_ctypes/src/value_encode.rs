@@ -446,7 +446,7 @@ mod tests {
         let arc = HostValueArc::new(42, HostValueKind::Callable);
         let value = BexExternalValue::HostValue(arc);
         let options = CffiHandleTableOptions::for_in_process();
-        let encoded = external_to_baml_value(&value, &options).expect("encode succeeds");
+        let encoded = external_to_outbound(&value, &options).expect("encode succeeds");
         let handle = match encoded.value {
             Some(BamlValueVariant::HandleValue(h)) => h,
             other => panic!("unexpected: {other:?}"),
