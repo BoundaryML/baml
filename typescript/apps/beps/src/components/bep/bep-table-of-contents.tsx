@@ -55,10 +55,12 @@ function TocList({
   headings,
   activeId,
   minLevel,
+  onItemClick,
 }: {
   headings: TocItem[];
   activeId: string | null;
   minLevel: number;
+  onItemClick: (id: string) => void;
 }) {
   return (
     <ul className="space-y-1 text-sm">
@@ -68,16 +70,18 @@ function TocList({
 
         return (
           <li key={id} style={{ paddingLeft: indent }}>
-            <div
+            <button
+              onClick={() => onItemClick(id)}
               className={cn(
-                "w-full py-1 px-2 rounded-sm transition-colors text-[13px] leading-snug",
+                "text-left w-full py-1 px-2 rounded-sm transition-colors text-[13px] leading-snug cursor-pointer",
+                "hover:text-foreground hover:bg-accent/50",
                 isActive
                   ? "text-primary font-medium bg-accent/30"
                   : "text-muted-foreground"
               )}
             >
               {text}
-            </div>
+            </button>
           </li>
         );
       })}
@@ -153,6 +157,29 @@ export function BepTableOfContents({ content, className }: BepTableOfContentsPro
     };
   }, [headings, getActiveHeading]);
 
+  const handleClick = useCallback((id: string) => {
+    const element = document.getElementById(id);
+    if (!element) return;
+
+    // Scroll the element into view with proper offset
+    // Using scrollIntoView with block: "start" and the CSS scroll-mt-24 class on headings
+    element.scrollIntoView({ 
+      behavior: "smooth", 
+      block: "start",
+      inline: "nearest"
+    });
+
+    // Update active state immediately for better UX
+    setActiveId(id);
+    
+    // Close mobile menu after navigation
+    setIsMobileExpanded(false);
+
+    // Also update the URL hash for better navigation history
+    // This doesn't cause a scroll jump because we already scrolled
+    window.history.replaceState(null, "", `#${id}`);
+  }, []);
+
   if (headings.length === 0) {
     return null;
   }
@@ -186,6 +213,7 @@ export function BepTableOfContents({ content, className }: BepTableOfContentsPro
                   headings={headings}
                   activeId={activeId}
                   minLevel={minLevel}
+                  onItemClick={handleClick}
                 />
               </div>
             </div>
@@ -212,6 +240,7 @@ export function BepTableOfContents({ content, className }: BepTableOfContentsPro
               headings={headings}
               activeId={activeId}
               minLevel={minLevel}
+              onItemClick={handleClick}
             />
           )}
         </div>
