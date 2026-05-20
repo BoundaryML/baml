@@ -287,7 +287,7 @@ function baml.Int.max(self: null, other: int) -> int {
 }
 
 function baml.Int.max_value() -> int {
-    load_const 9223372036854775807
+    load_const 4611686018427387903
     return
 }
 
@@ -295,7 +295,7 @@ function baml.Int.min(self: null, other: int) -> int {
 }
 
 function baml.Int.min_value() -> int {
-    load_const -9223372036854775808
+    load_const -4611686018427387904
     return
 }
 

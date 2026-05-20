@@ -2764,8 +2764,6 @@ dependencies = [
 [[package]]
 name = "darwin-kperf-events"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89a99d8ff29e1b903ed730cabbaa8c9cd46e4b11a9d9103b59fd2e19c9c8b054"
 
 [[package]]
 name = "darwin-kperf-sys"

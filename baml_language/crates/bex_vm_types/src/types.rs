@@ -630,6 +630,15 @@ impl Value {
     pub const TRUE: Value = Value(4);
     pub const OMITTED_ARG: Value = Value(6);
 
+    /// Largest representable BAML integer (`2^62 - 1 = 4_611_686_018_427_387_903`).
+    ///
+    /// Integers in BAML are i63 (low bit reserved for the tag). Values
+    /// outside `[INT_MIN, INT_MAX]` cannot round-trip through `Value::int`.
+    pub const INT_MAX: i64 = (i64::MAX >> 1);
+
+    /// Smallest representable BAML integer (`-2^62 = -4_611_686_018_427_387_904`).
+    pub const INT_MIN: i64 = !Self::INT_MAX;
+
     // ── Constructors ──────────────────────────────────────────────────────
 
     /// Build a `Value` carrying an `i63` integer. Values outside the

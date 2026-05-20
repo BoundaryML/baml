@@ -60,13 +60,13 @@ class baml.Float$stream {
 class baml.Int {
 }
 function baml.Int.max_value() -> int throws never {
-  { : 9223372036854775807
-    9223372036854775807 : 9223372036854775807
+  { : 4611686018427387903
+    4611686018427387903 : 4611686018427387903
   }
 }
 function baml.Int.min_value() -> int throws never {
-  { : -9223372036854775808
-    Neg 9223372036854775807 - 1 : -9223372036854775808
+  { : -4611686018427387904
+    Neg 4611686018427387903 - 1 : -4611686018427387904
   }
 }
 function baml.Int.from_json(j: baml.json.json) -> baml.Int throws baml.json.JsonParseError | baml.json.JsonDecodeError {

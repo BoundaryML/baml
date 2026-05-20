@@ -248,17 +248,21 @@ class Int {
 
   // ─── Constants (as zero-arg static methods) ───────────────────────────────
 
-  /// Returns the largest representable `int`, equal to `2^63 - 1`
-  /// (`9_223_372_036_854_775_807`).
+  /// Returns the largest representable `int`, equal to `2^62 - 1`
+  /// (`4_611_686_018_427_387_903`).
+  ///
+  /// Note: BAML integers are 63-bit signed (the runtime reserves one bit
+  /// for the tagged-pointer Value encoding). Values outside the
+  /// `[min_value(), max_value()]` range cannot round-trip through int.
   function max_value() -> int {
-    9223372036854775807
+    4611686018427387903
   }
 
-  /// Returns the smallest representable `int`, equal to `-2^63`
-  /// (`-9_223_372_036_854_775_808`). Note `int.min_value().abs()` throws.
+  /// Returns the smallest representable `int`, equal to `-2^62`
+  /// (`-4_611_686_018_427_387_904`). Note `int.min_value().abs()` throws.
   function min_value() -> int {
-    // Written as `-MAX - 1` because `9223372036854775808` (one past `i64::MAX`)
-    // overflows the literal parser before the unary minus is applied.
-    -9223372036854775807 - 1
+    // Written as `-MAX - 1` to avoid the literal parser; same trick as the
+    // old i64::MIN definition.
+    -4611686018427387903 - 1
   }
 }
