@@ -628,7 +628,7 @@ function FeedThreadCard({
   return (
     <div
       className={cn(
-        "group bg-card border rounded-lg overflow-hidden",
+        "group bg-card border rounded-lg",
         rootComment.resolved && "opacity-60"
       )}
       data-comment-id={rootComment._id}
