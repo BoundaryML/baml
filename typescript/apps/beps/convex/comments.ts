@@ -98,13 +98,18 @@ export const allByBepNewestFirst = query({
           }
         }
 
-        // Get parent comment info for replies
+        // Get parent comment info for replies and find root comment
         let parentAuthorName: string | undefined;
+        let rootCommentId: typeof comment._id | undefined;
         if (comment.parentId) {
           const parentComment = await ctx.db.get(comment.parentId);
           if (parentComment) {
             const parentAuthor = await ctx.db.get(parentComment.authorId);
             parentAuthorName = parentAuthor?.name ?? "Unknown";
+            // If parent has a parent, find the root; otherwise parent is the root
+            rootCommentId = parentComment.parentId
+              ? parentComment.parentId
+              : comment.parentId;
           }
         }
 
@@ -117,6 +122,7 @@ export const allByBepNewestFirst = query({
           pageSlug,
           versionNumber,
           parentAuthorName,
+          rootCommentId,
         };
       })
     );

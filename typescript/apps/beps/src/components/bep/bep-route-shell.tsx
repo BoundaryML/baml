@@ -968,6 +968,12 @@ const [copied, setCopied] = useState(false);
                     navigateToSection(MAIN_CONTENT_ID);
                   }
                 }}
+                bepContent={bep.content ?? ""}
+                bepPages={bep.pages.map((p) => ({
+                  slug: p.slug,
+                  title: p.title,
+                  content: p.content,
+                }))}
               />
             ) : !isViewingHistorical && routeInfo.section === "ai" ? (
               <AIAssistantPanel

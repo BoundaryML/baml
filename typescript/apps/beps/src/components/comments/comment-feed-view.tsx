@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
@@ -44,6 +44,8 @@ interface CommentFeedViewProps {
   currentVersionNumber?: number | null;
   linkContext?: BepLinkContext;
   onNavigateToPage?: (pageSlug: string | null) => void;
+  bepContent?: string;
+  bepPages?: Array<{ slug: string; title: string; content: string }>;
 }
 
 interface FeedComment {
@@ -55,6 +57,7 @@ interface FeedComment {
   authorName: string;
   authorAvatarUrl?: string;
   parentId?: Id<"comments">;
+  rootCommentId?: Id<"comments">; // The root of the thread for proper reply handling
   type: string;
   content: string;
   anchor?: {
@@ -75,6 +78,48 @@ interface FeedComment {
   pageSlug?: string;
   versionNumber?: number;
   parentAuthorName?: string;
+}
+
+function extractMarkdownContext(
+  content: string | undefined,
+  anchorText: string,
+  contextLines: number = 3
+): string | null {
+  if (!content || !anchorText) return null;
+
+  const lines = content.split("\n");
+  const anchorTextLower = anchorText.toLowerCase().trim();
+
+  // Find the line that contains the anchor text
+  let matchLineIndex = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].toLowerCase().includes(anchorTextLower.slice(0, 50))) {
+      matchLineIndex = i;
+      break;
+    }
+  }
+
+  if (matchLineIndex === -1) {
+    // Try to find a partial match
+    const words = anchorTextLower.split(/\s+/).filter(w => w.length > 3);
+    for (let i = 0; i < lines.length; i++) {
+      const lineLower = lines[i].toLowerCase();
+      const matchCount = words.filter(w => lineLower.includes(w)).length;
+      if (matchCount >= Math.min(3, words.length)) {
+        matchLineIndex = i;
+        break;
+      }
+    }
+  }
+
+  if (matchLineIndex === -1) return null;
+
+  // Get surrounding lines for context
+  const startLine = Math.max(0, matchLineIndex - contextLines);
+  const endLine = Math.min(lines.length, matchLineIndex + contextLines + 1);
+
+  const contextLines2 = lines.slice(startLine, endLine);
+  return contextLines2.join("\n");
 }
 
 function Avatar({ name, size = "md" }: { name: string; size?: "sm" | "md" }) {
@@ -173,12 +218,14 @@ function FeedCommentCard({
   readOnly,
   linkContext,
   onNavigateToPage,
+  getContentForPage,
 }: {
   comment: FeedComment;
   versionId?: Id<"bepVersions">;
   readOnly?: boolean;
   linkContext?: BepLinkContext;
   onNavigateToPage?: (pageSlug: string | null) => void;
+  getContentForPage?: (pageSlug: string | null) => string | undefined;
 }) {
   const { userId, user } = useUser();
   const toggleReaction = useMutation(api.comments.toggleReaction);
@@ -226,15 +273,18 @@ function FeedCommentCard({
     const content = replyEditorRef.current?.getMarkdown() || replyContent;
     if (!userId || !content.trim() || !versionId) return;
     try {
+      // Reply to the root comment of the thread, not to nested replies
+      const replyToId = comment.rootCommentId ?? comment._id;
+      
       await addComment({
         bepId: comment.bepId,
         versionId,
         pageId: comment.pageId,
-        parentId: comment._id,
+        parentId: replyToId,
         authorId: userId,
         type: "discussion",
         content: content.trim(),
-        anchor: comment.anchor,
+        // Don't pass anchor for replies - they inherit thread context
       });
       setReplyContent("");
       replyEditorRef.current?.setMarkdown("");
@@ -310,11 +360,27 @@ function FeedCommentCard({
         <div className="mb-3 p-3 bg-muted/50 rounded-md border-l-4 border-amber-400">
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
             <Quote className="h-3 w-3" />
-            Referenced text
+            Referenced section
           </div>
-          <p className="text-sm text-muted-foreground italic line-clamp-3">
-            {comment.anchor.nodeText}
-          </p>
+          {(() => {
+            const pageContent = getContentForPage?.(comment.pageSlug ?? null);
+            const contextMarkdown = extractMarkdownContext(
+              pageContent,
+              comment.anchor.nodeText
+            );
+            if (contextMarkdown) {
+              return (
+                <div className="prose prose-sm dark:prose-invert max-w-none opacity-80">
+                  <BepContent content={contextMarkdown} linkContext={linkContext} />
+                </div>
+              );
+            }
+            return (
+              <p className="text-sm text-muted-foreground italic line-clamp-3">
+                {comment.anchor.nodeText}
+              </p>
+            );
+          })()}
         </div>
       )}
 
@@ -489,6 +555,8 @@ export function CommentFeedView({
   currentVersionNumber,
   linkContext,
   onNavigateToPage,
+  bepContent,
+  bepPages,
 }: CommentFeedViewProps) {
   const [showResolved, setShowResolved] = useState(false);
 
@@ -497,6 +565,16 @@ export function CommentFeedView({
     versionId,
     includeResolved: showResolved,
   });
+
+  const getContentForPage = useCallback(
+    (pageSlug: string | null): string | undefined => {
+      if (!pageSlug) {
+        return bepContent;
+      }
+      return bepPages?.find((p) => p.slug === pageSlug)?.content;
+    },
+    [bepContent, bepPages]
+  );
 
   if (comments === undefined) {
     return (
@@ -558,6 +636,7 @@ export function CommentFeedView({
               versionId={versionId}
               linkContext={linkContext}
               onNavigateToPage={onNavigateToPage}
+              getContentForPage={getContentForPage}
             />
           ))}
         </div>
