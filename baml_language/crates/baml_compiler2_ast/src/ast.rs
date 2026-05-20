@@ -622,6 +622,23 @@ pub enum Expr {
     Throw {
         value: ExprId,
     },
+    /// BEP-034 `spawn name_expr? { body }`. The body is always a block
+    /// expression that runs on a freshly-spawned green thread; the
+    /// optional `name` is any expression that evaluates to a string and
+    /// surfaces in debug / stack traces.
+    Spawn {
+        /// Optional human-readable label for the spawn.
+        name: Option<ExprId>,
+        /// Body of the spawn (`{...}`) — always an `Expr::Block` after
+        /// CST lowering.
+        body: ExprId,
+    },
+    /// BEP-034 `await expr` — prefix form. Suspends the current thread
+    /// until `expr`'s future settles, then unwraps the value or re-throws
+    /// the future's error.
+    Await {
+        future: ExprId,
+    },
     Binary {
         op: BinaryOp,
         lhs: ExprId,

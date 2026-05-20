@@ -288,13 +288,14 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
         Terminator::Unreachable => {
             write!(f, "unreachable;")
         }
-        Terminator::DispatchFuture {
+        Terminator::SysOp {
             callee,
             args,
-            future,
-            resume,
+            destination,
+            target,
+            unwind,
         } => {
-            write!(f, "{future} = dispatch_future ")?;
+            write!(f, "{destination} = sys_op ")?;
             write_operand(f, callee)?;
             write!(f, "(")?;
             for (i, arg) in args.iter().enumerate() {
@@ -303,7 +304,23 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
                 }
                 write_operand(f, arg)?;
             }
-            write!(f, ") -> {resume};")
+            write!(f, ") -> {target}")?;
+            if let Some(u) = unwind {
+                write!(f, " unwind {u}")?;
+            }
+            write!(f, ";")
+        }
+        Terminator::Spawn {
+            closure,
+            name,
+            future,
+            resume,
+        } => {
+            write!(f, "{future} = spawn ")?;
+            write_operand(f, closure)?;
+            write!(f, " name=")?;
+            write_operand(f, name)?;
+            write!(f, " -> {resume};")
         }
         Terminator::Await {
             future,

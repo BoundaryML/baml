@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.$init_test_32(registry: testing.TestCollector) -> null {
+fn user.$init_test_33(registry: testing.TestCollector) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.TestCollector // registry // param
@@ -25,7 +25,7 @@ fn user.$init_test_32(registry: testing.TestCollector) -> null {
 }
 
 // lambda[0]
-fn .<lambda($init_test_32, 0)>(testset: testing.TestCollector) -> null {
+fn .<lambda($init_test_33, 0)>(testset: testing.TestCollector) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.TestCollector // testset // param
@@ -55,7 +55,7 @@ fn .<lambda($init_test_32, 0)>(testset: testing.TestCollector) -> null {
 }
 
 // lambda[0]
-fn .<lambda(<lambda($init_test_32, 0)>, 1)>(testset: testing.TestCollector) -> null {
+fn .<lambda(<lambda($init_test_33, 0)>, 1)>(testset: testing.TestCollector) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.TestCollector // testset // param
@@ -78,7 +78,7 @@ fn .<lambda(<lambda($init_test_32, 0)>, 1)>(testset: testing.TestCollector) -> n
 }
 
 // lambda[0]
-fn .<lambda(<lambda(<lambda($init_test_32, 0)>, 1)>, 2)>() -> null {
+fn .<lambda(<lambda(<lambda($init_test_33, 0)>, 1)>, 2)>() -> null {
     // Locals:
     let _0: null // _0 // return
 
@@ -92,7 +92,7 @@ fn .<lambda(<lambda(<lambda($init_test_32, 0)>, 1)>, 2)>() -> null {
 }
 
 // lambda[1]
-fn .<lambda(<lambda($init_test_32, 0)>, 3)>(testset: testing.TestCollector) -> null {
+fn .<lambda(<lambda($init_test_33, 0)>, 3)>(testset: testing.TestCollector) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.TestCollector // testset // param
@@ -115,7 +115,7 @@ fn .<lambda(<lambda($init_test_32, 0)>, 3)>(testset: testing.TestCollector) -> n
 }
 
 // lambda[0]
-fn .<lambda(<lambda(<lambda($init_test_32, 0)>, 3)>, 4)>() -> null {
+fn .<lambda(<lambda(<lambda($init_test_33, 0)>, 3)>, 4)>() -> null {
     // Locals:
     let _0: null // _0 // return
 

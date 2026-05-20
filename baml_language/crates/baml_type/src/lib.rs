@@ -194,11 +194,13 @@ pub enum Ty {
     BuiltinUnknown {
         attr: TyAttr,
     },
-    /// A future handle — the result of `dispatch_future` before `await`.
+    /// A future handle — the result of `schedule_future` or `spawn`
+    /// before `await`.
     ///
-    /// The inner type is the type the future resolves to upon `await`.
-    /// Compiler-only: should never reach runtime (futures are awaited in MIR).
-    Future(Box<Ty>, TyAttr),
+    /// Carries both the value type the future resolves to and the error
+    /// type the future may throw. The error type approximates `never` as
+    /// `Null` when the body of the future statically cannot throw.
+    Future(Box<Ty>, Box<Ty>, TyAttr),
 }
 
 // NOTE: `Unknown`, `Error`, and `Never` are intentionally excluded from this enum.
@@ -249,7 +251,7 @@ impl Ty {
                 attr,
             },
             Ty::WatchAccessor(inner, _) => Ty::WatchAccessor(inner, attr),
-            Ty::Future(inner, _) => Ty::Future(inner, attr),
+            Ty::Future(value, error, _) => Ty::Future(value, error, attr),
         }
     }
 
@@ -277,7 +279,7 @@ impl Ty {
             | Ty::Opaque(_, attr)
             | Ty::TypeAlias(_, attr)
             | Ty::WatchAccessor(_, attr)
-            | Ty::Future(_, attr) => attr,
+            | Ty::Future(_, _, attr) => attr,
         }
     }
 
@@ -549,7 +551,6 @@ impl Ty {
                 | Ty::Void { .. }
                 | Ty::WatchAccessor(..)
                 | Ty::BuiltinUnknown { .. }
-                | Ty::Future(..)
         )
     }
 
@@ -593,8 +594,9 @@ impl Ty {
                     throws.validate_runtime()
                 }
             }
-            Ty::Future(_, _) => {
-                Err("Future type should not reach runtime (must be awaited)".to_string())
+            Ty::Future(value, error, _) => {
+                value.validate_runtime()?;
+                error.validate_runtime()
             }
             Ty::Class(_, args, _) => {
                 for a in args {
@@ -711,7 +713,7 @@ impl fmt::Display for Ty {
             Ty::Void { .. } => write!(f, "void"),
             Ty::WatchAccessor(inner, _) => write!(f, "{inner}.$watch"),
             Ty::BuiltinUnknown { .. } => write!(f, "unknown"),
-            Ty::Future(inner, _) => write!(f, "future<{inner}>"),
+            Ty::Future(value, error, _) => write!(f, "future<{value}, {error}>"),
         }
     }
 }

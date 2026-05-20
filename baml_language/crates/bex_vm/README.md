@@ -174,7 +174,7 @@ The main `exec()` loop fetches and executes one instruction per cycle:
 │  │      Call(n)        → push new Frame, jump to function          │  │
 │  │      Return         → pop Frame, push return value              │  │
 │  │      Jump(offset)   → instruction_ptr += offset                 │  │
-│  │      DispatchFuture → return ScheduleFuture(idx)                │  │
+│  │      ScheduleFuture → return ScheduleFuture(idx)                │  │
 │  │      Await          → return Await(idx) if pending              │  │
 │  │      ...                                                        │  │
 │  │  }                                                              │  │
@@ -322,7 +322,7 @@ After `RETURN`, the frame is popped and result replaces the call site on stack.
    └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Async Operations: DispatchFuture + Await
+## Async Operations: ScheduleFuture + Await
 
 The VM cannot perform I/O directly. External operations (LLM calls, file I/O) use a two-phase pattern.
 
@@ -342,7 +342,7 @@ Example: `let content = fetch("http://example.com")`
 │  │ LOAD_CONST url   │  │ fetch_fn │ "http://." │ │      │  │ // task running in background │    │
 │  │                  │  └──────────┴────────────┘ │      │  └───────────────────────────────┘    │
 │  │                  │  ┌────────────┐            │      │                 ▲                     │
-│  │ DISPATCH_FUTURE ─│──│ future_idx │ ───────────│──────│─────────────────┘                     │
+│  │ SCHEDULE_FUTURE ─│──│ future_idx │ ───────────│──────│─────────────────┘                     │
 │  │                  │  └────────────┘            │      │                                       │
 │  │ ...              │  (vm continues working)    │      │                                       │
 │  │                  │                            │      │                                       │
@@ -361,7 +361,7 @@ Example: `let content = fetch("http://example.com")`
 └──────────────────────────────────────────────────┘      └───────────────────────────────────────┘
 ```
 
-Key insight: DISPATCH_FUTURE returns immediately, allowing the VM to continue other work.
+Key insight: SCHEDULE_FUTURE returns immediately, allowing the VM to continue other work.
 AWAIT blocks only if the future is still pending.
 
 ## Watch System

@@ -21,6 +21,7 @@ use std::{
 use baml_type::Ty;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
+pub use tokio_util::sync::CancellationToken;
 
 use crate::{bytecode::Bytecode, heap_ptr::HeapPtr, indexable::ObjectPool};
 
@@ -1051,7 +1052,7 @@ impl std::fmt::Display for Object {
                     write!(f, "<internal error: future #{}>", id.id)
                 }
             },
-            Object::UnscheduledFuture(future) => write!(f, "<unscheduled: {}>", future.operation),
+            Object::UnscheduledFuture(_) => write!(f, "<unscheduled: spawn>"),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(kind) => write!(f, "<sentinel {kind:?}>"),
             // Object::BamlType(type_ir) => write!(f, "<baml type: {type_ir}>"),
@@ -1059,42 +1060,73 @@ impl std::fmt::Display for Object {
     }
 }
 
+/// Error payload carried by a future's [`Future::ready`] `SetOnce` when the
+/// underlying engine produced an unrecoverable internal error.
+///
+/// Type-erased so this crate doesn't have to pull in `bex_engine`'s
+/// `EngineError` (which would form a cycle). The engine boxes its
+/// `EngineError` into this shape when transitioning a future to the
+/// `InternalError` terminal state (see `FutureRead::InternalError`);
+/// consumers (on the await side) downcast when surfacing the error to
+/// the host.
+pub type FutureInternalError = Box<dyn std::error::Error + Send + Sync>;
+
 /// A future heap object.
 ///
-/// Replaces a plain enum with a struct exposing an atomic discriminant
-/// (`AtomicU8`) so that the engine's spawned task and the VM can read/write
-/// it concurrently without a data race. Concretely:
+/// Holds the cross-thread state-machine for one `spawn { ... }` body:
+/// atomic discriminant, optional result value, cancellation token, and a
+/// `SetOnce` that wakes any consumer blocked in `await`. All synchronization
+/// primitives live on the heap object itself — there is no central
+/// `FutureManager` registry — so producer (spawned task) and consumer
+/// (awaiter / `f.cancel()` caller) communicate directly through the heap.
+///
+/// Concretely:
 ///
 /// - `state` is loaded with `Acquire` and stored with `Release`. When a
 ///   reader observes a terminal-state tag, all preceding payload writes by
 ///   the writer are visible to it.
-/// - `future_id` is set at construction and never modified. It is the only
-///   field readers consult for `Pending` and `InternalError` tags.
+/// - `id` is set at construction and never modified. It's purely for
+///   debug/tracing; nothing keys lookups off it anymore.
 /// - `value` is wrapped in [`UnsafeCell<MaybeUninit<Value>>`] and is written
 ///   *at most once* (during the unique transition from `Pending` to
 ///   `Ready` or `Error`). It is only readable when `state` indicates
 ///   `Ready` or `Error`.
+/// - `cancel` is the producer-observable cancel token. Consumers fire it
+///   via `f.cancel()`; the producer's next `await` checkpoint throws
+///   `baml.panics.Cancelled`. Children spawned by the producer derive
+///   their tokens from this one so cancellation cascades.
+/// - `ready` is the cross-task wake mechanism. Producers set it after any
+///   terminal state transition; the awaiter (via VM `Await` → engine)
+///   awaits on a clone of this Arc.
 ///
 /// # Safety
 ///
-/// Writers must hold the [`FutureManager`]'s state mutex (a
-/// `tokio::sync::Mutex` over the manager's `InactiveHeapPermit`), which
-/// the engine uses to enforce a single-writer invariant. Readers may run
-/// on any thread; the Acquire/Release pairing on `state` provides the
-/// necessary happens-before.
-///
-/// [`FutureManager`]: <https://docs.rs/bex_engine>
+/// Writers (the producer thread, plus `f.cancel()` callers) coordinate via
+/// the `state` atomic itself: terminal transitions are
+/// `compare_exchange(Pending → terminal)`; the first CAS wins and is the
+/// sole authority that writes `value`. The Acquire/Release pairing on
+/// `state` provides the happens-before for cross-thread reads of `value`.
 #[repr(C)]
 pub struct Future {
     /// Atomic discriminant (one of [`FutureTag`]). Loaded with `Acquire`,
-    /// stored with `Release`.
+    /// stored with `Release`. The first thread to successfully transition
+    /// `Pending → terminal` via `compare_exchange` is the unique writer.
     state: AtomicU8,
-    /// Set at construction; never modified. Valid for `Pending` and
-    /// `InternalError` states.
+    /// Set at construction; never modified. Purely for debug/tracing.
     id: FutureId,
-    /// Written at most once (preceded by an `Acquire`/`Release` handshake
-    /// on `state`). Valid only when `state` indicates `Ready` or `Error`.
+    /// Written at most once by whichever writer wins the `state` CAS.
+    /// Valid only when `state` indicates `Ready` or `Error`. For
+    /// `Cancelled` / `InternalError`, this stays uninitialized.
     value: UnsafeCell<MaybeUninit<Value>>,
+    /// Cancellation signal observed by the producer. Fired by
+    /// `f.cancel()` or by parent-cascade when an ancestor is cancelled.
+    pub cancel: CancellationToken,
+    /// Cross-task wake: producer (or cancel) sets it on terminal
+    /// transition; awaiter clones the Arc and `.wait().await`s.
+    /// `Ok(())` is "look at `state` for the actual outcome"; `Err(_)`
+    /// carries an unrecoverable engine error for surfacing through the
+    /// engine's `Await` resume path.
+    pub ready: Arc<tokio::sync::SetOnce<Result<(), FutureInternalError>>>,
 }
 
 // SAFETY: All access to `value` is gated by the Acquire/Release handshake
@@ -1114,6 +1146,27 @@ impl Serialize for Future {
 impl<'de> Deserialize<'de> for Future {
     fn deserialize<D: serde::Deserializer<'de>>(_deserializer: D) -> Result<Self, D::Error> {
         Err(serde::de::Error::custom("Future cannot be deserialized"))
+    }
+}
+
+// `UnscheduledFuture` is a runtime spawn-request slot — same lifecycle
+// shape as `Future`, never appears in a compiled `Program`. The pack
+// envelope (`baml_exec::PackEnvelope`) serializes the bytecode + the
+// constant heap; if an `UnscheduledFuture` ever reaches the serializer
+// that's a malformed program and we want to fail fast.
+impl Serialize for UnscheduledFuture {
+    fn serialize<S: serde::Serializer>(&self, _serializer: S) -> Result<S::Ok, S::Error> {
+        Err(serde::ser::Error::custom(
+            "UnscheduledFuture cannot be serialized",
+        ))
+    }
+}
+
+impl<'de> Deserialize<'de> for UnscheduledFuture {
+    fn deserialize<D: serde::Deserializer<'de>>(_deserializer: D) -> Result<Self, D::Error> {
+        Err(serde::de::Error::custom(
+            "UnscheduledFuture cannot be deserialized",
+        ))
     }
 }
 
@@ -1173,12 +1226,23 @@ pub enum FutureRead {
 
 impl Future {
     /// Construct a new [`Future`] in the `Pending` state.
-    pub fn pending(id: FutureId) -> Self {
+    ///
+    /// `cancel` is the future's own cancel token — fired by `f.cancel()`
+    /// and observed by the producer. The caller is responsible for deriving
+    /// it from the spawning thread's token so cascade cancellation works.
+    pub fn pending(id: FutureId, cancel: CancellationToken) -> Self {
         Self {
             state: AtomicU8::new(FutureTag::Pending as u8),
             id,
             value: UnsafeCell::new(MaybeUninit::uninit()),
+            cancel,
+            ready: Arc::new(tokio::sync::SetOnce::new()),
         }
+    }
+
+    /// `FutureId` for debug/tracing purposes.
+    pub fn id(&self) -> FutureId {
+        self.id
     }
 
     /// Read the current state with appropriate atomic ordering.
@@ -1231,7 +1295,19 @@ impl Future {
         }
     }
 
-    /// Transition to `Ready`.
+    /// Attempt to transition `Pending → Ready`, writing `value` and firing
+    /// the wake signal. Returns `true` if the transition was performed.
+    ///
+    /// A `false` return means another writer (a concurrent `f.cancel()`,
+    /// most likely) already settled the future to a different terminal
+    /// state. The producer in that case discards `value` and exits.
+    ///
+    /// Cross-thread synchronization: the speculative `value` write happens
+    /// before the CAS; the CAS uses `AcqRel` so a reader observing `Ready`
+    /// also observes the value write. If the CAS fails, the value cell is
+    /// reset back to uninitialized to keep GC honest (Ready/Error states
+    /// are the only ones for which GC traces the cell, and our state is
+    /// not Ready, so the cell shouldn't claim to hold a tracked Value).
     ///
     /// Fires the generational write barrier on `heap` for `self_ptr`
     /// before the value write. This is required because a `Future` can
@@ -1244,65 +1320,123 @@ impl Future {
     ///
     /// # Safety
     ///
-    /// Caller must hold `future_permit` (single-writer invariant). The
-    /// future must currently be in `Pending` state — overwriting `value`
-    /// after a previous `set_ready`/`set_error` would race with
-    /// concurrent readers. `self_ptr` must be the [`HeapPtr`] under which
-    /// `self` lives (so the write barrier marks the correct card).
-    pub unsafe fn set_ready(
+    /// Caller must hold the heap permit (to keep `value`'s embedded
+    /// `HeapPtr`, if any, valid against concurrent GC moves). `self_ptr`
+    /// must be the [`HeapPtr`] under which `self` lives, so the write
+    /// barrier marks the correct card.
+    pub unsafe fn settle_ready(
         &self,
         heap: &impl crate::WriteBarrier,
         self_ptr: HeapPtr,
         value: Value,
-    ) {
+    ) -> bool {
+        // Fire the generational write barrier BEFORE the speculative
+        // value write. If `value` is a young heap pointer and our CAS
+        // later wins, the card mark is what tells the next minor GC
+        // to find this reference. (If the CAS loses, the rollback
+        // below reverts the value cell but the spurious card mark is
+        // benign — the GC will simply rescan it.)
         heap.write_barrier(self_ptr, value);
-        // SAFETY: single-writer invariant via `future_permit`.
+        // SAFETY: speculative write; observed by readers only if our CAS
+        // wins (Release synchronizes the write to subsequent Acquire-loads).
         unsafe { (*self.value.get()).write(value) };
-        self.state.store(FutureTag::Ready as u8, Ordering::Release);
+        match self.state.compare_exchange(
+            FutureTag::Pending as u8,
+            FutureTag::Ready as u8,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) => {
+                let _ = self.ready.set(Ok(()));
+                true
+            }
+            Err(_) => {
+                // CAS failed — another writer beat us. Roll back the
+                // speculative write so GC's `value_mut_for_fixup` (which
+                // gates on state) doesn't trip over stale contents.
+                // SAFETY: state isn't Ready/Error, so no reader will look.
+                unsafe { *self.value.get() = MaybeUninit::uninit() };
+                false
+            }
+        }
     }
 
-    /// Transition to `Error`.
+    /// Attempt to transition `Pending → Error`, writing the error value
+    /// and firing the wake signal. Mirror of [`Self::settle_ready`].
     ///
-    /// Fires the generational write barrier — see [`Self::set_ready`].
+    /// Fires the generational write barrier — see [`Self::settle_ready`].
     ///
     /// # Safety
     ///
-    /// See [`Self::set_ready`] — caller must hold `future_permit`, the
-    /// future must currently be `Pending`, and `self_ptr` must point at
-    /// `self`'s heap slot.
-    pub unsafe fn set_error(
+    /// See [`Self::settle_ready`].
+    pub unsafe fn settle_error(
         &self,
         heap: &impl crate::WriteBarrier,
         self_ptr: HeapPtr,
         value: Value,
-    ) {
+    ) -> bool {
         heap.write_barrier(self_ptr, value);
-        // SAFETY: single-writer invariant via `future_permit`.
+        // SAFETY: see settle_ready.
         unsafe { (*self.value.get()).write(value) };
-        self.state.store(FutureTag::Error as u8, Ordering::Release);
+        match self.state.compare_exchange(
+            FutureTag::Pending as u8,
+            FutureTag::Error as u8,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) => {
+                let _ = self.ready.set(Ok(()));
+                true
+            }
+            Err(_) => {
+                // SAFETY: see settle_ready.
+                unsafe { *self.value.get() = MaybeUninit::uninit() };
+                false
+            }
+        }
     }
 
-    /// Transition to `Cancelled`.
+    /// Attempt to transition `Pending → Cancelled`. Fires the cancel
+    /// token (so the producer's next await checkpoint observes it) and
+    /// the wake signal (so any current awaiter resumes).
     ///
-    /// # Safety
-    ///
-    /// See [`Self::set_ready`] — caller must hold `future_permit` and the
-    /// future must currently be `Pending`.
-    pub unsafe fn set_cancelled(&self) {
-        self.state
-            .store(FutureTag::Cancelled as u8, Ordering::Release);
+    /// Returns `true` if the transition was performed. Idempotent in the
+    /// sense that repeated calls all return `false` after the first
+    /// successful one.
+    pub fn settle_cancelled(&self) -> bool {
+        match self.state.compare_exchange(
+            FutureTag::Pending as u8,
+            FutureTag::Cancelled as u8,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) => {
+                self.cancel.cancel();
+                let _ = self.ready.set(Ok(()));
+                true
+            }
+            Err(_) => false,
+        }
     }
 
-    /// Transition to `InternalError`. The `FutureId` retained is the one
-    /// from construction.
+    /// Attempt to transition `Pending → InternalError`, carrying `err`
+    /// on the wake signal for the engine to surface to the host on the
+    /// awaiter's next `await` re-execution.
     ///
-    /// # Safety
-    ///
-    /// See [`Self::set_ready`] — caller must hold `future_permit` and the
-    /// future must currently be `Pending`.
-    pub unsafe fn set_internal_error(&self) {
-        self.state
-            .store(FutureTag::InternalError as u8, Ordering::Release);
+    /// Returns `true` if the transition was performed.
+    pub fn settle_internal_error(&self, err: FutureInternalError) -> bool {
+        match self.state.compare_exchange(
+            FutureTag::Pending as u8,
+            FutureTag::InternalError as u8,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) => {
+                let _ = self.ready.set(Err(err));
+                true
+            }
+            Err(_) => false,
+        }
     }
 }
 
@@ -1311,25 +1445,28 @@ impl Clone for Future {
         // Snapshot the current state and clone the corresponding payload.
         // The only legitimate caller is the GC's heap-relocation copy
         // (`gc.rs` `copy_object_to_inactive`), which clones the heap object
-        // into the inactive space and then `forward_roots` updates the
-        // `FutureManager`'s pointer to the moved object before any reader
-        // observes the clone — so the FutureManager and the heap object
-        // stay in sync.
+        // into the inactive space.
+        //
+        // The `cancel` token and `ready` SetOnce are reference-counted
+        // (CancellationToken has internal `Arc`, `ready` is wrapped in an
+        // explicit `Arc`), so the clone shares the same underlying sync
+        // primitives. Producers that hold a clone of `ready` from before
+        // the GC move continue to wake the same set of waiters, and the
+        // moved heap copy observes the same `ready.set(...)` because both
+        // copies' `Arc<SetOnce>` point at the same allocation.
         //
         // Futures are conceptually *handles*, not values: there is no
-        // "the same future, but a copy" in the runtime. User-level
+        // "the same future, but a copy" at the user level. User-side
         // `deep_copy` reflects this by sharing the original `HeapPtr`
         // for any `Future` rather than calling this `Clone` impl. See
         // `crates/bex_vm/src/package_baml/root.rs::deep_copy_value_recursive`.
-        // Any other caller of this impl must ensure the `FutureManager`
-        // is taught about the new pointer, otherwise terminal-state writes
-        // will be applied to the original and the clone will be observable
-        // in a permanently stale state.
         let read = self.read();
         let cloned = Self {
             state: AtomicU8::new(0), // placeholder; rewritten below
             id: self.id,
             value: UnsafeCell::new(MaybeUninit::uninit()),
+            cancel: self.cancel.clone(),
+            ready: Arc::clone(&self.ready),
         };
         let tag: u8 = match read {
             FutureRead::Pending(_) => FutureTag::Pending as u8,
@@ -1364,16 +1501,22 @@ impl std::fmt::Debug for Future {
     }
 }
 
-/// An operation that should be passed to the engine to be scheduled.
+/// A pending user `spawn { body }` request that the engine still has to
+/// dispatch on a fresh `BexThread`.
 ///
-/// External operations are async functions that run outside the VM, such as
-/// LLM calls, HTTP requests, file I/O, or shell commands.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+/// BEP-034 phase D′: this struct used to also carry sys-op invocations
+/// (`kind: SysOp { ... }`), but sys-ops now go through the single-yield
+/// `VmExecState::SysOp` path without allocating a heap object. Only the
+/// spawn case survives.
+#[derive(Clone, Debug)]
 pub struct UnscheduledFuture {
-    /// The system operation to execute.
-    pub operation: SysOp,
-    /// Arguments to the operation.
-    pub args: Vec<Value>,
+    /// Pointer to an `Object::Closure` carrying the spawn body.
+    pub closure: HeapPtr,
+    /// Optional human-readable name attached at the spawn site. Surfaces in
+    /// debug, stack traces, and the playground. Held here as a `HeapPtr` so
+    /// the GC keeps the underlying string alive while the unscheduled
+    /// future is on the heap.
+    pub name: Option<HeapPtr>,
 }
 
 /// A unique identifier for a future.

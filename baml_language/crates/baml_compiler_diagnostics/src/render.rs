@@ -336,25 +336,46 @@ fn render_ariadne(
 }
 
 /// Strip ANSI SGR escape sequences (`\x1b[...m`) from `s`. Inlined to
-/// avoid a dep on `strip-ansi-escapes` for ~15 lines — only used in the
+/// avoid a dep on `strip-ansi-escapes` for ~25 lines — only used in the
 /// no-color path of [`render_ariadne`].
+///
+/// Preserves malformed input:
+///   - `\x1b` not followed by `[` is kept verbatim (a stray ESC byte is
+///     unusual but shouldn't silently eat the next character).
+///   - `\x1b[…` with no terminating `m` (truncated stream) is written
+///     back verbatim instead of dropping every character to EOF.
 fn strip_ansi(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
-    let mut chars = s.chars();
+    let mut chars = s.chars().peekable();
     while let Some(c) = chars.next() {
-        if c == '\x1b' {
-            // SGR sequences are `ESC [ <params> m`. Consume until we
-            // hit the terminator `m`; anything else is malformed and
-            // we let it through verbatim.
-            if chars.next() == Some('[') {
-                for inner in chars.by_ref() {
-                    if inner == 'm' {
-                        break;
-                    }
-                }
-            }
-        } else {
+        if c != '\x1b' {
             out.push(c);
+            continue;
+        }
+        // Peek — don't consume — so a non-`[` follow-up survives.
+        if chars.peek() != Some(&'[') {
+            out.push('\x1b');
+            continue;
+        }
+        chars.next(); // commit to consuming the `[`
+        // Buffer the body in case the sequence is unterminated; we
+        // need to write it back verbatim then. SGR bodies are short
+        // (a handful of digits + `;`s), so the allocation is trivial.
+        let mut buffered = String::new();
+        let mut terminated = false;
+        for inner in chars.by_ref() {
+            if inner == 'm' {
+                terminated = true;
+                break;
+            }
+            buffered.push(inner);
+        }
+        if !terminated {
+            // Truncated escape — surface the bytes rather than swallow
+            // the rest of the line.
+            out.push('\x1b');
+            out.push('[');
+            out.push_str(&buffered);
         }
     }
     out
@@ -470,6 +491,36 @@ mod tests {
         let mut paths = HashMap::new();
         paths.insert(FileId::new(0), PathBuf::from("test.baml"));
         paths
+    }
+
+    // ── strip_ansi: malformed-input preservation ───────────────────────
+
+    /// Well-formed SGR sequence: stripped, surrounding text intact.
+    #[test]
+    fn strip_ansi_removes_well_formed_sgr() {
+        assert_eq!(
+            strip_ansi("hello \x1b[31mred\x1b[0m world"),
+            "hello red world"
+        );
+    }
+
+    /// Bare ESC (no `[` follow-up) is preserved together with the next
+    /// character — regression for the earlier bug where `chars.next()`
+    /// dropped the byte after ESC unconditionally.
+    #[test]
+    fn strip_ansi_preserves_bare_escape_and_next_char() {
+        assert_eq!(strip_ansi("a\x1bXb"), "a\x1bXb");
+        // Trailing bare ESC (no follow-up at all) survives too.
+        assert_eq!(strip_ansi("end\x1b"), "end\x1b");
+    }
+
+    /// Unterminated `ESC[…` (truncated stream — no `m`) is written back
+    /// verbatim instead of swallowing the rest of the input. Without
+    /// this the old loop would drop everything past the `[`.
+    #[test]
+    fn strip_ansi_preserves_unterminated_csi() {
+        assert_eq!(strip_ansi("ok \x1b[31;1"), "ok \x1b[31;1");
+        assert_eq!(strip_ansi("\x1b[31"), "\x1b[31");
     }
 
     fn test_span() -> Span {

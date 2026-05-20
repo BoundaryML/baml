@@ -2398,6 +2398,8 @@ impl LetStmt {
                     | SyntaxKind::MATCH_EXPR
                     | SyntaxKind::CATCH_EXPR
                     | SyntaxKind::THROW_EXPR
+                    | SyntaxKind::SPAWN_EXPR
+                    | SyntaxKind::AWAIT_EXPR
                     | SyntaxKind::BLOCK_EXPR
                     | SyntaxKind::PAREN_EXPR
                     | SyntaxKind::ARRAY_LITERAL
@@ -2574,6 +2576,8 @@ impl BlockExpr {
                         | SyntaxKind::MATCH_EXPR
                         | SyntaxKind::CATCH_EXPR
                         | SyntaxKind::THROW_EXPR
+                        | SyntaxKind::SPAWN_EXPR
+                        | SyntaxKind::AWAIT_EXPR
                         | SyntaxKind::BLOCK_EXPR
                         | SyntaxKind::PATH_EXPR
                         | SyntaxKind::FIELD_ACCESS_EXPR

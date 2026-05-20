@@ -348,14 +348,27 @@ pub enum Instruction {
     /// `Vm::objects` array.
     AllocVariant(ObjectIndex),
 
-    /// Dispatch a statically-known global `sys_op` and create a pending future.
+    /// BEP-034 phase D′: invoke a statically-known global sys-op and
+    /// push its return value back on the stack in a single VM↔engine
+    /// round trip.
     ///
-    /// Format: `DISPATCH_FUTURE g` where `g` is the global index of the
-    /// `sys_op` function.
+    /// Format: `SYS_OP g` where `g` is the global index of the sys-op
+    /// function. Arguments are popped from the eval stack (arity from
+    /// the callee's metadata, same as `ScheduleFuture`).
     ///
-    /// Arguments are pushed onto the eval stack. The callee is read from
-    /// `Vm::globals[g]`, and arity is read from function metadata.
-    DispatchFuture(GlobalIndex),
+    /// Yields `VmExecState::SysOp { operation, args }`. The engine runs
+    /// the operation, races it against the active cancel token, and
+    /// pushes the resulting value back on the stack before resuming.
+    /// No `Object::Future` is allocated and no `FutureManager` entry is
+    /// created — sys-ops are not user-observable futures in BAML, so
+    /// the schedule + await pair is pure overhead.
+    SysOp(GlobalIndex),
+
+    /// BEP-034 `spawn { body }`. Pops `[closure_value, name_value]` from
+    /// the stack, allocates an `UnscheduledFuture { closure, name }`
+    /// into the TLAB, and yields `VmExecState::Spawn(ptr)` so the
+    /// engine routes the closure to a fresh `BexThread`.
+    Spawn,
 
     /// Awaits the future on top of the stack.
     ///
@@ -716,7 +729,8 @@ pub enum OpCode {
     AllocMap,
     AllocInstance,
     AllocVariant,
-    DispatchFuture,
+    SysOp,
+    Spawn,
     Watch,
     Unwatch,
     Notify,
@@ -763,6 +777,7 @@ impl OpCode {
             | Self::Unreachable
             | Self::MakeCell
             | Self::SendEvent
+            | Self::Spawn
             | Self::Add
             | Self::Sub
             | Self::Mul
@@ -823,7 +838,7 @@ impl OpCode {
             | Self::AllocArray
             | Self::AllocMap
             | Self::AllocVariant
-            | Self::DispatchFuture
+            | Self::SysOp
             | Self::Watch
             | Self::Unwatch
             | Self::Notify
@@ -931,7 +946,8 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::AllocMap as u8 => Ok(Self::AllocMap),
             x if x == Self::AllocInstance as u8 => Ok(Self::AllocInstance),
             x if x == Self::AllocVariant as u8 => Ok(Self::AllocVariant),
-            x if x == Self::DispatchFuture as u8 => Ok(Self::DispatchFuture),
+            x if x == Self::SysOp as u8 => Ok(Self::SysOp),
+            x if x == Self::Spawn as u8 => Ok(Self::Spawn),
             x if x == Self::Watch as u8 => Ok(Self::Watch),
             x if x == Self::Unwatch as u8 => Ok(Self::Unwatch),
             x if x == Self::Notify as u8 => Ok(Self::Notify),
@@ -1032,7 +1048,8 @@ impl std::fmt::Display for OpCode {
             Self::AllocMap => "ALLOC_MAP",
             Self::AllocInstance => "ALLOC_INSTANCE",
             Self::AllocVariant => "ALLOC_VARIANT",
-            Self::DispatchFuture => "DISPATCH_FUTURE",
+            Self::SysOp => "SYS_OP",
+            Self::Spawn => "SPAWN",
             Self::Watch => "WATCH",
             Self::Unwatch => "UNWATCH",
             Self::Notify => "NOTIFY",
@@ -1283,7 +1300,8 @@ impl std::fmt::Display for Instruction {
                 write!(f, "ALLOC_INSTANCE {class_obj} ntypeargs={ntypeargs}")
             }
             Instruction::AllocVariant(i) => write!(f, "ALLOC_VARIANT {i}"),
-            Instruction::DispatchFuture(callee) => write!(f, "DISPATCH_FUTURE {callee}"),
+            Instruction::SysOp(callee) => write!(f, "SYS_OP {callee}"),
+            Instruction::Spawn => write!(f, "SPAWN"),
             Instruction::Await => f.write_str("AWAIT"),
             Instruction::Call { callee, ntypeargs } => {
                 write!(f, "CALL {callee} ntypeargs={ntypeargs}")
@@ -1352,7 +1370,7 @@ pub enum OperandMeta {
     Var(String),
     /// `LoadField`, `StoreField` — field name.
     Field(String),
-    /// `Call`, `DispatchFuture` — function name.
+    /// `Call`, `SysOp` — function name.
     Callable(String),
     /// `LoadGlobal`, `StoreGlobal` — display value.
     Global(String),
@@ -1691,7 +1709,8 @@ impl Bytecode {
                 | Instruction::ThrowIfPanic
                 | Instruction::Unreachable
                 | Instruction::MakeCell
-                | Instruction::SendEvent => {}
+                | Instruction::SendEvent
+                | Instruction::Spawn => {}
 
                 // ── Expanded sub-enum ops: no operands ──────────────
                 Instruction::BinOp(_)
@@ -1766,7 +1785,7 @@ impl Bytecode {
                 // ── GlobalIndex operand → u32 ───────────────────────
                 Instruction::LoadGlobal(g)
                 | Instruction::StoreGlobal(g)
-                | Instruction::DispatchFuture(g)
+                | Instruction::SysOp(g)
                 | Instruction::MakeBoundMethod(g) => {
                     code.extend_from_slice(
                         &u32::try_from(g.into_raw())
@@ -2019,7 +2038,8 @@ impl Bytecode {
             Instruction::AllocMap(_) => OpCode::AllocMap,
             Instruction::AllocInstance { .. } => OpCode::AllocInstance,
             Instruction::AllocVariant(_) => OpCode::AllocVariant,
-            Instruction::DispatchFuture(_) => OpCode::DispatchFuture,
+            Instruction::SysOp(_) => OpCode::SysOp,
+            Instruction::Spawn => OpCode::Spawn,
             Instruction::Watch(_) => OpCode::Watch,
             Instruction::Unwatch(_) => OpCode::Unwatch,
             Instruction::Notify(_) => OpCode::Notify,

@@ -86,6 +86,100 @@ impl io::IoNamespaceIo for NativeSysOps {
             Ok(line)
         })
     }
+
+    fn print(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        s: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::async_op(async move {
+            use tokio::io::AsyncWriteExt;
+            let mut stdout = tokio::io::stdout();
+            stdout
+                .write_all(s.as_bytes())
+                .await
+                .map_err(|e| OpErrorKind::Other(format!("Failed to write stdout: {e}")))?;
+            stdout
+                .flush()
+                .await
+                .map_err(|e| OpErrorKind::Other(format!("Failed to flush stdout: {e}")))?;
+            Ok(())
+        })
+    }
+
+    fn println(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        s: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::async_op(async move {
+            use tokio::io::AsyncWriteExt;
+            let mut stdout = tokio::io::stdout();
+            // Single write_all so concurrent calls from spawned threads don't
+            // interleave on a line boundary.
+            let mut buf = s.into_bytes();
+            buf.push(b'\n');
+            stdout
+                .write_all(&buf)
+                .await
+                .map_err(|e| OpErrorKind::Other(format!("Failed to write stdout: {e}")))?;
+            stdout
+                .flush()
+                .await
+                .map_err(|e| OpErrorKind::Other(format!("Failed to flush stdout: {e}")))?;
+            Ok(())
+        })
+    }
+
+    fn eprint(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        s: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::async_op(async move {
+            use tokio::io::AsyncWriteExt;
+            let mut stderr = tokio::io::stderr();
+            stderr
+                .write_all(s.as_bytes())
+                .await
+                .map_err(|e| OpErrorKind::Other(format!("Failed to write stderr: {e}")))?;
+            stderr
+                .flush()
+                .await
+                .map_err(|e| OpErrorKind::Other(format!("Failed to flush stderr: {e}")))?;
+            Ok(())
+        })
+    }
+
+    fn eprintln(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        s: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::async_op(async move {
+            use tokio::io::AsyncWriteExt;
+            let mut stderr = tokio::io::stderr();
+            let mut buf = s.into_bytes();
+            buf.push(b'\n');
+            stderr
+                .write_all(&buf)
+                .await
+                .map_err(|e| OpErrorKind::Other(format!("Failed to write stderr: {e}")))?;
+            stderr
+                .flush()
+                .await
+                .map_err(|e| OpErrorKind::Other(format!("Failed to flush stderr: {e}")))?;
+            Ok(())
+        })
+    }
 }
 
 // ============================================================================
@@ -842,6 +936,7 @@ impl io::IoNamespaceSys for NativeSysOps {
 // ============================================================================
 
 type NetSocketHandle = tokio::sync::Mutex<tokio::net::TcpStream>;
+type NetTcpListenerHandle = tokio::net::TcpListener;
 
 impl io::IoClassNetSocket for NativeSysOps {
     fn read(
@@ -868,13 +963,97 @@ impl io::IoClassNetSocket for NativeSysOps {
         })
     }
 
+    fn write(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        socket: owned::net::Socket,
+        data: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        use tokio::io::AsyncWriteExt;
+
+        SysOpOutput::async_op(async move {
+            let handle: Arc<NetSocketHandle> = socket
+                ._handle
+                .downcast::<NetSocketHandle>()
+                .map_err(|_| OpErrorKind::Other("Invalid socket handle type".into()))?;
+            let mut stream = handle.lock().await;
+            stream
+                .write_all(data.as_bytes())
+                .await
+                .map_err(|e| OpErrorKind::Other(format!("Failed to write to socket: {e}")))?;
+            stream
+                .flush()
+                .await
+                .map_err(|e| OpErrorKind::Other(format!("Failed to flush socket: {e}")))?;
+            Ok(())
+        })
+    }
+
     fn close(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        _socket: owned::net::Socket,
+        socket: owned::net::Socket,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
+        use tokio::io::AsyncWriteExt;
+
+        SysOpOutput::async_op(async move {
+            let handle: Arc<NetSocketHandle> = socket
+                ._handle
+                .downcast::<NetSocketHandle>()
+                .map_err(|_| OpErrorKind::Other("Invalid socket handle type".into()))?;
+            // shutdown() flushes pending writes and closes the write half, so
+            // peers waiting on EOF (e.g. curl with "Connection: close") stop
+            // blocking. We swallow ENOTCONN / NotConnected since the peer may
+            // already have closed.
+            let mut stream = handle.lock().await;
+            match stream.shutdown().await {
+                Ok(()) => Ok(()),
+                Err(e) if e.kind() == std::io::ErrorKind::NotConnected => Ok(()),
+                Err(e) => Err(OpErrorKind::Other(format!("Failed to close socket: {e}"))),
+            }
+        })
+    }
+}
+
+impl io::IoClassNetTcpListener for NativeSysOps {
+    fn accept(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        listener: owned::net::TcpListener,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::net::Socket> {
+        SysOpOutput::async_op(async move {
+            let handle: Arc<NetTcpListenerHandle> = listener
+                ._handle
+                .downcast::<NetTcpListenerHandle>()
+                .map_err(|_| OpErrorKind::Other("Invalid TcpListener handle type".into()))?;
+            let (stream, _peer) = handle
+                .accept()
+                .await
+                .map_err(|e| OpErrorKind::Other(format!("Failed to accept connection: {e}")))?;
+            let sock_handle: Arc<dyn std::any::Any + Send + Sync> =
+                Arc::new(tokio::sync::Mutex::new(stream));
+            Ok(owned::net::Socket {
+                _handle: sock_handle,
+            })
+        })
+    }
+
+    fn close(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _listener: owned::net::TcpListener,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        // Dropping the Arc<TcpListener> closes the underlying socket once the
+        // last reference goes away. There's no explicit "stop accepting" call
+        // for tokio's listener — moving on is enough.
         SysOpOutput::ok(())
     }
 }
@@ -894,6 +1073,22 @@ impl io::IoNamespaceNet for NativeSysOps {
             let handle: Arc<dyn std::any::Any + Send + Sync> =
                 Arc::new(tokio::sync::Mutex::new(stream));
             Ok(owned::net::Socket { _handle: handle })
+        })
+    }
+
+    fn listen(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        addr: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::net::TcpListener> {
+        SysOpOutput::async_op(async move {
+            let listener = tokio::net::TcpListener::bind(&addr)
+                .await
+                .map_err(|e| OpErrorKind::Other(format!("Failed to bind '{addr}': {e}")))?;
+            let handle: Arc<dyn std::any::Any + Send + Sync> = Arc::new(listener);
+            Ok(owned::net::TcpListener { _handle: handle })
         })
     }
 }
@@ -1306,3 +1501,8 @@ impl io::IoNamespaceHttp for NativeSysOps {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
 }
+
+// BEP-034 Future methods live on the heap `Object::Future` itself (atomic
+// state + SetOnce + cancel token) and are dispatched via the native-call
+// path (`$rust_function` in `ns_future/future.baml`), not through sys-ops.
+// See `bex_vm::package_baml` for the trait impl.
