@@ -21,7 +21,7 @@
 use std::time::{Duration, Instant};
 
 use console::{Color, Style};
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::{HumanDuration, ProgressBar, ProgressStyle};
 
 /// Brand purple `#A855F7` for the cargo-style verb. Rendered via 24-bit
 /// truecolor ANSI (`\x1b[38;2;168;85;247m`) on terminals that support it;
@@ -143,12 +143,12 @@ impl Reporter {
     /// 12-col cargo padding and shift the verb one column right
     /// versus its peers above.
     pub fn finish(&self, verb: &str, msg: impl AsRef<str>) {
-        let elapsed = self.started.elapsed();
-        let line = format!(
-            "{} in {}",
-            format_status(verb, msg.as_ref()),
-            format_elapsed(elapsed)
-        );
+        // `{:#}` is `HumanDuration`'s alternate form — the compact
+        // `5s` / `2m` / `1h` shape, matching cargo's `Finished` line.
+        // The default `{}` form spells out `5 seconds`, which is too
+        // wordy for a one-line status.
+        let elapsed = HumanDuration(self.started.elapsed());
+        let line = format!("{} in {elapsed:#}", format_status(verb, msg.as_ref()));
         match &self.bar {
             Some(b) => {
                 b.println(line);
@@ -236,46 +236,9 @@ impl Reporter {
     }
 }
 
-/// Cargo-style elapsed time: sub-second as `0.42s`, longer as
-/// `1m 02s` / `1h 15m`. Keeps "Finished" lines visually compact.
-fn format_elapsed(d: Duration) -> String {
-    let secs = d.as_secs_f64();
-    if secs < 60.0 {
-        format!("{secs:.2}s")
-    } else if secs < 3600.0 {
-        let m = (secs / 60.0).floor() as u64;
-        let s = (secs - (m as f64) * 60.0).round() as u64;
-        format!("{m}m {s:02}s")
-    } else {
-        let h = (secs / 3600.0).floor() as u64;
-        let m = ((secs - (h as f64) * 3600.0) / 60.0).floor() as u64;
-        format!("{h}h {m:02}m")
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn format_elapsed_sub_minute_uses_decimal_seconds() {
-        assert_eq!(format_elapsed(Duration::from_millis(420)), "0.42s");
-        assert_eq!(format_elapsed(Duration::from_secs_f64(12.345)), "12.35s");
-        assert_eq!(format_elapsed(Duration::from_secs(59)), "59.00s");
-    }
-
-    #[test]
-    fn format_elapsed_sub_hour_uses_minutes_and_seconds() {
-        assert_eq!(format_elapsed(Duration::from_secs(60)), "1m 00s");
-        assert_eq!(format_elapsed(Duration::from_secs(62)), "1m 02s");
-        assert_eq!(format_elapsed(Duration::from_secs(125)), "2m 05s");
-    }
-
-    #[test]
-    fn format_elapsed_over_hour_uses_hours_and_minutes() {
-        assert_eq!(format_elapsed(Duration::from_secs(3600)), "1h 00m");
-        assert_eq!(format_elapsed(Duration::from_secs(3725)), "1h 02m");
-    }
 
     /// Status lines pad to cargo's 12-char column, putting the verb
     /// flush against where cargo prints `Compiling`. Counting on unstyled
