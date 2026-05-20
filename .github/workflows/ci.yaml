@@ -502,6 +502,14 @@ jobs:
 
       - name: "Run benchmarks"
         uses: CodSpeedHQ/action@v4
+        # CodSpeed flakes (network blip, codspeed.io outage, runner
+        # noise) shouldn't gate the alpha release. Step-level continue-
+        # on-error keeps the job's conclusion `success` so the
+        # `release-baml-language-alpha` workflow's
+        # `workflow_run.conclusion == 'success'` gate still fires; bench
+        # build / install steps above stay strict so a *real* benchmark
+        # regression in this workflow still surfaces as red.
+        continue-on-error: true
         with:
           mode: walltime
           run: cd baml_language && cargo codspeed run
