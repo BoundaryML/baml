@@ -135,11 +135,19 @@ pub fn external_to_outbound(
             }))
         }
 
-        // HostValue encoding is WIP
-        BexExternalValue::HostValue(_) => {
-            return Err(CtypesError::InternalError(
-                "HostValue cannot be encoded to BamlOutboundValue yet".to_string(),
-            ));
+        // Host-value handles do NOT live in HANDLE_TABLE. Encode directly using
+        // the host-side key; drop semantics are preserved by the Arc
+        // (HostValueArc::drop fires HostReleaseFn on last drop).
+        BexExternalValue::HostValue(arc) => {
+            use crate::baml_core::cffi::BamlHandleType;
+            let ht = match arc.kind {
+                bex_project::HostValueKind::Callable => BamlHandleType::HostValueCallable as i32,
+            };
+            Some(BamlValueVariant::HandleValue(BamlOutboundHandle {
+                key: arc.key,
+                handle_type: ht,
+                name: Some(empty_ty_name()),
+            }))
         }
 
         // All opaque types → insert into handle table, encode as BamlOutboundHandle.
@@ -382,7 +390,10 @@ fn ty_to_field_type(ty: &Ty) -> BamlTy {
 mod tests {
     use std::sync::Arc;
 
-    use bex_project::{BexExternalValue, MediaContent, MediaValue, PromptAst, PromptAstSimple};
+    use bex_project::{
+        BexExternalValue, HostValueArc, HostValueKind, MediaContent, MediaValue, PromptAst,
+        PromptAstSimple,
+    };
 
     use super::*;
     use crate::baml_core::cffi::{BamlHandleType, baml_outbound_value::Value as BamlValueVariant};
@@ -428,5 +439,24 @@ mod tests {
         let options = CffiHandleTableOptions::for_in_process();
         let handle = extract_handle(external_to_outbound(&value, &options).unwrap());
         assert_eq!(handle.handle_type, BamlHandleType::UntaggedRustData as i32);
+    }
+
+    #[test]
+    fn encode_outbound_host_value_callable() {
+        let arc = HostValueArc::new(42, HostValueKind::Callable);
+        let value = BexExternalValue::HostValue(arc);
+        let options = CffiHandleTableOptions::for_in_process();
+        let encoded = external_to_baml_value(&value, &options).expect("encode succeeds");
+        let handle = match encoded.value {
+            Some(BamlValueVariant::HandleValue(h)) => h,
+            other => panic!("unexpected: {other:?}"),
+        };
+        assert_eq!(handle.key, 42);
+        assert_eq!(handle.handle_type, BamlHandleType::HostValueCallable as i32);
+        // Must not appear in the handle table.
+        assert!(
+            options.table.resolve(42).is_none(),
+            "HOST_VALUE_CALLABLE must not be inserted into HANDLE_TABLE"
+        );
     }
 }

@@ -43,6 +43,10 @@ enum BamlHandleType {
   ADT_COLLECTOR = 12;
   ADT_TYPE = 13;
   ADT_TAGGED_HEAP_HANDLE = 14;
+  // Host-owned callable referenced via per-bridge HostValueRegistry.
+  // Lifetime: Rust drop notifies host via HostReleaseFn (not via
+  // HANDLE_TABLE). See bex_external_types::host_value.
+  HOST_VALUE_CALLABLE = 15;
 }
 
 message BamlHandle {
@@ -100,6 +104,30 @@ message InboundClassValue {
 message InboundEnumValue {
   string name = 1;
   string value = 2;
+}
+
+// -----------------------------------------------------------------------------
+// Host-callable error
+// -----------------------------------------------------------------------------
+
+enum HostCallableErrorCategory {
+  HOST_CALLABLE_ERROR_UNSPECIFIED = 0;
+  // Default — user's host callable raised an exception.
+  HOST_CALLABLE_HOST_ERROR = 1;
+  // Host bridge rejected args before invoking (arity / type mismatch).
+  HOST_CALLABLE_INVALID_ARGUMENT = 2;
+  // Host bridge observed cancellation (only meaningful when v2
+  // cancel_host_call lands).
+  HOST_CALLABLE_CANCELLED = 3;
+}
+
+// Sent by the host via complete_host_call when is_error = 1.
+message HostCallableError {
+  string class_name = 1;
+  string message = 2;
+  optional string traceback = 3;
+  optional string language = 4;
+  HostCallableErrorCategory category = 5;
 }
 
 // -----------------------------------------------------------------------------

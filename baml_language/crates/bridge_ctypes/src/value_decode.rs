@@ -10,8 +10,8 @@ use indexmap::IndexMap;
 
 use crate::{
     baml_core::cffi::{
-        InboundClassValue, InboundEnumValue, InboundListValue, InboundMapEntry, InboundMapValue,
-        InboundValue, inbound_value::Value as InboundValueVariant,
+        BamlHandleType, InboundClassValue, InboundEnumValue, InboundListValue, InboundMapEntry,
+        InboundMapValue, InboundValue, inbound_value::Value as InboundValueVariant,
     },
     error::CtypesError,
     handle_table::CffiHandleTable,
@@ -37,6 +37,16 @@ pub fn inbound_to_external(
             InboundValueVariant::EnumValue(e) => Ok(convert_enum(e)),
             InboundValueVariant::Uint8arrayValue(bytes) => Ok(BexExternalValue::Uint8Array(bytes)),
             InboundValueVariant::Handle(handle) => {
+                // HOST_VALUE_CALLABLE keys do NOT live in HANDLE_TABLE. The
+                // host bridge owns the lookup; we construct the Arc stub here
+                // so last-drop fires the registered HostReleaseFn.
+                if handle.handle_type == BamlHandleType::HostValueCallable as i32 {
+                    let arc = bex_project::HostValueArc::new(
+                        handle.key,
+                        bex_project::HostValueKind::Callable,
+                    );
+                    return Ok(BexExternalValue::HostValue(arc));
+                }
                 let value = handle_table
                     .drain(handle.key)
                     .ok_or(CtypesError::InvalidHandleKey(handle.key))?;
@@ -160,6 +170,31 @@ pub fn kwargs_to_bex_values(
 mod tests {
     use super::*;
     use crate::{baml_core::cffi::BamlHandle, handle_table::CffiHandleTableEntry};
+
+    #[test]
+    fn decode_inbound_host_value_callable() {
+        let table = CffiHandleTable::new();
+        let handle = BamlHandle {
+            key: 999,
+            handle_type: BamlHandleType::HostValueCallable as i32,
+        };
+        let inbound = InboundValue {
+            value: Some(InboundValueVariant::Handle(handle)),
+        };
+        let result = inbound_to_external(inbound, &table).expect("decode succeeds");
+        match result {
+            BexExternalValue::HostValue(arc) => {
+                assert_eq!(arc.key, 999);
+                assert_eq!(arc.kind, bex_project::HostValueKind::Callable);
+            }
+            other => panic!("unexpected variant: {other:?}"),
+        }
+        // Key must NOT have been inserted into the handle table.
+        assert!(
+            table.resolve(999).is_none(),
+            "HOST_VALUE_CALLABLE must not touch HANDLE_TABLE"
+        );
+    }
 
     #[test]
     fn inbound_handle_drains_table_entry() {
