@@ -162,16 +162,11 @@ const [copied, setCopied] = useState(false);
       : "skip"
   );
 
-  const allComments = useQuery(
-    api.comments.allByBepNewestFirst,
-    bep
-      ? {
-          bepId: bep._id,
-          versionId: viewingVersionId ?? currentVersionId ?? undefined,
-          includeResolved: false,
-        }
-      : "skip"
-  );
+  // Calculate total comment count from per-page counts (avoids needing new query for nav)
+  const totalCommentCount = useMemo(() => {
+    if (!commentCounts) return 0;
+    return Object.values(commentCounts).reduce((sum, count) => sum + count, 0);
+  }, [commentCounts]);
 
   const pageComments = useQuery(
     api.comments.byBepPage,
@@ -927,7 +922,7 @@ const [copied, setCopied] = useState(false);
                 activeSection={activeSection}
                 onSectionClick={handleSectionChange}
                 commentCounts={commentCounts ?? {}}
-                totalCommentCount={isViewingHistorical ? 0 : (allComments?.length ?? 0)}
+                totalCommentCount={isViewingHistorical ? 0 : totalCommentCount}
                 openIssueCount={isViewingHistorical ? 0 : openIssueCount}
                 decisionCount={isViewingHistorical ? 0 : bep.decisions.length}
                 hideMetaSections={isViewingHistorical}
