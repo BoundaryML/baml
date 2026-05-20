@@ -1042,7 +1042,9 @@ impl BexVm {
     /// Entry points must be [`bex_vm_types::FunctionKind::Bytecode`] —
     /// either a bare `Object::Function` or an `Object::Closure` wrapping
     /// one (BEP-034 spawn). The engine boundary
-    /// ([`bex_engine::BexEngine::call_function_bound_args`]) rejects
+    /// (`bex_engine::BexEngine::call_function_bound_args` — backticks
+    /// rather than an intra-doc link because `bex_vm` doesn't depend on
+    /// `bex_engine`; the relationship goes the other way) rejects
     /// `SysOp` / `Native` / `NativeUnresolved` callees with
     /// `EngineError::NotInvokableAsEntry` before reaching this method,
     /// because there's no enclosing bytecode frame for a native to
