@@ -35,7 +35,7 @@ function PanicArmAfterExhaustion(x: int) -> string {
 
 //----
 //- diagnostics
-// Warning: unreachable arm
+// warning: unreachable arm
 //     ╭─[ catch_catch_throw_set_reachability.baml:17:12 ]
 //     │
 //  17 │     int => "unreachable"

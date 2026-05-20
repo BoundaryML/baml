@@ -81,7 +81,7 @@ template_string BadCall4 #"
 
 //----
 //- diagnostics
-// Warning: Function 'WithParams' expects 1 arguments, but got 0
+// warning: Function 'WithParams' expects 1 arguments, but got 0
 //     ╭─[ template_string_bad_calls.baml:14:6 ]
 //     │
 //  14 │   {{ WithParams() }}
@@ -90,7 +90,7 @@ template_string BadCall4 #"
 //     │ 
 //     │ Note: Error code: E0080
 // ────╯
-// Warning: Variable `Random` does not exist. Did you mean one of these: `_`, `baml`, `ctx`?
+// warning: Variable `Random` does not exist. Did you mean one of these: `_`, `baml`, `ctx`?
 //     ╭─[ template_string_bad_calls.baml:18:6 ]
 //     │
 //  18 │   {{ Random(2) }}
@@ -99,7 +99,7 @@ template_string BadCall4 #"
 //     │ 
 //     │ Note: Error code: E0070
 // ────╯
-// Warning: 'Random' is undefined, expected function
+// warning: 'Random' is undefined, expected function
 //     ╭─[ template_string_bad_calls.baml:18:6 ]
 //     │
 //  18 │   {{ Random(2) }}
@@ -108,7 +108,7 @@ template_string BadCall4 #"
 //     │ 
 //     │ Note: Error code: E0073
 // ────╯
-// Warning: Function 'WithParams' expects 1 arguments, but got 2
+// warning: Function 'WithParams' expects 1 arguments, but got 2
 //    ╭─[ template_string_bad_calls.baml:6:6 ]
 //    │
 //  6 │   {{ WithParams(a=2, b=2) }}
@@ -117,7 +117,7 @@ template_string BadCall4 #"
 //    │ 
 //    │ Note: Error code: E0080
 // ───╯
-// Warning: Function 'WithParams' expects argument 'a' to be of type int, but got literal["a"]
+// warning: Function 'WithParams' expects argument 'a' to be of type int, but got literal["a"]
 //     ╭─[ template_string_bad_calls.baml:10:6 ]
 //     │
 //  10 │   {{ WithParams("a") }}

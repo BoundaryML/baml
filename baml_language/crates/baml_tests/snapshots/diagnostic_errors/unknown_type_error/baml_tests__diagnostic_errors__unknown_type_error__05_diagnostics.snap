@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: unresolved type: blah
+  [type] error: unresolved type: blah
    ╭─[ unknown_type_error.baml:3:18 ]
    │
  3 │ function Foo() -> blah {
@@ -12,7 +12,7 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0002
 ───╯
 
-  [type] Error: unresolved type: unknown_param_type
+  [type] error: unresolved type: unknown_param_type
    ╭─[ unknown_type_error.baml:8:16 ]
    │
  8 │ function Bar(x: unknown_param_type) -> int {
@@ -22,7 +22,7 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0002
 ───╯
 
-  [type] Error: unresolved type: unknown_optional
+  [type] error: unresolved type: unknown_optional
     ╭─[ unknown_type_error.baml:13:18 ]
     │
  13 │ function Baz() -> unknown_optional? {
@@ -32,7 +32,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0002
 ────╯
 
-  [type] Error: unresolved type: Status.Typo
+  [type] error: unresolved type: Status.Typo
     ╭─[ unknown_type_error.baml:26:37 ]
     │
  26 │ function StatusTypoInTypePosition(s: Status.Typo) -> int {

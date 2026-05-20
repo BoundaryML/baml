@@ -98,7 +98,7 @@ SOURCE_FILE
       R_BRACE "}"
 
 === ERRORS ===
-Error: Expected config key, found '.'
+error: Expected config key, found '.'
    ╭─[ test.baml:8:23 ]
    │
  8 │         model gemini-2.0-flash
@@ -108,7 +108,7 @@ Error: Expected config key, found '.'
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected config key, found integer
+error: Expected config key, found integer
    ╭─[ test.baml:8:24 ]
    │
  8 │         model gemini-2.0-flash
@@ -118,7 +118,7 @@ Error: Expected config key, found integer
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected config key, found '-'
+error: Expected config key, found '-'
    ╭─[ test.baml:8:25 ]
    │
  8 │         model gemini-2.0-flash
@@ -128,7 +128,7 @@ Error: Expected config key, found '-'
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected identifier, found '}'
+error: Expected identifier, found '}'
    ╭─[ test.baml:9:5 ]
    │
  9 │     }
@@ -138,7 +138,7 @@ Error: Expected identifier, found '}'
    │ Note: Error code: E0010
 ───╯
 
-Error: Header comments (//#) are not allowed inside LLM functions
+error: Header comments (//#) are not allowed inside LLM functions
     ╭─[ test.baml:13:5 ]
     │
  13 │     //# collect source material

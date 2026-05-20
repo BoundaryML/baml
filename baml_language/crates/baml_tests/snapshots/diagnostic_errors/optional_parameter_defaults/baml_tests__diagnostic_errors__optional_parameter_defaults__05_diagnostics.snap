@@ -1,9 +1,8 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 36483
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: defaulted parameter `max_results` must be passed by name
+  [type] error: defaulted parameter `max_results` must be passed by name
     ╭─[ call_binding.baml:22:18 ]
     │
  22 │   Search("cats", 5)
@@ -13,7 +12,7 @@ assertion_line: 36483
     │ Note: Error code: E0005
 ────╯
 
-  [type] Error: positional arguments cannot appear after named arguments
+  [type] error: positional arguments cannot appear after named arguments
     ╭─[ call_binding.baml:26:26 ]
     │
  26 │   Search(query = "cats", 5)
@@ -23,7 +22,7 @@ assertion_line: 36483
     │ Note: Error code: E0005
 ────╯
 
-  [type] Error: duplicate named argument `max_results`
+  [type] error: duplicate named argument `max_results`
     ╭─[ call_binding.baml:30:57 ]
     │
  30 │   Search(query = "cats", max_results = 1, max_results = 2)
@@ -33,7 +32,7 @@ assertion_line: 36483
     │ Note: Error code: E0005
 ────╯
 
-  [type] Error: missing required argument `query`
+  [type] error: missing required argument `query`
     ╭─[ call_binding.baml:34:3 ]
     │
  34 │   Search(q = "cats")
@@ -43,7 +42,7 @@ assertion_line: 36483
     │ Note: Error code: E0005
 ────╯
 
-  [type] Error: unknown named argument `q`
+  [type] error: unknown named argument `q`
     ╭─[ call_binding.baml:34:14 ]
     │
  34 │   Search(q = "cats")
@@ -53,7 +52,7 @@ assertion_line: 36483
     │ Note: Error code: E0005
 ────╯
 
-  [type] Error: default for parameter `a` cannot reference later parameter `b`
+  [type] error: default for parameter `a` cannot reference later parameter `b`
     ╭─[ call_binding.baml:37:33 ]
     │
  37 │ function BadForwardRef(a: int = b, b: int = 1) -> int {
@@ -63,7 +62,7 @@ assertion_line: 36483
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: required parameter `b` cannot appear after a defaulted parameter
+  [type] error: required parameter `b` cannot appear after a defaulted parameter
     ╭─[ call_binding.baml:41:45 ]
     │
  41 │ function BadRequiredAfterDefault(a: int = 1, b: int) -> int {
@@ -73,7 +72,7 @@ assertion_line: 36483
     │ Note: Error code: E0001
 ────╯
 
-  [hir] Error: parameter defaults are not supported in template_string `Greeting`
+  [hir] error: parameter defaults are not supported in template_string `Greeting`
    ╭─[ unsupported_contexts.baml:1:41 ]
    │
  1 │ template_string Greeting(name: string = "world") #"hello {{ name }}"#
@@ -83,7 +82,7 @@ assertion_line: 36483
    │ Note: Error code: E0010
 ───╯
 
-  [type] Error: `self` cannot have a default value
+  [type] error: `self` cannot have a default value
    ╭─[ unsupported_contexts.baml:9:27 ]
    │
  9 │   function Current(self = null) -> int {
@@ -93,7 +92,7 @@ assertion_line: 36483
    │ Note: Error code: E0001
 ───╯
 
-  [hir] Error: parameter defaults are not supported in lambda parameters
+  [hir] error: parameter defaults are not supported in lambda parameters
     ╭─[ unsupported_contexts.baml:15:21 ]
     │
  15 │   let f = (x: int = 1) -> int { x }
@@ -103,7 +102,7 @@ assertion_line: 36483
     │ Note: Error code: E0010
 ────╯
 
-  [type] Error: type mismatch: expected user.NamedLimit, got (query: string, filter?: string?) -> int throws never
+  [type] error: type mismatch: expected user.NamedLimit, got (query: string, filter?: string?) -> int throws never
     ╭─[ unsupported_contexts.baml:24:23 ]
     │
  24 │   let f: NamedLimit = Filtered

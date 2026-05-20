@@ -136,6 +136,17 @@ pub struct UserFunctionInfo {
     pub param_types: Vec<Ty>,
     pub param_has_default: Vec<bool>,
     pub return_type: Ty,
+    /// Filesystem path of the source file containing the function.
+    /// Empty string for builtins and synthesized functions.
+    /// Exposed for BEP-027 §"`baml.argv`": `argv[1]` under root-main `baml run`
+    /// is the path to the file containing `main`.
+    pub source_file: String,
+    /// `true` when the function carries `FunctionMeta::Llm` — i.e. it
+    /// was declared with `client X { ... } prompt #"..."#` and the
+    /// compiler synthesized the LLM dispatch body. Surfaced here so
+    /// `baml run --list` can annotate LLM functions inline without
+    /// reaching back into the heap to inspect `body_meta`.
+    pub is_llm: bool,
 }
 
 /// Internal call argument after host binding has distinguished omission from
@@ -232,6 +243,15 @@ pub enum EngineError {
     #[error("Function not found: {name}")]
     FunctionNotFound { name: String },
 
+    /// Function exists, but its `FunctionKind` is not invokable as an
+    /// engine entry point. Only bytecode functions can be called via
+    /// [`BexEngine::call_function`] / [`BexEngine::call_function_bound_args`]:
+    /// native (`$rust_function`) entries would re-enter the VM through
+    /// `YieldToCall` with no bytecode frame to return to. Sysops + builtins
+    /// reach their natives from inside a calling bytecode body.
+    #[error("Function `{name}` is not invokable as an entry point (kind: {kind})")]
+    NotInvokableAsEntry { name: String, kind: String },
+
     #[error("{0}")]
     ExternalOpFailed(#[from] OpError),
 
@@ -250,6 +270,13 @@ pub enum EngineError {
         value: Box<BexExternalValue>,
         trace: Vec<bex_vm::StackFrame>,
     },
+
+    /// Clean process-termination request from `baml.sys.exit(code)`.
+    /// The caller is expected to honor this as the process exit code.
+    /// BAML `int` is `i64`, so the signal carries the full value; the
+    /// caller clamps into its shell's range (typically 0..=255 on Unix).
+    #[error("baml.sys.exit({code})")]
+    Exit { code: i64 },
 
     #[error("Cannot convert object of type {type_name}")]
     CannotConvert { type_name: String },
@@ -286,6 +313,27 @@ fn format_vm_internal_error(
     );
     write!(out, "VM internal error: {err}").unwrap();
     out
+}
+
+/// Recognize an uncaught `baml.panics.Exit { code }` and pull its `code`
+/// field out. Returns `None` for any other value — the caller should fall
+/// back to the normal unhandled-throw path.
+///
+/// Exit lives in the regular panic class hierarchy so BAML code can catch
+/// it (like Python's `SystemExit`); at the engine boundary we recognize it
+/// by class tag rather than routing it through a separate `VmError`
+/// variant, so the VM's unwinder stays ignorant of which panic classes
+/// are "special" and the special-casing lives in exactly one place — here.
+fn extract_exit_code(value: &BexExternalValue) -> Option<i64> {
+    match value {
+        BexExternalValue::Instance {
+            class_name, fields, ..
+        } if class_name == bex_vm_types::PanicClass::Exit.fqn() => match fields.get("code")? {
+            BexExternalValue::Int(code) => Some(*code),
+            _ => None,
+        },
+        _ => None,
+    }
 }
 
 fn format_unhandled_throw(value: &BexExternalValue, trace: &[bex_vm::StackFrame]) -> String {
@@ -1050,6 +1098,7 @@ impl BexEngine {
             host_ctx,
             collectors,
             cancel,
+            type_args,
         }: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexExternalValue, EngineError> {
@@ -1065,6 +1114,7 @@ impl BexEngine {
                 host_ctx,
                 collectors,
                 cancel,
+                type_args,
             },
             copy_objects,
         )
@@ -1080,6 +1130,7 @@ impl BexEngine {
             host_ctx,
             collectors,
             cancel,
+            type_args,
         }: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexExternalValue, EngineError> {
@@ -1090,7 +1141,17 @@ impl BexEngine {
             return Err(cancelled_unhandled_throw());
         }
 
-        let function_index = self.lookup_function(function_name)?;
+        let (function_index, kind) = self.lookup_function(function_name)?;
+        // Only bytecode functions can be invoked as engine entry points.
+        // Sysops + `$rust_function` natives reach their handlers through
+        // an enclosing bytecode frame's `Call` / `YieldToCall` — there's
+        // no frame for them to return into at the top level.
+        if !matches!(kind, bex_vm_types::FunctionKind::Bytecode) {
+            return Err(EngineError::NotInvokableAsEntry {
+                name: function_name.to_string(),
+                kind: format!("{kind:?}"),
+            });
+        }
         self.validate_bound_args(function_name, &args)?;
         let return_type = self
             .function_return_type(function_name)
@@ -1143,7 +1204,12 @@ impl BexEngine {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        thread.vm.set_entry_point(function_index, &vm_args);
+        // Canary moved the root VM into `thread.vm` for BEP-034 spawn
+        // threading; pack/run still needs the generic-function type-args
+        // path. Combine both: typed-args setter on the threaded VM.
+        thread
+            .vm
+            .set_entry_point_with_type_args(function_index, &vm_args, type_args);
 
         // Initialize span tracking for the root call.
         // If host context is provided, nest under the host's span tree.
@@ -1295,47 +1361,37 @@ impl BexEngine {
         Ok(())
     }
 
-    /// Look up a function by name and return its heap pointer.
+    /// Look up a function by name and return its heap pointer + kind.
+    /// Resolution follows the canonical [`sys_types::resolve_name`] rule
+    /// (exact → `user.{name}` → unambiguous suffix match), shared with
+    /// `baml run`, `baml pack`, and the sysop LLM/`$new` resolvers.
     ///
-    /// Tries the exact name first, then falls back to `"user.{name}"` to handle
-    /// the compiler2 pipeline which qualifies user-defined functions with the
-    /// package prefix (e.g. `"main"` → `"user.main"`).
-    fn lookup_function(&self, function_name: &str) -> Result<HeapPtr, EngineError> {
-        // Try exact match first
-        if let Some((ptr, _kind)) = self.resolved_function_names.get(function_name) {
-            return Ok(*ptr);
-        }
-        // Fall back to "user." prefix (compiler2 qualifies user functions)
-        let qualified = format!("user.{function_name}");
-        self.resolved_function_names
-            .get(&qualified)
-            .map(|(ptr, _kind)| *ptr)
+    /// Returning the kind lets call-site gates (e.g.
+    /// `call_function_bound_args` rejecting non-Bytecode entries) avoid a
+    /// second heap dereference.
+    fn lookup_function(
+        &self,
+        function_name: &str,
+    ) -> Result<(HeapPtr, bex_vm_types::FunctionKind), EngineError> {
+        sys_types::resolve_name(&self.resolved_function_names, function_name)
+            .found()
+            .map(|(_k, (ptr, kind))| (*ptr, *kind))
             .ok_or_else(|| EngineError::FunctionNotFound {
                 name: function_name.to_string(),
             })
     }
 
-    /// Resolve a function name to the key actually present in `resolved_function_names`.
-    ///
-    /// Returns `Some(key)` where `key` is either `name` or `"user.{name}"`,
-    /// or `None` if neither is found.
+    /// Resolve a function name to the key actually present in
+    /// `resolved_function_names`. Uses [`sys_types::resolve_name`] so the
+    /// rule matches `lookup_function` exactly.
     fn resolve_function_name<'a>(&'a self, name: &str) -> Option<&'a str> {
-        if self.resolved_function_names.contains_key(name) {
-            return Some(
-                self.resolved_function_names
-                    .get_key_value(name)
-                    .map(|(k, _)| k.as_str())
-                    .unwrap(),
-            );
-        }
-        let qualified = format!("user.{name}");
-        self.resolved_function_names
-            .get_key_value(&qualified)
-            .map(|(k, _)| k.as_str())
+        sys_types::resolve_name(&self.resolved_function_names, name)
+            .found()
+            .map(|(k, _)| k)
     }
 
     /// Get the return type for a function by dereferencing its heap object.
-    fn function_return_type(&self, name: &str) -> Option<Ty> {
+    pub fn function_return_type(&self, name: &str) -> Option<Ty> {
         let resolved = self.resolve_function_name(name)?;
         let (ptr, _kind) = self.resolved_function_names.get(resolved)?;
         // SAFETY: ptr is from resolved_function_names, a compile-time object
@@ -1412,6 +1468,37 @@ impl BexEngine {
         self.resolve_function_name(name).is_some()
     }
 
+    /// Replace the process argv exposed to BAML via `baml.sys.argv()`.
+    ///
+    /// Allowed only before the engine is wrapped in an `Arc` and shared,
+    /// because we mutate `self` directly. Used by `baml run` to derive
+    /// `argv[1]` from the compiled program (BEP-027 §"`baml.argv`": the
+    /// path of the file containing root `main`).
+    pub fn set_argv(&mut self, argv: Vec<String>) {
+        self.argv = Arc::from(argv);
+    }
+
+    /// View of the current process argv. Used by hosts that need to
+    /// patch `argv[1]` based on resolution context (e.g. swapping a
+    /// script-alias name for the resolved function it expanded to).
+    pub fn argv(&self) -> &[String] {
+        &self.argv
+    }
+
+    /// Find a user-callable function by qualified name (`user.main`),
+    /// display name (`main`), or unambiguous namespace-leaf suffix
+    /// (`lorem.Func` resolving to `user.ns_lorem.Func`). Uses the
+    /// shared [`sys_types::resolve_name`] rule and post-filters to
+    /// user-callable bytecode functions.
+    pub fn find_user_function(&self, name: &str) -> Option<UserFunctionInfo> {
+        let (qualified, _) =
+            sys_types::resolve_name(&self.resolved_function_names, name).found()?;
+        let qualified = qualified.to_string();
+        self.user_functions()
+            .into_iter()
+            .find(|f| f.qualified_name == qualified)
+    }
+
     /// List all user-callable functions with signature info.
     pub fn user_functions(&self) -> Vec<UserFunctionInfo> {
         self.resolved_function_names
@@ -1424,6 +1511,8 @@ impl BexEngine {
                 match obj {
                     Object::Function(func) if func.origin.is_user_callable() => {
                         let display_name = name.strip_prefix("user.").unwrap_or(name).to_string();
+                        let is_llm =
+                            matches!(func.body_meta, Some(bex_vm_types::FunctionMeta::Llm { .. }));
                         Some(UserFunctionInfo {
                             qualified_name: name.clone(),
                             display_name,
@@ -1432,6 +1521,8 @@ impl BexEngine {
                             param_types: func.param_types.clone(),
                             param_has_default: func.param_has_default.clone(),
                             return_type: func.return_type.clone(),
+                            source_file: func.source_file.clone(),
+                            is_llm,
                         })
                     }
                     _ => None,
@@ -1881,6 +1972,13 @@ impl BexEngine {
                     } else {
                         self.vm_value_to_owned(thread.proof(), &value)
                     };
+                    // `baml.panics.Exit { code }` escaping all handlers is
+                    // the clean-termination path — surface it as an Exit
+                    // rather than a generic unhandled throw so the host
+                    // maps it to a process exit code.
+                    if let Some(code) = extract_exit_code(&external) {
+                        return Err(EngineError::Exit { code });
+                    }
                     return Err(EngineError::UnhandledThrow {
                         value: Box::new(external),
                         trace,
@@ -1889,6 +1987,15 @@ impl BexEngine {
                 Err(bex_vm::errors::VmError::Thrown(value)) => {
                     // Internal throw that escaped without unwinding — treat as
                     // unhandled with no trace.
+                    //
+                    // Two early-return paths combine here:
+                    //   - BEP-034 spawn: if this thread was running as a
+                    //     child future, route the throw to the parent via
+                    //     `settle_child_*` instead of bubbling out.
+                    //   - `baml.sys.exit(code)`: a synthetic throw carrying
+                    //     an exit-code value — surface as
+                    //     `EngineError::Exit` so the host can set the
+                    //     process exit code.
                     if let Some(future_id) = thread.vm_thread_settles_future() {
                         let is_cancel_panic = thread.vm_thread_cancel().is_cancelled()
                             && self.is_cancelled_panic(&value);
@@ -1901,6 +2008,9 @@ impl BexEngine {
                         return Ok(ThreadOutcome::SettledChild);
                     }
                     let external = self.vm_value_to_owned(thread.proof(), &value);
+                    if let Some(code) = extract_exit_code(&external) {
+                        return Err(EngineError::Exit { code });
+                    }
                     return Err(EngineError::UnhandledThrow {
                         value: Box::new(external),
                         trace: Vec::new(),

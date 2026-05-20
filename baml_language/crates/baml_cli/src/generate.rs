@@ -19,7 +19,7 @@ use baml_project::ProjectDatabase;
 use clap::Args;
 use codegen_python::{NamingConvention, OutputType};
 
-use crate::project_load::load_project_from;
+use crate::{project_load::load_project_from_reporting, reporter::Reporter};
 
 #[derive(Args, Clone, Debug)]
 pub struct GenerateArgs {
@@ -45,16 +45,24 @@ struct GeneratorDef {
 
 impl GenerateArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
-        let (db, from, baml_files) = load_project_from(&self.from)?;
+        let reporter = Reporter::new();
+        let (db, from, baml_files) = load_project_from_reporting(&self.from, &reporter)?;
         if baml_files.is_empty() {
-            eprintln!("No .baml files found in {}", from.display());
+            reporter.abandon();
+            crate::reporter::print_error(format_args!(
+                "no .baml files found in {}",
+                from.display()
+            ));
             return Ok(crate::ExitCode::Other);
         }
         let project = db
             .get_project()
             .ok_or_else(|| anyhow!("No project context"))?;
 
-        // Check for diagnostic errors.
+        // Compile-time diagnostics — same shape as run/pack: render the
+        // ariadne block after abandoning the spinner so the colored
+        // source-snippet output doesn't fight with the lamb.
+        reporter.spin("Checking", format!("{} file(s)", baml_files.len()));
         let source_files = db.get_source_files();
         let diagnostics = baml_project::collect_diagnostics(&db, project, &source_files);
         let errors: Vec<_> = diagnostics
@@ -62,7 +70,6 @@ impl GenerateArgs {
             .filter(|d| d.severity == Severity::Error)
             .collect();
         if !errors.is_empty() {
-            // Build source/path maps for ariadne rendering.
             let mut sources = HashMap::new();
             let mut file_paths = HashMap::new();
             for sf in &source_files {
@@ -74,8 +81,9 @@ impl GenerateArgs {
                 &errors.iter().copied().cloned().collect::<Vec<_>>(),
                 &sources,
                 &file_paths,
-                &render::RenderConfig::cli(),
+                &render::RenderConfig::cli_auto(),
             );
+            reporter.abandon();
             eprintln!("{rendered}");
             return Ok(crate::ExitCode::Other);
         }
@@ -84,6 +92,7 @@ impl GenerateArgs {
         // (e.g. python requires `naming_convention`). Validation runs here
         // — not during HIR lowering — so non-codegen tooling (LSP, formatter)
         // doesn't have to care about codegen-specific generator rules.
+        reporter.spin("Resolving", "generator blocks");
         let (generators, gen_diags) = discover_generators(&db, &from);
         if !gen_diags.is_empty() {
             let mut sources = HashMap::new();
@@ -97,20 +106,26 @@ impl GenerateArgs {
                 &gen_diags,
                 &sources,
                 &file_paths,
-                &render::RenderConfig::cli(),
+                &render::RenderConfig::cli_auto(),
             );
+            reporter.abandon();
             eprintln!("{rendered}");
             return Ok(crate::ExitCode::Other);
         }
 
         if generators.is_empty() {
-            eprintln!("No generator blocks found in BAML sources.");
-            eprintln!("Add a generator block to your .baml files, e.g.:");
-            eprintln!();
-            eprintln!("  generator my_client {{");
-            eprintln!("    output_type python/pydantic");
-            eprintln!("    output_dir \"..\"");
-            eprintln!("  }}");
+            reporter.abandon();
+            crate::reporter::print_error("no generator blocks found in BAML sources");
+            #[allow(clippy::print_stderr)]
+            {
+                eprintln!();
+                eprintln!("Add a generator block to your .baml files, e.g.:");
+                eprintln!();
+                eprintln!("  generator my_client {{");
+                eprintln!("    output_type python/pydantic");
+                eprintln!("    output_dir \"..\"");
+                eprintln!("  }}");
+            }
             return Ok(crate::ExitCode::Other);
         }
 
@@ -124,6 +139,7 @@ impl GenerateArgs {
         let mut total_files = 0;
 
         for generator in &generators {
+            reporter.spin("Generating", &generator.name);
             let output_dir = self
                 .output
                 .clone()
@@ -158,19 +174,28 @@ impl GenerateArgs {
                 count += 1;
             }
 
-            println!(
-                "Generator '{}': wrote {count} files to {}",
-                generator.name,
-                output_dir.display()
+            // Persistent status line in the scrollback — one per
+            // generator block. Matches cargo's `   Compiling foo
+            // v0.1.0` pattern: per-unit progress that sticks around
+            // above the spinner.
+            reporter.status(
+                "Generated",
+                format!(
+                    "{} ({count} file(s) → {})",
+                    generator.name,
+                    output_dir.display()
+                ),
             );
             total_files += count;
         }
 
         if total_files == 0 {
-            eprintln!("No files generated (no supported generators found).");
+            reporter.abandon();
+            crate::reporter::print_error("no files generated (no supported generators found)");
             return Ok(crate::ExitCode::Other);
         }
 
+        reporter.finish("Finished", format!("generated {total_files} file(s)"));
         Ok(crate::ExitCode::Success)
     }
 }

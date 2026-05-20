@@ -16,7 +16,7 @@ function server(req: int) -> bool throws never {
 
 //----
 //- diagnostics
-// Warning: unreachable arm
+// warning: unreachable arm
 //     ╭─[ throw_throws_never_unreachable_rethrow.baml:13:34 ]
 //     │
 //  13 │     Errors.AuthenticationError => { throw e }
@@ -25,7 +25,7 @@ function server(req: int) -> bool throws never {
 //     │ 
 //     │ Note: Error code: E0063
 // ────╯
-// Error: throws contract violation: `never` is missing user.Errors.AuthenticationError
+// error: throws contract violation: `never` is missing user.Errors.AuthenticationError
 //     ╭─[ throw_throws_never_unreachable_rethrow.baml:11:41 ]
 //     │
 //  11 │ function server(req: int) -> bool throws never {

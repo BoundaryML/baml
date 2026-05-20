@@ -111,7 +111,7 @@ SOURCE_FILE
       R_BRACE "}"
 
 === ERRORS ===
-Error: Expected client name, found '<'
+error: Expected client name, found '<'
     ╭─[ valid_generator.baml:22:11 ]
     │
  22 │     client<llm> MyClient
@@ -121,7 +121,7 @@ Error: Expected client name, found '<'
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '<', found '<'
+error: Expected Only 'client' and 'prompt' allowed in LLM function, found '<', found '<'
     ╭─[ valid_generator.baml:22:11 ]
     │
  22 │     client<llm> MyClient
@@ -131,7 +131,7 @@ Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '<', f
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'llm', found identifier
+error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'llm', found identifier
     ╭─[ valid_generator.baml:22:12 ]
     │
  22 │     client<llm> MyClient
@@ -141,7 +141,7 @@ Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'llm',
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '>', found '>'
+error: Expected Only 'client' and 'prompt' allowed in LLM function, found '>', found '>'
     ╭─[ valid_generator.baml:22:15 ]
     │
  22 │     client<llm> MyClient
@@ -151,7 +151,7 @@ Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '>', f
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'MyClient', found identifier
+error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'MyClient', found identifier
     ╭─[ valid_generator.baml:22:17 ]
     │
  22 │     client<llm> MyClient

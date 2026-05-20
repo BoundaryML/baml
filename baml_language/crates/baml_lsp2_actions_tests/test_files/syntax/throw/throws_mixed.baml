@@ -15,7 +15,7 @@ function ThrowsMixed(x: int) -> string throws string | Errors {
 
 //----
 //- diagnostics
-// Error: throws contract violation: `string | user.Errors` is missing user.Errors.AuthError
+// error: throws contract violation: `string | user.Errors` is missing user.Errors.AuthError
 //    ╭─[ throw_throws_mixed.baml:9:46 ]
 //    │
 //  9 │ function ThrowsMixed(x: int) -> string throws string | Errors {
@@ -24,7 +24,7 @@ function ThrowsMixed(x: int) -> string throws string | Errors {
 //    │ 
 //    │ Note: Error code: E0096
 // ───╯
-// Warning: extraneous throws declaration: user.Errors
+// warning: extraneous throws declaration: user.Errors
 //    ╭─[ throw_throws_mixed.baml:9:46 ]
 //    │
 //  9 │ function ThrowsMixed(x: int) -> string throws string | Errors {

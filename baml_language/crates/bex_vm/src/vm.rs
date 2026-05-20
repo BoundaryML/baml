@@ -1020,11 +1020,61 @@ impl BexVm {
     /// in a closure that carries the captured environment, then hands the
     /// closure pointer to a fresh `BexThread` which calls `set_entry_point`.
     pub fn set_entry_point(&mut self, function: HeapPtr, args: &[Value]) {
+        // BEP-034 spawn entry points can pass a `Closure` (carrying
+        // captured type args from the surrounding scope); host calls
+        // typically pass a bare `Function` and want no type args.
+        // Either way, fan out to `set_entry_point_with_type_args` so
+        // the type-arg-aware host call path
+        // (`BexEngine::call_function_bound_args`) shares one
+        // implementation with the spawn path.
         let type_args = match self.get_object(function) {
             Object::Function(_) => vec![],
             Object::Closure(closure) => closure.captured_type_args.clone(),
             other => panic!("expect function or closure as entry point, got {other:?}"),
         };
+        self.set_entry_point_with_type_args(function, args, type_args);
+    }
+
+    /// Like [`Self::set_entry_point`], but seeds the entry frame's
+    /// `type_args` slot. Use when the host invokes a generic function
+    /// (e.g. a user function with `<T>`) and needs to thread `T` through.
+    ///
+    /// Entry points must be [`bex_vm_types::FunctionKind::Bytecode`] —
+    /// either a bare `Object::Function` or an `Object::Closure` wrapping
+    /// one (BEP-034 spawn). The engine boundary
+    /// (`bex_engine::BexEngine::call_function_bound_args` — backticks
+    /// rather than an intra-doc link because `bex_vm` doesn't depend on
+    /// `bex_engine`; the relationship goes the other way) rejects
+    /// `SysOp` / `Native` / `NativeUnresolved` callees with
+    /// `EngineError::NotInvokableAsEntry` before reaching this method,
+    /// because there's no enclosing bytecode frame for a native to
+    /// `YieldToCall` back into at the top level.
+    pub fn set_entry_point_with_type_args(
+        &mut self,
+        function: HeapPtr,
+        args: &[Value],
+        type_args: Vec<baml_type::Ty>,
+    ) {
+        debug_assert!(
+            matches!(
+                self.get_object(function),
+                Object::Function(_) | Object::Closure(_)
+            ),
+            "expect function or closure as entry point, got {:?}",
+            self.get_object(function)
+        );
+        debug_assert!(
+            match self.get_object(function) {
+                Object::Function(f) => matches!(f.kind, bex_vm_types::FunctionKind::Bytecode),
+                Object::Closure(_) => true,
+                _ => false,
+            },
+            "entry points must be Function::Bytecode or Closure; engine \
+             boundary should have rejected this — see \
+             EngineError::NotInvokableAsEntry"
+        );
+
+        self.pending_call_type_args.clone_from(&type_args);
 
         self.stack.extend(args.iter().copied());
 
@@ -1437,6 +1487,7 @@ impl BexVm {
                 let msg = self.alloc_string(message);
                 (PanicClass::UserPanic, vec![msg])
             }
+            VmPanic::Exit { code } => (PanicClass::Exit, vec![Value::Int(code)]),
             VmPanic::AllocFailure { message } => {
                 let msg = self.alloc_string(message);
                 (PanicClass::AllocFailure, vec![msg])
@@ -2144,6 +2195,7 @@ impl BexVm {
         // `EarlyYield`, etc.), which is the right granularity for the
         // counter to reset at.
         self.early_yield.reset();
+
         match self.exec_inner() {
             Err(VmError::InternalError(err)) => {
                 let trace = self.capture_stack_trace();

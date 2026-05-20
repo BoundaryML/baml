@@ -53,7 +53,7 @@ function fo() -> int {
 
 //----
 //- diagnostics
-// Error: type `user.Color` has no member `get_re`
+// error: type `user.Color` has no member `get_re`
 //     ╭─[ class.baml:44:29 ]
 //     │
 //  44 │   let first_red = colors[0].get_re();
@@ -62,7 +62,7 @@ function fo() -> int {
 //     │ 
 //     │ Note: Error code: E0007
 // ────╯
-// Error: type `user.Color` has no member `gree`
+// error: type `user.Color` has no member `gree`
 //     ╭─[ class.baml:45:32 ]
 //     │
 //  45 │   let second_green = colors[1].gree;
@@ -71,7 +71,7 @@ function fo() -> int {
 //     │ 
 //     │ Note: Error code: E0007
 // ────╯
-// Error: type `user.Color` has no member `re`
+// error: type `user.Color` has no member `re`
 //     ╭─[ class.baml:47:23 ]
 //     │
 //  47 │   let sum = colors[0].re + colors[1].gree + colors[2].blu;
@@ -80,7 +80,7 @@ function fo() -> int {
 //     │ 
 //     │ Note: Error code: E0007
 // ────╯
-// Error: type `user.Color` has no member `gree`
+// error: type `user.Color` has no member `gree`
 //     ╭─[ class.baml:47:38 ]
 //     │
 //  47 │   let sum = colors[0].re + colors[1].gree + colors[2].blu;
@@ -89,7 +89,7 @@ function fo() -> int {
 //     │ 
 //     │ Note: Error code: E0007
 // ────╯
-// Error: type `user.Color` has no member `blu`
+// error: type `user.Color` has no member `blu`
 //     ╭─[ class.baml:47:55 ]
 //     │
 //  47 │   let sum = colors[0].re + colors[1].gree + colors[2].blu;
@@ -98,7 +98,7 @@ function fo() -> int {
 //     │ 
 //     │ Note: Error code: E0007
 // ────╯
-// Error: type `user.Color` has no member `get_re`
+// error: type `user.Color` has no member `get_re`
 //     ╭─[ class.baml:49:27 ]
 //     │
 //  49 │   let nested = [colors[0].get_re(), colors[1].get_gree(), colors[2].get_blu()];
@@ -107,7 +107,7 @@ function fo() -> int {
 //     │ 
 //     │ Note: Error code: E0007
 // ────╯
-// Error: type `user.Color` has no member `get_gree`
+// error: type `user.Color` has no member `get_gree`
 //     ╭─[ class.baml:49:47 ]
 //     │
 //  49 │   let nested = [colors[0].get_re(), colors[1].get_gree(), colors[2].get_blu()];
@@ -116,7 +116,7 @@ function fo() -> int {
 //     │ 
 //     │ Note: Error code: E0007
 // ────╯
-// Error: type `user.Color` has no member `get_blu`
+// error: type `user.Color` has no member `get_blu`
 //     ╭─[ class.baml:49:69 ]
 //     │
 //  49 │   let nested = [colors[0].get_re(), colors[1].get_gree(), colors[2].get_blu()];

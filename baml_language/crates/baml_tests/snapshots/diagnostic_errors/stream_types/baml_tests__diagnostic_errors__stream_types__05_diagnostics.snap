@@ -1,9 +1,8 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 37388
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [validation] Error: Duplicate class `Inner`
+  [validation] error: Duplicate class `Inner`
     ╭─[ complex.baml:7:7 ]
     │
   7 │ class Inner {
@@ -19,7 +18,7 @@ assertion_line: 37388
     │ Note: Error code: E0011
 ────╯
 
-  [type] Error: type mismatch: expected int, got string
+  [type] error: type mismatch: expected int, got string
     ╭─[ main.baml:31:7 ]
     │
  31 │ class Inner {
@@ -29,7 +28,7 @@ assertion_line: 37388
     │ Note: Error code: E0001
 ────╯
 
-  [validation] Error: Name `Foo` defined 2 times as: class, type
+  [validation] error: Name `Foo` defined 2 times as: class, type
      ╭─[ basic.baml:1:7 ]
      │
    1 │ class Foo {
@@ -45,7 +44,7 @@ assertion_line: 37388
      │ Note: Error code: E0011
 ─────╯
 
-  [validation] Error: Name `Bar` defined 2 times as: class, type
+  [validation] error: Name `Bar` defined 2 times as: class, type
      ╭─[ basic.baml:8:7 ]
      │
    8 │ class Bar {

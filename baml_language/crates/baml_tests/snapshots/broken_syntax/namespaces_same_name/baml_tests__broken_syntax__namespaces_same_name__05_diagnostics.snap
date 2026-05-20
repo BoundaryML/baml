@@ -1,9 +1,8 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 1066
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [parse] Error: Expected return type (->), found throws
+  [parse] error: Expected return type (->), found throws
     ╭─[ main.baml:15:31 ]
     │
  15 │ function ThrowsHttpResponse() throws root.http.Response {

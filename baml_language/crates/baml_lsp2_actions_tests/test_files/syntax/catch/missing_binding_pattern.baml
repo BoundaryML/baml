@@ -11,7 +11,7 @@ function MissingBindingPattern(x: int) -> string {
 
 //----
 //- diagnostics
-// Error: Expected '(', found '{'
+// error: Expected '(', found '{'
 //    ╭─[ catch_missing_binding_pattern.baml:6:20 ]
 //    │
 //  6 │   MayFail(x) catch {

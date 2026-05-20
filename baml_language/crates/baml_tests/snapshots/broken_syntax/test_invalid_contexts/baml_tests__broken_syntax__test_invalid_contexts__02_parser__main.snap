@@ -137,7 +137,7 @@ SOURCE_FILE
       R_BRACE "}"
 
 === ERRORS ===
-Error: test blocks are only allowed at the top level or inside a testset
+error: test blocks are only allowed at the top level or inside a testset
    ╭─[ main.baml:4:3 ]
    │
  4 │   test "inside function" {
@@ -147,7 +147,7 @@ Error: test blocks are only allowed at the top level or inside a testset
    │ Note: Error code: E0010
 ───╯
 
-Error: testset blocks are only allowed at the top level or inside a testset
+error: testset blocks are only allowed at the top level or inside a testset
     ╭─[ main.baml:10:3 ]
     │
  10 │   testset "inside function set" {

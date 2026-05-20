@@ -434,6 +434,16 @@ function baml.json.JsonSerializationError.to_json(self: baml.json.JsonSerializat
 function baml.json.JsonSerializationError.from_json(j: baml.json.json) -> baml.json.JsonSerializationError throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   JsonSerializationError { message: baml.json.from_json<string>(baml.json.field(j, "message")), path: baml.json.from_json<string>(baml.json.field(j, "path")), reason: baml.json.from_json<string>(baml.json.field(j, "reason")) } : baml.json.JsonSerializationError
 }
+function baml.json.serialize<T>(v: T) -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  { : string
+    stringify(to_json<T>(v)) : string
+  }
+}
+function baml.json.deserialize<T>(s: string) -> T throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  { : T
+    from_json<T>(parse(s)) : T
+  }
+}
 type baml.json.json$stream = null | bool | int | float | string | baml.json.json$stream[] | map<string, baml.json.json$stream>
 class baml.json.JsonParseError$stream {
   message: null | string
@@ -1324,6 +1334,15 @@ function baml.panics.UserPanic.to_json(self: baml.panics.UserPanic) -> baml.json
 function baml.panics.UserPanic.from_json(j: baml.json.json) -> baml.panics.UserPanic throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   UserPanic { message: baml.json.from_json<string>(baml.json.field(j, "message")) } : baml.panics.UserPanic
 }
+class baml.panics.Exit {
+  code: int
+}
+function baml.panics.Exit.to_json(self: baml.panics.Exit) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "code": self.code.to_json() } : map<string, baml.json.json>
+}
+function baml.panics.Exit.from_json(j: baml.json.json) -> baml.panics.Exit throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Exit { code: baml.json.from_json<int>(baml.json.field(j, "code")) } : baml.panics.Exit
+}
 class baml.panics.AllocFailure {
   message: string
 }
@@ -1343,7 +1362,7 @@ function baml.panics.HostUnavailable.to_json(self: baml.panics.HostUnavailable) 
 function baml.panics.HostUnavailable.from_json(j: baml.json.json) -> baml.panics.HostUnavailable throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   HostUnavailable { resource: baml.json.from_json<string>(baml.json.field(j, "resource")), message: baml.json.from_json<string>(baml.json.field(j, "message")) } : baml.panics.HostUnavailable
 }
-type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.Cancelled | baml.panics.UserPanic | baml.panics.AllocFailure | baml.panics.HostUnavailable
+type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.Cancelled | baml.panics.UserPanic | baml.panics.Exit | baml.panics.AllocFailure | baml.panics.HostUnavailable
 class baml.panics.DivisionByZero$stream {
   dividend: null | int
 }
@@ -1369,6 +1388,9 @@ class baml.panics.Cancelled$stream {
 class baml.panics.UserPanic$stream {
   message: null | string
 }
+class baml.panics.Exit$stream {
+  code: null | int
+}
 class baml.panics.AllocFailure$stream {
   message: null | string
 }
@@ -1376,7 +1398,7 @@ class baml.panics.HostUnavailable$stream {
   resource: null | string
   message: null | string
 }
-type baml.panics.Panic$stream = baml.panics.DivisionByZero$stream | baml.panics.IndexOutOfBounds$stream | baml.panics.MapKeyNotFound$stream | baml.panics.StackOverflow$stream | baml.panics.AssertionFailed$stream | baml.panics.Unreachable$stream | baml.panics.Cancelled$stream | baml.panics.UserPanic$stream | baml.panics.AllocFailure$stream | baml.panics.HostUnavailable$stream
+type baml.panics.Panic$stream = baml.panics.DivisionByZero$stream | baml.panics.IndexOutOfBounds$stream | baml.panics.MapKeyNotFound$stream | baml.panics.StackOverflow$stream | baml.panics.AssertionFailed$stream | baml.panics.Unreachable$stream | baml.panics.Cancelled$stream | baml.panics.UserPanic$stream | baml.panics.Exit$stream | baml.panics.AllocFailure$stream | baml.panics.HostUnavailable$stream
 
 --- <builtin>/baml/ns_stream/stream.baml ---
 class baml.stream.StreamFinished {

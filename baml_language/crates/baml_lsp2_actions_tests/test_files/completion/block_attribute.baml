@@ -6,7 +6,7 @@ class Person {
 //----
 //- diagnostics
 // (parse error expected - incomplete block attribute)
-// Error: Expected attribute name, found '}'
+// error: Expected attribute name, found '}'
 //    ╭─[ block_attribute.baml:4:1 ]
 //    │
 //  4 │ }

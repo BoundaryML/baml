@@ -1,9 +1,8 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 29034
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [validation] Error: Name `A` defined 3 times as: class, class, type
+  [validation] error: Name `A` defined 3 times as: class, class, type
    ╭─[ repro.baml:5:7 ]
    │
  1 │ class A {

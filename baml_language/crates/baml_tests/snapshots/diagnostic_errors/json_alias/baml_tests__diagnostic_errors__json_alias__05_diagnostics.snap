@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: type mismatch: expected int, got baml.json.json
+  [type] error: type mismatch: expected int, got baml.json.json
    ╭─[ json_alias.baml:5:3 ]
    │
  5 │   j

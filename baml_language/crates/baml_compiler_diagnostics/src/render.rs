@@ -136,11 +136,37 @@ impl Default for RenderConfig {
 }
 
 impl RenderConfig {
-    /// Configuration for CLI output (colored Ariadne).
+    /// Configuration for CLI output, always colored (Ariadne).
+    ///
+    /// Prefer [`Self::cli_auto`] for actual CLI surfaces — that variant
+    /// strips ANSI codes when stderr isn't a TTY (e.g. when the user pipes
+    /// to a file, redirects in CI, or runs through `less`) and when the
+    /// `NO_COLOR` env var is set (<https://no-color.org>).
     pub fn cli() -> Self {
         Self {
             format: DiagnosticFormat::Ariadne,
             color: true,
+            show_error_codes: true,
+        }
+    }
+
+    /// Configuration for CLI output with auto-detected color.
+    ///
+    /// Color is enabled when *both* of:
+    ///   - the `NO_COLOR` env var is unset (per <https://no-color.org>), and
+    ///   - `stderr` is a TTY.
+    ///
+    /// Use this from any `baml` subcommand that renders diagnostics so
+    /// `baml run 2> errors.log` (or piping through `less`/CI) doesn't get
+    /// raw ANSI codes embedded.
+    pub fn cli_auto() -> Self {
+        use std::io::IsTerminal;
+        Self {
+            format: DiagnosticFormat::Ariadne,
+            color: Self::pure_color_decision(
+                std::env::var_os("NO_COLOR").is_some(),
+                std::io::stderr().is_terminal(),
+            ),
             show_error_codes: true,
         }
     }
@@ -152,6 +178,13 @@ impl RenderConfig {
             color: false,
             show_error_codes: true,
         }
+    }
+
+    /// Pure helper underlying [`Self::cli_auto`]. Extracted so the
+    /// behavior can be unit-tested without manipulating process env or
+    /// terminal state.
+    fn pure_color_decision(no_color_set: bool, stderr_is_tty: bool) -> bool {
+        !no_color_set && stderr_is_tty
     }
 
     /// Configuration for concise one-line output.
@@ -232,10 +265,23 @@ fn render_ariadne(
     file_paths: &HashMap<FileId, PathBuf>,
     color: bool,
 ) -> String {
+    // BAML CLI uses lowercase `error:` / `warning:` everywhere (matching
+    // cargo, rustc, clap) — ariadne's built-in `ReportKind::Error` /
+    // `Warning` render capitalized, so swap to `Custom(name, color)`
+    // with the same red/yellow ariadne would have picked anyway.
+    //
+    // (and yes, ariadne not letting `Custom` participate in
+    // `with_color(false)` is genuinely dumb — `Custom(_, color)` is the
+    // one match arm that unconditionally returns `Some(color)` regardless
+    // of the config flag, so plain-text mode leaks ANSI escapes for the
+    // keyword. We work around it by stripping ANSI from the rendered
+    // string below when `color = false`. Real fix would be upstreaming a
+    // `Custom { name, color: Option<Color> }` shape; until then, strip.)
     let report_kind = match diagnostic.severity {
-        Severity::Error => ReportKind::Error,
-        Severity::Warning => ReportKind::Warning,
-        Severity::Info => ReportKind::Advice,
+        Severity::Error => ReportKind::Custom("error", ariadne::Color::Red),
+        Severity::Warning => ReportKind::Custom("warning", ariadne::Color::Yellow),
+        // `Advice` (info) keeps ariadne's default 147 (a soft blue/purple).
+        Severity::Info => ReportKind::Custom("info", ariadne::Color::Fixed(147)),
     };
 
     // Get the primary span for the report location
@@ -274,8 +320,65 @@ fn render_ariadne(
         .with_config(ariadne::Config::default().with_color(color))
         .finish();
 
-    // Render to string using SourceCache for proper filename display
-    render_report_to_string(&report, sources, file_paths)
+    // Render to string using SourceCache for proper filename display.
+    let rendered = render_report_to_string(&report, sources, file_paths);
+
+    // See the rant above the `report_kind` match — ariadne paints the
+    // `Custom` keyword unconditionally, so `with_color(false)` doesn't
+    // reach it. Strip ANSI from the final string so snapshots / piped
+    // output / `NO_COLOR` users get plain text without losing the
+    // lowercase keyword we get from `Custom`.
+    if color {
+        rendered
+    } else {
+        strip_ansi(&rendered)
+    }
+}
+
+/// Strip ANSI SGR escape sequences (`\x1b[...m`) from `s`. Inlined to
+/// avoid a dep on `strip-ansi-escapes` for ~25 lines — only used in the
+/// no-color path of [`render_ariadne`].
+///
+/// Preserves malformed input:
+///   - `\x1b` not followed by `[` is kept verbatim (a stray ESC byte is
+///     unusual but shouldn't silently eat the next character).
+///   - `\x1b[…` with no terminating `m` (truncated stream) is written
+///     back verbatim instead of dropping every character to EOF.
+fn strip_ansi(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '\x1b' {
+            out.push(c);
+            continue;
+        }
+        // Peek — don't consume — so a non-`[` follow-up survives.
+        if chars.peek() != Some(&'[') {
+            out.push('\x1b');
+            continue;
+        }
+        chars.next(); // commit to consuming the `[`
+        // Buffer the body in case the sequence is unterminated; we
+        // need to write it back verbatim then. SGR bodies are short
+        // (a handful of digits + `;`s), so the allocation is trivial.
+        let mut buffered = String::new();
+        let mut terminated = false;
+        for inner in chars.by_ref() {
+            if inner == 'm' {
+                terminated = true;
+                break;
+            }
+            buffered.push(inner);
+        }
+        if !terminated {
+            // Truncated escape — surface the bytes rather than swallow
+            // the rest of the line.
+            out.push('\x1b');
+            out.push('[');
+            out.push_str(&buffered);
+        }
+    }
+    out
 }
 
 /// Render a diagnostic in concise one-line format.
@@ -349,6 +452,35 @@ mod tests {
     use super::*;
     use crate::diagnostic::DiagnosticId;
 
+    // ── cli_auto color-decision logic ─────────────────────────────────
+
+    /// `NO_COLOR=…` always wins over TTY detection. (<https://no-color.org>)
+    #[test]
+    fn no_color_env_disables_color_even_on_tty() {
+        assert!(!RenderConfig::pure_color_decision(true, true));
+    }
+
+    /// Piped/redirected stderr disables color even with `NO_COLOR` unset.
+    /// Catches the original symptom: `baml run 2> errors.log` was getting
+    /// raw ANSI codes embedded in the log file.
+    #[test]
+    fn non_tty_stderr_disables_color() {
+        assert!(!RenderConfig::pure_color_decision(false, false));
+    }
+
+    /// The only path that produces colored output: stderr is a TTY AND
+    /// the user hasn't opted out via `NO_COLOR`.
+    #[test]
+    fn tty_without_no_color_enables_color() {
+        assert!(RenderConfig::pure_color_decision(false, true));
+    }
+
+    /// Defense in depth: both signals say "no" → definitely no color.
+    #[test]
+    fn no_color_and_non_tty_disables_color() {
+        assert!(!RenderConfig::pure_color_decision(true, false));
+    }
+
     fn make_source() -> HashMap<FileId, String> {
         let mut sources = HashMap::new();
         sources.insert(FileId::new(0), "class Foo {\n  name string\n}".to_string());
@@ -359,6 +491,36 @@ mod tests {
         let mut paths = HashMap::new();
         paths.insert(FileId::new(0), PathBuf::from("test.baml"));
         paths
+    }
+
+    // ── strip_ansi: malformed-input preservation ───────────────────────
+
+    /// Well-formed SGR sequence: stripped, surrounding text intact.
+    #[test]
+    fn strip_ansi_removes_well_formed_sgr() {
+        assert_eq!(
+            strip_ansi("hello \x1b[31mred\x1b[0m world"),
+            "hello red world"
+        );
+    }
+
+    /// Bare ESC (no `[` follow-up) is preserved together with the next
+    /// character — regression for the earlier bug where `chars.next()`
+    /// dropped the byte after ESC unconditionally.
+    #[test]
+    fn strip_ansi_preserves_bare_escape_and_next_char() {
+        assert_eq!(strip_ansi("a\x1bXb"), "a\x1bXb");
+        // Trailing bare ESC (no follow-up at all) survives too.
+        assert_eq!(strip_ansi("end\x1b"), "end\x1b");
+    }
+
+    /// Unterminated `ESC[…` (truncated stream — no `m`) is written back
+    /// verbatim instead of swallowing the rest of the input. Without
+    /// this the old loop would drop everything past the `[`.
+    #[test]
+    fn strip_ansi_preserves_unterminated_csi() {
+        assert_eq!(strip_ansi("ok \x1b[31;1"), "ok \x1b[31;1");
+        assert_eq!(strip_ansi("\x1b[31"), "\x1b[31");
     }
 
     fn test_span() -> Span {

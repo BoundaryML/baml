@@ -21,7 +21,7 @@ class InterfaceOne {
 
 //----
 //- diagnostics
-// Error: unresolved type: strin
+// error: unresolved type: strin
 //    ╭─[ class_spelling_error.baml:2:12 ]
 //    │
 //  2 │   interface strin
@@ -30,7 +30,7 @@ class InterfaceOne {
 //    │ 
 //    │ Note: Error code: E0002
 // ───╯
-// Error: unresolved type: InterfaceT
+// error: unresolved type: InterfaceT
 //    ╭─[ class_spelling_error.baml:6:7 ]
 //    │
 //  6 │   uses InterfaceT

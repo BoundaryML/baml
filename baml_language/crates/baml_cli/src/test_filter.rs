@@ -32,7 +32,6 @@ impl TestFilter {
         }
     }
 
-    #[allow(clippy::print_stderr)]
     pub fn filter_expr_match(filter_expr: &str, subject: &str) -> bool {
         if filter_expr.is_empty() {
             return true;
@@ -40,7 +39,7 @@ impl TestFilter {
 
         Regex::new(&format!("^{}$", filter_expr.replace("*", ".*"))).map_or_else(
             |e| {
-                eprintln!("Failed to parse filter: {e}");
+                crate::reporter::print_error(format_args!("Failed to parse filter: {e}"));
                 false
             },
             |r| r.is_match(subject),

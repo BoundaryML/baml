@@ -20,6 +20,7 @@ use std::{
 
 use baml_type::Ty;
 use indexmap::IndexMap;
+use serde::{Deserialize, Serialize};
 pub use tokio_util::sync::CancellationToken;
 
 use crate::{bytecode::Bytecode, heap_ptr::HeapPtr, indexable::ObjectPool};
@@ -44,7 +45,7 @@ pub mod type_tags {
 ///
 /// Note: At compile time, globals use `ConstValue` (with `ObjectIndex` for object refs).
 /// At load time (`BexEngine::new`), these are converted to `Value` (with `HeapPtr`).
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Program {
     /// Object pool containing functions, classes, strings, etc.
     pub objects: ObjectPool,
@@ -95,7 +96,7 @@ pub struct Program {
 /// Metadata for building a client tree at runtime.
 ///
 /// Stored on `Program` during compilation, transferred to `SysOpContext` during engine construction.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ClientBuildMeta {
     /// Provider type mapped to client type enum.
     pub client_type: ClientBuildType,
@@ -108,7 +109,7 @@ pub struct ClientBuildMeta {
 }
 
 /// Client type for build metadata (mirrors runtime `LlmClientType`).
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub enum ClientBuildType {
     #[default]
     Primitive,
@@ -117,7 +118,7 @@ pub enum ClientBuildType {
 }
 
 /// Retry policy metadata stored at compile time.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RetryPolicyMeta {
     pub max_retries: i64,
     pub initial_delay_ms: i64,
@@ -158,7 +159,7 @@ impl Program {
 /// reference. Each `OpErrorKind` variant maps to exactly one category via
 /// `OpErrorKind::category()`. Rich detail stays in `OpErrorKind`; this enum
 /// is purely for contract enforcement and compiler analysis.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SysOpErrorCategory {
     Io,
     Timeout,
@@ -190,7 +191,7 @@ impl std::fmt::Display for SysOpErrorCategory {
 }
 
 /// Contract-level panic categories for `sys_op` panic contracts.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SysOpPanicCategory {
     HostPanic,
 }
@@ -277,8 +278,49 @@ unsafe impl Send for FunctionKind {}
 #[allow(unsafe_code)]
 unsafe impl Sync for FunctionKind {}
 
+impl Serialize for FunctionKind {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // Native pointers are runtime-only; serialize as NativeUnresolved.
+        match self {
+            Self::Native(_) => Self::NativeUnresolved.serialize(serializer),
+            _ => {
+                #[derive(Serialize)]
+                enum FunctionKindRef<'a> {
+                    Bytecode,
+                    SysOp(&'a SysOp),
+                    NativeUnresolved,
+                }
+                match self {
+                    Self::Bytecode => FunctionKindRef::Bytecode.serialize(serializer),
+                    Self::SysOp(op) => FunctionKindRef::SysOp(op).serialize(serializer),
+                    Self::NativeUnresolved => {
+                        FunctionKindRef::NativeUnresolved.serialize(serializer)
+                    }
+                    Self::Native(_) => unreachable!(),
+                }
+            }
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for FunctionKind {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        enum FunctionKindDe {
+            Bytecode,
+            SysOp(SysOp),
+            NativeUnresolved,
+        }
+        match FunctionKindDe::deserialize(deserializer)? {
+            FunctionKindDe::Bytecode => Ok(Self::Bytecode),
+            FunctionKindDe::SysOp(op) => Ok(Self::SysOp(op)),
+            FunctionKindDe::NativeUnresolved => Ok(Self::NativeUnresolved),
+        }
+    }
+}
+
 /// LLM-specific metadata for a function.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum FunctionMeta {
     Llm {
         prompt_template: String,
@@ -286,7 +328,7 @@ pub enum FunctionMeta {
     },
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FunctionOrigin {
     UserDefined,
     Companion,
@@ -311,7 +353,7 @@ impl FunctionOrigin {
 }
 
 /// Represents any Baml function.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Function {
     /// Function name.
     pub name: String,
@@ -428,7 +470,7 @@ impl Function {
 }
 
 /// A field within a runtime class, carrying type and schema metadata.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ClassField {
     pub name: String,
     /// Resolved field type with `TypeVar`s erased to `Ty::Void`.
@@ -450,7 +492,7 @@ pub struct ClassField {
 }
 
 /// Runtime class representation.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Class {
     /// Type identity: carries short name, module path, and display name.
     /// Use `name.display_name` for the display string (e.g. "baml.llm.OrchestrationStep" or "Person").
@@ -480,7 +522,7 @@ impl std::fmt::Display for Class {
 }
 
 /// Runtime instance representation.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Instance {
     /// Pointer to the class object in the heap.
     pub class: HeapPtr,
@@ -501,7 +543,7 @@ impl std::fmt::Display for Instance {
 }
 
 /// A variant within a runtime enum, carrying schema metadata.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EnumVariant {
     pub name: String,
     pub description: Option<String>,
@@ -510,7 +552,7 @@ pub struct EnumVariant {
 }
 
 /// Runtime enum representation.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Enum {
     /// Type identity: carries short name, module path, and display name.
     /// Use `name.display_name` for the display string.
@@ -536,7 +578,7 @@ impl std::fmt::Display for Enum {
 }
 
 /// Same as [`Instance`] but for enums.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Variant {
     /// Pointer to the enum object in the heap.
     pub enm: HeapPtr,
@@ -575,7 +617,7 @@ pub enum SentinelKind {
 /// strings do not yet have referential equality, i.e "hello" can be represented with two different
 /// object indices. This makes comparisons nontrivial since they have to fetch the string. Same
 /// would happen with any other object type that we don't want to have referential equality for.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Value {
     /// Internal sentinel for an omitted defaulted argument.
     ///
@@ -657,7 +699,7 @@ include!(concat!(env!("OUT_DIR"), "/panics_generated.rs"));
 /// Self-contained type with no dependency on HIR or external types.
 /// Converted from HIR's `TestArgValue` during emission, and converted
 /// to `BexExternalValue` in the engine for function calls.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum TestArgValue {
     Null,
     Int(i64),
@@ -676,7 +718,7 @@ pub enum TestArgValue {
 }
 
 /// A compiled test case, ready for execution.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TestCase {
     /// Test name (e.g., "`TestAddOne`").
     pub name: String,
@@ -695,7 +737,7 @@ pub struct TestCase {
 /// `LoadType` instruction reads the `TyTemplate` directly from the constant pool at execution
 /// time and substitutes type arguments from `frame.type_args` before allocating an
 /// `Object::Type` on the heap.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum ConstValue {
     OmittedArg,
     Null,
@@ -862,8 +904,85 @@ const _: () = assert!(
     "Object enum size regression — expected <= 80 bytes"
 );
 
+// Custom serde for Object: RustData and Collector contain non-serializable
+// trait objects (Arc<dyn Any>). They should never appear in a compiled Program.
+#[derive(Serialize, Deserialize)]
+enum ObjectSerde {
+    Function(Box<Function>),
+    Class(Box<Class>),
+    Instance(Instance),
+    Enum(Box<Enum>),
+    Variant(Variant),
+    Closure(Closure),
+    BoundMethod(BoundMethod),
+    Cell(Cell),
+    String(String),
+    Uint8Array(Vec<u8>),
+    Array(Vec<Value>),
+    Map(IndexMap<String, Value>),
+    Future(Future),
+    UnscheduledFuture(UnscheduledFuture),
+    Type(Box<baml_type::Ty>),
+}
+
+impl Serialize for Object {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let proxy = match self {
+            Self::Function(v) => ObjectSerde::Function(v.clone()),
+            Self::Class(v) => ObjectSerde::Class(v.clone()),
+            Self::Instance(v) => ObjectSerde::Instance(v.clone()),
+            Self::Enum(v) => ObjectSerde::Enum(v.clone()),
+            Self::Variant(v) => ObjectSerde::Variant(v.clone()),
+            Self::Closure(v) => ObjectSerde::Closure(v.clone()),
+            Self::BoundMethod(v) => ObjectSerde::BoundMethod(v.clone()),
+            Self::Cell(v) => ObjectSerde::Cell(v.clone()),
+            Self::String(v) => ObjectSerde::String(v.clone()),
+            Self::Uint8Array(v) => ObjectSerde::Uint8Array(v.clone()),
+            Self::Array(v) => ObjectSerde::Array(v.clone()),
+            Self::Map(v) => ObjectSerde::Map(v.clone()),
+            Self::Future(v) => ObjectSerde::Future(v.clone()),
+            Self::UnscheduledFuture(v) => ObjectSerde::UnscheduledFuture(v.clone()),
+            Self::Type(v) => ObjectSerde::Type(v.clone()),
+            Self::RustData(_) => {
+                return Err(serde::ser::Error::custom("RustData cannot be serialized"));
+            }
+            Self::Collector(_) => {
+                return Err(serde::ser::Error::custom("Collector cannot be serialized"));
+            }
+            #[cfg(feature = "heap_debug")]
+            Self::Sentinel(_) => {
+                return Err(serde::ser::Error::custom("Sentinel cannot be serialized"));
+            }
+        };
+        proxy.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Object {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let proxy = ObjectSerde::deserialize(deserializer)?;
+        Ok(match proxy {
+            ObjectSerde::Function(v) => Self::Function(v),
+            ObjectSerde::Class(v) => Self::Class(v),
+            ObjectSerde::Instance(v) => Self::Instance(v),
+            ObjectSerde::Enum(v) => Self::Enum(v),
+            ObjectSerde::Variant(v) => Self::Variant(v),
+            ObjectSerde::Closure(v) => Self::Closure(v),
+            ObjectSerde::BoundMethod(v) => Self::BoundMethod(v),
+            ObjectSerde::Cell(v) => Self::Cell(v),
+            ObjectSerde::String(v) => Self::String(v),
+            ObjectSerde::Uint8Array(v) => Self::Uint8Array(v),
+            ObjectSerde::Array(v) => Self::Array(v),
+            ObjectSerde::Map(v) => Self::Map(v),
+            ObjectSerde::Future(v) => Self::Future(v),
+            ObjectSerde::UnscheduledFuture(v) => Self::UnscheduledFuture(v),
+            ObjectSerde::Type(v) => Self::Type(v),
+        })
+    }
+}
+
 /// A closure: a function object paired with a list of captured variable cells.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Closure {
     /// Pointer to the underlying `Object::Function`.
     pub function: HeapPtr,
@@ -884,7 +1003,7 @@ pub struct Closure {
 ///
 /// Created by `MakeBoundMethod`. The receiver is inserted as `self`
 /// at call time by `CallIndirect`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BoundMethod {
     /// Pointer to the underlying `Object::Function`.
     pub function: HeapPtr,
@@ -896,7 +1015,7 @@ pub struct BoundMethod {
 ///
 /// Variables that are closed over are heap-allocated as `Cell` objects so that
 /// both the enclosing scope and any closures share the same storage.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Cell {
     pub value: Value,
 }
@@ -1015,6 +1134,41 @@ pub struct Future {
 // `FutureManager`'s state mutex.
 unsafe impl Send for Future {}
 unsafe impl Sync for Future {}
+
+// Futures are runtime-only; they never appear in a compiled Program. Reject
+// serialization explicitly so a malformed program fails fast.
+impl Serialize for Future {
+    fn serialize<S: serde::Serializer>(&self, _serializer: S) -> Result<S::Ok, S::Error> {
+        Err(serde::ser::Error::custom("Future cannot be serialized"))
+    }
+}
+
+impl<'de> Deserialize<'de> for Future {
+    fn deserialize<D: serde::Deserializer<'de>>(_deserializer: D) -> Result<Self, D::Error> {
+        Err(serde::de::Error::custom("Future cannot be deserialized"))
+    }
+}
+
+// `UnscheduledFuture` is a runtime spawn-request slot — same lifecycle
+// shape as `Future`, never appears in a compiled `Program`. The pack
+// envelope (`baml_exec::PackEnvelope`) serializes the bytecode + the
+// constant heap; if an `UnscheduledFuture` ever reaches the serializer
+// that's a malformed program and we want to fail fast.
+impl Serialize for UnscheduledFuture {
+    fn serialize<S: serde::Serializer>(&self, _serializer: S) -> Result<S::Ok, S::Error> {
+        Err(serde::ser::Error::custom(
+            "UnscheduledFuture cannot be serialized",
+        ))
+    }
+}
+
+impl<'de> Deserialize<'de> for UnscheduledFuture {
+    fn deserialize<D: serde::Deserializer<'de>>(_deserializer: D) -> Result<Self, D::Error> {
+        Err(serde::de::Error::custom(
+            "UnscheduledFuture cannot be deserialized",
+        ))
+    }
+}
 
 // `Future::read` calls `MaybeUninit::<Value>::assume_init_read`, which is
 // sound only because `Value: Copy`. If `Value` ever gains a non-trivial
@@ -1369,7 +1523,7 @@ pub struct UnscheduledFuture {
 ///
 /// Unlike `bex_engine::CallId`, these are created for every scheduled future (sys op or function call),
 /// not just when there is a new call from the host.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct FutureId {
     id: usize,
 }
@@ -1411,7 +1565,7 @@ impl FutureId {
 ///
 /// Used for checking type errors at runtime. We can probably use some lib
 /// that creates this automatically based on the [`Value`] enum.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Type {
     OmittedArg,
     Int,
@@ -1454,7 +1608,7 @@ impl Type {
 }
 
 /// Object type lattice.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ObjectType {
     /// Top type of the lattice. It is castable to any of the other
     /// types.
@@ -1540,7 +1694,7 @@ impl std::fmt::Display for ObjectType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FunctionType {
     /// Top of function type lattice: represents all function types.
     Any,
@@ -1568,7 +1722,7 @@ impl From<&FunctionKind> for FunctionType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FutureType {
     /// Top of future type lattice: represents all future types.
     Any,

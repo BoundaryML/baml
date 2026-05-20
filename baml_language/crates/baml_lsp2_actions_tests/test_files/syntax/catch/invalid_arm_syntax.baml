@@ -11,7 +11,7 @@ function InvalidArmSyntax(x: int) -> string {
 
 //----
 //- diagnostics
-// Error: Expected '=>' after catch pattern, found '='
+// error: Expected '=>' after catch pattern, found '='
 //    ╭─[ catch_invalid_arm_syntax.baml:8:11 ]
 //    │
 //  8 │     let y = "hi";
@@ -20,7 +20,7 @@ function InvalidArmSyntax(x: int) -> string {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Warning: unreachable arm
+// warning: unreachable arm
 //    ╭─[ catch_invalid_arm_syntax.baml:7:15 ]
 //    │
 //  7 │     string => "ok",
@@ -29,7 +29,7 @@ function InvalidArmSyntax(x: int) -> string {
 //    │ 
 //    │ Note: Error code: E0063
 // ───╯
-// Warning: unreachable arm
+// warning: unreachable arm
 //    ╭─[ catch_invalid_arm_syntax.baml:7:20 ]
 //    │
 //  7 │ ╭─▶     string => "ok",

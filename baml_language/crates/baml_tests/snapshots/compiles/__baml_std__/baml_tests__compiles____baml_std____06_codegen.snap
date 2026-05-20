@@ -1684,6 +1684,16 @@ function baml.json.JsonSerializationError.to_json(self: null) -> baml.json.json 
     return
 }
 
+function baml.json.deserialize(s: string) -> void {
+    load_var s
+    call baml.json.parse
+    store_var _2
+    load_type #0
+    load_var _2
+    call baml.json.from_json
+    return
+}
+
 function baml.json.field(j: baml.json.json, key: string) -> baml.json.json {
 }
 
@@ -1694,6 +1704,14 @@ function baml.json.from_string(s: string) -> void {
 }
 
 function baml.json.parse(s: string) -> baml.json.json {
+}
+
+function baml.json.serialize(v: void) -> string {
+    load_type #0
+    load_var v
+    call baml.json.to_json
+    call baml.json.stringify
+    return
 }
 
 function baml.json.stringify(j: baml.json.json) -> string {
@@ -4461,6 +4479,30 @@ function baml.panics.DivisionByZero.to_json(self: null) -> baml.json.json {
     return
 }
 
+function baml.panics.Exit.from_json(j: baml.json.json) -> baml.panics.Exit {
+    load_var j
+    load_const "code"
+    call baml.json.field
+    store_var _3
+    load_type int
+    load_var _3
+    call baml.json.from_json
+    store_var _2
+    alloc_instance baml.panics.Exit
+    load_var _2
+    init_field .code
+    return
+}
+
+function baml.panics.Exit.to_json(self: null) -> baml.json.json {
+    load_var self
+    load_field .code
+    call baml.Int.to_json
+    load_const "code"
+    alloc_map 1
+    return
+}
+
 function baml.panics.HostUnavailable.from_json(j: baml.json.json) -> baml.panics.HostUnavailable {
     load_var j
     load_const "resource"
@@ -4869,6 +4911,9 @@ function baml.sys.argv() -> string[] {
 }
 
 function baml.sys.exec(program: string, args: string[]?, options: baml.sys.ProcessOptions?) -> baml.sys.ShellOutput {
+}
+
+function baml.sys.exit(code: int) -> void {
 }
 
 function baml.sys.now_ms() -> int {

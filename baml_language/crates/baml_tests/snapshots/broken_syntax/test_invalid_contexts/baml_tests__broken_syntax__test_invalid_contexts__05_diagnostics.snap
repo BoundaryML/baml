@@ -1,9 +1,8 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 3139
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: missing return: expected `null`
+  [type] error: missing return: expected `null`
    ╭─[ main.baml:3:26 ]
    │
  3 │ ╭─▶ function helper() -> null {
@@ -15,7 +14,7 @@ assertion_line: 3139
    │     Note: Error code: E0029
 ───╯
 
-  [parse] Error: test blocks are only allowed at the top level or inside a testset
+  [parse] error: test blocks are only allowed at the top level or inside a testset
    ╭─[ main.baml:4:3 ]
    │
  4 │   test "inside function" {
@@ -25,7 +24,7 @@ assertion_line: 3139
    │ Note: Error code: E0010
 ───╯
 
-  [type] Error: missing return: expected `null`
+  [type] error: missing return: expected `null`
     ╭─[ main.baml:9:27 ]
     │
   9 │ ╭─▶ function another() -> null {
@@ -37,7 +36,7 @@ assertion_line: 3139
     │     Note: Error code: E0029
 ────╯
 
-  [parse] Error: testset blocks are only allowed at the top level or inside a testset
+  [parse] error: testset blocks are only allowed at the top level or inside a testset
     ╭─[ main.baml:10:3 ]
     │
  10 │   testset "inside function set" {

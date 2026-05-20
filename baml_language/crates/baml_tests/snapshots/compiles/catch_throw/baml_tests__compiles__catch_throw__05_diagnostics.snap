@@ -1,9 +1,8 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 5414
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Warning: unreachable code: 1 statement(s) after diverging statement
+  [type] warning: unreachable code: 1 statement(s) after diverging statement
      ╭─[ catch_throw.baml:111:44 ]
      │
  111 │ ╭─▶ function ThrowStatement(x: int) -> string {

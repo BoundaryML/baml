@@ -13,7 +13,7 @@ function NoRet(x: int) {
 
 //----
 //- diagnostics
-// Error: Expected return type (->), found '{'
+// error: Expected return type (->), found '{'
 //    ╭─[ expr_missing_return_value.baml:1:24 ]
 //    │
 //  1 │ function NoRet(x: int) {

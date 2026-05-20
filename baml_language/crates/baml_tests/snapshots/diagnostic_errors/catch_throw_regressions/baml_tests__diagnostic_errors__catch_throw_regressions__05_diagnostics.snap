@@ -1,9 +1,8 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 27928
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: type mismatch: expected string, got user.Status
+  [type] error: type mismatch: expected string, got user.Status
     ╭─[ regressions.baml:25:5 ]
     │
  25 │     WrapperAlwaysThrows(n) catch (e) {
@@ -13,7 +12,7 @@ assertion_line: 27928
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: type mismatch: expected string, got user.Status
+  [type] error: type mismatch: expected string, got user.Status
     ╭─[ regressions.baml:43:5 ]
     │
  43 │     ThrowsAllStatusVariants(n) catch (e) {
@@ -23,7 +22,7 @@ assertion_line: 27928
     │ Note: Error code: E0001
 ────╯
 
-  [type] Warning: unreachable code: 2 statement(s) after diverging statement
+  [type] warning: unreachable code: 2 statement(s) after diverging statement
     ╭─[ regressions.baml:75:6 ]
     │
  75 │ ╭─▶     {

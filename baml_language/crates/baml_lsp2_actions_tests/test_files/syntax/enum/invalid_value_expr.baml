@@ -12,7 +12,7 @@ enum Test {
 
 //----
 //- diagnostics
-// Error: Enum variants cannot have type annotations
+// error: Enum variants cannot have type annotations
 //    ╭─[ enum_invalid_value_expr.baml:2:7 ]
 //    │
 //  2 │     A int | string

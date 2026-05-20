@@ -18,10 +18,12 @@ workspace = true
 
 [dependencies]
 baml_db = { workspace = true }
+baml_exec = { workspace = true }
 baml_fmt = { workspace = true }
 baml_lsp2_actions = { workspace = true }
 baml_lsp_server = { workspace = true }
 baml_project = { workspace = true }
+baml_type = { workspace = true }
 baml_workspace = { workspace = true }
 bex_engine = { workspace = true }
 bex_events = { workspace = true }
@@ -30,16 +32,25 @@ bex_vm_types = { workspace = true }
 codegen_python = { workspace = true }
 sys_native = { workspace = true }
 anyhow = { workspace = true }
+bitcode = { workspace = true }
 clap = { workspace = true, features = [ "color", "env" ] }
 clap-cargo = { workspace = true }
+console = { workspace = true }
 ctrlc = { workspace = true }
+flate2 = { workspace = true }
 indexmap = { workspace = true }
+indicatif = { workspace = true }
+libsui = { workspace = true }
 regex = { workspace = true }
+reqwest = { workspace = true, features = [ "blocking" ] }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 strsim = { workspace = true }
+tar = { workspace = true }
 text-size = { workspace = true }
 tokio = { workspace = true }
 toml = { workspace = true }
+zip = { workspace = true }
 
 [features]
 default = [ "native-tls", "aws-crypto" ]
