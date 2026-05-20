@@ -1,4 +1,6 @@
 class Float {
+  // mut_vm: Float values are heap-boxed (Object::Float); construction needs a TLAB.
+  //baml:mut_vm
   function to_json(self) -> baml.json.json {
     $rust_function
   }

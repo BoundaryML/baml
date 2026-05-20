@@ -5,7 +5,7 @@ use crate::errors::{VmBamlError, VmPanic, VmRustFnError};
 
 impl BamlClassInt for PackageBamlImpl {
     fn to_json(int: i64) -> Value {
-        Value::Int(int)
+        Value::int(int)
     }
     // ── Comparisons / clamping ────────────────────────────────────────────────
 

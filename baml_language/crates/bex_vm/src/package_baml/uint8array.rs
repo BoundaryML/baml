@@ -86,13 +86,13 @@ impl BamlClassUint8Array for PackageBamlImpl {
     fn from_array(array: &[Value]) -> Result<Vec<u8>, VmRustFnError> {
         let mut result = Vec::with_capacity(array.len());
         for (i, val) in array.iter().enumerate() {
-            let Value::Int(n) = val else {
+            let Some(n) = val.as_int() else {
                 return Err(VmBamlError::InvalidArgument {
                     message: format!("Element at index {i} is not an `int`"),
                 }
                 .into());
             };
-            let byte = u8::try_from(*n).map_err(|_| VmBamlError::InvalidArgument {
+            let byte = u8::try_from(n).map_err(|_| VmBamlError::InvalidArgument {
                 message: format!("Value {n} at index {i} is out of range 0..=255"),
             })?;
             result.push(byte);
@@ -103,7 +103,7 @@ impl BamlClassUint8Array for PackageBamlImpl {
     fn to_array(uint8array: &[u8]) -> Vec<Value> {
         uint8array
             .iter()
-            .map(|&b| Value::Int(i64::from(b)))
+            .map(|&b| Value::int(i64::from(b)))
             .collect()
     }
 

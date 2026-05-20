@@ -128,7 +128,7 @@ impl<'a> BexValue<'a> {
     pub fn as_int(self) -> Result<i64, AccessError> {
         match self {
             BexValue::ExternalValue(BexExternalValue::Int(i)) => Ok(*i),
-            BexValue::Value(Value::Int(i)) => Ok(*i),
+            BexValue::Value(v) if v.is_int() => Ok(v.as_int().expect("just checked is_int")),
             other => Err(AccessError::TypeMismatch {
                 expected: "int",
                 actual: other.type_name(),
@@ -139,7 +139,24 @@ impl<'a> BexValue<'a> {
     pub fn as_float(self) -> Result<f64, AccessError> {
         match self {
             BexValue::ExternalValue(BexExternalValue::Float(f)) => Ok(*f),
-            BexValue::Value(Value::Float(f)) => Ok(*f),
+            // Float is now heap-boxed as Object::Float(f64). Reading it
+            // requires dereferencing the HeapPtr. The 'a lifetime on
+            // BexValue<'a> guarantees the underlying Value reference is
+            // live, which transitively requires that the GC permit is held
+            // (the caller can only obtain &Value while permitted).
+            BexValue::Value(v) if v.is_object() => {
+                let ptr = v.as_object_ptr().expect("just checked is_object");
+                // SAFETY: see comment above re: 'a lifetime witnessing permit.
+                let obj = unsafe { ptr.get() };
+                if let Object::Float(f) = obj {
+                    Ok(*f)
+                } else {
+                    Err(AccessError::TypeMismatch {
+                        expected: "float",
+                        actual: obj.to_string(),
+                    })
+                }
+            }
             other => Err(AccessError::TypeMismatch {
                 expected: "float",
                 actual: other.type_name(),
@@ -150,7 +167,7 @@ impl<'a> BexValue<'a> {
     pub fn as_bool(self) -> Result<bool, AccessError> {
         match self {
             BexValue::ExternalValue(BexExternalValue::Bool(b)) => Ok(*b),
-            BexValue::Value(Value::Bool(b)) => Ok(*b),
+            BexValue::Value(v) if v.is_bool() => Ok(v.as_bool().expect("just checked is_bool")),
             other => Err(AccessError::TypeMismatch {
                 expected: "bool",
                 actual: other.type_name(),
@@ -161,7 +178,7 @@ impl<'a> BexValue<'a> {
     pub fn as_null(self) -> Result<(), AccessError> {
         match self {
             BexValue::ExternalValue(BexExternalValue::Null) => Ok(()),
-            BexValue::Value(Value::Null) => Ok(()),
+            BexValue::Value(v) if v.is_null() => Ok(()),
             other => Err(AccessError::TypeMismatch {
                 expected: "null",
                 actual: other.type_name(),
@@ -184,7 +201,11 @@ impl<'a> BexValue<'a> {
                     .ok_or(AccessError::InvalidHandle { expected })?;
                 f(&ptr)
             }
-            BexValue::Value(Value::Object(ptr)) | BexValue::HeapPtr(ptr) => f(ptr),
+            BexValue::HeapPtr(ptr) => f(ptr),
+            BexValue::Value(v) if v.is_object() => {
+                let ptr = v.as_object_ptr().expect("just checked is_object");
+                f(&ptr)
+            }
             other => Err(AccessError::TypeMismatch {
                 expected,
                 actual: other.type_name(),
@@ -361,7 +382,18 @@ impl<'a> BexValue<'a> {
                     .ok_or(AccessError::InvalidHandle { expected: "enum" })?;
                 BexValue::HeapPtr(&ptr).as_enum(heap, permit, expected_enum_name, map_fn)
             }
-            BexValue::Value(Value::Object(ptr)) | BexValue::HeapPtr(ptr) => {
+            this => {
+                let ptr_opt = match this {
+                    BexValue::HeapPtr(p) => Some(*p),
+                    BexValue::Value(v) => v.as_object_ptr(),
+                    _ => None,
+                };
+                let Some(ptr) = ptr_opt else {
+                    return Err(AccessError::TypeMismatch {
+                        expected: expected_enum_name,
+                        actual: this.type_name(),
+                    });
+                };
                 let obj = unsafe { ptr.get() };
                 let Object::Variant(variant) = obj else {
                     return Err(AccessError::TypeMismatch {
@@ -384,10 +416,6 @@ impl<'a> BexValue<'a> {
                 }
                 Ok(map_fn(BexVariant::Value(enum_, variant)))
             }
-            other => Err(AccessError::TypeMismatch {
-                expected: expected_enum_name,
-                actual: other.type_name(),
-            }),
         }
     }
 
@@ -428,7 +456,11 @@ impl<'a> BexValue<'a> {
                 )?;
                 from_ptr(&ptr)
             }
-            BexValue::Value(Value::Object(ptr)) | BexValue::HeapPtr(ptr) => from_ptr(ptr),
+            BexValue::HeapPtr(ptr) => from_ptr(ptr),
+            BexValue::Value(v) if v.is_object() => {
+                let ptr = v.as_object_ptr().expect("just checked is_object");
+                from_ptr(&ptr)
+            }
             other => Err(AccessError::TypeMismatch {
                 expected: "collector",
                 actual: other.type_name(),
@@ -462,7 +494,11 @@ impl<'a> BexValue<'a> {
                     .ok_or(AccessError::InvalidHandle { expected: "type" })?;
                 from_ptr(&ptr)
             }
-            BexValue::Value(Value::Object(ptr)) | BexValue::HeapPtr(ptr) => from_ptr(ptr),
+            BexValue::HeapPtr(ptr) => from_ptr(ptr),
+            BexValue::Value(v) if v.is_object() => {
+                let ptr = v.as_object_ptr().expect("just checked is_object");
+                from_ptr(&ptr)
+            }
             other => Err(AccessError::TypeMismatch {
                 expected: "type",
                 actual: other.type_name(),
@@ -585,104 +621,126 @@ fn owned_inner(
             }
             BexExternalValue::Adt(adt) => Ok(BexExternalValue::Adt(adt.clone())),
         },
-        BexValue::Value(Value::Object(heap_ptr)) | BexValue::HeapPtr(heap_ptr) => {
-            let obj = unsafe { heap_ptr.get() };
-            match obj {
-                Object::Function(..) => unconvertible("function"),
-                Object::Class(..) => unconvertible("class"),
-                Object::Enum(..) => unconvertible("enum"),
-                Object::Future(..) => unconvertible("future"),
-                Object::UnscheduledFuture(..) => unconvertible("unscheduled_future"),
+        other => {
+            // Object path: either HeapPtr directly, or a Value whose payload
+            // is an object pointer. Scalar-typed Values fall through to the
+            // ValueKind match below.
+            let ptr_opt = match other {
+                BexValue::HeapPtr(p) => Some(*p),
+                BexValue::Value(v) => v.as_object_ptr(),
+                BexValue::ExternalValue(_) => None,
+            };
+            if let Some(heap_ptr) = ptr_opt {
+                let obj = unsafe { heap_ptr.get() };
+                return match obj {
+                    Object::Function(..) => unconvertible("function"),
+                    Object::Class(..) => unconvertible("class"),
+                    Object::Enum(..) => unconvertible("enum"),
+                    Object::Future(..) => unconvertible("future"),
+                    Object::UnscheduledFuture(..) => unconvertible("unscheduled_future"),
 
-                Object::String(s) => Ok(BexExternalValue::String(s.clone())),
-                // Deep-copy path for trace payloads: no declared type is available here,
-                // so placeholder types with default attr are used.
-                Object::Array(array) => Ok(BexExternalValue::Array {
-                    element_type: Ty::BuiltinUnknown {
-                        attr: baml_type::TyAttr::default(),
-                    },
-                    items: array
-                        .iter()
-                        .map(|item| owned_inner(BexValue::Value(item), heap, lossy))
-                        .collect::<Result<_, _>>()?,
-                }),
-                Object::Map(map) => Ok(BexExternalValue::Map {
-                    key_type: Ty::String {
-                        attr: baml_type::TyAttr::default(),
-                    },
-                    value_type: Ty::BuiltinUnknown {
-                        attr: baml_type::TyAttr::default(),
-                    },
-                    entries: map
-                        .iter()
-                        .map(|(k, v)| {
-                            Ok((k.clone(), owned_inner(BexValue::Value(v), heap, lossy)?))
+                    Object::String(s) => Ok(BexExternalValue::String(s.clone())),
+                    // Deep-copy path for trace payloads: no declared type is available here,
+                    // so placeholder types with default attr are used.
+                    Object::Array(array) => Ok(BexExternalValue::Array {
+                        element_type: Ty::BuiltinUnknown {
+                            attr: baml_type::TyAttr::default(),
+                        },
+                        items: array
+                            .iter()
+                            .map(|item| owned_inner(BexValue::Value(item), heap, lossy))
+                            .collect::<Result<_, _>>()?,
+                    }),
+                    Object::Map(map) => Ok(BexExternalValue::Map {
+                        key_type: Ty::String {
+                            attr: baml_type::TyAttr::default(),
+                        },
+                        value_type: Ty::BuiltinUnknown {
+                            attr: baml_type::TyAttr::default(),
+                        },
+                        entries: map
+                            .iter()
+                            .map(|(k, v)| {
+                                Ok((k.clone(), owned_inner(BexValue::Value(v), heap, lossy)?))
+                            })
+                            .collect::<Result<_, _>>()?,
+                    }),
+                    Object::Instance(instance) => {
+                        let class_obj = unsafe { instance.class.get() };
+                        let Object::Class(class) = class_obj else {
+                            return Err(AccessError::TypeMismatch {
+                                expected: "class",
+                                actual: class_obj.to_string(),
+                            });
+                        };
+                        let fields = class
+                            .fields
+                            .iter()
+                            .zip(instance.fields.iter())
+                            .map(|(field, value)| {
+                                Ok((
+                                    field.name.clone(),
+                                    owned_inner(BexValue::Value(value), heap, lossy)?,
+                                ))
+                            })
+                            .collect::<Result<_, _>>()?;
+                        Ok(BexExternalValue::Instance {
+                            class_name: class.name.to_string(),
+                            fields,
                         })
-                        .collect::<Result<_, _>>()?,
-                }),
-                Object::Instance(instance) => {
-                    let class_obj = unsafe { instance.class.get() };
-                    let Object::Class(class) = class_obj else {
-                        return Err(AccessError::TypeMismatch {
-                            expected: "class",
-                            actual: class_obj.to_string(),
-                        });
-                    };
-                    let fields = class
-                        .fields
-                        .iter()
-                        .zip(instance.fields.iter())
-                        .map(|(field, value)| {
-                            Ok((
-                                field.name.clone(),
-                                owned_inner(BexValue::Value(value), heap, lossy)?,
-                            ))
+                    }
+                    Object::Variant(variant) => {
+                        let variant_obj = unsafe { variant.enm.get() };
+                        let Object::Enum(enum_) = variant_obj else {
+                            return Err(AccessError::TypeMismatch {
+                                expected: "enum",
+                                actual: variant_obj.to_string(),
+                            });
+                        };
+                        let variant_def = enum_.variants.get(variant.index).ok_or_else(|| {
+                            AccessError::FieldNotFound {
+                                expected: format!("variant index {}", variant.index),
+                            }
+                        })?;
+                        Ok(BexExternalValue::Variant {
+                            enum_name: enum_.name.to_string(),
+                            variant_name: variant_def.name.clone(),
                         })
-                        .collect::<Result<_, _>>()?;
-                    Ok(BexExternalValue::Instance {
-                        class_name: class.name.to_string(),
-                        fields,
-                    })
-                }
-                Object::Variant(variant) => {
-                    let variant_obj = unsafe { variant.enm.get() };
-                    let Object::Enum(enum_) = variant_obj else {
-                        return Err(AccessError::TypeMismatch {
-                            expected: "enum",
-                            actual: variant_obj.to_string(),
-                        });
-                    };
-                    let variant_def = enum_.variants.get(variant.index).ok_or_else(|| {
-                        AccessError::FieldNotFound {
-                            expected: format!("variant index {}", variant.index),
-                        }
-                    })?;
-                    Ok(BexExternalValue::Variant {
-                        enum_name: enum_.name.to_string(),
-                        variant_name: variant_def.name.clone(),
-                    })
-                }
-                Object::Collector(c) => {
-                    Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone())))
-                }
-                Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type((**ty).clone()))),
-                Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.clone())),
-                Object::RustData(data) => Ok(bex_external_types::try_convert_rust_data(data)
-                    .unwrap_or_else(|| BexExternalValue::RustData(data.clone()))),
-                Object::Closure(_) => unconvertible("closure"),
-                Object::BoundMethod(_) => unconvertible("bound_method"),
-                Object::Cell(_) => unconvertible("cell"),
-                #[cfg(feature = "heap_debug")]
-                Object::Sentinel(sentinel_kind) => {
-                    unconvertible(&format!("sentinel: {:?}", sentinel_kind))
+                    }
+                    Object::Collector(c) => {
+                        Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone())))
+                    }
+                    Object::Type(ty) => {
+                        Ok(BexExternalValue::Adt(BexExternalAdt::Type((**ty).clone())))
+                    }
+                    Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.clone())),
+                    Object::RustData(data) => Ok(bex_external_types::try_convert_rust_data(data)
+                        .unwrap_or_else(|| BexExternalValue::RustData(data.clone()))),
+                    Object::Float(f) => Ok(BexExternalValue::Float(*f)),
+                    Object::Closure(_) => unconvertible("closure"),
+                    Object::BoundMethod(_) => unconvertible("bound_method"),
+                    Object::Cell(_) => unconvertible("cell"),
+                    #[cfg(feature = "heap_debug")]
+                    Object::Sentinel(sentinel_kind) => {
+                        unconvertible(&format!("sentinel: {:?}", sentinel_kind))
+                    }
+                };
+            }
+            // Scalar-typed Value path.
+            let BexValue::Value(v) = other else {
+                unreachable!("non-Value/Object branch covered above")
+            };
+            match v.kind() {
+                bex_vm_types::ValueKind::OmittedArg => unconvertible("omitted argument"),
+                bex_vm_types::ValueKind::Null => Ok(BexExternalValue::Null),
+                bex_vm_types::ValueKind::Int(i) => Ok(BexExternalValue::Int(i)),
+                bex_vm_types::ValueKind::Bool(b) => Ok(BexExternalValue::Bool(b)),
+                // Object path already handled.
+                bex_vm_types::ValueKind::Object(_) => {
+                    unreachable!("object path handled above")
                 }
             }
         }
-        BexValue::Value(Value::OmittedArg) => unconvertible("omitted argument"),
-        BexValue::Value(Value::Null) => Ok(BexExternalValue::Null),
-        BexValue::Value(Value::Int(i)) => Ok(BexExternalValue::Int(*i)),
-        BexValue::Value(Value::Float(f)) => Ok(BexExternalValue::Float(*f)),
-        BexValue::Value(Value::Bool(b)) => Ok(BexExternalValue::Bool(*b)),
     }
 }
 

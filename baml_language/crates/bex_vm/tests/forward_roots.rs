@@ -53,9 +53,9 @@ fn forward_roots_remaps_stack_object_pointers() {
     let new_ptr = vm.tlab.alloc_string("after_gc".to_string());
     let untouched_ptr = vm.tlab.alloc_string("stays_put".to_string());
 
-    vm.stack.0.push(Value::Object(old_ptr));
-    vm.stack.0.push(Value::Int(42));
-    vm.stack.0.push(Value::Object(untouched_ptr));
+    vm.stack.0.push(Value::object(old_ptr));
+    vm.stack.0.push(Value::int(42));
+    vm.stack.0.push(Value::object(untouched_ptr));
 
     let mut forwarding: HashMap<HeapPtr, HeapPtr> = HashMap::new();
     forwarding.insert(old_ptr, new_ptr);
@@ -64,17 +64,17 @@ fn forward_roots_remaps_stack_object_pointers() {
 
     assert_eq!(
         vm.stack.0[0],
-        Value::Object(new_ptr),
+        Value::object(new_ptr),
         "stack slot 0 should have been rewritten to the forwarded pointer"
     );
     assert_eq!(
         vm.stack.0[1],
-        Value::Int(42),
+        Value::int(42),
         "non-object stack values must be left alone"
     );
     assert_eq!(
         vm.stack.0[2],
-        Value::Object(untouched_ptr),
+        Value::object(untouched_ptr),
         "pointers without a forwarding entry must be left alone"
     );
 }

@@ -12,32 +12,27 @@ use crate::{
 /// for strings / uint8arrays / variants, by-`HeapPtr` reference for arrays /
 /// maps / class instances. Used by `includes`, `index_of`, `last_index_of`.
 fn baml_eq(vm: &BexVm, a: &Value, b: &Value) -> bool {
-    match (a, b) {
-        (Value::Object(la), Value::Object(rb)) => {
-            // Try content comparison for the types where `==` is content-based;
-            // fall through to HeapPtr equality otherwise.
-            let lobj = vm.get_object(*la);
-            let robj = vm.get_object(*rb);
-            match (lobj, robj) {
-                (Object::String(_), Object::String(_)) => {
-                    match (vm.as_string(a), vm.as_string(b)) {
-                        (Ok(ls), Ok(rs)) => ls == rs,
-                        _ => false,
-                    }
+    if let (Some(la), Some(rb)) = (a.as_object_ptr(), b.as_object_ptr()) {
+        // Try content comparison for the types where `==` is content-based;
+        // fall through to HeapPtr equality otherwise.
+        let lobj = vm.get_object(la);
+        let robj = vm.get_object(rb);
+        match (lobj, robj) {
+            (Object::String(_), Object::String(_)) => match (vm.as_string(a), vm.as_string(b)) {
+                (Ok(ls), Ok(rs)) => ls == rs,
+                _ => false,
+            },
+            (Object::Uint8Array(_), Object::Uint8Array(_)) => {
+                match (vm.as_uint8array(a), vm.as_uint8array(b)) {
+                    (Ok(lb), Ok(rb)) => lb == rb,
+                    _ => false,
                 }
-                (Object::Uint8Array(_), Object::Uint8Array(_)) => {
-                    match (vm.as_uint8array(a), vm.as_uint8array(b)) {
-                        (Ok(lb), Ok(rb)) => lb == rb,
-                        _ => false,
-                    }
-                }
-                (Object::Variant(lv), Object::Variant(rv)) => {
-                    lv.enm == rv.enm && lv.index == rv.index
-                }
-                _ => la == rb,
             }
+            (Object::Variant(lv), Object::Variant(rv)) => lv.enm == rv.enm && lv.index == rv.index,
+            _ => la == rb,
         }
-        _ => a == b,
+    } else {
+        a == b
     }
 }
 
@@ -49,17 +44,17 @@ fn baml_eq(vm: &BexVm, a: &Value, b: &Value) -> bool {
 
 fn collect_value_roots(values: &[Value], roots: &mut Vec<HeapPtr>) {
     for v in values {
-        if let Value::Object(p) = v {
-            roots.push(*p);
+        if let Some(p) = v.as_object_ptr() {
+            roots.push(p);
         }
     }
 }
 
 fn forward_values(values: &mut [Value], forwarding: &HashMap<HeapPtr, HeapPtr>) {
     for v in values {
-        if let Value::Object(ptr) = v {
-            if let Some(&new) = forwarding.get(ptr) {
-                *ptr = new;
+        if let Some(ptr) = v.as_object_ptr() {
+            if let Some(&new) = forwarding.get(&ptr) {
+                *v = Value::object(new);
             }
         }
     }
@@ -74,8 +69,8 @@ fn forward_ptr(ptr: &mut HeapPtr, forwarding: &HashMap<HeapPtr, HeapPtr>) {
 /// Extract the callback `HeapPtr` from a `Value::Object`, or return a
 /// type-error `NativeCallResult` for any other variant.
 fn extract_callable(vm: &BexVm, f: &Value) -> Result<HeapPtr, NativeCallResult> {
-    if let Value::Object(p) = f {
-        Ok(*p)
+    if let Some(p) = f.as_object_ptr() {
+        Ok(p)
     } else {
         Err(NativeCallResult::from(VmInternalError::TypeError {
             expected: bex_vm_types::types::Type::Object(bex_vm_types::ObjectType::Any),
@@ -85,8 +80,8 @@ fn extract_callable(vm: &BexVm, f: &Value) -> Result<HeapPtr, NativeCallResult> 
 }
 
 fn expect_bool(vm: &BexVm, value: &Value) -> Result<bool, NativeCallResult> {
-    if let Value::Bool(b) = value {
-        Ok(*b)
+    if let Some(b) = value.as_bool() {
+        Ok(b)
     } else {
         Err(NativeCallResult::from(VmInternalError::TypeError {
             expected: bex_vm_types::types::Type::Bool,
@@ -172,11 +167,11 @@ impl Continuation for SomeContinuation {
             Err(e) => return e,
         };
         if b {
-            return NativeCallResult::Done(Value::Bool(true));
+            return NativeCallResult::Done(Value::bool(true));
         }
         self.idx += 1;
         if self.idx >= self.array.len() {
-            return NativeCallResult::Done(Value::Bool(false));
+            return NativeCallResult::Done(Value::bool(false));
         }
         let next_arg = self.array[self.idx];
         NativeCallResult::YieldToCall {
@@ -202,11 +197,11 @@ impl Continuation for EveryContinuation {
             Err(e) => return e,
         };
         if !b {
-            return NativeCallResult::Done(Value::Bool(false));
+            return NativeCallResult::Done(Value::bool(false));
         }
         self.idx += 1;
         if self.idx >= self.array.len() {
-            return NativeCallResult::Done(Value::Bool(true));
+            return NativeCallResult::Done(Value::bool(true));
         }
         let next_arg = self.array[self.idx];
         NativeCallResult::YieldToCall {
@@ -240,13 +235,13 @@ impl Continuation for FindContinuation {
                 self.array[self.idx]
             } else {
                 #[allow(clippy::cast_possible_wrap)]
-                Value::Int(self.idx as i64)
+                Value::int(self.idx as i64)
             };
             return NativeCallResult::Done(result);
         }
         self.idx += 1;
         if self.idx >= self.array.len() {
-            return NativeCallResult::Done(Value::Null);
+            return NativeCallResult::Done(Value::NULL);
         }
         let next_arg = self.array[self.idx];
         NativeCallResult::YieldToCall {
@@ -282,12 +277,12 @@ impl Continuation for FindLastContinuation {
                 self.array[self.idx]
             } else {
                 #[allow(clippy::cast_possible_wrap)]
-                Value::Int(self.idx as i64)
+                Value::int(self.idx as i64)
             };
             return NativeCallResult::Done(result);
         }
         if self.idx == 0 {
-            return NativeCallResult::Done(Value::Null);
+            return NativeCallResult::Done(Value::NULL);
         }
         self.idx -= 1;
         let next_arg = self.array[self.idx];
@@ -592,7 +587,7 @@ impl BamlClassArray for PackageBamlImpl {
         };
         let array = array.to_vec();
         if array.is_empty() {
-            return NativeCallResult::Done(Value::Bool(false));
+            return NativeCallResult::Done(Value::bool(false));
         }
         let first_arg = array[0];
         NativeCallResult::YieldToCall {
@@ -614,7 +609,7 @@ impl BamlClassArray for PackageBamlImpl {
         };
         let array = array.to_vec();
         if array.is_empty() {
-            return NativeCallResult::Done(Value::Bool(true));
+            return NativeCallResult::Done(Value::bool(true));
         }
         let first_arg = array[0];
         NativeCallResult::YieldToCall {
@@ -636,7 +631,7 @@ impl BamlClassArray for PackageBamlImpl {
         };
         let array = array.to_vec();
         if array.is_empty() {
-            return NativeCallResult::Done(Value::Null);
+            return NativeCallResult::Done(Value::NULL);
         }
         let first_arg = array[0];
         NativeCallResult::YieldToCall {
@@ -659,7 +654,7 @@ impl BamlClassArray for PackageBamlImpl {
         };
         let array = array.to_vec();
         if array.is_empty() {
-            return NativeCallResult::Done(Value::Null);
+            return NativeCallResult::Done(Value::NULL);
         }
         let first_arg = array[0];
         NativeCallResult::YieldToCall {
@@ -682,7 +677,7 @@ impl BamlClassArray for PackageBamlImpl {
         };
         let array = array.to_vec();
         if array.is_empty() {
-            return NativeCallResult::Done(Value::Null);
+            return NativeCallResult::Done(Value::NULL);
         }
         let last_idx = array.len() - 1;
         let first_arg = array[last_idx];
@@ -706,7 +701,7 @@ impl BamlClassArray for PackageBamlImpl {
         };
         let array = array.to_vec();
         if array.is_empty() {
-            return NativeCallResult::Done(Value::Null);
+            return NativeCallResult::Done(Value::NULL);
         }
         let last_idx = array.len() - 1;
         let first_arg = array[last_idx];

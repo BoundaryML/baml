@@ -564,56 +564,254 @@ pub enum SentinelKind {
     },
 }
 
-/// Runtime values.
+/// Runtime values — a single tagged 64-bit word.
 ///
-/// This struct should not contain allocated objects and should be [`Copy`].
-/// Read the documentation of `Vm::objects` (in `bex_vm` crate) to understand how allocated
-/// objects work in the virtual machine.
+/// This is a packed tagged-pointer representation. The low bit (or low
+/// 3 bits, depending on the category) carries a type tag; the upper
+/// bits carry the payload. Hardware-atomic on aligned 8-byte stores
+/// across all supported targets (x86-64, ARM64, ARMv7, RISC-V).
 ///
-/// # On `Hash`
-/// `Value` does not yet implement `Hash`, and should not implement `Eq`. Besides floating point which can be addressed,
-/// strings do not yet have referential equality, i.e "hello" can be represented with two different
-/// object indices. This makes comparisons nontrivial since they have to fetch the string. Same
-/// would happen with any other object type that we don't want to have referential equality for.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Value {
-    /// Internal sentinel for an omitted defaulted argument.
-    ///
-    /// This value is only valid between call binding and a callee-entry default
-    /// prologue. It must not be serialized or exposed to host code.
-    OmittedArg,
-    Null,
-    Int(i64),
-    Float(f64),
-    Bool(bool),
+/// # Encoding (low 3 bits = tag category)
+///
+/// | Bit pattern                            | Meaning                                          |
+/// | -------------------------------------- | ------------------------------------------------ |
+/// | `0x0000_0000_0000_0000`                | `Null` — the only zero pointer                   |
+/// | `0x0000_0000_0000_0002`                | `Bool(false)` sentinel                           |
+/// | `0x0000_0000_0000_0004`                | `Bool(true)` sentinel                            |
+/// | `0x0000_0000_0000_0006`                | `OmittedArg` sentinel                            |
+/// | `xxxxx...xxx1` (low bit set)           | `Int(i63)` — sign-extend via `(v as i64) >> 1`   |
+/// | `0xxxxx...xxx0` (low 3 bits zero, ≠0)  | `Object(HeapPtr)` — heap pointer (8-byte align)  |
+///
+/// # On `Float`
+///
+/// `Float(f64)` does NOT have an inline encoding. Floats are heap-boxed
+/// as `Object::Float(f64)` and referenced via the pointer arm. This
+/// trades float-arithmetic cost (one heap alloc per result) for a
+/// uniform 8-byte `Value` representation, which is what makes every
+/// read/write hardware-atomic and gives ~50% cache footprint
+/// reduction. BAML programs are integer-and-object-heavy so the
+/// trade-off favors us.
+///
+/// # On range loss
+///
+/// Integers shrink from i64 to i63 (max ~4.6e18). Holds nanosecond
+/// timestamps until year ~2200 with margin. For larger integers,
+/// callers must allocate a heap-boxed integer (not yet implemented).
+///
+/// # `PartialEq` / `Hash`
+///
+/// Derived on the underlying u64. This gives bit-equality, which is
+/// reference equality for heap-allocated objects (including boxed
+/// floats — two `Value::float(3.14, ...)` calls produce different
+/// pointers and compare unequal). Content equality for strings,
+/// arrays, etc. is handled at the user-visible `==` operator in the
+/// VM dispatch, not here.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(transparent)]
+pub struct Value(u64);
 
-    /// Pointer to a heap-allocated object.
-    ///
-    /// This is a raw pointer (`HeapPtr`) that points directly into the heap.
-    /// Strings are also objects, don't add `Value::String`.
+/// Categorical view of a `Value` for pattern matching.
+///
+/// Returned by [`Value::kind`]. The optimizer typically inlines the
+/// match and folds the discrimination into a tight switch table.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ValueKind {
+    Null,
+    OmittedArg,
+    Int(i64),
+    Bool(bool),
     Object(HeapPtr),
 }
 
 impl Value {
-    /// Returns the [`HeapPtr`] if this is an [`Object`].
-    pub const fn as_object_ptr(&self) -> Option<HeapPtr> {
-        match self {
-            Value::OmittedArg => None,
-            Value::Object(ptr) => Some(*ptr),
+    // ── Singletons ────────────────────────────────────────────────────────
+    pub const NULL: Value = Value(0);
+    pub const FALSE: Value = Value(2);
+    pub const TRUE: Value = Value(4);
+    pub const OMITTED_ARG: Value = Value(6);
+
+    // ── Constructors ──────────────────────────────────────────────────────
+
+    /// Build a `Value` carrying an `i63` integer. Values outside the
+    /// i63 range are truncated by the encoding shift — callers must
+    /// ensure `i` fits (range check at the BAML compiler / VM level).
+    #[inline(always)]
+    pub const fn int(i: i64) -> Self {
+        // SAFETY of cast: i63 fits in u64 bits; the (i as u64) << 1 may
+        // overflow for full-range i64s but the result is still a valid
+        // u64 bit pattern that decodes via arithmetic shift right.
+        Value(((i as u64) << 1) | 1)
+    }
+
+    /// Build a `Value` carrying a boolean.
+    #[inline(always)]
+    pub const fn bool(b: bool) -> Self {
+        if b { Self::TRUE } else { Self::FALSE }
+    }
+
+    /// Build a `Value` from a non-null heap pointer.
+    ///
+    /// Debug-asserts that the pointer is 8-byte aligned (heap allocator
+    /// invariant) and non-null (call sites that legitimately have a
+    /// nullable pointer should use [`Value::NULL`] explicitly).
+    #[inline(always)]
+    pub fn object(ptr: HeapPtr) -> Self {
+        let bits = ptr.as_ptr() as u64;
+        debug_assert!(
+            bits != 0,
+            "Value::object called with null heap ptr; use Value::NULL"
+        );
+        debug_assert!(
+            bits & 0b111 == 0,
+            "Value::object called with mis-aligned heap ptr 0x{bits:x}"
+        );
+        Value(bits)
+    }
+
+    // ── Tag predicates (cheap fast-path discriminators) ───────────────────
+
+    #[inline(always)]
+    pub const fn is_null(self) -> bool {
+        self.0 == 0
+    }
+
+    #[inline(always)]
+    pub const fn is_int(self) -> bool {
+        self.0 & 1 != 0
+    }
+
+    #[inline(always)]
+    pub const fn is_bool(self) -> bool {
+        self.0 == Self::FALSE.0 || self.0 == Self::TRUE.0
+    }
+
+    #[inline(always)]
+    pub const fn is_omitted_arg(self) -> bool {
+        self.0 == Self::OMITTED_ARG.0
+    }
+
+    /// True iff `self` is a non-null heap object pointer.
+    #[inline(always)]
+    pub const fn is_object(self) -> bool {
+        self.0 & 0b111 == 0 && self.0 != 0
+    }
+
+    // ── Typed accessors (return None on tag mismatch) ─────────────────────
+
+    /// Extract an `i64` if this is an `Int`. Sign-extends from the i63
+    /// stored encoding.
+    #[inline(always)]
+    pub const fn as_int(&self) -> Option<i64> {
+        if self.is_int() {
+            // Arithmetic shift right preserves sign.
+            Some((self.0 as i64) >> 1)
+        } else {
+            None
+        }
+    }
+
+    /// Extract a `bool` if this is a `Bool`.
+    #[inline(always)]
+    pub const fn as_bool(&self) -> Option<bool> {
+        match self.0 {
+            x if x == Self::FALSE.0 => Some(false),
+            x if x == Self::TRUE.0 => Some(true),
             _ => None,
+        }
+    }
+
+    /// Extract the `HeapPtr` if this is a non-null `Object`. Returns
+    /// `None` for `Null` (since the BAML Null is a "null pointer"
+    /// encoded as `Value(0)`).
+    ///
+    /// Takes `&self` so it can be used as a `fn(&Value) -> _` callback
+    /// in iterator combinators (`.filter_map(Value::as_object_ptr)`).
+    #[inline(always)]
+    pub fn as_object_ptr(&self) -> Option<HeapPtr> {
+        if self.is_object() {
+            // SAFETY: bit pattern was constructed from a valid HeapPtr
+            // via [`Value::object`] (which debug-asserts alignment +
+            // non-null). The pointer's GC liveness is the caller's
+            // concern (same as for the old enum variant).
+            Some(unsafe { HeapPtr::from_ptr(self.0 as *mut Object) })
+        } else {
+            None
+        }
+    }
+
+    // ── Match on categorical view ─────────────────────────────────────────
+
+    /// Decode into the categorical `ValueKind` for pattern matching.
+    /// Use this when you need to branch on the type; use the typed
+    /// accessors (`as_int`, `as_bool`, etc.) on the hot path when you
+    /// only care about one variant.
+    #[inline]
+    pub fn kind(&self) -> ValueKind {
+        if self.is_int() {
+            return ValueKind::Int((self.0 as i64) >> 1);
+        }
+        match self.0 {
+            x if x == Self::NULL.0 => ValueKind::Null,
+            x if x == Self::FALSE.0 => ValueKind::Bool(false),
+            x if x == Self::TRUE.0 => ValueKind::Bool(true),
+            x if x == Self::OMITTED_ARG.0 => ValueKind::OmittedArg,
+            _ => {
+                // Must be a pointer — low 3 bits zero, non-zero, not a
+                // sentinel pattern.
+                debug_assert_eq!(self.0 & 0b111, 0, "malformed Value bits 0x{:x}", self.0);
+                // SAFETY: see [`Value::as_object_ptr`].
+                ValueKind::Object(unsafe { HeapPtr::from_ptr(self.0 as *mut Object) })
+            }
+        }
+    }
+
+    // ── Raw bit access for debugging / advanced use ──────────────────────
+
+    /// The raw `u64` bit pattern. Exposed for diagnostics, formatting,
+    /// and concurrency machinery (e.g. AtomicU64 stores of `Value`).
+    /// Prefer the typed accessors for normal use.
+    #[inline(always)]
+    pub const fn bits(self) -> u64 {
+        self.0
+    }
+
+    /// Construct a `Value` from raw bits. **Unsafe in spirit** — the
+    /// caller must guarantee the bit pattern was produced by
+    /// `Value::bits` or by one of the constructors. Currently used by
+    /// the upcoming atomic-load path.
+    #[inline(always)]
+    pub const fn from_bits(bits: u64) -> Self {
+        Value(bits)
+    }
+}
+
+impl Default for Value {
+    #[inline(always)]
+    fn default() -> Self {
+        Self::NULL
+    }
+}
+
+impl std::fmt::Debug for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.kind() {
+            ValueKind::Null => write!(f, "Null"),
+            ValueKind::OmittedArg => write!(f, "OmittedArg"),
+            ValueKind::Int(i) => f.debug_tuple("Int").field(&i).finish(),
+            ValueKind::Bool(b) => f.debug_tuple("Bool").field(&b).finish(),
+            ValueKind::Object(p) => f.debug_tuple("Object").field(&p).finish(),
         }
     }
 }
 
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Value::OmittedArg => write!(f, "<omitted>"),
-            Value::Null => write!(f, "null"),
-            Value::Int(int) => write!(f, "{int}"),
-            Value::Float(float) => write!(f, "{}", format_float(*float)),
-            Value::Bool(bool) => write!(f, "{bool}"),
-            Value::Object(ptr) => write!(f, "{ptr}"),
+        match self.kind() {
+            ValueKind::OmittedArg => write!(f, "<omitted>"),
+            ValueKind::Null => write!(f, "null"),
+            ValueKind::Int(int) => write!(f, "{int}"),
+            ValueKind::Bool(bool) => write!(f, "{bool}"),
+            ValueKind::Object(ptr) => write!(f, "{ptr}"),
         }
     }
 }
@@ -739,12 +937,15 @@ impl ConstValue {
         F: Fn(crate::ObjectIndex) -> HeapPtr,
     {
         match self {
-            ConstValue::OmittedArg => Value::OmittedArg,
-            ConstValue::Null => Value::Null,
-            ConstValue::Int(v) => Value::Int(*v),
-            ConstValue::Float(v) => Value::Float(*v),
-            ConstValue::Bool(v) => Value::Bool(*v),
-            ConstValue::Object(idx) => Value::Object(resolve(*idx)),
+            ConstValue::OmittedArg => Value::OMITTED_ARG,
+            ConstValue::Null => Value::NULL,
+            ConstValue::Int(v) => Value::int(*v),
+            ConstValue::Float(_) => panic!(
+                "ConstValue::Float must be heap-boxed at engine load time — \
+                 use the float-allocating conversion path, not to_value"
+            ),
+            ConstValue::Bool(v) => Value::bool(*v),
+            ConstValue::Object(idx) => Value::object(resolve(*idx)),
             ConstValue::Type(_) => {
                 panic!(
                     "ConstValue::Type must not be pre-resolved via to_value — \
@@ -838,6 +1039,12 @@ pub enum Object {
 
     /// Map of values.
     Map(IndexMap<String, Value>),
+
+    /// Boxed 64-bit float. Floats are heap-allocated because `Value`
+    /// itself is a single tagged 64-bit word with no inline encoding
+    /// for full-precision f64. Allocation rate is low in practice —
+    /// BAML programs are integer-and-object-heavy.
+    Float(f64),
 
     Future(Future),
     /// Only used for requesting scheduling of a future, passed from VM to engine.
@@ -934,6 +1141,7 @@ impl std::fmt::Display for Object {
                 }
             },
             Object::UnscheduledFuture(_) => write!(f, "<unscheduled: spawn>"),
+            Object::Float(v) => write!(f, "{v}"),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(kind) => write!(f, "<sentinel {kind:?}>"),
             // Object::BamlType(type_ir) => write!(f, "<baml type: {type_ir}>"),
@@ -1441,14 +1649,13 @@ impl<O: Into<ObjectType>> From<O> for Type {
 impl Type {
     /// Get the type of a value.
     pub fn of(value: &Value, when_object: impl FnOnce(HeapPtr) -> ObjectType) -> Self {
-        match value {
-            Value::OmittedArg => Type::OmittedArg,
-            Value::Int(_) => Type::Int,
-            Value::Float(_) => Type::Float,
-            Value::Bool(_) => Type::Bool,
-            Value::Object(ptr) => Type::Object(when_object(*ptr)),
+        match value.kind() {
+            ValueKind::OmittedArg => Type::OmittedArg,
+            ValueKind::Int(_) => Type::Int,
+            ValueKind::Bool(_) => Type::Bool,
+            ValueKind::Object(ptr) => Type::Object(when_object(ptr)),
             // TODO: Actually?
-            Value::Null => Type::Object(ObjectType::Any),
+            ValueKind::Null => Type::Object(ObjectType::Any),
         }
     }
 }
@@ -1475,6 +1682,7 @@ pub enum ObjectType {
     Collector,
     Type,
     RustData,
+    Float,
 }
 
 impl ObjectType {
@@ -1497,6 +1705,7 @@ impl ObjectType {
             Object::Type(_) => Self::Type,
             Object::Future(fut) => Self::Future(fut.into()),
             Object::UnscheduledFuture(_) => Self::UnscheduledFuture,
+            Object::Float(_) => Self::Float,
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Self::Any,
             // Object::BamlType(_) => Self::Any, // TODO
@@ -1536,6 +1745,7 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Collector => write!(f, "collector"),
             ObjectType::Type => write!(f, "type"),
             ObjectType::RustData => write!(f, "rust_data"),
+            ObjectType::Float => write!(f, "float"),
         }
     }
 }
@@ -1638,7 +1848,7 @@ mod tests {
     fn omitted_arg_roundtrip_stays_in_sync() {
         let value = ConstValue::OmittedArg.to_value(|_| unreachable!("no object expected"));
 
-        assert_eq!(value, Value::OmittedArg);
+        assert_eq!(value, Value::OMITTED_ARG);
         assert_eq!(
             Type::of(&value, |_| unreachable!("omitted arg is not an object")),
             Type::OmittedArg

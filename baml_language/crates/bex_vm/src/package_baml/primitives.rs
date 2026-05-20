@@ -3,7 +3,7 @@
 //!
 //! Each `to_json` is a pure pass-through: the BAML runtime already stores
 //! these as the exact `Value` variants that the `json` union accepts
-//! (`Value::Int`, `Value::Float`, `Value::Bool`, `Value::Null`), so no
+//! (`Value::Int`, `Value::Float`, `Value::Bool`, `Value::NULL`), so no
 //! conversion is needed.
 
 use bex_vm_types::types::Value;

@@ -136,17 +136,18 @@ pub struct PackageBamlImpl;
 ///
 /// Used by both `Array.to_json` (in `array.rs`) and `Map.to_json` (in `map.rs`).
 pub(super) fn make_to_json_callee(vm: &mut BexVm, v: Value) -> Result<HeapPtr, VmRustFnError> {
-    let fn_name: String = match v {
-        Value::Null => "baml.Null.to_json".to_string(),
-        Value::Bool(_) => "baml.Bool.to_json".to_string(),
-        Value::Int(_) => "baml.Int.to_json".to_string(),
-        Value::Float(_) => "baml.Float.to_json".to_string(),
-        Value::OmittedArg => {
+    use bex_vm_types::ValueKind;
+    let fn_name: String = match v.kind() {
+        ValueKind::Null => "baml.Null.to_json".to_string(),
+        ValueKind::Bool(_) => "baml.Bool.to_json".to_string(),
+        ValueKind::Int(_) => "baml.Int.to_json".to_string(),
+        ValueKind::OmittedArg => {
             return Err(VmRustFnError::BamlError(VmBamlError::InvalidArgument {
                 message: "omitted argument cannot be converted to json".to_string(),
             }));
         }
-        Value::Object(ptr) => match vm.get_object(ptr) {
+        ValueKind::Object(ptr) => match vm.get_object(ptr) {
+            Object::Float(_) => "baml.Float.to_json".to_string(),
             Object::String(_) => "baml.String.to_json".to_string(),
             Object::Array(_) => "baml.Array.to_json".to_string(),
             Object::Map(_) => "baml.Map.to_json".to_string(),
@@ -182,7 +183,7 @@ pub(super) fn make_to_json_callee(vm: &mut BexVm, v: Value) -> Result<HeapPtr, V
 
     // Allocate a BoundMethod with the value as receiver.
     let bound = vm.alloc_bound_method(fn_ptr, v);
-    let Value::Object(bound_ptr) = bound else {
+    let Some(bound_ptr) = bound.as_object_ptr() else {
         unreachable!("alloc_bound_method always returns Value::Object");
     };
     Ok(bound_ptr)

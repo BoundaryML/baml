@@ -10,7 +10,7 @@ impl BamlClassString for PackageBamlImpl {
     fn to_json(vm: &mut BexVm, string: &str) -> Value {
         // `string` is already a valid `json` arm — BAML's `json` type alias
         // includes `string` as one of its union members.  Wrap the Rust `&str`
-        // back into a heap-allocated `Value::Object(Object::String(...))`.
+        // back into a heap-allocated `Value::object(Object::String(...))`.
         vm.alloc_string(string.to_string())
     }
 
@@ -271,7 +271,7 @@ impl BamlClassString for PackageBamlImpl {
     fn from_code_points(unicode: &[Value]) -> Result<String, VmRustFnError> {
         let mut result = String::with_capacity(unicode.len());
         for (i, val) in unicode.iter().enumerate() {
-            let Value::Int(n) = val else {
+            let Some(n) = val.as_int() else {
                 return Err(VmBamlError::InvalidArgument {
                     message: format!(
                         "string.from_code_points: element at index {i} is not an `int`"
@@ -279,7 +279,7 @@ impl BamlClassString for PackageBamlImpl {
                 }
                 .into());
             };
-            let cp = u32::try_from(*n).ok().and_then(char::from_u32).ok_or_else(|| {
+            let cp = u32::try_from(n).ok().and_then(char::from_u32).ok_or_else(|| {
                 VmBamlError::InvalidArgument {
                     message: format!(
                         "string.from_code_points: value {n} at index {i} is not a valid Unicode code point (must be in [0, 0x10FFFF] and not a surrogate)"

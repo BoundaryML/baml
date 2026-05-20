@@ -1,7 +1,10 @@
 use bex_vm_types::Value;
 
 use super::{BamlClassFloat, PackageBamlImpl};
-use crate::errors::{VmBamlError, VmPanic, VmRustFnError};
+use crate::{
+    BexVm,
+    errors::{VmBamlError, VmPanic, VmRustFnError},
+};
 
 // `i64::MIN as f64` is exactly representable (`-2^63`); `i64::MAX as f64` rounds
 // up to `2^63` (one past `i64::MAX`). So the in-range predicate is
@@ -32,8 +35,8 @@ fn float_to_int(value: f64, op: &str) -> Result<i64, VmRustFnError> {
 }
 
 impl BamlClassFloat for PackageBamlImpl {
-    fn to_json(float: f64) -> Value {
-        Value::Float(float)
+    fn to_json(vm: &mut BexVm, float: f64) -> Value {
+        vm.alloc_float(float)
     }
     // ── Predicates ────────────────────────────────────────────────────────────
 

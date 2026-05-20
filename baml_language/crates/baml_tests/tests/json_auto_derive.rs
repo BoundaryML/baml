@@ -809,7 +809,7 @@ async fn optional_class_override_honored_from_json_non_null() {
 #[tokio::test]
 async fn optional_class_override_honored_from_json_null() {
     // Same shape as above but the input has `b: null`. The native dispatcher's
-    // `Optional` arm short-circuits to `Value::Null` without calling B's
+    // `Optional` arm short-circuits to `Value::NULL` without calling B's
     // `from_json`. Without the short-circuit, calling `B.from_json(null)`
     // would land in B's user override and return `B{y:99}` — so this test
     // catches a regression where Optional accidentally falls through.

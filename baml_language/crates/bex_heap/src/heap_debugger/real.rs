@@ -370,7 +370,7 @@ impl BexHeap {
     }
 
     fn debug_assert_valid_value(&self, value: &Value) {
-        if let Value::Object(idx) = value {
+        if let Value::object(idx) = value {
             let _ = unsafe { self.get_object(*idx) };
         }
     }

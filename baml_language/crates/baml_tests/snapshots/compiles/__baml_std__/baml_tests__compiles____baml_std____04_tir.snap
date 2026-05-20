@@ -1234,7 +1234,19 @@ function baml.net.Socket.to_json(self: baml.net.Socket) -> baml.json.json throws
 function baml.net.Socket.from_json(j: baml.json.json) -> baml.net.Socket throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : baml.net.Socket
 }
+class baml.net.TcpListener {
+  _handle: $rust_type
+}
+function baml.net.TcpListener.to_json(self: baml.net.TcpListener) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<TcpListener>(self)) : baml.json.json
+}
+function baml.net.TcpListener.from_json(j: baml.json.json) -> baml.net.TcpListener throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : baml.net.TcpListener
+}
 class baml.net.Socket$stream {
+  _handle: $rust_type
+}
+class baml.net.TcpListener$stream {
   _handle: $rust_type
 }
 

@@ -248,9 +248,9 @@ pub(crate) fn display_instruction(
 /// all the information, we have to dereference the object and call it's
 /// `to_string` implementation.
 pub(crate) fn display_value(value: &Value) -> String {
-    match value {
-        Value::Object(ptr) => display_object_ptr(*ptr),
-        other => other.to_string(),
+    match value.as_object_ptr() {
+        Some(ptr) => display_object_ptr(ptr),
+        None => value.to_string(),
     }
 }
 

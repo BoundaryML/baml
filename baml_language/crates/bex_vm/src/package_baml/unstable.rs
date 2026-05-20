@@ -1,6 +1,9 @@
 use std::fmt::Write;
 
-use bex_vm_types::types::{Object, Value, format_float};
+use bex_vm_types::{
+    ValueKind,
+    types::{Object, Value, format_float},
+};
 
 use super::{BamlNamespaceUnstable, PackageBamlImpl};
 use crate::{
@@ -25,14 +28,14 @@ fn format_value_recursive(
         return Err(VmPanic::StackOverflow.into());
     }
 
-    match value {
-        Value::OmittedArg => Ok("<omitted>".to_string()),
-        Value::Null => Ok("null".to_string()),
-        Value::Int(i) => Ok(i.to_string()),
-        Value::Float(f) => Ok(format_float(*f)),
-        Value::Bool(b) => Ok(b.to_string()),
+    match value.kind() {
+        ValueKind::OmittedArg => Ok("<omitted>".to_string()),
+        ValueKind::Null => Ok("null".to_string()),
+        ValueKind::Int(i) => Ok(i.to_string()),
+        ValueKind::Bool(b) => Ok(b.to_string()),
 
-        Value::Object(obj_idx) => match vm.get_object(*obj_idx) {
+        ValueKind::Object(obj_idx) => match vm.get_object(obj_idx) {
+            Object::Float(f) => Ok(format_float(*f)),
             Object::Instance(instance) => {
                 let class = vm.get_object(instance.class);
                 let Object::Class(class) = class else {

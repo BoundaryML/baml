@@ -1975,7 +1975,15 @@ fn baml.http.SseStream.to_json(self: baml.http.SseStream) -> baml.json.json {
     }
 }
 
+fn baml.io.eprint = builtin(io)
+
+fn baml.io.eprintln = builtin(io)
+
 fn baml.io.input = builtin(io)
+
+fn baml.io.print = builtin(io)
+
+fn baml.io.println = builtin(io)
 
 fn baml.json.field = builtin(vm)
 
@@ -5917,7 +5925,11 @@ fn baml.media.Video.url = builtin(vm)
 
 fn baml.media.Audio.url = builtin(vm)
 
+fn baml.net.TcpListener.accept = builtin(io)
+
 fn baml.net.Socket.close = builtin(io)
+
+fn baml.net.TcpListener.close = builtin(io)
 
 fn baml.net.connect = builtin(io)
 
@@ -5942,7 +5954,51 @@ fn baml.net.Socket.from_json(j: baml.json.json) -> baml.net.Socket {
     }
 }
 
+fn baml.net.TcpListener.from_json(j: baml.json.json) -> baml.net.TcpListener {
+    // Locals:
+    let _0: baml.net.TcpListener // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.net.TcpListener);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.net.listen = builtin(io)
+
 fn baml.net.Socket.read = builtin(io)
+
+fn baml.net.TcpListener.to_json(self: baml.net.TcpListener) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.net.TcpListener // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.net.TcpListener);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
 
 fn baml.net.Socket.to_json(self: baml.net.Socket) -> baml.json.json {
     // Locals:
@@ -5964,6 +6020,8 @@ fn baml.net.Socket.to_json(self: baml.net.Socket) -> baml.json.json {
         return;
     }
 }
+
+fn baml.net.Socket.write = builtin(io)
 
 fn baml.panics.DivisionByZero.from_json(j: baml.json.json) -> baml.panics.DivisionByZero {
     // Locals:

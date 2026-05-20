@@ -425,7 +425,11 @@ function baml.http.to_json(self: ?) -> baml.json.json  [expr] {
 }
 
 --- <builtin>/baml/ns_io/io.baml ---
+function baml.io.eprint(s: string) -> null  [builtin]
+function baml.io.eprintln(s: string) -> null  [builtin]
 function baml.io.input(prompt: string?) -> string  [builtin]
+function baml.io.print(s: string) -> null  [builtin]
+function baml.io.println(s: string) -> null  [builtin]
 
 --- <builtin>/baml/ns_json/json.baml ---
 class baml.json.JsonDecodeError {
@@ -811,15 +815,28 @@ function baml.media.url(self: ?) -> string?  [builtin]
 class baml.net.Socket {
   _handle: $rust_type
 }
+class baml.net.TcpListener {
+  _handle: $rust_type
+}
+function baml.net.accept(self: ?) -> baml.net.Socket  [builtin]
+function baml.net.close(self: ?) -> null  [builtin]
 function baml.net.close(self: ?) -> null  [builtin]
 function baml.net.connect(addr: string) -> baml.net.Socket  [builtin]
 function baml.net.from_json(j: baml.json.json) -> baml.net.Socket  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
+function baml.net.from_json(j: baml.json.json) -> baml.net.TcpListener  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function baml.net.listen(addr: string) -> baml.net.TcpListener  [builtin]
 function baml.net.read(self: ?) -> string  [builtin]
 function baml.net.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
+function baml.net.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function baml.net.write(self: ?, data: string) -> null  [builtin]
 
 --- <builtin>/baml/ns_panics/panics.baml ---
 class baml.panics.AllocFailure {

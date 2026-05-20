@@ -422,7 +422,7 @@ pub struct BexEngine {
     /// `StoreGlobal` against this view as a `VmInternalError`.
     ///
     /// Stored as a [`SharedGlobals`] (rather than a plain `Arc<[Value]>`)
-    /// so the GC can trace + forward `Value::Object(HeapPtr)` entries: the
+    /// so the GC can trace + forward `Value::object(HeapPtr)` entries: the
     /// engine registers a clone of this `SharedGlobals` as a [`RootHaver`]
     /// permit holder during `BexEngine::new`. Without that registration any
     /// runtime heap object stored in a top-level `let` global was invisible
@@ -518,7 +518,54 @@ impl BexEngine {
         let test_cases = bytecode.test_cases;
 
         // Extract compile-time objects for the heap
-        let compile_time_objects: Vec<Object> = bytecode.objects.into_iter().collect();
+        let mut compile_time_objects: Vec<Object> = bytecode.objects.into_iter().collect();
+
+        // Float boxing pre-pass: scan every ConstValue::Float in function
+        // constants and module globals, allocate a compile-time Object::Float
+        // for each unique bit pattern, and rewrite the ConstValue::Float
+        // entries to ConstValue::Object(idx). Required because Value can no
+        // longer hold a float inline (heap-boxed; see spawn_value_tearing.md).
+        let mut float_indices: std::collections::HashMap<u64, usize> =
+            std::collections::HashMap::new();
+        // Pre-scan to discover unique floats.
+        for obj in &compile_time_objects {
+            if let Object::Function(func) = obj {
+                for cv in &func.bytecode.constants {
+                    if let bex_vm_types::ConstValue::Float(f) = cv {
+                        let next_idx = compile_time_objects.len() + float_indices.len();
+                        float_indices.entry(f.to_bits()).or_insert(next_idx);
+                    }
+                }
+            }
+        }
+        for cv in &bytecode.globals {
+            if let bex_vm_types::ConstValue::Float(f) = cv {
+                let next_idx = compile_time_objects.len() + float_indices.len();
+                float_indices.entry(f.to_bits()).or_insert(next_idx);
+            }
+        }
+        // Append boxes in index order.
+        let mut float_entries: Vec<(u64, usize)> =
+            float_indices.iter().map(|(k, v)| (*k, *v)).collect();
+        float_entries.sort_by_key(|(_, idx)| *idx);
+        for (bits, _) in float_entries {
+            compile_time_objects.push(Object::Float(f64::from_bits(bits)));
+        }
+        // Rewrite each ConstValue::Float -> ConstValue::Object(idx).
+        for obj in compile_time_objects.iter_mut() {
+            if let Object::Function(func) = obj {
+                for cv in func.bytecode.constants.iter_mut() {
+                    if let bex_vm_types::ConstValue::Float(f) = cv {
+                        let idx = float_indices[&f.to_bits()];
+                        *cv = bex_vm_types::ConstValue::Object(
+                            bex_vm_types::ObjectIndex::from_raw(idx),
+                        );
+                    }
+                }
+            }
+        }
+        // We can't rewrite bytecode.globals in place (immutable borrow), so we
+        // do it just before the globals_vec conversion below.
 
         // Encode compact bytecode for all functions before the heap freezes them.
         // This must happen before BexHeap::new() because objects become immutable
@@ -588,10 +635,18 @@ impl BexEngine {
 
         // Convert compile-time globals (ConstValue) to runtime globals (Value).
         // Object references are converted from ObjectIndex to HeapPtr.
+        // Float globals were redirected to compile-time Object::Float entries
+        // by the boxing pre-pass above.
         let globals_vec: Vec<Value> = bytecode
             .globals
             .into_iter()
-            .map(|cv| cv.to_value(|idx| heap.compile_time_ptr(idx.into_raw())))
+            .map(|cv| match cv {
+                bex_vm_types::ConstValue::Float(f) => {
+                    let idx = float_indices[&f.to_bits()];
+                    Value::object(heap.compile_time_ptr(idx))
+                }
+                other => other.to_value(|idx| heap.compile_time_ptr(idx.into_raw())),
+            })
             .collect();
         // Mutable during `$init` so `StoreGlobal` can populate top-level let
         // bindings; frozen into `Arc<[Value]>` once `$init` finishes (see below).
@@ -643,7 +698,7 @@ impl BexEngine {
                             // Handle events during $init: push null and continue.
                             // No span context exists during init, so the event is dropped,
                             // but we must push a return value to keep the stack balanced.
-                            vm.stack.push(Value::Null);
+                            vm.stack.push(Value::NULL);
                             continue;
                         }
                         Ok(other) => {
@@ -662,7 +717,7 @@ impl BexEngine {
         }
 
         // Freeze the now-populated globals into a `SharedGlobals` so the GC
-        // can trace + forward `Value::Object(HeapPtr)` entries. Every
+        // can trace + forward `Value::object(HeapPtr)` entries. Every
         // post-`$init` VM cloned into a `call_function` invocation reads
         // from this shared instance via `VmGlobals::Shared(globals.clone())`.
         // `StoreGlobal` against the shared view is rejected by the VM as
@@ -693,7 +748,7 @@ impl BexEngine {
         );
 
         // Register the frozen globals pool as its own permit holder so the
-        // GC traces and forwards `Value::Object(HeapPtr)` entries (e.g.
+        // GC traces and forwards `Value::object(HeapPtr)` entries (e.g.
         // top-level `let g = [1, 2, 3]` populated during `$init`). The
         // permit is never `acquire()`d — its sole job is to participate in
         // `HeapGuard::collect_roots` / `forward_roots` walks. The
@@ -1139,7 +1194,7 @@ impl BexEngine {
             .into_iter()
             .map(|arg| match arg {
                 BexCallArg::Provided(arg) => self.convert_external_to_vm_value(&mut thread, *arg),
-                BexCallArg::OmittedDefault => Ok(Value::OmittedArg),
+                BexCallArg::OmittedDefault => Ok(Value::OMITTED_ARG),
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -1623,7 +1678,7 @@ impl BexEngine {
     /// `baml.panics.Cancelled`. Used to differentiate cancellation panics
     /// from regular errors when settling a spawned thread that unwound.
     fn is_cancelled_panic(&self, value: &Value) -> bool {
-        let Value::Object(ptr) = value else {
+        let Some(ptr) = value.as_object_ptr() else {
             return false;
         };
         let Some(&cancelled_class_ptr) = self.resolved_class_names.get(CANCELLED_PANIC_CLASS)
@@ -1950,7 +2005,7 @@ impl BexEngine {
                     let cancelled = cancel.is_cancelled();
 
                     let (return_value, event_result) = if !copy_objects {
-                        if let Value::Object(ptr) = value {
+                        if let Some(ptr) = value.as_object_ptr() {
                             let handle = self.heap.create_handle(ptr);
                             (
                                 BexExternalValue::Handle(handle),
@@ -2118,7 +2173,7 @@ impl BexEngine {
                             call_id,
                         )
                         .await?;
-                    thread.vm.stack.push(Value::Object(future_ptr));
+                    thread.vm.stack.push(Value::object(future_ptr));
                 }
 
                 VmExecState::Await(future_id) => {
@@ -2324,7 +2379,7 @@ impl BexEngine {
                     // pops its two arguments but does not push a return value, so we
                     // push null here before the VM resumes at the next instruction
                     // (which will store or discard the return value).
-                    thread.vm.stack.push(Value::Null);
+                    thread.vm.stack.push(Value::NULL);
                 }
 
                 VmExecState::Notify(_notification) => {
