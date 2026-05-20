@@ -287,6 +287,19 @@ fn function_signature(display: &str, func_info: &UserFunctionInfo) -> String {
 /// through `--json-args` (i.e. the non-primitives). Returns `None` when
 /// every parameter is a primitive, since clap's auto-generated `Options:`
 /// table already documents them.
+///
+/// TODO: this block currently renders as plain text below clap's
+/// bold-purple `Usage:` / `Options:` headers, so it visually disconnects
+/// from the rest of `--help`. Worse, when every param is non-primitive
+/// the function-signature line in `about` already lists each one and
+/// this block just restates it. Two improvements worth landing
+/// together:
+///   1. Style the `JSON-only parameters` header with `CLAP_STYLING`'s
+///      `header` style and the type names with `placeholder`, so it
+///      sits inside clap's visual palette instead of below it.
+///   2. Suppress the block when every param is non-primitive — fall
+///      back to the function-signature line which already shows them
+///      all.
 fn json_only_params_block(func_info: &UserFunctionInfo) -> Option<String> {
     use std::fmt::Write as _;
     let json_only: Vec<(&String, &Ty, bool)> = func_info
