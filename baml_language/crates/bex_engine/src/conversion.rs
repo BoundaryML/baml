@@ -410,6 +410,11 @@ impl BexEngine {
                 }
                 slice[global_index]
             }
+            BexExternalValue::HostValue(_) => {
+                return Err(EngineError::CannotConvert {
+                    type_name: "host_value".to_string(),
+                });
+            }
         })
     }
 }

@@ -1639,6 +1639,7 @@ dependencies = [
  "bex_resource_types",
  "bex_vm_types",
  "indexmap 2.14.0",
+ "once_cell",
  "tokio",
 ]
 

@@ -135,6 +135,13 @@ pub fn external_to_outbound(
             }))
         }
 
+        // HostValue encoding is WIP
+        BexExternalValue::HostValue(_) => {
+            return Err(CtypesError::InternalError(
+                "HostValue cannot be encoded to BamlOutboundValue yet".to_string(),
+            ));
+        }
+
         // All opaque types → insert into handle table, encode as BamlOutboundHandle.
         BexExternalValue::Handle(_)
         | BexExternalValue::FunctionRef { .. }

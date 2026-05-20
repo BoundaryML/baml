@@ -584,6 +584,9 @@ fn owned_inner(
                 Ok(BexExternalValue::RustData(std::sync::Arc::clone(data)))
             }
             BexExternalValue::Adt(adt) => Ok(BexExternalValue::Adt(adt.clone())),
+            BexExternalValue::HostValue(hv) => {
+                Ok(BexExternalValue::HostValue(std::sync::Arc::clone(hv)))
+            }
         },
         BexValue::Value(Value::Object(heap_ptr)) | BexValue::HeapPtr(heap_ptr) => {
             let obj = unsafe { heap_ptr.get() };
