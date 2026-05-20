@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 4093
 ---
 === MIR2 ===
 
@@ -7214,6 +7215,12 @@ fn baml.TypeValue.from_json(j: baml.json.json) -> baml.TypeValue {
         return;
     }
 }
+
+fn baml.TypeValue.implemented_by = builtin(vm)
+
+fn baml.TypeValue.implementors = builtin(vm)
+
+fn baml.TypeValue.implements = builtin(vm)
 
 fn baml.TypeValue.to_json(self: baml.TypeValue) -> baml.json.json {
     // Locals:

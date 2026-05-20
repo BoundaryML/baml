@@ -183,6 +183,73 @@ fn extract_schema_attrs(
 
 pub use bex_vm_types::Program as ProgramAlias;
 
+/// One entry in the merged field list for a class. Owned so it can outlive
+/// transient `Arc<ItemTree>` borrows for interface-contributed fields.
+type MergedFieldEntry = (
+    String,
+    Option<baml_compiler2_ast::SpannedTypeExpr>,
+    Vec<baml_compiler2_hir::item_tree::Attribute>,
+    Vec<Name>,
+    Vec<Name>,
+);
+
+/// BEP-044: collect actual runtime fields. Class fields keep their bare
+/// names; fields redeclared inside `implements I {}` blocks are emitted as
+/// qualified `I.field` slots.
+fn collect_class_fields_with_implements(
+    db: &dyn baml_compiler2_tir::Db,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    pkg_ns: &[Name],
+    class_data: &baml_compiler2_hir::item_tree::Class,
+) -> Vec<MergedFieldEntry> {
+    let mut out: Vec<MergedFieldEntry> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    for field in &class_data.fields {
+        let name = field.name.to_string();
+        if !seen.insert(name.clone()) {
+            continue;
+        }
+        out.push((
+            name,
+            field.type_expr.clone(),
+            field.attributes.clone(),
+            class_data.generic_params.clone(),
+            pkg_ns.to_vec(),
+        ));
+    }
+
+    for impl_target in &class_data.implements {
+        let Some(iface_loc) = baml_compiler2_tir::interfaces::resolve_path_to_interface(
+            db,
+            &impl_target.target.expr,
+            pkg_items,
+            pkg_ns,
+        ) else {
+            continue;
+        };
+        let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+        let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
+            continue;
+        };
+        for field in &impl_target.fields {
+            let name = format!("{}.{}", iface_data.name, field.name);
+            if !seen.insert(name.clone()) {
+                continue;
+            }
+            out.push((
+                name,
+                field.type_expr.clone(),
+                field.attributes.clone(),
+                class_data.generic_params.clone(),
+                pkg_ns.to_vec(),
+            ));
+        }
+    }
+
+    out
+}
+
 /// Build a `TypeName` from a fully-qualified dotted path.
 ///
 /// Emit always fully qualifies — `display_name` keeps the literal package
@@ -299,9 +366,20 @@ pub fn generate_project_bytecode_with_opt(
             // empty, `tir2_to_template` produces `TyTemplate::Concrete(...)`
             // for every leaf and `field_template == Concrete(field_type)`.
             let class_generic_params: Vec<baml_base::Name> = class_data.generic_params.clone();
-            for (idx, field) in class_data.fields.iter().enumerate() {
-                field_indices.insert(field.name.to_string(), idx);
-                let (field_type, field_template) = match field.type_expr.as_ref() {
+            // BEP-044: collect class's own fields plus fields contributed by
+            // each `implements I {}` block (transitively through `extends`).
+            // Each entry carries the type expression's binding context
+            // (generic params + namespace) needed to lower it correctly.
+            let merged_fields = collect_class_fields_with_implements(
+                db,
+                pkg_items,
+                &pkg_info.namespace_path,
+                class_data,
+            );
+            for (idx, (name, type_expr, attrs, gen_params, ns)) in merged_fields.iter().enumerate()
+            {
+                field_indices.insert(name.clone(), idx);
+                let (field_type, field_template) = match type_expr {
                     Some(te) => {
                         let mut diags = Vec::new();
                         // Pass `class_generic_params` as the binding context so
@@ -312,12 +390,7 @@ pub fn generate_project_bytecode_with_opt(
                         // the `TyTemplate` (TypeVar→TypeArgRef(N)) used by
                         // typed runtime walking.
                         let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-                            db,
-                            &te.expr,
-                            pkg_items,
-                            &pkg_info.namespace_path,
-                            &class_generic_params,
-                            &mut diags,
+                            db, &te.expr, pkg_items, ns, gen_params, &mut diags,
                         );
                         let resolved_ty = cache.convert(&tir_ty);
                         let template = baml_compiler2_mir::tir2_to_template(
@@ -334,9 +407,9 @@ pub fn generate_project_bytecode_with_opt(
                         (null_ty.clone(), baml_type::TyTemplate::Concrete(null_ty))
                     }
                 };
-                let (field_desc, field_alias, field_skip) = extract_schema_attrs(&field.attributes);
+                let (field_desc, field_alias, field_skip) = extract_schema_attrs(attrs.as_slice());
                 fields.push(ClassField {
-                    name: field.name.to_string(),
+                    name: name.clone(),
                     field_type,
                     field_template,
                     description: field_desc,
@@ -388,21 +461,25 @@ pub fn generate_project_bytecode_with_opt(
             class_object_indices
                 .entry(short_name.clone())
                 .or_insert(class_obj_idx);
-            classes.entry(display_name).or_insert_with(|| {
+            // The display- and short-name maps must agree with the merged
+            // field indices (which include interface-injected fields) used
+            // by the Class object above. Use a closure that rebuilds the
+            // same merged ordering.
+            let rebuild_indices = || {
+                let merged = collect_class_fields_with_implements(
+                    db,
+                    pkg_items,
+                    &pkg_info.namespace_path,
+                    class_data,
+                );
                 let mut m = HashMap::new();
-                for (idx, field) in class_data.fields.iter().enumerate() {
-                    m.insert(field.name.to_string(), idx);
+                for (idx, (name, _, _, _, _)) in merged.iter().enumerate() {
+                    m.insert(name.clone(), idx);
                 }
                 m
-            });
-            classes.entry(short_name).or_insert_with(|| {
-                // Rebuild field_indices since we moved it above; re-read from class_data.
-                let mut m = HashMap::new();
-                for (idx, field) in class_data.fields.iter().enumerate() {
-                    m.insert(field.name.to_string(), idx);
-                }
-                m
-            });
+            };
+            classes.entry(display_name).or_insert_with(rebuild_indices);
+            classes.entry(short_name).or_insert_with(rebuild_indices);
         }
     }
 
@@ -857,6 +934,58 @@ pub fn generate_project_bytecode_with_opt(
                 program.recursive_type_alias_defs.insert(type_name, mir_ty);
             }
         }
+    }
+
+    // --- Pass 7.6: Interface implementation registry (BEP-044) ---
+    //
+    // Inverts the per-class `package_implements_registry` (class → ifaces it
+    // implements) into a runtime-friendly per-interface map (iface → classes
+    // that implement it), then bakes it into `Program.interface_implementors`
+    // so the `type` reflection methods (`implements`, `implementors`,
+    // `implemented_by`) have a static lookup table at runtime.
+    {
+        use std::collections::HashSet;
+
+        let mut inverted: indexmap::IndexMap<baml_type::TypeName, Vec<baml_type::TypeName>> =
+            indexmap::IndexMap::new();
+        let mut seen_pairs: HashSet<(String, String)> = HashSet::new();
+        for file in &all_files {
+            let pkg_info = file_package(db, *file);
+            let pkg_id = PackageId::new(db, pkg_info.package.clone());
+            let registry = baml_compiler2_tir::interfaces::package_implements_registry(db, pkg_id);
+            let item_tree = file_item_tree(db, *file);
+            let class_module_path: Vec<Name> = std::iter::once(pkg_info.package.clone())
+                .chain(pkg_info.namespace_path.iter().cloned())
+                .collect();
+            for class_data in item_tree.classes.values() {
+                let class_fq = class_module_path
+                    .iter()
+                    .chain(std::iter::once(&class_data.name))
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(".");
+                let class_name = fq_to_type_name(&class_fq);
+                let class_qtn = baml_compiler2_tir::ty::QualifiedTypeName::new(
+                    pkg_info.package.clone(),
+                    pkg_info.namespace_path.clone(),
+                    class_data.name.clone(),
+                );
+                let Some(iface_qtns) = registry.class_implements.get(&class_qtn) else {
+                    continue;
+                };
+                for iface_qtn in iface_qtns {
+                    let iface_name = baml_compiler2_mir::qtn_to_type_name(iface_qtn);
+                    let iface_fq = format!("{iface_name}");
+                    if seen_pairs.insert((iface_fq, class_fq.clone())) {
+                        inverted
+                            .entry(iface_name)
+                            .or_default()
+                            .push(class_name.clone());
+                    }
+                }
+            }
+        }
+        program.interface_implementors = inverted;
     }
 
     // --- Pass 8: Test cases (only when requested) ---
@@ -1643,6 +1772,8 @@ mod tests {
         let func_data = baml_compiler2_hir::item_tree::Function {
             name: baml_base::Name::new("f"),
             generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
+            generic_param_bound_aliases: Vec::new(),
             params: vec![
                 param("required", None),
                 param("with_default", Some(default_ref)),

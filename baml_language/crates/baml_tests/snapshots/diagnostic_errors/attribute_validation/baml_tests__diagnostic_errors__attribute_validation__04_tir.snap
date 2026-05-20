@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 31855
 ---
 === TIR2 ===
 class user.HasDuplicateDescription {
@@ -21,7 +22,7 @@ function user.HasDuplicateField.to_json(self: user.HasDuplicateField) -> baml.js
 }
 function user.HasDuplicateField.from_json(j: baml.json.json) -> user.HasDuplicateField throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   HasDuplicateField { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")), name: baml.json.from_json<int>(baml.json.field(j, "name")) } : user.HasDuplicateField
-  !! 196..213: type mismatch: expected int, got string
+  !! 196..213: type mismatch: expected string, got int
 }
 class user.HasDuplicateFieldAttr {
   name: string @alias("n") @description("Name") @alias("nm")

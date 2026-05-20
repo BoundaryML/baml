@@ -146,6 +146,8 @@ fn synthesize_to_json(class: &ClassDef, span: TextRange) -> FunctionDef {
     FunctionDef {
         name: Name::new("to_json"),
         generic_params: vec![],
+        generic_param_bounds: vec![],
+        generic_param_bound_aliases: vec![],
         params: vec![self_param],
         defaults: FunctionDefaults::empty(),
         return_type: Some(spanned(json_type(), span)),
@@ -185,6 +187,8 @@ fn synthesize_from_json(class: &ClassDef, span: TextRange) -> FunctionDef {
         // `from_json` does not introduce its own generic params; the class's
         // generic params are in scope via the enclosing class.
         generic_params: vec![],
+        generic_param_bounds: vec![],
+        generic_param_bound_aliases: vec![],
         params: vec![j_param],
         defaults: FunctionDefaults::empty(),
         return_type: Some(spanned(class_self_type(class), span)),

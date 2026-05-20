@@ -202,6 +202,44 @@ pub enum DiagnosticId {
 
     // Void type position errors (E0110)
     VoidInNonReturnPosition,
+
+    // Interface diagnostics (BEP-044; E0112-E0120)
+    /// `implements I {}` references an interface that does not exist.
+    UnknownInterface,
+    /// A class is missing the body of a required interface method.
+    MissingInterfaceMethod,
+    /// A class implements the same interface in two blocks.
+    DuplicateImplementsBlock,
+    /// A method declared in an `implements` block does not exist on the target interface.
+    UnknownInterfaceMember,
+    /// A class field's type does not match the interface field it satisfies.
+    InterfaceFieldTypeMismatch,
+    /// Two interfaces contribute conflicting types for the same field.
+    ConflictingInterfaceFieldTypes,
+    /// An interface's `extends` chain forms a cycle.
+    InterfaceExtendsCycle,
+    /// `extends Foo` references a type that is not an interface.
+    NotAnInterface,
+    /// A method body in `implements I {}` has a signature that doesn't match
+    /// the interface's declared signature for that method.
+    InterfaceMethodSignatureMismatch,
+    /// Two `implements` blocks on the same class declare methods with the
+    /// same name — unqualified calls would be ambiguous (BEP-044
+    /// §"Method Disambiguation").
+    AmbiguousInterfaceMethod,
+    /// An interface's `extends` list inherits conflicting types for the same
+    /// field from two parent interfaces.
+    InterfaceExtendsFieldConflict,
+    /// `default.method()` references a required method that has no default body.
+    DefaultOnRequiredMethod,
+    /// An `implements` block is missing a required interface field.
+    MissingInterfaceField,
+    /// A class implements an interface that `requires` other interfaces,
+    /// but doesn't explicitly implement them.
+    MissingRequiredInterface,
+    /// Top-level `implements I for T` attempted to implement an interface
+    /// that declares fields.
+    OutOfBodyImplementsFieldInterface,
 }
 
 impl DiagnosticId {
@@ -357,6 +395,23 @@ impl DiagnosticId {
 
             // Void type position errors
             DiagnosticId::VoidInNonReturnPosition => "E0110",
+
+            // Interface diagnostics
+            DiagnosticId::UnknownInterface => "E0112",
+            DiagnosticId::MissingInterfaceMethod => "E0113",
+            DiagnosticId::DuplicateImplementsBlock => "E0114",
+            DiagnosticId::UnknownInterfaceMember => "E0115",
+            DiagnosticId::InterfaceFieldTypeMismatch => "E0116",
+            DiagnosticId::ConflictingInterfaceFieldTypes => "E0117",
+            DiagnosticId::InterfaceExtendsCycle => "E0118",
+            DiagnosticId::NotAnInterface => "E0119",
+            DiagnosticId::InterfaceMethodSignatureMismatch => "E0120",
+            DiagnosticId::AmbiguousInterfaceMethod => "E0121",
+            DiagnosticId::InterfaceExtendsFieldConflict => "E0122",
+            DiagnosticId::DefaultOnRequiredMethod => "E0123",
+            DiagnosticId::MissingInterfaceField => "E0124",
+            DiagnosticId::MissingRequiredInterface => "E0125",
+            DiagnosticId::OutOfBodyImplementsFieldInterface => "E0126",
         }
     }
 }

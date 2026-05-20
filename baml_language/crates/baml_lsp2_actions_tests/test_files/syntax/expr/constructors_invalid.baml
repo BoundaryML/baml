@@ -71,6 +71,15 @@ function Foo() -> Bar {
 
 //----
 //- diagnostics
+// Error: type mismatch: expected int, got "hello"
+//    ╭─[ expr_constructors_invalid.baml:7:20 ]
+//    │
+//  7 │   let x = Bar { a: "hello", c: 12 };
+//    │                    ───┬───  
+//    │                       ╰───── type mismatch: expected int, got "hello"
+//    │ 
+//    │ Note: Error code: E0001
+// ───╯
 // Error: unresolved name: a
 //     ╭─[ expr_constructors_invalid.baml:11:21 ]
 //     │

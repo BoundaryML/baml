@@ -43,6 +43,127 @@ pub fn lower_type_expr(
 /// Use this when lowering type expressions from a function/class signature
 /// that lives in a sub-namespace of its package. For example, `File` in
 /// `baml/fs.baml` (namespace `["fs"]`) resolves via `lookup_type(&["fs", "File"])`.
+/// Public wrapper for [`substitute_self`] so callers in other crates
+/// can pre-resolve `Self` before invoking [`lower_type_expr_in_ns`].
+pub fn substitute_self_in(type_expr: &TypeExpr, replacement: &TypeExpr) -> TypeExpr {
+    substitute_self(type_expr, replacement)
+}
+
+/// BEP-044 generic bounds: walk `type_expr` and replace any single-
+/// segment `Path` whose name appears in `subst` with the matching
+/// replacement `TypeExpr`. Used at MIR lowering to substitute bounded
+/// type-vars (`T extends Named`) with their bound (`Named`) so the
+/// runtime sees a concrete type to dispatch on.
+pub fn substitute_paths_in(
+    type_expr: &TypeExpr,
+    subst: &std::collections::HashMap<baml_base::Name, TypeExpr>,
+) -> TypeExpr {
+    if subst.is_empty() {
+        return type_expr.clone();
+    }
+    fn walk(
+        ty: &TypeExpr,
+        subst: &std::collections::HashMap<baml_base::Name, TypeExpr>,
+    ) -> TypeExpr {
+        match ty {
+            TypeExpr::Path {
+                segments,
+                generic_args,
+                attrs,
+            } => {
+                if segments.len() == 1
+                    && generic_args.is_empty()
+                    && let Some(replacement) = subst.get(&segments[0])
+                {
+                    return replacement.clone();
+                }
+                TypeExpr::Path {
+                    segments: segments.clone(),
+                    generic_args: generic_args.iter().map(|a| walk(a, subst)).collect(),
+                    attrs: attrs.clone(),
+                }
+            }
+            TypeExpr::List { inner, attrs } => TypeExpr::List {
+                inner: Box::new(walk(inner, subst)),
+                attrs: attrs.clone(),
+            },
+            TypeExpr::Optional { inner, attrs } => TypeExpr::Optional {
+                inner: Box::new(walk(inner, subst)),
+                attrs: attrs.clone(),
+            },
+            TypeExpr::Map { key, value, attrs } => TypeExpr::Map {
+                key: Box::new(walk(key, subst)),
+                value: Box::new(walk(value, subst)),
+                attrs: attrs.clone(),
+            },
+            TypeExpr::Union { variants, attrs } => TypeExpr::Union {
+                variants: variants.iter().map(|v| walk(v, subst)).collect(),
+                attrs: attrs.clone(),
+            },
+            _ => ty.clone(),
+        }
+    }
+    walk(type_expr, subst)
+}
+
+/// BEP-044: walk `type_expr` and replace any `Self` reference with
+/// `replacement`. Used by signature lowering to pre-resolve `Self` to
+/// the enclosing class/interface's type expression before regular
+/// resolution runs.
+fn substitute_self(type_expr: &TypeExpr, replacement: &TypeExpr) -> TypeExpr {
+    match type_expr {
+        TypeExpr::Path {
+            segments,
+            generic_args,
+            attrs,
+        } => {
+            if segments.len() == 1 && generic_args.is_empty() && segments[0].as_str() == "Self" {
+                return replacement.clone();
+            }
+            TypeExpr::Path {
+                segments: segments.clone(),
+                generic_args: generic_args
+                    .iter()
+                    .map(|a| substitute_self(a, replacement))
+                    .collect(),
+                attrs: attrs.clone(),
+            }
+        }
+        TypeExpr::List { inner, attrs } => TypeExpr::List {
+            inner: Box::new(substitute_self(inner, replacement)),
+            attrs: attrs.clone(),
+        },
+        TypeExpr::Optional { inner, attrs } => TypeExpr::Optional {
+            inner: Box::new(substitute_self(inner, replacement)),
+            attrs: attrs.clone(),
+        },
+        TypeExpr::Map { key, value, attrs } => TypeExpr::Map {
+            key: Box::new(substitute_self(key, replacement)),
+            value: Box::new(substitute_self(value, replacement)),
+            attrs: attrs.clone(),
+        },
+        TypeExpr::Union { variants, attrs } => TypeExpr::Union {
+            variants: variants
+                .iter()
+                .map(|v| substitute_self(v, replacement))
+                .collect(),
+            attrs: attrs.clone(),
+        },
+        _ => type_expr.clone(),
+    }
+}
+
+/// Build a `TypeExpr::Path` referring to a single named type, so
+/// [`substitute_self`] can swap `Self` for the enclosing class /
+/// interface name.
+pub fn type_expr_for_name(name: baml_base::Name) -> TypeExpr {
+    TypeExpr::Path {
+        segments: vec![name],
+        generic_args: Vec::new(),
+        attrs: Vec::new(),
+    }
+}
+
 pub fn lower_type_expr_in_ns(
     db: &dyn crate::Db,
     type_expr: &TypeExpr,
@@ -111,6 +232,24 @@ pub fn lower_type_expr_in_ns(
                         // (e.g. `expected Box<int>, got Box`) when the arity
                         // mismatch actually matters at the use site.
                         Ty::Class(qualify_def(db, def, short), lowered_args, TyAttr::default())
+                    }
+                    Definition::Interface(_) => {
+                        // Same generic-arg handling as `Class` — interface
+                        // parameters are valid in the same positions.
+                        let lowered_args: Vec<Ty> = generic_args
+                            .iter()
+                            .map(|ga| {
+                                lower_type_expr_in_ns(
+                                    db,
+                                    ga,
+                                    package_items,
+                                    ns_context,
+                                    generic_params,
+                                    diagnostics,
+                                )
+                            })
+                            .collect();
+                        Ty::Interface(qualify_def(db, def, short), lowered_args, TyAttr::default())
                     }
                     Definition::Enum(_) => {
                         // Enums are not generic — validate args and emit a diagnostic if any were supplied.

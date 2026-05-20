@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 3999
 ---
 === HIR2 ===
 
@@ -1016,6 +1017,9 @@ class baml.TypeValue {
 function baml.from_json(j: baml.json.json) -> baml.TypeValue  [expr] {
   baml.TypeValue {  }
 }
+function baml.implemented_by(self: ?, other: type) -> bool  [builtin]
+function baml.implementors(self: ?) -> type[]  [builtin]
+function baml.implements(self: ?, other: type) -> bool  [builtin]
 function baml.to_json(self: ?) -> baml.json.json  [expr] {
   map {  }
 }

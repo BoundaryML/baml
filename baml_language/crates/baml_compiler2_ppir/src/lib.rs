@@ -410,6 +410,8 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     let companion = ast::FunctionDef {
                         name: SmolStr::new(format!("{}$stream", func.name)),
                         generic_params: func.generic_params.clone(),
+                        generic_param_bounds: func.generic_param_bounds.clone(),
+                        generic_param_bound_aliases: func.generic_param_bound_aliases.clone(),
                         params: func.params.clone(),
                         defaults: func.defaults.clone(),
                         return_type: Some(stream_return_type.clone()),
@@ -453,6 +455,8 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     let companion = ast::FunctionDef {
                         name: SmolStr::new(format!("{}$parse_stream", func.name)),
                         generic_params: func.generic_params.clone(),
+                        generic_param_bounds: func.generic_param_bounds.clone(),
+                        generic_param_bound_aliases: func.generic_param_bound_aliases.clone(),
                         params: vec![sse_param],
                         defaults: ast::FunctionDefaults::empty(),
                         return_type: Some(stream_return_type),

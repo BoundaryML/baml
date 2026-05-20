@@ -210,6 +210,40 @@ pub enum TirTypeError {
         /// The full expression text (e.g. `a.name`)
         expr: String,
     },
+
+    /// BEP-044 §"Method Disambiguation": an unqualified call resolves to
+    /// a method declared by two or more interfaces — the receiver carries
+    /// no information to pick one. `sources` lists every contributing
+    /// interface name.
+    AmbiguousInterfaceMethod {
+        class_name: Name,
+        method_name: Name,
+        sources: Vec<Name>,
+    },
+
+    /// BEP-044 interface fields live in per-interface namespaces. A bare
+    /// field access is ambiguous when multiple implemented interfaces provide
+    /// the same field name and the class does not shadow it with an own field.
+    AmbiguousInterfaceField {
+        class_name: Name,
+        field_name: Name,
+        sources: Vec<Name>,
+    },
+
+    /// Interface fields must be constructed with their qualified name, e.g.
+    /// `Animal.name`, so object literals cannot accidentally fill the wrong
+    /// namespace.
+    InterfaceFieldRequiresQualifiedConstruction {
+        field_name: Name,
+        qualified_name: Name,
+    },
+
+    /// BEP-044 §"default keyword scoping rules": `default.method()` on a
+    /// required method (no default body) is a compile error.
+    DefaultOnRequiredMethod {
+        interface_name: Name,
+        method_name: Name,
+    },
 }
 
 impl fmt::Display for TirTypeError {
@@ -524,6 +558,63 @@ impl fmt::Display for TirTypeError {
                     "did you mean `{suggested}`? `{expr}` does not handle the case when `{base}` is null"
                 )
             }
+            TirTypeError::AmbiguousInterfaceMethod {
+                class_name,
+                method_name,
+                sources,
+            } => {
+                let iface_list = sources
+                    .iter()
+                    .map(|n| format!("`{n}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let hint = sources
+                    .iter()
+                    .map(|n| format!("obj.{n}.{method_name}()"))
+                    .collect::<Vec<_>>()
+                    .join(" or ");
+                write!(
+                    f,
+                    "method `{method_name}` on class `{class_name}` is declared by \
+                     multiple interfaces: {iface_list}; unqualified calls will be \
+                    ambiguous — use {hint}"
+                )
+            }
+            TirTypeError::AmbiguousInterfaceField {
+                class_name,
+                field_name,
+                sources,
+            } => {
+                let iface_list = sources
+                    .iter()
+                    .map(|n| format!("`{n}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let hint = sources
+                    .iter()
+                    .map(|n| format!("obj.{n}.{field_name}"))
+                    .collect::<Vec<_>>()
+                    .join(" or ");
+                write!(
+                    f,
+                    "field `{field_name}` on class `{class_name}` is ambiguous because it is declared by multiple interfaces: {iface_list}; use {hint}"
+                )
+            }
+            TirTypeError::InterfaceFieldRequiresQualifiedConstruction {
+                field_name,
+                qualified_name,
+            } => write!(
+                f,
+                "interface field `{field_name}` must be constructed as `{qualified_name}`"
+            ),
+            TirTypeError::DefaultOnRequiredMethod {
+                interface_name,
+                method_name,
+            } => write!(
+                f,
+                "`default.{method_name}()` is invalid: method `{method_name}` on interface \
+                 `{interface_name}` has no default body"
+            ),
         }
     }
 }

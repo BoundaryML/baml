@@ -32,11 +32,22 @@ pub struct EnvVarRef {
 /// Returns true if `kind` can serve as an identifier token in expression position.
 ///
 /// The parser allows `KW_CLIENT` (and `WORD`) inside `PATH_EXPR` / `FIELD_ACCESS_EXPR`
-/// nodes when `client` is used as a variable or field name. This must match
-/// exactly what `parse_path_or_ident` accepts; adding a new keyword there
-/// requires adding it here too.
+/// nodes when `client` is used as a variable or field name. The interface-related
+/// keywords (`implements`, `interface`, `extends`) likewise remain valid as
+/// member names — e.g. `dog_t.implements(animal_t)` on the reflection `type`
+/// value. This must match exactly what `parse_path_or_ident` / `at_member_name`
+/// accept in the parser.
 fn is_ident_token(kind: SyntaxKind) -> bool {
-    kind == SyntaxKind::WORD || kind == SyntaxKind::KW_CLIENT
+    matches!(
+        kind,
+        SyntaxKind::WORD
+            | SyntaxKind::KW_CLIENT
+            | SyntaxKind::KW_IMPLEMENTS
+            | SyntaxKind::KW_IMPLEMENT
+            | SyntaxKind::KW_INTERFACE
+            | SyntaxKind::KW_EXTENDS
+            | SyntaxKind::KW_REQUIRES
+    )
 }
 
 /// Locate the `GENERIC_ARGS` node that should be treated as the *call-site*
@@ -2294,8 +2305,8 @@ impl LoweringContext {
         for child in node.children() {
             match child.kind() {
                 SyntaxKind::OBJECT_FIELD => {
-                    // OBJECT_FIELD: WORD COLON expr
-                    let mut key = None;
+                    // OBJECT_FIELD: WORD (DOT WORD)* COLON expr
+                    let mut key_segments = Vec::new();
                     let mut val = None;
                     let mut seen_colon = false;
                     for elem in child.children_with_tokens() {
@@ -2306,9 +2317,7 @@ impl LoweringContext {
                             rowan::NodeOrToken::Token(t)
                                 if is_ident_token(t.kind()) && !seen_colon =>
                             {
-                                if key.is_none() {
-                                    key = Some(Name::new(t.text()));
-                                }
+                                key_segments.push(t.text().to_string());
                             }
                             rowan::NodeOrToken::Node(n) if seen_colon && val.is_none() => {
                                 val = Some(self.lower_expr(&n));
@@ -2320,6 +2329,11 @@ impl LoweringContext {
                             rowan::NodeOrToken::Node(_) => {}
                         }
                     }
+                    let key = if key_segments.is_empty() {
+                        None
+                    } else {
+                        Some(Name::new(key_segments.join(".")))
+                    };
                     if let (Some(k), Some(val_id)) = (key, val) {
                         fields.push((k, val_id));
                     }
@@ -2500,6 +2514,8 @@ impl LoweringContext {
         let func_def = FunctionDef {
             name: Name::new("<anonymous function>"),
             generic_params,
+            generic_param_bounds: Vec::new(),
+            generic_param_bound_aliases: Vec::new(),
             params,
             defaults,
             return_type,
@@ -2952,6 +2968,8 @@ impl LoweringContext {
         let lambda_def = FunctionDef {
             name: Name::new("<test body>"),
             generic_params: vec![],
+            generic_param_bounds: vec![],
+            generic_param_bound_aliases: vec![],
             params: vec![],
             defaults: FunctionDefaults::empty(),
             return_type: None,
@@ -3048,6 +3066,8 @@ impl LoweringContext {
         let sub_collector_def = FunctionDef {
             name: Name::new("<testset collector>"),
             generic_params: vec![],
+            generic_param_bounds: vec![],
+            generic_param_bound_aliases: vec![],
             params: vec![sub_param],
             defaults: FunctionDefaults::empty(),
             return_type: None,

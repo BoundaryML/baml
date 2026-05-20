@@ -1,5 +1,5 @@
 class InterfaceTwo {
-  interface strin
+  iface strin
 }
 
 class InterfaceOne {
@@ -10,7 +10,7 @@ class InterfaceOne {
 //   -->  class/spelling_error.baml:2
 //    |
 //  1 | class InterfaceTwo {
-//  2 |   interface strin
+//  2 |   iface strin
 //    |
 // error: Type `InterfaceT` does not exist. Did you mean one of these: `InterfaceTwo`, `InterfaceOne`, `int`, `true`, `string`, `float`, `false`, `bool`?
 //   -->  class/spelling_error.baml:6
@@ -22,11 +22,11 @@ class InterfaceOne {
 //----
 //- diagnostics
 // Error: unresolved type: strin
-//    ╭─[ class_spelling_error.baml:2:12 ]
+//    ╭─[ class_spelling_error.baml:2:8 ]
 //    │
-//  2 │   interface strin
-//    │            ───┬──  
-//    │               ╰──── unresolved type: strin
+//  2 │   iface strin
+//    │        ───┬──  
+//    │           ╰──── unresolved type: strin
 //    │ 
 //    │ Note: Error code: E0002
 // ───╯

@@ -89,6 +89,16 @@ pub struct Program {
     /// Only recursive aliases are stored (non-recursive ones are expanded inline).
     /// Keyed by [`baml_type::TypeName`] for consistent identity with `Ty::TypeAlias`.
     pub recursive_type_alias_defs: IndexMap<baml_type::TypeName, Ty>,
+
+    /// Per-program interface implementation registry (BEP-044).
+    ///
+    /// Maps each interface's `TypeName` to the list of class `TypeName`s that
+    /// nominally implement it (transitively through `extends`). Used by the
+    /// runtime reflection methods `type.implementors()`, `type.implements()`,
+    /// and `type.implemented_by()`.
+    ///
+    /// Empty for programs without interfaces.
+    pub interface_implementors: IndexMap<baml_type::TypeName, Vec<baml_type::TypeName>>,
 }
 
 /// Metadata for building a client tree at runtime.

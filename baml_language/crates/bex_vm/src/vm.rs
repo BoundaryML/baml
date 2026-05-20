@@ -356,6 +356,13 @@ pub struct BexVm {
     /// re-enter the VM (via `YieldToCall`) therefore see their own type-args
     /// even if the inner callback uses different ones.
     pending_call_type_args: Vec<baml_type::Ty>,
+
+    /// Per-program interface implementation registry (BEP-044). Used by the
+    /// `type.implements()` / `type.implementors()` / `type.implemented_by()`
+    /// reflection methods. Shared `Arc` so spawned VMs (lambdas, futures)
+    /// don't duplicate the map.
+    pub interface_implementors:
+        Arc<indexmap::IndexMap<baml_type::TypeName, Vec<baml_type::TypeName>>>,
 }
 
 /// VM execution state.
@@ -490,6 +497,8 @@ pub struct BytecodeProgram {
     pub test_cases: Vec<bex_vm_types::TestCase>,
     /// Recursive type alias definitions for output format rendering.
     pub recursive_type_alias_defs: indexmap::IndexMap<baml_type::TypeName, baml_type::Ty>,
+    /// Interface → implementors registry (BEP-044) for runtime reflection.
+    pub interface_implementors: indexmap::IndexMap<baml_type::TypeName, Vec<baml_type::TypeName>>,
 }
 
 /// Convert a compiled `Program` to a `BytecodeProgram` with native functions attached.
@@ -548,6 +557,7 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
         client_metadata: program.client_metadata,
         test_cases: program.test_cases,
         recursive_type_alias_defs: program.recursive_type_alias_defs,
+        interface_implementors: program.interface_implementors,
     })
 }
 
@@ -643,6 +653,9 @@ impl BexVm {
         resolved_class_names: HashMap<String, HeapPtr>,
         #[cfg(not(target_arch = "wasm32"))] park_requested: Arc<AtomicBool>,
         argv: Arc<[String]>,
+        interface_implementors: Arc<
+            indexmap::IndexMap<baml_type::TypeName, Vec<baml_type::TypeName>>,
+        >,
     ) -> Self {
         // Defer the first TLAB chunk reservation until the first `tlab.alloc`,
         // which the engine reaches only after the VM has been registered as a
@@ -694,6 +707,7 @@ impl BexVm {
             current_span_context: None,
             argv,
             pending_call_type_args: Vec::new(),
+            interface_implementors,
         }
     }
 
@@ -975,6 +989,8 @@ impl BexVm {
                 .map(|(name, idx)| (name, heap.compile_time_ptr(idx.into_raw()))),
         );
 
+        let interface_implementors = Arc::new(bytecode.interface_implementors);
+
         Ok(Self::new(
             heap,
             globals,
@@ -982,6 +998,7 @@ impl BexVm {
             #[cfg(not(target_arch = "wasm32"))]
             park_requested,
             Arc::from(Vec::<String>::new()),
+            interface_implementors,
         ))
     }
 

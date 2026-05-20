@@ -237,6 +237,16 @@ fn write_ty_identity(out: &mut String, ty: &Ty) {
             }
             out.push('>');
         }
+        Ty::Interface(qtn, args, _) => {
+            let _ = write!(out, "I:{qtn}<");
+            for (i, a) in args.iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                write_ty_identity(out, a);
+            }
+            out.push('>');
+        }
         Ty::Primitive(p, _) => {
             let _ = write!(out, "P:{p:?}");
         }

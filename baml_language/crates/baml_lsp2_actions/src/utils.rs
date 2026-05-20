@@ -150,7 +150,7 @@ pub fn display_function_param_ty(param: &FunctionParamTy) -> String {
 pub fn display_ty(ty: &Ty) -> String {
     use baml_compiler2_tir::ty::PrimitiveType;
     let rendered = match ty {
-        Ty::Class(qn, type_args, _) => {
+        Ty::Class(qn, type_args, _) | Ty::Interface(qn, type_args, _) => {
             if type_args.is_empty() {
                 qn.to_string()
             } else {

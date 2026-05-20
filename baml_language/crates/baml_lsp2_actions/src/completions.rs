@@ -1608,6 +1608,12 @@ fn completions_for_top_level() -> Vec<Completion> {
         Completion::new("type", CompletionKind::Keyword)
             .with_detail("type alias declaration")
             .with_sort("08_type"),
+        Completion::new("interface", CompletionKind::Keyword)
+            .with_detail("interface declaration")
+            .with_sort("09_interface"),
+        Completion::new("implements", CompletionKind::Keyword)
+            .with_detail("out-of-body interface implementation")
+            .with_sort("10_implements"),
     ]
 }
 

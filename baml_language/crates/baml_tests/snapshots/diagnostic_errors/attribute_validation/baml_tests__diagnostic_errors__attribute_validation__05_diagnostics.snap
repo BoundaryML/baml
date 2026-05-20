@@ -1,14 +1,14 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 25847
+assertion_line: 31910
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: type mismatch: expected int, got string
+  [type] Error: type mismatch: expected string, got int
     ╭─[ test.baml:10:7 ]
     │
  10 │ class HasDuplicateField {
     │       ────────┬────────  
-    │               ╰────────── type mismatch: expected int, got string
+    │               ╰────────── type mismatch: expected string, got int
     │ 
     │ Note: Error code: E0001
 ────╯

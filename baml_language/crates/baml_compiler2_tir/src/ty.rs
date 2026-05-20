@@ -103,6 +103,11 @@ impl fmt::Display for QualifiedTypeName {
 pub enum Ty {
     /// A class type — just the name, no expansion.
     Class(QualifiedTypeName, Vec<Ty>, TyAttr),
+    /// An interface type (BEP-044) — nominal contract. Subtyping is
+    /// determined by explicit `implements I { ... }` blocks on classes.
+    /// Generic args follow the same shape as `Class` for parameterised
+    /// interfaces like `Container<T>`.
+    Interface(QualifiedTypeName, Vec<Ty>, TyAttr),
     /// An enum type.
     Enum(QualifiedTypeName, TyAttr),
     /// An enum variant — Enum(qualified) . Variant(name).
@@ -374,6 +379,7 @@ impl Ty {
     pub fn attr(&self) -> &TyAttr {
         match self {
             Ty::Class(_, _, a)
+            | Ty::Interface(_, _, a)
             | Ty::Enum(_, a)
             | Ty::EnumVariant(_, _, a)
             | Ty::TypeAlias(_, a)
@@ -402,6 +408,7 @@ impl Ty {
     pub fn with_attr(mut self, new_attr: TyAttr) -> Ty {
         match &mut self {
             Ty::Class(_, _, a)
+            | Ty::Interface(_, _, a)
             | Ty::Enum(_, a)
             | Ty::EnumVariant(_, _, a)
             | Ty::TypeAlias(_, a)
@@ -541,6 +548,30 @@ impl fmt::Display for Ty {
                     write!(f, "<{}>", args.join(", "))?;
                 } else if !qn.generic_params.is_empty() {
                     // Unspecialized generic class — show `_` placeholders, one per declared param.
+                    let placeholders = vec!["_"; qn.generic_params.len()];
+                    write!(f, "<{}>", placeholders.join(", "))?;
+                }
+                Ok(())
+            }
+            Ty::Interface(qn, type_args, _) => {
+                let namespace = qn
+                    .namespace()
+                    .iter()
+                    .map(std::string::ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(".");
+                if !namespace.is_empty() {
+                    write!(f, "{}.{}.{}", qn.package(), namespace, qn.name())?;
+                } else {
+                    write!(f, "{}.{}", qn.package(), qn.name())?;
+                }
+                if !type_args.is_empty() {
+                    let args: Vec<_> = type_args
+                        .iter()
+                        .map(std::string::ToString::to_string)
+                        .collect();
+                    write!(f, "<{}>", args.join(", "))?;
+                } else if !qn.generic_params.is_empty() {
                     let placeholders = vec!["_"; qn.generic_params.len()];
                     write!(f, "<{}>", placeholders.join(", "))?;
                 }

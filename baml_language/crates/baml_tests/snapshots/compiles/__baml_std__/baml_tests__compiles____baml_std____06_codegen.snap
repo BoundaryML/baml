@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 4227
 ---
 function baml.Array.at(self: null, index: int) -> void? {
 }
@@ -493,6 +494,15 @@ function baml.String.trim_start(self: null) -> string {
 function baml.TypeValue.from_json(j: baml.json.json) -> baml.TypeValue {
     alloc_instance baml.TypeValue
     return
+}
+
+function baml.TypeValue.implemented_by(self: null, other: type) -> bool {
+}
+
+function baml.TypeValue.implementors(self: null) -> type[] {
+}
+
+function baml.TypeValue.implements(self: null, other: type) -> bool {
 }
 
 function baml.TypeValue.to_json(self: null) -> baml.json.json {

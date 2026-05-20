@@ -445,6 +445,11 @@ pub struct BexEngine {
     active_calls: Mutex<HashMap<CallId, CancellationToken>>,
 
     futures: FutureManager,
+
+    /// Per-program interface implementors registry (BEP-044), kept here so
+    /// every spawned VM (including post-`$init` workers) sees the same map
+    /// without cloning the underlying `IndexMap`.
+    interface_implementors: Arc<indexmap::IndexMap<baml_type::TypeName, Vec<baml_type::TypeName>>>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -580,6 +585,10 @@ impl BexEngine {
         #[cfg(not(target_arch = "wasm32"))]
         let park_requested = Arc::new(AtomicBool::new(false));
 
+        let interface_implementors: Arc<
+            indexmap::IndexMap<baml_type::TypeName, Vec<baml_type::TypeName>>,
+        > = Arc::new(bytecode.interface_implementors.clone());
+
         // Run $init for each package in dependency order.
         // $init evaluates top-level let-binding initializers and stores their
         // results into the global slots via StoreGlobal instructions.
@@ -597,6 +606,7 @@ impl BexEngine {
                     #[cfg(not(target_arch = "wasm32"))]
                     Arc::clone(&park_requested),
                     Arc::clone(&argv),
+                    Arc::clone(&interface_implementors),
                 );
                 vm.set_entry_point(*init_ptr, &[]);
                 // Drive the VM to completion. $init only contains synchronous
@@ -720,6 +730,7 @@ impl BexEngine {
             park_requested,
             active_calls: Mutex::new(HashMap::new()),
             futures: FutureManager::new(futures_permit),
+            interface_implementors,
         })
     }
 
@@ -1098,6 +1109,7 @@ impl BexEngine {
             #[cfg(not(target_arch = "wasm32"))]
             Arc::clone(&self.park_requested),
             Arc::clone(&self.argv),
+            Arc::clone(&self.interface_implementors),
         );
         let vm = self.heap_permit_manager.new_permit(vm).await;
         let mut vm = vm.acquire().await;

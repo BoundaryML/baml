@@ -1076,6 +1076,7 @@ pub enum Item {
     Function(FunctionDef),
     Class(ClassDef),
     Enum(EnumDef),
+    Interface(InterfaceDef),
     TypeAlias(TypeAliasDef),
     Client(ClientDef),
     Test(TestDef),
@@ -1083,6 +1084,7 @@ pub enum Item {
     TemplateString(TemplateStringDef),
     RetryPolicy(RetryPolicyDef),
     Let(LetDef),
+    ImplementsFor(ImplementsForDef),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1099,6 +1101,13 @@ pub struct FunctionDef {
     pub name: Name,
     /// Generic type parameters (e.g., `["T", "U"]`). Empty for non-generic functions.
     pub generic_params: Vec<Name>,
+    /// BEP-044 generic bounds: parallel to `generic_params`. Each entry
+    /// is the `TypeExpr` after `extends` (e.g. `T extends Named` stores
+    /// `Some(Path(["Named"]))`); `None` for unbounded parameters.
+    pub generic_param_bounds: Vec<Option<TypeExpr>>,
+    /// BEP-044 generic-bound aliases parallel to `generic_params`.
+    /// `T extends Container<int> as Ints` stores `Some("Ints")`.
+    pub generic_param_bound_aliases: Vec<Option<Name>>,
     pub params: Vec<Param>,
     pub defaults: FunctionDefaults,
     pub return_type: Option<SpannedTypeExpr>,
@@ -1203,11 +1212,95 @@ pub struct ClassDef {
     pub generic_params: Vec<Name>,
     pub fields: Vec<FieldDef>,
     pub methods: Vec<FunctionDef>,
+    /// `implements I { ... }` blocks declared inside the class body (BEP-044).
+    pub implements: Vec<ImplementsBlockDef>,
     pub attributes: Vec<RawAttribute>,
     /// Joined `///` doc-comment lines preceding this declaration.
     pub docstring: Option<std::string::String>,
     pub span: TextRange,
     pub name_span: TextRange,
+}
+
+/// Definition of an `interface` declaration (BEP-044).
+///
+/// Interfaces declare a contract over fields and methods. Classes opt in to
+/// the contract via [`ImplementsBlockDef`] inside the class body.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InterfaceDef {
+    pub name: Name,
+    /// Generic type parameters (e.g., `["T"]` for `Container<T>`). Empty for non-generic interfaces.
+    pub generic_params: Vec<Name>,
+    /// Parent interfaces from `extends I1, I2, ...`. Each is parsed as a
+    /// `TypeExpr` so we can accept generic parents like `Container<int>`.
+    pub extends: Vec<SpannedTypeExpr>,
+    /// Field signatures declared on the interface. Interface fields cannot
+    /// have default values — see BEP-044 §"Interface Fields".
+    pub fields: Vec<FieldDef>,
+    /// Required methods (no body). Implementing classes must provide a body.
+    pub required_methods: Vec<MethodSigDef>,
+    /// Default methods (with body). Implementing classes inherit unless they override.
+    pub default_methods: Vec<FunctionDef>,
+    pub attributes: Vec<RawAttribute>,
+    pub docstring: Option<std::string::String>,
+    pub span: TextRange,
+    pub name_span: TextRange,
+}
+
+/// Method signature declared in an interface body without a body — i.e., a
+/// required method. Mirrors [`FunctionDef`] minus the body.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MethodSigDef {
+    pub name: Name,
+    pub generic_params: Vec<Name>,
+    pub params: Vec<Param>,
+    pub defaults: FunctionDefaults,
+    pub return_type: Option<SpannedTypeExpr>,
+    pub throws: Option<SpannedTypeExpr>,
+    pub attributes: Vec<RawAttribute>,
+    pub docstring: Option<std::string::String>,
+    pub span: TextRange,
+    pub name_span: TextRange,
+}
+
+/// One `implements I { ... }` block inside a class body (BEP-044).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImplementsBlockDef {
+    /// The target interface, captured as a `TypeExpr` so we can accept generic
+    /// parameterization like `implements Container<int>`. The path's first
+    /// segment is the interface name.
+    pub target: SpannedTypeExpr,
+    /// Field redeclarations inside this `implements` block (BEP-044).
+    pub fields: Vec<FieldDef>,
+    /// Method overrides / definitions inside this `implements` block.
+    pub methods: Vec<FunctionDef>,
+    /// True when this block came from top-level `implements I for T`.
+    pub is_out_of_body: bool,
+    pub span: TextRange,
+}
+
+impl ImplementsBlockDef {
+    /// Convenience: the interface's simple name (last path segment), used for
+    /// diagnostics. Returns `None` if the target is not a simple path.
+    pub fn interface_name(&self) -> Option<&Name> {
+        match &self.target.expr {
+            TypeExpr::Path { segments, .. } => segments.last(),
+            _ => None,
+        }
+    }
+}
+
+/// Top-level `implements I for T { ... }` block (BEP-044).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImplementsForDef {
+    /// The interface being implemented.
+    pub interface_target: SpannedTypeExpr,
+    /// The type the interface is being implemented for.
+    pub for_target: SpannedTypeExpr,
+    /// Field redeclarations inside the block.
+    pub fields: Vec<FieldDef>,
+    /// Method definitions inside the block.
+    pub methods: Vec<FunctionDef>,
+    pub span: TextRange,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

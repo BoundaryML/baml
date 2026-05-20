@@ -348,6 +348,15 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
             }
         }
 
+        Definition::Interface(iface_loc) => {
+            let item_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+            let iface = &item_tree[iface_loc.id(db)];
+            TypeInfo::OtherItem {
+                name: iface.name.as_str().to_string(),
+                kind: "interface",
+            }
+        }
+
         Definition::TypeAlias(alias_loc) => {
             let item_tree = baml_compiler2_hir::file_item_tree(db, alias_loc.file(db));
             let alias_data = &item_tree[alias_loc.id(db)];

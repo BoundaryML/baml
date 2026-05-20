@@ -1,0 +1,2142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>baml_compiler2_tir — Architecture Deep Dive</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #181b24;
+    --surface2: #1e222e;
+    --border: #2a2f3e;
+    --accent: #6c8cff;
+    --accent2: #a78bfa;
+    --accent3: #34d399;
+    --accent4: #f472b6;
+    --accent5: #fbbf24;
+    --text: #e2e8f0;
+    --text-dim: #8892a8;
+    --text-bright: #f8fafc;
+    --code-bg: #141720;
+    --red: #f87171;
+    --orange: #fb923c;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    overflow: hidden;
+    height: 100vh;
+  }
+
+  .slide {
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    padding: 3rem 5rem;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+  }
+
+  .slide.active {
+    display: flex;
+    opacity: 1;
+  }
+
+  .slide-content {
+    max-width: 1200px;
+    width: 100%;
+  }
+
+  h1 {
+    font-size: 3rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    margin-bottom: 1rem;
+  }
+
+  h2 {
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 1.5rem;
+  }
+
+  h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+  }
+
+  .subtitle {
+    font-size: 1.25rem;
+    color: var(--text-dim);
+    margin-bottom: 2rem;
+  }
+
+  .gradient-text {
+    background: linear-gradient(135deg, var(--accent), var(--accent2), var(--accent4));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .tag {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 1rem;
+  }
+
+  .tag-blue { background: rgba(108, 140, 255, 0.15); color: var(--accent); }
+  .tag-green { background: rgba(52, 211, 153, 0.15); color: var(--accent3); }
+  .tag-purple { background: rgba(167, 139, 250, 0.15); color: var(--accent2); }
+  .tag-pink { background: rgba(244, 114, 182, 0.15); color: var(--accent4); }
+  .tag-amber { background: rgba(251, 191, 36, 0.15); color: var(--accent5); }
+
+  /* Architecture Diagram Styles */
+  .arch-diagram {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: center;
+    margin: 1.5rem 0;
+  }
+
+  .arch-stage {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+    max-width: 800px;
+  }
+
+  .arch-box {
+    padding: 0.75rem 1.5rem;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    text-align: center;
+    flex: 1;
+    border: 1px solid;
+    position: relative;
+  }
+
+  .arch-box.ast { background: rgba(251, 191, 36, 0.1); border-color: rgba(251, 191, 36, 0.3); color: var(--accent5); }
+  .arch-box.hir { background: rgba(244, 114, 182, 0.1); border-color: rgba(244, 114, 182, 0.3); color: var(--accent4); }
+  .arch-box.ppir { background: rgba(167, 139, 250, 0.1); border-color: rgba(167, 139, 250, 0.3); color: var(--accent2); }
+  .arch-box.tir { background: rgba(108, 140, 255, 0.15); border-color: rgba(108, 140, 255, 0.5); color: var(--accent); box-shadow: 0 0 20px rgba(108, 140, 255, 0.15); }
+  .arch-box.vir { background: rgba(52, 211, 153, 0.1); border-color: rgba(52, 211, 153, 0.3); color: var(--accent3); }
+  .arch-box.runtime { background: rgba(248, 113, 113, 0.1); border-color: rgba(248, 113, 113, 0.3); color: var(--red); }
+
+  .arch-arrow {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 1.2rem;
+    padding: 0.15rem 0;
+  }
+
+  .arch-desc {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    text-align: right;
+    min-width: 200px;
+    flex-shrink: 0;
+  }
+
+  /* Grid layouts */
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-top: 1rem;
+  }
+
+  .grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+  }
+
+  .card h3 {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .card p, .card ul {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+
+  .card ul {
+    padding-left: 1.25rem;
+  }
+
+  .card ul li {
+    margin-bottom: 0.25rem;
+  }
+
+  .card-accent {
+    border-left: 3px solid var(--accent);
+  }
+
+  .card-green { border-left: 3px solid var(--accent3); }
+  .card-purple { border-left: 3px solid var(--accent2); }
+  .card-pink { border-left: 3px solid var(--accent4); }
+  .card-amber { border-left: 3px solid var(--accent5); }
+  .card-red { border-left: 3px solid var(--red); }
+
+  /* Code blocks */
+  code {
+    font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+    font-size: 0.85em;
+    background: var(--code-bg);
+    padding: 0.15em 0.4em;
+    border-radius: 4px;
+    color: var(--accent3);
+  }
+
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem;
+    overflow-x: auto;
+    font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+    font-size: 0.8rem;
+    line-height: 1.7;
+    margin: 1rem 0;
+  }
+
+  pre code {
+    background: none;
+    padding: 0;
+    font-size: inherit;
+  }
+
+  .kw { color: var(--accent4); }
+  .ty { color: var(--accent); }
+  .fn-name { color: var(--accent3); }
+  .str { color: var(--accent5); }
+  .comment { color: var(--text-dim); font-style: italic; }
+  .field { color: var(--accent2); }
+  .variant { color: var(--orange); }
+
+  /* Flow diagram */
+  .flow {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    margin: 1.5rem 0;
+    overflow-x: auto;
+  }
+
+  .flow-step {
+    flex: 1;
+    min-width: 140px;
+    padding: 1rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .flow-step:first-child { border-radius: 10px 0 0 10px; }
+  .flow-step:last-child { border-radius: 0 10px 10px 0; }
+
+  .flow-step h4 {
+    font-size: 0.85rem;
+    font-weight: 700;
+    margin-bottom: 0.4rem;
+  }
+
+  .flow-step p {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    line-height: 1.4;
+  }
+
+  .flow-step::after {
+    content: '→';
+    position: absolute;
+    right: -0.65rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1.1rem;
+    color: var(--accent);
+    z-index: 1;
+  }
+
+  .flow-step:last-child::after { content: ''; }
+
+  /* Type tree */
+  .type-tree {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.8rem;
+    background: var(--code-bg);
+    padding: 1.25rem;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    margin: 1rem 0;
+  }
+
+  .type-tree .branch {
+    padding-left: 1.5rem;
+    position: relative;
+  }
+
+  .type-tree .branch::before {
+    content: '├─';
+    position: absolute;
+    left: 0;
+    color: var(--text-dim);
+  }
+
+  .type-tree .branch:last-child::before {
+    content: '└─';
+  }
+
+  .type-tree .leaf { color: var(--accent3); }
+  .type-tree .node { color: var(--accent); font-weight: 600; }
+  .type-tree .desc { color: var(--text-dim); font-weight: 400; }
+
+  /* Subtype diagram */
+  .subtype-diagram {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 1rem 0;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.85rem;
+  }
+
+  .subtype-row {
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+  }
+
+  .subtype-node {
+    padding: 0.4rem 1rem;
+    border-radius: 8px;
+    text-align: center;
+    font-weight: 600;
+    min-width: 100px;
+  }
+
+  .subtype-arrow {
+    color: var(--text-dim);
+    font-size: 0.75rem;
+  }
+
+  /* Module map */
+  .module-map {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.45rem;
+    margin: 1rem 0;
+  }
+
+  .module-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.6rem 0.8rem;
+    font-size: 0.75rem;
+    transition: border-color 0.2s;
+  }
+
+  .module-item:hover {
+    border-color: var(--accent);
+  }
+
+  .module-item .name {
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-bright);
+    font-size: 0.7rem;
+    display: block;
+    margin-bottom: 0.2rem;
+  }
+
+  .module-item .desc {
+    color: var(--text-dim);
+    line-height: 1.3;
+  }
+
+  /* Navigation */
+  .nav {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    display: flex;
+    gap: 0.5rem;
+    z-index: 100;
+  }
+
+  .nav button {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 1rem;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .nav button:hover {
+    background: var(--surface2);
+    border-color: var(--accent);
+  }
+
+  .progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    transition: width 0.3s ease;
+    z-index: 100;
+  }
+
+  .slide-counter {
+    position: fixed;
+    bottom: 2.35rem;
+    right: 8rem;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+    z-index: 100;
+  }
+
+  /* Callout */
+  .callout {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 10px 10px 0;
+    padding: 1rem 1.25rem;
+    margin: 1rem 0;
+    font-size: 0.9rem;
+    line-height: 1.6;
+  }
+
+  .callout strong {
+    color: var(--accent);
+  }
+
+  /* Salsa diagram */
+  .salsa-flow {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin: 1rem 0;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem;
+  }
+
+  .salsa-query {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+  }
+
+  .salsa-query .icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    flex-shrink: 0;
+  }
+
+  .salsa-cached { background: rgba(52, 211, 153, 0.08); }
+  .salsa-cached .icon { background: rgba(52, 211, 153, 0.15); color: var(--accent3); }
+  .salsa-recompute { background: rgba(248, 113, 113, 0.08); }
+  .salsa-recompute .icon { background: rgba(248, 113, 113, 0.15); color: var(--red); }
+  .salsa-indent { margin-left: 2rem; }
+  .salsa-indent-2 { margin-left: 4rem; }
+
+  /* Variance table */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.85rem;
+  }
+
+  th {
+    text-align: left;
+    padding: 0.6rem 1rem;
+    background: var(--surface);
+    border-bottom: 2px solid var(--border);
+    font-weight: 600;
+    color: var(--text-bright);
+  }
+
+  td {
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-dim);
+  }
+
+  td:first-child {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--accent);
+    font-size: 0.8rem;
+  }
+
+  /* Animation */
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .slide.active .slide-content > * {
+    animation: fadeInUp 0.5s ease forwards;
+  }
+
+  .slide.active .slide-content > *:nth-child(2) { animation-delay: 0.05s; }
+  .slide.active .slide-content > *:nth-child(3) { animation-delay: 0.1s; }
+  .slide.active .slide-content > *:nth-child(4) { animation-delay: 0.15s; }
+  .slide.active .slide-content > *:nth-child(5) { animation-delay: 0.2s; }
+
+  /* File path links */
+  a.fp {
+    color: var(--accent3);
+    text-decoration: none;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.78em;
+    background: rgba(52, 211, 153, 0.08);
+    padding: 0.1em 0.45em;
+    border-radius: 4px;
+    border: 1px solid rgba(52, 211, 153, 0.15);
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  a.fp:hover {
+    background: rgba(52, 211, 153, 0.18);
+    border-color: rgba(52, 211, 153, 0.4);
+    color: #5eead4;
+  }
+
+  a.fp .line-count {
+    color: var(--text-dim);
+    font-size: 0.85em;
+    margin-left: 0.3em;
+  }
+
+  .module-item a.fp {
+    font-size: 0.7rem;
+    display: block;
+    margin-bottom: 0.2rem;
+    padding: 0.15em 0.4em;
+  }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    .slide { padding: 2rem; }
+    h1 { font-size: 2rem; }
+    h2 { font-size: 1.5rem; }
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    .module-map { grid-template-columns: 1fr 1fr; }
+    .flow { flex-direction: column; }
+    .flow-step::after { content: '↓' !important; right: 50%; transform: translate(50%, 0); top: auto; bottom: -0.65rem; }
+  }
+  /* ═══ Typecheck Animation System ═══ */
+  .anim-wrapper { width: 100%; }
+  .anim-container { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin: 0.75rem 0; }
+  .anim-code-panel { background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem 0; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.78rem; line-height: 2.1; min-height: 120px; }
+  .anim-line { padding: 0.1rem 1rem; border-left: 2px solid transparent; transition: all 0.35s ease; opacity: 0.3; white-space: nowrap; }
+  .anim-line.active { background: rgba(108, 140, 255, 0.1); border-left-color: var(--accent); opacity: 1; }
+  .anim-line.done { opacity: 0.65; }
+  .anim-line .ln { color: var(--text-dim); margin-right: 1.2rem; font-size: 0.7rem; min-width: 1rem; display: inline-block; text-align: right; user-select: none; }
+  .anim-state-panel { display: flex; flex-direction: column; gap: 0.6rem; }
+  .state-section { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 0.5rem 0.65rem; }
+  .state-section h4 { font-size: 0.68rem; color: var(--text-dim); font-family: 'JetBrains Mono', monospace; margin-bottom: 0.35rem; padding-bottom: 0.25rem; border-bottom: 1px solid var(--border); }
+  .state-table { display: flex; flex-direction: column; gap: 0.15rem; min-height: 1.2rem; }
+  .state-empty { color: var(--text-dim); font-size: 0.68rem; font-style: italic; padding: 0.2rem 0.3rem; font-family: 'JetBrains Mono', monospace; }
+  .state-entry { display: flex; align-items: center; padding: 0.2rem 0.4rem; border-radius: 5px; font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; border: 1px solid transparent; transition: all 0.35s ease; }
+  .state-entry.new { background: rgba(52, 211, 153, 0.1); border-color: rgba(52, 211, 153, 0.25); }
+  .state-entry.changed { background: rgba(251, 191, 36, 0.1); border-color: rgba(251, 191, 36, 0.25); }
+  .state-entry.stable { background: rgba(108, 140, 255, 0.04); border-color: var(--border); }
+  .state-entry .key { color: var(--accent); font-weight: 600; white-space: nowrap; }
+  .state-entry .arrow { color: var(--text-dim); margin: 0 0.35rem; flex-shrink: 0; }
+  .state-entry .val { color: var(--accent3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tp { color: var(--accent) !important; } .tl { color: var(--accent5) !important; } .tc { color: var(--accent2) !important; } .tf { color: var(--accent4) !important; } .te { color: var(--red) !important; } .tn { color: var(--text-dim) !important; }
+  .anim-bottom { margin-top: 0.4rem; }
+  .anim-narration { background: var(--surface2); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; padding: 0.45rem 0.75rem; font-size: 0.78rem; color: var(--text); line-height: 1.5; min-height: 2rem; transition: opacity 0.3s; }
+  .anim-narration code { font-size: 0.75rem; }
+  .anim-controls { display: flex; gap: 0.4rem; justify-content: center; align-items: center; margin-top: 0.4rem; }
+  .anim-controls button { padding: 0.3rem 0.85rem; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; font-size: 0.75rem; font-family: inherit; transition: all 0.2s; }
+  .anim-controls button:hover { background: var(--surface2); border-color: var(--accent); }
+  .step-counter { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--text-dim); min-width: 3rem; text-align: center; }
+  .state-section.narrow-section { border-left: 2px solid var(--accent4); }
+  .state-section.narrow-section h4 { color: var(--accent4); }
+</style>
+</head>
+<body>
+
+<div class="progress" id="progress"></div>
+<div class="slide-counter" id="counter"></div>
+
+<!-- ========== SLIDE 1: Title ========== -->
+<div class="slide active" id="slide-1">
+  <div class="slide-content" style="text-align: center;">
+    <div class="tag tag-blue">Compiler Internals</div>
+    <h1><span class="gradient-text">baml_compiler2_tir</span></h1>
+    <p class="subtitle">Typed Intermediate Representation<br>Per-scope type inference for the BAML compiler</p>
+    <div style="margin-top: 1.5rem;">
+      <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir" style="font-size: 0.85rem;">crates/baml_compiler2_tir/</a>
+    </div>
+    <div style="margin-top: 1.5rem; color: var(--text-dim); font-size: 0.85rem;">
+      Use <code>←</code> <code>→</code> arrow keys or click the buttons to navigate
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 2: What is TIR? ========== -->
+<div class="slide" id="slide-2">
+  <div class="slide-content">
+    <div class="tag tag-blue">Overview</div>
+    <h2>What is TIR?</h2>
+    <div class="grid-2">
+      <div>
+        <p class="subtitle" style="font-size: 1rem; margin-bottom: 1rem;">
+          <strong>TIR</strong> = <strong>Typed Intermediate Representation</strong>
+        </p>
+        <p style="color: var(--text-dim); line-height: 1.8; font-size: 0.9rem;">
+          TIR is the core type-checking phase of the BAML compiler. It takes an untyped expression tree
+          from earlier stages and produces a fully-typed, verified representation with:
+        </p>
+        <ul style="color: var(--text-dim); line-height: 2; font-size: 0.9rem; padding-left: 1.25rem; margin-top: 0.75rem;">
+          <li>A type for <strong style="color: var(--text);">every expression</strong></li>
+          <li><strong style="color: var(--text);">Name resolution</strong> for all identifiers</li>
+          <li><strong style="color: var(--text);">Exhaustiveness</strong> checking for pattern matches</li>
+          <li><strong style="color: var(--text);">Exception inference</strong> across the call graph</li>
+          <li><strong style="color: var(--text);">Flow-sensitive</strong> type refinement</li>
+        </ul>
+      </div>
+      <div>
+        <div class="callout">
+          <strong>Key insight:</strong> TIR operates <em>per-scope</em> — each function body,
+          lambda, or block is analyzed independently. This enables fine-grained incremental
+          recomputation via Salsa: editing a lambda body only re-checks that lambda, not the
+          entire file.
+        </div>
+        <div class="card card-accent" style="margin-top: 1rem;">
+          <h3 style="color: var(--accent);">~23,000 lines of type logic</h3>
+          <p>19 source files in <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src">src/</a> covering inference, normalization,
+          subtyping, generics, exhaustiveness, and more.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 3: Pipeline Position ========== -->
+<div class="slide" id="slide-3">
+  <div class="slide-content">
+    <div class="tag tag-purple">Pipeline</div>
+    <h2>Where TIR Fits in the Compiler</h2>
+    <p class="subtitle" style="font-size: 0.95rem; margin-bottom: 1.5rem;">
+      The BAML compiler is a multi-stage pipeline. TIR sits at the critical bridge between
+      syntactic analysis and semantic verification.
+    </p>
+    <div class="arch-diagram">
+      <div class="arch-stage">
+        <div class="arch-desc">Source text &rarr; syntax tree</div>
+        <div class="arch-box ast">AST &mdash; Abstract Syntax Tree</div>
+      </div>
+      <div class="arch-arrow">&#9660;</div>
+      <div class="arch-stage">
+        <div class="arch-desc">Scopes, bindings, semantic info</div>
+        <div class="arch-box hir">HIR &mdash; High-level IR</div>
+      </div>
+      <div class="arch-arrow">&#9660;</div>
+      <div class="arch-stage">
+        <div class="arch-desc">Elaborated signatures, type exprs</div>
+        <div class="arch-box ppir">PPIR &mdash; Pre-processing IR</div>
+      </div>
+      <div class="arch-arrow">&#9660;</div>
+      <div class="arch-stage">
+        <div class="arch-desc"><strong style="color: var(--accent);">Type checking &amp; inference</strong></div>
+        <div class="arch-box tir">TIR &mdash; Typed IR &nbsp;&#11088;</div>
+      </div>
+      <div class="arch-arrow">&#9660;</div>
+      <div class="arch-stage">
+        <div class="arch-desc">Validated, ready for codegen</div>
+        <div class="arch-box vir">VIR &mdash; Verified IR</div>
+      </div>
+      <div class="arch-arrow">&#9660;</div>
+      <div class="arch-stage">
+        <div class="arch-desc">Execution</div>
+        <div class="arch-box runtime">Runtime</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 4: Module Map ========== -->
+<div class="slide" id="slide-4">
+  <div class="slide-content">
+    <div class="tag tag-green">Modules</div>
+    <h2>Source Module Map</h2>
+    <p class="subtitle" style="font-size: 0.9rem;">19 source files, each with a focused responsibility &mdash; click any path to open in VS Code</p>
+    <div class="module-map">
+      <div class="module-item" style="border-left: 3px solid var(--accent);">
+        <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/lib.rs">lib.rs<span class="line-count">45 lines</span></a>
+        <span class="desc">Entry point, Db trait, module exports</span>
+      </div>
+      <div class="module-item" style="border-left: 3px solid var(--accent);">
+        <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/ty.rs">ty.rs<span class="line-count">635 lines</span></a>
+        <span class="desc">Core Ty enum &mdash; all type representations</span>
+      </div>
+      <div class="module-item" style="border-left: 3px solid var(--accent3);">
+        <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/inference.rs">inference.rs<span class="line-count">1596 lines</span></a>
+        <span class="desc">Salsa query entry point for per-scope inference</span>
+      </div>
+      <div class="module-item" style="border-left: 3px solid var(--accent3);">
+        <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/builder.rs">builder.rs<span class="line-count">9406 lines</span></a>
+        <span class="desc">TypeInferenceBuilder &mdash; walks expressions</span>
+      </div>
+      <div class="module-item" style="border-left: 3px solid var(--accent2);">
+        <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/normalize.rs">normalize.rs<span class="line-count">1990 lines</span></a>
+        <span class="desc">Type alias resolution, subtyping</span>
+      </div>
+      <div class="module-item" style="border-left: 3px solid var(--accent2);">
+        <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/lower_type_expr.rs">lower_type_expr.rs<span class="line-count">506 lines</span></a>
+        <span class="desc">TypeExpr (AST) &rarr; Ty conversion</span>
+      </div>
+      <div class="module-item" style="border-left: 3px solid var(--accent2);">
+        <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/generics.rs">generics.rs<span class="line-count">532 lines</span></a>
+        <span class="desc">Generic type variable binding &amp; substitution</span>
+      </div>
+      <div class="module-item" style="border-left: 3px solid var(--accent4);">
+        <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/narrowing.rs">narrowing.rs<span class="line-count">352 lines</span></a>
+        <span class="desc">Flow-sensitive type refinement</span>
+      </div>
+      <div class="module-item" style="border-left: 3px solid var(--accent4);">
+        <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/exhaustiveness.rs">exhaustiveness.rs<span class="line-count">4327 lines</span></a>
+        <span class="desc">Pattern match exhaustiveness checking</span>
+      </div>
+      <div class="module-item" style="border-left: 3px solid var(--accent4);">
+        <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/pattern_lowering.rs">pattern_lowering.rs<span class="line-count">58 lines</span></a>
+        <span class="desc">AST patterns &rarr; deconstructed patterns</span>
+      </div>
+      <div class="module-item" style="border-left: 3px solid var(--accent5);">
+        <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/throw_inference.rs">throw_inference.rs<span class="line-count">548 lines</span></a>
+        <span class="desc">Exception inference via call graph</span>
+      </div>
+      <div class="module-item" style="border-left: 3px solid var(--accent5);">
+        <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/throws_analysis.rs">throws_analysis.rs<span class="line-count">270 lines</span></a>
+        <span class="desc">Exception analysis infrastructure</span>
+      </div>
+      <div class="module-item" style="border-left: 3px solid var(--text-dim);">
+        <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/resolve.rs">resolve.rs<span class="line-count">194 lines</span></a>
+        <span class="desc">On-demand name resolution</span>
+      </div>
+      <div class="module-item" style="border-left: 3px solid var(--text-dim);">
+        <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/callable.rs">callable.rs<span class="line-count">365 lines</span></a>
+        <span class="desc">Function &amp; method resolution</span>
+      </div>
+      <div class="module-item" style="border-left: 3px solid var(--text-dim);">
+        <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/cycle_detector.rs">cycle_detector.rs<span class="line-count">50 lines</span></a>
+        <span class="desc">Runtime guard for recursive types (max depth 64)</span>
+      </div>
+      <div class="module-item" style="border-left: 3px solid var(--text-dim);">
+        <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/package_interface.rs">package_interface.rs<span class="line-count">886 lines</span></a>
+        <span class="desc">Cross-package type exports &amp; resolution</span>
+      </div>
+      <div class="module-item" style="border-left: 3px solid var(--accent3);">
+        <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/infer_context.rs">infer_context.rs<span class="line-count">986 lines</span></a>
+        <span class="desc">Diagnostic sink for inference runs</span>
+      </div>
+      <div class="module-item" style="border-left: 3px solid var(--text-dim);">
+        <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/analysis.rs">analysis.rs<span class="line-count">274 lines</span></a>
+        <span class="desc">Two-pass dependency graph analysis framework</span>
+      </div>
+      <div class="module-item" style="border-left: 3px solid var(--text-dim);">
+        <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/user_facing.rs">user_facing.rs<span class="line-count">61 lines</span></a>
+        <span class="desc">Human-readable type display &amp; sanitization</span>
+      </div>
+    </div>
+    <div style="display: flex; gap: 1.5rem; font-size: 0.75rem; color: var(--text-dim); margin-top: 0.5rem; justify-content: center;">
+      <span><span style="color: var(--accent);">&#9632;</span> Core types</span>
+      <span><span style="color: var(--accent3);">&#9632;</span> Inference engine</span>
+      <span><span style="color: var(--accent2);">&#9632;</span> Type operations</span>
+      <span><span style="color: var(--accent4);">&#9632;</span> Analysis</span>
+      <span><span style="color: var(--accent5);">&#9632;</span> Exceptions</span>
+      <span><span style="color: var(--text-dim);">&#9632;</span> Utilities</span>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 5: The Ty Enum ========== -->
+<div class="slide" id="slide-5">
+  <div class="slide-content">
+    <div class="tag tag-blue">Core</div>
+    <h2>The <code>Ty</code> Enum &mdash; Heart of the Type System <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/ty.rs">src/ty.rs</a></h2>
+    <div class="grid-2">
+      <div class="type-tree">
+        <div><span class="node">Ty</span></div>
+        <div class="branch"><span class="leaf">Class</span> <span class="desc">(name, generics, attr)</span></div>
+        <div class="branch"><span class="leaf">Enum</span> <span class="desc">(name, attr)</span></div>
+        <div class="branch"><span class="leaf">EnumVariant</span> <span class="desc">(enum, variant, attr)</span></div>
+        <div class="branch"><span class="leaf">TypeAlias</span> <span class="desc">(name, attr)</span></div>
+        <div class="branch"><span class="leaf">Primitive</span> <span class="desc">(int | float | string | bool | null | image | ...)</span></div>
+        <div class="branch"><span class="leaf">List</span> <span class="desc">(element_ty)</span></div>
+        <div class="branch"><span class="leaf">Map</span> <span class="desc">(key_ty, val_ty)</span></div>
+        <div class="branch"><span class="leaf">Optional</span> <span class="desc">(inner_ty)</span></div>
+        <div class="branch"><span class="leaf">Union</span> <span class="desc">(variants[])</span></div>
+        <div class="branch"><span class="leaf">Literal</span> <span class="desc">(42, "hello", true &mdash; as types)</span></div>
+        <div class="branch"><span class="leaf">Function</span> <span class="desc">(params, ret, throws)</span></div>
+        <div class="branch"><span class="leaf">TypeVar</span> <span class="desc">(T &mdash; generic parameter)</span></div>
+        <div class="branch"><span class="leaf">EvolvingList</span> <span class="desc">(mutable, narrows on push)</span></div>
+        <div class="branch"><span class="leaf">EvolvingMap</span> <span class="desc">(mutable, narrows on insert)</span></div>
+        <div class="branch"><span class="leaf">Never</span> <span class="desc">(bottom type)</span></div>
+        <div class="branch"><span class="leaf">Void</span> <span class="desc">(statements, not consumable)</span></div>
+        <div class="branch"><span class="leaf">BuiltinUnknown</span> <span class="desc">(top type)</span></div>
+        <div class="branch"><span class="leaf">Unknown</span> <span class="desc">(error recovery)</span></div>
+      </div>
+      <div>
+        <div class="card card-accent" style="margin-bottom: 1rem;">
+          <h3>Every variant carries <code>TyAttr</code></h3>
+          <p>Location metadata for diagnostics &mdash; so every type can be traced
+          back to the source code that produced it.</p>
+        </div>
+        <div class="card card-green" style="margin-bottom: 1rem;">
+          <h3>Literals are first-class types</h3>
+          <p><code>Literal(42)</code> is a distinct type from <code>int</code>.
+          A <code>Freshness</code> flag controls when literals widen to their
+          base primitive at binding sites.</p>
+        </div>
+        <div class="card card-purple" style="margin-bottom: 1rem;">
+          <h3>Evolving containers</h3>
+          <p>Empty <code>[]</code> starts as <code>EvolvingList(Never)</code>
+          and widens as elements are pushed. Freezes to <code>List&lt;T&gt;</code> on read.</p>
+        </div>
+        <div class="card card-pink">
+          <h3>Bottom &amp; Top types</h3>
+          <p><code>Never</code> (bottom) is a subtype of everything.
+          <code>BuiltinUnknown</code> (top) is a supertype of everything.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 6: Inference Pipeline ========== -->
+<div class="slide" id="slide-6">
+  <div class="slide-content">
+    <div class="tag tag-green">Engine</div>
+    <h2>Type Inference Pipeline</h2>
+    <p class="subtitle" style="font-size: 0.9rem;">
+      The main entry point: <code>infer_scope_types(db, ScopeId) &rarr; ScopeInference</code> in <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/inference.rs">src/inference.rs</a>
+    </p>
+    <div class="flow">
+      <div class="flow-step" style="border-left: 3px solid var(--accent5);">
+        <h4 style="color: var(--accent5);">1. Scope Setup</h4>
+        <p>Load ExprBody from PPIR. Create TypeInferenceBuilder with empty maps.</p>
+        <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/inference.rs" style="margin-top: 0.3rem; font-size: 0.65rem;">inference.rs</a>
+      </div>
+      <div class="flow-step" style="border-left: 3px solid var(--accent);">
+        <h4 style="color: var(--accent);">2. Walk Exprs</h4>
+        <p>Traverse expression tree. Bidirectional: synthesize (bottom-up) or check (top-down).</p>
+        <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/builder.rs" style="margin-top: 0.3rem; font-size: 0.65rem;">builder.rs</a>
+      </div>
+      <div class="flow-step" style="border-left: 3px solid var(--accent2);">
+        <h4 style="color: var(--accent2);">3. Resolve Names</h4>
+        <p>Walk scope chain upward: let bindings, params, package items. Record MemberResolution.</p>
+        <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/resolve.rs" style="margin-top: 0.3rem; font-size: 0.65rem;">resolve.rs</a>
+      </div>
+      <div class="flow-step" style="border-left: 3px solid var(--accent4);">
+        <h4 style="color: var(--accent4);">4. Narrow Types</h4>
+        <p>Flow-sensitive refinement: <code>if (x != null)</code> narrows <code>T?</code> to <code>T</code> in then-branch.</p>
+        <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/narrowing.rs" style="margin-top: 0.3rem; font-size: 0.65rem;">narrowing.rs</a>
+      </div>
+      <div class="flow-step" style="border-left: 3px solid var(--accent3);">
+        <h4 style="color: var(--accent3);">5. Check Patterns</h4>
+        <p>Lower patterns, run exhaustiveness algorithm. Report missing cases with witnesses.</p>
+        <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/exhaustiveness.rs" style="margin-top: 0.3rem; font-size: 0.65rem;">exhaustiveness.rs</a>
+      </div>
+      <div class="flow-step" style="border-left: 3px solid var(--red);">
+        <h4 style="color: var(--red);">6. Infer Throws</h4>
+        <p>Two-pass call graph analysis. Propagate exceptions, stop at declared throw clauses.</p>
+        <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/throw_inference.rs" style="margin-top: 0.3rem; font-size: 0.65rem;">throw_inference.rs</a>
+      </div>
+    </div>
+    <div class="callout">
+      <strong>Output:</strong> <code>ScopeInference</code> contains a type for every expression,
+      resolution info for every name, call plans for every invocation, exhaustiveness verdicts,
+      exception sets, and accumulated diagnostics.
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 7: Bidirectional Type Checking ========== -->
+<div class="slide" id="slide-7">
+  <div class="slide-content">
+    <div class="tag tag-green">Type Checking</div>
+    <h2>Bidirectional Type Checking</h2>
+    <p class="subtitle" style="font-size: 0.9rem;">Two modes of operation that work together for maximum inference power</p>
+    <div class="grid-2">
+      <div class="card card-accent">
+        <h3 style="color: var(--accent);">Synthesis (Bottom-up) &uarr;</h3>
+        <p style="margin-bottom: 0.75rem;">Infer the type of an expression from its structure, without any expected type.</p>
+        <pre><code><span class="comment">// infer_expr(expr) → Ty</span>
+
+<span class="kw">let</span> x = <span class="str">42</span>      <span class="comment">// synthesize: 42 → int</span>
+<span class="kw">let</span> y = x + <span class="str">1</span>   <span class="comment">// synthesize: int + int → int</span>
+<span class="kw">let</span> z = [<span class="str">1</span>,<span class="str">2</span>,<span class="str">3</span>] <span class="comment">// synthesize: → List&lt;int&gt;</span></code></pre>
+      </div>
+      <div class="card card-purple">
+        <h3 style="color: var(--accent2);">Checking (Top-down) &darr;</h3>
+        <p style="margin-bottom: 0.75rem;">Verify an expression matches an expected type, pushing context downward.</p>
+        <pre><code><span class="comment">// check_expr(expr, expected_ty)</span>
+
+<span class="kw">let</span> x: <span class="ty">string</span> = <span class="str">42</span>   <span class="comment">// check 42 against string → ERROR</span>
+<span class="kw">let</span> f: <span class="ty">int → bool</span> =  <span class="comment">// push return type down</span>
+  (n) => n > <span class="str">0</span>        <span class="comment">// infer n:int from context</span></code></pre>
+      </div>
+    </div>
+    <div class="callout" style="margin-top: 1rem;">
+      <strong>Why bidirectional?</strong> Pure bottom-up requires annotations everywhere. Pure top-down can't infer without context.
+      Bidirectional gets the best of both: synthesize when types are locally obvious, check when context is available.
+      <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/builder.rs">src/builder.rs</a> implements this by switching between <code>infer_expr</code> and <code>check_expr</code> as it walks the tree.
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 8: ScopeInference output ========== -->
+<div class="slide" id="slide-8">
+  <div class="slide-content">
+    <div class="tag tag-purple">Output</div>
+    <h2><code>ScopeInference</code> &mdash; The Output <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/inference.rs">src/inference.rs</a></h2>
+    <p class="subtitle" style="font-size: 0.9rem;">Everything the rest of the compiler needs, in one structure per scope</p>
+    <div class="grid-3">
+      <div class="card card-accent">
+        <h3><code>expressions</code></h3>
+        <p>Map&lt;ExprId, Ty&gt;</p>
+        <p style="margin-top: 0.5rem;">The type of every expression in the scope. This is the primary output.</p>
+      </div>
+      <div class="card card-green">
+        <h3><code>resolutions</code></h3>
+        <p>Map&lt;ExprId, MemberResolution&gt;</p>
+        <p style="margin-top: 0.5rem;">Where each name resolves: field, variant, method, or free function.</p>
+      </div>
+      <div class="card card-purple">
+        <h3><code>call_plans</code></h3>
+        <p>Map&lt;ExprId, CallPlan&gt;</p>
+        <p style="margin-top: 0.5rem;">Parameter binding plans for every function call expression.</p>
+      </div>
+      <div class="card card-pink">
+        <h3><code>pattern_types</code></h3>
+        <p>Map&lt;PatId, Ty&gt;</p>
+        <p style="margin-top: 0.5rem;">Binding types after widening for each pattern in match/let.</p>
+      </div>
+      <div class="card card-amber">
+        <h3><code>path_segment_types</code></h3>
+        <p>Map&lt;(ExprId, usize), Ty&gt;</p>
+        <p style="margin-top: 0.5rem;">Type at each segment in path expressions like <code>a.b.c</code>.</p>
+      </div>
+      <div class="card card-red">
+        <h3><code>catch_residual_throws</code></h3>
+        <p>Map&lt;ExprId, Set&lt;Ty&gt;&gt;</p>
+        <p style="margin-top: 0.5rem;">Exception types that escape after catch arms are applied.</p>
+      </div>
+    </div>
+    <div style="margin-top: 1rem; text-align: center; font-size: 0.85rem; color: var(--text-dim);">
+      Plus: <code>param_types</code>, <code>nested_lambda_types</code>, <code>exhaustive_matches</code>, and diagnostics
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 9: Subtyping ========== -->
+<div class="slide" id="slide-9">
+  <div class="slide-content">
+    <div class="tag tag-purple">Type System</div>
+    <h2>Subtyping Rules</h2>
+    <p class="subtitle" style="font-size: 0.9rem;">Implemented in <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/normalize.rs">src/normalize.rs<span class="line-count">1990 lines</span></a> with co-inductive equirecursive handling</p>
+    <div class="grid-2">
+      <div>
+        <table>
+          <thead>
+            <tr><th>Subtype</th><th>Supertype</th><th>Rule</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Never</td><td>*</td><td>Bottom is subtype of everything</td></tr>
+            <tr><td>*</td><td>BuiltinUnknown</td><td>Top is supertype of everything</td></tr>
+            <tr><td>int</td><td>float</td><td>Numeric widening</td></tr>
+            <tr><td>Literal(42)</td><td>int</td><td>Literal widens to base</td></tr>
+            <tr><td>EnumVariant(E,V)</td><td>Enum(E)</td><td>Variant is subtype of enum</td></tr>
+            <tr><td>List&lt;A&gt;</td><td>List&lt;B&gt;</td><td>Covariant: A &lt;: B</td></tr>
+            <tr><td>Map&lt;K1,V1&gt;</td><td>Map&lt;K2,V2&gt;</td><td>Covariant in both</td></tr>
+            <tr><td>(A) &rarr; B</td><td>(C) &rarr; D</td><td>Params contra, return co</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <div class="subtype-diagram">
+          <div class="subtype-row">
+            <div class="subtype-node" style="background: rgba(52,211,153,0.15); color: var(--accent3);">BuiltinUnknown</div>
+          </div>
+          <div class="subtype-arrow">&uarr; (top)</div>
+          <div class="subtype-row">
+            <div class="subtype-node" style="background: rgba(108,140,255,0.1); color: var(--accent);">string</div>
+            <div class="subtype-node" style="background: rgba(108,140,255,0.1); color: var(--accent);">float</div>
+            <div class="subtype-node" style="background: rgba(108,140,255,0.1); color: var(--accent);">bool</div>
+            <div class="subtype-node" style="background: rgba(167,139,250,0.1); color: var(--accent2);">Enum(E)</div>
+          </div>
+          <div class="subtype-arrow">&uarr;</div>
+          <div class="subtype-row">
+            <div class="subtype-node" style="background: rgba(251,191,36,0.1); color: var(--accent5);">"hi"</div>
+            <div class="subtype-node" style="background: rgba(108,140,255,0.1); color: var(--accent);">int</div>
+            <div class="subtype-node" style="background: rgba(251,191,36,0.1); color: var(--accent5);">true</div>
+            <div class="subtype-node" style="background: rgba(244,114,182,0.1); color: var(--accent4);">Variant(E,V)</div>
+          </div>
+          <div class="subtype-arrow">&uarr;</div>
+          <div class="subtype-row">
+            <div class="subtype-node" style="background: rgba(251,191,36,0.1); color: var(--accent5);">Literal("hi")</div>
+            <div class="subtype-node" style="background: rgba(251,191,36,0.1); color: var(--accent5);">Literal(42)</div>
+            <div class="subtype-node" style="background: rgba(251,191,36,0.1); color: var(--accent5);">Literal(true)</div>
+          </div>
+          <div class="subtype-arrow">&uarr; (bottom)</div>
+          <div class="subtype-row">
+            <div class="subtype-node" style="background: rgba(248,113,113,0.15); color: var(--red);">Never</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 10: Name Resolution ========== -->
+<div class="slide" id="slide-10">
+  <div class="slide-content">
+    <div class="tag tag-amber">Resolution</div>
+    <h2>Name Resolution &amp; Member Access <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/resolve.rs">src/resolve.rs</a> <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/callable.rs">src/callable.rs</a></h2>
+    <div class="grid-2">
+      <div>
+        <h3 style="margin-bottom: 1rem; color: var(--accent5);">Resolution Chain</h3>
+        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+          <div class="card" style="padding: 0.75rem 1rem; border-left: 3px solid var(--accent5);">
+            <strong style="font-size: 0.85rem;">1. Let bindings</strong>
+            <p style="font-size: 0.8rem;">Walk scope chain upward through let-bound variables</p>
+          </div>
+          <div class="card" style="padding: 0.75rem 1rem; border-left: 3px solid var(--accent);">
+            <strong style="font-size: 0.85rem;">2. Parameters</strong>
+            <p style="font-size: 0.8rem;">Function/lambda parameters in the enclosing scope</p>
+          </div>
+          <div class="card" style="padding: 0.75rem 1rem; border-left: 3px solid var(--accent2);">
+            <strong style="font-size: 0.85rem;">3. Package items</strong>
+            <p style="font-size: 0.8rem;">Classes, enums, functions exported by the package</p>
+          </div>
+          <div class="card" style="padding: 0.75rem 1rem; border-left: 3px solid var(--accent3);">
+            <strong style="font-size: 0.85rem;">4. Builtins</strong>
+            <p style="font-size: 0.8rem;">The <code>baml</code> package: env, llm, etc.</p>
+          </div>
+        </div>
+      </div>
+      <div>
+        <h3 style="margin-bottom: 1rem; color: var(--accent);">MemberResolution</h3>
+        <pre style="font-size: 0.78rem;"><code><span class="kw">enum</span> <span class="ty">MemberResolution</span> {
+  <span class="variant">Field</span> {
+    class_loc, field_name    <span class="comment">// p.name</span>
+  },
+  <span class="variant">Variant</span> {
+    enum_loc, variant_name   <span class="comment">// Status.Active</span>
+  },
+  <span class="variant">Free</span> {
+    func_loc                 <span class="comment">// baml.env.get</span>
+  },
+  <span class="variant">BoundMethod</span> {
+    class_loc, func_loc      <span class="comment">// p.validate()</span>
+  },
+  <span class="variant">UnboundMethod</span> {
+    class_loc, func_loc      <span class="comment">// Person.create()</span>
+  },
+}</code></pre>
+        <div class="callout" style="margin-top: 0.75rem;">
+          <strong>Used by:</strong> MIR for qualified names, LSP for go-to-definition,
+          and the formatter for import resolution.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 11: Narrowing ========== -->
+<div class="slide" id="slide-11">
+  <div class="slide-content">
+    <div class="tag tag-pink">Analysis</div>
+    <h2>Flow-Sensitive Type Narrowing</h2>
+    <p class="subtitle" style="font-size: 0.9rem;">
+      Types refine based on control flow &mdash; implemented in <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/narrowing.rs">src/narrowing.rs<span class="line-count">352 lines</span></a>
+    </p>
+    <div class="grid-2">
+      <div>
+        <pre style="line-height: 2;"><code><span class="kw">function</span> <span class="fn-name">process</span>(x: <span class="ty">string | null</span>) {
+
+  <span class="comment">// x is string | null here</span>
+
+  <span class="kw">if</span> (x != <span class="str">null</span>) {
+    <span class="comment">// x narrowed to string ✓</span>
+    <span class="kw">return</span> x.<span class="fn-name">length</span>
+  }
+
+  <span class="comment">// x narrowed to null ✓</span>
+  <span class="comment">// (inverse narrowing in else branch)</span>
+  <span class="kw">return</span> <span class="str">0</span>
+}</code></pre>
+      </div>
+      <div>
+        <div class="card card-pink" style="margin-bottom: 1rem;">
+          <h3>Null Checks</h3>
+          <p><code>if (x != null)</code> narrows <code>T?</code> to <code>T</code> in
+          the then-branch and to <code>null</code> in the else-branch.</p>
+        </div>
+        <div class="card card-accent" style="margin-bottom: 1rem;">
+          <h3>Early Return Narrowing</h3>
+          <p>If the then-branch diverges (returns/throws), the rest of the function
+          sees the narrowed type from the else-path.</p>
+        </div>
+        <div class="card card-green">
+          <h3>Evolving Containers</h3>
+          <p>Empty <code>[]</code> is <code>EvolvingList(Never)</code>.
+          Each <code>.push(x)</code> widens the element type.
+          On read, it freezes to <code>List&lt;T&gt;</code>.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 12: Exhaustiveness ========== -->
+<div class="slide" id="slide-12">
+  <div class="slide-content">
+    <div class="tag tag-pink">Patterns</div>
+    <h2>Pattern Exhaustiveness Checking</h2>
+    <p class="subtitle" style="font-size: 0.9rem;">
+      Ported from rustc's usefulness algorithm &mdash; <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/exhaustiveness.rs">src/exhaustiveness.rs<span class="line-count">4327 lines</span></a> + <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/pattern_lowering.rs">src/pattern_lowering.rs<span class="line-count">58 lines</span></a>
+    </p>
+    <div class="grid-2">
+      <div>
+        <pre style="line-height: 1.9;"><code><span class="kw">match</span> status {
+  <span class="variant">Status.Active</span>  => <span class="str">"running"</span>,
+  <span class="variant">Status.Paused</span>  => <span class="str">"paused"</span>,
+  <span class="comment">// ⚠ Missing: Status.Stopped</span>
+  <span class="comment">// TIR reports: "non-exhaustive match</span>
+  <span class="comment">//   missing: Status.Stopped"</span>
+}
+
+<span class="kw">match</span> status {
+  <span class="variant">Status.Active</span>  => <span class="str">"running"</span>,
+  <span class="variant">Status.Paused</span>  => <span class="str">"paused"</span>,
+  <span class="variant">Status.Stopped</span> => <span class="str">"stopped"</span>,
+  <span class="comment">// ✓ Exhaustive — all variants covered</span>
+}</code></pre>
+      </div>
+      <div>
+        <div class="card card-accent" style="margin-bottom: 0.75rem;">
+          <h3>Step 1: Lower Patterns</h3>
+          <p>AST patterns are deconstructed into constructor + sub-patterns.
+          <code>Status.Active</code> becomes <code>Ctor(Variant("Active"), [])</code>.</p>
+        </div>
+        <div class="card card-purple" style="margin-bottom: 0.75rem;">
+          <h3>Step 2: Build Matrix</h3>
+          <p>All arms form a pattern matrix. Each row is one arm,
+          columns are sub-pattern positions.</p>
+        </div>
+        <div class="card card-green" style="margin-bottom: 0.75rem;">
+          <h3>Step 3: Usefulness Check</h3>
+          <p>For each possible constructor, specialize the matrix.
+          If any constructor has no matching row, the match is non-exhaustive.</p>
+        </div>
+        <div class="card card-pink">
+          <h3>Step 4: Witness Construction</h3>
+          <p>Missing cases are reconstructed into human-readable patterns
+          for the diagnostic message.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 13: Exception Inference ========== -->
+<div class="slide" id="slide-13">
+  <div class="slide-content">
+    <div class="tag tag-amber">Exceptions</div>
+    <h2>Exception Inference (BEP-007)</h2>
+    <p class="subtitle" style="font-size: 0.9rem;">
+      Two-pass call graph analysis in <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/throw_inference.rs">src/throw_inference.rs<span class="line-count">548 lines</span></a> + <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/throws_analysis.rs">src/throws_analysis.rs<span class="line-count">270 lines</span></a>
+    </p>
+    <div class="grid-2">
+      <div>
+        <h3 style="color: var(--accent5); margin-bottom: 1rem;">Two-Pass Algorithm</h3>
+        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+          <div class="card card-amber">
+            <h3>Pass 1: Direct Throws</h3>
+            <p>Scan each function body for <code>throw</code> expressions
+            and direct calls. Build a set of directly-thrown types.</p>
+          </div>
+          <div class="card card-accent">
+            <h3>Pass 2: Transitive Propagation</h3>
+            <p>Walk the call graph. Each callee's throw set propagates to
+            the caller &mdash; unless the callee has a declared <code>throws</code>
+            clause, which acts as a <strong>firewall</strong>.</p>
+          </div>
+        </div>
+      </div>
+      <div>
+        <pre style="line-height: 1.9;"><code><span class="comment">// throws IoError (declared = firewall)</span>
+<span class="kw">function</span> <span class="fn-name">readFile</span>(path: <span class="ty">string</span>)
+    <span class="kw">throws</span> <span class="ty">IoError</span> {
+  ...
+}
+
+<span class="comment">// TIR infers: throws IoError</span>
+<span class="comment">// (transitive from readFile)</span>
+<span class="kw">function</span> <span class="fn-name">loadConfig</span>() {
+  <span class="kw">let</span> data = <span class="fn-name">readFile</span>(<span class="str">"config.json"</span>)
+  <span class="kw">return</span> <span class="fn-name">parse</span>(data)
+}
+
+<span class="comment">// This function catches IoError</span>
+<span class="comment">// TIR verifies: no escaping throws</span>
+<span class="kw">function</span> <span class="fn-name">safeLoad</span>() {
+  <span class="kw">try</span> {
+    <span class="kw">return</span> <span class="fn-name">loadConfig</span>()
+  } <span class="kw">catch</span> (e: <span class="ty">IoError</span>) {
+    <span class="kw">return</span> <span class="fn-name">defaults</span>()
+  }
+}</code></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 14: Salsa Incrementality ========== -->
+<div class="slide" id="slide-14">
+  <div class="slide-content">
+    <div class="tag tag-green">Performance</div>
+    <h2>Salsa-Powered Incrementality</h2>
+    <p class="subtitle" style="font-size: 0.9rem;">
+      Per-scope inference means surgical recomputation on edits
+    </p>
+    <div class="grid-2">
+      <div>
+        <h3 style="margin-bottom: 1rem; color: var(--accent3);">Scenario: Edit a Lambda Body</h3>
+        <div class="salsa-flow">
+          <div class="salsa-query salsa-cached">
+            <div class="icon">&#10003;</div>
+            <div><code>infer_scope_types(main_fn)</code> <span style="color: var(--accent3);">&mdash; cached</span></div>
+          </div>
+          <div class="salsa-query salsa-cached salsa-indent">
+            <div class="icon">&#10003;</div>
+            <div><code>infer_scope_types(helper_fn)</code> <span style="color: var(--accent3);">&mdash; cached</span></div>
+          </div>
+          <div class="salsa-query salsa-recompute salsa-indent">
+            <div class="icon">&#10007;</div>
+            <div><code>infer_scope_types(lambda_42)</code> <span style="color: var(--red);">&mdash; recompute</span></div>
+          </div>
+          <div class="salsa-query salsa-cached salsa-indent-2">
+            <div class="icon">&#10003;</div>
+            <div><code>resolve_class_fields(Person)</code> <span style="color: var(--accent3);">&mdash; cached</span></div>
+          </div>
+          <div class="salsa-query salsa-cached">
+            <div class="icon">&#10003;</div>
+            <div><code>package_interface(user_pkg)</code> <span style="color: var(--accent3);">&mdash; cached</span></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="card card-green" style="margin-bottom: 1rem;">
+          <h3>Per-Scope Granularity</h3>
+          <p>Each function, lambda, let, and block gets its own <code>ScopeId</code>.
+          Salsa tracks dependencies at this level, so only the changed scope
+          (and its dependents) recompute.</p>
+        </div>
+        <div class="card card-accent" style="margin-bottom: 1rem;">
+          <h3>Arena-based IDs</h3>
+          <p><code>ExprId</code> and <code>PatId</code> are indices into an arena
+          (<code>ExprBody</code>). This avoids pointer chasing and makes
+          equality checks cheap &mdash; critical for Salsa memoization.</p>
+        </div>
+        <div class="card card-purple">
+          <h3>Demand-Driven</h3>
+          <p>Queries are lazy: <code>resolve_class_fields</code> only runs
+          when someone asks for it. Unused code never gets type-checked
+          unless explicitly requested.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 15: Generics ========== -->
+<div class="slide" id="slide-15">
+  <div class="slide-content">
+    <div class="tag tag-purple">Generics</div>
+    <h2>Generic Type Handling</h2>
+    <p class="subtitle" style="font-size: 0.9rem;">
+      Type variable binding and substitution in <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/generics.rs">src/generics.rs<span class="line-count">532 lines</span></a>
+    </p>
+    <div class="grid-2">
+      <div>
+        <pre style="line-height: 1.9;"><code><span class="comment">// Definition with type parameter T</span>
+<span class="kw">class</span> <span class="ty">Container</span>&lt;<span class="ty">T</span>&gt; {
+  <span class="field">value</span>: <span class="ty">T</span>
+  <span class="field">items</span>: <span class="ty">List</span>&lt;<span class="ty">T</span>&gt;
+}
+
+<span class="comment">// Usage binds T → int</span>
+<span class="kw">let</span> c: <span class="ty">Container</span>&lt;<span class="ty">int</span>&gt; = ...
+c.<span class="field">value</span>   <span class="comment">// → int</span>
+c.<span class="field">items</span>   <span class="comment">// → List&lt;int&gt;</span>
+
+<span class="comment">// Builtin generics work the same way</span>
+<span class="kw">let</span> arr: <span class="ty">Array</span>&lt;<span class="ty">string</span>&gt; = [<span class="str">"a"</span>, <span class="str">"b"</span>]
+arr.<span class="fn-name">at</span>(<span class="str">0</span>)  <span class="comment">// → string (T substituted)</span></code></pre>
+      </div>
+      <div>
+        <div class="flow" style="flex-direction: column; gap: 0;">
+          <div class="flow-step" style="border-radius: 10px 10px 0 0; border-left: 3px solid var(--accent2);">
+            <h4 style="color: var(--accent2);">1. Collect Generic Params</h4>
+            <p>Extract <code>[T]</code> from the type definition's parameter list</p>
+          </div>
+          <div class="flow-step" style="border-left: 3px solid var(--accent);">
+            <h4 style="color: var(--accent);">2. Bind Arguments</h4>
+            <p>Match concrete types to params: <code>{T → int}</code></p>
+          </div>
+          <div class="flow-step" style="border-left: 3px solid var(--accent3);">
+            <h4 style="color: var(--accent3);">3. Substitute</h4>
+            <p>Walk method signatures replacing TypeVar(T) with int</p>
+          </div>
+          <div class="flow-step" style="border-radius: 0 0 10px 10px; border-left: 3px solid var(--accent4);">
+            <h4 style="color: var(--accent4);">4. Cache Result</h4>
+            <p>Substituted signatures cached per concrete instantiation</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 16: Normalization Deep Dive ========== -->
+<div class="slide" id="slide-16">
+  <div class="slide-content">
+    <div class="tag tag-purple">Deep Dive</div>
+    <h2>Type Normalization &amp; Cycle Detection</h2>
+    <p class="subtitle" style="font-size: 0.9rem;">
+      The largest analysis module handles alias expansion, structural comparison, and recursive types &mdash; <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/normalize.rs">src/normalize.rs<span class="line-count">1990 lines</span></a> + <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/cycle_detector.rs">src/cycle_detector.rs<span class="line-count">50 lines</span></a>
+    </p>
+    <div class="grid-2">
+      <div>
+        <div class="card card-accent" style="margin-bottom: 1rem;">
+          <h3>Type Alias Resolution</h3>
+          <p>Expands aliases to <code>StructuralTy</code> for comparison.
+          <code>type StringList = List&lt;string&gt;</code> becomes the structural form
+          so <code>StringList</code> and <code>List&lt;string&gt;</code> are equivalent.</p>
+        </div>
+        <div class="card card-pink" style="margin-bottom: 1rem;">
+          <h3>Cycle Detection (Tarjan's SCC)</h3>
+          <p>Identifies strongly-connected components in the type graph.
+          <strong>Guarded cycles</strong> (through a class indirection) are valid:
+          <code>class Node { next: Node? }</code>.
+          <strong>Unguarded cycles</strong> are errors:
+          <code>type A = B; type B = A;</code></p>
+        </div>
+        <div class="card card-green">
+          <h3>Equirecursive Subtyping</h3>
+          <p>Recursive types are compared co-inductively: assume <code>A &lt;: B</code>,
+          then verify the assumption holds at each unfolding.
+          Uses a set of <em>assumptions</em> to break infinite recursion.</p>
+        </div>
+      </div>
+      <div>
+        <pre style="line-height: 1.8; font-size: 0.75rem;"><code><span class="comment">// Valid: guarded cycle through class</span>
+<span class="kw">class</span> <span class="ty">LinkedList</span> {
+  <span class="field">value</span>: <span class="ty">int</span>
+  <span class="field">next</span>: <span class="ty">LinkedList</span>?  <span class="comment">// ✓ guarded by Optional</span>
+}
+
+<span class="comment">// Invalid: unguarded cycle</span>
+<span class="kw">type</span> <span class="ty">Loop</span> = <span class="ty">List</span>&lt;<span class="ty">Loop</span>&gt;  <span class="comment">// ✗ infinite expansion</span>
+
+<span class="comment">// Co-inductive subtype check:</span>
+<span class="comment">//   LinkedList &lt;: LinkedList?</span>
+<span class="comment">//   1. Assume LinkedList &lt;: LinkedList?</span>
+<span class="comment">//   2. Check fields:</span>
+<span class="comment">//      value: int &lt;: int  ✓</span>
+<span class="comment">//      next: LinkedList? &lt;: LinkedList?</span>
+<span class="comment">//        → hits assumption, stops  ✓</span>
+<span class="comment">//   3. Assumption validated ✓</span>
+
+<span class="comment">// Runtime guard: cycle_detector.rs</span>
+<span class="comment">// MAX_DEPTH = 64</span>
+<span class="comment">// Prevents infinite loops in</span>
+<span class="comment">// pathological recursive types</span></code></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 17: Package Interface ========== -->
+<div class="slide" id="slide-17">
+  <div class="slide-content">
+    <div class="tag tag-green">Packages</div>
+    <h2>Package Interface &amp; Cross-Package Resolution</h2>
+    <p class="subtitle" style="font-size: 0.9rem;">
+      How types cross package boundaries &mdash; <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/package_interface.rs">src/package_interface.rs<span class="line-count">886 lines</span></a>
+    </p>
+    <div class="grid-2">
+      <div>
+        <div class="card card-accent" style="margin-bottom: 1rem;">
+          <h3><code>PackageInterface</code></h3>
+          <p>The fully-resolved typed contract of a package:</p>
+          <ul>
+            <li>All exported classes with field types</li>
+            <li>All exported enums with variants</li>
+            <li>All exported functions with signatures</li>
+            <li>Type aliases expanded to structural form</li>
+            <li>Transitive throw sets for all functions</li>
+          </ul>
+        </div>
+        <div class="card card-green">
+          <h3><code>PackageResolutionContext</code></h3>
+          <p>Bundles a package's own items with its dependencies'
+          <code>PackageInterface</code>s. Provides unified lookup:
+          "find type <code>Foo</code>" searches local items first,
+          then imported packages.</p>
+        </div>
+      </div>
+      <div>
+        <pre style="line-height: 1.8;"><code><span class="comment">// Package A exports:</span>
+<span class="kw">class</span> <span class="ty">User</span> {
+  <span class="field">name</span>: <span class="ty">string</span>
+  <span class="field">role</span>: <span class="ty">Role</span>
+}
+
+<span class="kw">enum</span> <span class="ty">Role</span> { Admin, Member }
+
+<span class="kw">function</span> <span class="fn-name">getUser</span>(id: <span class="ty">int</span>) -> <span class="ty">User</span>
+  <span class="kw">throws</span> <span class="ty">NotFoundError</span>
+
+<span class="comment">// Package B imports Package A:</span>
+<span class="comment">// PackageResolutionContext sees:</span>
+<span class="comment">//   local items + A.PackageInterface</span>
+
+<span class="kw">function</span> <span class="fn-name">listAdmins</span>() -> <span class="ty">List</span>&lt;<span class="ty">User</span>&gt; {
+  <span class="comment">// User, Role resolved via</span>
+  <span class="comment">// PackageResolutionContext</span>
+  ...
+}</code></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 18: Design Patterns ========== -->
+<div class="slide" id="slide-18">
+  <div class="slide-content">
+    <div class="tag tag-amber">Design</div>
+    <h2>Key Design Patterns</h2>
+    <div class="grid-3">
+      <div class="card card-accent">
+        <h3>Salsa Queries</h3>
+        <p>All major computations are <code>#[salsa::tracked]</code> functions.
+        Inputs change → only dependent queries recompute. The database (<code>dyn Db</code>)
+        threads through every call.</p>
+      </div>
+      <div class="card card-green">
+        <h3>Arena Allocation</h3>
+        <p>Expressions and patterns live in arenas (<code>ExprBody</code>).
+        <code>ExprId</code> is a cheap index — no heap allocation per node,
+        cache-friendly traversal, and trivial equality.</p>
+      </div>
+      <div class="card card-purple">
+        <h3>Span-Free Errors</h3>
+        <p><code>TirTypeError</code> carries no source location. The <code>ExprId</code>
+        or <code>PatId</code> provides identity; the diagnostic layer maps
+        back to spans via the AST. Keeps the type checker location-agnostic.</p>
+      </div>
+      <div class="card card-pink">
+        <h3>Co-inductive Reasoning</h3>
+        <p>Recursive types use assumption sets: assume the property holds,
+        verify at each step. If the assumption is never violated,
+        it holds by co-induction. Guards against infinite loops.</p>
+      </div>
+      <div class="card card-amber">
+        <h3>Demand-Driven</h3>
+        <p>Nothing computes eagerly. <code>resolve_class_fields</code> only runs
+        when a field access is type-checked. Dead code is never analyzed
+        unless the LSP requests it.</p>
+      </div>
+      <div class="card card-red">
+        <h3>Firewall Pattern</h3>
+        <p>Declared <code>throws</code> clauses act as firewalls in exception
+        inference. They stop transitive propagation, creating a clean
+        contract boundary between caller and callee.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 19: Data Flow Summary ========== -->
+<div class="slide" id="slide-19">
+  <div class="slide-content">
+    <div class="tag tag-blue">Summary</div>
+    <h2>Complete Data Flow</h2>
+    <div style="display: flex; gap: 2rem; align-items: flex-start;">
+      <div style="flex: 1;">
+        <div style="background: var(--code-bg); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; line-height: 2.2;">
+          <div style="color: var(--accent5);">BAML Source Code</div>
+          <div style="color: var(--text-dim);">&nbsp;&nbsp;&nbsp;&nbsp;│ parsing</div>
+          <div style="color: var(--accent5);">AST (baml_compiler2_ast)</div>
+          <div style="color: var(--text-dim);">&nbsp;&nbsp;&nbsp;&nbsp;│ name binding, scoping</div>
+          <div style="color: var(--accent4);">HIR (baml_compiler2_hir)</div>
+          <div style="color: var(--text-dim);">&nbsp;&nbsp;&nbsp;&nbsp;│ signature elaboration</div>
+          <div style="color: var(--accent2);">PPIR (baml_compiler2_ppir)</div>
+          <div style="color: var(--text-dim);">&nbsp;&nbsp;&nbsp;&nbsp;│</div>
+          <div style="padding: 0.5rem; border: 1px solid rgba(108,140,255,0.3); border-radius: 8px; background: rgba(108,140,255,0.05);">
+            <div style="color: var(--accent); font-weight: 700;">TIR (this crate)</div>
+            <div style="color: var(--text-dim); font-size: 0.7rem; padding-left: 1rem;">
+              ├─ <span style="color: var(--accent3);">infer_scope_types</span> → ScopeInference <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/inference.rs" style="font-size: 0.65rem;">inference.rs</a><br>
+              │&nbsp;&nbsp; ├─ Walk ExprBody <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/builder.rs" style="font-size: 0.65rem;">builder.rs</a><br>
+              │&nbsp;&nbsp; ├─ Name resolution <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/resolve.rs" style="font-size: 0.65rem;">resolve.rs</a><br>
+              │&nbsp;&nbsp; ├─ Narrowing <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/narrowing.rs" style="font-size: 0.65rem;">narrowing.rs</a><br>
+              │&nbsp;&nbsp; ├─ Generics <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/generics.rs" style="font-size: 0.65rem;">generics.rs</a><br>
+              │&nbsp;&nbsp; └─ Subtyping <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/normalize.rs" style="font-size: 0.65rem;">normalize.rs</a><br>
+              ├─ <span style="color: var(--accent3);">exhaustiveness_check</span> <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/exhaustiveness.rs" style="font-size: 0.65rem;">exhaustiveness.rs</a><br>
+              ├─ <span style="color: var(--accent3);">throw_inference</span> <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/throw_inference.rs" style="font-size: 0.65rem;">throw_inference.rs</a><br>
+              ├─ <span style="color: var(--accent3);">package_interface</span> <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/package_interface.rs" style="font-size: 0.65rem;">package_interface.rs</a><br>
+              └─ diagnostics <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/infer_context.rs" style="font-size: 0.65rem;">infer_context.rs</a>
+            </div>
+          </div>
+          <div style="color: var(--text-dim);">&nbsp;&nbsp;&nbsp;&nbsp;│ verification</div>
+          <div style="color: var(--accent3);">VIR (baml_compiler2_vir)</div>
+          <div style="color: var(--text-dim);">&nbsp;&nbsp;&nbsp;&nbsp;│ codegen / execution</div>
+          <div style="color: var(--red);">Runtime</div>
+        </div>
+      </div>
+      <div style="flex: 1;">
+        <div class="card card-accent" style="margin-bottom: 1rem;">
+          <h3>Input</h3>
+          <p>Untyped expression trees from PPIR, plus package-level type declarations
+          (classes, enums, type aliases, function signatures) from HIR.</p>
+        </div>
+        <div class="card card-green" style="margin-bottom: 1rem;">
+          <h3>Processing</h3>
+          <p>Bidirectional type inference walks every expression. Subprocesses handle
+          generics, narrowing, exhaustiveness, and exceptions. All backed by Salsa
+          for incrementality.</p>
+        </div>
+        <div class="card card-purple" style="margin-bottom: 1rem;">
+          <h3>Output</h3>
+          <p><code>ScopeInference</code> per scope: typed expressions, name resolutions,
+          call plans, pattern types, exception sets, and diagnostics.
+          <code>PackageInterface</code> for cross-package contracts.</p>
+        </div>
+        <div class="card card-pink">
+          <h3>Consumers</h3>
+          <p>VIR (code generation), LSP (hover types, go-to-definition, diagnostics),
+          and the formatter (import analysis).</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 20: Animation — Let Bindings & Literal Widening ========== -->
+<div class="slide" id="slide-20">
+  <div class="slide-content">
+    <div class="tag tag-green">Live Animation</div>
+    <h2>Typechecking in Action: Let Bindings</h2>
+    <p class="subtitle" style="font-size:0.85rem;">Watch <code>TypeInferenceBuilder</code> process let-bindings. Fresh literals widen to base types at binding sites. <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/builder.rs">builder.rs</a></p>
+    <div class="anim-wrapper" id="anim-1">
+      <div class="anim-container">
+        <div class="anim-code-panel">
+          <div class="anim-line" data-line="1"><span class="ln">1</span><span class="kw">let</span> x = <span class="str">42</span></div>
+          <div class="anim-line" data-line="2"><span class="ln">2</span><span class="kw">let</span> y = x + <span class="str">1</span></div>
+          <div class="anim-line" data-line="3"><span class="ln">3</span><span class="kw">let</span> name = <span class="str">"Alice"</span></div>
+        </div>
+        <div class="anim-state-panel">
+          <div class="state-section">
+            <h4>expressions: Map&lt;ExprId, Ty&gt;</h4>
+            <div class="state-table" id="anim-1-expr"></div>
+          </div>
+          <div class="state-section">
+            <h4>locals: Map&lt;Name, LocalBinding&gt;</h4>
+            <div class="state-table" id="anim-1-locals"></div>
+          </div>
+        </div>
+      </div>
+      <div class="anim-bottom">
+        <div class="anim-narration" id="anim-1-narr"></div>
+        <div class="anim-controls">
+          <button onclick="A['anim-1'].reset()">Reset</button>
+          <button onclick="A['anim-1'].back()">&larr; Back</button>
+          <span class="step-counter" id="anim-1-step">0/7</span>
+          <button onclick="A['anim-1'].step()">Step &rarr;</button>
+          <button onclick="A['anim-1'].play()">&#9654; Play</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 21: Animation — Null Narrowing ========== -->
+<div class="slide" id="slide-21">
+  <div class="slide-content">
+    <div class="tag tag-pink">Live Animation</div>
+    <h2>Typechecking in Action: Null Narrowing</h2>
+    <p class="subtitle" style="font-size:0.85rem;">Flow-sensitive refinement: <code>if (x != null)</code> narrows <code>string?</code> &rarr; <code>string</code> in the then-branch. <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/narrowing.rs">narrowing.rs</a></p>
+    <div class="anim-wrapper" id="anim-2">
+      <div class="anim-container">
+        <div class="anim-code-panel">
+          <div class="anim-line" data-line="1"><span class="ln">1</span><span class="comment">// x: string? (parameter)</span></div>
+          <div class="anim-line" data-line="2"><span class="ln">2</span><span class="kw">if</span> (x != <span class="str">null</span>) {</div>
+          <div class="anim-line" data-line="3"><span class="ln">3</span>&nbsp;&nbsp;x.<span class="fn-name">length</span></div>
+          <div class="anim-line" data-line="4"><span class="ln">4</span>} <span class="kw">else</span> {</div>
+          <div class="anim-line" data-line="5"><span class="ln">5</span>&nbsp;&nbsp;<span class="str">0</span></div>
+          <div class="anim-line" data-line="6"><span class="ln">6</span>}</div>
+        </div>
+        <div class="anim-state-panel">
+          <div class="state-section">
+            <h4>expressions: Map&lt;ExprId, Ty&gt;</h4>
+            <div class="state-table" id="anim-2-expr"></div>
+          </div>
+          <div class="state-section">
+            <h4>locals: Map&lt;Name, LocalBinding&gt;</h4>
+            <div class="state-table" id="anim-2-locals"></div>
+          </div>
+          <div class="state-section narrow-section">
+            <h4>active narrowings</h4>
+            <div class="state-table" id="anim-2-narrow"></div>
+          </div>
+        </div>
+      </div>
+      <div class="anim-bottom">
+        <div class="anim-narration" id="anim-2-narr"></div>
+        <div class="anim-controls">
+          <button onclick="A['anim-2'].reset()">Reset</button>
+          <button onclick="A['anim-2'].back()">&larr; Back</button>
+          <span class="step-counter" id="anim-2-step">0/7</span>
+          <button onclick="A['anim-2'].step()">Step &rarr;</button>
+          <button onclick="A['anim-2'].play()">&#9654; Play</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 22: Animation — Evolving Lists ========== -->
+<div class="slide" id="slide-22">
+  <div class="slide-content">
+    <div class="tag tag-purple">Live Animation</div>
+    <h2>Typechecking in Action: Evolving Lists</h2>
+    <p class="subtitle" style="font-size:0.85rem;">Empty arrays become <code>EvolvingList</code> and widen their element type as items are pushed. Reads freeze the type. <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/builder.rs">builder.rs</a></p>
+    <div class="anim-wrapper" id="anim-3">
+      <div class="anim-container">
+        <div class="anim-code-panel">
+          <div class="anim-line" data-line="1"><span class="ln">1</span><span class="kw">let</span> items = []</div>
+          <div class="anim-line" data-line="2"><span class="ln">2</span>items.<span class="fn-name">push</span>(<span class="str">42</span>)</div>
+          <div class="anim-line" data-line="3"><span class="ln">3</span>items.<span class="fn-name">push</span>(<span class="str">7</span>)</div>
+          <div class="anim-line" data-line="4"><span class="ln">4</span><span class="kw">let</span> n = items[<span class="str">0</span>]</div>
+        </div>
+        <div class="anim-state-panel">
+          <div class="state-section">
+            <h4>expressions: Map&lt;ExprId, Ty&gt;</h4>
+            <div class="state-table" id="anim-3-expr"></div>
+          </div>
+          <div class="state-section">
+            <h4>locals: Map&lt;Name, LocalBinding&gt;</h4>
+            <div class="state-table" id="anim-3-locals"></div>
+          </div>
+        </div>
+      </div>
+      <div class="anim-bottom">
+        <div class="anim-narration" id="anim-3-narr"></div>
+        <div class="anim-controls">
+          <button onclick="A['anim-3'].reset()">Reset</button>
+          <button onclick="A['anim-3'].back()">&larr; Back</button>
+          <span class="step-counter" id="anim-3-step">0/7</span>
+          <button onclick="A['anim-3'].step()">Step &rarr;</button>
+          <button onclick="A['anim-3'].play()">&#9654; Play</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 23: Synthesis vs Checking Explained ========== -->
+<div class="slide" id="slide-23">
+  <div class="slide-content">
+    <div class="tag tag-amber">Concept</div>
+    <h2>Two Modes: Synthesis vs Checking</h2>
+    <p class="subtitle" style="font-size: 0.9rem;">The builder switches between two modes as it walks the expression tree. Every function call uses <em>both</em>.</p>
+    <div class="grid-2">
+      <div class="card card-accent" style="padding: 1.25rem;">
+        <h3 style="color: var(--accent); font-size: 1.1rem; margin-bottom: 0.75rem;">Synthesis (infer_expr) &uarr;</h3>
+        <p style="margin-bottom: 0.75rem; line-height: 1.7;"><strong>Type info flows leaves &rarr; root.</strong> Compute the type from sub-expression types alone. No expected type &mdash; the expression itself tells you what it is.</p>
+        <pre style="font-size: 0.75rem; line-height: 1.8;"><code><span class="comment">// "What type IS this?"</span>
+<span class="str">42</span>       <span class="comment">&rarr; Literal(42, Fresh)</span>
+x + <span class="str">1</span>    <span class="comment">&rarr; int (from operand types)</span>
+<span class="fn-name">format</span>  <span class="comment">&rarr; (int)&rarr;string (lookup)</span></code></pre>
+        <div style="margin-top: 0.75rem; padding: 0.5rem 0.75rem; background: rgba(108,140,255,0.08); border-radius: 6px; font-size: 0.8rem; color: var(--text-dim);">
+          Used when: no contextual type available, variable lookups, operator results, callee resolution.
+        </div>
+      </div>
+      <div class="card card-purple" style="padding: 1.25rem;">
+        <h3 style="color: var(--accent2); font-size: 1.1rem; margin-bottom: 0.75rem;">Checking (check_expr) &darr;</h3>
+        <p style="margin-bottom: 0.75rem; line-height: 1.7;"><strong>Type info flows root &rarr; leaves.</strong> An <em>expected</em> type is passed down from the parent. Verify that the expression conforms, and push context into sub-expressions.</p>
+        <pre style="font-size: 0.75rem; line-height: 1.8;"><code><span class="comment">// "Does this MATCH the expected type?"</span>
+<span class="str">42</span> vs <span class="ty">int</span>       <span class="comment">&rarr; &#10003; (Literal &lt;: int)</span>
+<span class="str">42</span> vs <span class="ty">string</span>    <span class="comment">&rarr; &#10007; TYPE MISMATCH</span>
+<span class="str">"hi"</span> vs <span class="ty">string</span>  <span class="comment">&rarr; &#10003; (Literal &lt;: string)</span></code></pre>
+        <div style="margin-top: 0.75rem; padding: 0.5rem 0.75rem; background: rgba(167,139,250,0.08); border-radius: 6px; font-size: 0.8rem; color: var(--text-dim);">
+          Used when: type annotations, function arguments (vs param types), return expressions (vs declared return type).
+        </div>
+      </div>
+    </div>
+    <div class="callout" style="margin-top: 1rem;">
+      <strong>Note:</strong> The tree walk is always recursive (parent &rarr; children). &ldquo;Direction&rdquo; refers to <em>type information flow</em>, not traversal order.
+      In <code>format(42)</code>: <span style="color: var(--accent);">synthesize</span> callee type &uarr; <code>(int) &rarr; string</code>,
+      then <span style="color: var(--accent2);">check</span> argument <code>42</code> &darr; against <code>int</code>,
+      then <span style="color: var(--accent);">synthesize</span> return type &uarr; <code>string</code>.
+      The two modes interleave within a single call expression.
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 24: Animation — Bidirectional Checking ========== -->
+<div class="slide" id="slide-24">
+  <div class="slide-content">
+    <div class="tag tag-amber">Live Animation</div>
+    <h2>Typechecking in Action: Bidirectional Checking</h2>
+    <p class="subtitle" style="font-size:0.85rem;">Even a single function call uses <em>both</em> modes: synthesize the callee, then <em>check</em> each argument against the parameter types. <a class="fp" href="vscode://file/Users/aaron/projects/baml/baml_language/crates/baml_compiler2_tir/src/builder.rs">builder.rs</a></p>
+    <div class="anim-wrapper" id="anim-4">
+      <div class="anim-container">
+        <div class="anim-code-panel">
+          <div class="anim-line" data-line="1"><span class="ln">1</span><span class="kw">function</span> <span class="fn-name">format</span>(n: <span class="ty">int</span>) -&gt; <span class="ty">string</span></div>
+          <div class="anim-line" data-line="2"><span class="ln">2</span><span class="kw">let</span> result = <span class="fn-name">format</span>(<span class="str">42</span>)</div>
+          <div class="anim-line" data-line="3"><span class="ln">3</span><span class="kw">let</span> bad = <span class="fn-name">format</span>(<span class="str">"hello"</span>)</div>
+        </div>
+        <div class="anim-state-panel">
+          <div class="state-section">
+            <h4>expressions: Map&lt;ExprId, Ty&gt;</h4>
+            <div class="state-table" id="anim-4-expr"></div>
+          </div>
+          <div class="state-section">
+            <h4>locals: Map&lt;Name, LocalBinding&gt;</h4>
+            <div class="state-table" id="anim-4-locals"></div>
+          </div>
+        </div>
+      </div>
+      <div class="anim-bottom">
+        <div class="anim-narration" id="anim-4-narr"></div>
+        <div class="anim-controls">
+          <button onclick="A['anim-4'].reset()">Reset</button>
+          <button onclick="A['anim-4'].back()">&larr; Back</button>
+          <span class="step-counter" id="anim-4-step">0/7</span>
+          <button onclick="A['anim-4'].step()">Step &rarr;</button>
+          <button onclick="A['anim-4'].play()">&#9654; Play</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 25: End ========== -->
+<div class="slide" id="slide-25">
+  <div class="slide-content" style="text-align: center;">
+    <div class="tag tag-blue">fin</div>
+    <h1><span class="gradient-text">That's baml_compiler2_tir</span></h1>
+    <p class="subtitle" style="max-width: 600px; margin: 0 auto;">
+      The typed intermediate representation &mdash; where BAML source code becomes a fully verified,
+      type-safe program ready for code generation.
+    </p>
+    <div class="grid-3" style="max-width: 700px; margin: 2rem auto 0;">
+      <div class="card card-accent" style="text-align: center;">
+        <h3 style="font-size: 1.5rem; color: var(--accent);">19</h3>
+        <p>source files</p>
+      </div>
+      <div class="card card-green" style="text-align: center;">
+        <h3 style="font-size: 1.5rem; color: var(--accent3);">~23,000</h3>
+        <p>lines of type logic</p>
+      </div>
+      <div class="card card-purple" style="text-align: center;">
+        <h3 style="font-size: 1.5rem; color: var(--accent2);">20+</h3>
+        <p>type variants</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Navigation -->
+<div class="nav">
+  <button onclick="prevSlide()" title="Previous (&larr;)">&#8592;</button>
+  <button onclick="nextSlide()" title="Next (&rarr;)">&#8594;</button>
+</div>
+
+<script>
+  // ═══ Slide Navigation ═══
+  let current = 1;
+  const total = document.querySelectorAll('.slide').length;
+
+  function showSlide(n) {
+    if (n < 1 || n > total) return;
+    document.querySelector('.slide.active').classList.remove('active');
+    current = n;
+    document.getElementById(`slide-${current}`).classList.add('active');
+    document.getElementById('progress').style.width = `${(current / total) * 100}%`;
+    document.getElementById('counter').textContent = `${current} / ${total}`;
+    // Reset animations on animated slides
+    Object.values(A).forEach(a => {
+      if (document.getElementById(a.id)?.closest(`#slide-${current}`)) a.reset();
+    });
+  }
+
+  function nextSlide() { showSlide(current + 1); }
+  function prevSlide() { showSlide(current - 1); }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); nextSlide(); }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); prevSlide(); }
+  });
+
+  let touchStartX = 0;
+  document.addEventListener('touchstart', (e) => { touchStartX = e.touches[0].clientX; });
+  document.addEventListener('touchend', (e) => {
+    const diff = touchStartX - e.changedTouches[0].clientX;
+    if (Math.abs(diff) > 50) { diff > 0 ? nextSlide() : prevSlide(); }
+  });
+
+  document.getElementById('progress').style.width = `${(1 / total) * 100}%`;
+  document.getElementById('counter').textContent = `1 / ${total}`;
+
+  // ═══ Animation Engine ═══
+  const A = {};
+
+  class Anim {
+    constructor(id, steps) {
+      this.id = id;
+      this.steps = steps;
+      this.i = 0;
+      this.timer = null;
+      this.draw();
+    }
+    step() { if (this.i < this.steps.length - 1) { this.i++; this.draw(); } }
+    back() { if (this.i > 0) { this.i--; this.draw(); } }
+    reset() { this.i = 0; if (this.timer) { clearInterval(this.timer); this.timer = null; } this.draw(); }
+    play() {
+      if (this.timer) { clearInterval(this.timer); this.timer = null; return; }
+      this.timer = setInterval(() => {
+        if (this.i >= this.steps.length - 1) { clearInterval(this.timer); this.timer = null; return; }
+        this.step();
+      }, 2200);
+    }
+    draw() {
+      const s = this.steps[this.i];
+      const el = document.getElementById(this.id);
+      if (!el) return;
+      el.querySelectorAll('.anim-line').forEach(ln => {
+        const n = +ln.dataset.line;
+        ln.className = 'anim-line' +
+          (s.hl && s.hl.includes(n) ? ' active' : s.dim && s.dim.includes(n) ? ' done' : ' future');
+      });
+      this._tbl(this.id + '-expr', s.expr);
+      this._tbl(this.id + '-locals', s.locals);
+      const narrowEl = document.getElementById(this.id + '-narrow');
+      if (narrowEl) this._tbl(this.id + '-narrow', s.narrow || []);
+      const narrEl = document.getElementById(this.id + '-narr');
+      if (narrEl) narrEl.innerHTML = s.narr;
+      const ctr = document.getElementById(this.id + '-step');
+      if (ctr) ctr.textContent = this.i + '/' + (this.steps.length - 1);
+    }
+    _tbl(id, rows) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (!rows || !rows.length) { el.innerHTML = '<div class="state-empty">( empty )</div>'; return; }
+      el.innerHTML = rows.map(r =>
+        '<div class="state-entry ' + r[2] + '">' +
+        '<span class="key">' + r[0] + '</span>' +
+        '<span class="arrow">&rarr;</span>' +
+        '<span class="val">' + r[1] + '</span></div>'
+      ).join('');
+    }
+  }
+
+  // ═══ Animation Step Data ═══
+
+  // Anim 1: Let Bindings & Literal Widening
+  A['anim-1'] = new Anim('anim-1', [
+    { hl:[], dim:[], expr:[], locals:[],
+      narr:'Empty scope. <code>TypeInferenceBuilder</code> starts with empty <code>expressions</code> and <code>locals</code> maps. Click <b>Step</b> to begin inference.' },
+
+    { hl:[1], dim:[], expr:[
+        ['42', '<span class="tl">Literal(42, Fresh)</span>', 'new']
+      ], locals:[],
+      narr:'<code>infer_expr(42)</code> synthesizes <span class="tl">Literal(42, Fresh)</span>. <b>Fresh</b> = this literal can be widened at a binding site.' },
+
+    { hl:[1], dim:[], expr:[
+        ['let x = &hellip;', '<span class="tl">Literal(42)</span> <span class="tn">&rarr; widen &rarr;</span> <span class="tp">int</span>', 'changed']
+      ], locals:[
+        ['x', '<span class="tp">int</span>', 'new']
+      ],
+      narr:'At <code>let</code>: <code>widen_fresh()</code> converts <span class="tl">Literal(42, Fresh)</span> &rarr; <span class="tp">int</span>. The widened type is stored in <code>locals</code> for downstream references.' },
+
+    { hl:[2], dim:[1], expr:[
+        ['x', '<span class="tp">int</span> <span class="tn">(from locals)</span>', 'new']
+      ], locals:[
+        ['x', '<span class="tp">int</span>', 'stable']
+      ],
+      narr:'<code>infer_path("x")</code> &rarr; look up <code>x</code> in <code>locals</code> &rarr; <span class="tp">int</span>. Name resolution walks the scope chain upward.' },
+
+    { hl:[2], dim:[1], expr:[
+        ['x', '<span class="tp">int</span>', 'stable'],
+        ['1', '<span class="tl">Literal(1, Fresh)</span>', 'new'],
+        ['x + 1', '<span class="tp">int</span>', 'new']
+      ], locals:[
+        ['x', '<span class="tp">int</span>', 'stable']
+      ],
+      narr:'<code>infer_binary_op(int, +, Literal(1))</code> &rarr; <span class="tp">int</span>. Arithmetic promotes both operands to their base types.' },
+
+    { hl:[2], dim:[1], expr:[
+        ['x + 1', '<span class="tp">int</span> <span class="tn">&rarr; widen &rarr; int (no-op)</span>', 'stable']
+      ], locals:[
+        ['x', '<span class="tp">int</span>', 'stable'],
+        ['y', '<span class="tp">int</span>', 'new']
+      ],
+      narr:'<code>widen_fresh(int)</code> is a no-op &mdash; already a base type. Store <code>locals[y]</code> = <span class="tp">int</span>.' },
+
+    { hl:[3], dim:[1,2], expr:[
+        ['"Alice"', '<span class="tl">Literal("Alice", Fresh)</span>', 'new']
+      ], locals:[
+        ['x', '<span class="tp">int</span>', 'stable'],
+        ['y', '<span class="tp">int</span>', 'stable']
+      ],
+      narr:'<code>infer_expr("Alice")</code> &rarr; <span class="tl">Literal("Alice", Fresh)</span>. String literals are also fresh literal types.' },
+
+    { hl:[3], dim:[1,2], expr:[
+        ['"Alice"', '<span class="tl">Literal("Alice")</span> <span class="tn">&rarr; widen &rarr;</span> <span class="tp">string</span>', 'changed']
+      ], locals:[
+        ['x', '<span class="tp">int</span>', 'stable'],
+        ['y', '<span class="tp">int</span>', 'stable'],
+        ['name', '<span class="tp">string</span>', 'new']
+      ],
+      narr:'<code>widen_fresh()</code> converts <span class="tl">Literal("Alice", Fresh)</span> &rarr; <span class="tp">string</span>. All three bindings resolved. <b>Scope inference complete!</b>' },
+  ]);
+
+  // Anim 2: Null Narrowing
+  A['anim-2'] = new Anim('anim-2', [
+    { hl:[1], dim:[], expr:[], locals:[
+        ['x', '<span class="tp">string</span><span class="tn">?</span>', 'new']
+      ], narrow:[],
+      narr:'Function parameter <code>x</code> has declared type <span class="tp">string?</span> (= Optional&lt;string&gt;). Stored in <code>locals</code>.' },
+
+    { hl:[2], dim:[1], expr:[
+        ['x != null', '<span class="tp">bool</span>', 'new']
+      ], locals:[
+        ['x', '<span class="tp">string</span><span class="tn">?</span>', 'stable']
+      ], narrow:[],
+      narr:'Infer condition <code>x != null</code> &rarr; <span class="tp">bool</span>. The builder now calls <code>extract_narrowings()</code> from <code>narrowing.rs</code>.' },
+
+    { hl:[2], dim:[1], expr:[
+        ['x != null', '<span class="tp">bool</span>', 'stable']
+      ], locals:[
+        ['x', '<span class="tp">string</span><span class="tn">?</span>', 'stable']
+      ], narrow:[
+        ['x', 'then: <span class="tp">string</span> &nbsp;/&nbsp; else: <span class="tn">null</span>', 'new']
+      ],
+      narr:'<code>extract_narrowings</code> &rarr; <code>Narrowing { name: x, then_type: string, else_type: null }</code>. The <code>!= null</code> pattern strips null from the then-branch type.' },
+
+    { hl:[3], dim:[1,2], expr:[], locals:[
+        ['x', '<span class="tp">string</span>', 'changed']
+      ], narrow:[
+        ['x', '<span class="tp">string</span> <span class="tn">(then-branch active)</span>', 'changed']
+      ],
+      narr:'<code>apply_then_narrowings()</code>: save original <span class="tp">string?</span>, set <code>locals[x]</code> = <span class="tp">string</span>. Now inside the then-branch.' },
+
+    { hl:[3], dim:[1,2], expr:[
+        ['x.length', '<span class="tp">int</span>', 'new']
+      ], locals:[
+        ['x', '<span class="tp">string</span>', 'stable']
+      ], narrow:[
+        ['x', '<span class="tp">string</span> <span class="tn">(then-branch active)</span>', 'stable']
+      ],
+      narr:'<code>resolve_member(string, "length")</code> &rarr; <span class="tp">int</span>. With <code>x</code> narrowed to <span class="tp">string</span>, field access is valid &mdash; no null-safety error!' },
+
+    { hl:[4,5], dim:[1,2,3], expr:[], locals:[
+        ['x', '<span class="tn">null</span>', 'changed']
+      ], narrow:[
+        ['x', '<span class="tn">null</span> <span class="tn">(else-branch active)</span>', 'changed']
+      ],
+      narr:'<code>restore_and_apply_else()</code>: restore original, then apply else-narrowing. <code>locals[x]</code> = <span class="tn">null</span>. Now inside the else-branch.' },
+
+    { hl:[5], dim:[1,2,3,4], expr:[
+        ['0', '<span class="tl">Literal(0, Fresh)</span>', 'new']
+      ], locals:[
+        ['x', '<span class="tn">null</span>', 'stable']
+      ], narrow:[
+        ['x', '<span class="tn">null</span> <span class="tn">(else-branch active)</span>', 'stable']
+      ],
+      narr:'<code>infer_expr(0)</code> &rarr; <span class="tl">Literal(0, Fresh)</span>. This is the else-branch result.' },
+
+    { hl:[6], dim:[1,2,3,4,5], expr:[
+        ['if-expr', '<span class="tp">int</span> <span class="tn">(join: int | Literal(0) &rarr; int)</span>', 'new']
+      ], locals:[
+        ['x', '<span class="tp">string</span><span class="tn">?</span>', 'changed']
+      ], narrow:[],
+      narr:'<code>join_types(int, Literal(0))</code> &rarr; <span class="tp">int</span>. <code>restore_narrowings()</code> puts <code>locals[x]</code> back to <span class="tp">string?</span>. <b>Narrowings are scoped to the if-expression.</b>' },
+  ]);
+
+  // Anim 3: Evolving Lists
+  A['anim-3'] = new Anim('anim-3', [
+    { hl:[], dim:[], expr:[], locals:[],
+      narr:'Watch how empty arrays use <code>EvolvingList</code> to widen their element type as items are added. Click <b>Step</b> to begin.' },
+
+    { hl:[1], dim:[], expr:[
+        ['[]', '<span class="tc">List</span>&lt;<span class="te">Never</span>&gt;', 'new']
+      ], locals:[],
+      narr:'<code>infer_expr([])</code> &rarr; <span class="tc">List</span>&lt;<span class="te">Never</span>&gt;. An empty array has element type <span class="te">Never</span> (bottom type &mdash; subtype of everything).' },
+
+    { hl:[1], dim:[], expr:[
+        ['[]', '<span class="tc">List(Never)</span> <span class="tn">&rarr; make_evolving &rarr;</span> <span class="tc">EvolvingList(Never)</span>', 'changed']
+      ], locals:[
+        ['items', '<span class="tc">EvolvingList</span>&lt;<span class="te">Never</span>&gt;', 'new']
+      ],
+      narr:'At <code>let</code> (no annotation): <code>make_evolving()</code> converts List(Never) &rarr; <span class="tc">EvolvingList(Never)</span>. The container is now mutable &mdash; its element type widens on mutations.' },
+
+    { hl:[2], dim:[1], expr:[
+        ['items.push(42)', '<span class="tn">intercepted by try_container_method_call</span>', 'new']
+      ], locals:[
+        ['items', '<span class="tc">EvolvingList</span>&lt;<span class="te">Never</span>&gt;', 'stable']
+      ],
+      narr:'<code>items.push(42)</code> &mdash; <code>try_container_method_call</code> intercepts this <em>before</em> normal method resolution. It recognizes <code>.push()</code> on an EvolvingList.' },
+
+    { hl:[2], dim:[1], expr:[
+        ['items.push(42)', '<span class="tp">void</span> <span class="tn">(mutates in place)</span>', 'changed']
+      ], locals:[
+        ['items', '<span class="tc">EvolvingList</span>&lt;<span class="tp">int</span>&gt;', 'changed']
+      ],
+      narr:'Element type widens: <code>join(Never, int)</code> &rarr; <span class="tp">int</span>. <code>locals[items]</code> updated in-place to <span class="tc">EvolvingList</span>&lt;<span class="tp">int</span>&gt;. Push returns <span class="tp">void</span>.' },
+
+    { hl:[3], dim:[1,2], expr:[
+        ['items.push(7)', '<span class="tp">void</span> <span class="tn">(join(int, int) = int &mdash; no change)</span>', 'new']
+      ], locals:[
+        ['items', '<span class="tc">EvolvingList</span>&lt;<span class="tp">int</span>&gt;', 'stable']
+      ],
+      narr:'<code>items.push(7)</code> &mdash; element type: <code>join(int, int)</code> = <span class="tp">int</span>. No type change. Container stays <span class="tc">EvolvingList</span>&lt;<span class="tp">int</span>&gt;.' },
+
+    { hl:[4], dim:[1,2,3], expr:[
+        ['items', '<span class="tc">EvolvingList(int)</span> <span class="tn">&rarr; freeze &rarr;</span> <span class="tc">List</span>&lt;<span class="tp">int</span>&gt;', 'new']
+      ], locals:[
+        ['items', '<span class="tc">EvolvingList</span>&lt;<span class="tp">int</span>&gt;', 'stable']
+      ],
+      narr:'Reading <code>items</code> in expression position: EvolvingList(int) <b>freezes</b> to <span class="tc">List</span>&lt;<span class="tp">int</span>&gt;. The local stays evolving so future mutations still work.' },
+
+    { hl:[4], dim:[1,2,3], expr:[
+        ['items[0]', '<span class="tp">int</span> <span class="tn">(index into List&lt;int&gt;)</span>', 'new']
+      ], locals:[
+        ['items', '<span class="tc">EvolvingList</span>&lt;<span class="tp">int</span>&gt;', 'stable'],
+        ['n', '<span class="tp">int</span>', 'new']
+      ],
+      narr:'Index access on <span class="tc">List</span>&lt;<span class="tp">int</span>&gt; returns <span class="tp">int</span>. Store <code>locals[n]</code> = <span class="tp">int</span>. <b>Complete!</b> The evolving list captured the element type progressively.' },
+  ]);
+
+  // Anim 4: Bidirectional Checking — simple function call
+  A['anim-4'] = new Anim('anim-4', [
+    { hl:[], dim:[], expr:[], locals:[],
+      narr:'A single function call uses <b>both modes</b>: <span class="tp">synthesis &uarr;</span> to look up the callee, then <span class="tc">checking &darr;</span> to verify each argument against its parameter type. Click <b>Step</b>.' },
+
+    { hl:[1], dim:[], expr:[
+        ['format', '<span class="tf">(int) &rarr; string</span> <span class="tn">(from package)</span>', 'new']
+      ], locals:[],
+      narr:'<span class="tp">SYNTHESIS &uarr;</span> &mdash; <code>infer_path("format")</code> looks up the function in package items. Result: <span class="tf">(int) &rarr; string</span>. Type flows <em>upward</em> from the definition.' },
+
+    { hl:[2], dim:[1], expr:[
+        ['format', '<span class="tf">(int) &rarr; string</span>', 'stable'],
+        ['format(42)', '<span class="tp">SYNTHESIS &uarr;</span> resolve callee &rarr; <span class="tf">(int)&rarr;string</span>', 'new']
+      ], locals:[],
+      narr:'<span class="tp">SYNTHESIS &uarr;</span> &mdash; processing <code>format(42)</code>. First, synthesize the callee type: <span class="tf">(int) &rarr; string</span>. Now we know the parameter expects <span class="tp">int</span>.' },
+
+    { hl:[2], dim:[1], expr:[
+        ['42', '<span class="tc">CHECK &darr;</span> <span class="tl">Literal(42)</span> vs expected <span class="tp">int</span> &mdash; <span class="tp">&#10003;</span>', 'new']
+      ], locals:[],
+      narr:'<span class="tc">CHECKING &darr;</span> &mdash; <code>check_expr(42, expected=int)</code>. The parameter type <span class="tp">int</span> pushes <em>downward</em> into the argument. <span class="tl">Literal(42)</span> &lt;: <span class="tp">int</span>? Yes! &#10003;' },
+
+    { hl:[2], dim:[1], expr:[
+        ['format(42)', '<span class="tp">string</span> <span class="tn">(return type)</span>', 'new']
+      ], locals:[
+        ['result', '<span class="tp">string</span>', 'new']
+      ],
+      narr:'<span class="tp">SYNTHESIS &uarr;</span> &mdash; call result type = return type of callee = <span class="tp">string</span>. Flows upward. Store <code>locals[result]</code> = <span class="tp">string</span>.' },
+
+    { hl:[3], dim:[1,2], expr:[
+        ['format("hello")', '<span class="tc">CHECK &darr;</span> callee expects <span class="tp">int</span>', 'new']
+      ], locals:[
+        ['result', '<span class="tp">string</span>', 'stable']
+      ],
+      narr:'<span class="tp">SYNTHESIS &uarr;</span> resolves callee again: <span class="tf">(int) &rarr; string</span>. Now <span class="tc">CHECKING &darr;</span> the argument <code>"hello"</code> against parameter type <span class="tp">int</span>&hellip;' },
+
+    { hl:[3], dim:[1,2], expr:[
+        ['"hello"', '<span class="tc">CHECK &darr;</span> <span class="tl">Literal("hello")</span> vs <span class="tp">int</span> &mdash; <span class="te">&#10007; TYPE MISMATCH</span>', 'new']
+      ], locals:[
+        ['result', '<span class="tp">string</span>', 'stable']
+      ],
+      narr:'<span class="te">TYPE MISMATCH!</span> <code>check_expr("hello", expected=int)</code> fails: <span class="tl">string</span> is not a subtype of <span class="tp">int</span>. The error is caught <b>at the argument</b>, not after the call returns. That\'s the power of checking mode.' },
+
+    { hl:[3], dim:[1,2], expr:[
+        ['format("hello")', '<span class="tp">string</span> <span class="tn">(error recovery &mdash; uses return type)</span>', 'changed']
+      ], locals:[
+        ['result', '<span class="tp">string</span>', 'stable'],
+        ['bad', '<span class="tp">string</span> <span class="tn">(inferred despite error)</span>', 'new']
+      ],
+      narr:'<b>Error recovery:</b> despite the argument error, TIR still assigns the return type <span class="tp">string</span> so downstream code can continue checking. <b>Both modes work together in every call!</b>' },
+  ]);
+</script>
+
+</body>
+</html>

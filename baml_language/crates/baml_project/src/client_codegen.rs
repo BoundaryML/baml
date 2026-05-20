@@ -529,7 +529,12 @@ fn convert_tir_leaf(
         TirTy::Primitive(PrimitiveType::Pdf, _) => cg::Ty::Media(baml_db::MediaKind::Pdf),
 
         // Named types — preserve full QualifiedTypeName via name_from_qtn.
-        TirTy::Class(qtn, type_args, _) => cg::Ty::Class(
+        // Interfaces (BEP-044) lower to `cg::Ty::Class` in client codegen:
+        // generated SDKs expose interface-typed values as union-of-implementors
+        // (BEP-044 §LLM Functions), which the codegen path handles via union
+        // simplification once the implementor set is enumerated; treating them
+        // as a regular nominal type here lets that machinery run unchanged.
+        TirTy::Class(qtn, type_args, _) | TirTy::Interface(qtn, type_args, _) => cg::Ty::Class(
             name_from_qtn(qtn),
             type_args
                 .iter()

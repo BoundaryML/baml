@@ -61,6 +61,10 @@ enum StructuralTy {
     /// Generic class arguments are compared invariantly — `Foo<int>` and `Foo<string>`
     /// are not subtypes of each other.
     Class(QualifiedTypeName, Vec<StructuralTy>),
+    /// Interface type (BEP-044). Distinct from `Class` so that nominal
+    /// `class T implements I` subtyping doesn't accidentally fire on the
+    /// structural class-name match.
+    Interface(QualifiedTypeName, Vec<StructuralTy>),
     Enum(QualifiedTypeName),
     EnumVariant(QualifiedTypeName, Name),
     // Constructors
@@ -421,6 +425,13 @@ fn normalize_impl(
                 .map(|t| normalize_impl(t, aliases, recursive, expanding))
                 .collect();
             StructuralTy::Class(qn.clone(), args)
+        }
+        Ty::Interface(qn, type_args, _) => {
+            let args = type_args
+                .iter()
+                .map(|t| normalize_impl(t, aliases, recursive, expanding))
+                .collect();
+            StructuralTy::Interface(qn.clone(), args)
         }
         Ty::Enum(qn, _) => StructuralTy::Enum(qn.clone()),
         Ty::EnumVariant(qn, v, _) => StructuralTy::EnumVariant(qn.clone(), v.clone()),
