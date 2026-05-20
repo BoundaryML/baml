@@ -71,7 +71,7 @@ test TestMakePoem() {
 
 //----
 //- diagnostics
-// Error: unresolved name: poem
+// error: unresolved name: poem
 //     ╭─[ expr_expr_full.baml:41:16 ]
 //     │
 //  41 │   CombinePoems(poem, another)
@@ -80,7 +80,7 @@ test TestMakePoem() {
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: unresolved name: another
+// error: unresolved name: another
 //     ╭─[ expr_expr_full.baml:41:22 ]
 //     │
 //  41 │   CombinePoems(poem, another)
@@ -89,7 +89,7 @@ test TestMakePoem() {
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: unresolved name: TestPipeline
+// error: unresolved name: TestPipeline
 //     ╭─[ expr_expr_full.baml:44:6 ]
 //     │
 //  44 │ test TestPipeline() {
@@ -98,7 +98,7 @@ test TestMakePoem() {
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: unresolved name: functions
+// error: unresolved name: functions
 //    ╭─[ expr_expr_full.baml:1:1 ]
 //    │
 //  1 │ function MakePoem(length: int) -> string {
@@ -107,7 +107,7 @@ test TestMakePoem() {
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯
-// Error: unresolved name: TestPyramid
+// error: unresolved name: TestPyramid
 //     ╭─[ expr_expr_full.baml:49:6 ]
 //     │
 //  49 │ test TestPyramid() {
@@ -116,7 +116,7 @@ test TestMakePoem() {
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: unresolved name: functions
+// error: unresolved name: functions
 //    ╭─[ expr_expr_full.baml:1:1 ]
 //    │
 //  1 │ function MakePoem(length: int) -> string {
@@ -125,7 +125,7 @@ test TestMakePoem() {
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯
-// Error: unresolved name: TestMakePoem
+// error: unresolved name: TestMakePoem
 //     ╭─[ expr_expr_full.baml:67:6 ]
 //     │
 //  67 │ test TestMakePoem() {
@@ -134,7 +134,7 @@ test TestMakePoem() {
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: unresolved name: functions
+// error: unresolved name: functions
 //    ╭─[ expr_expr_full.baml:1:1 ]
 //    │
 //  1 │ function MakePoem(length: int) -> string {
@@ -143,7 +143,7 @@ test TestMakePoem() {
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯
-// Error: unresolved name: args
+// error: unresolved name: args
 //    ╭─[ expr_expr_full.baml:1:3 ]
 //    │
 //  1 │ function MakePoem(length: int) -> string {
@@ -152,7 +152,7 @@ test TestMakePoem() {
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯
-// Error: unresolved name: length
+// error: unresolved name: length
 //    ╭─[ expr_expr_full.baml:1:1 ]
 //    │
 //  1 │ function MakePoem(length: int) -> string {
@@ -161,7 +161,7 @@ test TestMakePoem() {
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯
-// Error: unresolved name: functions
+// error: unresolved name: functions
 //     ╭─[ expr_expr_full.baml:45:3 ]
 //     │
 //  45 │   functions [Pipeline]
@@ -170,7 +170,7 @@ test TestMakePoem() {
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: unresolved name: functions
+// error: unresolved name: functions
 //     ╭─[ expr_expr_full.baml:50:3 ]
 //     │
 //  50 │   functions [Pyramid]
@@ -179,7 +179,7 @@ test TestMakePoem() {
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: unresolved name: functions
+// error: unresolved name: functions
 //     ╭─[ expr_expr_full.baml:55:3 ]
 //     │
 //  55 │   functions [OuterPyramid]
@@ -188,7 +188,7 @@ test TestMakePoem() {
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: unresolved name: functions
+// error: unresolved name: functions
 //     ╭─[ expr_expr_full.baml:68:5 ]
 //     │
 //  68 │     functions [MakePoem]
@@ -197,7 +197,7 @@ test TestMakePoem() {
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: unresolved name: args
+// error: unresolved name: args
 //     ╭─[ expr_expr_full.baml:69:5 ]
 //     │
 //  69 │     args { length 4 }
@@ -206,7 +206,7 @@ test TestMakePoem() {
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: unresolved name: length
+// error: unresolved name: length
 //     ╭─[ expr_expr_full.baml:69:12 ]
 //     │
 //  69 │     args { length 4 }

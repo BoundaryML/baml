@@ -20,7 +20,7 @@ function Caller(x: int) -> string {
 
 //----
 //- diagnostics
-// Error: throws contract violation: `user.Errors` is missing user.Errors.AuthError
+// error: throws contract violation: `user.Errors` is missing user.Errors.AuthError
 //    ╭─[ throw_throws_caller_sees_contract.baml:9:42 ]
 //    │
 //  9 │ function MayFail(x: int) -> string throws Errors {
@@ -29,7 +29,7 @@ function Caller(x: int) -> string {
 //    │ 
 //    │ Note: Error code: E0096
 // ───╯
-// Warning: extraneous throws declaration: user.Errors
+// warning: extraneous throws declaration: user.Errors
 //    ╭─[ throw_throws_caller_sees_contract.baml:9:42 ]
 //    │
 //  9 │ function MayFail(x: int) -> string throws Errors {

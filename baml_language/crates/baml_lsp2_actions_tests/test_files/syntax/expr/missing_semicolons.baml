@@ -164,7 +164,7 @@ function MissingReturnExpression() -> int {
 
 //----
 //- diagnostics
-// Error: missing return: expected `int`
+// error: missing return: expected `int`
 //      ╭─[ expr_missing_semicolons.baml:160:42 ]
 //      │
 //  160 │ ╭─▶ function MissingReturnExpression() -> int {

@@ -9,7 +9,7 @@ function MayFail<[CURSOR](x: int) -> string throws Errors {
 
 //----
 //- diagnostics
-// Error: throws contract violation: `user.Errors` is missing user.Errors.AuthError
+// error: throws contract violation: `user.Errors` is missing user.Errors.AuthError
 //    ╭─[ hover_function_throws.baml:6:42 ]
 //    │
 //  6 │ function MayFail(x: int) -> string throws Errors {
@@ -18,7 +18,7 @@ function MayFail<[CURSOR](x: int) -> string throws Errors {
 //    │ 
 //    │ Note: Error code: E0096
 // ───╯
-// Warning: extraneous throws declaration: user.Errors
+// warning: extraneous throws declaration: user.Errors
 //    ╭─[ hover_function_throws.baml:6:42 ]
 //    │
 //  6 │ function MayFail(x: int) -> string throws Errors {

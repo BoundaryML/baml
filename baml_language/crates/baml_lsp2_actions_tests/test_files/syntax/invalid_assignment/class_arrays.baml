@@ -45,7 +45,7 @@ function ClassArrayAssignments() -> int {
 
 //----
 //- diagnostics
-// Error: type mismatch: expected user.Person[], got user.Animal[]
+// error: type mismatch: expected user.Person[], got user.Animal[]
 //     ╭─[ invalid_assignment_class_arrays.baml:25:6 ]
 //     │
 //  25 │     p1 = [Animal { species: "Bird", legs: 2 }];
@@ -54,7 +54,7 @@ function ClassArrayAssignments() -> int {
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: type mismatch: expected user.Animal[], got user.Person[]
+// error: type mismatch: expected user.Animal[], got user.Person[]
 //     ╭─[ invalid_assignment_class_arrays.baml:29:6 ]
 //     │
 //  29 │     a1 = [Person { name: "D", age: 4 }];
@@ -63,7 +63,7 @@ function ClassArrayAssignments() -> int {
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: type mismatch: expected user.Person[], got user.Person
+// error: type mismatch: expected user.Person[], got user.Person
 //     ╭─[ invalid_assignment_class_arrays.baml:33:7 ]
 //     │
 //  33 │     p2 = Person { name: "F", age: 6 };

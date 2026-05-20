@@ -268,9 +268,15 @@ fn render_ariadne(
     // BAML CLI uses lowercase `error:` / `warning:` everywhere (matching
     // cargo, rustc, clap) — ariadne's built-in `ReportKind::Error` /
     // `Warning` render capitalized, so swap to `Custom(name, color)`
-    // with the same colors ariadne would have chosen anyway. Keeps the
-    // visual treatment identical, just lowercases the keyword so it
-    // matches `print_error` / `print_warning` everywhere else.
+    // with the same red/yellow ariadne would have picked anyway.
+    //
+    // (and yes, ariadne not letting `Custom` participate in
+    // `with_color(false)` is genuinely dumb — `Custom(_, color)` is the
+    // one match arm that unconditionally returns `Some(color)` regardless
+    // of the config flag, so plain-text mode leaks ANSI escapes for the
+    // keyword. We work around it by stripping ANSI from the rendered
+    // string below when `color = false`. Real fix would be upstreaming a
+    // `Custom { name, color: Option<Color> }` shape; until then, strip.)
     let report_kind = match diagnostic.severity {
         Severity::Error => ReportKind::Custom("error", ariadne::Color::Red),
         Severity::Warning => ReportKind::Custom("warning", ariadne::Color::Yellow),
@@ -314,8 +320,44 @@ fn render_ariadne(
         .with_config(ariadne::Config::default().with_color(color))
         .finish();
 
-    // Render to string using SourceCache for proper filename display
-    render_report_to_string(&report, sources, file_paths)
+    // Render to string using SourceCache for proper filename display.
+    let rendered = render_report_to_string(&report, sources, file_paths);
+
+    // See the rant above the `report_kind` match — ariadne paints the
+    // `Custom` keyword unconditionally, so `with_color(false)` doesn't
+    // reach it. Strip ANSI from the final string so snapshots / piped
+    // output / `NO_COLOR` users get plain text without losing the
+    // lowercase keyword we get from `Custom`.
+    if color {
+        rendered
+    } else {
+        strip_ansi(&rendered)
+    }
+}
+
+/// Strip ANSI SGR escape sequences (`\x1b[...m`) from `s`. Inlined to
+/// avoid a dep on `strip-ansi-escapes` for ~15 lines — only used in the
+/// no-color path of [`render_ariadne`].
+fn strip_ansi(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            // SGR sequences are `ESC [ <params> m`. Consume until we
+            // hit the terminator `m`; anything else is malformed and
+            // we let it through verbatim.
+            if chars.next() == Some('[') {
+                for inner in chars.by_ref() {
+                    if inner == 'm' {
+                        break;
+                    }
+                }
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
 }
 
 /// Render a diagnostic in concise one-line format.

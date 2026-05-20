@@ -46,7 +46,7 @@ function BadValueReturn(x: int) -> string {
 
 //----
 //- diagnostics
-// Error: type mismatch: expected string, got 1
+// error: type mismatch: expected string, got 1
 //     ╭─[ misc_return.baml:36:11 ]
 //     │
 //  36 │    return 1;

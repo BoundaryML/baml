@@ -57,7 +57,7 @@ type Four = int | string | b
 
 //----
 //- diagnostics
-// Error: Unknown keyword 'typpe'. Did you mean 'type'? Usage: type Name = expression
+// error: Unknown keyword 'typpe'. Did you mean 'type'? Usage: type Name = expression
 //    ╭─[ class_invalid_type_aliases.baml:9:1 ]
 //    │
 //  9 │ typpe Two = float

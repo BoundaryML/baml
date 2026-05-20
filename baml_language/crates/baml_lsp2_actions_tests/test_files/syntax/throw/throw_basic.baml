@@ -18,7 +18,7 @@ function ThrowVariable(msg: string) -> string {
 
 //----
 //- diagnostics
-// Warning: unreachable code: 1 statement(s) after diverging statement
+// warning: unreachable code: 1 statement(s) after diverging statement
 //    ╭─[ throw_throw_basic.baml:2:35 ]
 //    │
 //  2 │ ╭─▶ function ThrowString() -> string {
@@ -28,7 +28,7 @@ function ThrowVariable(msg: string) -> string {
 //    │     
 //    │     Note: Error code: E0001
 // ───╯
-// Warning: unreachable code: 1 statement(s) after diverging statement
+// warning: unreachable code: 1 statement(s) after diverging statement
 //    ╭─[ throw_throw_basic.baml:8:29 ]
 //    │
 //  8 │ ╭─▶ function ThrowInt() -> int {
@@ -38,7 +38,7 @@ function ThrowVariable(msg: string) -> string {
 //    │     
 //    │     Note: Error code: E0001
 // ───╯
-// Warning: unreachable code: 1 statement(s) after diverging statement
+// warning: unreachable code: 1 statement(s) after diverging statement
 //     ╭─[ throw_throw_basic.baml:14:48 ]
 //     │
 //  14 │ ╭─▶ function ThrowVariable(msg: string) -> string {

@@ -18,7 +18,7 @@ client<llm> Hello {
 
 //----
 //- diagnostics
-// Error: Expected config key, found error
+// error: Expected config key, found error
 //    ╭─[ strings_unquoted_strings.baml:4:16 ]
 //    │
 //  4 │     thing hello'world
@@ -27,7 +27,7 @@ client<llm> Hello {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected identifier, found '#'
+// error: Expected identifier, found '#'
 //    ╭─[ strings_unquoted_strings.baml:6:13 ]
 //    │
 //  6 │     banned2 #helloworld
@@ -36,7 +36,7 @@ client<llm> Hello {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected config key, found '#'
+// error: Expected config key, found '#'
 //    ╭─[ strings_unquoted_strings.baml:6:13 ]
 //    │
 //  6 │     banned2 #helloworld
@@ -45,7 +45,7 @@ client<llm> Hello {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected identifier, found '('
+// error: Expected identifier, found '('
 //    ╭─[ strings_unquoted_strings.baml:7:18 ]
 //    │
 //  7 │     banned3 hello(world)
@@ -54,7 +54,7 @@ client<llm> Hello {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected config key, found '('
+// error: Expected config key, found '('
 //    ╭─[ strings_unquoted_strings.baml:7:18 ]
 //    │
 //  7 │     banned3 hello(world)
@@ -63,7 +63,7 @@ client<llm> Hello {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected identifier, found ')'
+// error: Expected identifier, found ')'
 //    ╭─[ strings_unquoted_strings.baml:7:24 ]
 //    │
 //  7 │     banned3 hello(world)
@@ -72,7 +72,7 @@ client<llm> Hello {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected config key, found ')'
+// error: Expected config key, found ')'
 //    ╭─[ strings_unquoted_strings.baml:7:24 ]
 //    │
 //  7 │     banned3 hello(world)

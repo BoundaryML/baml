@@ -77,7 +77,7 @@ function Bar1(a: string) -> int {
 
 //----
 //- diagnostics
-// Warning: Function 'Foo' referenced without parentheses. Did you mean 'Foo()'?
+// warning: Function 'Foo' referenced without parentheses. Did you mean 'Foo()'?
 //     ╭─[ functions_v2_prompt_errors_prompt1.baml:32:18 ]
 //     │
 //  32 │       {% set b = Foo %}
@@ -86,7 +86,7 @@ function Bar1(a: string) -> int {
 //     │ 
 //     │ Note: Error code: E0071
 // ────╯
-// Warning: Function 'Foo2' referenced without parentheses. Did you mean 'Foo2()'?
+// warning: Function 'Foo2' referenced without parentheses. Did you mean 'Foo2()'?
 //     ╭─[ functions_v2_prompt_errors_prompt1.baml:34:18 ]
 //     │
 //  34 │       {% set b = Foo2 %}
@@ -95,7 +95,7 @@ function Bar1(a: string) -> int {
 //     │ 
 //     │ Note: Error code: E0071
 // ────╯
-// Warning: 'b' is undefined, expected function
+// warning: 'b' is undefined, expected function
 //     ╭─[ functions_v2_prompt_errors_prompt1.baml:37:8 ]
 //     │
 //  37 │     {{ b() }}
@@ -104,7 +104,7 @@ function Bar1(a: string) -> int {
 //     │ 
 //     │ Note: Error code: E0073
 // ────╯
-// Warning: Function 'Foo' expects 0 arguments, but got 1
+// warning: Function 'Foo' expects 0 arguments, but got 1
 //     ╭─[ functions_v2_prompt_errors_prompt1.baml:24:8 ]
 //     │
 //  24 │     {{ Foo(a) }}
@@ -113,7 +113,7 @@ function Bar1(a: string) -> int {
 //     │ 
 //     │ Note: Error code: E0080
 // ────╯
-// Warning: Variable `b` does not exist. Did you mean one of these: `_`, `baml`, `ctx`?
+// warning: Variable `b` does not exist. Did you mean one of these: `_`, `baml`, `ctx`?
 //    ╭─[ functions_v2_prompt_errors_prompt1.baml:6:12 ]
 //    │
 //  6 │   This! {{ b}}

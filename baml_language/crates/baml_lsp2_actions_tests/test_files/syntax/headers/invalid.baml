@@ -63,7 +63,7 @@ client<llm> GPT4 {
 //----
 //- diagnostics
 // (expect errors for invalid header patterns)
-// Error: Expected expression, found '#'
+// error: Expected expression, found '#'
 //     ╭─[ headers_invalid.baml:12:21 ]
 //     │
 //  12 │     let x = "hello" ## Inline Header // Should fail
@@ -72,7 +72,7 @@ client<llm> GPT4 {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected expression, found '#'
+// error: Expected expression, found '#'
 //     ╭─[ headers_invalid.baml:12:22 ]
 //     │
 //  12 │     let x = "hello" ## Inline Header // Should fail
@@ -81,7 +81,7 @@ client<llm> GPT4 {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected expression, found '#'
+// error: Expected expression, found '#'
 //     ╭─[ headers_invalid.baml:33:23 ]
 //     │
 //  33 │     let x = "start" + # Middle Header // Should fail
@@ -90,7 +90,7 @@ client<llm> GPT4 {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Header comments (//#) are not allowed inside LLM functions
+// error: Header comments (//#) are not allowed inside LLM functions
 //     ╭─[ headers_invalid.baml:50:5 ]
 //     │
 //  50 │     //# Section Header
@@ -99,7 +99,7 @@ client<llm> GPT4 {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: unresolved name: Inline
+// error: unresolved name: Inline
 //     ╭─[ headers_invalid.baml:12:24 ]
 //     │
 //  12 │     let x = "hello" ## Inline Header // Should fail
@@ -108,7 +108,7 @@ client<llm> GPT4 {
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: unresolved name: Header
+// error: unresolved name: Header
 //     ╭─[ headers_invalid.baml:12:31 ]
 //     │
 //  12 │     let x = "hello" ## Inline Header // Should fail
@@ -117,7 +117,7 @@ client<llm> GPT4 {
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: unresolved name: Middle
+// error: unresolved name: Middle
 //     ╭─[ headers_invalid.baml:33:25 ]
 //     │
 //  33 │     let x = "start" + # Middle Header // Should fail
@@ -126,7 +126,7 @@ client<llm> GPT4 {
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: unresolved name: Header
+// error: unresolved name: Header
 //     ╭─[ headers_invalid.baml:33:32 ]
 //     │
 //  33 │     let x = "start" + # Middle Header // Should fail

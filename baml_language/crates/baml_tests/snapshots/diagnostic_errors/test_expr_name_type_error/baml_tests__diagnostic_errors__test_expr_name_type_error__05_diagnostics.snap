@@ -1,9 +1,8 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 38038
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: type mismatch: expected string, got int
+  [type] error: type mismatch: expected string, got int
    ╭─[ main.baml:1:1 ]
    │
  1 │ // Expression names — type errors: non-string expressions as test names.
@@ -13,7 +12,7 @@ assertion_line: 38038
    │ Note: Error code: E0001
 ───╯
 
-  [type] Error: type mismatch: expected string, got 42
+  [type] error: type mismatch: expected string, got 42
    ╭─[ main.baml:7:6 ]
    │
  7 │ test 42 {
@@ -23,7 +22,7 @@ assertion_line: 38038
    │ Note: Error code: E0001
 ───╯
 
-  [type] Error: type mismatch: expected string, got int
+  [type] error: type mismatch: expected string, got int
     ╭─[ main.baml:13:11 ]
     │
  13 │     test (5 + i) {

@@ -33,7 +33,7 @@ type AttrNotFound = int @assert({{ this > 0 }}) @unknown
 
 //----
 //- diagnostics
-// Error: `@description` is only allowed on class fields and enum variants; remove it here
+// error: `@description` is only allowed on class fields and enum variants; remove it here
 //    ╭─[ class_invalid_attrs_on_type_alias.baml:1:30 ]
 //    │
 //  1 │ type DescNotAllowed = string @description("This is not allowed")
@@ -42,7 +42,7 @@ type AttrNotFound = int @assert({{ this > 0 }}) @unknown
 //    │ 
 //    │ Note: Error code: E0106
 // ───╯
-// Error: `@alias` is only allowed on class fields and enum variants; remove it here
+// error: `@alias` is only allowed on class fields and enum variants; remove it here
 //    ╭─[ class_invalid_attrs_on_type_alias.baml:3:30 ]
 //    │
 //  3 │ type AliasNotAllowed = float @alias("Alias not allowed")
@@ -51,7 +51,7 @@ type AttrNotFound = int @assert({{ this > 0 }}) @unknown
 //    │ 
 //    │ Note: Error code: E0106
 // ───╯
-// Error: `@skip` is only allowed on class fields and enum variants; remove it here
+// error: `@skip` is only allowed on class fields and enum variants; remove it here
 //    ╭─[ class_invalid_attrs_on_type_alias.baml:5:29 ]
 //    │
 //  5 │ type SkipNotAllowed = float @skip
@@ -60,7 +60,7 @@ type AttrNotFound = int @assert({{ this > 0 }}) @unknown
 //    │ 
 //    │ Note: Error code: E0106
 // ───╯
-// Error: Unknown attribute `@unknown`
+// error: Unknown attribute `@unknown`
 //    ╭─[ class_invalid_attrs_on_type_alias.baml:7:49 ]
 //    │
 //  7 │ type AttrNotFound = int @assert({{ this > 0 }}) @unknown

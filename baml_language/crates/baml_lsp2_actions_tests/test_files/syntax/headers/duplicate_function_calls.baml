@@ -14,7 +14,7 @@ function CallsDedup() -> string {
 
 //----
 //- diagnostics
-// Error: unresolved name: Foo
+// error: unresolved name: Foo
 //    ╭─[ headers_duplicate_function_calls.baml:4:13 ]
 //    │
 //  4 │     let a = Foo();
@@ -23,7 +23,7 @@ function CallsDedup() -> string {
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯
-// Error: unresolved name: Foo
+// error: unresolved name: Foo
 //    ╭─[ headers_duplicate_function_calls.baml:7:13 ]
 //    │
 //  7 │     let b = Foo();
@@ -32,7 +32,7 @@ function CallsDedup() -> string {
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯
-// Error: unresolved name: Foo
+// error: unresolved name: Foo
 //     ╭─[ headers_duplicate_function_calls.baml:10:13 ]
 //     │
 //  10 │     let c = Foo();

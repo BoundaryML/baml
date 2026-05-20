@@ -1,9 +1,8 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 608
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [hir] Error: vertex-ai requires either base_url or location (e.g. us-central1) in options
+  [hir] error: vertex-ai requires either base_url or location (e.g. us-central1) in options
    ╭─[ test.baml:6:23 ]
    │
  6 │ ╭─▶     provider vertex-ai
@@ -15,7 +14,7 @@ assertion_line: 608
    │     Note: Error code: E0101
 ───╯
 
-  [parse] Error: Expected config key, found '.'
+  [parse] error: Expected config key, found '.'
    ╭─[ test.baml:8:23 ]
    │
  8 │         model gemini-2.0-flash
@@ -25,7 +24,7 @@ assertion_line: 608
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected config key, found integer
+  [parse] error: Expected config key, found integer
    ╭─[ test.baml:8:24 ]
    │
  8 │         model gemini-2.0-flash
@@ -35,7 +34,7 @@ assertion_line: 608
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected config key, found '-'
+  [parse] error: Expected config key, found '-'
    ╭─[ test.baml:8:25 ]
    │
  8 │         model gemini-2.0-flash
@@ -45,7 +44,7 @@ assertion_line: 608
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected identifier, found '}'
+  [parse] error: Expected identifier, found '}'
    ╭─[ test.baml:9:5 ]
    │
  9 │     }
@@ -55,7 +54,7 @@ assertion_line: 608
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Header comments (//#) are not allowed inside LLM functions
+  [parse] error: Header comments (//#) are not allowed inside LLM functions
     ╭─[ test.baml:13:5 ]
     │
  13 │     //# collect source material

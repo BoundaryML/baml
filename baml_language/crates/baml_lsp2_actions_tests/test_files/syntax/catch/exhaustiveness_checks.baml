@@ -32,7 +32,7 @@ function NonExhaustiveMatchInsideCatch(x: int, pet: Pet) -> string {
 
 //----
 //- diagnostics
-// Warning: unreachable arm
+// warning: unreachable arm
 //     ╭─[ catch_exhaustiveness_checks.baml:17:9 ]
 //     │
 //  17 │ ╭─▶     _ => match (pet) {
@@ -43,7 +43,7 @@ function NonExhaustiveMatchInsideCatch(x: int, pet: Pet) -> string {
 //     │     
 //     │     Note: Error code: E0063
 // ────╯
-// Error: unreachable arm
+// error: unreachable arm
 //     ╭─[ catch_exhaustiveness_checks.baml:20:12 ]
 //     │
 //  20 │       _ => "unreachable"
@@ -52,7 +52,7 @@ function NonExhaustiveMatchInsideCatch(x: int, pet: Pet) -> string {
 //     │ 
 //     │ Note: Error code: E0063
 // ────╯
-// Warning: unreachable arm
+// warning: unreachable arm
 //     ╭─[ catch_exhaustiveness_checks.baml:27:9 ]
 //     │
 //  27 │ ╭─▶     _ => match (pet) {
@@ -63,7 +63,7 @@ function NonExhaustiveMatchInsideCatch(x: int, pet: Pet) -> string {
 //     │     
 //     │     Note: Error code: E0063
 // ────╯
-// Error: non-exhaustive match on `user.Pet`; missing: user.Dog { type: _ }
+// error: non-exhaustive match on `user.Pet`; missing: user.Dog { type: _ }
 //     ╭─[ catch_exhaustiveness_checks.baml:27:9 ]
 //     │
 //  27 │ ╭─▶     _ => match (pet) {
