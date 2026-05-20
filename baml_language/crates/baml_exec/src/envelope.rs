@@ -8,6 +8,16 @@ use bex_vm_types::types::Program;
 
 use crate::output::OutputFormat;
 
+/// Name of the embedded section that holds the [`PackEnvelope`] inside a
+/// packaged binary. Read by `baml_pack_host` at startup, written by
+/// `baml_cli::pack_command` at pack time. Both ends reference this
+/// const so a rename can't desync — a stale literal on one side would
+/// only surface at runtime when a packed binary fails to load.
+///
+/// Fits the 16-byte Mach-O `sectname` cap. Plain `[a-z]` so every
+/// libsui backend (Mach-O / ELF / PE-resource) handles it cleanly.
+pub const PACK_SECTION_NAME: &str = "baaaaaaaaaaaaaml";
+
 /// Wire format embedded into a packaged binary.
 ///
 /// Stable across `baml pack` / `baml-pack-host` versions built from the

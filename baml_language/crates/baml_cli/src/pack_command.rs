@@ -22,7 +22,7 @@ use std::{
 
 use anyhow::{Context, Result, anyhow};
 use baml_db::{baml_compiler_diagnostics::Severity, baml_compiler2_emit};
-use baml_exec::{OutputFormat, PackEnvelope, validate_help_param};
+use baml_exec::{OutputFormat, PACK_SECTION_NAME, PackEnvelope, validate_help_param};
 use baml_project::ProjectDatabase;
 use bex_engine::BexEngine;
 use bex_vm_types::types::Program;
@@ -651,26 +651,21 @@ fn write_executable(
     writer: &mut std::fs::File,
     target_triple: &str,
 ) -> Result<()> {
-    // Section name is inlined on both ends (here and the read side in
-    // `baml_pack_host::extract_envelope`) so changing it shows up as a
-    // literal diff in both files — a shared const would let one side
-    // drift silently without breaking the build until a packed binary
-    // refused to load at runtime.
     if target_triple.contains("linux") {
         libsui::Elf::new(host_bytes)
-            .append("averywashere", data, writer)
+            .append(PACK_SECTION_NAME, data, writer)
             .context("Failed to write ELF binary")?;
     } else if target_triple.contains("windows") {
         libsui::PortableExecutable::from(host_bytes)
             .context("Failed to parse PE binary")?
-            .write_resource("averywashere", data.to_vec())
+            .write_resource(PACK_SECTION_NAME, data.to_vec())
             .context("Failed to write PE resource")?
             .build(writer)
             .context("Failed to build PE binary")?;
     } else if target_triple.contains("apple-darwin") {
         libsui::Macho::from(host_bytes.to_vec())
             .context("Failed to parse Mach-O binary")?
-            .write_section("averywashere", data.to_vec())
+            .write_section(PACK_SECTION_NAME, data.to_vec())
             .context("Failed to write Mach-O section")?
             .build_and_sign(writer)
             .context("Failed to build Mach-O binary")?;

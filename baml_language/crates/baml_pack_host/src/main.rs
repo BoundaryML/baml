@@ -22,19 +22,14 @@
 use std::{process::ExitCode, sync::Arc};
 
 use baml_exec::{
-    DispatchResult, PackEnvelope, clamp_exit_code, dispatch_target, load_json_source,
-    parse_target_argv, print_error,
+    DispatchResult, PACK_SECTION_NAME, PackEnvelope, clamp_exit_code, dispatch_target,
+    load_json_source, parse_target_argv, print_error,
 };
 use bex_engine::BexEngine;
 use sys_native::SysOpsExt;
 
 fn extract_envelope() -> Result<PackEnvelope, String> {
-    // Section name is inlined on both ends (here and
-    // `baml_cli::pack_command`) so changing it shows up as a literal
-    // diff in both files — a shared const would let one side drift
-    // silently without breaking the build until a packed binary
-    // refused to load at runtime.
-    let section = libsui::find_section("averywashere")
+    let section = libsui::find_section(PACK_SECTION_NAME)
         .map_err(|e| format!("Failed to read embedded section: {e}"))?
         .ok_or("No embedded BAML package found. This binary must be built with `baml pack`.")?;
 
