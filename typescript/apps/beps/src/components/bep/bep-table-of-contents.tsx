@@ -73,7 +73,7 @@ function TocList({
             <button
               onClick={() => onItemClick(id)}
               className={cn(
-                "text-left w-full py-1 px-2 rounded-sm transition-colors text-[13px] leading-snug",
+                "text-left w-full py-1 px-2 rounded-sm transition-colors text-[13px] leading-snug cursor-pointer",
                 "hover:text-foreground hover:bg-accent/50",
                 isActive
                   ? "text-primary font-medium bg-accent/30"
@@ -159,11 +159,25 @@ export function BepTableOfContents({ content, className }: BepTableOfContentsPro
 
   const handleClick = useCallback((id: string) => {
     const element = document.getElementById(id);
-    if (element) {
-      element.scrollIntoView({ behavior: "smooth", block: "start" });
-      setActiveId(id);
-      setIsMobileExpanded(false);
-    }
+    if (!element) return;
+
+    // Scroll the element into view with proper offset
+    // Using scrollIntoView with block: "start" and the CSS scroll-mt-24 class on headings
+    element.scrollIntoView({ 
+      behavior: "smooth", 
+      block: "start",
+      inline: "nearest"
+    });
+
+    // Update active state immediately for better UX
+    setActiveId(id);
+    
+    // Close mobile menu after navigation
+    setIsMobileExpanded(false);
+
+    // Also update the URL hash for better navigation history
+    // This doesn't cause a scroll jump because we already scrolled
+    window.history.replaceState(null, "", `#${id}`);
   }, []);
 
   if (headings.length === 0) {

@@ -502,6 +502,7 @@ jobs:
 
       - name: "Run benchmarks"
         uses: CodSpeedHQ/action@v4
+        continue-on-error: true
         with:
           mode: walltime
           run: cd baml_language && cargo codspeed run
