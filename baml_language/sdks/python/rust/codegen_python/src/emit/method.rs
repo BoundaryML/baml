@@ -24,8 +24,10 @@ pub(crate) struct PyMethodBinding {
     /// Default metadata matching `arg_tys` (receiver `self` is not included
     /// for instance methods).
     pub(crate) arg_defaults: Vec<Option<FunctionArgumentDefault>>,
-    /// Drives the `staticmethod(...)` wrap and the choice of factory
-    /// alias (`__define_static_method` vs. `__define_instance_method`).
+    /// Drives the `staticmethod(...)` wrap on static methods. Both
+    /// kinds route through the same `_define_function` factory; the
+    /// wrap is what blocks Python's descriptor protocol from injecting
+    /// the class as positional arg 0 on statics.
     pub(crate) kind: MethodKind,
     /// Parameter types matching the IR's `arguments` (no `self`). Used
     /// only by `.pyi` rendering. For instance methods the `.pyi`

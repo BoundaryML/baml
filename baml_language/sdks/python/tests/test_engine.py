@@ -71,7 +71,7 @@ function ReturnFloat(f: float) -> float {
 def make_runtime(baml_source: str) -> BamlRuntime:
     """Create a BamlRuntime from a single BAML source string."""
     return BamlRuntime.initialize_runtime(
-        ".", {"main.baml": baml_source}, sdk_root="__bridge_python_tests__"
+        ".", {"main.baml": baml_source}
     )
 
 
@@ -100,13 +100,13 @@ class TestBasics:
         bad_baml = 'function Bad() -> int { "not an int" }'
         with pytest.raises(Exception):
             BamlRuntime.initialize_runtime(
-                ".", {"bad.baml": bad_baml}, sdk_root="__bridge_python_tests__"
+                ".", {"bad.baml": bad_baml}
             )
 
     def test_initialize_runtime_empty(self):
         """initialize_runtime succeeds with empty source (no functions)."""
         rt = BamlRuntime.initialize_runtime(
-            ".", {"empty.baml": ""}, sdk_root="__bridge_python_tests__"
+            ".", {"empty.baml": ""}
         )
         assert rt is not None
 

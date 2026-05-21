@@ -12,37 +12,22 @@ def test_root_imports_cleanly():
 
 
 def test_all_namespaces_reachable():
-    import baml_sdk
-
-    # Every directory under baml_src that contains a .baml file becomes a
-    # baml_sdk submodule (with `ns_` prefix stripped).
-    # Several namespaces from 18a are disabled because the TIR resolver
-    # doesn't currently support cross-namespace user-package refs — see
-    # 18b for the deferred coverage list.
-    # `void` is intentionally absent: its baml_src directory only contains a
-    # `function NoOp() -> void {}` and pure-expression functions don't emit
-    # Python code (see 18b). Likewise `ns_lorem/streams.baml` only adds
-    # functions, so its routing-rule coverage shows up as the `Box` /
-    # `Resume` declarations rather than per-function .pyi entries.
-    for ns in (
-        "primitives",
-        "media",
-        "enums",
-        "literals",
-        "class_refs",
-        "aliases",
-        "aliases_consumer",
-        "optional",
-        "lists",
-        "maps",
-        "unions",
-        "recursion",
-        "generics",
-        "forward_refs",
-        "lorem",
-        "a",
-    ):
-        assert hasattr(baml_sdk, ns), f"baml_sdk.{ns} missing"
+    import baml_sdk.primitives  # noqa: F401
+    import baml_sdk.media  # noqa: F401
+    import baml_sdk.enums  # noqa: F401
+    import baml_sdk.literals  # noqa: F401
+    import baml_sdk.class_refs  # noqa: F401
+    import baml_sdk.aliases  # noqa: F401
+    import baml_sdk.aliases_consumer  # noqa: F401
+    import baml_sdk.optional  # noqa: F401
+    import baml_sdk.lists  # noqa: F401
+    import baml_sdk.maps  # noqa: F401
+    import baml_sdk.unions  # noqa: F401
+    import baml_sdk.recursion  # noqa: F401
+    import baml_sdk.generics  # noqa: F401
+    import baml_sdk.forward_refs  # noqa: F401
+    import baml_sdk.lorem  # noqa: F401
+    import baml_sdk.a  # noqa: F401
 
 
 def test_root_foo_reachable():

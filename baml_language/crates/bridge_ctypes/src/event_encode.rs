@@ -10,7 +10,7 @@ use crate::{
         event_kind::Kind as ProtoEventKindVariant,
     },
     error::CtypesError,
-    value_encode::external_to_baml_value,
+    value_encode::external_to_outbound,
 };
 
 /// Convert a `bex_events::RuntimeEvent` to protobuf `RuntimeEvent`.
@@ -48,7 +48,7 @@ fn event_kind_to_proto(
             let args: Result<Vec<_>, _> = start
                 .args
                 .iter()
-                .map(|arg| external_to_baml_value(arg, options))
+                .map(|arg| external_to_outbound(arg, options))
                 .collect();
             let tags: Vec<TagEntry> = start
                 .tags
@@ -65,7 +65,7 @@ fn event_kind_to_proto(
             })
         }
         EventKind::Function(FunctionEvent::End(end)) => {
-            let result = external_to_baml_value(&end.result, options)?;
+            let result = external_to_outbound(&end.result, options)?;
             let duration_ms = u64::try_from(end.duration.as_millis()).unwrap_or(u64::MAX);
             ProtoEventKindVariant::FunctionEnd(FunctionEndEvent {
                 name: end.name.clone(),
@@ -89,7 +89,7 @@ fn event_kind_to_proto(
             data,
             source,
         }) => {
-            let data_proto = external_to_baml_value(data, options)?;
+            let data_proto = external_to_outbound(data, options)?;
             let source_proto = source.as_ref().map(|s| cffi::SourceLocation {
                 file_id: s.file_id,
                 line: s.line,
@@ -104,7 +104,7 @@ fn event_kind_to_proto(
             })
         }
         EventKind::Custom(CustomEvent { name, data }) => {
-            let data_proto = external_to_baml_value(data, options)?;
+            let data_proto = external_to_outbound(data, options)?;
             ProtoEventKindVariant::Custom(cffi::CustomEvent {
                 name: name.clone(),
                 data: Some(data_proto),

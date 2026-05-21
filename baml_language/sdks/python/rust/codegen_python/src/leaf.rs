@@ -85,22 +85,17 @@ impl LeafBody {
             .any(|(s, _)| matches!(s, EmittedSymbol::Class(_)))
     }
 
+    /// True when this leaf needs the `_define_function` factory import —
+    /// free functions, static methods, and instance methods all route
+    /// through the same `define_function` factory (the
+    /// `staticmethod(...)` wrap on statics is handled at the call site,
+    /// not the factory).
     pub(crate) fn needs_define_function(&self) -> bool {
-        self.symbols
-            .iter()
-            .any(|(s, _)| matches!(s, EmittedSymbol::Function(_)))
-    }
-
-    pub(crate) fn needs_define_static_method(&self) -> bool {
         self.symbols.iter().any(|(s, _)| match s {
-            EmittedSymbol::Class(c) => !c.static_methods.is_empty(),
-            _ => false,
-        })
-    }
-
-    pub(crate) fn needs_define_instance_method(&self) -> bool {
-        self.symbols.iter().any(|(s, _)| match s {
-            EmittedSymbol::Class(c) => !c.instance_methods.is_empty(),
+            EmittedSymbol::Function(_) => true,
+            EmittedSymbol::Class(c) => {
+                !c.static_methods.is_empty() || !c.instance_methods.is_empty()
+            }
             _ => false,
         })
     }
@@ -204,11 +199,78 @@ impl LeafBody {
         acc.into_imports()
     }
 
-    /// Root imports for the `.pyi` companion. Now that class fields
-    /// are mirrored into `.pyi`, the walk shape matches `.py` exactly —
-    /// properties, methods, function/alias types all contribute.
-    pub(crate) fn root_imports_pyi(&self) -> RootImports {
-        self.root_imports_py()
+    /// Field-edge cross-leaf refs, expressed as relative-anchored
+    /// imports (25b2 Phase 4). These are reachable from positions
+    /// that evaluate as Python expressions at module load time —
+    /// Pydantic field annotations and type-alias RHS values — so
+    /// they need unconditional imports once the eager root cascade
+    /// is gone.
+    ///
+    /// The relative-anchored form (`from .. import <segment>` rather
+    /// than `from <root_dots> import <first_segment>`) navigates only
+    /// through fully-initialized intermediates: an intra-subtree ref
+    /// like `stream_types/baml/llm` → `stream_types/baml/http` lands
+    /// as `from .. import http`, avoiding the partial-attribute
+    /// `AttributeError` that going through the SDK root would trigger
+    /// during subpackage init.
+    pub(crate) fn field_edge_rel_imports_py(&self) -> Vec<RelImport> {
+        let mut acc = RootImportSets::default();
+        let current = &self.leaf;
+        for (sym, _) in &self.symbols {
+            match sym {
+                EmittedSymbol::Class(c) => {
+                    for prop in &c.properties {
+                        collect_root_imports(&prop.ty, current, &mut acc);
+                    }
+                }
+                EmittedSymbol::TypeAlias(a) => {
+                    collect_root_imports(&a.resolves_to, current, &mut acc);
+                }
+                EmittedSymbol::Function(_) | EmittedSymbol::Enum(_) => {}
+            }
+        }
+        acc.into_rel()
+    }
+
+    /// All cross-leaf refs (classes, enums, aliases, function and
+    /// method signatures), expressed as relative-anchored imports.
+    /// Mirrors `root_imports_py`'s walk shape but returns the
+    /// `RelImport` form used by the post-25b2 render path.
+    pub(crate) fn all_rel_imports_py(&self) -> Vec<RelImport> {
+        let mut acc = RootImportSets::default();
+        let current = &self.leaf;
+        for (sym, _) in &self.symbols {
+            match sym {
+                EmittedSymbol::Class(c) => {
+                    for prop in &c.properties {
+                        collect_root_imports(&prop.ty, current, &mut acc);
+                    }
+                    for m in &c.static_methods {
+                        for ty in &m.arg_tys {
+                            collect_root_imports(ty, current, &mut acc);
+                        }
+                        collect_root_imports(&m.return_ty, current, &mut acc);
+                    }
+                    for m in &c.instance_methods {
+                        for ty in &m.arg_tys {
+                            collect_root_imports(ty, current, &mut acc);
+                        }
+                        collect_root_imports(&m.return_ty, current, &mut acc);
+                    }
+                }
+                EmittedSymbol::Function(f) => {
+                    for ty in &f.arg_tys {
+                        collect_root_imports(ty, current, &mut acc);
+                    }
+                    collect_root_imports(&f.return_ty, current, &mut acc);
+                }
+                EmittedSymbol::TypeAlias(a) => {
+                    collect_root_imports(&a.resolves_to, current, &mut acc);
+                }
+                EmittedSymbol::Enum(_) => {}
+            }
+        }
+        acc.into_rel()
     }
 
     /// Whether this leaf's `.pyi` needs `import typing`. Any rendered
@@ -269,10 +331,59 @@ pub(crate) struct RootImports {
     pub(crate) root_names: Vec<String>,
 }
 
+/// A single cross-leaf reference, expressed as a Python relative-
+/// import statement: `from <dots><from_path> import <anchor>`.
+///
+/// Every cross-leaf reference is anchored at the SDK root: codegen
+/// imports the **first segment** of the routed leaf (or the bare type
+/// name for root-namespace refs), and the translator emits the
+/// fully-qualified dotted form `<first>.<rest>.<bare>` for the
+/// annotation. Per-package cascades in every non-root `__init__.py`
+/// (`from . import <each_child>`) bind every intermediate segment as
+/// an attribute of its parent, so pyright resolves the dotted form
+/// cleanly and the runtime lookup walks bound attributes the whole
+/// way down.
+///
+/// `depth` is the dot count for the from-clause: 1 = same package as
+/// the leaf (only relevant when current is the SDK root itself),
+/// 2 = parent, 3 = grandparent, etc. `from_path` is always empty
+/// for cross-leaf refs (we always escape to the SDK root and import
+/// the top-level segment from there).
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct RelImport {
+    pub(crate) depth: usize,
+    pub(crate) from_path: String,
+    pub(crate) anchor: String,
+}
+
+impl RelImport {
+    /// Render to a Python `from … import …` source line.
+    pub(crate) fn render(&self, indent: &str) -> String {
+        let dots = ".".repeat(self.depth);
+        if self.from_path.is_empty() {
+            format!(
+                "{indent}from {dots} import {anchor}\n",
+                anchor = self.anchor
+            )
+        } else {
+            format!(
+                "{indent}from {dots}{path} import {anchor}\n",
+                path = self.from_path,
+                anchor = self.anchor,
+            )
+        }
+    }
+}
+
 #[derive(Default)]
 struct RootImportSets {
     segments: BTreeSet<String>,
     root_names: BTreeSet<String>,
+    /// Relative-anchored imports keyed by (depth, anchor), deduped.
+    /// Field-edge refs use this representation (25b2 Phase 4); each
+    /// (depth, anchor) becomes one `from <depth_dots> import <anchor>`
+    /// line at render time.
+    rel: BTreeSet<RelImport>,
 }
 
 impl RootImportSets {
@@ -281,6 +392,9 @@ impl RootImportSets {
             segments: self.segments.into_iter().collect(),
             root_names: self.root_names.into_iter().collect(),
         }
+    }
+    fn into_rel(self) -> Vec<RelImport> {
+        self.rel.into_iter().collect()
     }
 }
 
@@ -324,17 +438,37 @@ fn collect_root_imports(ty: &Ty, current: &LeafPath, out: &mut RootImportSets) {
             }
             collect_root_imports(ret, current, out);
         }
-        // `Ty::Media(_)` is rendered by `translate_ty` as the literal
-        // dotted form `baml.media.Image` etc. — no `Name` involved, but
-        // the resulting annotation references the `baml` first-segment,
-        // so the leaf needs `baml` imported.
+        // `Ty::Media(_)` renders as `baml.media.Image` etc. — the
+        // routed leaf is `baml/media`, so codegen imports the top-level
+        // segment `baml` from the SDK root via
+        // `from <root_dots> import baml`. The per-package cascade in
+        // `baml/__init__.py` (`from . import media, http, …`) binds
+        // `media` as an attribute of `baml` for the dotted access.
         //
         // `Ty::RustType` renders as `_BamlPyHandle` and gets its own
         // `from baml_core import BamlPyHandle as _BamlPyHandle`
         // line via `needs_baml_pyhandle` — it does *not* go through
         // the cross-leaf segment set.
         Ty::Media(_) => {
+            // Skip when current leaf IS `baml/media` (same-leaf ref).
+            let target: &[&str] = &["baml", "media"];
+            let target_eq = current.segments.len() == target.len()
+                && current
+                    .segments
+                    .iter()
+                    .zip(target.iter())
+                    .all(|(a, b)| a.as_str() == *b);
+            if target_eq {
+                return;
+            }
             out.segments.insert("baml".to_string());
+            // Always anchor at the SDK root: escape `current.len()`
+            // levels, then import the top-level segment `baml`.
+            out.rel.insert(RelImport {
+                depth: current.segments.len() + 1,
+                from_path: String::new(),
+                anchor: "baml".to_string(),
+            });
         }
         Ty::Int
         | Ty::Float
@@ -367,9 +501,26 @@ fn record_name_routing(
         // here (current is also empty there, so `routed == *current`).
         if !current.segments.is_empty() {
             out.root_names.insert(name.bare_name().to_string());
+            out.rel.insert(RelImport {
+                depth: current.segments.len() + 1,
+                from_path: String::new(),
+                anchor: name.bare_name().to_string(),
+            });
         }
     } else {
+        // Always import the top-level segment from the SDK root. The
+        // per-package cascade in every non-root `__init__.py` binds the
+        // deeper segments as attributes, so the translator's emission
+        // `<first>.<rest>.<bare>` resolves through bound attribute
+        // accesses all the way down. This shape is uniform regardless
+        // of how the current leaf and the routed leaf are positioned
+        // relative to each other.
         out.segments.insert(routed.segments[0].clone());
+        out.rel.insert(RelImport {
+            depth: current.segments.len() + 1,
+            from_path: String::new(),
+            anchor: routed.segments[0].clone(),
+        });
     }
 }
 
@@ -624,6 +775,10 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
     match s {
         EmittedSymbol::Class(c) => {
             if let Some((module, rust_name)) = media_reexport_rust_name(c) {
+                // 25b2 Phase 4: media re-export is now a pure import
+                // line. The engine FQN lives only in `_TYPE_MAP`'s
+                // reverse map (seeded with the PyO3 identity →
+                // `baml.media.*` overrides in `baml_core/typemap.py`).
                 return format!(
                     "from {module} import {rust_name} as {py_name}\n",
                     py_name = c.py_name,
@@ -821,12 +976,8 @@ fn render_method_binding(m: &PyMethodBinding) -> String {
     let required_positional_count = required_positional_count(&m.arg_defaults, receiver_count);
     let default_arg =
         render_required_positional_arg(required_positional_count, m.param_names.len());
-    let factory = match m.kind {
-        MethodKind::Static => "_define_static_method",
-        MethodKind::Instance => "_define_instance_method",
-    };
     let inner = format!(
-        "{factory}({fqn}, {mode_str} {params}{default_arg})",
+        "_define_function({fqn}, {mode_str} {params}{default_arg})",
         fqn = py_string(&m.baml_fqn),
     );
     // `staticmethod(...)` wrap stops Python's descriptor protocol from
@@ -927,46 +1078,47 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
         }
     }
     // Root imports go between the stdlib block and the factory
-    // imports. Every line resolves through the SDK root via the
-    // relative-path form — we never import a different namespace's
-    // submodule directly.
+    // imports. 25b2 Phase 4: field-edge refs (Pydantic field
+    // annotations + type-alias RHS) emit as unconditional imports —
+    // Pydantic v2 resolves field forward-refs against the module's
+    // runtime globals at model-construction time, and type-alias RHS
+    // values evaluate at module load. Both fail cleanly without an
+    // unconditional import now that the eager root cascade is gone.
     //
-    // `baml` is lifted to a runtime import: Pydantic v2 resolves field
-    // annotations like `baml.media.Pdf` against the module's runtime
-    // globals at model-construction time, so the `TYPE_CHECKING` guard
-    // isn't enough. `baml/*` is stdlib (only ever imports from
-    // `baml_core`) and never references user leaves, so the
-    // runtime import can't cycle.
+    // Each import uses the most-direct relative path via the common
+    // ancestor of current and routed (see `record_name_routing`):
+    // intra-subtree refs land as `from .. import http`, avoiding the
+    // partial-init AttributeError that going through the SDK root
+    // would trigger during subpackage init. Cross-subtree refs naturally
+    // anchor at the SDK root (common-prefix length 0).
     //
-    // All other first-segments stay under `if typing.TYPE_CHECKING:`
-    // so recursive references (leaf A → leaf B → leaf A) don't
-    // create an import cycle. `from __future__ import annotations`
-    // (in every header) makes annotations resolve lazily as strings.
-    //
-    // Dot count = depth + 1: anchors at the `baml_sdk/` root
-    // regardless of the installed package name.
-    let dots = ".".repeat(body.leaf.segments.len() + 1);
-    let (runtime_segments, type_checking_segments): (Vec<&String>, Vec<&String>) =
-        root_segments.iter().partition(|seg| seg.as_str() == "baml");
-    if !runtime_segments.is_empty() {
+    // Method/function signatures live only in `.pyi` (runtime
+    // factories don't carry annotations), so the legacy
+    // `TYPE_CHECKING`-guarded block stays for those refs.
+    let field_edge = body.field_edge_rel_imports_py();
+    let field_edge_set: BTreeSet<RelImport> = field_edge.iter().cloned().collect();
+    if !field_edge.is_empty() {
         out.push('\n');
-        for seg in &runtime_segments {
-            writeln!(out, "from {dots} import {seg}").unwrap();
+        for r in &field_edge {
+            out.push_str(&r.render(""));
         }
     }
-    if !type_checking_segments.is_empty() || !root_names.is_empty() {
+    // TYPE_CHECKING block: refs from method/function signatures
+    // (non-field-edge). Filter out anything already emitted as a
+    // field-edge import. Key on the (depth, from_path, anchor) triple.
+    let all_refs = body.all_rel_imports_py();
+    let tc_only: Vec<&RelImport> = all_refs
+        .iter()
+        .filter(|r| !field_edge_set.contains(*r))
+        .collect();
+    if !tc_only.is_empty() {
         out.push('\n');
         out.push_str("if typing.TYPE_CHECKING:\n");
-        for seg in &type_checking_segments {
-            writeln!(out, "    from {dots} import {seg}").unwrap();
-        }
-        // Root-namespace types referenced from a non-root leaf — the
-        // translator emitted them as bare names (e.g. `Foo`), so we
-        // import the names directly from the root leaf's `__init__`.
-        for name in root_names {
-            writeln!(out, "    from {dots} import {name}").unwrap();
+        for r in &tc_only {
+            out.push_str(&r.render("    "));
         }
     }
+    let _ = (root_segments, root_names);
     // Factory imports use absolute paths (`baml_core` is a
     // separate installed package, not reachable from this SDK tree)
     // with a `_` alias to keep them private to the module.
@@ -975,8 +1127,6 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
     // `_BamlPyHandle` from translate_ty so the local relative `baml`
     // module (the SDK's own `baml.*` namespace) doesn't shadow the
     // installed runtime package.
-    let needs_static_method = body.needs_define_static_method();
-    let needs_instance_method = body.needs_define_instance_method();
     let needs_pyhandle = body.needs_baml_pyhandle();
     let mut runtime_imports: Vec<(&'static str, &'static str)> = Vec::new();
     if needs_pyhandle {
@@ -984,12 +1134,6 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
     }
     if needs_factory {
         runtime_imports.push(("define_function", "_define_function"));
-    }
-    if needs_instance_method {
-        runtime_imports.push(("define_instance_method", "_define_instance_method"));
-    }
-    if needs_static_method {
-        runtime_imports.push(("define_static_method", "_define_static_method"));
     }
     if !runtime_imports.is_empty() {
         out.push('\n');
@@ -1038,6 +1182,12 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
         prev = Some((key, sym));
     }
 
+    // 25b2 Phase 4: per-leaf `_register_*` trailers are gone. The
+    // codegen-emitted `baml_sdk/_typemap.py` carries every FQN → leaf
+    // lazy entry; `set_type_map(_TYPE_MAP)` in the root init installs
+    // it. `BamlTypeMap.get_class(fqn)` resolves via importlib on first
+    // lookup. Class bodies are pure Pydantic — no codegen metadata.
+
     let names = body.all_names();
     if !names.is_empty() {
         out.push_str("\n\n");
@@ -1053,10 +1203,10 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
 
 #[derive(askama::Template)]
 #[template(
-    source = r#"{%- if properties.is_empty() && static_methods.is_empty() && instance_methods.is_empty() -%}
-class {{ py_name }}({{ bases }}): ...
-{%- else -%}
-class {{ py_name }}({{ bases }}):
+    source = r#"class {{ py_name }}({{ bases }}):
+{%- if properties.is_empty() && static_methods.is_empty() && instance_methods.is_empty() %}
+    ...
+{%- endif %}
 {%- for prop in properties %}
     {{ prop.name }}: {{ prop.ty_py }}
 {%- endfor %}
@@ -1077,8 +1227,7 @@ class {{ py_name }}({{ bases }}):
 
 {%- endif %}
 {{ m.block }}
-{%- endfor %}
-{%- endif %}"#,
+{%- endfor %}"#,
     ext = "py.j2",
     escape = "none"
 )]
@@ -1356,13 +1505,12 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
         .symbols
         .iter()
         .any(|(s, _)| matches!(s, EmittedSymbol::Enum(_)));
-    let root_imports = body.root_imports_pyi();
-    let root_segments = &root_imports.segments;
-    let root_names = &root_imports.root_names;
-    // The root-import block uses `typing.TYPE_CHECKING`, so `typing`
-    // must be in scope even if no signature would pull it in.
-    let needs_typing =
-        body.needs_typing_pyi() || !root_segments.is_empty() || !root_names.is_empty();
+    // 25b2 Phase 4: `.pyi` uses the same relative-anchored imports as
+    // `.py`, but wraps all of them under `if typing.TYPE_CHECKING:` —
+    // the stub doesn't run at runtime, so the guard is a no-op for
+    // type checkers and keeps the stub minimal.
+    let rel_imports = body.all_rel_imports_py();
+    let needs_typing = body.needs_typing_pyi() || !rel_imports.is_empty();
     let needs_typing_extensions = body.has_recursive_alias();
     let needs_pydantic = body.needs_pydantic();
     let has_stdlib_block = needs_enum || needs_typing || needs_typing_extensions || needs_pydantic;
@@ -1382,19 +1530,11 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
         }
     }
 
-    // Same root-import block as `.py`. The guard is a no-op in `.pyi`
-    // but kept for diffability.
-    if !root_segments.is_empty() || !root_names.is_empty() {
+    if !rel_imports.is_empty() {
         out.push('\n');
         out.push_str("if typing.TYPE_CHECKING:\n");
-        let dots = ".".repeat(body.leaf.segments.len() + 1);
-        for seg in root_segments {
-            writeln!(out, "    from {dots} import {seg}").unwrap();
-        }
-        // Root-namespace types referenced from this non-root leaf —
-        // mirrors the `.py` block.
-        for name in root_names {
-            writeln!(out, "    from {dots} import {name}").unwrap();
+        for r in &rel_imports {
+            out.push_str(&r.render("    "));
         }
     }
 

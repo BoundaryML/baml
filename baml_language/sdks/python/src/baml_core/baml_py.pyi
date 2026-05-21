@@ -3,7 +3,6 @@
 
 import builtins
 import typing
-
 __all__ = [
     "AbortController",
     "BamlAudio",
@@ -160,10 +159,8 @@ class BamlRuntime:
     r"""
     The main BAML runtime, wrapping a `dyn Bex` instance.
     """
-    @property
-    def _sdk_root(self) -> builtins.str: ...
     @staticmethod
-    def initialize_runtime(root_path: builtins.str, files: typing.Mapping[builtins.str, builtins.str], *, sdk_root: builtins.str) -> BamlRuntime:
+    def initialize_runtime(root_path: builtins.str, files: typing.Mapping[builtins.str, builtins.str]) -> BamlRuntime:
         r"""
         Initialize the process-global runtime from in-memory BAML source files.
         
@@ -174,10 +171,6 @@ class BamlRuntime:
         # Arguments
         * `root_path` - Root path for BAML files
         * `files` - Map of filename to file content
-        * `sdk_root` - Python package path of the generated `baml_sdk`
-          (typically `__name__` from the generated root `__init__.py`).
-          Stored on the returned runtime so the outbound decoder can route
-          class references via `importlib`.
         """
     def call_function(self, function_name: str, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None, collectors: typing.Optional[typing.Sequence["Collector"]] = None, abort_controller: typing.Optional["AbortController"] = None) -> typing.Any:
         r"""

@@ -52,10 +52,10 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
         // Python does not allow float parameters to typing.Literal.
         Ty::Literal(Literal::Float(_)) => "typing.Any".to_string(),
         Ty::Uint8Array => "bytes".to_string(),
-        Ty::Media(MediaKind::Image) => "baml.media.Image".to_string(),
-        Ty::Media(MediaKind::Audio) => "baml.media.Audio".to_string(),
-        Ty::Media(MediaKind::Video) => "baml.media.Video".to_string(),
-        Ty::Media(MediaKind::Pdf) => "baml.media.Pdf".to_string(),
+        Ty::Media(MediaKind::Image) => media_ref("Image", ctx),
+        Ty::Media(MediaKind::Audio) => media_ref("Audio", ctx),
+        Ty::Media(MediaKind::Video) => media_ref("Video", ctx),
+        Ty::Media(MediaKind::Pdf) => media_ref("Pdf", ctx),
         Ty::Media(MediaKind::Generic) => "typing.Any".to_string(),
         Ty::Class(name, args) => {
             let arg_strs: Vec<String> = args.iter().map(|a| translate_ty(a, ctx)).collect();
@@ -160,6 +160,15 @@ fn should_quote_self_ref(name: &Name, ctx: &TranslateCtx) -> bool {
 /// schema-build pass, which walks the alias lazily.
 fn should_defer_name_ref(ctx: &TranslateCtx) -> bool {
     ctx.defer_name_refs
+}
+
+fn media_ref(bare: &str, ctx: &TranslateCtx) -> String {
+    let name = Name::new(
+        baml_base::Name::new("baml"),
+        vec![baml_base::Name::new("media")],
+        baml_base::Name::new(bare),
+    );
+    render_name_ref(&name, ctx)
 }
 
 fn render_name_ref(name: &Name, ctx: &TranslateCtx) -> String {
