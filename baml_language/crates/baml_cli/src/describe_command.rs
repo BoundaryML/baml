@@ -479,30 +479,35 @@ pub fn write_description(
         writeln!(w)?;
         let available_for_body = budget.saturating_sub(lines_used);
         let was_truncated = body_lines.len() > available_for_body;
+        let shown_body_lines;
         if body_lines.len() <= available_for_body {
             for line in &body_lines {
                 writeln!(w, "{line}")?;
             }
-            lines_used += body_lines.len();
+            shown_body_lines = body_lines.len();
+            lines_used += shown_body_lines;
         } else if available_for_body >= 5 {
             let truncated = truncate_body(&body_lines, available_for_body);
             for line in &truncated {
                 writeln!(w, "{line}")?;
             }
-            lines_used += truncated.len();
+            shown_body_lines = truncated.len();
+            lines_used += shown_body_lines;
         } else {
-            let elided = shape_with_elision(&desc.shape, &desc.full_body);
-            for line in elided.lines() {
+            let elided_text = shape_with_elision(&desc.shape, &desc.full_body);
+            let elided_lines: Vec<&str> = elided_text.lines().collect();
+            for line in &elided_lines {
                 writeln!(w, "{line}")?;
             }
-            lines_used += elided.lines().count();
+            shown_body_lines = elided_lines.len();
+            lines_used += shown_body_lines;
         }
         if was_truncated {
             writeln!(w)?;
             writeln!(
                 w,
                 "[INFO] Showing {shown} of {total} lines. Use --budget {needed} for full output.",
-                shown = available_for_body.min(body_lines.len()),
+                shown = shown_body_lines,
                 total = body_lines.len(),
                 needed = body_lines.len() + 1,
             )?;

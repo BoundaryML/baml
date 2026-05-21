@@ -1,7 +1,7 @@
 /// A mutable, growable array of bytes (u8 values in the range 0–255).
 ///
 /// Used for binary data such as file contents, network payloads, and encoded strings.
-/// Bytes outside the range 0–255 are silently masked to u8 on insert.
+/// `push` silently masks values to u8; `from_array` throws `InvalidArgument` for out-of-range values.
 class Uint8Array {
   /// Serializes the byte array to a JSON array of integers (each in range 0–255).
   //baml:mut_vm
@@ -21,7 +21,7 @@ class Uint8Array {
     $rust_function
   }
 
-  /// Appends `item` (a byte value 0–255) to the end of the array. Returns the new length. Mutates `self`.
+  /// Appends `item` to the end of the array. Values outside 0–255 are silently masked to u8. Returns the new length. Mutates `self`.
   //baml:mut_self
   function push(self, item: int) -> int {
     $rust_function

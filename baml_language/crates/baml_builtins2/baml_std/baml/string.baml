@@ -222,8 +222,8 @@ class String {
     $rust_function
   }
 
-  /// Returns true if the string matches the given regex `pattern`.
-  function matches(self, pattern: string) -> bool {
+  /// Returns true if the string contains the given `substring`.
+  function matches(self, substring: string) -> bool {
     $rust_function
   }
 
