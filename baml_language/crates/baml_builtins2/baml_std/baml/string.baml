@@ -1,4 +1,9 @@
+/// A UTF-8 encoded string.
+///
+/// String literals use double quotes: `"hello"`. Multiline strings use the `#"..."#` syntax.
+/// All methods returning a new string do not mutate `self` unless noted otherwise.
 class String {
+  /// Serializes this string to a JSON value.
   //baml:mut_vm
   function to_json(self) -> baml.json.json {
     $rust_function
@@ -44,10 +49,12 @@ class String {
     $rust_function
   }
 
+  /// Returns the string with all Unicode characters converted to lowercase.
   function to_lower_case(self) -> string {
     $rust_function
   }
 
+  /// Returns the string with all Unicode characters converted to uppercase.
   function to_upper_case(self) -> string {
     $rust_function
   }
@@ -91,18 +98,29 @@ class String {
     $rust_function
   }
 
+  /// Returns true if `search` appears anywhere in the string.
   function includes(self, search: string) -> bool {
     $rust_function
   }
 
+  /// Returns true if the string starts with `prefix`.
   function starts_with(self, prefix: string) -> bool {
     $rust_function
   }
 
+  /// Returns true if the string ends with `suffix`.
   function ends_with(self, suffix: string) -> bool {
     $rust_function
   }
 
+  /// Splits the string by `delimiter` and returns an array of substrings.
+  ///
+  /// # Examples
+  /// ```
+  /// "a,b,c".split(",")     // ["a", "b", "c"]
+  /// "hello".split("")      // ["h", "e", "l", "l", "o"]
+  /// "no match".split(",")  // ["no match"]
+  /// ```
   function split(self, delimiter: string) -> string[] {
     $rust_function
   }
@@ -145,6 +163,7 @@ class String {
     $rust_function
   }
 
+  /// Replaces the first occurrence of `search` with `replacement`.
   function replace(self, search: string, replacement: string) -> string {
     $rust_function
   }
@@ -203,10 +222,12 @@ class String {
     $rust_function
   }
 
-  function matches(self, pattern: string) -> bool {
+  /// Returns true if the string contains the given `substring`.
+  function matches(self, substring: string) -> bool {
     $rust_function
   }
 
+  /// Replaces all occurrences of `search` with `replacement`.
   function replace_all(self, search: string, replacement: string) -> string {
     $rust_function
   }

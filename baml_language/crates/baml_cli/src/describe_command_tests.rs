@@ -9,7 +9,7 @@ use baml_db::baml_compiler2_hir;
 use baml_lsp2_actions::ResolvedTarget;
 use baml_project::ProjectDatabase;
 
-use crate::describe_command::{dispatch, write_description, write_listing};
+use crate::describe_command::{dispatch, write_description, write_keyword, write_listing};
 
 // ── Test helpers ────────────────────────────────────────────────────────────
 
@@ -37,6 +37,13 @@ fn capture_description(
 ) -> String {
     let mut buf = Vec::new();
     write_description(&mut buf, db, desc, budget, Path::new("/test")).unwrap();
+    String::from_utf8(buf).unwrap()
+}
+
+/// Capture `write_keyword` output as a String.
+fn capture_keyword(name: &str) -> String {
+    let mut buf = Vec::new();
+    write_keyword(&mut buf, name).unwrap();
     String::from_utf8(buf).unwrap()
 }
 
@@ -98,6 +105,7 @@ class Baz {
 fn describe_via_dispatch(db: &ProjectDatabase, name: &str) -> String {
     let files = baml_compiler2_hir::compiler2_all_files(db);
     match dispatch(db, name) {
+        Some(ResolvedTarget::Keyword(ref kw)) => capture_keyword(kw),
         Some(ResolvedTarget::Package(pkg)) => {
             let entries = baml_lsp2_actions::list_package_items(db, pkg);
             capture_listing(&entries)
@@ -542,6 +550,44 @@ fn suggest_is_case_insensitive() {
     );
 }
 
+// ── Truncation hint tests ────────────────────────────────────────────────────
+
+/// Truncated output shows `[INFO]` hint with correct line counts.
+#[test]
+fn render_describe_truncation_hint() {
+    // Use a builtin with many methods (e.g., String, which has ~40+ methods).
+    let db = simple_project();
+    let files = baml_compiler2_hir::compiler2_all_files(&db);
+    let descs = baml_lsp2_actions::describe(&db, &files, "String");
+    assert_eq!(descs.len(), 1);
+    let output = capture_description(&db, &descs[0], 30);
+    // The output should contain the [INFO] hint since String has more than 30 lines.
+    assert!(
+        output.contains("[INFO] Showing"),
+        "expected [INFO] truncation hint in output:\n{output}"
+    );
+    assert!(
+        output.contains("--budget"),
+        "expected --budget in truncation hint:\n{output}"
+    );
+    insta::assert_snapshot!(output);
+}
+
+/// Full budget shows no truncation hint.
+#[test]
+fn render_describe_no_hint_when_full() {
+    let db = simple_project();
+    let files = baml_compiler2_hir::compiler2_all_files(&db);
+    let descs = baml_lsp2_actions::describe(&db, &files, "Point");
+    assert_eq!(descs.len(), 1);
+    // Point has only a few lines; budget of 30 is sufficient.
+    let output = capture_description(&db, &descs[0], 30);
+    assert!(
+        !output.contains("[INFO]"),
+        "should not have [INFO] hint when output is not truncated:\n{output}"
+    );
+}
+
 /// Suggestions are limited to the requested count.
 #[test]
 fn suggest_respects_limit() {
@@ -552,5 +598,82 @@ fn suggest_respects_limit() {
         suggestions.len() <= 3,
         "got {} suggestions, expected ≤ 3",
         suggestions.len()
+    );
+}
+
+// ── Keyword tests ──────────────────────────────────────────────────────────
+
+#[test]
+fn render_keyword_class() {
+    let output = capture_keyword("class");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_if() {
+    let output = capture_keyword("if");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_spawn() {
+    let output = capture_keyword("spawn");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_ts_interface() {
+    let output = capture_keyword("interface");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_ts_instanceof() {
+    let output = capture_keyword("instanceof");
+    insta::assert_snapshot!(output);
+}
+
+/// Keywords via dispatch should resolve to `ResolvedTarget::Keyword`.
+#[test]
+fn dispatch_keyword_class() {
+    let db = simple_project();
+    let output = describe_via_dispatch(&db, "class");
+    insta::assert_snapshot!(output);
+}
+
+/// Unknown keyword should fall through to normal resolution.
+#[test]
+fn dispatch_nonexistent_keyword() {
+    let db = simple_project();
+    let output = describe_via_dispatch(&db, "nonexistent_keyword");
+    assert!(
+        output.starts_with("NOT FOUND:"),
+        "expected NOT FOUND for non-keyword, got: {output}"
+    );
+}
+
+// ── root. disambiguation tests ─────────────────────────────────────────────
+
+/// `root.X` resolves to user-package items.
+#[test]
+fn dispatch_root_prefix_resolves_user_item() {
+    let db = simple_project();
+    let output = describe_via_dispatch(&db, "root.Point");
+    // Should resolve to the user's Point class
+    assert!(
+        output.contains("class Point"),
+        "expected user Point class, got: {output}"
+    );
+    insta::assert_snapshot!(output);
+}
+
+/// `root.` with a nonexistent item returns NOT FOUND.
+#[test]
+fn dispatch_root_prefix_nonexistent() {
+    let db = simple_project();
+    let output = describe_via_dispatch(&db, "root.Nonexistent");
+    assert!(
+        output.starts_with("NOT FOUND:"),
+        "expected NOT FOUND, got: {output}"
     );
 }

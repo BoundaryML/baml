@@ -1,45 +1,73 @@
+/// An ordered, growable collection of elements of type T.
 class Array<T> {
+  /// Returns the number of elements in the array.
   function length(self) -> int {
     $rust_function
   }
 
+  /// Returns the element at `index`, or `null` if out of bounds.
+  ///
+  /// Negative indices count from the end: `-1` is the last element.
+  ///
+  /// # Examples
+  /// ```
+  /// [10, 20, 30].at(0)    // 10
+  /// [10, 20, 30].at(-1)   // 30
+  /// [10, 20, 30].at(99)   // null
+  /// ```
   function at(self, index: int) -> T? {
     $rust_function
   }
 
+  /// Appends `item` to the end of the array. Returns the new length. Mutates `self`.
   //baml:mut_self
   function push(self, item: T) -> int {
     $rust_function
   }
 
+  /// Removes and returns the last element, or `null` if the array is empty. Mutates `self`.
   //baml:mut_self
   function pop(self) -> T? {
     $rust_function
   }
 
+  /// Returns a new array with the elements of `self` followed by the elements of `other`.
   function concat(self, other: T[]) -> T[] {
     $rust_function
   }
 
+  /// Returns a new array with the elements in reverse order. Does not mutate `self`.
   function reverse(self) -> T[] {
     $rust_function
   }
 
+  /// Returns a sub-array from index `start` (inclusive) to `end` (exclusive).
+  ///
+  /// Negative indices count from the end. Out-of-range indices are clamped.
+  ///
+  /// # Examples
+  /// ```
+  /// [1, 2, 3, 4].slice(1, 3)   // [2, 3]
+  /// [1, 2, 3].slice(-2, 3)     // [2, 3]
+  /// ```
   function slice(self, start: int, end: int) -> T[] {
     $rust_function
   }
 
+  /// Joins all elements into a string, separated by `separator`. Each element is converted to a string via its `to_string` representation.
   //baml:vm
   function join(self, separator: string) -> string {
     $rust_function
   }
 
+  /// Applies `f` to each element and returns an array of the results.
   //baml:mut_vm
   //baml:may_yield
   function map<U, E>(self, f: (T) -> U throws E) -> U[] throws E {
     $rust_function
   }
 
+  /// Serializes the array to a JSON array. Each element must be JSON-serializable.
   //baml:mut_vm
   //baml:may_yield
   function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
@@ -307,21 +335,26 @@ class Array<T> {
   }
 }
 
+/// An unordered collection of key-value pairs.
 class Map<K, V> {
+  /// Returns the number of entries in the map.
   function length(self) -> int {
     $rust_function
   }
 
+  /// Returns `true` if the map contains an entry for `key`.
   //baml:vm
   function has(self, key: K) -> bool {
     $rust_function
   }
 
+  /// Returns an array of all keys in the map. Order is not guaranteed.
   //baml:mut_vm
   function keys(self) -> K[] {
     $rust_function
   }
 
+  /// Returns an array of all values in the map. Order matches `keys()`.
   function values(self) -> V[] {
     $rust_function
   }
@@ -355,6 +388,7 @@ class Map<K, V> {
     $rust_function
   }
 
+  /// Serializes the map to a JSON object. Keys must be strings.
   //baml:mut_vm
   //baml:may_yield
   function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {

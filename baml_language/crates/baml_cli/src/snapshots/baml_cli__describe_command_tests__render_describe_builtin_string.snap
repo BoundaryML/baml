@@ -2,9 +2,14 @@
 source: crates/baml_cli/src/describe_command_tests.rs
 expression: output
 ---
-class String  <builtin>/baml/string.baml:1
+class String  <builtin>/baml/string.baml:5
 
+/// A UTF-8 encoded string.
+///
+/// String literals use double quotes: `"hello"`. Multiline strings use the `#"..."#` syntax.
+/// All methods returning a new string do not mutate `self` unless noted otherwise.
 class String {
+  /// Serializes this string to a JSON value.
   //baml:mut_vm
   function to_json(self) -> baml.json.json {
     $rust_function
@@ -13,12 +18,7 @@ class String {
   /// Returns the length of the string in **UTF-8 bytes**.
   ///
   /// This is `O(1)`. For ASCII text the byte length equals the character
-  /// count, but for any string containing multi-byte characters the two
-  /// differ — e.g. `"héllo".length() == 6` because `é` is two bytes.
-  ///
-  /// To count Unicode code points (`O(n)`), use `char_count()`.
-  ///
-  ... skipped 443 lines ...
+  [... skipped 464 lines ...]
   ///
   /// # Examples
   /// ```
@@ -32,5 +32,7 @@ class String {
     $rust_function
   }
 }
+
+[INFO] Showing 28 of 491 lines. Use --budget 492 for full output.
 
 references (0):

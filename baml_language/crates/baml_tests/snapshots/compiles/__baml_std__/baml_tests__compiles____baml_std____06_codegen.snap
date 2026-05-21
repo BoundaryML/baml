@@ -451,7 +451,7 @@ function baml.String.length(self: null) -> int {
 function baml.String.lines(self: null) -> string[] {
 }
 
-function baml.String.matches(self: null, pattern: string) -> bool {
+function baml.String.matches(self: null, substring: string) -> bool {
 }
 
 function baml.String.replace(self: null, search: string, replacement: string) -> string {
