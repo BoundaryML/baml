@@ -544,39 +544,7 @@ impl RunArgs {
         let _ = db;
         Self::emit_format_hint_if_needed(reporter, needs_format_hint);
 
-        // Resolve each `-f` to its canonical info. Collect into a stable
-        // (TargetEntry, UserFunctionInfo) list — the entry holds names
-        // that the clap subcommand layer keys on, the info is the
-        // signature.
-        let mut entries: Vec<baml_exec::TargetEntry> = Vec::with_capacity(self.functions.len());
-        let mut lookups: HashMap<String, UserFunctionInfo> = HashMap::new();
-        for func in &self.functions {
-            let Some(info) = engine.find_user_function(func) else {
-                return Err(Self::function_not_found_error(&engine, func));
-            };
-            baml_exec::validate_help_param(&engine, &info.qualified_name)?;
-            let display = info
-                .qualified_name
-                .strip_prefix("user.")
-                .unwrap_or(&info.qualified_name)
-                .to_string();
-            let subcommand = display.rsplit('.').next().unwrap_or(&display).to_string();
-            if let Some(prev) = entries.iter().find(|e| e.subcommand_name == subcommand) {
-                anyhow::bail!(
-                    "two `-f` targets share subcommand name `{subcommand}` \
-                     (`{}` and `{}`). Subcommand names come from the last `.`-segment \
-                     of the function name; rename one of them.",
-                    prev.display_name,
-                    display,
-                );
-            }
-            entries.push(baml_exec::TargetEntry {
-                qualified_name: info.qualified_name.clone(),
-                display_name: display.clone(),
-                subcommand_name: subcommand,
-            });
-            lookups.insert(info.qualified_name.clone(), info);
-        }
+        let (entries, lookups) = self.resolve_subcommand_targets(&engine)?;
 
         // Build the parse bin_name as the reinvocation prefix so the
         // help text is copy-pasteable.
@@ -622,6 +590,52 @@ impl RunArgs {
             event_sink,
             reporter,
         )
+    }
+
+    /// Walk `self.functions`, resolve each to an engine-canonical
+    /// `(TargetEntry, UserFunctionInfo)` pair, and reject duplicate
+    /// subcommand names. Mirrors `pack_command::resolve_targets`'
+    /// `-f` path so `baml run -f` and `baml pack -f` see the same
+    /// resolution shape; kept as a method here rather than hoisted to
+    /// `baml_exec` because the error messages reference `baml run`'s
+    /// help text.
+    fn resolve_subcommand_targets(
+        &self,
+        engine: &BexEngine,
+    ) -> Result<(
+        Vec<baml_exec::TargetEntry>,
+        HashMap<String, UserFunctionInfo>,
+    )> {
+        let mut entries: Vec<baml_exec::TargetEntry> = Vec::with_capacity(self.functions.len());
+        let mut lookups: HashMap<String, UserFunctionInfo> = HashMap::new();
+        for func in &self.functions {
+            let Some(info) = engine.find_user_function(func) else {
+                return Err(Self::function_not_found_error(engine, func));
+            };
+            baml_exec::validate_help_param(engine, &info.qualified_name)?;
+            let display = info
+                .qualified_name
+                .strip_prefix("user.")
+                .unwrap_or(&info.qualified_name)
+                .to_string();
+            let subcommand = display.rsplit('.').next().unwrap_or(&display).to_string();
+            if let Some(prev) = entries.iter().find(|e| e.subcommand_name == subcommand) {
+                anyhow::bail!(
+                    "two `-f` targets share subcommand name `{subcommand}` \
+                     (`{}` and `{}`). Subcommand names come from the last `.`-segment \
+                     of the function name; rename one of them.",
+                    prev.display_name,
+                    display,
+                );
+            }
+            entries.push(baml_exec::TargetEntry {
+                qualified_name: info.qualified_name.clone(),
+                display_name: display.clone(),
+                subcommand_name: subcommand,
+            });
+            lookups.insert(info.qualified_name.clone(), info);
+        }
+        Ok((entries, lookups))
     }
 
     /// Shared tail: spawn the runtime, run dispatch, render the
@@ -1840,6 +1854,20 @@ mod tests {
 
     // ── Default-valued `RunArgs` fixture for behavior tests ───────────
 
+    /// Engine fixture for namespace tests — `compile_multi_file`
+    /// supports folder-based namespaces (`ns_<name>/foo.baml`) which the
+    /// single-source `compile_source` helper can't express.
+    fn engine_from_files(files: &[(&str, &str)]) -> BexEngine {
+        let snapshot = baml_project::testing::compile_multi_file(files);
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("BexEngine::new should succeed")
+    }
+
     /// Build a `RunArgs` with default everything; tests flip individual
     /// fields. Keeps test bodies focused on the field under test.
     fn run_args() -> RunArgs {
@@ -2117,5 +2145,98 @@ mod tests {
     #[test]
     fn test_parse_scripts_empty_input_no_warn_empty_result() {
         assert!(RunArgs::parse_scripts("").is_empty());
+    }
+
+    // ── Namespaced `-f` targets (folder-based `ns_<name>/`) ──────────
+
+    /// `baml run -f llm.Summarize` resolves to the namespaced function
+    /// and surfaces `Summarize` (the leaf segment) as the subcommand
+    /// name the user types after `--`.
+    #[test]
+    fn test_run_subcommand_resolves_namespaced_target() {
+        let engine = engine_from_files(&[(
+            "ns_llm/summarize.baml",
+            "function Summarize(text: string) -> string { text }",
+        )]);
+        let mut args = run_args();
+        args.functions = vec!["llm.Summarize".into()];
+        let (entries, lookups) = args.resolve_subcommand_targets(&engine).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].qualified_name, "user.llm.Summarize");
+        assert_eq!(entries[0].display_name, "llm.Summarize");
+        assert_eq!(entries[0].subcommand_name, "Summarize");
+        assert!(lookups.contains_key("user.llm.Summarize"));
+    }
+
+    /// `-f` across namespaces builds one entry per function, each
+    /// keyed on its leaf segment.
+    #[test]
+    fn test_run_subcommand_multi_namespaced() {
+        let engine = engine_from_files(&[
+            (
+                "ns_llm/summarize.baml",
+                "function Summarize(text: string) -> string { text }",
+            ),
+            (
+                "ns_util/greet.baml",
+                "function Greet(name: string) -> string { name }",
+            ),
+        ]);
+        let mut args = run_args();
+        args.functions = vec!["llm.Summarize".into(), "util.Greet".into()];
+        let (entries, _) = args.resolve_subcommand_targets(&engine).unwrap();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].display_name, "llm.Summarize");
+        assert_eq!(entries[0].subcommand_name, "Summarize");
+        assert_eq!(entries[1].display_name, "util.Greet");
+        assert_eq!(entries[1].subcommand_name, "Greet");
+    }
+
+    /// Two namespaces exporting the same leaf → subcommand-name
+    /// collision is rejected with both fully-qualified names cited.
+    /// Same regression check as the pack-side equivalent.
+    #[test]
+    fn test_run_subcommand_namespaced_name_collision_errors() {
+        let engine = engine_from_files(&[
+            ("ns_llm/foo.baml", "function Foo() -> int { 1 }"),
+            ("ns_util/foo.baml", "function Foo() -> int { 2 }"),
+        ]);
+        let mut args = run_args();
+        args.functions = vec!["llm.Foo".into(), "util.Foo".into()];
+        let err = args.resolve_subcommand_targets(&engine).unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("share subcommand name `Foo`"), "got: {msg}");
+        assert!(msg.contains("llm.Foo"), "got: {msg}");
+        assert!(msg.contains("util.Foo"), "got: {msg}");
+    }
+
+    /// Bare-name lookup also resolves namespaced targets via the
+    /// shared resolver's suffix scan — `Summarize` finds
+    /// `llm.Summarize` when it's the unique match.
+    #[test]
+    fn test_run_subcommand_namespaced_resolves_via_bare_name() {
+        let engine = engine_from_files(&[(
+            "ns_llm/summarize.baml",
+            "function Summarize(text: string) -> string { text }",
+        )]);
+        let mut args = run_args();
+        args.functions = vec!["Summarize".into()];
+        let (entries, _) = args.resolve_subcommand_targets(&engine).unwrap();
+        assert_eq!(entries[0].qualified_name, "user.llm.Summarize");
+        assert_eq!(entries[0].subcommand_name, "Summarize");
+    }
+
+    /// Unknown `-f` target → "function not found" error with the same
+    /// suggestion-engine output we use for the single-target path.
+    #[test]
+    fn test_run_subcommand_unknown_function_errors() {
+        let engine = engine_from_files(&[(
+            "ns_llm/summarize.baml",
+            "function Summarize(text: string) -> string { text }",
+        )]);
+        let mut args = run_args();
+        args.functions = vec!["DoesNotExist".into()];
+        let err = args.resolve_subcommand_targets(&engine).unwrap_err();
+        assert!(format!("{err}").contains("not found"));
     }
 }
