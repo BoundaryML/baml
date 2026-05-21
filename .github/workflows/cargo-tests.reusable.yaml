@@ -37,7 +37,7 @@
 # | --------------- | --------------------- | ----------------------------------------------- |
 # | `linux-cargo`   | `cargo-test-linux`    | `sdk-tests/linux`, `cargo-doc`,                 |
 # |                 |                       | `snapshot-tests`, `ci.yaml::prek`,              |
-# |                 |                       | `ci.yaml::bridge-nodejs-sync`,                  |
+# |                 |                       | `ci.yaml::proto-sync`,                          |
 # |                 |                       | `ci.yaml::benchmarks-instrumented`              |
 # | `linux-wasm`    | `cargo-test-wasm`     | —                                               |
 # | `linux-msrv`    | `cargo-build-msrv`    | —                                               |

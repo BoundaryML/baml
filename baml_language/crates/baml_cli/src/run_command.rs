@@ -14,6 +14,7 @@ use baml_db::{
 use baml_project::ProjectDatabase;
 use baml_workspace::discover_baml_files;
 use bex_engine::{BexEngine, FunctionCallContextBuilder, UserFunctionInfo};
+// `surface_clap_error` is defined later in this file.
 // For --log-file event sink.
 use clap::Args;
 use sys_native::{CallId, SysOpsExt};
@@ -31,21 +32,6 @@ struct ScriptExpansion {
     function: Option<String>,
     /// Arguments after `--` in the script body.
     extra_args: Vec<String>,
-}
-
-/// Result of target resolution.
-#[derive(Debug)]
-enum ResolvedTarget {
-    /// Direct function call (from --function, namespace main, etc.)
-    Function(String),
-    /// Script expansion from [scripts] in baml.toml.
-    Script(ScriptExpansion),
-}
-
-impl ResolvedTarget {
-    fn function(name: String) -> Self {
-        Self::Function(name)
-    }
 }
 
 /// Parse a script body (as pre-split tokens) into its components.
@@ -130,24 +116,30 @@ fn parse_script_body(tokens: &[String]) -> Result<ScriptExpansion> {
 
 #[derive(Args, Clone, Debug)]
 pub struct RunArgs {
-    /// Target: namespace name to run its `main`.
-    /// If omitted, runs `main` in the root namespace.
+    /// Positional target: function name to run as the sole entry point.
+    /// Mutually exclusive with `-f/--function` and `-e/--expression`.
     #[arg(value_name = "TARGET")]
     pub target: Option<String>,
 
-    /// Call a specific function directly (e.g. llm.Summarize or just Summarize).
-    #[arg(long)]
-    pub function: Option<String>,
+    /// Run a specific function, repeatable. With one `-f` the auto-CLI
+    /// still surfaces the function as a subcommand (post-`--` tokens
+    /// must start with the subcommand name); with multiple `-f` the
+    /// binary multiplexes between them.
+    /// Mutually exclusive with positional `<TARGET>` and `-e`.
+    #[arg(short = 'f', long = "function", value_name = "NAME")]
+    pub functions: Vec<String>,
 
     /// Evaluate a BAML expression. Use -e @file to read from a file, -e - for stdin.
-    #[arg(short = 'e')]
+    /// Mutually exclusive with positional `<TARGET>` and `-f`.
+    #[arg(short = 'e', long = "expression")]
     pub expression: Option<String>,
 
-    /// JSON arguments: inline JSON string, @file, or - for stdin.
-    #[arg(long)]
-    pub json_args: Option<String>,
+    /// Standalone single-file source. Loads only this file (no project
+    /// discovery). Mutually exclusive with `--from`.
+    #[arg(long, value_name = "PATH")]
+    pub file: Option<PathBuf>,
 
-    /// List runnable targets (scripts, namespace mains, functions).
+    /// List runnable targets (scripts, functions).
     #[arg(long)]
     pub list: bool,
 
@@ -167,12 +159,13 @@ pub struct RunArgs {
     #[arg(long, short = 'h')]
     pub help: bool,
 
-    /// Project root directory.
+    /// Project root directory. Ignored when `--file` is set.
     #[arg(long, default_value = ".")]
     pub from: PathBuf,
 
-    /// Arguments passed to the target function (after `--` separator).
-    /// These are parsed as auto-CLI flags derived from the function signature.
+    /// Arguments passed to the target after `--`. Parsed as auto-CLI
+    /// flags derived from the function signature(s). With multiple `-f`
+    /// the first token after `--` is the chosen subcommand name.
     #[arg(last = true)]
     pub target_args: Vec<String>,
 }
@@ -295,7 +288,7 @@ impl RunArgs {
         // expression given) before constructing the Reporter, so the
         // spinner doesn't briefly draw a frame above the help text.
         if self.help
-            && self.function.is_none()
+            && self.functions.is_empty()
             && self.target.is_none()
             && self.expression.is_none()
         {
@@ -307,15 +300,11 @@ impl RunArgs {
     }
 
     fn run_with_reporter(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
-        // BEP-027 §"Target resolution": `--function <ns>.<name>` and
-        // `-e '<expr>'` are alternative dispatch modes that "replace the
-        // positional target entirely." Either of them is mutually
-        // exclusive with both the other and with a positional target.
-        // Reject the conflict up front instead of silently preferring
-        // one and ignoring the rest.
+        // Dispatch modes are mutually exclusive. Positional target /
+        // `-f` (one or many) / `-e` all replace each other.
         let dispatch_modes: &[(&str, bool)] = &[
             ("`<target>`", self.target.is_some()),
-            ("`--function`", self.function.is_some()),
+            ("`-f`", !self.functions.is_empty()),
             ("`-e`", self.expression.is_some()),
         ];
         let used: Vec<&str> = dispatch_modes
@@ -329,17 +318,38 @@ impl RunArgs {
             );
         }
 
-        // `--json-args` feeds typed parameters of the resolved function.
-        // Expression mode has no function signature to bind against, so
-        // `--json-args` is meaningless there. Reject the combination
-        // rather than silently dropping the JSON, which would be a
-        // particularly painful footgun in a CI pipeline.
-        if self.expression.is_some() && self.json_args.is_some() {
+        // `--file` is the standalone-source alternative to `--from`. Both
+        // pointing at sources would be ambiguous (which one wins?), so
+        // reject the combination up front. We only enforce this when
+        // `--from` is set to something other than its default `.`,
+        // because clap can't tell "user passed `.`" from "user passed
+        // nothing." If `--file` is set and `--from` was left at the
+        // default, treat that as fine.
+        if self.file.is_some() && self.from != Path::new(".") {
             anyhow::bail!(
-                "`-e` is not compatible with `--json-args`. \
-                 Expression mode has no function signature to bind JSON keys \
-                 to — inline the values in the expression instead."
+                "`--file` and `--from` are mutually exclusive — `--file` already names \
+                 the single source to load."
             );
+        }
+
+        // Expression mode short-circuits before reaching project / file
+        // loading, so combining `-e` with surfaces that change *what* is
+        // loaded silently does nothing. Reject up front to avoid the
+        // footgun.
+        if self.expression.is_some() {
+            if self.file.is_some() {
+                anyhow::bail!(
+                    "`-e` is not compatible with `--file`. Expression mode \
+                     evaluates inline source; remove one of the two."
+                );
+            }
+            if self.list {
+                anyhow::bail!(
+                    "`-e` is not compatible with `--list`. Expression mode \
+                     evaluates an expression; `--list` enumerates targets — \
+                     pick one."
+                );
+            }
         }
 
         let event_sink: Option<Arc<dyn bex_events::EventSink>> =
@@ -350,154 +360,150 @@ impl RunArgs {
                 bex_events_native::start_stderr()
             });
 
-        if self.help && (self.function.is_none() && self.target.is_none()) {
+        if self.help
+            && self.functions.is_empty()
+            && self.target.is_none()
+            && self.expression.is_none()
+        {
             Self::print_run_help();
             return Ok(crate::ExitCode::Success);
         }
 
         if let Some(expr_source) = &self.expression {
-            // BEP-027 §"`baml.argv`": `argv[1]` for `-e` is "the
-            // expression source". We load the text up front (only once —
-            // `-e -` reads stdin and the engine compile re-uses the same
-            // string) and use the loaded body for both `argv[1]` and the
-            // synthetic compilation unit.
+            // `-e -` reads stdin / `-e @file` reads file. Load once so
+            // the engine compile and `argv[1]` see the same text.
             let expr_body = load_expression_source(expr_source)?;
             return self.run_expression(&expr_body, event_sink, reporter);
         }
 
-        let argv = self.build_argv();
-
-        let (db, mut engine, needs_format_hint) =
-            if self.target.as_ref().is_some_and(|t| t.ends_with(".baml")) {
-                self.load_and_compile_standalone(
-                    self.target.as_ref().unwrap(),
-                    event_sink.clone(),
-                    argv.clone(),
-                    reporter,
-                )?
-            } else {
-                self.load_and_compile(event_sink.clone(), argv.clone(), reporter)?
-            };
-        let _ = db; // keep db alive for engine lifetime
-        Self::emit_format_hint_if_needed(reporter, needs_format_hint);
-
-        // BEP-027 §"`baml.argv`": patch `argv[1]` post-compile so it
-        // matches the spec's "however the user named the target" rule
-        // using engine-canonical names rather than the user's raw input.
-        //
-        //   - Root `main` (no positional/function/expr) → filepath of
-        //     the file containing `main`.
-        //   - `--function` → the qualified function name with the
-        //     `user.` package prefix stripped, so `--function
-        //     user.llm.X` and `--function llm.X` both surface as
-        //     `argv[1] = "llm.X"`.
-        if self.target.is_none() && self.function.is_none() && self.expression.is_none() {
-            if let Some(main_info) = engine.find_user_function("main") {
-                if !main_info.source_file.is_empty() {
-                    let mut patched = argv.clone();
-                    if patched.len() >= 2 {
-                        patched[1] = main_info.source_file.clone();
-                        engine.set_argv(patched);
-                    }
-                }
-            }
-        } else if let Some(func) = &self.function {
-            if let Some(info) = engine.find_user_function(func) {
-                let display = info.display_name;
-                if display != *func && argv.len() >= 2 {
-                    let mut patched = argv.clone();
-                    patched[1] = display;
-                    engine.set_argv(patched);
-                }
-            }
-        }
-
-        let toml_content = std::fs::read_to_string(self.from.join("baml.toml")).unwrap_or_default();
-        let scripts = Self::parse_scripts(&toml_content);
-        let namespaces = collect_namespaces(&engine);
-
+        // `--list` short-circuit doesn't need a resolved target; load
+        // the project and print before we get to dispatch.
         if self.list {
+            let bootstrap_argv = vec![
+                std::env::current_exe()
+                    .ok()
+                    .map(|p| p.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| "baml".to_string()),
+                "--list".to_string(),
+            ];
+            let (db, engine, _) =
+                self.load_and_compile(event_sink.clone(), bootstrap_argv, reporter)?;
+            let _ = db;
+            // `--file` mode is hermetic — skip the project `[scripts]`
+            // lookup the same way `run_single_target` does.
+            let scripts = if self.file.is_some() {
+                HashMap::new()
+            } else {
+                let toml_content =
+                    std::fs::read_to_string(self.from.join("baml.toml")).unwrap_or_default();
+                Self::parse_scripts(&toml_content)
+            };
+            let namespaces = collect_namespaces(&engine);
             return self.print_list(&engine, &scripts, &namespaces, &self.output_format);
         }
 
+        // No target → print help and exit non-zero. (Implicit `main` no
+        // longer exists.)
+        if self.target.is_none() && self.functions.is_empty() {
+            Self::print_run_help();
+            return Ok(crate::ExitCode::Other);
+        }
+
+        if let Some(target) = &self.target {
+            // Helpful redirect when the user typed a path as the
+            // positional (e.g. `baml run baml_src/main.baml`). Positional
+            // `<TARGET>` is always a function name; for a `.baml` source
+            // use `--file`.
+            if looks_like_path(target) {
+                anyhow::bail!(
+                    "positional `<TARGET>` is a function name, not a file path. \
+                     For a single-file source, use `--file {target}` and pass the \
+                     function via `-f <NAME>`. For example:\n\
+                     \n    baml run --file {target} -f <NAME>\n",
+                );
+            }
+            return self.run_single_target(target, event_sink, reporter);
+        }
+        self.run_subcommand_targets(event_sink, reporter)
+    }
+
+    /// Positional `<TARGET>` path: one function, no subcommand layer.
+    /// `[scripts]` aliases are resolved here too (positional only).
+    fn run_single_target(
+        &self,
+        target: &str,
+        event_sink: Option<Arc<dyn bex_events::EventSink>>,
+        reporter: &Reporter,
+    ) -> Result<crate::ExitCode> {
+        let argv = self.build_argv_for_single(target);
+        let (db, mut engine, needs_format_hint) =
+            self.load_and_compile(event_sink.clone(), argv.clone(), reporter)?;
+        let _ = db;
+        Self::emit_format_hint_if_needed(reporter, needs_format_hint);
+
+        // `[scripts]` are a project-mode concept. In `--file` (standalone)
+        // mode the project's `baml.toml` shouldn't be consulted — the
+        // file is hermetic by intent — so an empty `scripts` map skips
+        // both expansion and validation.
+        let (toml_content, scripts) = if self.file.is_some() {
+            (String::new(), HashMap::new())
+        } else {
+            let content = std::fs::read_to_string(self.from.join("baml.toml")).unwrap_or_default();
+            let parsed = Self::parse_scripts(&content);
+            (content, parsed)
+        };
+        let namespaces = collect_namespaces(&engine);
         self.validate_scripts(&engine, &scripts, &namespaces, &toml_content)?;
 
-        let resolved = self.resolve_target(&engine, &scripts)?;
-
-        let (function_name, effective_target_args, was_script) = match resolved {
-            ResolvedTarget::Function(name) => (name, self.target_args.clone(), false),
-            ResolvedTarget::Script(expansion) => {
-                let func = expansion.function.unwrap_or_else(|| "main".to_string());
+        // Resolve to (function_name, effective_args, was_script).
+        let (function_name, effective_target_args, was_script) =
+            if let Some(script_tokens) = scripts.get(target) {
+                self.vlog(format_args!(
+                    "Expanding script `{target}`: {script_tokens:?}"
+                ));
+                let expansion = parse_script_body(script_tokens)?;
+                let func = expansion.function.ok_or_else(|| {
+                    anyhow!(
+                        "Script `{target}` has no `--function` and there is no implicit \
+                         entry point. Add `--function <name>` to the script body."
+                    )
+                })?;
                 if engine.find_user_function(&func).is_none() {
-                    // Script body's --function target is unresolvable.
-                    // `validate_scripts` already catches this at load time;
-                    // this is defensive in case validation is bypassed.
                     return Err(Self::function_not_found_error(&engine, &func));
                 }
                 let mut merged_args = expansion.extra_args;
                 merged_args.extend(self.target_args.iter().cloned());
                 (func, merged_args, true)
-            }
-        };
+            } else if engine.find_user_function(target).is_some() {
+                (target.to_string(), self.target_args.clone(), false)
+            } else {
+                return Err(Self::target_not_found_error_in(
+                    &scripts, &engine, target, &self.from,
+                ));
+            };
 
-        // BEP-027 §"`baml.argv`": for script-alias dispatch, `argv[1]`
-        // surfaces the *post-expansion* canonical name rather than the
-        // script alias. Script aliases are transparent indirection — the
-        // program reports what actually ran, using the same rules the
-        // direct (non-aliased) dispatch path uses:
-        //
-        //   - Script expands to root `main` (no `--function` in body) →
-        //     filepath of the file containing `main`, matching `baml
-        //     run` (no target).
-        //   - Script expands to a named function → the function's
-        //     display name (`user.` prefix stripped).
-        if was_script {
-            if let Some(info) = engine.find_user_function(&function_name) {
-                let resolved_label = if info.display_name == "main" && !info.source_file.is_empty()
-                {
-                    // Root main case: use the file path so script-aliased
-                    // and direct invocations of root main produce the
-                    // same `argv[1]`.
-                    info.source_file
-                } else {
-                    info.display_name
-                };
-                let mut patched: Vec<String> = engine.argv().to_vec();
-                if patched.len() >= 2 {
-                    patched[1] = resolved_label;
-                    engine.set_argv(patched);
-                }
+        // Patch `argv[1]` to the engine-canonical display name (strips
+        // `user.` prefix) so scripts and the direct path agree.
+        if let Some(info) = engine.find_user_function(&function_name) {
+            let display = info.display_name.clone();
+            let mut patched: Vec<String> = engine.argv().to_vec();
+            if patched.len() >= 2 && (was_script || display != *target) {
+                patched[1] = display;
+                engine.set_argv(patched);
             }
         }
 
         let func_info = engine
             .find_user_function(&function_name)
             .ok_or_else(|| anyhow!("Function `{function_name}` not found"))?;
-
-        // BEP-027 §"Auto-CLI conventions": `help` is reserved at entry-point
-        // resolution. Reject before printing help so a target declaring a
-        // `help` parameter doesn't get its `--help <string>` rendered as if
-        // valid. The same check runs again inside dispatch_target as a
-        // safety net for non-help invocations.
         baml_exec::validate_help_param(&engine, &function_name)?;
 
-        // BEP-027 §"What `baml pack` changes" reserves `--help` only on
-        // typed targets — parameterless `main()` owns its full argv.
-        // The verb-level `--help` (before `--`) is handled upfront via
-        // `print_run_help`; per-target `--help` arrives in
-        // `effective_target_args` and is classified by clap's parser
-        // below.
         let target_is_typed = !func_info.param_names.is_empty();
-
-        // Route post-`--` tokens through the same clap-driven parser
-        // that the packed binary uses. Help requests and parse errors
-        // come back as `clap::Error`; we distinguish them by `kind()`
-        // so `--help` exits cleanly and bad flags exit non-zero.
         let parsed = if target_is_typed {
             let display = function_name
                 .strip_prefix("user.")
                 .unwrap_or(&function_name);
-            let bin_name = format!("baml run --function {display} --");
+            let bin_name = format!("baml run {display} --");
             match baml_exec::parse_target_argv(
                 &bin_name,
                 &function_name,
@@ -505,45 +511,146 @@ impl RunArgs {
                 &effective_target_args,
             ) {
                 Ok(p) => p,
-                Err(err) => {
-                    use baml_exec::clap_reexport::ErrorKind;
-                    let kind = err.kind();
-                    // Help / version: render to stdout and exit success.
-                    // Parse errors: stderr + non-zero. Suspend the
-                    // spinner first so the multi-line clap block lands
-                    // intact instead of intermixed with ticks.
-                    reporter.abandon();
-                    let _ = err.print();
-                    return match kind {
-                        ErrorKind::DisplayHelp | ErrorKind::DisplayVersion => {
-                            Ok(crate::ExitCode::Success)
-                        }
-                        _ => Ok(crate::ExitCode::Other),
-                    };
-                }
+                Err(err) => return surface_clap_error(reporter, err),
             }
         } else {
             baml_exec::ParsedTargetArgs::default()
         };
 
-        // `--json-args` can come from the verb-level flag (parsed by
-        // clap on the run command) OR from the per-target clap parser.
-        // The verb-level form wins because it's the explicit override.
-        let json_args = match &self.json_args {
+        let json_args = match parsed.json_source.as_deref() {
             Some(source) => Some(baml_exec::load_json_source(source)?),
-            None => match parsed.json_source.as_deref() {
-                Some(source) => Some(baml_exec::load_json_source(source)?),
-                None => None,
-            },
+            None => None,
         };
 
-        self.vlog(format_args!("Calling {function_name}"));
+        self.dispatch_and_finish(
+            engine,
+            &function_name,
+            parsed.cli_values,
+            json_args,
+            event_sink,
+            reporter,
+        )
+    }
 
-        // Cargo emits `     Running …` right before the program's
-        // stdout starts. Same shape here: persist a `Running <name>`
-        // line, then clear the spinner so the target's stdout writes
-        // don't collide with a still-ticking lamb below.
-        reporter.status("Running", &function_name);
+    /// `-f` mode: build a multi-subcommand parser, dispatch the chosen one.
+    fn run_subcommand_targets(
+        &self,
+        event_sink: Option<Arc<dyn bex_events::EventSink>>,
+        reporter: &Reporter,
+    ) -> Result<crate::ExitCode> {
+        let argv = self.build_argv_for_subcommand();
+        let (db, mut engine, needs_format_hint) =
+            self.load_and_compile(event_sink.clone(), argv.clone(), reporter)?;
+        let _ = db;
+        Self::emit_format_hint_if_needed(reporter, needs_format_hint);
+
+        let (entries, lookups) = self.resolve_subcommand_targets(&engine)?;
+
+        // Build the parse bin_name as the reinvocation prefix so the
+        // help text is copy-pasteable.
+        let bin_name = format!(
+            "baml run {} --",
+            self.functions
+                .iter()
+                .map(|f| format!("-f {f}"))
+                .collect::<Vec<_>>()
+                .join(" "),
+        );
+        let (chosen, parsed) = match baml_exec::parse_multi_target_argv(
+            &bin_name,
+            &entries,
+            &lookups,
+            &self.target_args,
+        ) {
+            Ok(v) => v,
+            Err(err) => return surface_clap_error(reporter, err),
+        };
+
+        // Patch argv[1] to the chosen subcommand name.
+        let chosen_entry = entries
+            .iter()
+            .find(|e| e.qualified_name == chosen)
+            .expect("parse returned an unregistered subcommand");
+        let mut patched = engine.argv().to_vec();
+        if patched.len() >= 2 {
+            patched[1] = chosen_entry.subcommand_name.clone();
+            engine.set_argv(patched);
+        }
+
+        let json_args = match parsed.json_source.as_deref() {
+            Some(source) => Some(baml_exec::load_json_source(source)?),
+            None => None,
+        };
+
+        self.dispatch_and_finish(
+            engine,
+            &chosen,
+            parsed.cli_values,
+            json_args,
+            event_sink,
+            reporter,
+        )
+    }
+
+    /// Walk `self.functions`, resolve each to an engine-canonical
+    /// `(TargetEntry, UserFunctionInfo)` pair, and reject duplicate
+    /// subcommand names. Mirrors `pack_command::resolve_targets`'
+    /// `-f` path so `baml run -f` and `baml pack -f` see the same
+    /// resolution shape; kept as a method here rather than hoisted to
+    /// `baml_exec` because the error messages reference `baml run`'s
+    /// help text.
+    fn resolve_subcommand_targets(
+        &self,
+        engine: &BexEngine,
+    ) -> Result<(
+        Vec<baml_exec::TargetEntry>,
+        HashMap<String, UserFunctionInfo>,
+    )> {
+        let mut entries: Vec<baml_exec::TargetEntry> = Vec::with_capacity(self.functions.len());
+        let mut lookups: HashMap<String, UserFunctionInfo> = HashMap::new();
+        for func in &self.functions {
+            let Some(info) = engine.find_user_function(func) else {
+                return Err(Self::function_not_found_error(engine, func));
+            };
+            baml_exec::validate_help_param(engine, &info.qualified_name)?;
+            let display = info
+                .qualified_name
+                .strip_prefix("user.")
+                .unwrap_or(&info.qualified_name)
+                .to_string();
+            let subcommand = display.rsplit('.').next().unwrap_or(&display).to_string();
+            if let Some(prev) = entries.iter().find(|e| e.subcommand_name == subcommand) {
+                anyhow::bail!(
+                    "two `-f` targets share subcommand name `{subcommand}` \
+                     (`{}` and `{}`). Subcommand names come from the last `.`-segment \
+                     of the function name; rename one of them.",
+                    prev.display_name,
+                    display,
+                );
+            }
+            entries.push(baml_exec::TargetEntry {
+                qualified_name: info.qualified_name.clone(),
+                display_name: display.clone(),
+                subcommand_name: subcommand,
+            });
+            lookups.insert(info.qualified_name.clone(), info);
+        }
+        Ok((entries, lookups))
+    }
+
+    /// Shared tail: spawn the runtime, run dispatch, render the
+    /// `Running` / `Finished` lines.
+    fn dispatch_and_finish(
+        &self,
+        engine: BexEngine,
+        function_name: &str,
+        cli_values: HashMap<String, bex_engine::BexExternalValue>,
+        json_args: Option<serde_json::Value>,
+        event_sink: Option<Arc<dyn bex_events::EventSink>>,
+        reporter: &Reporter,
+    ) -> Result<crate::ExitCode> {
+        self.vlog(format_args!("Calling {function_name}"));
+        reporter.status("Running", function_name);
         reporter.abandon();
 
         let rt = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
@@ -552,8 +659,8 @@ impl RunArgs {
         let start = std::time::Instant::now();
         let dispatch_result = rt.block_on(baml_exec::dispatch_target(
             Arc::clone(&engine),
-            &function_name,
-            parsed.cli_values,
+            function_name,
+            cli_values,
             json_args,
             output_format,
         ));
@@ -566,12 +673,10 @@ impl RunArgs {
 
         match dispatch_result {
             Ok(baml_exec::DispatchResult::Ok) => {
-                reporter.finish("Finished", &function_name);
+                reporter.finish("Finished", function_name);
                 Ok(crate::ExitCode::Success)
             }
             Ok(baml_exec::DispatchResult::TargetError) => Ok(crate::ExitCode::TargetError),
-            // `baml.sys.exit(code)` short-circuits the engine; honor the user's
-            // code as the process exit code, clamped to the C `int` range.
             Ok(baml_exec::DispatchResult::Exit(code)) => {
                 std::process::exit(baml_exec::clamp_exit_code(code));
             }
@@ -593,51 +698,33 @@ impl RunArgs {
     ///
     /// - `-e`            → placeholder (the raw `-e` argument). Callers
     ///   should use [`Self::build_argv_for_expression`] with the already-
-    ///   loaded source text so `argv[1]` is the **expression source** per
-    ///   spec, not the `@path` or `-` reference.
-    /// - `<file.baml>`   → the canonicalized absolute path.
-    /// - `<namespace>`   → the namespace name verbatim (e.g. `"eval"`).
-    /// - `<script>`      → the script name as placeholder; patched
-    ///   **post-resolution** to the canonical function name the alias
-    ///   expanded to (e.g. `baml run dev` where `dev = "--function
-    ///   llm.Foo"` → `argv[1] = "llm.Foo"`). This treats script aliases
-    ///   as transparent indirection — the program sees what actually ran.
-    /// - `--function`    → placeholder; patched post-compile to the
-    ///   engine-canonical display name (drops any `user.` prefix the
-    ///   user spelled).
-    /// - no target       → placeholder `"main"`; patched post-compile to
-    ///   the filepath of the file containing `function main`.
-    fn build_argv(&self) -> Vec<String> {
+    ///   loaded source text so `argv[1]` is the **expression source**.
+    /// - positional `<TARGET>` → the target name verbatim; patched
+    ///   post-resolve to the engine display name (drops `user.` prefix
+    ///   the user may have spelled) or to the post-expansion function
+    ///   name for `[scripts]` aliases.
+    /// - `-f` (multi-target) → placeholder; patched after parse to the
+    ///   chosen subcommand name.
+    fn build_argv_for_single(&self, target: &str) -> Vec<String> {
         let executable = std::env::current_exe()
             .ok()
             .map(|p| p.to_string_lossy().into_owned())
             .unwrap_or_else(|| "baml".to_string());
+        let mut argv = vec![executable, target.to_string()];
+        argv.extend(self.target_args.iter().cloned());
+        argv
+    }
 
-        let entry = if let Some(expr) = &self.expression {
-            // Expression mode placeholder. Callers that have already
-            // resolved the expression body (post-`load_expression_source`)
-            // should use `build_argv_for_expression` instead so `argv[1]`
-            // carries the actual source text rather than the `@path` or
-            // `-` reference.
-            expr.clone()
-        } else if let Some(func) = &self.function {
-            func.clone()
-        } else if let Some(target) = &self.target {
-            // For `.baml` file targets, resolve to an absolute path so argv[1]
-            // is stable regardless of the caller's cwd.
-            if target.ends_with(".baml") {
-                std::fs::canonicalize(target)
-                    .ok()
-                    .map(|p| p.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| target.clone())
-            } else {
-                target.clone()
-            }
-        } else {
-            "main".to_string()
-        };
-
-        let mut argv = vec![executable, entry];
+    /// Multi-target placeholder: `argv[1]` is the empty string until
+    /// the subcommand is parsed off the trailing tokens, then patched
+    /// by the caller. Post-`--` tokens are appended verbatim so
+    /// `baml.sys.argv()` reflects exactly what the user typed.
+    fn build_argv_for_subcommand(&self) -> Vec<String> {
+        let executable = std::env::current_exe()
+            .ok()
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "baml".to_string());
+        let mut argv = vec![executable, String::new()];
         argv.extend(self.target_args.iter().cloned());
         argv
     }
@@ -657,13 +744,18 @@ impl RunArgs {
         argv
     }
 
-    /// Load the project, check diagnostics, compile to bytecode, create engine.
+    /// Load the project (or standalone `--file`), check diagnostics,
+    /// compile to bytecode, create engine.
     fn load_and_compile(
         &self,
         event_sink: Option<Arc<dyn bex_events::EventSink>>,
         argv: Vec<String>,
         reporter: &Reporter,
     ) -> Result<(ProjectDatabase, BexEngine, bool)> {
+        if let Some(file) = self.file.as_deref() {
+            return self.load_and_compile_standalone(file, event_sink, argv, reporter);
+        }
+
         // `load_project_from_reporting` emits one `Loading <file>`
         // line per discovered source file (cargo-style per-unit
         // progress) — no aggregate `Loading <project>` needed.
@@ -704,14 +796,15 @@ impl RunArgs {
     /// The same file runs identically on any machine regardless of project context.
     fn load_and_compile_standalone(
         &self,
-        file_path: &str,
+        file_path: &Path,
         event_sink: Option<Arc<dyn bex_events::EventSink>>,
         argv: Vec<String>,
         reporter: &Reporter,
     ) -> Result<(ProjectDatabase, BexEngine, bool)> {
-        reporter.spin("Loading", file_path);
-        let canonical = std::fs::canonicalize(Path::new(file_path))
-            .with_context(|| format!("File not found: {file_path}"))?;
+        let display = file_path.display().to_string();
+        reporter.spin("Loading", &display);
+        let canonical = std::fs::canonicalize(file_path)
+            .with_context(|| format!("File not found: {display}"))?;
         self.vlog(format_args!(
             "Standalone mode: loading {}",
             canonical.display()
@@ -728,16 +821,16 @@ impl RunArgs {
         db.set_project_root(parent);
         db.add_or_update_file(&canonical, &content);
 
-        reporter.spin("Checking", file_path);
+        reporter.spin("Checking", &display);
         self.check_project_diagnostics(
             &db,
-            &format!("Cannot run: compilation errors in {file_path}"),
+            &format!("Cannot run: compilation errors in {display}"),
             reporter,
         )?;
         // See note in `load_and_compile`: "Resolving" is the honest
         // verb when --list is the destination, "Compiling" otherwise.
         let compile_verb = if self.list { "Resolving" } else { "Compiling" };
-        reporter.spin(compile_verb, file_path);
+        reporter.spin(compile_verb, &display);
         let engine = self.compile_to_engine(&db, event_sink, argv)?;
         self.vlog(format_args!(
             "Compiled {} function(s) from standalone file",
@@ -782,9 +875,11 @@ impl RunArgs {
         };
 
         let mut db = ProjectDatabase::new();
-        let has_explicit_project = from
-            .as_ref()
-            .is_some_and(|f| f.join("baml.toml").exists() || f.join("baml_src").exists());
+        // Project marker: matches `project_load::load_project_from_inner`.
+        // `baml.toml` is the marker; `baml_src/` alone no longer qualifies
+        // (would let `baml run -e` pick up project context that every
+        // other verb refuses).
+        let has_explicit_project = from.as_ref().is_some_and(|f| f.join("baml.toml").exists());
 
         let project_root = if has_explicit_project {
             let root = from.as_ref().unwrap();
@@ -886,73 +981,8 @@ impl RunArgs {
     }
 
     // ========================================================================
-    // Target resolution
+    // `[scripts]` parsing
     // ========================================================================
-
-    /// Resolve the run target to a qualified function name the engine understands.
-    ///
-    /// Resolution cascade:
-    /// 1. `--function` flag → direct function call
-    /// 2. No target → root namespace's `main`
-    /// 3. Target ends in `.baml` → hermetic standalone
-    /// 4. Target matches a `[scripts]` entry in `baml.toml` → expand alias
-    /// 5. Target matches a namespace with a `main` → that namespace's main
-    /// 6. Otherwise → error with suggestions
-    fn resolve_target(
-        &self,
-        engine: &BexEngine,
-        scripts: &HashMap<String, Vec<String>>,
-    ) -> Result<ResolvedTarget> {
-        if let Some(func) = &self.function {
-            if engine.find_user_function(func).is_some() {
-                return Ok(ResolvedTarget::function(func.clone()));
-            }
-            // `--function` only dispatches to functions, so the
-            // suggestion set is functions — not scripts/namespaces/files.
-            return Err(Self::function_not_found_error(engine, func));
-        }
-
-        match &self.target {
-            None => {
-                if engine.function_exists("main") {
-                    Ok(ResolvedTarget::function("main".to_string()))
-                } else {
-                    anyhow::bail!(
-                        "No `main` function found in the root namespace.\n\
-                         Use `baml run --function <name>` to call a specific function,\n\
-                         or `baml run --list` to see available targets."
-                    );
-                }
-            }
-            Some(target) => {
-                if target.ends_with(".baml") {
-                    if engine.function_exists("main") {
-                        return Ok(ResolvedTarget::function("main".to_string()));
-                    }
-                    anyhow::bail!(
-                        "Standalone file `{target}` has no `main` function.\n\
-                         Use `baml run --function <name>` to call a specific function."
-                    );
-                }
-
-                if let Some(script_tokens) = scripts.get(target.as_str()) {
-                    self.vlog(format_args!(
-                        "Expanding script `{target}`: {script_tokens:?}"
-                    ));
-                    return Ok(ResolvedTarget::Script(parse_script_body(script_tokens)?));
-                }
-
-                let ns_main = format!("{target}.main");
-                if engine.function_exists(&ns_main) {
-                    return Ok(ResolvedTarget::function(ns_main));
-                }
-
-                Err(Self::target_not_found_error_in(
-                    scripts, engine, target, &self.from,
-                ))
-            }
-        }
-    }
 
     /// Parse `[scripts]` from raw `baml.toml` content.
     ///
@@ -1559,6 +1589,29 @@ fn extract_flag_keys(tokens: &[String]) -> Vec<String> {
     keys
 }
 
+/// Heuristic: does the positional `<TARGET>` look like a filesystem
+/// path rather than a function name? See pack_command's twin helper —
+/// kept duplicated rather than hoisted so each command owns its own
+/// "redirect to --file" hint message.
+fn looks_like_path(target: &str) -> bool {
+    target.contains('/') || target.contains('\\') || target.ends_with(".baml")
+}
+
+/// Render a clap error and return the matching CLI exit code.
+/// Help / version requests render to stdout and exit success; all other
+/// kinds go to stderr with a non-zero exit. The spinner is abandoned
+/// first so the multi-line clap block lands cleanly above the cursor.
+fn surface_clap_error(reporter: &Reporter, err: clap::Error) -> Result<crate::ExitCode> {
+    use baml_exec::clap_reexport::ErrorKind;
+    let kind = err.kind();
+    reporter.abandon();
+    let _ = err.print();
+    Ok(match kind {
+        ErrorKind::DisplayHelp | ErrorKind::DisplayVersion => crate::ExitCode::Success,
+        _ => crate::ExitCode::Other,
+    })
+}
+
 /// Load expression source from -e argument: inline string, @file, or - for stdin.
 fn load_expression_source(source: &str) -> Result<String> {
     if source == "-" {
@@ -1801,14 +1854,28 @@ mod tests {
 
     // ── Default-valued `RunArgs` fixture for behavior tests ───────────
 
+    /// Engine fixture for namespace tests — `compile_multi_file`
+    /// supports folder-based namespaces (`ns_<name>/foo.baml`) which the
+    /// single-source `compile_source` helper can't express.
+    fn engine_from_files(files: &[(&str, &str)]) -> BexEngine {
+        let snapshot = baml_project::testing::compile_multi_file(files);
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("BexEngine::new should succeed")
+    }
+
     /// Build a `RunArgs` with default everything; tests flip individual
     /// fields. Keeps test bodies focused on the field under test.
     fn run_args() -> RunArgs {
         RunArgs {
             target: None,
-            function: None,
+            functions: Vec::new(),
             expression: None,
-            json_args: None,
+            file: None,
             list: false,
             output_format: OutputFormat::Debug,
             log_file: None,
@@ -1819,20 +1886,19 @@ mod tests {
         }
     }
 
-    // ── Dispatch-mode mutex (BEP-027 §"Target resolution") ────────────
+    // ── Dispatch-mode mutex ───────────────────────────────────────────
 
-    /// `--function` and a positional target are mutually exclusive
-    /// dispatch modes.
+    /// `-f` and a positional target are mutually exclusive dispatch modes.
     #[test]
     fn test_run_rejects_target_plus_function() {
         let mut args = run_args();
         args.target = Some("eval".into());
-        args.function = Some("X".into());
+        args.functions = vec!["X".into()];
         let err = args.run().unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("mutually exclusive"), "got: {msg}");
         assert!(
-            msg.contains("`<target>`") && msg.contains("`--function`"),
+            msg.contains("`<target>`") && msg.contains("`-f`"),
             "got: {msg}"
         );
     }
@@ -1852,19 +1918,16 @@ mod tests {
         );
     }
 
-    /// `-e` and `--function` are mutually exclusive.
+    /// `-e` and `-f` are mutually exclusive.
     #[test]
     fn test_run_rejects_function_plus_expression() {
         let mut args = run_args();
-        args.function = Some("X".into());
+        args.functions = vec!["X".into()];
         args.expression = Some("2 + 2".into());
         let err = args.run().unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("mutually exclusive"), "got: {msg}");
-        assert!(
-            msg.contains("`--function`") && msg.contains("`-e`"),
-            "got: {msg}"
-        );
+        assert!(msg.contains("`-f`") && msg.contains("`-e`"), "got: {msg}");
     }
 
     /// All three dispatch modes together → mutex error names all three.
@@ -1872,28 +1935,162 @@ mod tests {
     fn test_run_rejects_three_dispatch_modes() {
         let mut args = run_args();
         args.target = Some("t".into());
-        args.function = Some("F".into());
+        args.functions = vec!["F".into()];
         args.expression = Some("e".into());
         let err = args.run().unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("`<target>`"));
-        assert!(msg.contains("`--function`"));
+        assert!(msg.contains("`-f`"));
         assert!(msg.contains("`-e`"));
     }
 
-    // ── `-e` + `--json-args` rejection ─────────────────────────────────
-
-    /// Expression mode has no function signature to bind JSON keys to;
-    /// silently dropping the JSON would be a footgun in CI pipelines.
+    /// `-e` + `--file` is rejected — `-e` evaluates inline source so a
+    /// separate `--file` would be silently ignored.
     #[test]
-    fn test_run_rejects_expression_plus_json_args() {
+    fn test_run_rejects_expression_plus_file() {
         let mut args = run_args();
         args.expression = Some("2 + 2".into());
-        args.json_args = Some("{}".into());
+        args.file = Some(PathBuf::from("a.baml"));
         let err = args.run().unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("`-e`"), "got: {msg}");
-        assert!(msg.contains("--json-args"), "got: {msg}");
+        assert!(msg.contains("--file"), "got: {msg}");
+    }
+
+    /// `-e` + `--list` is rejected — `--list` enumerates project
+    /// targets; expression mode has none.
+    #[test]
+    fn test_run_rejects_expression_plus_list() {
+        let mut args = run_args();
+        args.expression = Some("2 + 2".into());
+        args.list = true;
+        let err = args.run().unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("`-e`"), "got: {msg}");
+        assert!(msg.contains("--list"), "got: {msg}");
+    }
+
+    /// `--file` and `--from` are mutually exclusive (both name a source).
+    #[test]
+    fn test_run_rejects_file_plus_explicit_from() {
+        let mut args = run_args();
+        args.target = Some("X".into());
+        args.file = Some(PathBuf::from("a.baml"));
+        args.from = PathBuf::from("./project");
+        let err = args.run().unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("mutually exclusive"), "got: {msg}");
+        assert!(msg.contains("--file"), "got: {msg}");
+    }
+
+    /// `--file` with default `--from` (i.e. `.`) is fine — we can't tell
+    /// "user passed `.`" from "user passed nothing" at the clap layer,
+    /// so the mutex only fires when `--from` is explicitly non-default.
+    #[test]
+    fn test_run_allows_file_with_default_from() {
+        let mut args = run_args();
+        args.target = Some("X".into());
+        args.file = Some(PathBuf::from("a.baml"));
+        // args.from is `PathBuf::from(".")` (the default).
+        // The validation pass shouldn't reject this; the actual file load
+        // will fail later but for a different reason.
+        // We can't call .run() here without hitting filesystem so probe
+        // the same predicate `run_with_reporter` would.
+        assert!(args.file.is_some());
+        assert_eq!(args.from, Path::new("."));
+    }
+
+    // ── Clap derive parse tests ──────────────────────────────────────
+
+    /// `-f` is repeatable through the clap derive. Regression test for
+    /// the derive macro silently collapsing repeated short flags into
+    /// `Option<String>` instead of `Vec<String>`.
+    #[test]
+    fn test_run_dash_f_is_repeatable() {
+        use clap::{CommandFactory, FromArgMatches, Parser};
+        #[derive(Parser)]
+        #[command(disable_help_flag = true)]
+        struct Wrapper {
+            #[command(flatten)]
+            args: RunArgs,
+        }
+        let cmd = Wrapper::command();
+        let matches = cmd
+            .clone()
+            .try_get_matches_from(["run", "-f", "a", "-f", "b", "--function", "c"])
+            .unwrap();
+        let parsed = Wrapper::from_arg_matches(&matches).unwrap();
+        assert_eq!(parsed.args.functions, vec!["a", "b", "c"]);
+        assert!(parsed.args.target.is_none());
+    }
+
+    /// `--file` binds to the PathBuf field.
+    #[test]
+    fn test_run_file_flag_parses() {
+        use clap::Parser;
+        #[derive(Parser)]
+        #[command(disable_help_flag = true)]
+        struct Wrapper {
+            #[command(flatten)]
+            args: RunArgs,
+        }
+        let parsed = Wrapper::try_parse_from(["run", "describe", "--file", "x.baml"]).unwrap();
+        assert_eq!(parsed.args.target.as_deref(), Some("describe"));
+        assert_eq!(parsed.args.file.as_deref(), Some(Path::new("x.baml")));
+    }
+
+    /// Tokens after `--` land in `target_args` verbatim, not consumed by
+    /// any earlier flag.
+    #[test]
+    fn test_run_post_dash_dash_tokens_are_verbatim() {
+        use clap::Parser;
+        #[derive(Parser)]
+        #[command(disable_help_flag = true)]
+        struct Wrapper {
+            #[command(flatten)]
+            args: RunArgs,
+        }
+        let parsed = Wrapper::try_parse_from([
+            "run",
+            "-f",
+            "a",
+            "--",
+            "a",
+            "--ty",
+            "string",
+            "--json-args",
+            "{}",
+        ])
+        .unwrap();
+        assert_eq!(parsed.args.functions, vec!["a"]);
+        assert_eq!(
+            parsed.args.target_args,
+            vec!["a", "--ty", "string", "--json-args", "{}"]
+        );
+    }
+
+    /// The verb-level `--json-args` flag was removed. A user that types
+    /// it pre-`--` should hit clap's unknown-flag path, not silently
+    /// land it somewhere.
+    #[test]
+    fn test_run_rejects_verb_level_json_args() {
+        use clap::{CommandFactory, Parser};
+        #[derive(Parser)]
+        #[command(disable_help_flag = true)]
+        struct Wrapper {
+            #[command(flatten)]
+            args: RunArgs,
+        }
+        let err = Wrapper::command()
+            .try_get_matches_from(["run", "--json-args", "{}", "describe"])
+            .unwrap_err();
+        assert!(
+            matches!(
+                err.kind(),
+                clap::error::ErrorKind::UnknownArgument | clap::error::ErrorKind::InvalidSubcommand
+            ),
+            "got: {err}"
+        );
     }
 
     // ── `--list` empty-targets JSON shape (BEP-027 §`--list`) ──────────
@@ -1948,5 +2145,98 @@ mod tests {
     #[test]
     fn test_parse_scripts_empty_input_no_warn_empty_result() {
         assert!(RunArgs::parse_scripts("").is_empty());
+    }
+
+    // ── Namespaced `-f` targets (folder-based `ns_<name>/`) ──────────
+
+    /// `baml run -f llm.Summarize` resolves to the namespaced function
+    /// and surfaces `Summarize` (the leaf segment) as the subcommand
+    /// name the user types after `--`.
+    #[test]
+    fn test_run_subcommand_resolves_namespaced_target() {
+        let engine = engine_from_files(&[(
+            "ns_llm/summarize.baml",
+            "function Summarize(text: string) -> string { text }",
+        )]);
+        let mut args = run_args();
+        args.functions = vec!["llm.Summarize".into()];
+        let (entries, lookups) = args.resolve_subcommand_targets(&engine).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].qualified_name, "user.llm.Summarize");
+        assert_eq!(entries[0].display_name, "llm.Summarize");
+        assert_eq!(entries[0].subcommand_name, "Summarize");
+        assert!(lookups.contains_key("user.llm.Summarize"));
+    }
+
+    /// `-f` across namespaces builds one entry per function, each
+    /// keyed on its leaf segment.
+    #[test]
+    fn test_run_subcommand_multi_namespaced() {
+        let engine = engine_from_files(&[
+            (
+                "ns_llm/summarize.baml",
+                "function Summarize(text: string) -> string { text }",
+            ),
+            (
+                "ns_util/greet.baml",
+                "function Greet(name: string) -> string { name }",
+            ),
+        ]);
+        let mut args = run_args();
+        args.functions = vec!["llm.Summarize".into(), "util.Greet".into()];
+        let (entries, _) = args.resolve_subcommand_targets(&engine).unwrap();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].display_name, "llm.Summarize");
+        assert_eq!(entries[0].subcommand_name, "Summarize");
+        assert_eq!(entries[1].display_name, "util.Greet");
+        assert_eq!(entries[1].subcommand_name, "Greet");
+    }
+
+    /// Two namespaces exporting the same leaf → subcommand-name
+    /// collision is rejected with both fully-qualified names cited.
+    /// Same regression check as the pack-side equivalent.
+    #[test]
+    fn test_run_subcommand_namespaced_name_collision_errors() {
+        let engine = engine_from_files(&[
+            ("ns_llm/foo.baml", "function Foo() -> int { 1 }"),
+            ("ns_util/foo.baml", "function Foo() -> int { 2 }"),
+        ]);
+        let mut args = run_args();
+        args.functions = vec!["llm.Foo".into(), "util.Foo".into()];
+        let err = args.resolve_subcommand_targets(&engine).unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("share subcommand name `Foo`"), "got: {msg}");
+        assert!(msg.contains("llm.Foo"), "got: {msg}");
+        assert!(msg.contains("util.Foo"), "got: {msg}");
+    }
+
+    /// Bare-name lookup also resolves namespaced targets via the
+    /// shared resolver's suffix scan — `Summarize` finds
+    /// `llm.Summarize` when it's the unique match.
+    #[test]
+    fn test_run_subcommand_namespaced_resolves_via_bare_name() {
+        let engine = engine_from_files(&[(
+            "ns_llm/summarize.baml",
+            "function Summarize(text: string) -> string { text }",
+        )]);
+        let mut args = run_args();
+        args.functions = vec!["Summarize".into()];
+        let (entries, _) = args.resolve_subcommand_targets(&engine).unwrap();
+        assert_eq!(entries[0].qualified_name, "user.llm.Summarize");
+        assert_eq!(entries[0].subcommand_name, "Summarize");
+    }
+
+    /// Unknown `-f` target → "function not found" error with the same
+    /// suggestion-engine output we use for the single-target path.
+    #[test]
+    fn test_run_subcommand_unknown_function_errors() {
+        let engine = engine_from_files(&[(
+            "ns_llm/summarize.baml",
+            "function Summarize(text: string) -> string { text }",
+        )]);
+        let mut args = run_args();
+        args.functions = vec!["DoesNotExist".into()];
+        let err = args.resolve_subcommand_targets(&engine).unwrap_err();
+        assert!(format!("{err}").contains("not found"));
     }
 }

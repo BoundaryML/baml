@@ -50,8 +50,8 @@ jobs:
       webview: ${{ steps.check_webview.outputs.changed }}
       # Flag for unsafe code changes (bex_heap) - triggers Miri tests
       unsafe: ${{ steps.check_unsafe.outputs.changed }}
-      # Flag for bridge_nodejs changes - triggers generated file sync check
-      bridge_nodejs: ${{ steps.check_bridge_nodejs.outputs.changed }}
+      # Flag for proto codegen changes - triggers generated file sync check
+      proto: ${{ steps.check_proto.outputs.changed }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -224,14 +224,13 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Check if bridge_nodejs changed
-        id: check_bridge_nodejs
+      - name: Check if proto sources changed
+        id: check_proto
         env:
           MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
-            ':baml_language/crates/bridge_nodejs/**' \
-            ':baml_language/crates/bridge_ctypes/types/**' \
+            ':baml_language/crates/bridge_ctypes/**/*.proto' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
@@ -400,18 +399,23 @@ jobs:
         run: cargo miri test -p bex_heap --lib
         working-directory: baml_language
 
-  bridge-nodejs-sync:
-    name: "bridge_nodejs generated files sync"
+  proto-sync:
+    name: "proto generated files sync"
     runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: determine_changes
-    if: needs.determine_changes.outputs.bridge_nodejs == 'true'
-    timeout-minutes: 15
+    if: needs.determine_changes.outputs.proto == 'true'
+    timeout-minutes: 20
+    env:
+      # See the matching comment on `prek` — mise 2025.12.12 ships a broken
+      # freethreaded Python build; this job doesn't need Python or pipx tools.
+      MISE_DISABLE_TOOLS: python,pipx:uv,pipx:ruff,pipx:maturin
     steps:
       - name: "Checkout"
         uses: actions/checkout@v4
         with:
           persist-credentials: false
 
+      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version.
       - name: "Install Rust toolchain"
         run: rustup toolchain install
         working-directory: baml_language
@@ -423,44 +427,71 @@ jobs:
           save-if: false
           shared-key: "linux-cargo"
 
-      - name: "Install pnpm"
-        uses: pnpm/action-setup@v4
-
-      - name: "Setup Node.js"
-        uses: actions/setup-node@v4
+      # mise provides go, node, pnpm, protoc, and protoc-gen-go per mise.toml.
+      - name: "Install mise"
+        uses: jdx/mise-action@v2
+        # Pinning to old version because newer versions time out on the npm backend,
+        # see https://github.com/jdx/mise/discussions/7630
         with:
-          node-version: "20"
-          cache: "pnpm"
-          cache-dependency-path: baml_language/crates/bridge_nodejs/pnpm-lock.yaml
+          version: 2025.12.12
 
-      - name: "Install dependencies"
+      # Rust (prost) + Python (protoc) — both driven by bridge_ctypes/build.rs.
+      # Writes Python pb2/pyi into baml_language/sdks/python/src/baml_core/cffi/v1/.
+      - name: "Generate Rust + Python proto bindings (bridge_ctypes)"
+        run: cargo build -p bridge_ctypes
+        working-directory: baml_language
+
+      # Go (protoc-gen-go) — writes into bridge_go/cffi/proto/baml_core/cffi/v1/.
+      - name: "Generate Go proto bindings (bridge_go)"
+        run: ./build.sh
+        working-directory: baml_language/crates/bridge_go
+
+      - name: "Install bridge_nodejs dependencies"
         run: pnpm install --frozen-lockfile
         working-directory: baml_language/crates/bridge_nodejs
 
-      - name: "Build bridge_nodejs"
+      # Node / TypeScript (protobufjs) — writes into bridge_nodejs/typescript_src/proto/.
+      # build:debug also regenerates typescript2/pkg-proto/src/generated/ (ts-proto / buf).
+      - name: "Generate Node/TypeScript proto bindings (bridge_nodejs)"
         run: pnpm build:debug
         working-directory: baml_language/crates/bridge_nodejs
 
-      - name: "Check generated files are in sync"
+      - name: "Check generated proto files are in sync"
         run: |
-          # Check for both modified tracked files and untracked files
-          STATUS=$(git status --porcelain -- baml_language/crates/bridge_nodejs)
+          # Check for both modified tracked files and untracked files across every
+          # codegen output documented in baml_language/crates/bridge_ctypes/README.md.
+          PATHS=(
+            baml_language/crates/bridge_nodejs
+            baml_language/crates/bridge_ctypes
+            baml_language/crates/bridge_go
+            baml_language/sdks/python/src/baml_core/cffi
+            typescript2/pkg-proto
+          )
+          README="baml_language/crates/bridge_ctypes/README.md"
+          STATUS=$(git status --porcelain -- "${PATHS[@]}")
           if [ -n "$STATUS" ]; then
-            echo "::error::bridge_nodejs has uncommitted changes after running 'pnpm build:debug'"
+            echo "::error::proto generated files are out of sync — consult ${README} for the regeneration commands and commit the resulting changes."
             echo ""
             echo "The following files are out of sync:"
             echo "$STATUS"
             echo ""
-            echo "Please run 'pnpm build:debug' in baml_language/crates/bridge_nodejs and commit the changes."
+            echo "===== ${README} ====="
+            cat "${README}"
+            echo "===== end of ${README} ====="
             echo ""
-            git diff -- baml_language/crates/bridge_nodejs
+            git diff -- "${PATHS[@]}"
             exit 1
           fi
-          echo "All generated files are in sync."
+          echo "All generated proto files are in sync."
 
   benchmarks-instrumented:
     name: "benchmarks instrumented (baml)"
-    runs-on: ubuntu-latest
+    # Must stay on the same runner family as the `linux-cargo` saver
+    # (cargo-test-linux). Swatinem/rust-cache hashes every installed rustup
+    # toolchain into the env-hash, and GitHub-hosted `ubuntu-latest` ships a
+    # different pre-installed stable than the Blacksmith ubuntu-2404 image,
+    # which used to flip the cache prefix and force a cold build.
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: determine_changes
     # Run benchmarks when any Rust code changes, on manual opt-in, or on push to main/canary.
     # Skip merge_group since they already ran in the PR.
@@ -500,8 +531,28 @@ jobs:
         run: cargo codspeed build -p baml_tests -m walltime
         working-directory: baml_language
 
+      # CodSpeed's walltime runner auto-installs `linux-tools-$(uname -r)` so
+      # its bundled `perf` matches the running kernel. Blacksmith's ubuntu-2404
+      # image runs a kernel Ubuntu's apt repos don't ship a matching
+      # `linux-tools-*` package for, so that step bails with
+      # `Unable to locate package linux-tools-<kernel>`. Pre-install
+      # `linux-tools-common` + `linux-tools-generic` instead: the generic meta
+      # package pulls in a perf binary at `/usr/lib/linux-tools-*/perf`, which
+      # CodSpeed's `get_working_perf_executable()` falls back to via
+      # `find /usr/lib -path "/usr/lib/linux-tools-*/perf"` when `which perf`
+      # fails — at which point CodSpeed's own apt install short-circuits.
+      # Source: https://github.com/CodSpeedHQ/runner/blob/main/src/executor/wall_time/profiler/perf/{setup,perf_executable}.rs
+      - name: "Pre-install perf for CodSpeed (Blacksmith image)"
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends linux-tools-common linux-tools-generic
+          # Smoke-test: at least one of these must succeed, otherwise CodSpeed
+          # will silently fall through to its own broken apt install path.
+          perf --version || ls /usr/lib/linux-tools-*/perf
+
       - name: "Run benchmarks"
         uses: CodSpeedHQ/action@v4
+        continue-on-error: true
         with:
           mode: walltime
           run: cd baml_language && cargo codspeed run
@@ -527,7 +578,7 @@ jobs:
       - docs
       - webview-tests
       - miri-tests
-      - bridge-nodejs-sync
+      - proto-sync
       - benchmarks-instrumented
     # Only run if something failed or was cancelled (otherwise skip → success)
     if: ${{ failure() || cancelled() }}
@@ -548,7 +599,7 @@ jobs:
           echo "| docs | ${{ needs.docs.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| webview-tests | ${{ needs.webview-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| miri-tests | ${{ needs.miri-tests.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| bridge-nodejs-sync | ${{ needs.bridge-nodejs-sync.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| proto-sync | ${{ needs.proto-sync.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| benchmarks-instrumented | ${{ needs.benchmarks-instrumented.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "::error::One or more CI jobs failed!"

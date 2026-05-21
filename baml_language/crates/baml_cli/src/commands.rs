@@ -76,6 +76,12 @@ pub(crate) enum Commands {
     #[command(about = "Run BAML tests")]
     Test(crate::test_command::TestArgs),
 
+    #[command(about = "Initialize a new BAML project (creates baml.toml)")]
+    Init(crate::init_command::InitArgs),
+
+    #[command(about = "Create a new BAML project directory")]
+    New(crate::init_command::NewArgs),
+
     #[command(about = "Run a BAML function or script", disable_help_flag = true)]
     Run(crate::run_command::RunArgs),
 
@@ -139,6 +145,8 @@ impl RuntimeCli {
 
     pub fn run(&self) -> Result<crate::ExitCode> {
         match &self.command {
+            Commands::Init(args) => args.run(),
+            Commands::New(args) => args.run(),
             Commands::Run(args) => args.run(),
             Commands::Pack(args) => args.run(),
             Commands::Describe(args) => args.run(),

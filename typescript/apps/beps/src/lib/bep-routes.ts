@@ -4,12 +4,13 @@ export const RESERVED_PAGE_SLUGS = new Set([
   "issues",
   "decisions",
   "ai",
+  "comments",
   "pages",
   "v",
   "readme",
 ]);
 
-export type BepSectionType = "readme" | "page" | "issues" | "decisions" | "ai";
+export type BepSectionType = "readme" | "page" | "issues" | "decisions" | "ai" | "comments";
 
 export interface ParsedBepRoute {
   section: BepSectionType;
@@ -121,6 +122,15 @@ export function parseBepSegments(segments: string[]): ParsedBepRoute {
     };
   }
 
+  if (segments.length === 1 && segments[0] === "comments") {
+    return {
+      section: "comments",
+      versionNumber: null,
+      isHistorical: false,
+      isValid: true,
+    };
+  }
+
   return {
     section: "readme",
     versionNumber: null,
@@ -163,6 +173,9 @@ export function buildBepPath({
   if (section === "ai") {
     return `${base}/ai`;
   }
+  if (section === "comments") {
+    return `${base}/comments`;
+  }
   return base;
 }
 
@@ -173,6 +186,7 @@ export function toNavSectionId(
   if (section === "readme") return MAIN_CONTENT_ID;
   if (section === "page" && pageSlug) return pageSlug;
   if (section === "ai") return "ai";
+  if (section === "comments") return "comments";
   return section;
 }
 
