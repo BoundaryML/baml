@@ -20,6 +20,8 @@ You are working in a BEP (BAML Enhancement Proposal) repository. Use the \`./bep
 ./bep diff <ref>        # Diff local vs server (--full for unified diff)
 ./bep push <ref>        # Dry-run diff + prompt to push (-y to confirm)
 ./bep open <number>     # Open in browser
+./bep comments <number> # Fetch all comments for a BEP (current version)
+./bep reply <number> <comment-id> "message"  # Reply to a comment
 \`\`\`
 
 \`<ref>\` is a BEP number (e.g. \`41\`) or slug (e.g. \`my-feature\` for \`BEP-?-my-feature\`).
@@ -35,6 +37,19 @@ If \`$ARGUMENTS\` is a title/topic, create a new BEP:
 4. Run \`./bep diff <slug>\` to preview, then ask if user wants to push
 
 If no arguments, ask what the user wants to do.
+
+## Working with Comments
+
+To review and respond to feedback on a BEP:
+
+1. **Fetch comments**: \`./bep comments <number>\` to see all comments with context
+2. **Review concerns**: Look for ⚠️ concerns and ❓ questions that need addressing
+3. **Reply to feedback**: \`./bep reply <number> <comment-id> "Your response"\`
+
+Comment types:
+- \`discussion\` - General feedback (default)
+- \`concern\` - Blocking issue that needs resolution
+- \`question\` - Needs clarification
 
 ## BEP Writing Style
 
