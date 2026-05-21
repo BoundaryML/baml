@@ -16,7 +16,7 @@ function bad() -> string {
 
 //----
 //- diagnostics
-// Error: type mismatch: expected user.Named, got int
+// error: type mismatch: expected user.Named, got int
 //     ╭─[ interface_error_generic_bound_violation.baml:14:9 ]
 //     │
 //  14 │   return first_named<int>(ints)

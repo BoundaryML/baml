@@ -18,7 +18,7 @@ class TestLiterals {
 
 //----
 //- diagnostics
-// Error: unresolved type: True
+// error: unresolved type: True
 //    ╭─[ class_misspeled_boolean_literals.baml:3:4 ]
 //    │
 //  3 │   b "boolean" | True | False
@@ -27,7 +27,7 @@ class TestLiterals {
 //    │ 
 //    │ Note: Error code: E0002
 // ───╯
-// Error: unresolved type: False
+// error: unresolved type: False
 //    ╭─[ class_misspeled_boolean_literals.baml:3:4 ]
 //    │
 //  3 │   b "boolean" | True | False

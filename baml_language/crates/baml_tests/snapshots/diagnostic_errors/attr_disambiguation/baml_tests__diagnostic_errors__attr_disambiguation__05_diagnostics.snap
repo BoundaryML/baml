@@ -1,9 +1,8 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 25257
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [hir] Error: `@alias` is only allowed on class fields and enum variants; remove it here
+  [hir] error: `@alias` is only allowed on class fields and enum variants; remove it here
     ╭─[ nested.baml:12:12 ]
     │
  12 │   d2 (NFoo @alias("d2_alias"))[]
@@ -13,7 +12,7 @@ assertion_line: 25257
     │ Note: Error code: E0106
 ────╯
 
-  [hir] Error: `@alias` is only allowed on class fields and enum variants; remove it here
+  [hir] error: `@alias` is only allowed on class fields and enum variants; remove it here
     ╭─[ nested.baml:18:15 ]
     │
  18 │   d4 map<NFoo @alias("d4_alias"), NBar>
@@ -23,7 +22,7 @@ assertion_line: 25257
     │ Note: Error code: E0106
 ────╯
 
-  [hir] Error: `@alias` is only allowed on class fields and enum variants; remove it here
+  [hir] error: `@alias` is only allowed on class fields and enum variants; remove it here
     ╭─[ nested.baml:24:12 ]
     │
  24 │   d6 (NFoo @alias("d6_alias") | NBar)[]
@@ -33,7 +32,7 @@ assertion_line: 25257
     │ Note: Error code: E0106
 ────╯
 
-  [hir] Error: `@alias` is only allowed on class fields and enum variants; remove it here
+  [hir] error: `@alias` is only allowed on class fields and enum variants; remove it here
     ╭─[ nested.baml:30:12 ]
     │
  30 │   d8 (NFoo @alias("d8_alias"))[] @stream.done
@@ -43,7 +42,7 @@ assertion_line: 25257
     │ Note: Error code: E0106
 ────╯
 
-  [hir] Error: `@alias` is only allowed on class fields and enum variants; remove it here
+  [hir] error: `@alias` is only allowed on class fields and enum variants; remove it here
     ╭─[ nested.baml:36:28 ]
     │
  36 │   d10 map<string, map<NFoo @alias("d10_alias"), NBar>>
@@ -53,7 +52,7 @@ assertion_line: 25257
     │ Note: Error code: E0106
 ────╯
 
-  [hir] Error: `@alias` is only allowed on class fields and enum variants; remove it here
+  [hir] error: `@alias` is only allowed on class fields and enum variants; remove it here
     ╭─[ non_field.baml:10:16 ]
     │
  10 │ type E1 = EFoo @alias("e1_alias")
@@ -63,7 +62,7 @@ assertion_line: 25257
     │ Note: Error code: E0106
 ────╯
 
-  [hir] Error: `@alias` is only allowed on class fields and enum variants; remove it here
+  [hir] error: `@alias` is only allowed on class fields and enum variants; remove it here
     ╭─[ non_field.baml:16:16 ]
     │
  16 │ type E3 = EFoo @alias("e3_alias") @stream.done
@@ -73,7 +72,7 @@ assertion_line: 25257
     │ Note: Error code: E0106
 ────╯
 
-  [hir] Error: `@alias` is only allowed on class fields and enum variants; remove it here
+  [hir] error: `@alias` is only allowed on class fields and enum variants; remove it here
     ╭─[ non_field.baml:19:24 ]
     │
  19 │ type E4 = EA | EB | EC @alias("e4_alias")
@@ -83,7 +82,7 @@ assertion_line: 25257
     │ Note: Error code: E0106
 ────╯
 
-  [hir] Error: `@alias` is only allowed on class fields and enum variants; remove it here
+  [hir] error: `@alias` is only allowed on class fields and enum variants; remove it here
     ╭─[ non_field.baml:22:21 ]
     │
  22 │ function E5(x: EFoo @alias("e5_alias")) -> string {
@@ -93,7 +92,7 @@ assertion_line: 25257
     │ Note: Error code: E0106
 ────╯
 
-  [hir] Error: `@alias` is only allowed on class fields and enum variants; remove it here
+  [hir] error: `@alias` is only allowed on class fields and enum variants; remove it here
     ╭─[ non_field.baml:32:23 ]
     │
  32 │ function E7() -> EFoo @alias("e7_alias") {
@@ -103,7 +102,7 @@ assertion_line: 25257
     │ Note: Error code: E0106
 ────╯
 
-  [hir] Error: `@alias` is only allowed on class fields and enum variants; remove it here
+  [hir] error: `@alias` is only allowed on class fields and enum variants; remove it here
     ╭─[ unions.baml:22:14 ]
     │
  22 │   b5 UA | UB @alias("b5_alias") | UC
@@ -113,7 +112,7 @@ assertion_line: 25257
     │ Note: Error code: E0106
 ────╯
 
-  [hir] Error: `@alias` is only allowed on class fields and enum variants; remove it here
+  [hir] error: `@alias` is only allowed on class fields and enum variants; remove it here
     ╭─[ unions.baml:25:9 ]
     │
  25 │   b6 UA @alias("b6_alias") | UB | UC
@@ -123,7 +122,7 @@ assertion_line: 25257
     │ Note: Error code: E0106
 ────╯
 
-  [hir] Error: `@alias` is only allowed on class fields and enum variants; remove it here
+  [hir] error: `@alias` is only allowed on class fields and enum variants; remove it here
     ╭─[ unions.baml:48:16 ]
     │
  48 │   b13 UA | (UB @alias("b13_alias"))
@@ -133,7 +132,7 @@ assertion_line: 25257
     │ Note: Error code: E0106
 ────╯
 
-  [hir] Error: `@alias` is only allowed on class fields and enum variants; remove it here
+  [hir] error: `@alias` is only allowed on class fields and enum variants; remove it here
     ╭─[ unions.baml:51:16 ]
     │
  51 │   b14 (UA | UB @alias("b14_alias"))

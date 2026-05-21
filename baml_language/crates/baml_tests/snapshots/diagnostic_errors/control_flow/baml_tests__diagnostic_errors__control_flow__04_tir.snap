@@ -134,11 +134,11 @@ function user.LlmFunction$build_request_stream(input: string) -> baml.http.Reque
   baml.llm.build_request_stream(TestClient, "LlmFunction", map { "input": input }) : baml.http.Request
 }
 function user.LlmFunction$parse(json: string) -> string throws never {
-  baml.llm.parse<T>("LlmFunction", json) : string
+  baml.llm.parse<TFinal>("LlmFunction", json) : string
 }
-function user.LlmFunction$stream(input: string) -> baml.llm.Stream<string, null | string> throws never {
-  baml.llm.stream_llm_function(TestClient, "LlmFunction", map { "input": input }) : baml.llm.Stream<string, null | string>
+function user.LlmFunction$stream(input: string) -> baml.llm.Stream<null | string, string> throws never {
+  baml.llm.stream_llm_function(TestClient, "LlmFunction", map { "input": input }) : baml.llm.Stream<null | string, string>
 }
-function user.LlmFunction$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> throws never {
+function user.LlmFunction$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<null | string, string> throws never {
   TestClient.__make_stream(sse, "LlmFunction") : unknown
 }

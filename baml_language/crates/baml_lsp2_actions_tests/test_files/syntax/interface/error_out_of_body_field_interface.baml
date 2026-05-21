@@ -17,7 +17,7 @@ implements Named for Robot {
 
 //----
 //- diagnostics
-// Error: `implements Named for Robot` cannot implement field-bearing interface `Named` outside the class body
+// error: `implements Named for Robot` cannot implement field-bearing interface `Named` outside the class body
 //     ╭─[ interface_error_out_of_body_field_interface.baml:12:11 ]
 //     │
 //  12 │ implements Named for Robot {

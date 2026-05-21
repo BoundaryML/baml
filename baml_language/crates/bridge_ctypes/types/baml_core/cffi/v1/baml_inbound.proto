@@ -1,3 +1,5 @@
+// See crates/bridge_ctypes/README.md for the list of consumers and the
+// commands used to regenerate each language's proto client.
 syntax = "proto3";
 package baml_core.cffi.v1;
 
@@ -13,6 +15,13 @@ option go_package = "./cffi";
 //   - baml.media.{Image,Audio,Video,Pdf}     -> ADT_MEDIA_*
 //   - baml.llm.PromptAst                     -> ADT_PROMPT_AST
 //   - baml.llm.Collector                     -> ADT_COLLECTOR
+//   - baml.llm.Stream                        -> ADT_TAGGED_HEAP_HANDLE
+//
+// `ADT_TAGGED_HEAP_HANDLE` signals "the on-the-wire payload is a
+// `BamlOutboundHandle` (outbound) / `BamlHandle` (inbound) whose
+// engine-side `BexExternalAdt` is a `TaggedHeapHandle { ty, heap_handle }`."
+// The outbound `BamlOutboundHandle.name` field carries the underlying
+// class + concrete generic args.
 //
 // Stdlib symbols TODO (decode to bare BamlPyHandle today):
 //   - baml.io.File, baml.net.Socket, baml.http.{Response,SseStream}
@@ -33,6 +42,7 @@ enum BamlHandleType {
   ADT_PROMPT_AST = 11;
   ADT_COLLECTOR = 12;
   ADT_TYPE = 13;
+  ADT_TAGGED_HEAP_HANDLE = 14;
 }
 
 message BamlHandle {

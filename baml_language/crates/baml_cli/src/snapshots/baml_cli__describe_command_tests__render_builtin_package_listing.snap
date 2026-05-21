@@ -41,6 +41,8 @@ class            fs.DirEntry                      <builtin>/baml/ns_fs/fs.baml:6
 class            fs.MkdirOptions                  <builtin>/baml/ns_fs/fs.baml:72
 function         fs.read_dir                      <builtin>/baml/ns_fs/fs.baml:76
 function         fs.mkdir                         <builtin>/baml/ns_fs/fs.baml:80
+enum             future.FutureState               <builtin>/baml/ns_future/future.baml:21
+class            future.Future                    <builtin>/baml/ns_future/future.baml:28
 class            glob.ScanOptions                 <builtin>/baml/ns_glob/glob.baml:1
 class            glob.Glob                        <builtin>/baml/ns_glob/glob.baml:10
 function         glob.new                         <builtin>/baml/ns_glob/glob.baml:22
@@ -51,6 +53,10 @@ function         http.fetch                       <builtin>/baml/ns_http/http.ba
 function         http.send                        <builtin>/baml/ns_http/http.baml:46
 function         http.fetch_sse                   <builtin>/baml/ns_http/http.baml:50
 function         io.input                         <builtin>/baml/ns_io/io.baml:1
+function         io.print                         <builtin>/baml/ns_io/io.baml:7
+function         io.println                       <builtin>/baml/ns_io/io.baml:12
+function         io.eprint                        <builtin>/baml/ns_io/io.baml:17
+function         io.eprintln                      <builtin>/baml/ns_io/io.baml:22
 type             json.json                        <builtin>/baml/ns_json/json.baml:1
 class            json.JsonParseError              <builtin>/baml/ns_json/json.baml:3
 class            json.JsonDecodeError             <builtin>/baml/ns_json/json.baml:6
@@ -63,6 +69,8 @@ function         json.to_json                     <builtin>/baml/ns_json/json.ba
 function         json.from_string                 <builtin>/baml/ns_json/json.baml:75
 function         json.from_json                   <builtin>/baml/ns_json/json.baml:101
 function         json.field                       <builtin>/baml/ns_json/json.baml:112
+function         json.serialize                   <builtin>/baml/ns_json/json.baml:132
+function         json.deserialize                 <builtin>/baml/ns_json/json.baml:151
 class            llm.OrchestrationStep            <builtin>/baml/ns_llm/llm.baml:1
 class            llm.ExecutionContext             <builtin>/baml/ns_llm/llm.baml:6
 class            llm.PlannerState                 <builtin>/baml/ns_llm/llm.baml:12
@@ -98,7 +106,9 @@ class            media.Audio                      <builtin>/baml/ns_media/media.
 class            media.Video                      <builtin>/baml/ns_media/media.baml:83
 class            media.Image                      <builtin>/baml/ns_media/media.baml:124
 class            net.Socket                       <builtin>/baml/ns_net/net.baml:1
-function         net.connect                      <builtin>/baml/ns_net/net.baml:13
+class            net.TcpListener                  <builtin>/baml/ns_net/net.baml:21
+function         net.connect                      <builtin>/baml/ns_net/net.baml:34
+function         net.listen                       <builtin>/baml/ns_net/net.baml:40
 class            panics.DivisionByZero            <builtin>/baml/ns_panics/panics.baml:1
 class            panics.IndexOutOfBounds          <builtin>/baml/ns_panics/panics.baml:5
 class            panics.MapKeyNotFound            <builtin>/baml/ns_panics/panics.baml:10
@@ -107,9 +117,10 @@ class            panics.AssertionFailed           <builtin>/baml/ns_panics/panic
 class            panics.Unreachable               <builtin>/baml/ns_panics/panics.baml:22
 class            panics.Cancelled                 <builtin>/baml/ns_panics/panics.baml:27
 class            panics.UserPanic                 <builtin>/baml/ns_panics/panics.baml:32
-class            panics.AllocFailure              <builtin>/baml/ns_panics/panics.baml:39
-class            panics.HostUnavailable           <builtin>/baml/ns_panics/panics.baml:46
-type             panics.Panic                     <builtin>/baml/ns_panics/panics.baml:51
+class            panics.Exit                      <builtin>/baml/ns_panics/panics.baml:41
+class            panics.AllocFailure              <builtin>/baml/ns_panics/panics.baml:48
+class            panics.HostUnavailable           <builtin>/baml/ns_panics/panics.baml:55
+type             panics.Panic                     <builtin>/baml/ns_panics/panics.baml:60
 class            stream.StreamFinished            <builtin>/baml/ns_stream/stream.baml:4
 class            stream.StreamNoYield             <builtin>/baml/ns_stream/stream.baml:9
 class            sys.ProcessOptions               <builtin>/baml/ns_sys/sys.baml:1
@@ -118,6 +129,7 @@ function         sys.exec                         <builtin>/baml/ns_sys/sys.baml
 function         sys.shell                        <builtin>/baml/ns_sys/sys.baml:22
 function         sys.sleep                        <builtin>/baml/ns_sys/sys.baml:26
 function         sys.panic                        <builtin>/baml/ns_sys/sys.baml:30
-function         sys.now_ms                       <builtin>/baml/ns_sys/sys.baml:34
-function         sys.argv                         <builtin>/baml/ns_sys/sys.baml:39
+function         sys.exit                         <builtin>/baml/ns_sys/sys.baml:34
+function         sys.now_ms                       <builtin>/baml/ns_sys/sys.baml:38
+function         sys.argv                         <builtin>/baml/ns_sys/sys.baml:43
 function         unstable.string                  <builtin>/baml/ns_unstable/unstable.baml:2

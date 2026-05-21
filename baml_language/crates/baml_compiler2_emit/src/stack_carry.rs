@@ -162,11 +162,15 @@ fn is_stack_carry_use_safe(
                     }
                     *target
                 }
-                Some(Terminator::DispatchFuture { future, resume, .. }) => {
-                    if !matches!(future, Place::Local(l) if *l == local) {
+                Some(Terminator::SysOp {
+                    destination,
+                    target,
+                    ..
+                }) => {
+                    if !matches!(destination, Place::Local(l) if *l == local) {
                         return false;
                     }
-                    *resume
+                    *target
                 }
                 _ => return false,
             }
@@ -471,10 +475,10 @@ fn simulate_terminator_stack(
             sim.push();
             simulate_store_place_stack(destination, sim, classifications)
         }
-        Terminator::DispatchFuture {
+        Terminator::SysOp {
             callee,
             args,
-            future,
+            destination,
             ..
         } => {
             if pull_semantics::resolve_constant_function_name(callee, classifications, def_use)
@@ -494,6 +498,30 @@ fn simulate_terminator_stack(
             }
 
             if !sim.pop_n(args.len()) {
+                return false;
+            }
+            sim.push();
+            simulate_store_place_stack(destination, sim, classifications)
+        }
+        Terminator::Spawn {
+            closure,
+            name,
+            future,
+            ..
+        } => {
+            let mut sink = StackCarryPullSink {
+                sim,
+                carried_local,
+                classifications,
+                def_use,
+            };
+            if pull_semantics::walk_operand_pull(&mut sink, closure).is_err() {
+                return false;
+            }
+            if pull_semantics::walk_operand_pull(&mut sink, name).is_err() {
+                return false;
+            }
+            if !sim.pop_n(2) {
                 return false;
             }
             sim.push();

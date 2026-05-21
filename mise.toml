@@ -17,12 +17,15 @@ uv = "0.11.3"
 "cargo:wasm-pack" = "0.14.0"
 "cargo:ripgrep" = "latest"
 "cargo:just" = "latest"
-"cargo:prek" = "latest"
+"cargo:prek" = "0.3.13"
 
 # Go tools
 # locked to match the version in .github/actions/setup-go/action.yml
 "protoc-gen-go" = "1.34.1"
 "go:golang.org/x/tools/cmd/goimports" = "0.36.0"
+
+# Protobuf compiler — needed by bridge_go/build.sh (bridge_ctypes uses vendored protoc).
+protoc = "27.1"
 
 # Python tools
 "pipx:ruff" = "latest"

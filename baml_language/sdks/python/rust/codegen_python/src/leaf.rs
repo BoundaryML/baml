@@ -440,18 +440,27 @@ fn render_class_bases(generic_params: &[String]) -> String {
     }
 }
 
-/// If `c` is one of the four `baml.media.{Image,Video,Audio,Pdf}` stdlib
-/// classes, return the corresponding Rust `PyO3` class name (`BamlImage`,
-/// `BamlVideo`, …). 15b §lines 14-19 specify these as re-exports of
-/// `PyO3` types holding `Arc<MediaValue>` directly; the regular Pydantic
-/// shell is suppressed for them. Hardcoded list rather than an IR
-/// flag — out of scope per 15d.
-fn media_reexport_rust_name(c: &crate::emit::class::PyClass) -> Option<&'static str> {
+/// If `c` is one of the stdlib classes that codegen emits as a one-line
+/// re-export, return the (module path, exported name) pair.
+///
+/// `baml.media.{Image,Video,Audio,Pdf}` (15b §lines 14-19): re-exports
+/// of `PyO3` types holding `Arc<MediaValue>` directly — live in
+/// `baml_core.baml_py` (the `PyO3` extension module).
+///
+/// `baml.llm.Stream`: pure-Python wrapper re-exported from `baml_core`
+/// (`sdks/python/src/baml_core/_stream.py`). Lives outside the `PyO3`
+/// module because nothing on the call path needed Rust — the args
+/// encoder, runtime accessor, and result decoder are all already
+/// exposed to Python.
+fn media_reexport_rust_name(
+    c: &crate::emit::class::PyClass,
+) -> Option<(&'static str, &'static str)> {
     match c.source.to_string().as_str() {
-        "baml.media.Image" => Some("BamlImage"),
-        "baml.media.Video" => Some("BamlVideo"),
-        "baml.media.Audio" => Some("BamlAudio"),
-        "baml.media.Pdf" => Some("BamlPdf"),
+        "baml.media.Image" => Some(("baml_core.baml_py", "BamlImage")),
+        "baml.media.Video" => Some(("baml_core.baml_py", "BamlVideo")),
+        "baml.media.Audio" => Some(("baml_core.baml_py", "BamlAudio")),
+        "baml.media.Pdf" => Some(("baml_core.baml_py", "BamlPdf")),
+        "baml.llm.Stream" => Some(("baml_core", "BamlStream")),
         _ => None,
     }
 }
@@ -614,9 +623,9 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
 
     match s {
         EmittedSymbol::Class(c) => {
-            if let Some(rust_name) = media_reexport_rust_name(c) {
+            if let Some((module, rust_name)) = media_reexport_rust_name(c) {
                 return format!(
-                    "from baml_core.baml_py import {rust_name} as {py_name}\n",
+                    "from {module} import {rust_name} as {py_name}\n",
                     py_name = c.py_name,
                 );
             }
@@ -1154,9 +1163,9 @@ fn render_symbol_pyi(s: &EmittedSymbol, leaf: &LeafPath) -> String {
 
     match s {
         EmittedSymbol::Class(c) => {
-            if let Some(rust_name) = media_reexport_rust_name(c) {
+            if let Some((module, rust_name)) = media_reexport_rust_name(c) {
                 return format!(
-                    "from baml_core.baml_py import {rust_name} as {py_name}\n",
+                    "from {module} import {rust_name} as {py_name}\n",
                     py_name = c.py_name,
                 );
             }

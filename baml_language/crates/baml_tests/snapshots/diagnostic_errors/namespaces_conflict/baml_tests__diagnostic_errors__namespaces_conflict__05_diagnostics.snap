@@ -1,9 +1,8 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 34531
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [validation] Error: Duplicate class `Response`
+  [validation] error: Duplicate class `Response`
    ╭─[ a.baml:2:7 ]
    │
  2 │ class Response {

@@ -47,6 +47,9 @@ namespace baml.fs:
   function size
   function write
   function write_bytes
+namespace baml.future:
+  class Future<T, E> { methods: [cancel, is_settled, is_cancelled, is_result, is_error, state, to_json, from_json] }
+  enum FutureState
 namespace baml.glob:
   class Glob { methods: [scan, matches, to_json, from_json] }
   class ScanOptions { methods: [to_json, from_json] }
@@ -59,16 +62,22 @@ namespace baml.http:
   function fetch_sse
   function send
 namespace baml.io:
+  function eprint
+  function eprintln
   function input
+  function print
+  function println
 namespace baml.json:
   class JsonDecodeError { methods: [to_json, from_json] }
   class JsonParseError { methods: [to_json, from_json] }
   class JsonSerializationError { methods: [to_json, from_json] }
   type json
+  function deserialize<T>
   function field
   function from_json<T>
   function from_string<T>
   function parse
+  function serialize<T>
   function stringify
   function stringify_pretty
   function to_json<T>
@@ -87,12 +96,12 @@ namespace baml.llm:
   class PrimitiveClientOptions { methods: [to_json, from_json] }
   class PromptAst { methods: [to_json, from_json] }
   class RetryPolicy { methods: [to_json, from_json] }
-  class Stream<T, S> { methods: [next, final, to_json, from_json] }
+  class Stream<TStream, TFinal> { methods: [next, final, to_json, from_json] }
   class StreamAccumulator { methods: [add_events, content, is_done, model, finish_reason, input_tokens, output_tokens, to_json, from_json] }
-  class StreamCache<T, S> { methods: [new, to_json, from_json] }
+  class StreamCache<TStream, TFinal> { methods: [new, to_json, from_json] }
   class VertexAiOptions { methods: [to_json, from_json] }
-  function __sap_parse_final<T, S>
-  function __sap_parse_partial<T, S>
+  function __sap_parse_final<TStream, TFinal>
+  function __sap_parse_partial<TStream, TFinal>
   function build_request
   function build_request_stream
   function call_llm_function<T>
@@ -100,9 +109,9 @@ namespace baml.llm:
   function get_jinja_template
   function get_return_type
   function get_stream_return_type
-  function parse<T, S>
+  function parse<TStream, TFinal>
   function render_prompt
-  function stream_llm_function<T, S>
+  function stream_llm_function<TStream, TFinal>
 namespace baml.math:
   function trunc
 namespace baml.media:
@@ -111,13 +120,16 @@ namespace baml.media:
   class Pdf { methods: [to_json, url, file, base64, mime_type, from_url, from_file, from_base64, from_json] }
   class Video { methods: [to_json, url, file, base64, mime_type, from_url, from_file, from_base64, from_json] }
 namespace baml.net:
-  class Socket { methods: [read, close, to_json, from_json] }
+  class Socket { methods: [read, write, close, to_json, from_json] }
+  class TcpListener { methods: [accept, close, to_json, from_json] }
   function connect
+  function listen
 namespace baml.panics:
   class AllocFailure { methods: [to_json, from_json] }
   class AssertionFailed { methods: [to_json, from_json] }
   class Cancelled { methods: [to_json, from_json] }
   class DivisionByZero { methods: [to_json, from_json] }
+  class Exit { methods: [to_json, from_json] }
   class HostUnavailable { methods: [to_json, from_json] }
   class IndexOutOfBounds { methods: [to_json, from_json] }
   class MapKeyNotFound { methods: [to_json, from_json] }
@@ -133,6 +145,7 @@ namespace baml.sys:
   class ShellOutput { methods: [ok, to_json, from_json] }
   function argv
   function exec
+  function exit
   function now_ms
   function panic
   function shell

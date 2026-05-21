@@ -14,7 +14,7 @@ class Person {
 
 //----
 //- diagnostics
-// Error: class `Person` has no field `display_name` to link for interface `Named`
+// error: class `Person` has no field `display_name` to link for interface `Named`
 //     ╭─[ interface_error_unknown_class_field_link.baml:11:13 ]
 //     │
 //  11 │     name as display_name

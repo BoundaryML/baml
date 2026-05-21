@@ -60,6 +60,8 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Catch => SyntaxKind::KW_CATCH,
         TokenKind::CatchAll => SyntaxKind::KW_CATCH_ALL,
         TokenKind::Throws => SyntaxKind::KW_THROWS,
+        TokenKind::Spawn => SyntaxKind::KW_SPAWN,
+        TokenKind::Await => SyntaxKind::KW_AWAIT,
 
         // Literals
         TokenKind::Word => SyntaxKind::WORD,
@@ -193,6 +195,12 @@ pub(crate) struct Parser<'a> {
     /// Track nesting depth inside testset bodies where `test`/`testset` statements
     /// are valid. Incremented by `parse_testset_body`, checked by `parse_stmt`.
     testset_body_depth: u32,
+    /// Track contexts where a postfix `{ … }` must NOT be consumed as an
+    /// object-literal constructor. Set while parsing the optional name
+    /// expression of `spawn name { body }` so the body's brace stays
+    /// available to `parse_spawn_expr`. Counter so nested spawns nest
+    /// correctly.
+    suppress_object_literal_depth: u32,
 }
 
 impl<'a> Parser<'a> {
@@ -206,6 +214,7 @@ impl<'a> Parser<'a> {
             type_args_depth: 0,
             suppress_catch_depth: 0,
             testset_body_depth: 0,
+            suppress_object_literal_depth: 0,
         }
     }
 
@@ -4662,8 +4671,16 @@ impl<'a> Parser<'a> {
             } else if op == TokenKind::LBrace {
                 // Object literal/constructor
                 // Check if we have a preceding expression (constructor name/expression)
-                // by checking if we've emitted any events since expr_start
-                if self.events.len() > expr_start && self.looks_like_object_constructor() {
+                // by checking if we've emitted any events since expr_start.
+                //
+                // `suppress_object_literal_depth > 0` is set by `parse_spawn_expr`
+                // while parsing the optional name expression — without it,
+                // `spawn nm { y: 1 }` would consume the body's `{ y: 1 }` as
+                // a struct literal and then fail to find a body brace.
+                if self.suppress_object_literal_depth == 0
+                    && self.events.len() > expr_start
+                    && self.looks_like_object_constructor()
+                {
                     // We have a preceding expression that looks like a type/constructor,
                     // treat as object literal/constructor
                     let lhs_start = self.find_previous_expr_start_after(expr_start);
@@ -4863,9 +4880,47 @@ impl<'a> Parser<'a> {
                 p.bump(); // operator
                 p.parse_expr_bp(PREFIX_BP); // operand: postfix ops bind tighter
             });
+        } else if self.at(TokenKind::Await) {
+            // BEP-034 `await expr` — prefix operator binding like other
+            // prefixes so postfix `.`/`()`/`[]` still attach to the
+            // awaited value.
+            self.with_node(SyntaxKind::AWAIT_EXPR, |p| {
+                p.bump(); // `await`
+                p.parse_expr_bp(PREFIX_BP);
+            });
+        } else if self.at(TokenKind::Spawn) {
+            // BEP-034 `spawn name_expr? block`.
+            self.parse_spawn_expr();
         } else {
             self.parse_primary_expr();
         }
+    }
+
+    /// Parse `spawn name_expr? { body }`. The name expression is optional
+    /// and is parsed until we see `{` (v1 has no `with` clause). The body
+    /// is always a brace-delimited block.
+    fn parse_spawn_expr(&mut self) {
+        self.with_node(SyntaxKind::SPAWN_EXPR, |p| {
+            p.bump(); // `spawn`
+            // Optional name expression: anything that can lead an
+            // expression and is not `{`. We parse the name with a binding
+            // power of 0 (no infix beyond what naturally terminates at
+            // `{`), then the brace-block.
+            if !p.at(TokenKind::LBrace) {
+                // Suppress object-literal postfix so the body brace
+                // isn't consumed as a struct constructor — without
+                // this, `spawn nm { y: 1 }` parses `nm { y: 1 }` as
+                // an OBJECT_LITERAL and the body is missing.
+                p.suppress_object_literal_depth += 1;
+                p.parse_expr_bp(1);
+                p.suppress_object_literal_depth -= 1;
+            }
+            if p.at(TokenKind::LBrace) {
+                p.parse_block_expr();
+            } else {
+                p.error_unexpected_token("'{' after spawn".to_string());
+            }
+        });
     }
 
     /// Parse primary expression (literals, identifiers, parentheses)

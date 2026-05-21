@@ -66,7 +66,7 @@ function user.Fn$parse(json: string) -> string {
     return
 }
 
-function user.Fn$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> {
+function user.Fn$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<null | string, string> {
     alloc_instance baml.llm.Client
     load_const "openai/gpt-4o"
     init_field .name
@@ -104,7 +104,7 @@ function user.Fn$render_prompt() -> baml.llm.PromptAst {
     return
 }
 
-function user.Fn$stream() -> baml.llm.Stream<string, null | string> {
+function user.Fn$stream() -> baml.llm.Stream<null | string, string> {
     alloc_instance baml.llm.Client
     load_const "openai/gpt-4o"
     init_field .name

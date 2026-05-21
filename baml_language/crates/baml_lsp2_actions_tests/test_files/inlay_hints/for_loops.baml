@@ -28,7 +28,7 @@ function qux() -> () {
 
 //----
 //- diagnostics
-// Error: could not parse type expression for return type of `bar`
+// error: could not parse type expression for return type of `bar`
 //     ╭─[ for_loops.baml:11:18 ]
 //     │
 //  11 │ function bar() -> () {
@@ -37,7 +37,7 @@ function qux() -> () {
 //     │ 
 //     │ Note: Error code: E0108
 // ────╯
-// Error: could not parse type expression for return type of `baz`
+// error: could not parse type expression for return type of `baz`
 //     ╭─[ for_loops.baml:17:18 ]
 //     │
 //  17 │ function baz() -> () {
@@ -46,7 +46,7 @@ function qux() -> () {
 //     │ 
 //     │ Note: Error code: E0108
 // ────╯
-// Error: could not parse type expression for return type of `qux`
+// error: could not parse type expression for return type of `qux`
 //     ╭─[ for_loops.baml:23:18 ]
 //     │
 //  23 │ function qux() -> () {

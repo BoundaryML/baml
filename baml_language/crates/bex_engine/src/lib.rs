@@ -71,6 +71,7 @@
 mod conversion;
 mod function_call_context;
 mod future;
+mod thread;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex, atomic::Ordering},
@@ -80,7 +81,6 @@ use ::bex_heap::{HeapPermit as _, Tlab};
 // Re-export event types for callers.
 use ::bex_vm_types::{RootHaver, types::FutureId};
 use ::core::sync::atomic::AtomicBool;
-use ::sys_types::OpFuture;
 use async_trait::async_trait;
 use bex_events::{EventKind, FunctionEnd, FunctionEvent, FunctionStart, SpanContext};
 pub use bex_events::{HostSpanContext, RuntimeEvent, SpanId};
@@ -103,7 +103,24 @@ use thiserror::Error;
 pub use tokio_util::sync::CancellationToken;
 use web_time::{Instant, SystemTime};
 
-pub use crate::future::{FutureManager, FutureManagerGuard, FutureManagerInner};
+pub use crate::{
+    future::{FutureManager, FutureManagerGuard, FutureManagerInner},
+    thread::{BexThread, ChildErrorQueue},
+};
+
+/// Outcome of running a single [`BexThread`] to termination.
+///
+/// Used by [`BexEngine::run_thread_event_loop`] to distinguish whether the
+/// thread is the root (whose value must be returned to the host) or a
+/// spawned child (whose value has already been written into the
+/// [`FutureManager`] for the awaiter to pick up).
+#[allow(clippy::large_enum_variant)]
+pub(crate) enum ThreadOutcome {
+    /// Root thread completed normally; return this value to the host.
+    RootValue(BexExternalValue),
+    /// Spawned child thread settled — `FutureManager` already updated.
+    SettledChild,
+}
 
 // ============================================================================
 // Engine Types
@@ -119,6 +136,17 @@ pub struct UserFunctionInfo {
     pub param_types: Vec<Ty>,
     pub param_has_default: Vec<bool>,
     pub return_type: Ty,
+    /// Filesystem path of the source file containing the function.
+    /// Empty string for builtins and synthesized functions.
+    /// Exposed for BEP-027 §"`baml.argv`": `argv[1]` under root-main `baml run`
+    /// is the path to the file containing `main`.
+    pub source_file: String,
+    /// `true` when the function carries `FunctionMeta::Llm` — i.e. it
+    /// was declared with `client X { ... } prompt #"..."#` and the
+    /// compiler synthesized the LLM dispatch body. Surfaced here so
+    /// `baml run --list` can annotate LLM functions inline without
+    /// reaching back into the heap to inspect `body_meta`.
+    pub is_llm: bool,
 }
 
 /// Internal call argument after host binding has distinguished omission from
@@ -215,6 +243,15 @@ pub enum EngineError {
     #[error("Function not found: {name}")]
     FunctionNotFound { name: String },
 
+    /// Function exists, but its `FunctionKind` is not invokable as an
+    /// engine entry point. Only bytecode functions can be called via
+    /// [`BexEngine::call_function`] / [`BexEngine::call_function_bound_args`]:
+    /// native (`$rust_function`) entries would re-enter the VM through
+    /// `YieldToCall` with no bytecode frame to return to. Sysops + builtins
+    /// reach their natives from inside a calling bytecode body.
+    #[error("Function `{name}` is not invokable as an entry point (kind: {kind})")]
+    NotInvokableAsEntry { name: String, kind: String },
+
     #[error("{0}")]
     ExternalOpFailed(#[from] OpError),
 
@@ -234,6 +271,13 @@ pub enum EngineError {
         trace: Vec<bex_vm::StackFrame>,
     },
 
+    /// Clean process-termination request from `baml.sys.exit(code)`.
+    /// The caller is expected to honor this as the process exit code.
+    /// BAML `int` is `i64`, so the signal carries the full value; the
+    /// caller clamps into its shell's range (typically 0..=255 on Unix).
+    #[error("baml.sys.exit({code})")]
+    Exit { code: i64 },
+
     #[error("Cannot convert object of type {type_name}")]
     CannotConvert { type_name: String },
 
@@ -252,6 +296,9 @@ pub enum EngineError {
 
     #[error("Package initialization failed: {0}")]
     InitFailed(String),
+
+    #[error("{0}")]
+    Other(String),
 }
 
 fn format_vm_internal_error(
@@ -266,6 +313,27 @@ fn format_vm_internal_error(
     );
     write!(out, "VM internal error: {err}").unwrap();
     out
+}
+
+/// Recognize an uncaught `baml.panics.Exit { code }` and pull its `code`
+/// field out. Returns `None` for any other value — the caller should fall
+/// back to the normal unhandled-throw path.
+///
+/// Exit lives in the regular panic class hierarchy so BAML code can catch
+/// it (like Python's `SystemExit`); at the engine boundary we recognize it
+/// by class tag rather than routing it through a separate `VmError`
+/// variant, so the VM's unwinder stays ignorant of which panic classes
+/// are "special" and the special-casing lives in exactly one place — here.
+fn extract_exit_code(value: &BexExternalValue) -> Option<i64> {
+    match value {
+        BexExternalValue::Instance {
+            class_name, fields, ..
+        } if class_name == bex_vm_types::PanicClass::Exit.fqn() => match fields.get("code")? {
+            BexExternalValue::Int(code) => Some(*code),
+            _ => None,
+        },
+        _ => None,
+    }
 }
 
 fn format_unhandled_throw(value: &BexExternalValue, trace: &[bex_vm::StackFrame]) -> String {
@@ -1041,6 +1109,7 @@ impl BexEngine {
             host_ctx,
             collectors,
             cancel,
+            type_args,
         }: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexExternalValue, EngineError> {
@@ -1056,6 +1125,7 @@ impl BexEngine {
                 host_ctx,
                 collectors,
                 cancel,
+                type_args,
             },
             copy_objects,
         )
@@ -1071,6 +1141,7 @@ impl BexEngine {
             host_ctx,
             collectors,
             cancel,
+            type_args,
         }: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexExternalValue, EngineError> {
@@ -1081,7 +1152,17 @@ impl BexEngine {
             return Err(cancelled_unhandled_throw());
         }
 
-        let function_index = self.lookup_function(function_name)?;
+        let (function_index, kind) = self.lookup_function(function_name)?;
+        // Only bytecode functions can be invoked as engine entry points.
+        // Sysops + `$rust_function` natives reach their handlers through
+        // an enclosing bytecode frame's `Call` / `YieldToCall` — there's
+        // no frame for them to return into at the top level.
+        if !matches!(kind, bex_vm_types::FunctionKind::Bytecode) {
+            return Err(EngineError::NotInvokableAsEntry {
+                name: function_name.to_string(),
+                kind: format!("{kind:?}"),
+            });
+        }
         self.validate_bound_args(function_name, &args)?;
         let return_type = self
             .function_return_type(function_name)
@@ -1111,8 +1192,12 @@ impl BexEngine {
             Arc::clone(&self.argv),
             Arc::clone(&self.interface_implementors),
         );
-        let vm = self.heap_permit_manager.new_permit(vm).await;
-        let mut vm = vm.acquire().await;
+        // BEP-034: wrap the root VM in a `BexThread` from the outset so the
+        // permit's `RootHaver` is the thread (delegating to the inner VM).
+        // Spawned children build their own `BexThread`s in `spawn_thread`.
+        let root_thread = BexThread::new_root(vm, cancel.clone());
+        let inactive = self.heap_permit_manager.new_permit(root_thread).await;
+        let mut thread = inactive.acquire().await;
 
         // Snapshot args for the root FunctionStart event before converting to VM values
         let args_snapshot = args
@@ -1126,12 +1211,17 @@ impl BexEngine {
         let vm_args: Vec<Value> = args
             .into_iter()
             .map(|arg| match arg {
-                BexCallArg::Provided(arg) => self.convert_external_to_vm_value(&mut vm, *arg),
+                BexCallArg::Provided(arg) => self.convert_external_to_vm_value(&mut thread, *arg),
                 BexCallArg::OmittedDefault => Ok(Value::OmittedArg),
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        vm.set_entry_point(function_index, &vm_args);
+        // Canary moved the root VM into `thread.vm` for BEP-034 spawn
+        // threading; pack/run still needs the generic-function type-args
+        // path. Combine both: typed-args setter on the threaded VM.
+        thread
+            .vm
+            .set_entry_point_with_type_args(function_index, &vm_args, type_args);
 
         // Initialize span tracking for the root call.
         // If host context is provided, nest under the host's span tree.
@@ -1164,7 +1254,7 @@ impl BexEngine {
                 let collector_ref = bex_vm_types::CollectorRef(
                     Arc::clone(c) as Arc<dyn std::any::Any + Send + Sync>
                 );
-                vm.alloc_collector(collector_ref)
+                thread.vm.alloc_collector(collector_ref)
             })
             .collect();
 
@@ -1204,10 +1294,10 @@ impl BexEngine {
         // Run the event loop with span tracking. On errors, emit FunctionEnd
         // events for every active span so consumers can mark each node failed.
         let result = self
-            .run_event_loop(
+            .run_thread_event_loop(
                 return_type,
                 throws_type,
-                vm,
+                thread,
                 call_id,
                 &mut span_state,
                 &cancel,
@@ -1218,7 +1308,17 @@ impl BexEngine {
             let error = err.to_string();
             self.emit_error_function_end_events(call_id, &mut span_state, &error);
         }
-        result
+        match result {
+            Ok(ThreadOutcome::RootValue(value)) => Ok(value),
+            Ok(ThreadOutcome::SettledChild) => {
+                // Root threads should never produce SettledChild; treat as an
+                // engine invariant violation rather than silently returning Null.
+                Err(EngineError::Other(
+                    "BEP-034: root thread terminated as SettledChild".to_string(),
+                ))
+            }
+            Err(err) => Err(err),
+        }
 
         // active_calls cleanup is done by ActiveCallGuard on drop.
         //
@@ -1273,47 +1373,37 @@ impl BexEngine {
         Ok(())
     }
 
-    /// Look up a function by name and return its heap pointer.
+    /// Look up a function by name and return its heap pointer + kind.
+    /// Resolution follows the canonical [`sys_types::resolve_name`] rule
+    /// (exact → `user.{name}` → unambiguous suffix match), shared with
+    /// `baml run`, `baml pack`, and the sysop LLM/`$new` resolvers.
     ///
-    /// Tries the exact name first, then falls back to `"user.{name}"` to handle
-    /// the compiler2 pipeline which qualifies user-defined functions with the
-    /// package prefix (e.g. `"main"` → `"user.main"`).
-    fn lookup_function(&self, function_name: &str) -> Result<HeapPtr, EngineError> {
-        // Try exact match first
-        if let Some((ptr, _kind)) = self.resolved_function_names.get(function_name) {
-            return Ok(*ptr);
-        }
-        // Fall back to "user." prefix (compiler2 qualifies user functions)
-        let qualified = format!("user.{function_name}");
-        self.resolved_function_names
-            .get(&qualified)
-            .map(|(ptr, _kind)| *ptr)
+    /// Returning the kind lets call-site gates (e.g.
+    /// `call_function_bound_args` rejecting non-Bytecode entries) avoid a
+    /// second heap dereference.
+    fn lookup_function(
+        &self,
+        function_name: &str,
+    ) -> Result<(HeapPtr, bex_vm_types::FunctionKind), EngineError> {
+        sys_types::resolve_name(&self.resolved_function_names, function_name)
+            .found()
+            .map(|(_k, (ptr, kind))| (*ptr, *kind))
             .ok_or_else(|| EngineError::FunctionNotFound {
                 name: function_name.to_string(),
             })
     }
 
-    /// Resolve a function name to the key actually present in `resolved_function_names`.
-    ///
-    /// Returns `Some(key)` where `key` is either `name` or `"user.{name}"`,
-    /// or `None` if neither is found.
+    /// Resolve a function name to the key actually present in
+    /// `resolved_function_names`. Uses [`sys_types::resolve_name`] so the
+    /// rule matches `lookup_function` exactly.
     fn resolve_function_name<'a>(&'a self, name: &str) -> Option<&'a str> {
-        if self.resolved_function_names.contains_key(name) {
-            return Some(
-                self.resolved_function_names
-                    .get_key_value(name)
-                    .map(|(k, _)| k.as_str())
-                    .unwrap(),
-            );
-        }
-        let qualified = format!("user.{name}");
-        self.resolved_function_names
-            .get_key_value(&qualified)
-            .map(|(k, _)| k.as_str())
+        sys_types::resolve_name(&self.resolved_function_names, name)
+            .found()
+            .map(|(k, _)| k)
     }
 
     /// Get the return type for a function by dereferencing its heap object.
-    fn function_return_type(&self, name: &str) -> Option<Ty> {
+    pub fn function_return_type(&self, name: &str) -> Option<Ty> {
         let resolved = self.resolve_function_name(name)?;
         let (ptr, _kind) = self.resolved_function_names.get(resolved)?;
         // SAFETY: ptr is from resolved_function_names, a compile-time object
@@ -1390,6 +1480,37 @@ impl BexEngine {
         self.resolve_function_name(name).is_some()
     }
 
+    /// Replace the process argv exposed to BAML via `baml.sys.argv()`.
+    ///
+    /// Allowed only before the engine is wrapped in an `Arc` and shared,
+    /// because we mutate `self` directly. Used by `baml run` to derive
+    /// `argv[1]` from the compiled program (BEP-027 §"`baml.argv`": the
+    /// path of the file containing root `main`).
+    pub fn set_argv(&mut self, argv: Vec<String>) {
+        self.argv = Arc::from(argv);
+    }
+
+    /// View of the current process argv. Used by hosts that need to
+    /// patch `argv[1]` based on resolution context (e.g. swapping a
+    /// script-alias name for the resolved function it expanded to).
+    pub fn argv(&self) -> &[String] {
+        &self.argv
+    }
+
+    /// Find a user-callable function by qualified name (`user.main`),
+    /// display name (`main`), or unambiguous namespace-leaf suffix
+    /// (`lorem.Func` resolving to `user.ns_lorem.Func`). Uses the
+    /// shared [`sys_types::resolve_name`] rule and post-filters to
+    /// user-callable bytecode functions.
+    pub fn find_user_function(&self, name: &str) -> Option<UserFunctionInfo> {
+        let (qualified, _) =
+            sys_types::resolve_name(&self.resolved_function_names, name).found()?;
+        let qualified = qualified.to_string();
+        self.user_functions()
+            .into_iter()
+            .find(|f| f.qualified_name == qualified)
+    }
+
     /// List all user-callable functions with signature info.
     pub fn user_functions(&self) -> Vec<UserFunctionInfo> {
         self.resolved_function_names
@@ -1402,6 +1523,8 @@ impl BexEngine {
                 match obj {
                     Object::Function(func) if func.origin.is_user_callable() => {
                         let display_name = name.strip_prefix("user.").unwrap_or(name).to_string();
+                        let is_llm =
+                            matches!(func.body_meta, Some(bex_vm_types::FunctionMeta::Llm { .. }));
                         Some(UserFunctionInfo {
                             qualified_name: name.clone(),
                             display_name,
@@ -1410,6 +1533,8 @@ impl BexEngine {
                             param_types: func.param_types.clone(),
                             param_has_default: func.param_has_default.clone(),
                             return_type: func.return_type.clone(),
+                            source_file: func.source_file.clone(),
+                            is_llm,
                         })
                     }
                     _ => None,
@@ -1555,36 +1680,318 @@ impl BexEngine {
         // is permit-released, so they're not blocking that wait.
     }
 
-    /// Drive the VM to completion, dispatching sys-ops, awaits, span
+    /// Transition the child future settled by `thread` to `Cancelled`
+    /// and fire its cancel token so descendants cascade-cancel.
+    ///
+    /// Cancellations are user-initiated, not unhandled errors, so we
+    /// don't push onto the parent's fire-and-forget queue.
+    async fn settle_child_cancelled(
+        &self,
+        thread: &mut ActiveHeapPermit<BexThread>,
+        future_id: FutureId,
+    ) -> Result<(), EngineError> {
+        let child_cancel = thread.vm_thread_cancel().clone();
+        let mut guard = self.futures.acquire(thread.proof()).await;
+        guard.cancel_future(future_id)?;
+        drop(guard);
+        child_cancel.cancel();
+        Ok(())
+    }
+
+    /// Transition the child future settled by `thread` to `Error(value)`,
+    /// fire its cancel token, and push our settled future ptr onto our
+    /// parent's fire-and-forget error queue per BEP-034 — without this,
+    /// errors on un-awaited children would silently vanish.
+    async fn settle_child_errored(
+        &self,
+        thread: &mut ActiveHeapPermit<BexThread>,
+        future_id: FutureId,
+        value: Value,
+    ) -> Result<(), EngineError> {
+        let child_cancel = thread.vm_thread_cancel().clone();
+        let mut guard = self.futures.acquire(thread.proof()).await;
+        // Snapshot the heap ptr while we still hold the guard — once
+        // the terminal transition runs, the entry is gone.
+        let settled_ptr = guard.future_heap_ptr(future_id);
+        guard.err_future(future_id, value)?;
+        drop(guard);
+        child_cancel.cancel();
+        if let Some(ptr) = settled_ptr {
+            thread.vm_thread_notify_parent_of_error(future_id, ptr);
+        }
+        Ok(())
+    }
+
+    /// True if `value` is an `Object::Instance` whose class is
+    /// `baml.panics.Cancelled`. Used to differentiate cancellation panics
+    /// from regular errors when settling a spawned thread that unwound.
+    fn is_cancelled_panic(&self, value: &Value) -> bool {
+        let Value::Object(ptr) = value else {
+            return false;
+        };
+        let Some(&cancelled_class_ptr) = self.resolved_class_names.get(CANCELLED_PANIC_CLASS)
+        else {
+            return false;
+        };
+        // SAFETY: a Value::Object that escaped a VM exec step is alive on
+        // the heap; this read is gated by the caller's active heap permit.
+        match unsafe { ptr.get() } {
+            Object::Instance(instance) => instance.class == cancelled_class_ptr,
+            _ => false,
+        }
+    }
+
+    /// Spawn a fresh `BexThread` that runs the body packaged in `closure`
+    /// and settles a newly-allocated future when the body terminates.
+    ///
+    /// Allocates the future under the calling thread's heap permit (a
+    /// short-lived `()` permit so the new future and child VM are heap
+    /// objects gated against GC for the construction window), then
+    /// constructs a child `BexThread` whose cancel token is a child of
+    /// `parent_cancel` so a parent cancellation cascades down the spawn
+    /// tree. The child thread runs its own `run_thread_event_loop` on the
+    /// tokio runtime (or `wasm_bindgen_futures::spawn_local` on wasm) and
+    /// holds its own permit while executing.
+    ///
+    /// Returns the heap pointer to the allocated future so the spawning
+    /// thread can push it onto its stack as the result of `spawn { ... }`.
+    fn spawn_thread(
+        self: Arc<Self>,
+        parent_cancel: CancellationToken,
+        parent_pending_errors: Arc<ChildErrorQueue>,
+        closure: HeapPtr,
+        name: Option<String>,
+        call_id: CallId,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<HeapPtr, EngineError>> + Send + 'static>,
+    > {
+        Box::pin(self.spawn_thread_inner(
+            parent_cancel,
+            parent_pending_errors,
+            closure,
+            name,
+            call_id,
+        ))
+    }
+
+    async fn spawn_thread_inner(
+        self: Arc<Self>,
+        parent_cancel: CancellationToken,
+        parent_pending_errors: Arc<ChildErrorQueue>,
+        closure: HeapPtr,
+        name: Option<String>,
+        call_id: CallId,
+    ) -> Result<HeapPtr, EngineError> {
+        // Each spawned thread gets a child cancel token so parent → child
+        // cascade falls out of the token tree without bespoke tracking.
+        let child_cancel = parent_cancel.child_token();
+        drop(parent_cancel);
+
+        // Build the child VM up-front (synchronously) so the await on the
+        // permit only holds Send values across yield points.
+        let mut child_vm = BexVm::new(
+            Arc::clone(&self.heap),
+            VmGlobals::Shared(self.globals.clone()),
+            self.resolved_class_names
+                .iter()
+                .chain(self.resolved_enum_names.iter())
+                .map(|(k, v)| (k.clone(), *v))
+                .collect(),
+            #[cfg(not(target_arch = "wasm32"))]
+            Arc::clone(&self.park_requested),
+            Arc::clone(&self.argv),
+            Arc::clone(&self.interface_implementors),
+        );
+        child_vm.set_entry_point(closure, &[]);
+
+        // Allocate the future and the child permit through a single
+        // helper that confines the unawaited path so the surrounding
+        // async fn stays `Send`. The helper takes ownership of all
+        // potentially non-`Send` locals so they never live across an
+        // outer-scope `.await`.
+        let (future_ptr, future_id, inactive) = self
+            .clone()
+            .spawn_thread_setup(child_vm, child_cancel.clone(), name, parent_pending_errors)
+            .await?;
+
+        // Phase B note: v1 spans for spawned bodies are deferred. We pass
+        // `None` for `span_state` so the child does not emit FunctionStart/
+        // FunctionEnd events through the engine span machinery.
+        // Return type / throws type are also approximated; the future's
+        // value is converted via `vm_value_to_owned` on the awaiter side.
+        let engine = self;
+        let return_type = Ty::Null {
+            attr: baml_type::TyAttr::default(),
+        };
+        let task = async move {
+            let permit = inactive.acquire().await;
+            let mut local_span_state: Option<SpanState> = None;
+            match engine
+                .run_thread_event_loop(
+                    return_type,
+                    None,
+                    permit,
+                    call_id,
+                    &mut local_span_state,
+                    &child_cancel,
+                    true,
+                )
+                .await
+            {
+                Ok(_) => {}
+                Err(err) => {
+                    tracing::error!(
+                        ?err,
+                        ?future_id,
+                        "spawn thread terminated with engine error"
+                    );
+                }
+            }
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        tokio::spawn(task);
+        #[cfg(target_arch = "wasm32")]
+        wasm_bindgen_futures::spawn_local(task);
+
+        Ok(future_ptr)
+    }
+
+    /// Pop one `pending_child_errors` entry off `thread`'s queue and
+    /// extract its error `Value` from the heap. Returns `None` when
+    /// the queue is empty or the entry is malformed (a bug-tolerant
+    /// path that logs and skips). Used by the parent's await drain
+    /// (pre- and post-) for BEP-034 fire-and-forget propagation.
+    ///
+    /// Synchronous so it can run inline at the call site without
+    /// crossing an `.await` boundary (the helper itself doesn't need
+    /// async, and inlining sidesteps the `&mut ActiveHeapPermit<…>`
+    /// auto-Send inference quirks that hit other engine helpers).
+    fn read_pending_child_error_value(
+        thread: &mut bex_heap::ActiveHeapPermit<BexThread>,
+    ) -> Option<Value> {
+        let (_id, errored_future_ptr) = thread.vm_thread_pop_pending_child_error()?;
+        // SAFETY: the ptr was rooted via the BexThread's
+        // `pending_child_errors` queue, so GC has kept the heap object
+        // alive and forward-updated the ptr if it moved. We hold the
+        // active permit.
+        match unsafe { errored_future_ptr.get() } {
+            Object::Future(f) => match f.read() {
+                bex_vm_types::FutureRead::Error(v) => Some(v),
+                other => {
+                    tracing::warn!(
+                        ?other,
+                        "pending_child_errors entry not in Error state; skipping"
+                    );
+                    None
+                }
+            },
+            _ => {
+                tracing::warn!("pending_child_errors entry not an Object::Future; skipping");
+                None
+            }
+        }
+    }
+
+    /// Synchronous (apart from a couple of `tokio::sync::Mutex::lock`
+    /// awaits) setup helper used by [`Self::spawn_thread`]. Confines the
+    /// permit allocation flow so the outer `spawn_thread` future never
+    /// holds any non-`Send` `MutexGuards` across an `.await`.
+    async fn spawn_thread_setup(
+        self: Arc<Self>,
+        child_vm: BexVm,
+        child_cancel: CancellationToken,
+        name: Option<String>,
+        parent_pending_errors: Arc<ChildErrorQueue>,
+    ) -> Result<(HeapPtr, FutureId, InactiveHeapPermit<BexThread>), EngineError> {
+        // One-shot `()` permit for the brief future-allocation window. It
+        // is dropped before we create the long-lived `BexThread` permit
+        // so the GC isn't blocked by a leftover holder.
+        let permit = self.heap_permit_manager.new_permit(()).await;
+        let permit = permit.acquire().await;
+        let (future_id, future_ptr) = {
+            let mut guard = self.futures.acquire(permit.proof()).await;
+            guard.new_future(child_cancel.clone())
+        };
+        drop(permit);
+
+        let child_thread = BexThread::new_child(
+            child_vm,
+            child_cancel,
+            name,
+            future_id,
+            parent_pending_errors,
+        );
+        let inactive = self.heap_permit_manager.new_permit(child_thread).await;
+
+        Ok((future_ptr, future_id, inactive))
+    }
+
+    /// Drive a `BexThread` to completion, dispatching sys-ops, awaits, span
     /// notifications, and early-yield events.
     ///
-    /// The `vm` parameter is the permit for this invocation; it is released
-    /// at async safepoints (via `gc_safepoint`) and re-acquired after any
-    /// concurrent GC finishes. Each re-acquisition invalidates the VM's TLAB
-    /// through the post-GC `forward_roots` hook.
+    /// The `thread` parameter wraps the executing `BexVm` plus metadata
+    /// (cancel token, optional name, optional `settles_future`) that
+    /// distinguishes a root call from a spawned child. The permit is
+    /// released at async safepoints (via `gc_safepoint`) and re-acquired
+    /// after any concurrent GC finishes. Each re-acquisition invalidates
+    /// the VM's TLAB through the post-GC `forward_roots` hook.
+    ///
+    /// Returns a [`ThreadOutcome`] describing how the thread terminated:
+    /// either a host-visible root value, a root that has already written
+    /// to the host, or a settled child future. Children route their
+    /// `Complete` / `ThrownUnhandled` / `InternalError` transitions
+    /// through [`FutureManager`] so the awaiter resumes correctly.
     #[allow(clippy::too_many_arguments)]
-    async fn run_event_loop(
+    async fn run_thread_event_loop(
         self: &Arc<Self>,
         return_type: Ty,
         throws_type: Option<Ty>,
-        mut vm: ActiveHeapPermit<BexVm>,
+        mut thread: ActiveHeapPermit<BexThread>,
         call_id: CallId,
         span_state: &mut Option<SpanState>,
         cancel: &CancellationToken,
         copy_objects: bool,
-    ) -> Result<BexExternalValue, EngineError> {
+    ) -> Result<ThreadOutcome, EngineError> {
         loop {
             // Update the VM's span context so native functions can read it.
-            vm.current_span_context = span_state.as_ref().map(Self::build_span_context_from_state);
+            thread.vm.current_span_context =
+                span_state.as_ref().map(Self::build_span_context_from_state);
 
-            let exec_result = match vm.exec() {
+            let exec_result = match thread.vm.exec() {
                 Ok(state) => state,
                 Err(bex_vm::errors::VmError::ThrownUnhandled { value, trace }) => {
+                    // Spawned children route the thrown value back to the
+                    // awaiter via `err_future`; the awaiter's `await`
+                    // re-throws it. Cancellation panics use `cancel_future`
+                    // so the awaiter sees `FutureRead::Cancelled` instead
+                    // of an error.
+                    if let Some(future_id) = thread.vm_thread_settles_future() {
+                        let is_cancel_panic = thread.vm_thread_cancel().is_cancelled()
+                            && self.is_cancelled_panic(&value);
+                        if is_cancel_panic {
+                            self.settle_child_cancelled(&mut thread, future_id).await?;
+                        } else {
+                            self.settle_child_errored(&mut thread, future_id, value)
+                                .await?;
+                        }
+                        // Trace info for the child is dropped on the floor
+                        // — Phase B keeps it engine-local since v1 spans
+                        // for spawned bodies are TODO.
+                        let _ = trace;
+                        return Ok(ThreadOutcome::SettledChild);
+                    }
                     let external = if let Some(ref ty) = throws_type {
-                        self.convert_vm_value_to_external_with_type(&value, ty, vm.proof())?
+                        self.convert_vm_value_to_external_with_type(&value, ty, thread.proof())?
                     } else {
-                        self.vm_value_to_owned(vm.proof(), &value)
+                        self.vm_value_to_owned(thread.proof(), &value)
                     };
+                    // `baml.panics.Exit { code }` escaping all handlers is
+                    // the clean-termination path — surface it as an Exit
+                    // rather than a generic unhandled throw so the host
+                    // maps it to a process exit code.
+                    if let Some(code) = extract_exit_code(&external) {
+                        return Err(EngineError::Exit { code });
+                    }
                     return Err(EngineError::UnhandledThrow {
                         value: Box::new(external),
                         trace,
@@ -1593,21 +2000,70 @@ impl BexEngine {
                 Err(bex_vm::errors::VmError::Thrown(value)) => {
                     // Internal throw that escaped without unwinding — treat as
                     // unhandled with no trace.
-                    let external = self.vm_value_to_owned(vm.proof(), &value);
+                    //
+                    // Two early-return paths combine here:
+                    //   - BEP-034 spawn: if this thread was running as a
+                    //     child future, route the throw to the parent via
+                    //     `settle_child_*` instead of bubbling out.
+                    //   - `baml.sys.exit(code)`: a synthetic throw carrying
+                    //     an exit-code value — surface as
+                    //     `EngineError::Exit` so the host can set the
+                    //     process exit code.
+                    if let Some(future_id) = thread.vm_thread_settles_future() {
+                        let is_cancel_panic = thread.vm_thread_cancel().is_cancelled()
+                            && self.is_cancelled_panic(&value);
+                        if is_cancel_panic {
+                            self.settle_child_cancelled(&mut thread, future_id).await?;
+                        } else {
+                            self.settle_child_errored(&mut thread, future_id, value)
+                                .await?;
+                        }
+                        return Ok(ThreadOutcome::SettledChild);
+                    }
+                    let external = self.vm_value_to_owned(thread.proof(), &value);
+                    if let Some(code) = extract_exit_code(&external) {
+                        return Err(EngineError::Exit { code });
+                    }
                     return Err(EngineError::UnhandledThrow {
                         value: Box::new(external),
                         trace: Vec::new(),
                     });
                 }
                 Err(bex_vm::errors::VmError::InternalError(err)) => {
+                    if let Some(future_id) = thread.vm_thread_settles_future() {
+                        let mut guard = self.futures.acquire(thread.proof()).await;
+                        guard
+                            .internal_error_future(future_id, EngineError::VmInternalError(err))?;
+                        drop(guard);
+                        thread.vm_thread_cancel().cancel();
+                        return Ok(ThreadOutcome::SettledChild);
+                    }
                     return Err(EngineError::VmInternalError(err));
                 }
                 Err(bex_vm::errors::VmError::TracedInternalError { source, trace }) => {
+                    if let Some(future_id) = thread.vm_thread_settles_future() {
+                        let mut guard = self.futures.acquire(thread.proof()).await;
+                        guard.internal_error_future(
+                            future_id,
+                            EngineError::TracedVmInternalError { source, trace },
+                        )?;
+                        drop(guard);
+                        thread.vm_thread_cancel().cancel();
+                        return Ok(ThreadOutcome::SettledChild);
+                    }
                     return Err(EngineError::TracedVmInternalError { source, trace });
                 }
             };
             match exec_result {
                 VmExecState::Complete(value) => {
+                    // Spawned children: write the value into the future
+                    // registry and return SettledChild. The awaiter's
+                    // next `Await` instruction picks up `FutureRead::Ready`.
+                    if let Some(future_id) = thread.vm_thread_settles_future() {
+                        let mut guard = self.futures.acquire(thread.proof()).await;
+                        guard.fulfill_future(future_id, value)?;
+                        return Ok(ThreadOutcome::SettledChild);
+                    }
                     // "Cancel wins" semantics: if cancellation races with a
                     // completed VM step, report a cancellation panic rather
                     // than returning a success value.
@@ -1621,13 +2077,13 @@ impl BexEngine {
                             let handle = self.heap.create_handle(ptr);
                             (
                                 BexExternalValue::Handle(handle),
-                                self.vm_value_to_owned(vm.proof(), &value),
+                                self.vm_value_to_owned(thread.proof(), &value),
                             )
                         } else {
                             let external = self.convert_vm_value_to_external_with_type(
                                 &value,
                                 &return_type,
-                                vm.proof(),
+                                thread.proof(),
                             )?;
                             (external.clone(), external)
                         }
@@ -1635,7 +2091,7 @@ impl BexEngine {
                         let external = self.convert_vm_value_to_external_with_type(
                             &value,
                             &return_type,
-                            vm.proof(),
+                            thread.proof(),
                         )?;
                         (external.clone(), external)
                     };
@@ -1675,126 +2131,188 @@ impl BexEngine {
                         return Err(cancelled_unhandled_throw());
                     }
 
-                    return Ok(return_value);
+                    return Ok(ThreadOutcome::RootValue(return_value));
                 }
 
-                VmExecState::ScheduleFuture(unscheduled) => {
-                    // Extract data from unscheduled future
-                    let unscheduled = vm
-                        .unscheduled_future(unscheduled)
-                        .map_err(EngineError::VmInternalError)?;
-                    let args: Vec<BexExternalValue> = unscheduled
-                        .args
-                        .iter()
-                        .map(|v| self.vm_arg_to_bex_value(v))
-                        .collect();
-                    let operation = unscheduled.operation;
+                VmExecState::SysOp { operation, args } => {
+                    // BEP-034 phase D′: single round-trip sys-op call.
+                    // Convert args, race the op against the active
+                    // cancel token, and push the resulting value back
+                    // on the VM stack. No `Object::Future` is
+                    // allocated and no `FutureManager` entry is
+                    // created — the schedule/await dance was pure
+                    // overhead because the user never sees the future.
+                    #[allow(clippy::large_enum_variant)]
+                    enum SysOpOutcome {
+                        Cancelled,
+                        Result(Result<BexExternalValue, OpError>),
+                    }
 
-                    // Setup future. Each `futures.acquire(vm.proof())` is
-                    // scoped tightly so the proof's borrow on `vm` ends
-                    // before any subsequent `vm.stack` mutation; the type
-                    // system enforces GC exclusion via the `'a` tie
-                    // between proof and guard. The cost is one extra
-                    // uncontended Mutex lock on the early-cancel path
-                    // below — far cheaper than restructuring the
-                    // VM-stack-and-cancel choreography.
-                    // TODO: detached cancellation
-                    let future_cancel = cancel.child_token();
-                    let (future_id, future_ptr) = {
-                        let mut g = self.futures.acquire(vm.proof()).await;
-                        g.new_future(future_cancel.clone())
-                    };
-                    vm.stack.push(Value::Object(future_ptr));
+                    let bex_args: Vec<BexExternalValue> =
+                        args.iter().map(|v| self.vm_arg_to_bex_value(v)).collect();
+
                     if cancel.is_cancelled() {
-                        // Early cancellation -- don't even start the
-                        // future. (`future_cancel` is a child of `cancel`,
-                        // so checking `cancel` here is equivalent to
-                        // checking the inheriting child.) Re-acquire the
-                        // FutureManager Mutex to cancel the just-created
-                        // entry; see the comment above for why this
-                        // second acquire is structural, not redundant.
-                        self.futures
-                            .acquire(vm.proof())
-                            .await
-                            .cancel_future(future_id)?;
-                        continue;
+                        // Cancel-at-yield: spawned children settle as
+                        // Cancelled so the heap Future no longer hangs
+                        // at Pending; root threads surface the cancel
+                        // to the host.
+                        if let Some(future_id) = thread.vm_thread_settles_future() {
+                            self.settle_child_cancelled(&mut thread, future_id).await?;
+                            return Ok(ThreadOutcome::SettledChild);
+                        }
+                        return Err(cancelled_unhandled_throw());
                     }
 
-                    // Execute sys_op
                     let sys_op_result =
-                        self.execute_sys_op(operation, &args, call_id, cancel, vm.proof());
+                        self.execute_sys_op(operation, &bex_args, call_id, cancel, thread.proof());
 
-                    match sys_op_result {
-                        SysOpResult::Ready(result) => {
-                            // VM permit is still held, gating GC for the
-                            // duration of this critical section. The
-                            // FutureManager Mutex serializes against other
-                            // mutators; no second semaphore acquire here.
-                            let mut future_permit = self.futures.acquire(vm.proof()).await;
-                            // Cancellation safepoint: if cancellation fires between the
-                            // pre-exec early check and the commit, surface it as a Cancelled
-                            // future rather than fulfilling. The VM's next `Await` will throw
-                            // `baml.panics.Cancelled`.
-                            if cancel.is_cancelled() {
-                                future_permit.cancel_future(future_id)?;
-                                drop(future_permit);
-                                continue;
-                            }
-                            match result {
-                                Ok(external) => {
-                                    match self
-                                        .convert_external_to_vm_value(&mut future_permit, external)
-                                    {
-                                        Ok(value) => {
-                                            future_permit.fulfill_future(future_id, value)?;
-                                        }
-                                        Err(conv_err) => {
-                                            future_permit
-                                                .internal_error_future(future_id, conv_err)?;
-                                        }
-                                    }
-                                }
-                                Err(op_err) => {
-                                    // Route sync sys-op errors through `internal_error_future`
-                                    // so the original error is preserved on the registry's
-                                    // `SetOnce`. The VM's subsequent `Await` yields back to
-                                    // this loop's `Await` branch, where `future_ready` returns
-                                    // the original error to the caller via `?`.
-                                    future_permit.internal_error_future(
-                                        future_id,
-                                        EngineError::from(op_err),
-                                    )?;
-                                }
-                            }
-                            drop(future_permit);
-                        }
+                    let outcome = match sys_op_result {
+                        SysOpResult::Ready(r) => r,
                         SysOpResult::Async(fut) => {
-                            let task = Arc::clone(self).run_future(fut, future_id, future_cancel);
-                            // Surface invariant violations from `run_future` (e.g.
-                            // `FutureNotFound` from a double-transition bug). In normal
-                            // operation each future is only transitioned once by this
-                            // task, so any error is a bug worth investigating.
-                            #[cfg(not(target_arch = "wasm32"))]
-                            tokio::spawn(async move {
-                                if let Err(err) = task.await {
-                                    tracing::error!(?err, ?future_id, "spawned future task failed");
+                            // Release the heap permit so concurrent GC
+                            // can run during the wait. Re-acquire
+                            // before touching VM state.
+                            let inactive = thread.release();
+                            self.maybe_collect_garbage().await;
+                            let outcome = tokio::select! {
+                                biased;
+                                () = cancel.cancelled() => SysOpOutcome::Cancelled,
+                                r = fut                  => SysOpOutcome::Result(r),
+                            };
+                            thread = inactive.acquire().await;
+                            match outcome {
+                                SysOpOutcome::Cancelled => {
+                                    if let Some(future_id) = thread.vm_thread_settles_future() {
+                                        self.settle_child_cancelled(&mut thread, future_id).await?;
+                                        return Ok(ThreadOutcome::SettledChild);
+                                    }
+                                    return Err(cancelled_unhandled_throw());
                                 }
-                            });
-                            #[cfg(target_arch = "wasm32")]
-                            wasm_bindgen_futures::spawn_local(async move {
-                                if let Err(err) = task.await {
-                                    tracing::error!(?err, ?future_id, "spawned future task failed");
-                                }
-                            });
+                                SysOpOutcome::Result(r) => r,
+                            }
+                        }
+                    };
+
+                    match outcome {
+                        Ok(external) => {
+                            // Convert the external value back into a VM
+                            // Value (allocating string / list / instance
+                            // heap objects as needed) and push it onto
+                            // the eval stack. The bytecode that follows
+                            // this sys-op call is a normal `store_var`
+                            // / projection / whatever the surrounding
+                            // expression expected — no implicit await.
+                            let value = self.convert_external_to_vm_value(&mut thread, external)?;
+                            thread.vm.stack.push(value);
+                        }
+                        Err(op_err) => {
+                            return Err(EngineError::from(op_err));
                         }
                     }
+                }
+
+                VmExecState::Spawn(unscheduled) => {
+                    // BEP-034: pull the closure + name off the
+                    // `UnscheduledFuture` heap object and hand them to
+                    // `spawn_thread`, which allocates the future and
+                    // dispatches the body on a fresh `BexThread`. The
+                    // child also inherits a clone of our pending-child-
+                    // errors queue so it can push back to us if it
+                    // terminates fire-and-forget with a throw.
+                    let (closure, name_ptr) = {
+                        let unscheduled = thread
+                            .vm
+                            .unscheduled_future(unscheduled)
+                            .map_err(EngineError::VmInternalError)?;
+                        (unscheduled.closure, unscheduled.name)
+                    };
+                    let spawn_name: Option<String> =
+                        name_ptr.and_then(|ptr| match unsafe { ptr.get() } {
+                            Object::String(s) => Some(s.clone()),
+                            _ => None,
+                        });
+                    let parent_errors_arc = thread.vm_thread_pending_errors_arc();
+                    let future_ptr = Arc::clone(self)
+                        .spawn_thread(
+                            cancel.clone(),
+                            parent_errors_arc,
+                            closure,
+                            spawn_name,
+                            call_id,
+                        )
+                        .await?;
+                    thread.vm.stack.push(Value::Object(future_ptr));
                 }
 
                 VmExecState::Await(future_id) => {
+                    // BEP-034: surface any fire-and-forget child error
+                    // at this checkpoint, EXCEPT the one belonging to
+                    // the future we're about to await — that error
+                    // will surface via the normal `FutureRead::Error
+                    // → VmError::Thrown` path, which is catchable by
+                    // user `catch` clauses. Without this carve-out, an
+                    // explicit `(await f) catch (e) { … }` where `f`
+                    // errored fire-and-forget would have its error
+                    // pre-empted here as `EngineError::UnhandledThrow`
+                    // and bypass the catch.
+                    //
+                    // We key the carve-out on the `FutureId` (not the
+                    // heap ptr) so the match works even if the
+                    // producer already removed the `active_futures`
+                    // entry: the queue still has our entry tagged with
+                    // the same id.
+                    thread.vm_thread_consume_pending_child_error_for(future_id);
+                    if let Some(value) = Self::read_pending_child_error_value(&mut thread) {
+                        // Same propagation pattern as
+                        // `VmError::ThrownUnhandled` for a non-cancel
+                        // throw: settle our own future as Error if we
+                        // are a spawned child (so OUR awaiter sees the
+                        // error, and our parent's queue gets us too);
+                        // otherwise surface as unhandled to the host.
+                        if let Some(our_future_id) = thread.vm_thread_settles_future() {
+                            self.settle_child_errored(&mut thread, our_future_id, value)
+                                .await?;
+                            return Ok(ThreadOutcome::SettledChild);
+                        }
+                        let external = self.vm_value_to_owned(thread.proof(), &value);
+                        return Err(EngineError::UnhandledThrow {
+                            value: Box::new(external),
+                            trace: Vec::new(),
+                        });
+                    }
+                    // Fail-fast if the thread's own cancel token is
+                    // already fired (e.g. parent cascaded into us
+                    // between the previous yield and this await). The
+                    // BEP guarantees that the next `await` after the
+                    // token fires throws `Cancelled`; we honor that
+                    // even when the awaited future is unrelated to our
+                    // cancel chain (and would otherwise never settle
+                    // via cascade).
+                    //
+                    // For spawned children: route through `cancel_future`
+                    // so the heap Future settles instead of leaking as
+                    // Pending. Mirrors the `VmError::ThrownUnhandled`
+                    // arm above for a Cancelled panic from the VM side.
+                    if cancel.is_cancelled() {
+                        if let Some(future_id) = thread.vm_thread_settles_future() {
+                            self.settle_child_cancelled(&mut thread, future_id).await?;
+                            return Ok(ThreadOutcome::SettledChild);
+                        }
+                        return Err(cancelled_unhandled_throw());
+                    }
+                    #[allow(clippy::items_after_statements)]
+                    // Outcome of the SetOnce-vs-cancel race below. Inline
+                    // here because moving it to module scope just for
+                    // clippy's preference would split the readers'
+                    // attention across two files.
+                    enum AwaitOutcome {
+                        Cancelled,
+                        Done(Result<(), EngineError>),
+                    }
                     // Tightly-scoped guard so the proof's borrow on `vm`
                     // ends before we release the VM permit below.
                     let future = {
-                        let g = self.futures.acquire(vm.proof()).await;
+                        let g = self.futures.acquire(thread.proof()).await;
                         g.future_ready(future_id)?
                     };
                     // Release the VM permit before the SetOnce wait — the
@@ -1802,12 +2320,55 @@ impl BexEngine {
                     // wait would deadlock concurrent GC park (which needs
                     // every permit) against the spawned task that fulfils
                     // this future (which needs a permit to write the heap).
-                    let inactive = vm.release();
+                    let inactive = thread.release();
                     // While parked, run a heuristic-driven GC check (no
                     // permit dance needed since we're already released).
                     self.maybe_collect_garbage().await;
-                    future.await?;
-                    vm = inactive.acquire().await;
+                    // Race the SetOnce wait against the thread's own
+                    // cancel token so an unrelated-future await
+                    // doesn't hang when the thread itself is cancelled
+                    // (cascade only saves us when the awaited future is
+                    // a descendant whose token derives from ours).
+                    let outcome = tokio::select! {
+                        biased;
+                        () = cancel.cancelled() => AwaitOutcome::Cancelled,
+                        r = future              => AwaitOutcome::Done(r),
+                    };
+                    thread = inactive.acquire().await;
+                    match outcome {
+                        AwaitOutcome::Cancelled => {
+                            if let Some(future_id) = thread.vm_thread_settles_future() {
+                                self.settle_child_cancelled(&mut thread, future_id).await?;
+                                return Ok(ThreadOutcome::SettledChild);
+                            }
+                            return Err(cancelled_unhandled_throw());
+                        }
+                        AwaitOutcome::Done(r) => r?,
+                    }
+                    // Post-await drain: a fire-and-forget child may
+                    // have errored *during* our wait on the SetOnce.
+                    // Per BEP-034, the error must surface at this
+                    // await checkpoint (not slip past it). The pre-
+                    // drain caught errors that were ready going in;
+                    // this catches errors that arrived during the wait.
+                    //
+                    // Same catch-natural carve-out as pre-drain. Key
+                    // by `future_id` for the same reason: stable
+                    // across GC moves and across producer settles
+                    // that remove the `active_futures` bookkeeping.
+                    thread.vm_thread_consume_pending_child_error_for(future_id);
+                    if let Some(value) = Self::read_pending_child_error_value(&mut thread) {
+                        if let Some(our_future_id) = thread.vm_thread_settles_future() {
+                            self.settle_child_errored(&mut thread, our_future_id, value)
+                                .await?;
+                            return Ok(ThreadOutcome::SettledChild);
+                        }
+                        let external = self.vm_value_to_owned(thread.proof(), &value);
+                        return Err(EngineError::UnhandledThrow {
+                            value: Box::new(external),
+                            trace: Vec::new(),
+                        });
+                    }
                 }
 
                 VmExecState::Event {
@@ -1821,7 +2382,7 @@ impl BexEngine {
                         let mut call_stack = state.host_call_stack.clone();
                         call_stack.extend(state.stack.iter().map(|s| s.span_id.clone()));
 
-                        let external_data = self.vm_value_to_owned(vm.proof(), &data);
+                        let external_data = self.vm_value_to_owned(thread.proof(), &data);
 
                         // Convert source location tuple to SourceLocation struct.
                         let source = source_location.map(
@@ -1886,7 +2447,7 @@ impl BexEngine {
                     // pops its two arguments but does not push a return value, so we
                     // push null here before the VM resumes at the next instruction
                     // (which will store or discard the return value).
-                    vm.stack.push(Value::Null);
+                    thread.vm.stack.push(Value::Null);
                 }
 
                 VmExecState::Notify(_notification) => {
@@ -1912,7 +2473,7 @@ impl BexEngine {
                                 // Convert VM args to fully owned values for the event
                                 let external_args: Vec<BexExternalValue> = args
                                     .iter()
-                                    .map(|v| self.vm_value_to_owned(vm.proof(), v))
+                                    .map(|v| self.vm_value_to_owned(thread.proof(), v))
                                     .collect();
 
                                 let enter_event = RuntimeEvent {
@@ -1947,7 +2508,7 @@ impl BexEngine {
                             } => {
                                 if let Some(span) = state.stack.pop() {
                                     let external_result =
-                                        self.vm_value_to_owned(vm.proof(), &result);
+                                        self.vm_value_to_owned(thread.proof(), &result);
                                     // call_stack: host prefix + remaining engine spans + exiting span
                                     let mut call_stack = state.host_call_stack.clone();
                                     call_stack
@@ -1978,67 +2539,10 @@ impl BexEngine {
                     }
                 }
                 VmExecState::EarlyYield => {
-                    vm = self.gc_safepoint(vm).await;
+                    thread = self.gc_safepoint(thread).await;
                 }
             }
         }
-    }
-
-    /// Runs a future, handling cancellation.
-    /// When completed, updates the future state on the heap.
-    ///
-    /// Holding-no-permit during the long `select!` wait means GC can run
-    /// freely while the inner sys-op is in flight. After `select!` resolves,
-    /// the spawned task takes a one-shot heap permit (`NoOpRootHaver` —
-    /// nothing to root) so its brief writeback to the `FutureManager`'s
-    /// registry is gated against GC just like any in-VM caller.
-    async fn run_future(
-        self: Arc<Self>,
-        future: OpFuture,
-        future_id: FutureId,
-        cancel: CancellationToken,
-    ) -> Result<(), EngineError> {
-        // Stack-local enum, never stored or sent across threads — the size
-        // mismatch between variants (Cancelled is ZST, Result carries a
-        // ~300-byte BexExternalValue+OpError) doesn't matter here.
-        #[allow(clippy::large_enum_variant)]
-        enum Outcome {
-            Cancelled,
-            Result(Result<BexExternalValue, OpError>),
-        }
-        let outcome = tokio::select! {
-            biased;
-            () = cancel.cancelled() => Outcome::Cancelled,
-            r = future            => Outcome::Result(r),
-        };
-
-        // One-shot heap permit for GC exclusion during the brief writeback.
-        // `()`'s `RootHaver` impl has no roots — this permit is purely a
-        // "block GC while I write" mechanism.
-        let inactive = self.heap_permit_manager.new_permit(()).await;
-        let active = inactive.acquire().await;
-        let mut future_guard = self.futures.acquire(active.proof()).await;
-        match outcome {
-            Outcome::Cancelled => {
-                future_guard.cancel_future(future_id)?;
-            }
-            Outcome::Result(Ok(value)) => {
-                match self.convert_external_to_vm_value(&mut future_guard, value) {
-                    Ok(value) => {
-                        future_guard.fulfill_future(future_id, value)?;
-                    }
-                    Err(conv_err) => {
-                        future_guard.internal_error_future(future_id, conv_err)?;
-                    }
-                }
-            }
-            Outcome::Result(Err(err)) => {
-                future_guard.internal_error_future(future_id, err.into())?;
-            }
-        }
-        drop(future_guard);
-        drop(active);
-        Ok(())
     }
 
     /// Build a `SpanContext` from the current `SpanState`.

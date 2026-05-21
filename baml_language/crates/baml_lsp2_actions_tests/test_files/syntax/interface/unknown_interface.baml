@@ -6,7 +6,7 @@ class Ghost {
 
 //----
 //- diagnostics
-// Error: class `Ghost` cannot implement `DoesNotExist`: no interface with that name is in scope
+// error: class `Ghost` cannot implement `DoesNotExist`: no interface with that name is in scope
 //    ╭─[ interface_unknown_interface.baml:4:13 ]
 //    │
 //  4 │   implements DoesNotExist {}

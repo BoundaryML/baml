@@ -27,6 +27,9 @@ baml_builtins2 = { workspace = true }
 baml_type = { workspace = true }
 bex_resource_types = { workspace = true }
 indexmap = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true, features = [ "rt", "macros", "sync" ] }
+tokio-util = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
@@ -34,7 +37,6 @@ divan = { workspace = true }
 indexmap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true, features = [ "rt", "macros" ] }
 
 [features]
 default = [  ]

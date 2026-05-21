@@ -14,7 +14,7 @@ class Plain {
 
 //----
 //- diagnostics
-// Error: unresolved name: default
+// error: unresolved name: default
 //     ╭─[ interface_error_default_outside_implements.baml:11:11 ]
 //     │
 //  11 │     return default.log("hi")

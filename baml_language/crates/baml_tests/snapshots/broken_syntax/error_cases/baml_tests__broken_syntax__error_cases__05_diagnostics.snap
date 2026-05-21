@@ -1,9 +1,8 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 290
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [parse] Error: Expected function name, found integer
+  [parse] error: Expected function name, found integer
    ╭─[ syntax_errors.baml:6:10 ]
    │
  6 │ function 123Invalid() {}
@@ -13,7 +12,7 @@ assertion_line: 290
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected return type (->), found '{'
+  [parse] error: Expected return type (->), found '{'
    ╭─[ syntax_errors.baml:6:23 ]
    │
  6 │ function 123Invalid() {}
@@ -23,7 +22,7 @@ assertion_line: 290
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected '}', found EOF
+  [parse] error: Expected '}', found EOF
     ╭─[ syntax_errors.baml:13:78 ]
     │
  13 │ // ============================================================================

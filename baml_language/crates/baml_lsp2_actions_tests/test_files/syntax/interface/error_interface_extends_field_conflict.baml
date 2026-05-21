@@ -13,7 +13,7 @@ interface Z requires X, Y {}
 
 //----
 //- diagnostics
-// Error: interface `Z` inherits conflicting types for field `id`: `string` from `X`, `int` from `Y`
+// error: interface `Z` inherits conflicting types for field `id`: `string` from `X`, `int` from `Y`
 //     ╭─[ interface_error_interface_extends_field_conflict.baml:12:11 ]
 //     │
 //  12 │ interface Z requires X, Y {}

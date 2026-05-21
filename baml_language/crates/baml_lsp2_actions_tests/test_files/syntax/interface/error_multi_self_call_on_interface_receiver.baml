@@ -20,7 +20,7 @@ function bad(a: Equatable, b: Equatable) -> bool {
 
 //----
 //- diagnostics
-// Error: method `same` on interface `Equatable` uses `Self` in its parameters and requires a concrete receiver
+// error: method `same` on interface `Equatable` uses `Self` in its parameters and requires a concrete receiver
 //     ╭─[ interface_error_multi_self_call_on_interface_receiver.baml:18:9 ]
 //     │
 //  18 │   return a.same(b)

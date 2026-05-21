@@ -15,7 +15,7 @@ client<llm> MyClient {
 
 //----
 //- diagnostics
-// Error: type mismatch: expected map<string, string> | null, got "not_a_map"
+// error: type mismatch: expected map<string, string> | null, got "not_a_map"
 //    ╭─[ client_remap_role_invalid_type.baml:1:1 ]
 //    │
 //  1 │ ╭─▶ client<llm> MyClient {

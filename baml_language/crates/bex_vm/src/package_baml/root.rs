@@ -232,13 +232,7 @@ fn deep_equals_recursive(
                 }
 
                 (Object::UnscheduledFuture(a_fut), Object::UnscheduledFuture(b_fut)) => {
-                    a_fut.operation == b_fut.operation
-                        && a_fut.args.len() == b_fut.args.len()
-                        && a_fut
-                            .args
-                            .iter()
-                            .zip(b_fut.args.iter())
-                            .all(|(a, b)| deep_equals_recursive(vm, *a, *b, visited))
+                    a_fut.closure == b_fut.closure && a_fut.name == b_fut.name
                 }
 
                 _ => false,

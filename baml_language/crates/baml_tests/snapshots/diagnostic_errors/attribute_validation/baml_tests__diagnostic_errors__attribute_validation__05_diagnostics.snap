@@ -1,19 +1,18 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 31910
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: type mismatch: expected string, got int
+  [type] error: type mismatch: expected int, got string
     ╭─[ test.baml:10:7 ]
     │
  10 │ class HasDuplicateField {
     │       ────────┬────────  
-    │               ╰────────── type mismatch: expected string, got int
+    │               ╰────────── type mismatch: expected int, got string
     │ 
     │ Note: Error code: E0001
 ────╯
 
-  [hir] Error: Duplicate field `HasDuplicateField.name`
+  [hir] error: Duplicate field `HasDuplicateField.name`
     ╭─[ test.baml:13:3 ]
     │
  11 │   name string
@@ -27,7 +26,7 @@ assertion_line: 31910
     │ Note: Error code: E0012
 ────╯
 
-  [hir] Error: Duplicate variant `HasDuplicateVariant.RED`
+  [hir] error: Duplicate variant `HasDuplicateVariant.RED`
     ╭─[ test.baml:23:3 ]
     │
  21 │   RED

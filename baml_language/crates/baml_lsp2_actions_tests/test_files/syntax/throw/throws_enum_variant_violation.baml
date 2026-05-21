@@ -16,7 +16,7 @@ function ThrowsVariantViolation(x: int) -> string throws Errors {
 
 //----
 //- diagnostics
-// Error: throws contract violation: `user.Errors` is missing user.Errors.AuthError, user.Errors.NotFoundError
+// error: throws contract violation: `user.Errors` is missing user.Errors.AuthError, user.Errors.NotFoundError
 //     ╭─[ throw_throws_enum_variant_violation.baml:10:57 ]
 //     │
 //  10 │ function ThrowsVariantViolation(x: int) -> string throws Errors {
@@ -25,7 +25,7 @@ function ThrowsVariantViolation(x: int) -> string throws Errors {
 //     │ 
 //     │ Note: Error code: E0096
 // ────╯
-// Warning: extraneous throws declaration: user.Errors
+// warning: extraneous throws declaration: user.Errors
 //     ╭─[ throw_throws_enum_variant_violation.baml:10:57 ]
 //     │
 //  10 │ function ThrowsVariantViolation(x: int) -> string throws Errors {

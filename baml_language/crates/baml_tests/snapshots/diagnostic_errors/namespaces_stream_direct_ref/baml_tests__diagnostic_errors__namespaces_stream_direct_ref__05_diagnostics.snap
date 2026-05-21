@@ -1,9 +1,8 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 34944
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: type mismatch: expected string, got null | string
+  [type] error: type mismatch: expected string, got null | string
     ╭─[ main.baml:20:57 ]
     │
  20 │ ╭─▶ function RootUsesOwnStream(c: Config$stream) -> string {
@@ -14,7 +13,7 @@ assertion_line: 34944
     │     Note: Error code: E0001
 ────╯
 
-  [type] Error: type mismatch: expected string, got null | string
+  [type] error: type mismatch: expected string, got null | string
     ╭─[ main.baml:25:68 ]
     │
  25 │ ╭─▶ function RootUsesLlmStream(r: root.llm.Response$stream) -> string {
@@ -25,7 +24,7 @@ assertion_line: 34944
     │     Note: Error code: E0001
 ────╯
 
-  [type] Error: type mismatch: expected string, got null | string
+  [type] error: type mismatch: expected string, got null | string
     ╭─[ models.baml:12:58 ]
     │
  12 │ ╭─▶ function LlmUsesOwnStream(r: Response$stream) -> string {
@@ -36,7 +35,7 @@ assertion_line: 34944
     │     Note: Error code: E0001
 ────╯
 
-  [type] Error: type mismatch: expected string, got null | string
+  [type] error: type mismatch: expected string, got null | string
     ╭─[ models.baml:17:62 ]
     │
  17 │ ╭─▶ function LlmUsesRootStream(c: root.Config$stream) -> string {

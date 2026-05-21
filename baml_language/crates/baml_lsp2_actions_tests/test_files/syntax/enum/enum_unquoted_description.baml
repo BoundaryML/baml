@@ -27,7 +27,7 @@ enum TestEnum {
 
 //----
 //- diagnostics
-// Error: Expected ')', found is
+// error: Expected ')', found is
 //     ╭─[ enum_enum_unquoted_description.baml:13:10 ]
 //     │
 //  13 │     User is confused
@@ -36,7 +36,7 @@ enum TestEnum {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected Unexpected token in enum body, found is
+// error: Expected Unexpected token in enum body, found is
 //     ╭─[ enum_enum_unquoted_description.baml:13:10 ]
 //     │
 //  13 │     User is confused
@@ -45,7 +45,7 @@ enum TestEnum {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected Unexpected token in enum body, found ')'
+// error: Expected Unexpected token in enum body, found ')'
 //     ╭─[ enum_enum_unquoted_description.baml:14:3 ]
 //     │
 //  14 │   )
@@ -54,7 +54,7 @@ enum TestEnum {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected ')', found is
+// error: Expected ')', found is
 //     ╭─[ enum_enum_unquoted_description.baml:16:10 ]
 //     │
 //  16 │     User is excited
@@ -63,7 +63,7 @@ enum TestEnum {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected Unexpected token in enum body, found is
+// error: Expected Unexpected token in enum body, found is
 //     ╭─[ enum_enum_unquoted_description.baml:16:10 ]
 //     │
 //  16 │     User is excited
@@ -72,7 +72,7 @@ enum TestEnum {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected Unexpected token in enum body, found ')'
+// error: Expected Unexpected token in enum body, found ')'
 //     ╭─[ enum_enum_unquoted_description.baml:17:3 ]
 //     │
 //  17 │   )
@@ -81,7 +81,7 @@ enum TestEnum {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: `@description` argument must be a string literal, got `User`
+// error: `@description` argument must be a string literal, got `User`
 //     ╭─[ enum_enum_unquoted_description.baml:12:25 ]
 //     │
 //  12 │ ╭─▶   Confused @description(
@@ -91,7 +91,7 @@ enum TestEnum {
 //     │     
 //     │     Note: Error code: E0037
 // ────╯
-// Error: `@description` argument must be a string literal, got `User`
+// error: `@description` argument must be a string literal, got `User`
 //     ╭─[ enum_enum_unquoted_description.baml:15:37 ]
 //     │
 //  15 │ ╭─▶   Excited @alias("k5") @description(

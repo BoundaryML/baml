@@ -14,7 +14,7 @@ class Server {
 
 //----
 //- diagnostics
-// Error: class `Server` declares field `port: string` but interface `Config` requires `port: int`
+// error: class `Server` declares field `port: string` but interface `Config` requires `port: int`
 //     ╭─[ interface_field_type_mismatch.baml:10:8 ]
 //     │
 //  10 │   port: string

@@ -27,7 +27,7 @@ function bad(i: Item) -> string {
 
 //----
 //- diagnostics
-// Error: field `name` on class `Item` is ambiguous because it is declared by multiple interfaces: `Named`, `Labeled`; use obj.as<Named>.name or obj.as<Labeled>.name
+// error: field `name` on class `Item` is ambiguous because it is declared by multiple interfaces: `Named`, `Labeled`; use obj.as<Named>.name or obj.as<Labeled>.name
 //     ╭─[ interface_error_ambiguous_interface_field_access.baml:25:12 ]
 //     │
 //  25 │   return i.name

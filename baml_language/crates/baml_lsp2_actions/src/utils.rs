@@ -215,6 +215,9 @@ pub fn display_ty(ty: &Ty) -> String {
         Ty::RustType { .. } => "$rust_type".to_string(),
         Ty::Type { .. } => "type".to_string(),
         Ty::Error { .. } => "!error".to_string(),
+        Ty::Future(value, error, _) => {
+            format!("Future<{}, {}>", display_ty(value), display_ty(error))
+        }
     };
     humanize_type_string(&rendered)
 }

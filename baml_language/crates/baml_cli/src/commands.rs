@@ -14,7 +14,7 @@ pub(crate) const fn release_version() -> &'static str {
 
 #[derive(Parser, Debug)]
 #[command(author, version = release_version(), about = "A CLI tool for working with BAML. Learn more at https://docs.boundaryml.com.", long_about = None)]
-#[command(styles = clap_cargo::style::CLAP_STYLING)]
+#[command(styles = crate::reporter::CLAP_STYLING)]
 #[command(propagate_version = true)]
 pub(crate) struct RuntimeCli {
     /// Enable specific features (can be specified multiple times)
@@ -76,8 +76,17 @@ pub(crate) enum Commands {
     #[command(about = "Run BAML tests")]
     Test(crate::test_command::TestArgs),
 
+    #[command(about = "Initialize a new BAML project (creates baml.toml)")]
+    Init(crate::init_command::InitArgs),
+
+    #[command(about = "Create a new BAML project directory")]
+    New(crate::init_command::NewArgs),
+
     #[command(about = "Run a BAML function or script", disable_help_flag = true)]
     Run(crate::run_command::RunArgs),
+
+    #[command(about = "Package a BAML target as a standalone executable")]
+    Pack(crate::pack_command::PackArgs),
 
     #[command(about = "Starts a language server", name = "lsp")]
     LanguageServer(crate::lsp::LanguageServerArgs),
@@ -112,6 +121,11 @@ impl RuntimeCli {
             }
         }
 
+        // BEP-027 §"`--` separator" — note: clap already prints a
+        // helpful "to pass '<flag>' as a value, use '-- <flag>'" tip on
+        // `ErrorKind::UnknownArgument`, so we don't need to add our own.
+        // The error format ships with `[-- <TARGET_ARGS>...]` in the
+        // usage line as further reinforcement.
         let matches = match command.try_get_matches_from_mut(argv) {
             Ok(matches) => matches,
             Err(err) => err.exit(),
@@ -131,7 +145,10 @@ impl RuntimeCli {
 
     pub fn run(&self) -> Result<crate::ExitCode> {
         match &self.command {
+            Commands::Init(args) => args.run(),
+            Commands::New(args) => args.run(),
             Commands::Run(args) => args.run(),
+            Commands::Pack(args) => args.run(),
             Commands::Describe(args) => args.run(),
             Commands::Generate(args) => args.run(),
             Commands::Grep(args) => args.run(),
@@ -139,10 +156,7 @@ impl RuntimeCli {
             Commands::LanguageServer(args) => match args.run() {
                 Ok(()) => Ok(crate::ExitCode::Success),
                 Err(e) => {
-                    #[allow(clippy::print_stderr)]
-                    {
-                        eprintln!("Error: {e}");
-                    }
+                    crate::reporter::print_error(e);
                     Ok(crate::ExitCode::Other)
                 }
             },

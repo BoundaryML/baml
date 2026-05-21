@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 18340
 ---
 === TIR2 ===
 type user.Searcher = (query: string, max_results?: int) -> int throws never
@@ -69,7 +68,7 @@ function user.AskDocs$build_request_stream(query: string, max_results: int = 10,
   baml.llm.build_request_stream(TestClient, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : baml.http.Request
 }
 function user.AskDocs$parse(json: string) -> string throws never {
-  baml.llm.parse<T>("AskDocs", json) : string
+  baml.llm.parse<TFinal>("AskDocs", json) : string
 }
 class user.SearchService {
   base: string
@@ -92,10 +91,10 @@ function user.SearchService.from_json(j: baml.json.json) -> user.SearchService t
 }
 type user.Searcher$stream = unknown
 type user.NarrowSearcher$stream = unknown
-function user.AskDocs$stream(query: string, max_results: int = 10, filter: string = DefaultFilter()) -> baml.llm.Stream<string, null | string> throws never {
-  baml.llm.stream_llm_function(TestClient, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : baml.llm.Stream<string, null | string>
+function user.AskDocs$stream(query: string, max_results: int = 10, filter: string = DefaultFilter()) -> baml.llm.Stream<null | string, string> throws never {
+  baml.llm.stream_llm_function(TestClient, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : baml.llm.Stream<null | string, string>
 }
-function user.AskDocs$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> throws never {
+function user.AskDocs$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<null | string, string> throws never {
   TestClient.__make_stream(sse, "AskDocs") : unknown
 }
 class user.SearchService$stream {

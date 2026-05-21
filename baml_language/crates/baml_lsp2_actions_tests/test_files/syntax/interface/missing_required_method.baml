@@ -10,7 +10,7 @@ class IncompleteAnimal {
 
 //----
 //- diagnostics
-// Error: class `IncompleteAnimal` does not implement required method `speak` of interface `Animal`
+// error: class `IncompleteAnimal` does not implement required method `speak` of interface `Animal`
 //    ╭─[ interface_missing_required_method.baml:7:25 ]
 //    │
 //  7 │ ╭─▶ class IncompleteAnimal {

@@ -60,7 +60,7 @@ function NestedIfStatements() -> string {
 
 //----
 //- diagnostics
-// Error: type mismatch: expected string, got int
+// error: type mismatch: expected string, got int
 //     ╭─[ headers_nested_if_statements.baml:58:5 ]
 //     │
 //  58 │     e

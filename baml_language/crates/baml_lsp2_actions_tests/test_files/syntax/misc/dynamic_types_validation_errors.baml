@@ -227,7 +227,7 @@ args {
 
 //----
 //- diagnostics
-// Error: field 'C' is missing a type annotation
+// error: field 'C' is missing a type annotation
 //      ╭─[ misc_dynamic_types_validation_errors.baml:105:7 ]
 //      │
 //  105 │       C

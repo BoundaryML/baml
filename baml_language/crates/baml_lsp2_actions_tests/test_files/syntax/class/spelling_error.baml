@@ -1,5 +1,5 @@
 class InterfaceTwo {
-  iface strin
+  interface strin
 }
 
 class InterfaceOne {
@@ -10,7 +10,7 @@ class InterfaceOne {
 //   -->  class/spelling_error.baml:2
 //    |
 //  1 | class InterfaceTwo {
-//  2 |   iface strin
+//  2 |   interface strin
 //    |
 // error: Type `InterfaceT` does not exist. Did you mean one of these: `InterfaceTwo`, `InterfaceOne`, `int`, `true`, `string`, `float`, `false`, `bool`?
 //   -->  class/spelling_error.baml:6
@@ -21,16 +21,25 @@ class InterfaceOne {
 
 //----
 //- diagnostics
-// Error: unresolved type: strin
-//    ╭─[ class_spelling_error.baml:2:8 ]
+// error: Expected Unexpected token in class body, found interface
+//    ╭─[ class_spelling_error.baml:2:3 ]
 //    │
-//  2 │   iface strin
-//    │        ───┬──  
-//    │           ╰──── unresolved type: strin
+//  2 │   interface strin
+//    │   ────┬────  
+//    │       ╰────── Expected Unexpected token in class body, found interface
 //    │ 
-//    │ Note: Error code: E0002
+//    │ Note: Error code: E0010
 // ───╯
-// Error: unresolved type: InterfaceT
+// error: field 'strin' is missing a type annotation
+//    ╭─[ class_spelling_error.baml:2:13 ]
+//    │
+//  2 │   interface strin
+//    │             ──┬──  
+//    │               ╰──── field 'strin' is missing a type annotation
+//    │ 
+//    │ Note: Error code: E0010
+// ───╯
+// error: unresolved type: InterfaceT
 //    ╭─[ class_spelling_error.baml:6:7 ]
 //    │
 //  6 │   uses InterfaceT

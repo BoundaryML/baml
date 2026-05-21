@@ -44,7 +44,7 @@ function NestedArrayAssignments() -> int {
 
 //----
 //- diagnostics
-// Error: type mismatch: expected int[][], got int[]
+// error: type mismatch: expected int[][], got int[]
 //     ╭─[ invalid_assignment_nested_arrays.baml:28:5 ]
 //     │
 //  28 │     d = [3, 4, 5];
@@ -53,7 +53,7 @@ function NestedArrayAssignments() -> int {
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: type mismatch: expected string[][], got int[][]
+// error: type mismatch: expected string[][], got int[][]
 //     ╭─[ invalid_assignment_nested_arrays.baml:36:5 ]
 //     │
 //  36 │     f = [[1, 2]];
@@ -62,7 +62,7 @@ function NestedArrayAssignments() -> int {
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: type mismatch: expected user.Person[][], got user.Animal[][]
+// error: type mismatch: expected user.Person[][], got user.Animal[][]
 //     ╭─[ invalid_assignment_nested_arrays.baml:40:5 ]
 //     │
 //  40 │     g = [[Animal { species: "Cat", legs: 4 }]];

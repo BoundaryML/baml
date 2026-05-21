@@ -383,12 +383,14 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                 let span = func.span;
                 let name_span = func.name_span;
 
-                // Return type: baml.llm.Stream<ORIGINAL_RETURN_TYPE, STREAM_EXPANDED_TYPE>
+                // Return type: baml.llm.Stream<STREAM_EXPANDED_TYPE, ORIGINAL_RETURN_TYPE>
+                // (matches the stdlib `class Stream<TStream, TFinal>` ordering:
+                // stream type first, final type second.)
                 let original_return_type_expr = return_type_spanned.expr.clone();
                 let stream_return_type = ast::SpannedTypeExpr {
                     expr: ast::TypeExpr::Path {
                         segments: vec![Name::new("baml"), Name::new("llm"), Name::new("Stream")],
-                        generic_args: vec![original_return_type_expr, stream_type_expr],
+                        generic_args: vec![stream_type_expr, original_return_type_expr],
                         attrs: vec![],
                     },
                     span,

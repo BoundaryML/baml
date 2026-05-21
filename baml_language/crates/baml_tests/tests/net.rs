@@ -33,10 +33,8 @@ async fn net_connect_and_read() {
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &addr), @r#"
     function main() -> string {
         load_const "{ADDR}"
-        dispatch_future baml.net.connect
-        await
-        dispatch_future baml.net.Socket.read
-        await
+        sys_op baml.net.connect
+        sys_op baml.net.Socket.read
         return
     }
     "#);
@@ -60,10 +58,8 @@ async fn net_connect_failure() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
         load_const "127.0.0.1:1"
-        dispatch_future baml.net.connect
-        await
-        dispatch_future baml.net.Socket.read
-        await
+        sys_op baml.net.connect
+        sys_op baml.net.Socket.read
         return
     }
     "#);
@@ -100,16 +96,13 @@ async fn net_multiple_reads() {
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &addr), @r#"
     function main() -> string {
         load_const "{ADDR}"
-        dispatch_future baml.net.connect
-        await
+        sys_op baml.net.connect
         store_var sock
         load_var sock
-        dispatch_future baml.net.Socket.read
-        await
+        sys_op baml.net.Socket.read
         store_var first
         load_var sock
-        dispatch_future baml.net.Socket.read
-        await
+        sys_op baml.net.Socket.read
         store_var second
         load_var first
         return

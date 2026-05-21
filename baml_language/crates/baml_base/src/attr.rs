@@ -6,13 +6,17 @@
 //! These live in `baml_base` b/c they're shared by `baml_compiler_tir::Ty`
 //! (TIR) and `baml_type::Ty` (VIR+).
 
+use serde::{Deserialize, Serialize};
+
 use crate::core_types::Span;
 
 /// Binary present/absent flag for SAP attributes.
 ///
 /// Used instead of `bool` for extensibility — future attributes may
 /// need additional states (e.g., `Inherited`, `Explicit`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default, Serialize, Deserialize,
+)]
 pub enum TyAttrValue {
     #[default]
     Unset,
@@ -34,7 +38,7 @@ impl TyAttrValue {
 }
 
 /// A single `@assert` attached to a type expression.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TyAssert {
     /// Index into the program's function table — the assertion body
     /// compiled to a `(value) -> bool` function.
@@ -67,7 +71,7 @@ impl Ord for TyAssert {
 ///
 /// BEP-006 v12 defines three binary (present/absent) SAP attributes
 /// that control how the schema-aligned parser handles each streaming state.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default, Serialize, Deserialize)]
 pub struct TyAttr {
     /// `@sap.parse_without_null`: during parsing (both in-progress and done
     /// states), exclude `null` from the type's parse candidates.

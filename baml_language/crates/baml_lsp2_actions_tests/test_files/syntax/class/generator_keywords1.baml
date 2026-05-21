@@ -29,7 +29,7 @@ class Foo {
 
 //----
 //- diagnostics
-// Error: Expected Unexpected token in class body, found if
+// error: Expected Unexpected token in class body, found if
 //     ╭─[ class_generator_keywords1.baml:13:5 ]
 //     │
 //  13 │     if string
@@ -38,7 +38,7 @@ class Foo {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: field 'string' is missing a type annotation
+// error: field 'string' is missing a type annotation
 //     ╭─[ class_generator_keywords1.baml:13:8 ]
 //     │
 //  13 │     if string

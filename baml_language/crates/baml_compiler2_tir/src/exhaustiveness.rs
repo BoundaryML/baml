@@ -305,6 +305,13 @@ fn write_ty_identity(out: &mut String, ty: &Ty) {
             out.push('!');
             write_ty_identity(out, throws);
         }
+        Ty::Future(value, error, _) => {
+            out.push_str("Fut<");
+            write_ty_identity(out, value);
+            out.push(',');
+            write_ty_identity(out, error);
+            out.push('>');
+        }
     }
 }
 

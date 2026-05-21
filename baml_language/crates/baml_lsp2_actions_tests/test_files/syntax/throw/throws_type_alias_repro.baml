@@ -30,7 +30,7 @@ function getProfile(req: Request) -> bool throws Errors {
 
 //----
 //- diagnostics
-// Warning: unreachable arm
+// warning: unreachable arm
 //     ╭─[ throw_throws_type_alias_repro.baml:22:27 ]
 //     │
 //  22 │     AuthenticationError => { throw e }
@@ -39,7 +39,7 @@ function getProfile(req: Request) -> bool throws Errors {
 //     │ 
 //     │ Note: Error code: E0063
 // ────╯
-// Warning: extraneous throws declaration: user.Errors
+// warning: extraneous throws declaration: user.Errors
 //     ╭─[ throw_throws_type_alias_repro.baml:27:49 ]
 //     │
 //  27 │ function getProfile(req: Request) -> bool throws Errors {

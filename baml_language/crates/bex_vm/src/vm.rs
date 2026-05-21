@@ -386,17 +386,44 @@ pub enum VmExecState {
     /// - Output (internal error): engine error
     Await(FutureId),
 
-    /// VM notifies caller about a future that needs to be scheduled.
+    /// BEP-034: VM yields a `spawn { body }` to the engine.
     ///
-    /// - Input: a `HeapPtr` to the `UnscheduledFuture` object the VM allocated.
-    /// - Output: the engine pushes a `Future::Pending(future_id)` heap pointer
-    ///   onto the VM stack. Terminal transitions (`Ready`/`Error`/`Cancelled`/
-    ///   `InternalError`) happen later via the `FutureManager`; the VM only
-    ///   ever sees `Pending` directly after this yield.
+    /// - Input: a `HeapPtr` to the `UnscheduledFuture` object the VM
+    ///   allocated. The struct carries the body closure and the
+    ///   optional spawn name.
+    /// - Output: the engine builds a fresh `Future::Pending(id)` heap
+    ///   object, dispatches the body on a new `BexThread`, and pushes
+    ///   the future pointer onto the VM stack. Terminal transitions
+    ///   (`Ready`/`Error`/`Cancelled`/`InternalError`) happen later
+    ///   via the `FutureManager`; the VM only ever sees `Pending`
+    ///   directly after this yield.
     ///
-    /// Bytecode execution continues when control flow is handled back to the
-    /// VM.
-    ScheduleFuture(HeapPtr),
+    /// BEP-034 phase D′: this used to be `ScheduleFuture` and covered
+    /// both sys-ops and spawns; sys-ops have moved to the dedicated
+    /// single-yield `SysOp` variant below.
+    Spawn(HeapPtr),
+
+    /// BEP-034 phase D′: VM is invoking a sys-op and wants its return
+    /// value pushed back on the stack.
+    ///
+    /// Replaces the two-yield `ScheduleFuture` → `Await` dance the old
+    /// MIR emitted for every sys-op call. The engine runs the op
+    /// inline (synchronously if `Ready`, or by awaiting the `Async`
+    /// future while releasing the heap permit), races it against the
+    /// active cancel token, and pushes the resulting `Value` on the
+    /// VM stack before resuming. Errors propagate as
+    /// `EngineError::UnhandledThrow` exactly like today's sys-op
+    /// fulfillment path.
+    ///
+    /// - Input: the `SysOp` to run plus its `args`, popped from the
+    ///   eval stack by the `OpCode::SysOp` handler.
+    /// - Output: a single `Value` on the VM stack.
+    /// - No `Object::Future` is allocated; no `FutureManager` entry
+    ///   is created.
+    SysOp {
+        operation: bex_vm_types::SysOp,
+        args: Vec<Value>,
+    },
 
     /// VM has completed the execution of all available bytecode.
     Complete(Value),
@@ -1002,13 +1029,69 @@ impl BexVm {
         ))
     }
 
-    /// Bootstraps the VM preparing the given function to run.
+    /// Bootstraps the VM preparing the given callable to run.
+    ///
+    /// `function` may point to either an [`Object::Function`] or an
+    /// [`Object::Closure`]. Closure entry points are used by BEP-034
+    /// `spawn { ... }`: the compiler lowers the body to a lambda, wraps it
+    /// in a closure that carries the captured environment, then hands the
+    /// closure pointer to a fresh `BexThread` which calls `set_entry_point`.
     pub fn set_entry_point(&mut self, function: HeapPtr, args: &[Value]) {
+        // BEP-034 spawn entry points can pass a `Closure` (carrying
+        // captured type args from the surrounding scope); host calls
+        // typically pass a bare `Function` and want no type args.
+        // Either way, fan out to `set_entry_point_with_type_args` so
+        // the type-arg-aware host call path
+        // (`BexEngine::call_function_bound_args`) shares one
+        // implementation with the spawn path.
+        let type_args = match self.get_object(function) {
+            Object::Function(_) => vec![],
+            Object::Closure(closure) => closure.captured_type_args.clone(),
+            other => panic!("expect function or closure as entry point, got {other:?}"),
+        };
+        self.set_entry_point_with_type_args(function, args, type_args);
+    }
+
+    /// Like [`Self::set_entry_point`], but seeds the entry frame's
+    /// `type_args` slot. Use when the host invokes a generic function
+    /// (e.g. a user function with `<T>`) and needs to thread `T` through.
+    ///
+    /// Entry points must be [`bex_vm_types::FunctionKind::Bytecode`] —
+    /// either a bare `Object::Function` or an `Object::Closure` wrapping
+    /// one (BEP-034 spawn). The engine boundary
+    /// (`bex_engine::BexEngine::call_function_bound_args` — backticks
+    /// rather than an intra-doc link because `bex_vm` doesn't depend on
+    /// `bex_engine`; the relationship goes the other way) rejects
+    /// `SysOp` / `Native` / `NativeUnresolved` callees with
+    /// `EngineError::NotInvokableAsEntry` before reaching this method,
+    /// because there's no enclosing bytecode frame for a native to
+    /// `YieldToCall` back into at the top level.
+    pub fn set_entry_point_with_type_args(
+        &mut self,
+        function: HeapPtr,
+        args: &[Value],
+        type_args: Vec<baml_type::Ty>,
+    ) {
         debug_assert!(
-            matches!(self.get_object(function), Object::Function(_)),
-            "expect function as entry point, got {:?}",
+            matches!(
+                self.get_object(function),
+                Object::Function(_) | Object::Closure(_)
+            ),
+            "expect function or closure as entry point, got {:?}",
             self.get_object(function)
         );
+        debug_assert!(
+            match self.get_object(function) {
+                Object::Function(f) => matches!(f.kind, bex_vm_types::FunctionKind::Bytecode),
+                Object::Closure(_) => true,
+                _ => false,
+            },
+            "entry points must be Function::Bytecode or Closure; engine \
+             boundary should have rejected this — see \
+             EngineError::NotInvokableAsEntry"
+        );
+
+        self.pending_call_type_args.clone_from(&type_args);
 
         self.stack.extend(args.iter().copied());
 
@@ -1016,7 +1099,7 @@ impl BexVm {
             function,
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(0),
-            type_args: vec![],
+            type_args,
             faulting_pc: 0,
         }));
 
@@ -1421,6 +1504,7 @@ impl BexVm {
                 let msg = self.alloc_string(message);
                 (PanicClass::UserPanic, vec![msg])
             }
+            VmPanic::Exit { code } => (PanicClass::Exit, vec![Value::Int(code)]),
             VmPanic::AllocFailure { message } => {
                 let msg = self.alloc_string(message);
                 (PanicClass::AllocFailure, vec![msg])
@@ -2128,6 +2212,7 @@ impl BexVm {
         // `EarlyYield`, etc.), which is the right granularity for the
         // counter to reset at.
         self.early_yield.reset();
+
         match self.exec_inner() {
             Err(VmError::InternalError(err)) => {
                 let trace = self.capture_stack_trace();
@@ -3614,12 +3699,12 @@ impl BexVm {
                 self.stack.push(Value::Object(variant_ptr));
             }
 
-            Instruction::DispatchFuture(callee) => {
+            Instruction::SysOp(callee) => {
                 let callee_value = self.globals.get(self.proof(), callee);
                 let expected_type = FunctionType::SysOp;
                 let callee_ptr = self.as_object_ptr(&callee_value, expected_type.into())?;
 
-                // Can't dispatch if it's not a function
+                // Can't invoke if it's not a function
                 let Object::Function(callable_future) = self.get_object(callee_ptr) else {
                     return Err(VmInternalError::TypeError {
                         expected: expected_type.into(),
@@ -3628,7 +3713,7 @@ impl BexVm {
                     .into());
                 };
 
-                // Must be a sys_op - extract the SysOp.
+                // Must be a sys_op - extract the SysOp tag.
                 let FunctionKind::SysOp(sys_op) = callable_future.kind else {
                     return Err(VmInternalError::TypeError {
                         expected: FunctionType::SysOp.into(),
@@ -3641,21 +3726,48 @@ impl BexVm {
                     VmInternalError::NotEnoughItemsOnStack(callable_future.arity),
                 )?;
                 let args_offset = StackIndex::from_raw(args_offset);
+                let call_args: Vec<Value> = self.stack.drain(args_offset..).collect();
 
-                // Collect function call args and cleanup consumed stack.
-                let future_args: Vec<Value> = self.stack.drain(args_offset..).collect();
-
-                // Create the unscheduled future to hand off to the embedder.
-                let pending_future = UnscheduledFuture {
+                // BEP-034 phase D′: single round trip. The engine runs
+                // the op (racing it against the cancel token), then
+                // pushes the value back on the stack and resumes. No
+                // `Object::Future` is allocated; no `FutureManager`
+                // entry is created.
+                return Ok(Some(VmExecState::SysOp {
                     operation: sys_op,
-                    args: future_args,
+                    args: call_args,
+                }));
+            }
+
+            Instruction::Spawn => {
+                // BEP-034: pops `[closure, name]` off the eval stack, in
+                // that order — `name` is on top. Builds an
+                // `UnscheduledFuture { closure, name }` and yields it
+                // to the engine, which routes the spawn through
+                // `BexEngine::spawn_thread`.
+                let name_value = self.stack.ensure_pop();
+                let closure_value = self.stack.ensure_pop();
+
+                let closure_ptr =
+                    self.as_object_ptr(&closure_value, ObjectType::Function(FunctionType::Any))?;
+                let name_ptr = match name_value {
+                    Value::Null => None,
+                    Value::Object(ptr) => Some(ptr),
+                    ref other => {
+                        return Err(VmInternalError::TypeError {
+                            expected: Type::Object(ObjectType::String),
+                            got: self.type_of(other),
+                        }
+                        .into());
+                    }
                 };
 
-                // Allocate the unscheduled future.
+                let pending_future = UnscheduledFuture {
+                    closure: closure_ptr,
+                    name: name_ptr,
+                };
                 let object_index = self.tlab.alloc(Object::UnscheduledFuture(pending_future));
-
-                // Yield control flow back to the embedder.
-                return Ok(Some(VmExecState::ScheduleFuture(object_index)));
+                return Ok(Some(VmExecState::Spawn(object_index)));
             }
 
             Instruction::Await => {
@@ -5479,8 +5591,8 @@ impl BexVm {
                     self.stack.push(Value::Object(variant_ptr));
                 }
 
-                // ── DispatchFuture ────────────────────────────────────────────
-                OpCode::DispatchFuture => {
+                // ── SysOp (BEP-034 phase D′) ──────────────────────────────────
+                OpCode::SysOp => {
                     let raw = { read_u32_unchecked(code, pc) };
                     let callee = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                     let callee_value = self.globals.get(self.proof(), callee);
@@ -5504,13 +5616,36 @@ impl BexVm {
                         VmInternalError::NotEnoughItemsOnStack(callable_future.arity),
                     )?;
                     let args_offset = StackIndex::from_raw(args_offset);
-                    let future_args: Vec<Value> = self.stack.drain(args_offset..).collect();
-                    let pending_future = bex_vm_types::types::UnscheduledFuture {
+                    let call_args: Vec<Value> = self.stack.drain(args_offset..).collect();
+                    return Ok(Some(VmExecState::SysOp {
                         operation: sys_op,
-                        args: future_args,
+                        args: call_args,
+                    }));
+                }
+
+                // ── Spawn (BEP-034) ────────────────────────────────────────────
+                OpCode::Spawn => {
+                    let name_value = self.stack.ensure_pop();
+                    let closure_value = self.stack.ensure_pop();
+                    let closure_ptr = self
+                        .as_object_ptr(&closure_value, ObjectType::Function(FunctionType::Any))?;
+                    let name_ptr = match name_value {
+                        Value::Null => None,
+                        Value::Object(ptr) => Some(ptr),
+                        ref other => {
+                            return Err(VmInternalError::TypeError {
+                                expected: Type::Object(ObjectType::String),
+                                got: self.type_of(other),
+                            }
+                            .into());
+                        }
+                    };
+                    let pending_future = bex_vm_types::types::UnscheduledFuture {
+                        closure: closure_ptr,
+                        name: name_ptr,
                     };
                     let object_index = self.tlab.alloc(Object::UnscheduledFuture(pending_future));
-                    return Ok(Some(VmExecState::ScheduleFuture(object_index)));
+                    return Ok(Some(VmExecState::Spawn(object_index)));
                 }
 
                 // ── Watch / Unwatch / Notify / NotifyBlock ────────────────────

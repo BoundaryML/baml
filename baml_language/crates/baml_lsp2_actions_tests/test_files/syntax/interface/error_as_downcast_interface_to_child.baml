@@ -22,7 +22,7 @@ function bad(n: Named) -> string {
 
 //----
 //- diagnostics
-// Error: type mismatch: expected user.Person, got user.Named
+// error: type mismatch: expected user.Person, got user.Named
 //     ╭─[ interface_error_as_downcast_interface_to_child.baml:20:10 ]
 //     │
 //  20 │   return n.as<Person>.occupation

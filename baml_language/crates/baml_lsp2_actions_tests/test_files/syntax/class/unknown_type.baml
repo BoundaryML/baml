@@ -12,7 +12,7 @@ class InterfaceTwo {
 
 //----
 //- diagnostics
-// Error: unresolved type: Bar
+// error: unresolved type: Bar
 //    ╭─[ class_unknown_type.baml:3:8 ]
 //    │
 //  3 │   prop2 Bar

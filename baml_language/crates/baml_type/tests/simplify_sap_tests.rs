@@ -163,10 +163,13 @@ fn collect_alias_refs(ty: &Ty) -> Vec<TypeName> {
 fn collect_alias_refs_inner(ty: &Ty, out: &mut Vec<TypeName>) {
     match ty {
         Ty::TypeAlias(name, _) => out.push(name.clone()),
-        Ty::Optional(inner, _)
-        | Ty::List(inner, _)
-        | Ty::WatchAccessor(inner, _)
-        | Ty::Future(inner, _) => collect_alias_refs_inner(inner, out),
+        Ty::Optional(inner, _) | Ty::List(inner, _) | Ty::WatchAccessor(inner, _) => {
+            collect_alias_refs_inner(inner, out)
+        }
+        Ty::Future(value, error, _) => {
+            collect_alias_refs_inner(value, out);
+            collect_alias_refs_inner(error, out);
+        }
         Ty::Union(members, _) => {
             for m in members {
                 collect_alias_refs_inner(m, out);

@@ -79,4 +79,41 @@ impl IoNamespaceIo for WasmIo {
             )),
         }
     }
+
+    fn print(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _s: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn println(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _s: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn eprint(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _s: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn eprintln(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _s: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
 }

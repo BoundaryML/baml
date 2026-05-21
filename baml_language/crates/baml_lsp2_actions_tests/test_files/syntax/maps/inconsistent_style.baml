@@ -21,7 +21,7 @@ function InconsistentStyleUse() -> int{
 
 //----
 //- diagnostics
-// Error: Expected expression, found ':'
+// error: Expected expression, found ':'
 //    ╭─[ maps_inconsistent_style.baml:9:19 ]
 //    │
 //  9 │         some_ident: "yes"
@@ -30,7 +30,7 @@ function InconsistentStyleUse() -> int{
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: unresolved name: name
+// error: unresolved name: name
 //    ╭─[ maps_inconsistent_style.baml:8:9 ]
 //    │
 //  8 │         name "Hello"

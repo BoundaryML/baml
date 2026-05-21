@@ -35,8 +35,7 @@ async fn shell_with_pipe() {
     function main() -> string {
         load_const "echo 'hello world' | tr 'a-z' 'A-Z'"
         load_const null
-        dispatch_future baml.sys.shell
-        await
+        sys_op baml.sys.shell
         load_field .stdout
         call baml.Uint8Array.to_string
         return

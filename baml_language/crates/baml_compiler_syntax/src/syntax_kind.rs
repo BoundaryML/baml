@@ -40,6 +40,8 @@ pub enum SyntaxKind {
     KW_CATCH,
     KW_CATCH_ALL,
     KW_THROWS,
+    KW_SPAWN,
+    KW_AWAIT,
 
     // Other keywords
     KW_WATCH,
@@ -318,6 +320,18 @@ pub enum SyntaxKind {
     /// `BINDING_PATTERN` so downstream code doesn't have to text-match `_`.
     WILDCARD_PATTERN,
     THROW_EXPR,
+    /// `spawn name_expr? block` — BEP-034 spawn expression.
+    /// Structure: `KW_SPAWN [expr] BLOCK_EXPR`.
+    SPAWN_EXPR,
+    /// `await expr` — BEP-034 await expression.
+    /// Structure: `KW_AWAIT expr`.
+    AWAIT_EXPR,
+    /// `Future<T, E>` — explicit future type expression.
+    /// Structure: `WORD("Future") LESS type_expr COMMA type_expr GREATER`.
+    /// Parsed as a generic path type today; this kind exists for the
+    /// parser to mark the syntactic origin when the surface form should
+    /// resolve to a `Ty::Future`.
+    FUTURE_TYPE_EXPR,
     LAMBDA_EXPR,
     THROWS_CLAUSE,
     WHILE_STMT,
@@ -477,6 +491,8 @@ impl SyntaxKind {
                 | Self::KW_CATCH
                 | Self::KW_CATCH_ALL
                 | Self::KW_THROWS
+                | Self::KW_SPAWN
+                | Self::KW_AWAIT
                 | Self::KW_WATCH
                 | Self::KW_INSTANCEOF
                 | Self::KW_DYNAMIC

@@ -62,7 +62,7 @@ function Bar(a: string, b: int | bool) -> int {
 
 //----
 //- diagnostics
-// Error: Old-style function syntax. Use: function Name(params...) -> ReturnType { ... }
+// error: Old-style function syntax. Use: function Name(params...) -> ReturnType { ... }
 //    ╭─[ functions_v2_duplicate_names.baml:1:14 ]
 //    │
 //  1 │ function Bar {
@@ -71,7 +71,7 @@ function Bar(a: string, b: int | bool) -> int {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: unresolved name: input
+// error: unresolved name: input
 //    ╭─[ functions_v2_duplicate_names.baml:2:3 ]
 //    │
 //  2 │   input string
@@ -80,7 +80,7 @@ function Bar(a: string, b: int | bool) -> int {
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯
-// Error: unresolved name: string
+// error: unresolved name: string
 //    ╭─[ functions_v2_duplicate_names.baml:2:9 ]
 //    │
 //  2 │   input string
@@ -89,7 +89,7 @@ function Bar(a: string, b: int | bool) -> int {
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯
-// Error: unresolved name: output
+// error: unresolved name: output
 //    ╭─[ functions_v2_duplicate_names.baml:3:3 ]
 //    │
 //  3 │   output string
@@ -98,7 +98,7 @@ function Bar(a: string, b: int | bool) -> int {
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯
-// Error: unresolved name: string
+// error: unresolved name: string
 //    ╭─[ functions_v2_duplicate_names.baml:3:10 ]
 //    │
 //  3 │   output string
@@ -107,7 +107,7 @@ function Bar(a: string, b: int | bool) -> int {
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯
-// Error: type mismatch: expected baml.llm.Client, got () -> unknown throws never
+// error: type mismatch: expected baml.llm.Client, got () -> unknown throws never
 //    ╭─[ functions_v2_duplicate_names.baml:6:46 ]
 //    │
 //  6 │ ╭─▶ function Bar(a: string, b: int | bool) -> int {
@@ -118,7 +118,7 @@ function Bar(a: string, b: int | bool) -> int {
 //    │     
 //    │     Note: Error code: E0001
 // ───╯
-// Error: type mismatch: expected baml.llm.Client, got () -> unknown throws never
+// error: type mismatch: expected baml.llm.Client, got () -> unknown throws never
 //    ╭─[ functions_v2_duplicate_names.baml:4:2 ]
 //    │
 //  4 │ ╭─▶ }

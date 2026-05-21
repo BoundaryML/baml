@@ -13,7 +13,7 @@ class Server {
 
 //----
 //- diagnostics
-// Error: class `Server` does not provide field `port` required by interface `Config`
+// error: class `Server` does not provide field `port` required by interface `Config`
 //     ╭─[ interface_error_missing_field_in_implements_block.baml:9:17 ]
 //     │
 //   9 │ ╭─▶     host: string

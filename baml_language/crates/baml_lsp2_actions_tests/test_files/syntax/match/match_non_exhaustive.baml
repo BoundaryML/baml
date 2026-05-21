@@ -20,7 +20,7 @@ function MissingMultipleVariants(c: Color) -> string {
 
 //----
 //- diagnostics
-// Error: non-exhaustive match on `user.Color`; missing: user.Color.Blue
+// error: non-exhaustive match on `user.Color`; missing: user.Color.Blue
 //     ╭─[ match_match_non_exhaustive.baml:8:49 ]
 //     │
 //   8 │ ╭─▶ function MissingOneVariant(c: Color) -> string {
@@ -31,7 +31,7 @@ function MissingMultipleVariants(c: Color) -> string {
 //     │     
 //     │     Note: Error code: E0062
 // ────╯
-// Error: non-exhaustive match on `user.Color`; missing: user.Color.Green, user.Color.Blue
+// error: non-exhaustive match on `user.Color`; missing: user.Color.Green, user.Color.Blue
 //     ╭─[ match_match_non_exhaustive.baml:15:55 ]
 //     │
 //  15 │ ╭─▶ function MissingMultipleVariants(c: Color) -> string {

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 76
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -480,7 +479,7 @@ SOURCE_FILE
         R_BRACE "}"
 
 === ERRORS ===
-Error: Expected expression, found let
+error: Expected expression, found let
    ╭─[ banned_expressions.baml:3:11 ]
    │
  3 │   let a = let b = 42

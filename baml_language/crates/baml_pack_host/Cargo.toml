@@ -1,0 +1,41 @@
+[package]
+name = "baml_pack_host"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+description = "Standalone host binary for packaged BAML programs"
+
+[lints]
+workspace = true
+
+[dependencies]
+baml_exec = { workspace = true }
+bex_engine = { workspace = true, default-features = false, features = [ "ring-crypto" ] }
+bex_events = { workspace = true }
+bex_vm_types = { workspace = true }
+sys_native = { workspace = true, default-features = false, features = [ "ring-crypto" ] }
+anyhow = { workspace = true }
+bitcode = { workspace = true }
+libsui = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true, features = [ "rt" ] }
+
+[features]
+default = [  ]
+native-tls = [ "sys_native/native-tls" ]
+
+[[bin]]
+name = "baml-pack-host"
+path = "src/main.rs"
+
+# Standalone host binary for packed `baml pack` outputs — depends on
+# `sys_native` (tokio + mio) and `libsui` (native ELF/Mach-O/PE patching).
+# Both are inherently non-wasm. Excluded from `clippy-wasm` / wasm CI.
+[package.metadata.ci]
+wasm_support = false

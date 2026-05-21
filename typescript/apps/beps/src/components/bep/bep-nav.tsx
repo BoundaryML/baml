@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { Plus, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -17,6 +17,7 @@ interface BepNavProps {
   activeSection: string;
   onSectionClick: (id: string) => void;
   commentCounts?: Record<string, number>;
+  totalCommentCount?: number;
   openIssueCount?: number;
   decisionCount?: number;
   hideMetaSections?: boolean; // Hide issues, decisions (for historical viewing)
@@ -31,6 +32,7 @@ export function BepNav({
   activeSection,
   onSectionClick,
   commentCounts = {},
+  totalCommentCount = 0,
   openIssueCount = 0,
   decisionCount = 0,
   hideMetaSections = false,
@@ -138,6 +140,29 @@ export function BepNav({
               {decisionCount > 0 && (
                 <span className="text-xs bg-muted px-1.5 py-0.5 rounded">
                   {decisionCount}
+                </span>
+              )}
+            </span>
+          </button>
+
+          <button
+            onClick={() => onSectionClick("comments")}
+            className={cn(
+              "w-full text-left px-3 py-2 rounded-md text-sm transition-colors",
+              "hover:bg-accent hover:text-accent-foreground",
+              activeSection === "comments"
+                ? "bg-accent text-accent-foreground font-medium"
+                : "text-muted-foreground"
+            )}
+          >
+            <span className="flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <MessageSquare className="h-4 w-4" />
+                All Comments
+              </span>
+              {totalCommentCount > 0 && (
+                <span className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                  {totalCommentCount}
                 </span>
               )}
             </span>

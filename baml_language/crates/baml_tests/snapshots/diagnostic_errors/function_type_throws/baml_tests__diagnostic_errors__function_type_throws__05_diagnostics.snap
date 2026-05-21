@@ -1,9 +1,8 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 31206
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: type mismatch: expected (value: int) -> int throws never, got (value: int) -> int throws string
+  [type] error: type mismatch: expected (value: int) -> int throws never, got (value: int) -> int throws string
     ╭─[ negative.baml:15:6 ]
     │
  15 │   cb(inner)
@@ -13,7 +12,7 @@ assertion_line: 31206
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: type mismatch: expected user.HiddenHandler, got (value: int) -> int throws string
+  [type] error: type mismatch: expected user.HiddenHandler, got (value: int) -> int throws string
     ╭─[ negative.baml:23:17 ]
     │
  23 │   accept_hidden(risky)
@@ -23,7 +22,7 @@ assertion_line: 31206
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: type mismatch: expected (value: int) -> int throws never, got (value: int) -> int throws string
+  [type] error: type mismatch: expected (value: int) -> int throws never, got (value: int) -> int throws string
     ╭─[ negative.baml:27:16 ]
     │
  27 │   Holder { cb: risky }
@@ -33,7 +32,7 @@ assertion_line: 31206
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: type mismatch: expected (value: int) -> int throws never, got (value: int) -> int throws string
+  [type] error: type mismatch: expected (value: int) -> int throws never, got (value: int) -> int throws string
     ╭─[ negative.baml:34:3 ]
     │
  34 │   local

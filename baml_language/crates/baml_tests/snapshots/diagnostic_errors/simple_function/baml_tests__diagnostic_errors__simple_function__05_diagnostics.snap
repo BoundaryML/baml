@@ -1,9 +1,8 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 36231
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: unresolved name: GPT4
+  [type] error: unresolved name: GPT4
    ╭─[ main.baml:1:1 ]
    │
  1 │ ╭─▶ function HelloWorld(name: string) -> string {
@@ -15,7 +14,7 @@ assertion_line: 36231
    │     Note: Error code: E0003
 ───╯
 
-  [type] Error: unresolved name: GPT4
+  [type] error: unresolved name: GPT4
    ╭─[ main.baml:1:44 ]
    │
  1 │ ╭─▶ function HelloWorld(name: string) -> string {

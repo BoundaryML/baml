@@ -617,6 +617,7 @@ pub fn generate_project_bytecode_with_opt(
                 compute_function_metadata_from_item_tree(
                     db,
                     *file,
+                    *local_id,
                     func_data,
                     &parameter_defaults,
                     cache_pass4,
@@ -1064,6 +1065,7 @@ fn compute_throws_type(
 fn compute_function_metadata_from_item_tree(
     db: &dyn baml_compiler2_mir::Db,
     file: baml_base::SourceFile,
+    func_id: baml_compiler2_hir::ids::LocalItemId<baml_compiler2_hir::ids::FunctionMarker>,
     func_data: &baml_compiler2_hir::item_tree::Function,
     parameter_defaults: &baml_compiler2_hir::signature::FunctionParameterDefaults,
     cache: &ResolvedAliases,
@@ -1081,6 +1083,25 @@ fn compute_function_metadata_from_item_tree(
         attr: baml_type::TyAttr::default(),
     };
 
+    // For methods on generic classes, the class-level generic params are in
+    // scope inside the method signature.  Without them, type references like
+    // `S` in `Stream<T, S>.next(self) -> S | StreamFinished` route through
+    // `route_name_to_unknown` and erase to `Ty::Void`, breaking the runtime's
+    // FFI-boundary return-type check.  Mirror
+    // `MirLowerer::enclosing_generic_params`: class params come first, then
+    // function-level params.
+    let enclosing_generics: Vec<baml_base::Name> = {
+        let item_tree = file_item_tree(db, file);
+        let mut params: Vec<baml_base::Name> = item_tree
+            .classes
+            .values()
+            .find(|class_data| class_data.methods.contains(&func_id))
+            .map(|class_data| class_data.generic_params.clone())
+            .unwrap_or_default();
+        params.extend(func_data.generic_params.iter().cloned());
+        params
+    };
+
     let resolve = |te: &TypeExpr| -> baml_type::Ty {
         let mut diags = Vec::new();
         // Use `lower_type_expr_in_ns` so unqualified references (e.g. `MyLorem`
@@ -1095,7 +1116,7 @@ fn compute_function_metadata_from_item_tree(
             te,
             pkg_items,
             &pkg_info.namespace_path,
-            &[],
+            &enclosing_generics,
             &mut diags,
         );
         cache.convert(&tir_ty)
@@ -1775,6 +1796,7 @@ mod tests {
         let (_, _, param_has_default, _) = compute_function_metadata_from_item_tree(
             &db,
             file,
+            function_id,
             &func_data,
             &parameter_defaults,
             &cache,

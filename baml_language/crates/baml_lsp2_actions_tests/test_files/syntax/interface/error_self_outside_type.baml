@@ -6,7 +6,7 @@ function bad(x: Self) -> Self {
 
 //----
 //- diagnostics
-// Error: unresolved type: Self
+// error: unresolved type: Self
 //    ╭─[ interface_error_self_outside_type.baml:3:25 ]
 //    │
 //  3 │ function bad(x: Self) -> Self {
@@ -15,7 +15,7 @@ function bad(x: Self) -> Self {
 //    │ 
 //    │ Note: Error code: E0002
 // ───╯
-// Error: unresolved type: Self
+// error: unresolved type: Self
 //    ╭─[ interface_error_self_outside_type.baml:3:16 ]
 //    │
 //  3 │ function bad(x: Self) -> Self {

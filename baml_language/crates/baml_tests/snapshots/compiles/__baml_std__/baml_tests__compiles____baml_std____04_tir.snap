@@ -294,6 +294,19 @@ class baml.fs.MkdirOptions$stream {
   recursive: null | bool
 }
 
+--- <builtin>/baml/ns_future/future.baml ---
+enum baml.future.FutureState
+class baml.future.Future {
+}
+function baml.future.Future.to_json(self: baml.future.Future) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map {  } : map<never, never>
+}
+function baml.future.Future.from_json(j: baml.json.json) -> Future<unknown, unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Future {  } : baml.future.Future<T, E>
+}
+class baml.future.Future$stream {
+}
+
 --- <builtin>/baml/ns_glob/glob.baml ---
 class baml.glob.ScanOptions {
   cwd: string?
@@ -421,6 +434,16 @@ function baml.json.JsonSerializationError.to_json(self: baml.json.JsonSerializat
 function baml.json.JsonSerializationError.from_json(j: baml.json.json) -> baml.json.JsonSerializationError throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   JsonSerializationError { message: baml.json.from_json<string>(baml.json.field(j, "message")), path: baml.json.from_json<string>(baml.json.field(j, "path")), reason: baml.json.from_json<string>(baml.json.field(j, "reason")) } : baml.json.JsonSerializationError
 }
+function baml.json.serialize<T>(v: T) -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  { : string
+    stringify(to_json<T>(v)) : string
+  }
+}
+function baml.json.deserialize<T>(s: string) -> T throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  { : T
+    from_json<T>(parse(s)) : T
+  }
+}
 type baml.json.json$stream = null | bool | int | float | string | baml.json.json$stream[] | map<string, baml.json.json$stream>
 class baml.json.JsonParseError$stream {
   message: null | string
@@ -511,12 +534,12 @@ function baml.llm.build_request_stream(client: baml.llm.Client, function_name: s
     primitive_client.build_request_stream(specialized_prompt, return_type) : baml.http.Request
   }
 }
-function baml.llm.parse<T, S>(function_name: string, json: string) -> T throws never {
-  { : T
+function baml.llm.parse<TStream, TFinal>(function_name: string, json: string) -> TFinal throws never {
+  { : TFinal
     let return_type = get_return_type(function_name) : type
     let stream_return_type = get_stream_return_type(function_name) : type
-    let cache = StreamCache.new(return_type, stream_return_type) : baml.llm.StreamCache<T, S>
-    __sap_parse_final<T>(json, cache) : T
+    let cache = StreamCache.new(return_type, stream_return_type) : baml.llm.StreamCache<TStream, TFinal>
+    __sap_parse_final<TFinal>(json, cache) : TFinal
   }
 }
 function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> T throws never {
@@ -527,12 +550,12 @@ function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: s
     result : T
   }
 }
-function baml.llm.stream_llm_function<T, S>(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.Stream<T, S> throws never {
-  { : baml.llm.Stream<T, S>
+function baml.llm.stream_llm_function<TStream, TFinal>(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.Stream<TStream, TFinal> throws never {
+  { : baml.llm.Stream<TStream, TFinal>
     let jinja_string = get_jinja_template(function_name) : string
     let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name } : baml.llm.ExecutionContext
-    let result: Stream<T, S> = client.execute_stream(context, 0) : baml.llm.Stream<T, S>
-    result : baml.llm.Stream<T, S>
+    let result: Stream<TStream, TFinal> = client.execute_stream(context, 0) : baml.llm.Stream<TStream, TFinal>
+    result : baml.llm.Stream<TStream, TFinal>
   }
 }
 class baml.llm.OrchestrationStep$stream {
@@ -674,7 +697,7 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
         self.build_attempt_with_state(planner_state) : baml.llm.OrchestrationStep[]
   }
 }
-function baml.llm.Client.execute_stream<T, S>(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> baml.llm.Stream<T, S> throws never {
+function baml.llm.Client.execute_stream<TStream, TFinal>(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> baml.llm.Stream<TStream, TFinal> throws never {
   { : never
     match (self.retry : baml.llm.RetryPolicy?) : never
       r: RetryPolicy =>
@@ -702,26 +725,26 @@ function baml.llm.Client.execute_stream<T, S>(self: baml.llm.Client, context: ba
                   { : void
                     attempt_delay = inherited_delay_ms : int
                   }
-                let result2: Stream<T, S> = : unknown -> baml.llm.Stream<T, S>
-                  catch (self.execute_once_stream(context, attempt_delay) : baml.llm.Stream<T, S>) : unknown
+                let result2: Stream<TStream, TFinal> = : unknown -> baml.llm.Stream<TStream, TFinal>
+                  catch (self.execute_once_stream(context, attempt_delay) : baml.llm.Stream<TStream, TFinal>) : unknown
                     catch (e)
                       _ =>
                         { : never
                           continue
                         }
-                return result2 : baml.llm.Stream<T, S>
+                return result2 : baml.llm.Stream<TStream, TFinal>
               }
           }
           throw root.errors.DevOther { message: "All orchestration..." } : baml.errors.DevOther
         }
       null =>
         { : never
-          let result: Stream<T, S> = self.execute_once_stream(context, inherited_delay_ms) : baml.llm.Stream<T, S>
-          return result : baml.llm.Stream<T, S>
+          let result: Stream<TStream, TFinal> = self.execute_once_stream(context, inherited_delay_ms) : baml.llm.Stream<TStream, TFinal>
+          return result : baml.llm.Stream<TStream, TFinal>
         }
   }
 }
-function baml.llm.Client.execute_once_stream<T, S>(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> baml.llm.Stream<T, S> throws never {
+function baml.llm.Client.execute_once_stream<TStream, TFinal>(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> baml.llm.Stream<TStream, TFinal> throws never {
   { : never
     match (self.client_type : baml.llm.ClientType) : never
       ClientType.Primitive =>
@@ -732,21 +755,21 @@ function baml.llm.Client.execute_once_stream<T, S>(self: baml.llm.Client, contex
           let specialized = primitive.specialize_prompt(prompt) : baml.llm.PromptAst
           let http_request = primitive.build_request_stream(specialized, return_type) : baml.http.Request
           let sse = root.http.fetch_sse(http_request) : baml.http.SseStream
-          let stream: Stream<T, S> = self.__make_stream(sse, context.function_name) : baml.llm.Stream<T, S>
-          return stream : baml.llm.Stream<T, S>
+          let stream: Stream<TStream, TFinal> = self.__make_stream(sse, context.function_name) : baml.llm.Stream<TStream, TFinal>
+          return stream : baml.llm.Stream<TStream, TFinal>
         }
       ClientType.Fallback =>
         { : never
           for sub in self.sub_clients
             { : never
-              let result2: Stream<T, S> = : unknown -> baml.llm.Stream<T, S>
-                catch (sub.execute_stream(context, active_delay_ms) : baml.llm.Stream<T, S>) : unknown
+              let result2: Stream<TStream, TFinal> = : unknown -> baml.llm.Stream<TStream, TFinal>
+                catch (sub.execute_stream(context, active_delay_ms) : baml.llm.Stream<TStream, TFinal>) : unknown
                   catch (e)
                     _ =>
                       { : never
                         continue
                       }
-              return result2 : baml.llm.Stream<T, S>
+              return result2 : baml.llm.Stream<TStream, TFinal>
             }
           throw root.errors.DevOther { message: "All orchestration..." } : baml.errors.DevOther
         }
@@ -758,19 +781,19 @@ function baml.llm.Client.execute_once_stream<T, S>(self: baml.llm.Client, contex
             }
           let idx = self.counter % self.sub_clients.length() : int
           self.counter Add= 1 : int
-          let result3: Stream<T, S> = <missing>(context, active_delay_ms) : unknown -> baml.llm.Stream<T, S>
-          return result3 : baml.llm.Stream<T, S>
+          let result3: Stream<TStream, TFinal> = <missing>(context, active_delay_ms) : unknown -> baml.llm.Stream<TStream, TFinal>
+          return result3 : baml.llm.Stream<TStream, TFinal>
         }
   }
 }
-function baml.llm.Client.__make_stream<T, S>(self: baml.llm.Client, sse: baml.http.SseStream, function_name: string) -> baml.llm.Stream<T, S> throws never {
-  { : baml.llm.Stream<T, S>
+function baml.llm.Client.__make_stream<TStream, TFinal>(self: baml.llm.Client, sse: baml.http.SseStream, function_name: string) -> baml.llm.Stream<TStream, TFinal> throws never {
+  { : baml.llm.Stream<TStream, TFinal>
     let primitive = self.to_primitive_client() : baml.llm.PrimitiveClient
     let return_type = get_return_type(function_name) : type
     let stream_return_type = get_stream_return_type(function_name) : type
     let acc = primitive.new_stream_accumulator() : baml.llm.StreamAccumulator
-    let cache: StreamCache<T, S> = StreamCache.new(return_type, stream_return_type) : baml.llm.StreamCache<T, S>
-    Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache } : baml.llm.Stream<T, S>
+    let cache: StreamCache<TStream, TFinal> = StreamCache.new(return_type, stream_return_type) : baml.llm.StreamCache<TStream, TFinal>
+    Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache } : baml.llm.Stream<TStream, TFinal>
   }
 }
 function baml.llm.Client.execute_oneshot<T>(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> T throws never {
@@ -996,16 +1019,16 @@ class baml.llm.StreamCache {
   _data: $rust_type
 }
 function baml.llm.StreamCache.to_json(self: baml.llm.StreamCache) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<StreamCache<T, S>>(self)) : baml.json.json
+  baml.json.parse(baml.json.to_string<StreamCache<TStream, TFinal>>(self)) : baml.json.json
 }
 function baml.llm.StreamCache.from_json(j: baml.json.json) -> baml.llm.StreamCache<unknown, unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : baml.llm.StreamCache<T, S>
+  baml.json.from_string<T>(baml.json.stringify(j)) : baml.llm.StreamCache<TStream, TFinal>
 }
 class baml.llm.Stream {
   _client: baml.llm.PrimitiveClient
   _acc: baml.llm.StreamAccumulator
   _sse: baml.http.SseStream
-  _cache: baml.llm.StreamCache<T, S>
+  _cache: baml.llm.StreamCache<TStream, TFinal>
 }
 function baml.llm.Stream.next(self: baml.llm.Stream) -> unknown | baml.stream.StreamFinished throws never {
   { : never
@@ -1026,22 +1049,22 @@ function baml.llm.Stream.next(self: baml.llm.Stream) -> unknown | baml.stream.St
             return root.stream.StreamFinished {  } : baml.stream.StreamFinished
           }
         let content = self._acc.content() : string
-        let parsed: S | root.stream.StreamNoYield = __sap_parse_partial<S>(content, self._cache) : S | baml.stream.StreamNoYield
-        match (parsed : S | baml.stream.StreamNoYield) : never
+        let parsed: TStream | root.stream.StreamNoYield = __sap_parse_partial<TStream>(content, self._cache) : TStream | baml.stream.StreamNoYield
+        match (parsed : TStream | baml.stream.StreamNoYield) : never
           root.stream.StreamNoYield =>
             { : never
               continue
             }
-          parsed: S =>
+          parsed: TStream =>
             { : never
-              return parsed : S
+              return parsed : TStream
             }
       }
     root.sys.panic("Unreachable") : never
   }
 }
 function baml.llm.Stream.final(self: baml.llm.Stream) -> unknown throws never {
-  { : T
+  { : TFinal
     while Not self._acc.is_done()
       { : void
         let next = : string
@@ -1067,14 +1090,14 @@ function baml.llm.Stream.final(self: baml.llm.Stream) -> unknown throws never {
       reason: string =>
         self._client.validate_finish_reason(reason) : null
     let content = self._acc.content() : string
-    __sap_parse_final<T>(content, self._cache) : T
+    __sap_parse_final<TFinal>(content, self._cache) : TFinal
   }
 }
 function baml.llm.Stream.to_json(self: baml.llm.Stream) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
   map { "_client": self._client.to_json(), "_acc": self._acc.to_json(), "_sse": self._sse.to_json(), "_cache": self._cache.to_json() } : map<string, baml.json.json>
 }
 function baml.llm.Stream.from_json(j: baml.json.json) -> baml.llm.Stream<unknown, unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Stream { _client: baml.json.from_json<PrimitiveClient>(baml.json.field(j, "_client")), _acc: baml.json.from_json<StreamAccumulator>(baml.json.field(j, "_acc")), _sse: baml.json.from_json<root.http.SseStream>(baml.json.field(j, "_sse")), _cache: baml.json.from_json<StreamCache<T, S>>(baml.json.field(j, "_cache")) } : baml.llm.Stream<T, S>
+  Stream { _client: baml.json.from_json<PrimitiveClient>(baml.json.field(j, "_client")), _acc: baml.json.from_json<StreamAccumulator>(baml.json.field(j, "_acc")), _sse: baml.json.from_json<root.http.SseStream>(baml.json.field(j, "_sse")), _cache: baml.json.from_json<StreamCache<TStream, TFinal>>(baml.json.field(j, "_cache")) } : baml.llm.Stream<TStream, TFinal>
 }
 class baml.llm.PrimitiveClient {
   name: string
@@ -1163,7 +1186,7 @@ class baml.llm.Stream$stream {
   _client: null | baml.llm.PrimitiveClient$stream
   _acc: null | baml.llm.StreamAccumulator$stream
   _sse: null | baml.http.SseStream$stream
-  _cache: null | baml.llm.StreamCache$stream<T, S>
+  _cache: null | baml.llm.StreamCache$stream<TStream, TFinal>
 }
 class baml.llm.PrimitiveClient$stream {
   name: null | string
@@ -1221,7 +1244,19 @@ function baml.net.Socket.to_json(self: baml.net.Socket) -> baml.json.json throws
 function baml.net.Socket.from_json(j: baml.json.json) -> baml.net.Socket throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : baml.net.Socket
 }
+class baml.net.TcpListener {
+  _handle: $rust_type
+}
+function baml.net.TcpListener.to_json(self: baml.net.TcpListener) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<TcpListener>(self)) : baml.json.json
+}
+function baml.net.TcpListener.from_json(j: baml.json.json) -> baml.net.TcpListener throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : baml.net.TcpListener
+}
 class baml.net.Socket$stream {
+  _handle: $rust_type
+}
+class baml.net.TcpListener$stream {
   _handle: $rust_type
 }
 
@@ -1299,6 +1334,15 @@ function baml.panics.UserPanic.to_json(self: baml.panics.UserPanic) -> baml.json
 function baml.panics.UserPanic.from_json(j: baml.json.json) -> baml.panics.UserPanic throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   UserPanic { message: baml.json.from_json<string>(baml.json.field(j, "message")) } : baml.panics.UserPanic
 }
+class baml.panics.Exit {
+  code: int
+}
+function baml.panics.Exit.to_json(self: baml.panics.Exit) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "code": self.code.to_json() } : map<string, baml.json.json>
+}
+function baml.panics.Exit.from_json(j: baml.json.json) -> baml.panics.Exit throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Exit { code: baml.json.from_json<int>(baml.json.field(j, "code")) } : baml.panics.Exit
+}
 class baml.panics.AllocFailure {
   message: string
 }
@@ -1318,7 +1362,7 @@ function baml.panics.HostUnavailable.to_json(self: baml.panics.HostUnavailable) 
 function baml.panics.HostUnavailable.from_json(j: baml.json.json) -> baml.panics.HostUnavailable throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   HostUnavailable { resource: baml.json.from_json<string>(baml.json.field(j, "resource")), message: baml.json.from_json<string>(baml.json.field(j, "message")) } : baml.panics.HostUnavailable
 }
-type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.Cancelled | baml.panics.UserPanic | baml.panics.AllocFailure | baml.panics.HostUnavailable
+type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.Cancelled | baml.panics.UserPanic | baml.panics.Exit | baml.panics.AllocFailure | baml.panics.HostUnavailable
 class baml.panics.DivisionByZero$stream {
   dividend: null | int
 }
@@ -1344,6 +1388,9 @@ class baml.panics.Cancelled$stream {
 class baml.panics.UserPanic$stream {
   message: null | string
 }
+class baml.panics.Exit$stream {
+  code: null | int
+}
 class baml.panics.AllocFailure$stream {
   message: null | string
 }
@@ -1351,7 +1398,7 @@ class baml.panics.HostUnavailable$stream {
   resource: null | string
   message: null | string
 }
-type baml.panics.Panic$stream = baml.panics.DivisionByZero$stream | baml.panics.IndexOutOfBounds$stream | baml.panics.MapKeyNotFound$stream | baml.panics.StackOverflow$stream | baml.panics.AssertionFailed$stream | baml.panics.Unreachable$stream | baml.panics.Cancelled$stream | baml.panics.UserPanic$stream | baml.panics.AllocFailure$stream | baml.panics.HostUnavailable$stream
+type baml.panics.Panic$stream = baml.panics.DivisionByZero$stream | baml.panics.IndexOutOfBounds$stream | baml.panics.MapKeyNotFound$stream | baml.panics.StackOverflow$stream | baml.panics.AssertionFailed$stream | baml.panics.Unreachable$stream | baml.panics.Cancelled$stream | baml.panics.UserPanic$stream | baml.panics.Exit$stream | baml.panics.AllocFailure$stream | baml.panics.HostUnavailable$stream
 
 --- <builtin>/baml/ns_stream/stream.baml ---
 class baml.stream.StreamFinished {

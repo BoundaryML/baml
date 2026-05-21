@@ -476,6 +476,18 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::Expr::Throw { value } => {
                 self.walk_expr(*value, body, source_map, true);
             }
+            ast::Expr::Spawn {
+                name,
+                body: spawn_body,
+            } => {
+                if let Some(name) = name {
+                    self.walk_expr(*name, body, source_map, true);
+                }
+                self.walk_expr(*spawn_body, body, source_map, true);
+            }
+            ast::Expr::Await { future } => {
+                self.walk_expr(*future, body, source_map, true);
+            }
             ast::Expr::Binary { lhs, rhs, .. } => {
                 self.walk_expr(*lhs, body, source_map, true);
                 self.walk_expr(*rhs, body, source_map, true);

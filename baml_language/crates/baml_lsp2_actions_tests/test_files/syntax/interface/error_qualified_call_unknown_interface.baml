@@ -18,7 +18,7 @@ function bad(d: Dog) -> string {
 
 //----
 //- diagnostics
-// Error: unresolved type: NotAnInterface
+// error: unresolved type: NotAnInterface
 //     ╭─[ interface_error_qualified_call_unknown_interface.baml:16:10 ]
 //     │
 //  16 │   return d.as<NotAnInterface>.speak()

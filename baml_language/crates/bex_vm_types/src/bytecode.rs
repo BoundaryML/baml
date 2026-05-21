@@ -1,6 +1,7 @@
 //! Instruction set and bytecode representation.
 
 use baml_base::Span;
+use serde::{Deserialize, Serialize};
 
 use crate::{GlobalIndex, ObjectIndex, types::ConstValue};
 
@@ -12,7 +13,7 @@ use crate::{GlobalIndex, ObjectIndex, types::ConstValue};
 ///
 /// Maps a contiguous range of integer values to jump offsets.
 /// Values outside the range or "holes" jump to the default offset.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct JumpTableData {
     /// Minimum discriminant value (maps to index 0).
     pub min: i64,
@@ -97,7 +98,7 @@ impl JumpTableData {
 ///   Optimized at Compile Time"
 /// - Dietz 1992, "Coding Multiway Branches Using Customized Hash Functions"
 /// - Proposed for LLVM (issue #96971), Roslyn (#66604), Go (#34381)
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MatchHashTable {
     /// Multiplicative hash constant, found at compile time.
     pub multiply: u64,
@@ -116,7 +117,7 @@ pub struct MatchHashTable {
 }
 
 /// Single entry in a [`MatchHashTable`].
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MatchHashEntry {
     /// The type tag expected at this slot (for verification).
     pub expected_tag: i64,
@@ -153,7 +154,7 @@ pub struct MatchHashEntry {
 /// Instead store the state or complex structure in the `Vm` struct (in `bex_vm` crate) and
 /// find a way to reference it with very simple instructions.
 #[allow(clippy::large_enum_variant)]
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Instruction {
     /// Loads a constant from the bytecode's constant pool.
     ///
@@ -347,14 +348,27 @@ pub enum Instruction {
     /// `Vm::objects` array.
     AllocVariant(ObjectIndex),
 
-    /// Dispatch a statically-known global `sys_op` and create a pending future.
+    /// BEP-034 phase D′: invoke a statically-known global sys-op and
+    /// push its return value back on the stack in a single VM↔engine
+    /// round trip.
     ///
-    /// Format: `DISPATCH_FUTURE g` where `g` is the global index of the
-    /// `sys_op` function.
+    /// Format: `SYS_OP g` where `g` is the global index of the sys-op
+    /// function. Arguments are popped from the eval stack (arity from
+    /// the callee's metadata, same as `ScheduleFuture`).
     ///
-    /// Arguments are pushed onto the eval stack. The callee is read from
-    /// `Vm::globals[g]`, and arity is read from function metadata.
-    DispatchFuture(GlobalIndex),
+    /// Yields `VmExecState::SysOp { operation, args }`. The engine runs
+    /// the operation, races it against the active cancel token, and
+    /// pushes the resulting value back on the stack before resuming.
+    /// No `Object::Future` is allocated and no `FutureManager` entry is
+    /// created — sys-ops are not user-observable futures in BAML, so
+    /// the schedule + await pair is pure overhead.
+    SysOp(GlobalIndex),
+
+    /// BEP-034 `spawn { body }`. Pops `[closure_value, name_value]` from
+    /// the stack, allocates an `UnscheduledFuture { closure, name }`
+    /// into the TLAB, and yields `VmExecState::Spawn(ptr)` so the
+    /// engine routes the closure to a fresh `BexThread`.
+    Spawn,
 
     /// Awaits the future on top of the stack.
     ///
@@ -625,7 +639,7 @@ pub enum Instruction {
 /// Each variant maps to a 1-byte opcode in the `CompactCode.code` stream.
 /// The operand format is determined by the opcode — see `OpCode::encoded_size()`.
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OpCode {
     // ── Unit ops (no operands, 1 byte) ─────────────────────────
     Return = 0,
@@ -715,7 +729,8 @@ pub enum OpCode {
     AllocMap,
     AllocInstance,
     AllocVariant,
-    DispatchFuture,
+    SysOp,
+    Spawn,
     Watch,
     Unwatch,
     Notify,
@@ -762,6 +777,7 @@ impl OpCode {
             | Self::Unreachable
             | Self::MakeCell
             | Self::SendEvent
+            | Self::Spawn
             | Self::Add
             | Self::Sub
             | Self::Mul
@@ -822,7 +838,7 @@ impl OpCode {
             | Self::AllocArray
             | Self::AllocMap
             | Self::AllocVariant
-            | Self::DispatchFuture
+            | Self::SysOp
             | Self::Watch
             | Self::Unwatch
             | Self::Notify
@@ -930,7 +946,8 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::AllocMap as u8 => Ok(Self::AllocMap),
             x if x == Self::AllocInstance as u8 => Ok(Self::AllocInstance),
             x if x == Self::AllocVariant as u8 => Ok(Self::AllocVariant),
-            x if x == Self::DispatchFuture as u8 => Ok(Self::DispatchFuture),
+            x if x == Self::SysOp as u8 => Ok(Self::SysOp),
+            x if x == Self::Spawn as u8 => Ok(Self::Spawn),
             x if x == Self::Watch as u8 => Ok(Self::Watch),
             x if x == Self::Unwatch as u8 => Ok(Self::Unwatch),
             x if x == Self::Notify as u8 => Ok(Self::Notify),
@@ -1031,7 +1048,8 @@ impl std::fmt::Display for OpCode {
             Self::AllocMap => "ALLOC_MAP",
             Self::AllocInstance => "ALLOC_INSTANCE",
             Self::AllocVariant => "ALLOC_VARIANT",
-            Self::DispatchFuture => "DISPATCH_FUTURE",
+            Self::SysOp => "SYS_OP",
+            Self::Spawn => "SPAWN",
             Self::Watch => "WATCH",
             Self::Unwatch => "UNWATCH",
             Self::Notify => "NOTIFY",
@@ -1094,7 +1112,7 @@ pub fn read_i8(code: &[u8], pc: &mut usize) -> i8 {
 /// Block notification metadata stored in the Function struct.
 /// The `function_name` field is populated at runtime from the Function containing this notification.
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BlockNotification {
     pub function_name: String, // Populated at runtime from Function::name
     pub block_name: String,
@@ -1103,7 +1121,7 @@ pub struct BlockNotification {
     pub is_enter: bool,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub enum BlockNotificationType {
     Statement,
     If,
@@ -1114,7 +1132,7 @@ pub enum BlockNotificationType {
 
 /// Visualization node metadata stored in the Function struct.
 /// Used for control flow visualization (branches, loops, scopes).
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct VizNodeMeta {
     /// Unique node ID within this function.
     pub node_id: u32,
@@ -1131,7 +1149,7 @@ pub struct VizNodeMeta {
 }
 
 /// Type of visualization node.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub enum VizNodeType {
     /// Root of a function's control flow.
     FunctionRoot,
@@ -1148,7 +1166,7 @@ pub enum VizNodeType {
 }
 
 /// Delta type for viz execution events.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub enum VizExecDelta {
     /// Entering a visualization node.
     Enter,
@@ -1157,7 +1175,7 @@ pub enum VizExecDelta {
 }
 
 /// Visualization execution event emitted when entering/exiting a viz node.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct VizExecEvent {
     /// Enter or exit.
     pub delta: VizExecDelta,
@@ -1171,7 +1189,7 @@ pub struct VizExecEvent {
     pub header_level: Option<u8>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub enum BinOp {
     Add,
     Sub,
@@ -1185,7 +1203,7 @@ pub enum BinOp {
     Shr,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub enum CmpOp {
     Eq,
     NotEq,
@@ -1195,7 +1213,7 @@ pub enum CmpOp {
     GtEq,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub enum UnaryOp {
     Not,
     Neg,
@@ -1282,7 +1300,8 @@ impl std::fmt::Display for Instruction {
                 write!(f, "ALLOC_INSTANCE {class_obj} ntypeargs={ntypeargs}")
             }
             Instruction::AllocVariant(i) => write!(f, "ALLOC_VARIANT {i}"),
-            Instruction::DispatchFuture(callee) => write!(f, "DISPATCH_FUTURE {callee}"),
+            Instruction::SysOp(callee) => write!(f, "SYS_OP {callee}"),
+            Instruction::Spawn => write!(f, "SPAWN"),
             Instruction::Await => f.write_str("AWAIT"),
             Instruction::Call { callee, ntypeargs } => {
                 write!(f, "CALL {callee} ntypeargs={ntypeargs}")
@@ -1345,13 +1364,13 @@ impl std::fmt::Display for Instruction {
 ///
 /// Populated by the compiler at emit time so that debug display doesn't
 /// need to resolve names from the `ObjectPool` or runtime stack.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum OperandMeta {
     /// `LoadVar`, `StoreVar`, `Watch`, `Unwatch`, `Notify` — variable name.
     Var(String),
     /// `LoadField`, `StoreField` — field name.
     Field(String),
-    /// `Call`, `DispatchFuture` — function name.
+    /// `Call`, `SysOp` — function name.
     Callable(String),
     /// `LoadGlobal`, `StoreGlobal` — display value.
     Global(String),
@@ -1379,7 +1398,7 @@ impl OperandMeta {
 ///
 /// Parallel to `Bytecode::instructions`. Contains resolved operand names for
 /// debug display.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct InstructionMeta {
     /// Resolved operand name (if applicable to the instruction type).
     pub operand: Option<OperandMeta>,
@@ -1388,7 +1407,7 @@ pub struct InstructionMeta {
 /// Run-length encoded source mapping entry.
 ///
 /// Each entry applies from `pc` (inclusive) until the next entry.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LineTableEntry {
     /// Bytecode program counter where this entry begins.
     pub pc: usize,
@@ -1403,7 +1422,7 @@ pub struct LineTableEntry {
 }
 
 /// Debug metadata for a named local variable and its lexical scope.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DebugLocalScope {
     /// Stack slot used by this local.
     pub slot: usize,
@@ -1426,7 +1445,7 @@ pub struct DebugLocalScope {
 /// handler. The handler bytecode is responsible for filtering: a
 /// `ThrowIfPanic` instruction before wildcard arms rethrows panics the
 /// programmer didn't explicitly name.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ExceptionTableEntry {
     /// First protected instruction (inclusive).
     pub start_pc: usize,
@@ -1452,7 +1471,7 @@ impl ExceptionTableEntry {
 /// Compact jump table: maps discriminant values to i32 byte offsets
 /// (relative to the end of the `JumpTable` instruction in the compact stream).
 /// Parallel to `Bytecode::jump_tables` but with translated offsets.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CompactJumpTable {
     /// Minimum discriminant value (maps to index 0), same as `JumpTableData::min`.
     pub min: i64,
@@ -1479,7 +1498,7 @@ impl CompactJumpTable {
 /// A re-encoding of `Vec<Instruction>` as `Vec<u8>` with 1-byte opcodes and
 /// fixed u32 operands. Produced by `Bytecode::lower_to_compact()` at engine
 /// load time. The line table and exception table are translated to byte-offset PCs.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CompactCode {
     /// The encoded instruction stream.
     pub code: Vec<u8>,
@@ -1521,7 +1540,7 @@ impl CompactCode {
 /// Executable bytecode.
 ///
 /// Contains the instructions to run and all the associated constants.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Bytecode {
     /// Sequence of instructions.
     pub instructions: Vec<Instruction>,
@@ -1532,6 +1551,7 @@ pub struct Bytecode {
 
     /// Resolved constants (runtime, populated at load time).
     /// Contains `HeapPtr` for object references. Used by `LoadConst`.
+    #[serde(skip)]
     pub resolved_constants: Vec<crate::Value>,
 
     /// Jump tables for switch dispatch (indexed by `JumpTable` instruction).
@@ -1559,6 +1579,7 @@ pub struct Bytecode {
 
     /// Compact bytecode encoding. Populated at engine load time by
     /// `lower_to_compact()`. `None` until lowering runs.
+    #[serde(skip)]
     pub compact: Option<CompactCode>,
 }
 
@@ -1688,7 +1709,8 @@ impl Bytecode {
                 | Instruction::ThrowIfPanic
                 | Instruction::Unreachable
                 | Instruction::MakeCell
-                | Instruction::SendEvent => {}
+                | Instruction::SendEvent
+                | Instruction::Spawn => {}
 
                 // ── Expanded sub-enum ops: no operands ──────────────
                 Instruction::BinOp(_)
@@ -1763,7 +1785,7 @@ impl Bytecode {
                 // ── GlobalIndex operand → u32 ───────────────────────
                 Instruction::LoadGlobal(g)
                 | Instruction::StoreGlobal(g)
-                | Instruction::DispatchFuture(g)
+                | Instruction::SysOp(g)
                 | Instruction::MakeBoundMethod(g) => {
                     code.extend_from_slice(
                         &u32::try_from(g.into_raw())
@@ -2016,7 +2038,8 @@ impl Bytecode {
             Instruction::AllocMap(_) => OpCode::AllocMap,
             Instruction::AllocInstance { .. } => OpCode::AllocInstance,
             Instruction::AllocVariant(_) => OpCode::AllocVariant,
-            Instruction::DispatchFuture(_) => OpCode::DispatchFuture,
+            Instruction::SysOp(_) => OpCode::SysOp,
+            Instruction::Spawn => OpCode::Spawn,
             Instruction::Watch(_) => OpCode::Watch,
             Instruction::Unwatch(_) => OpCode::Unwatch,
             Instruction::Notify(_) => OpCode::Notify,

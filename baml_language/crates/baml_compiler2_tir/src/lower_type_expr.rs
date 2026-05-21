@@ -226,12 +226,34 @@ pub fn lower_type_expr_in_ns(
                             })
                             .collect();
 
+                        // BEP-034: `baml.future.Future<T, E>` resolves to the
+                        // dedicated `Ty::Future` variant rather than the
+                        // generic `Ty::Class`. The class declaration exists
+                        // as a regular `.baml` file (for method dispatch via
+                        // the standard PackageBaml path), but `spawn` /
+                        // `await` keys off `Ty::Future` directly. Mirrors
+                        // how `int[]` resolves to `Ty::List` even though
+                        // `class Array<T>` is a regular class declaration.
+                        let qtn = qualify_def(db, def, short);
+                        if qtn.name().as_str() == "Future"
+                            && qtn.package().as_str() == "baml"
+                            && qtn.namespace().len() == 1
+                            && qtn.namespace()[0].as_str() == "future"
+                            && lowered_args.len() == 2
+                        {
+                            return Ty::Future(
+                                Box::new(lowered_args[0].clone()),
+                                Box::new(lowered_args[1].clone()),
+                                TyAttr::default(),
+                            );
+                        }
+
                         // Class arity mismatches are not flagged here — downstream
                         // checks (pattern subtype check, generic substitution,
                         // assignment checks) already produce a clearer diagnostic
                         // (e.g. `expected Box<int>, got Box`) when the arity
                         // mismatch actually matters at the use site.
-                        Ty::Class(qualify_def(db, def, short), lowered_args, TyAttr::default())
+                        Ty::Class(qtn, lowered_args, TyAttr::default())
                     }
                     Definition::Interface(_) => {
                         // Same generic-arg handling as `Class` — interface

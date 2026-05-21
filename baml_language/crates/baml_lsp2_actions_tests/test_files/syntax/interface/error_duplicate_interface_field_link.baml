@@ -16,7 +16,7 @@ class Person {
 
 //----
 //- diagnostics
-// Error: field `name` of interface `Named` is linked more than once
+// error: field `name` of interface `Named` is linked more than once
 //     ╭─[ interface_error_duplicate_interface_field_link.baml:13:5 ]
 //     │
 //  12 │     name as primary_name

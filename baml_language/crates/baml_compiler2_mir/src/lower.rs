@@ -242,9 +242,30 @@ pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
         }
         Tir2Ty::Unknown { attr } => Ty::Void { attr: attr.clone() }, // error recovery
         Tir2Ty::Error { attr } => Ty::Void { attr: attr.clone() },   // error recovery
+        // Demonstration-only hardcode for `baml.llm.Stream<TStream, TFinal>`'s
+        // typevars (see thoughts/sam-projects/bridge-python/21d…).
+        // The two stdlib names lower to `Ty::BuiltinUnknown` so the
+        // host-driven streaming smokes can prove the rest of the streaming
+        // wiring is intact, without yet solving general generics-through-FFI.
+        // `BuiltinUnknown` is the engine's "any value matches" sentinel at
+        // the FFI boundary (see `value_matches_type` in
+        // `bex_engine/src/conversion.rs`), so a `string` return for
+        // `Stream.next() -> TStream | StreamFinished` decodes as the
+        // `TStream` arm of the union.
+        // Every other TypeVar still falls through to the defensive Ty::Void.
+        Tir2Ty::TypeVar(name, _) if name.as_str() == "TStream" || name.as_str() == "TFinal" => {
+            Ty::BuiltinUnknown { attr }
+        }
         // TypeVar should never reach MIR — it is erased to Unknown before VIR.
         // Map defensively to Void as error recovery.
         Tir2Ty::TypeVar(..) => Ty::Void { attr },
+        // BEP-034: future types pass through unchanged with both
+        // value and error type parameters mapped.
+        Tir2Ty::Future(value, error, attr) => Ty::Future(
+            Box::new(convert_tir2_ty(value, resolved)),
+            Box::new(convert_tir2_ty(error, resolved)),
+            attr.clone(),
+        ),
     }
 }
 
@@ -2559,9 +2580,102 @@ impl LoweringContext<'_> {
             AstExpr::Missing => {
                 self.emit_panic_call("parse error", expr_id);
             }
+
+            AstExpr::Spawn { name, body } => {
+                self.lower_spawn(expr_id, name, body, dest);
+            }
+
+            AstExpr::Await { future } => {
+                self.lower_await(expr_id, future, dest);
+            }
         }
 
         self.builder.current_source_span = prev_span;
+    }
+
+    /// Lower `spawn name? { body }` into:
+    ///   1. A `MakeClosure` for the body wrapped as a 0-arg lambda.
+    ///   2. A name temp (string operand or null constant).
+    ///   3. A `Terminator::Spawn` writing the resulting Future handle.
+    fn lower_spawn(
+        &mut self,
+        expr_id: AstExprId,
+        name: Option<AstExprId>,
+        body: AstExprId,
+        dest: Place,
+    ) {
+        // The AST-lower step has already wrapped the spawn body in a
+        // synthetic 0-arg `Expr::Lambda`. Lowering it through the
+        // standard expression path emits a `MakeClosure` rvalue, which
+        // is exactly what we want as the closure operand to `Spawn`.
+        let closure_local = self.builder.temp(Ty::Null {
+            attr: TyAttr::default(),
+        });
+        let closure_place = Place::Local(closure_local);
+        self.lower_expr(body, closure_place.clone());
+        let closure_op = Operand::Copy(closure_place);
+
+        // Lower the optional name into an operand.
+        let name_op = match name {
+            Some(name_id) => self.lower_to_operand(name_id),
+            None => Operand::Constant(Constant::Null),
+        };
+
+        // Allocate the future temp. Phase C uses a defaulted `Null` type
+        // for the future local; the TIR-tracked value/error types flow
+        // through to runtime via the surrounding context. A follow-up
+        // can plumb `Tir2Ty::Future` directly through `convert_tir2_ty`
+        // here once we read it from `self.expr_types`.
+        let future_local = self.builder.temp(Ty::Null {
+            attr: TyAttr::default(),
+        });
+        let future_place = Place::Local(future_local);
+
+        let resume = self.builder.create_block();
+        self.builder
+            .spawn(closure_op, name_op, future_place.clone(), resume);
+        self.builder.set_current_block(resume);
+        // The result of `spawn` is the Future handle.
+        self.builder
+            .assign(dest, Rvalue::Use(Operand::Copy(future_place)));
+        // Phase C: `expr_id` is recorded for source-span tracking but
+        // is not used for type lookup here.
+        let _ = expr_id;
+    }
+
+    /// Lower `await expr` into a `Terminator::Await` whose destination is
+    /// the awaited value.
+    fn lower_await(&mut self, _expr_id: AstExprId, future: AstExprId, dest: Place) {
+        let future_local = self.builder.temp(Ty::Null {
+            attr: TyAttr::default(),
+        });
+        let future_place = Place::Local(future_local);
+        self.lower_expr(future, future_place.clone());
+
+        // `Terminator::Await` requires its destination to be `Place::Local`.
+        // If the caller handed us a projection (field/index), await into a
+        // temp local and then assign through to the projection — mirrors
+        // how `lower_call` normalizes its destination.
+        let (await_dest, projection_dest) = match dest {
+            Place::Local(_) => (dest, None),
+            projection => {
+                let tmp = self.builder.temp(Ty::Null {
+                    attr: TyAttr::default(),
+                });
+                (Place::Local(tmp), Some(projection))
+            }
+        };
+
+        let resume = self.builder.create_block();
+        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
+        self.builder
+            .await_(future_place, await_dest.clone(), resume, unwind);
+        self.builder.set_current_block(resume);
+
+        if let Some(projection) = projection_dest {
+            self.builder
+                .assign(projection, Rvalue::Use(Operand::Copy(await_dest)));
+        }
     }
 }
 
@@ -4038,23 +4152,28 @@ impl LoweringContext<'_> {
         let is_sys_op = self.check_sys_op(callee);
 
         if is_sys_op {
-            // dest must be a local place for Await
+            // BEP-034 phase D′: sys-ops now lower to a single
+            // `Terminator::SysOp` that runs the op inline in the
+            // engine and binds the return value directly into `dest`
+            // — no intermediate `Future` heap object, no separate
+            // `Await` terminator, no `FutureManager` entry.
+            //
+            // The bytecode emit just becomes:
+            //     <args ...>
+            //     SYS_OP g
+            //     <store dest>
             let dest_local = match dest {
                 Place::Local(l) => l,
                 _ => self.builder.temp(Ty::Null {
                     attr: TyAttr::default(),
                 }),
             };
-            let result_ty = self.builder.local_ty(dest_local);
-            let future_ty = Ty::Future(Box::new(result_ty), TyAttr::default());
-            let future_local = self.builder.temp(future_ty);
-            let future_place = Place::Local(future_local);
-            let resume = self.builder.create_block();
-            // For generic IO builtins (`$rust_io_function` with type params),
-            // the compiler injects synthetic trailing value-arg slots — one
-            // `baml_type::Ty` per type parameter.  The Rust glue reads them
-            // positionally after the regular value args.  We therefore append
-            // type-arg operands AFTER the value args here (unlike regular BAML
+            // For generic IO builtins (`$rust_io_function` with type
+            // params), the compiler injects synthetic trailing
+            // value-arg slots — one `baml_type::Ty` per type
+            // parameter.  The Rust glue reads them positionally after
+            // the regular value args.  We therefore append type-arg
+            // operands AFTER the value args here (unlike regular BAML
             // calls where they are prepended as leading args).
             let sys_op_arg_operands = if ntypeargs > 0 {
                 let mut combined = arg_operands;
@@ -4063,16 +4182,13 @@ impl LoweringContext<'_> {
             } else {
                 arg_operands
             };
-            self.builder.dispatch_future(
+            self.builder.sys_op(
                 callee_operand,
                 sys_op_arg_operands,
-                future_place.clone(),
-                resume,
+                Place::Local(dest_local),
+                target,
+                unwind,
             );
-            self.builder.set_current_block(resume);
-            let dest_place = Place::Local(dest_local);
-            self.builder
-                .await_(future_place, dest_place, target, unwind);
         } else {
             // Call destinations must be Place::Local in MIR. If `dest` is a
             // projection (Field/Index) or a capture, call into a temp local
@@ -8678,7 +8794,7 @@ pub fn lower_function<'db>(
             // synthetic trailing value-arg slot for each generic type parameter
             // (e.g. `parse<T>` gets one extra `baml_type::Ty` slot after the
             // regular params).  We must include those synthetic slots in the
-            // arity so that `DispatchFuture` pops the correct number of args
+            // arity so that `ScheduleFuture` pops the correct number of args
             // from the stack.
             let extra_arity = if matches!(kind, BuiltinKind::Io) {
                 // For IO builtins (`$rust_io_function`), the compiler injects

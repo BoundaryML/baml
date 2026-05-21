@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 11691
 ---
 === TIR2 ===
 function user.OpenAIImageResponses$new() -> ? throws never {
@@ -19,7 +18,7 @@ function user.GenerateImage$build_request_stream(prompt: string) -> baml.http.Re
   baml.llm.build_request_stream(OpenAIImageResponses, "GenerateImage", map { "prompt": prompt }) : baml.http.Request
 }
 function user.GenerateImage$parse(json: string) -> image throws never {
-  baml.llm.parse<T>("GenerateImage", json) : image
+  baml.llm.parse<TFinal>("GenerateImage", json) : image
 }
 function user.GenerateImageSet(prompt: string) -> image[] throws never {
   baml.llm.call_llm_function<T>(OpenAIImageResponses, "GenerateImageSet", map { "prompt": prompt }) : image[]
@@ -34,7 +33,7 @@ function user.GenerateImageSet$build_request_stream(prompt: string) -> baml.http
   baml.llm.build_request_stream(OpenAIImageResponses, "GenerateImageSet", map { "prompt": prompt }) : baml.http.Request
 }
 function user.GenerateImageSet$parse(json: string) -> image[] throws never {
-  baml.llm.parse<T>("GenerateImageSet", json) : image[]
+  baml.llm.parse<TFinal>("GenerateImageSet", json) : image[]
 }
 function user.GenerateMixedImageNarrative(prompt: string) -> (image | string)[] throws never {
   baml.llm.call_llm_function<T>(OpenAIImageResponses, "GenerateMixedImag...", map { "prompt": prompt }) : (image | string)[]
@@ -49,7 +48,7 @@ function user.GenerateMixedImageNarrative$build_request_stream(prompt: string) -
   baml.llm.build_request_stream(OpenAIImageResponses, "GenerateMixedImag...", map { "prompt": prompt }) : baml.http.Request
 }
 function user.GenerateMixedImageNarrative$parse(json: string) -> (image | string)[] throws never {
-  baml.llm.parse<T>("GenerateMixedImag...", json) : (image | string)[]
+  baml.llm.parse<TFinal>("GenerateMixedImag...", json) : (image | string)[]
 }
 function user.GenerateImage$stream(prompt: string) -> baml.llm.Stream<image, image> throws never {
   baml.llm.stream_llm_function(OpenAIImageResponses, "GenerateImage", map { "prompt": prompt }) : baml.llm.Stream<image, image>

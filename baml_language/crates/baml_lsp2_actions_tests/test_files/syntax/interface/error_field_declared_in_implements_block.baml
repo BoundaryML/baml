@@ -14,7 +14,7 @@ class Server {
 
 //----
 //- diagnostics
-// Error: field `port` cannot be declared inside `implements Config`
+// error: field `port` cannot be declared inside `implements Config`
 //     ╭─[ interface_error_field_declared_in_implements_block.baml:10:22 ]
 //     │
 //  10 │ ╭─▶   implements Config {
@@ -24,7 +24,7 @@ class Server {
 //     │     
 //     │     Note: Error code: E0127
 // ────╯
-// Error: class `Server` does not provide field `port` required by interface `Config`
+// error: class `Server` does not provide field `port` required by interface `Config`
 //     ╭─[ interface_error_field_declared_in_implements_block.baml:9:15 ]
 //     │
 //   9 │ ╭─▶ class Server {

@@ -18,7 +18,7 @@ function bad() -> string {
 
 //----
 //- diagnostics
-// Error: interface projection uses `.as<Animal>`, not `.Animal`
+// error: interface projection uses `.as<Animal>`, not `.Animal`
 //     ╭─[ interface_error_old_qualified_projection.baml:16:9 ]
 //     │
 //  16 │   return d.Animal.speak()

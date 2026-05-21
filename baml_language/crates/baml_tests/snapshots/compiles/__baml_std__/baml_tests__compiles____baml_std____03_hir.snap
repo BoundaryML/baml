@@ -334,6 +334,23 @@ function baml.fs.write(path: string, content: string) -> int  [builtin]
 function baml.fs.write_bytes(self: ?, data: uint8array) -> int  [builtin]
 function baml.fs.write_bytes(path: string, content: uint8array) -> int  [builtin]
 
+--- <builtin>/baml/ns_future/future.baml ---
+class baml.future.Future {
+}
+enum baml.future.FutureState {Pending, Ready, Error, Cancelled}
+function baml.future.cancel(self: ?) -> bool  [builtin]
+function baml.future.from_json(j: baml.json.json) -> baml.future.Future  [expr] {
+  baml.future.Future {  }
+}
+function baml.future.is_cancelled(self: ?) -> bool  [builtin]
+function baml.future.is_error(self: ?) -> bool  [builtin]
+function baml.future.is_result(self: ?) -> bool  [builtin]
+function baml.future.is_settled(self: ?) -> bool  [builtin]
+function baml.future.state(self: ?) -> baml.future.FutureState  [builtin]
+function baml.future.to_json(self: ?) -> baml.json.json  [expr] {
+  map {  }
+}
+
 --- <builtin>/baml/ns_glob/glob.baml ---
 class baml.glob.Glob {
   _handle: $rust_type
@@ -409,7 +426,11 @@ function baml.http.to_json(self: ?) -> baml.json.json  [expr] {
 }
 
 --- <builtin>/baml/ns_io/io.baml ---
+function baml.io.eprint(s: string) -> null  [builtin]
+function baml.io.eprintln(s: string) -> null  [builtin]
 function baml.io.input(prompt: string?) -> string  [builtin]
+function baml.io.print(s: string) -> null  [builtin]
+function baml.io.println(s: string) -> null  [builtin]
 
 --- <builtin>/baml/ns_json/json.baml ---
 class baml.json.JsonDecodeError {
@@ -425,28 +446,34 @@ class baml.json.JsonSerializationError {
   reason: string
 }
 type baml.json.json = null | bool | int | float | string | baml.json.json[] | map<string, baml.json.json>
+function baml.json.deserialize(s: string) -> baml.json.T  [expr] {
+  {  } from_json(parse(s))
+}
 function baml.json.field(j: baml.json.json, key: string) -> baml.json.json  [builtin]
 function baml.json.from_json(j: baml.json.json) -> baml.json.JsonParseError  [expr] {
   baml.json.JsonParseError { message: baml.json.from_json(baml.json.field(j, "message")) }
-}
-function baml.json.from_json(j: baml.json.json) -> baml.json.JsonSerializationError  [expr] {
-  baml.json.JsonSerializationError { message: baml.json.from_json(baml.json.field(j, "message")), path: baml.json.from_json(baml.json.field(j, "path")), reason: baml.json.from_json(baml.json.field(j, "reason")) }
 }
 function baml.json.from_json(j: baml.json.json) -> baml.json.T  [builtin]
 function baml.json.from_json(j: baml.json.json) -> baml.json.JsonDecodeError  [expr] {
   baml.json.JsonDecodeError { message: baml.json.from_json(baml.json.field(j, "message")), path: baml.json.from_json(baml.json.field(j, "path")) }
 }
+function baml.json.from_json(j: baml.json.json) -> baml.json.JsonSerializationError  [expr] {
+  baml.json.JsonSerializationError { message: baml.json.from_json(baml.json.field(j, "message")), path: baml.json.from_json(baml.json.field(j, "path")), reason: baml.json.from_json(baml.json.field(j, "reason")) }
+}
 function baml.json.from_string(s: string) -> baml.json.T  [builtin]
 function baml.json.parse(s: string) -> baml.json.json  [builtin]
+function baml.json.serialize(v: baml.json.T) -> string  [expr] {
+  {  } stringify(to_json(v))
+}
 function baml.json.stringify(j: baml.json.json) -> string  [builtin]
 function baml.json.stringify_pretty(j: baml.json.json) -> string  [builtin]
-function baml.json.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json(), "path": self.path.to_json() }
-}
 function baml.json.to_json(self: ?) -> baml.json.json  [expr] {
   map { "message": self.message.to_json() }
 }
 function baml.json.to_json(v: baml.json.T) -> baml.json.json  [builtin]
+function baml.json.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "message": self.message.to_json(), "path": self.path.to_json() }
+}
 function baml.json.to_json(self: ?) -> baml.json.json  [expr] {
   map { "message": self.message.to_json(), "path": self.path.to_json(), "reason": self.reason.to_json() }
 }
@@ -483,7 +510,7 @@ function baml.llm.from_json(j: baml.json.json) -> baml.llm.PlannerState  [expr] 
 function baml.llm.from_json(j: baml.json.json) -> baml.llm.ExecutionContext  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
-function baml.llm.parse(function_name: string, json: string) -> baml.llm.T  [expr] {
+function baml.llm.parse(function_name: string, json: string) -> baml.llm.TFinal  [expr] {
   { let return_type = get_return_type(function_name); let stream_return_type = get_stream_return_type(function_name); let cache = StreamCache.new(return_type, stream_return_type) } __sap_parse_final(json, cache)
 }
 function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.PromptAst  [expr] {
@@ -596,8 +623,8 @@ enum baml.llm.ClientType {Primitive, Fallback, RoundRobin}
 function baml.llm.__make_stream(self: ?, sse: root.http.SseStream, function_name: string) -> baml.llm.Stream  [expr] {
   { let primitive = self.to_primitive_client(); let return_type = get_return_type(function_name); let stream_return_type = get_stream_return_type(function_name); let acc = primitive.new_stream_accumulator(); let cache: baml.llm.StreamCache = StreamCache.new(return_type, stream_return_type) } baml.llm.Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache }
 }
-function baml.llm.__sap_parse_final(json: string, cache: baml.llm.StreamCache) -> baml.llm.T  [builtin]
-function baml.llm.__sap_parse_partial(json: string, cache: baml.llm.StreamCache) -> baml.llm.S | root.stream.StreamNoYield  [builtin]
+function baml.llm.__sap_parse_final(json: string, cache: baml.llm.StreamCache) -> baml.llm.TFinal  [builtin]
+function baml.llm.__sap_parse_partial(json: string, cache: baml.llm.StreamCache) -> baml.llm.TStream | root.stream.StreamNoYield  [builtin]
 function baml.llm.add_events(self: ?, events: string) -> null  [builtin]
 function baml.llm.build_attempt(self: ?) -> baml.llm.OrchestrationStep[]  [expr] {
   { let planner_state = PlannerState { rr_client_names: [] } } self.build_attempt_with_state(planner_state)
@@ -626,7 +653,7 @@ function baml.llm.execute_oneshot(self: ?, context: baml.llm.ExecutionContext, i
 function baml.llm.execute_stream(self: ?, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> baml.llm.Stream  [expr] {
   {  } match (self.retry) { r: baml.llm.RetryPolicy => { let current_delay = r.initial_delay_ms Add 0.0; { let attempt = 0; while attempt Le r.max_retries { let attempt_delay = inherited_delay_ms; if (attempt Gt 0) { attempt_delay = root.math.trunc(current_delay); let next = current_delay Mul r.multiplier } if (next Gt r.max_delay_ms Add 0.0) { current_delay = r.max_delay_ms Add 0.0 } else { current_delay = next }; if (attempt Eq r.max_retries) { attempt_delay = inherited_delay_ms }; let result2: baml.llm.Stream = self.execute_once_stream(context, attempt_delay) catch (e) { _ => { continue } }; return result2 } }; throw root.errors.DevOther { message: "All orchestration..." } }, null => { let result: baml.llm.Stream = self.execute_once_stream(context, inherited_delay_ms); return result } }
 }
-function baml.llm.final(self: ?) -> baml.llm.T  [expr] {
+function baml.llm.final(self: ?) -> baml.llm.TFinal  [expr] {
   { while Not self._acc.is_done() { let next = match (self._sse.next()) { null => { break }, next: string => next }; self._acc.add_events(next) } if (self._acc.is_done()) { self._sse.close(); break }; match (self._acc.finish_reason()) { null => { throw root.errors.LlmClientError { message: "Streaming finishe..." } }, reason: string => self._client.validate_finish_reason(reason) }; let content = self._acc.content() } __sap_parse_final(content, self._cache)
 }
 function baml.llm.finish_reason(self: ?) -> string?  [builtin]
@@ -679,8 +706,8 @@ function baml.llm.is_done(self: ?) -> bool  [builtin]
 function baml.llm.model(self: ?) -> string?  [builtin]
 function baml.llm.new(target: type, streaming: type) -> baml.llm.StreamCache  [builtin]
 function baml.llm.new_stream_accumulator(self: ?) -> baml.llm.StreamAccumulator  [builtin]
-function baml.llm.next(self: ?) -> baml.llm.S | root.stream.StreamFinished  [expr] {
-  { while true { let next = match (self._sse.next()) { null => { return root.stream.StreamFinished {  } }, next: string => next }; self._acc.add_events(next); if (self._acc.is_done()) { self._sse.close(); return root.stream.StreamFinished {  } }; let content = self._acc.content(); let parsed: baml.llm.S | root.stream.StreamNoYield = __sap_parse_partial(content, self._cache) } match (parsed) { root.stream.StreamNoYield => { continue }, parsed: baml.llm.S => { return parsed } } } root.sys.panic("Unreachable")
+function baml.llm.next(self: ?) -> baml.llm.TStream | root.stream.StreamFinished  [expr] {
+  { while true { let next = match (self._sse.next()) { null => { return root.stream.StreamFinished {  } }, next: string => next }; self._acc.add_events(next); if (self._acc.is_done()) { self._sse.close(); return root.stream.StreamFinished {  } }; let content = self._acc.content(); let parsed: baml.llm.TStream | root.stream.StreamNoYield = __sap_parse_partial(content, self._cache) } match (parsed) { root.stream.StreamNoYield => { continue }, parsed: baml.llm.TStream => { return parsed } } } root.sys.panic("Unreachable")
 }
 function baml.llm.output_tokens(self: ?) -> int?  [builtin]
 function baml.llm.parse(self: ?, http_response_body: string) -> baml.llm.T  [builtin]
@@ -795,15 +822,28 @@ function baml.media.url(self: ?) -> string?  [builtin]
 class baml.net.Socket {
   _handle: $rust_type
 }
+class baml.net.TcpListener {
+  _handle: $rust_type
+}
+function baml.net.accept(self: ?) -> baml.net.Socket  [builtin]
+function baml.net.close(self: ?) -> null  [builtin]
 function baml.net.close(self: ?) -> null  [builtin]
 function baml.net.connect(addr: string) -> baml.net.Socket  [builtin]
 function baml.net.from_json(j: baml.json.json) -> baml.net.Socket  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
+function baml.net.from_json(j: baml.json.json) -> baml.net.TcpListener  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function baml.net.listen(addr: string) -> baml.net.TcpListener  [builtin]
 function baml.net.read(self: ?) -> string  [builtin]
 function baml.net.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
+function baml.net.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function baml.net.write(self: ?, data: string) -> null  [builtin]
 
 --- <builtin>/baml/ns_panics/panics.baml ---
 class baml.panics.AllocFailure {
@@ -817,6 +857,9 @@ class baml.panics.Cancelled {
 }
 class baml.panics.DivisionByZero {
   dividend: int
+}
+class baml.panics.Exit {
+  code: int
 }
 class baml.panics.HostUnavailable {
   resource: string
@@ -838,7 +881,7 @@ class baml.panics.Unreachable {
 class baml.panics.UserPanic {
   message: string
 }
-type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.Cancelled | baml.panics.UserPanic | baml.panics.AllocFailure | baml.panics.HostUnavailable
+type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.Cancelled | baml.panics.UserPanic | baml.panics.Exit | baml.panics.AllocFailure | baml.panics.HostUnavailable
 function baml.panics.from_json(j: baml.json.json) -> baml.panics.DivisionByZero  [expr] {
   baml.panics.DivisionByZero { dividend: baml.json.from_json(baml.json.field(j, "dividend")) }
 }
@@ -848,8 +891,8 @@ function baml.panics.from_json(j: baml.json.json) -> baml.panics.StackOverflow  
 function baml.panics.from_json(j: baml.json.json) -> baml.panics.Cancelled  [expr] {
   baml.panics.Cancelled { message: baml.json.from_json(baml.json.field(j, "message")) }
 }
-function baml.panics.from_json(j: baml.json.json) -> baml.panics.HostUnavailable  [expr] {
-  baml.panics.HostUnavailable { resource: baml.json.from_json(baml.json.field(j, "resource")), message: baml.json.from_json(baml.json.field(j, "message")) }
+function baml.panics.from_json(j: baml.json.json) -> baml.panics.AllocFailure  [expr] {
+  baml.panics.AllocFailure { message: baml.json.from_json(baml.json.field(j, "message")) }
 }
 function baml.panics.from_json(j: baml.json.json) -> baml.panics.IndexOutOfBounds  [expr] {
   baml.panics.IndexOutOfBounds { index: baml.json.from_json(baml.json.field(j, "index")), length: baml.json.from_json(baml.json.field(j, "length")) }
@@ -860,17 +903,20 @@ function baml.panics.from_json(j: baml.json.json) -> baml.panics.AssertionFailed
 function baml.panics.from_json(j: baml.json.json) -> baml.panics.UserPanic  [expr] {
   baml.panics.UserPanic { message: baml.json.from_json(baml.json.field(j, "message")) }
 }
+function baml.panics.from_json(j: baml.json.json) -> baml.panics.HostUnavailable  [expr] {
+  baml.panics.HostUnavailable { resource: baml.json.from_json(baml.json.field(j, "resource")), message: baml.json.from_json(baml.json.field(j, "message")) }
+}
 function baml.panics.from_json(j: baml.json.json) -> baml.panics.MapKeyNotFound  [expr] {
   baml.panics.MapKeyNotFound { key: baml.json.from_json(baml.json.field(j, "key")) }
 }
 function baml.panics.from_json(j: baml.json.json) -> baml.panics.Unreachable  [expr] {
   baml.panics.Unreachable { message: baml.json.from_json(baml.json.field(j, "message")) }
 }
-function baml.panics.from_json(j: baml.json.json) -> baml.panics.AllocFailure  [expr] {
-  baml.panics.AllocFailure { message: baml.json.from_json(baml.json.field(j, "message")) }
+function baml.panics.from_json(j: baml.json.json) -> baml.panics.Exit  [expr] {
+  baml.panics.Exit { code: baml.json.from_json(baml.json.field(j, "code")) }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "code": self.code.to_json() }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
   map { "dividend": self.dividend.to_json() }
@@ -882,7 +928,7 @@ function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
   map { "message": self.message.to_json() }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "resource": self.resource.to_json(), "message": self.message.to_json() }
+  map { "message": self.message.to_json() }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
   map { "index": self.index.to_json(), "length": self.length.to_json() }
@@ -892,6 +938,9 @@ function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
   map { "message": self.message.to_json() }
+}
+function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "resource": self.resource.to_json(), "message": self.message.to_json() }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
   map { "key": self.key.to_json() }
@@ -932,6 +981,7 @@ class baml.sys.ShellOutput {
 }
 function baml.sys.argv() -> string[]  [builtin]
 function baml.sys.exec(program: string, args: string[]?, options: baml.sys.ProcessOptions?) -> baml.sys.ShellOutput  [builtin]
+function baml.sys.exit(code: int) -> never  [builtin]
 function baml.sys.from_json(j: baml.json.json) -> baml.sys.ProcessOptions  [expr] {
   baml.sys.ProcessOptions { cwd: baml.json.from_json(baml.json.field(j, "cwd")), env: baml.json.from_json(baml.json.field(j, "env")), timeout_ms: baml.json.from_json(baml.json.field(j, "timeout_ms")), stdin: baml.json.from_json(baml.json.field(j, "stdin")) }
 }
