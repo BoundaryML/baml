@@ -1278,6 +1278,21 @@ fn interface_field_type_must_match_invariantly() {
     );
 }
 
+#[test]
+fn interface_field_union_order_is_exactly_equivalent() {
+    assert_zero_compile_errors(
+        r#"
+        interface Measured {
+            value: int | string
+        }
+        class Reading {
+            value: string | int
+            implements Measured {}
+        }
+        "#,
+    );
+}
+
 #[tokio::test]
 async fn class_own_field_shadowing_interface_field_is_separate_at_runtime() {
     let output = baml_test!(

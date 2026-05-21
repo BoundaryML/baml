@@ -220,14 +220,11 @@ pub fn package_implements_registry<'db>(
                 &[],
                 &mut diags,
             );
-            let Some(target_key) = implementation_key_for_ty(&target_ty) else {
-                continue;
-            };
-            if let baml_compiler2_ast::TypeExpr::Path { generic_args, .. } =
-                &imp.interface_target.expr
-            {
-                if !generic_args.is_empty() {
-                    let lowered: Vec<Ty> = generic_args
+            let interface_args = match &imp.interface_target.expr {
+                baml_compiler2_ast::TypeExpr::Path { generic_args, .. }
+                    if !generic_args.is_empty() =>
+                {
+                    generic_args
                         .iter()
                         .map(|ga| {
                             crate::lower_type_expr::lower_type_expr_in_ns(
@@ -239,10 +236,29 @@ pub fn package_implements_registry<'db>(
                                 &mut diags,
                             )
                         })
-                        .collect();
-                    type_implements_type_args
-                        .insert((target_key.clone(), iface_qtn.clone()), lowered);
+                        .collect::<Vec<_>>()
                 }
+                _ => Vec::new(),
+            };
+
+            if let Ty::Class(class_qtn, _, _) = &target_ty {
+                if !interface_args.is_empty() {
+                    implements_type_args
+                        .insert((class_qtn.clone(), iface_qtn.clone()), interface_args);
+                }
+                class_implements
+                    .entry(class_qtn.clone())
+                    .or_default()
+                    .insert(iface_qtn);
+                continue;
+            }
+
+            let Some(target_key) = implementation_key_for_ty(&target_ty) else {
+                continue;
+            };
+            if !interface_args.is_empty() {
+                type_implements_type_args
+                    .insert((target_key.clone(), iface_qtn.clone()), interface_args);
             }
             type_implements
                 .entry(target_key)

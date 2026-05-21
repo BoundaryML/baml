@@ -27,7 +27,7 @@ use baml_compiler2_hir::{body::FunctionBody, file_semantic_index, scope::ScopeKi
 use baml_compiler2_tir::{
     infer_context::{DiagnosticLocation, TirTypeError},
     inference::render_scope_diagnostics,
-    ty::{Ty, TyAttr},
+    ty::{QualifiedTypeName, Ty, TyAttr},
 };
 use indexmap::IndexMap;
 use text_size::{TextRange, TextSize};
@@ -343,6 +343,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
         &ast_items,
         pkg_items,
         &pkg_info.namespace_path,
+        &aliases,
     ));
 
     // Deduplicate: multiple steps can produce the same diagnostic (e.g. scope
@@ -370,6 +371,7 @@ fn check_interfaces<'db>(
     items: &[baml_compiler2_ast::Item],
     pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
 ) -> Vec<Diagnostic> {
     use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
 
@@ -402,6 +404,7 @@ fn check_interfaces<'db>(
                 iface,
                 pkg_items,
                 namespace_path,
+                aliases,
                 &mut diagnostics,
             );
         }
@@ -415,6 +418,7 @@ fn check_interfaces<'db>(
                 class,
                 pkg_items,
                 namespace_path,
+                aliases,
                 &mut diagnostics,
             );
         }
@@ -882,18 +886,19 @@ fn validate_interface_extends_fields<'db>(
     iface: &baml_compiler2_ast::InterfaceDef,
     pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
 
-    let mut seen: IndexMap<Name, (Name, String)> = IndexMap::new();
+    let mut seen: IndexMap<Name, (Name, baml_compiler2_ast::TypeExpr, String)> = IndexMap::new();
 
     // Seed with the interface's own fields.
     for field in &iface.fields {
         if let Some(te) = &field.type_expr {
             seen.insert(
                 field.name.clone(),
-                (iface.name.clone(), format!("{}", te.expr)),
+                (iface.name.clone(), te.expr.clone(), format!("{}", te.expr)),
             );
         }
     }
@@ -916,14 +921,24 @@ fn validate_interface_extends_fields<'db>(
         for (origin, field_name, field_te) in &members.fields {
             let Some(field_te) = field_te else { continue };
             let ty_str = format!("{}", field_te.expr);
-            if let Some((existing_origin, existing_ty)) = seen.get(field_name) {
-                if *existing_ty != ty_str {
+            if let Some((existing_origin, existing_ty, existing_rendered)) = seen.get(field_name) {
+                if !type_exprs_compatible(
+                    db,
+                    pkg_items,
+                    namespace_path,
+                    &iface.generic_params,
+                    existing_ty,
+                    namespace_path,
+                    &iface.generic_params,
+                    &field_te.expr,
+                    aliases,
+                ) {
                     diagnostics.push(
                         Hir2Diagnostic::InterfaceExtendsFieldConflict {
                             interface_name: iface.name.clone(),
                             field_name: field_name.clone(),
                             first_interface: existing_origin.clone(),
-                            first_type: existing_ty.clone(),
+                            first_type: existing_rendered.clone(),
                             second_interface: origin.clone(),
                             second_type: ty_str,
                             span: iface.name_span,
@@ -932,7 +947,10 @@ fn validate_interface_extends_fields<'db>(
                     );
                 }
             } else {
-                seen.insert(field_name.clone(), (origin.clone(), ty_str));
+                seen.insert(
+                    field_name.clone(),
+                    (origin.clone(), field_te.expr.clone(), ty_str),
+                );
             }
         }
     }
@@ -949,6 +967,29 @@ fn validate_implements_for<'db>(
     use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
 
     let target_name = Name::new(format!("{}", imp.for_target.expr));
+    let mut target_type_errors = Vec::new();
+    baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+        db,
+        &imp.for_target.expr,
+        pkg_items,
+        namespace_path,
+        &[],
+        &mut target_type_errors,
+    );
+    if !target_type_errors.is_empty() {
+        for error in target_type_errors {
+            diagnostics.push(
+                Diagnostic::error(tir_type_error_to_diagnostic_id(&error), error.to_string())
+                    .with_primary_span(Span {
+                        file_id,
+                        range: imp.for_target.span,
+                    })
+                    .with_phase(DiagnosticPhase::Type),
+            );
+        }
+        return;
+    }
+
     let Some((iface_loc, iface)) =
         resolve_interface_path(db, &imp.interface_target.expr, pkg_items, namespace_path)
     else {
@@ -1084,6 +1125,7 @@ fn validate_class_implements<'db>(
     class: &baml_compiler2_ast::ClassDef,
     pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
@@ -1167,6 +1209,10 @@ fn validate_class_implements<'db>(
             continue;
         };
         let iface_file = iface_loc.file(db);
+        let iface_namespace_path =
+            baml_compiler2_hir::file_package::file_package(db, iface_file).namespace_path;
+        let mut interface_generic_params = class.generic_params.clone();
+        interface_generic_params.extend(iface.generic_params.clone());
         if block.is_out_of_body && !iface.fields.is_empty() {
             diagnostics.push(
                 Hir2Diagnostic::OutOfBodyImplementsFieldInterface {
@@ -1345,7 +1391,17 @@ fn validate_class_implements<'db>(
                     .and_then(std::option::Option::as_ref),
                 class_field.type_expr.as_ref(),
             ) {
-                if !type_exprs_compatible(&iface_te.expr, &class_te.expr) {
+                if !type_exprs_compatible(
+                    db,
+                    pkg_items,
+                    &iface_namespace_path,
+                    &interface_generic_params,
+                    &iface_te.expr,
+                    namespace_path,
+                    &class.generic_params,
+                    &class_te.expr,
+                    aliases,
+                ) {
                     diagnostics.push(
                         Hir2Diagnostic::InterfaceFieldTypeMismatch {
                             class_name: class.name.clone(),
@@ -1383,7 +1439,17 @@ fn validate_class_implements<'db>(
             if let (Some(iface_te), Some(class_te)) =
                 (iface_te.as_ref(), class_field.type_expr.as_ref())
             {
-                if !type_exprs_compatible(&iface_te.expr, &class_te.expr) {
+                if !type_exprs_compatible(
+                    db,
+                    pkg_items,
+                    &iface_namespace_path,
+                    &interface_generic_params,
+                    &iface_te.expr,
+                    namespace_path,
+                    &class.generic_params,
+                    &class_te.expr,
+                    aliases,
+                ) {
                     diagnostics.push(
                         Hir2Diagnostic::InterfaceFieldTypeMismatch {
                             class_name: class.name.clone(),
@@ -1439,15 +1505,50 @@ fn validate_class_implements<'db>(
     // `resolve_member` in TIR for the unqualified-call diagnostic.
 }
 
-/// Invariant compatibility check on raw AST `TypeExpr`s.
+/// Invariant compatibility check for interface fields.
 ///
 /// Interface fields are writeable through the interface view, so the class
-/// storage type must match the interface field type exactly.
+/// storage type must match the interface field type exactly. The exactness
+/// rule lives in TIR normalization so LSP and compiler diagnostics agree on
+/// semantic equality without permitting assignment subtyping.
 fn type_exprs_compatible(
-    a: &baml_compiler2_ast::TypeExpr,
-    b: &baml_compiler2_ast::TypeExpr,
+    db: &dyn Db,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    lhs_namespace_path: &[Name],
+    lhs_generic_params: &[Name],
+    lhs: &baml_compiler2_ast::TypeExpr,
+    rhs_namespace_path: &[Name],
+    rhs_generic_params: &[Name],
+    rhs: &baml_compiler2_ast::TypeExpr,
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
 ) -> bool {
-    a.to_string() == b.to_string()
+    let mut diagnostics = Vec::new();
+    let lhs_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+        db,
+        lhs,
+        pkg_items,
+        lhs_namespace_path,
+        lhs_generic_params,
+        &mut diagnostics,
+    );
+    let lhs_lowered = diagnostics.is_empty();
+    diagnostics.clear();
+    let rhs_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+        db,
+        rhs,
+        pkg_items,
+        rhs_namespace_path,
+        rhs_generic_params,
+        &mut diagnostics,
+    );
+
+    if !lhs_lowered || !diagnostics.is_empty() {
+        // Resolution diagnostics are emitted elsewhere. Avoid inventing a
+        // misleading interface-field mismatch on partially unresolved types.
+        return lhs.to_string() == rhs.to_string();
+    }
+
+    baml_compiler2_tir::normalize::is_same_normalized_type(&lhs_ty, &rhs_ty, aliases)
 }
 
 fn type_expr_contains_self(expr: &baml_compiler2_ast::TypeExpr) -> bool {

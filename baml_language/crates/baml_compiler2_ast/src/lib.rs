@@ -418,6 +418,32 @@ function main(m: MultiFormat) -> string {
     }
 
     #[test]
+    fn ast_preserves_out_of_body_implements_for_external_class_target() {
+        let source = r#"
+interface ToJson {
+  function to_json(self) -> string
+}
+
+implements ToJson for Dog {
+  function to_json(self) -> string {
+    return "dog"
+  }
+}
+"#;
+        let items = parse_and_lower(source);
+        let imp = items
+            .iter()
+            .find_map(|item| match item {
+                Item::ImplementsFor(imp) => Some(imp),
+                _ => None,
+            })
+            .expect("external class target should remain an ImplementsFor item");
+
+        assert_eq!(imp.interface_target.expr.to_string(), "ToJson");
+        assert_eq!(imp.for_target.expr.to_string(), "Dog");
+    }
+
+    #[test]
     fn ast_default_indices_survive_recovered_parameter() {
         let source = r#"
 function Broken(: int = 1, value: int = 2) -> int {

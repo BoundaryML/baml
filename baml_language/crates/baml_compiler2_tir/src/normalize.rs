@@ -22,6 +22,22 @@ pub(crate) fn is_subtype_of(sub: &Ty, sup: &Ty, aliases: &HashMap<QualifiedTypeN
     sub_norm.is_subtype_of(&sup_norm, &mut HashSet::new())
 }
 
+/// Check invariant type equality after resolving aliases and canonicalizing
+/// order-insensitive type forms such as unions.
+///
+/// This is not an assignability/subtyping check. Use it for invariant positions
+/// where two type spellings may differ but still denote the same type, such as
+/// interface field implementations.
+pub fn is_same_normalized_type(
+    lhs: &Ty,
+    rhs: &Ty,
+    aliases: &HashMap<QualifiedTypeName, Ty>,
+) -> bool {
+    let recursive = find_recursive_aliases(aliases);
+    normalize(lhs, aliases, &recursive).canonicalize()
+        == normalize(rhs, aliases, &recursive).canonicalize()
+}
+
 /// Find all recursive type aliases via DFS.
 pub fn find_recursive_aliases(
     aliases: &HashMap<QualifiedTypeName, Ty>,
@@ -42,7 +58,7 @@ pub fn find_recursive_aliases(
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// Normalized structural type. All aliases resolved, recursion explicit.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 enum StructuralTy {
     // Primitives
     Int,
@@ -99,7 +115,7 @@ enum StructuralTy {
     Error,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 struct StructuralFunctionParam {
     name: Option<Name>,
     ty: StructuralTy,
@@ -107,6 +123,60 @@ struct StructuralFunctionParam {
 }
 
 impl StructuralTy {
+    fn canonicalize(self) -> Self {
+        match self {
+            StructuralTy::Class(qn, args) => {
+                StructuralTy::Class(qn, args.into_iter().map(Self::canonicalize).collect())
+            }
+            StructuralTy::Interface(qn, args) => {
+                StructuralTy::Interface(qn, args.into_iter().map(Self::canonicalize).collect())
+            }
+            StructuralTy::Optional(inner) => {
+                StructuralTy::Optional(Box::new(inner.canonicalize()))
+            }
+            StructuralTy::List(inner) => StructuralTy::List(Box::new(inner.canonicalize())),
+            StructuralTy::Map { key, value } => StructuralTy::Map {
+                key: Box::new(key.canonicalize()),
+                value: Box::new(value.canonicalize()),
+            },
+            StructuralTy::Union(types) => {
+                let mut canonical = Vec::new();
+                for ty in types {
+                    match ty.canonicalize() {
+                        StructuralTy::Union(inner) => canonical.extend(inner),
+                        other => canonical.push(other),
+                    }
+                }
+                canonical.sort();
+                canonical.dedup();
+                if canonical.len() == 1 {
+                    canonical
+                        .pop()
+                        .expect("single-element canonical union should have an element")
+                } else {
+                    StructuralTy::Union(canonical)
+                }
+            }
+            StructuralTy::Function {
+                params,
+                ret,
+                throws,
+            } => StructuralTy::Function {
+                params: params
+                    .into_iter()
+                    .map(StructuralFunctionParam::canonicalize)
+                    .collect(),
+                ret: Box::new(ret.canonicalize()),
+                throws: Box::new(throws.canonicalize()),
+            },
+            StructuralTy::Mu { var, body } => StructuralTy::Mu {
+                var,
+                body: Box::new(body.canonicalize()),
+            },
+            other => other,
+        }
+    }
+
     /// Equirecursive subtyping with co-inductive assumptions.
     fn is_subtype_of(
         &self,
@@ -276,6 +346,16 @@ impl StructuralTy {
 
         assumptions.remove(&pair);
         result
+    }
+}
+
+impl StructuralFunctionParam {
+    fn canonicalize(self) -> Self {
+        Self {
+            name: self.name,
+            ty: self.ty.canonicalize(),
+            mode: self.mode,
+        }
     }
 }
 
@@ -1082,6 +1162,55 @@ mod tests {
 
     fn optional_param(name: &str, ty: Ty) -> FunctionParamTy {
         FunctionParamTy::optional(Some(Name::new(name)), ty)
+    }
+
+    #[test]
+    fn same_normalized_type_accepts_union_reordering() {
+        let aliases = HashMap::new();
+        let int = Ty::Primitive(PrimitiveType::Int, TyAttr::default());
+        let string = Ty::Primitive(PrimitiveType::String, TyAttr::default());
+        let lhs = Ty::Union(vec![int.clone(), string.clone()], TyAttr::default());
+        let rhs = Ty::Union(vec![string, int], TyAttr::default());
+
+        assert!(is_same_normalized_type(&lhs, &rhs, &aliases));
+    }
+
+    #[test]
+    fn same_normalized_type_rejects_narrower_union_member() {
+        let aliases = HashMap::new();
+        let int = Ty::Primitive(PrimitiveType::Int, TyAttr::default());
+        let string = Ty::Primitive(PrimitiveType::String, TyAttr::default());
+        let union = Ty::Union(vec![int.clone(), string], TyAttr::default());
+
+        assert!(!is_same_normalized_type(&int, &union, &aliases));
+    }
+
+    #[test]
+    fn same_normalized_type_expands_aliases() {
+        let mut aliases = HashMap::new();
+        aliases.insert(
+            qn("IntOrString"),
+            Ty::Union(
+                vec![
+                    Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
+                    Ty::Primitive(PrimitiveType::String, TyAttr::default()),
+                ],
+                TyAttr::default(),
+            ),
+        );
+        let direct = Ty::Union(
+            vec![
+                Ty::Primitive(PrimitiveType::String, TyAttr::default()),
+                Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
+            ],
+            TyAttr::default(),
+        );
+
+        assert!(is_same_normalized_type(
+            &type_alias("IntOrString"),
+            &direct,
+            &aliases
+        ));
     }
 
     #[test]

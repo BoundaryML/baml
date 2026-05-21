@@ -158,9 +158,9 @@ pub fn lower_file_with_file_id(
     }
 
     // BEP-044: merge top-level `implements I for T` items into the target
-    // class when `T` names a local class. Primitive/fixed-shape targets lower
-    // to non-path TypeExprs (`int`, `string`, etc.) and must remain as
-    // first-class implementation records for later validation/registration.
+    // class when `T` names a local class. Targets declared in another file,
+    // primitives, and fixed-shape types must remain as first-class
+    // implementation records for later package-level resolution.
     let impl_fors: Vec<ImplementsForDef> = items
         .iter()
         .filter_map(|item| match item {
@@ -175,29 +175,26 @@ pub fn lower_file_with_file_id(
             _ => None,
         };
         if let Some(target_name) = target_name {
-            let block = ImplementsBlockDef {
-                target: imp.interface_target,
-                fields: imp.fields,
-                field_links: imp.field_links,
-                methods: imp.methods,
-                is_out_of_body: true,
-                span: imp.span,
-            };
-            let found = items.iter_mut().any(|item| {
-                if let Item::Class(class) = item {
-                    if class.name == target_name {
-                        class.implements.push(block.clone());
-                        return true;
-                    }
+            let target_class = items.iter_mut().find_map(|item| {
+                if let Item::Class(class) = item
+                    && class.name == target_name
+                {
+                    Some(class)
+                } else {
+                    None
                 }
-                false
             });
-            if !found {
-                diags.push(LoweringDiagnostic::UnresolvedImplementsForTarget {
-                    interface_name: format!("{}", block.target.expr),
-                    target_name: target_name.to_string(),
-                    span: imp.for_target.span,
+            if let Some(class) = target_class {
+                class.implements.push(ImplementsBlockDef {
+                    target: imp.interface_target,
+                    fields: imp.fields,
+                    field_links: imp.field_links,
+                    methods: imp.methods,
+                    is_out_of_body: true,
+                    span: imp.span,
                 });
+            } else {
+                items.push(Item::ImplementsFor(imp));
             }
         } else {
             items.push(Item::ImplementsFor(imp));

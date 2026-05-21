@@ -6823,8 +6823,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     fn types_equivalent(&self, a: &Ty, b: &Ty) -> bool {
-        crate::normalize::is_subtype_of(a, b, &self.aliases)
-            && crate::normalize::is_subtype_of(b, a, &self.aliases)
+        crate::normalize::is_same_normalized_type(a, b, &self.aliases)
     }
 
     fn class_implements_interface_instantiation(
@@ -9116,10 +9115,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                         .get(&(class_qtn.clone(), iface_qtn.clone()))
                     {
                         if impl_args.len() == iface_args.len()
-                            && impl_args.iter().zip(iface_args.iter()).all(|(a, b)| {
-                                crate::normalize::is_subtype_of(a, b, &self.aliases)
-                                    && crate::normalize::is_subtype_of(b, a, &self.aliases)
-                            })
+                            && impl_args
+                                .iter()
+                                .zip(iface_args.iter())
+                                .all(|(a, b)| self.types_equivalent(a, b))
                         {
                             return true;
                         }
@@ -9150,10 +9149,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                         .type_implements_type_args
                         .get(&(target_key, iface_qtn.clone()))
                     && impl_args.len() == iface_args.len()
-                    && impl_args.iter().zip(iface_args.iter()).all(|(a, b)| {
-                        crate::normalize::is_subtype_of(a, b, &self.aliases)
-                            && crate::normalize::is_subtype_of(b, a, &self.aliases)
-                    })
+                    && impl_args
+                        .iter()
+                        .zip(iface_args.iter())
+                        .all(|(a, b)| self.types_equivalent(a, b))
                 {
                     return true;
                 }
