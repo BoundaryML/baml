@@ -1,4 +1,4 @@
-// BEP-044 §"Method Disambiguation": `obj.Foo.method()` where `Foo` is not an
+// BEP-044 §"Method Disambiguation": `obj.as<Foo>.method()` where `Foo` is not an
 // interface name visible to the class — diagnostic should explain that the
 // qualifier must be a known interface.
 
@@ -13,17 +13,17 @@ class Dog {
 }
 
 function bad(d: Dog) -> string {
-  return d.NotAnInterface.speak()
+  return d.as<NotAnInterface>.speak()
 }
 
 //----
 //- diagnostics
-// Error: type `user.Dog` has no member `NotAnInterface`
-//     ╭─[ interface_error_qualified_call_unknown_interface.baml:16:12 ]
+// Error: unresolved type: NotAnInterface
+//     ╭─[ interface_error_qualified_call_unknown_interface.baml:16:10 ]
 //     │
-//  16 │   return d.NotAnInterface.speak()
-//     │            ───────┬──────  
-//     │                   ╰──────── type `user.Dog` has no member `NotAnInterface`
+//  16 │   return d.as<NotAnInterface>.speak()
+//     │          ──────────┬─────────  
+//     │                    ╰─────────── unresolved type: NotAnInterface
 //     │ 
-//     │ Note: Error code: E0007
+//     │ Note: Error code: E0002
 // ────╯

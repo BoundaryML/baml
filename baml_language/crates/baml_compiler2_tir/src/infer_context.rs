@@ -230,12 +230,35 @@ pub enum TirTypeError {
         sources: Vec<Name>,
     },
 
-    /// Interface fields must be constructed with their qualified name, e.g.
-    /// `Animal.name`, so object literals cannot accidentally fill the wrong
-    /// namespace.
+    /// A concrete-typed receiver tried to access an interface field name that
+    /// is only available after projecting to the interface view.
+    InterfaceFieldRequiresProjection {
+        class_name: Name,
+        field_name: Name,
+        interface_name: Name,
+    },
+
+    /// Interface-qualified field keys such as `Animal.name` are not class
+    /// constructor fields. Interface fields are satisfied by class-owned fields
+    /// or explicit `field as class_field` links.
     InterfaceFieldRequiresQualifiedConstruction {
         field_name: Name,
         qualified_name: Name,
+    },
+
+    /// The old `value.Interface.member` projection syntax has been replaced by
+    /// `.as<Interface>.member`.
+    DeprecatedInterfaceProjection { interface_name: Name },
+
+    /// `.as<T>` is an interface projection/upcast; the target must be an
+    /// interface type.
+    InvalidInterfaceUpcastTarget { target: Ty },
+
+    /// Interface-typed receivers cannot call methods with additional `Self`
+    /// parameters. The concrete implementor must be known for those arguments.
+    InvalidSelfCallThroughInterface {
+        interface_name: Name,
+        method_name: Name,
     },
 
     /// BEP-044 §"default keyword scoping rules": `default.method()` on a
@@ -570,7 +593,7 @@ impl fmt::Display for TirTypeError {
                     .join(", ");
                 let hint = sources
                     .iter()
-                    .map(|n| format!("obj.{n}.{method_name}()"))
+                    .map(|n| format!("obj.as<{n}>.{method_name}()"))
                     .collect::<Vec<_>>()
                     .join(" or ");
                 write!(
@@ -592,7 +615,7 @@ impl fmt::Display for TirTypeError {
                     .join(", ");
                 let hint = sources
                     .iter()
-                    .map(|n| format!("obj.{n}.{field_name}"))
+                    .map(|n| format!("obj.as<{n}>.{field_name}"))
                     .collect::<Vec<_>>()
                     .join(" or ");
                 write!(
@@ -600,12 +623,35 @@ impl fmt::Display for TirTypeError {
                     "field `{field_name}` on class `{class_name}` is ambiguous because it is declared by multiple interfaces: {iface_list}; use {hint}"
                 )
             }
+            TirTypeError::InterfaceFieldRequiresProjection {
+                class_name,
+                field_name,
+                interface_name,
+            } => write!(
+                f,
+                "field `{field_name}` is an interface field on `{interface_name}`, not a concrete field on class `{class_name}`; use obj.as<{interface_name}>.{field_name}"
+            ),
             TirTypeError::InterfaceFieldRequiresQualifiedConstruction {
                 field_name,
                 qualified_name,
             } => write!(
                 f,
-                "interface field `{field_name}` must be constructed as `{qualified_name}`"
+                "interface-qualified field `{field_name}` cannot be used in a class constructor; use class field `{qualified_name}`"
+            ),
+            TirTypeError::DeprecatedInterfaceProjection { interface_name } => write!(
+                f,
+                "interface projection uses `.as<{interface_name}>`, not `.{interface_name}`"
+            ),
+            TirTypeError::InvalidInterfaceUpcastTarget { target } => {
+                write!(f, "`.as<T>` target must be an interface, got `{target}`")
+            }
+            TirTypeError::InvalidSelfCallThroughInterface {
+                interface_name,
+                method_name,
+            } => write!(
+                f,
+                "method `{method_name}` on interface `{interface_name}` uses `Self` in \
+                 its parameters and requires a concrete receiver"
             ),
             TirTypeError::DefaultOnRequiredMethod {
                 interface_name,

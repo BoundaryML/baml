@@ -377,6 +377,9 @@ impl ExprBody {
             Expr::OptionalMemberAccess { base, member } => {
                 format!("{}?.{member}", self.display_expr_inner(*base, depth + 1))
             }
+            Expr::Upcast { base, target } => {
+                format!("{}.as<{target}>", self.display_expr_inner(*base, depth + 1))
+            }
             Expr::Index { base, index } => {
                 format!(
                     "{}[{}]",
@@ -662,6 +665,11 @@ pub enum Expr {
     MemberAccess {
         base: ExprId,
         member: Name,
+    },
+    /// Explicit static projection/upcast: `expr.as<T>`.
+    Upcast {
+        base: ExprId,
+        target: TypeExpr,
     },
     /// Optional member access: `obj?.member` — short-circuits to null if base is null.
     OptionalMemberAccess {
@@ -1271,6 +1279,9 @@ pub struct ImplementsBlockDef {
     pub target: SpannedTypeExpr,
     /// Field redeclarations inside this `implements` block (BEP-044).
     pub fields: Vec<FieldDef>,
+    /// Explicit mappings from interface fields to class fields:
+    /// `interface_field as class_field`.
+    pub field_links: Vec<InterfaceFieldLinkDef>,
     /// Method overrides / definitions inside this `implements` block.
     pub methods: Vec<FunctionDef>,
     /// True when this block came from top-level `implements I for T`.
@@ -1289,6 +1300,15 @@ impl ImplementsBlockDef {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InterfaceFieldLinkDef {
+    pub interface_field: Name,
+    pub class_field: Name,
+    pub span: TextRange,
+    pub interface_field_span: TextRange,
+    pub class_field_span: TextRange,
+}
+
 /// Top-level `implements I for T { ... }` block (BEP-044).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImplementsForDef {
@@ -1298,6 +1318,8 @@ pub struct ImplementsForDef {
     pub for_target: SpannedTypeExpr,
     /// Field redeclarations inside the block.
     pub fields: Vec<FieldDef>,
+    /// Explicit mappings from interface fields to class fields.
+    pub field_links: Vec<InterfaceFieldLinkDef>,
     /// Method definitions inside the block.
     pub methods: Vec<FunctionDef>,
     pub span: TextRange,

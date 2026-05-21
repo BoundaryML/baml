@@ -193,12 +193,11 @@ type MergedFieldEntry = (
     Vec<Name>,
 );
 
-/// BEP-044: collect actual runtime fields. Class fields keep their bare
-/// names; fields redeclared inside `implements I {}` blocks are emitted as
-/// qualified `I.field` slots.
+/// BEP-044: collect actual runtime fields. Interface fields are views over
+/// class fields, so they never add qualified runtime slots.
 fn collect_class_fields_with_implements(
-    db: &dyn baml_compiler2_tir::Db,
-    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    _db: &dyn baml_compiler2_tir::Db,
+    _pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     pkg_ns: &[Name],
     class_data: &baml_compiler2_hir::item_tree::Class,
 ) -> Vec<MergedFieldEntry> {
@@ -217,34 +216,6 @@ fn collect_class_fields_with_implements(
             class_data.generic_params.clone(),
             pkg_ns.to_vec(),
         ));
-    }
-
-    for impl_target in &class_data.implements {
-        let Some(iface_loc) = baml_compiler2_tir::interfaces::resolve_path_to_interface(
-            db,
-            &impl_target.target.expr,
-            pkg_items,
-            pkg_ns,
-        ) else {
-            continue;
-        };
-        let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
-        let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
-            continue;
-        };
-        for field in &impl_target.fields {
-            let name = format!("{}.{}", iface_data.name, field.name);
-            if !seen.insert(name.clone()) {
-                continue;
-            }
-            out.push((
-                name,
-                field.type_expr.clone(),
-                field.attributes.clone(),
-                class_data.generic_params.clone(),
-                pkg_ns.to_vec(),
-            ));
-        }
     }
 
     out

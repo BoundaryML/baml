@@ -144,8 +144,18 @@ pub struct Class {
 pub struct ImplementsBlock {
     pub target: ast::SpannedTypeExpr,
     pub fields: Vec<ClassField>,
+    pub field_links: Vec<InterfaceFieldLink>,
     pub is_out_of_body: bool,
     pub span: TextRange,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InterfaceFieldLink {
+    pub interface_field: Name,
+    pub class_field: Name,
+    pub span: TextRange,
+    pub interface_field_span: TextRange,
+    pub class_field_span: TextRange,
 }
 
 /// An enum variant stored in the `ItemTree`.
@@ -463,6 +473,17 @@ impl ItemTree {
                         type_expr: f.type_expr.clone(),
                         attributes: f.attributes.iter().map(Attribute::from).collect(),
                         docstring: f.docstring.clone(),
+                    })
+                    .collect(),
+                field_links: b
+                    .field_links
+                    .iter()
+                    .map(|link| InterfaceFieldLink {
+                        interface_field: link.interface_field.clone(),
+                        class_field: link.class_field.clone(),
+                        span: link.span,
+                        interface_field_span: link.interface_field_span,
+                        class_field_span: link.class_field_span,
                     })
                     .collect(),
                 is_out_of_body: b.is_out_of_body,

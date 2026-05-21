@@ -961,7 +961,7 @@ fn validate_class_implements<'db>(
                 Hir2Diagnostic::OutOfBodyImplementsFieldInterface {
                     target_name: class.name.to_string(),
                     interface_name: iface.name.clone(),
-                    span: block.span,
+                    span: block.target.span,
                 }
                 .to_diagnostic(file_id),
             );
@@ -1057,68 +1057,131 @@ fn validate_class_implements<'db>(
             );
         }
 
-        // BEP-044: validate fields declared in the `implements` block.
-        // Only check the interface's OWN fields — inherited fields from
-        // `requires` parents must be declared in their own `implements` blocks.
-        let provided_field_names: HashSet<Name> =
-            block.fields.iter().map(|f| f.name.clone()).collect();
+        // BEP-044 v2: interface fields are satisfied by class fields. The
+        // implements block may contain only explicit `field as class_field`
+        // links; an absent link auto-links by exact field name.
+        let class_fields: IndexMap<Name, &baml_compiler2_ast::FieldDef> =
+            class.fields.iter().map(|f| (f.name.clone(), f)).collect();
 
-        // Build a lookup of the interface's own fields for validation.
-        let own_fields: Vec<(&Name, Option<&baml_compiler2_ast::SpannedTypeExpr>)> = iface
+        let own_fields: IndexMap<Name, Option<baml_compiler2_ast::SpannedTypeExpr>> = iface
             .fields
             .iter()
-            .map(|f| (&f.name, f.type_expr.as_ref()))
+            .map(|f| {
+                let substituted =
+                    f.type_expr
+                        .as_ref()
+                        .map(|te| baml_compiler2_ast::SpannedTypeExpr {
+                            expr: substitute_type_vars(&te.expr, &subst),
+                            span: te.span,
+                        });
+                (f.name.clone(), substituted)
+            })
             .collect();
 
-        // Check that each field in the implements block exists on the interface
-        // (own fields only) and has a matching type.
-        for impl_field in &block.fields {
-            let iface_field = own_fields.iter().find(|(n, _)| **n == impl_field.name);
-            match iface_field {
-                None => {
+        let mut link_sites: IndexMap<Name, Vec<TextRange>> = IndexMap::new();
+        for link in &block.field_links {
+            link_sites
+                .entry(link.interface_field.clone())
+                .or_default()
+                .push(link.interface_field_span);
+        }
+        for (field_name, sites) in &link_sites {
+            if sites.len() > 1 {
+                diagnostics.push(
+                    Hir2Diagnostic::DuplicateInterfaceFieldLink {
+                        interface_name: iface.name.clone(),
+                        field_name: field_name.clone(),
+                        sites: sites.clone(),
+                    }
+                    .to_diagnostic(file_id),
+                );
+            }
+        }
+
+        let mut explicit_links: IndexMap<Name, &baml_compiler2_ast::InterfaceFieldLinkDef> =
+            IndexMap::new();
+        for link in &block.field_links {
+            if !own_fields.contains_key(&link.interface_field) {
+                diagnostics.push(
+                    Hir2Diagnostic::UnknownInterfaceFieldLink {
+                        interface_name: iface.name.clone(),
+                        field_name: link.interface_field.clone(),
+                        span: link.interface_field_span,
+                    }
+                    .to_diagnostic(file_id),
+                );
+                continue;
+            }
+            let Some(class_field) = class_fields.get(&link.class_field) else {
+                diagnostics.push(
+                    Hir2Diagnostic::UnknownClassFieldInInterfaceLink {
+                        class_name: class.name.clone(),
+                        interface_name: iface.name.clone(),
+                        field_name: link.class_field.clone(),
+                        span: link.class_field_span,
+                    }
+                    .to_diagnostic(file_id),
+                );
+                explicit_links.insert(link.interface_field.clone(), link);
+                continue;
+            };
+            if let (Some(iface_te), Some(class_te)) = (
+                own_fields
+                    .get(&link.interface_field)
+                    .and_then(std::option::Option::as_ref),
+                class_field.type_expr.as_ref(),
+            ) {
+                if !type_exprs_compatible(&iface_te.expr, &class_te.expr) {
                     diagnostics.push(
-                        Hir2Diagnostic::UnknownInterfaceMember {
+                        Hir2Diagnostic::InterfaceFieldTypeMismatch {
+                            class_name: class.name.clone(),
+                            field_name: link.class_field.clone(),
                             interface_name: iface.name.clone(),
-                            method_name: impl_field.name.clone(),
-                            span: impl_field.name_span,
+                            class_type: format!("{}", class_te.expr),
+                            interface_type: format!("{}", iface_te.expr),
+                            span: class_te.span,
                         }
                         .to_diagnostic(file_id),
                     );
                 }
-                Some((_, Some(iface_te))) => {
-                    if let Some(impl_te) = &impl_field.type_expr {
-                        if !type_exprs_compatible(&iface_te.expr, &impl_te.expr) {
-                            diagnostics.push(
-                                Hir2Diagnostic::InterfaceFieldTypeMismatch {
-                                    class_name: class.name.clone(),
-                                    field_name: impl_field.name.clone(),
-                                    interface_name: iface.name.clone(),
-                                    class_type: format!("{}", impl_te.expr),
-                                    interface_type: format!("{}", iface_te.expr),
-                                    span: impl_te.span,
-                                }
-                                .to_diagnostic(file_id),
-                            );
-                        }
-                    }
-                }
-                _ => {}
             }
+            explicit_links
+                .entry(link.interface_field.clone())
+                .or_insert(link);
         }
 
-        // Check that every own field of the interface is provided in the
-        // implements block.
-        for (field_name, _) in &own_fields {
-            if !provided_field_names.contains(*field_name) {
+        for (field_name, iface_te) in &own_fields {
+            if explicit_links.contains_key(field_name) {
+                continue;
+            }
+            let Some(class_field) = class_fields.get(field_name) else {
                 diagnostics.push(
                     Hir2Diagnostic::MissingInterfaceField {
                         class_name: class.name.clone(),
                         interface_name: iface.name.clone(),
-                        field_name: (*field_name).clone(),
+                        field_name: field_name.clone(),
                         span: block.span,
                     }
                     .to_diagnostic(file_id),
                 );
+                continue;
+            };
+            if let (Some(iface_te), Some(class_te)) =
+                (iface_te.as_ref(), class_field.type_expr.as_ref())
+            {
+                if !type_exprs_compatible(&iface_te.expr, &class_te.expr) {
+                    diagnostics.push(
+                        Hir2Diagnostic::InterfaceFieldTypeMismatch {
+                            class_name: class.name.clone(),
+                            field_name: class_field.name.clone(),
+                            interface_name: iface.name.clone(),
+                            class_type: format!("{}", class_te.expr),
+                            interface_type: format!("{}", iface_te.expr),
+                            span: class_te.span,
+                        }
+                        .to_diagnostic(file_id),
+                    );
+                }
             }
         }
 
@@ -2186,10 +2249,14 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::NullCoalesceWithNull { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::NullableMemberAccess { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::AmbiguousInterfaceMethod { .. } => DiagnosticId::AmbiguousInterfaceMethod,
-        TirTypeError::AmbiguousInterfaceField { .. } => DiagnosticId::AmbiguousInterfaceMethod,
+        TirTypeError::AmbiguousInterfaceField { .. } => DiagnosticId::AmbiguousInterfaceField,
+        TirTypeError::InterfaceFieldRequiresProjection { .. } => DiagnosticId::NoSuchField,
         TirTypeError::InterfaceFieldRequiresQualifiedConstruction { .. } => {
             DiagnosticId::NoSuchField
         }
+        TirTypeError::DeprecatedInterfaceProjection { .. } => DiagnosticId::NoSuchField,
+        TirTypeError::InvalidInterfaceUpcastTarget { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::InvalidSelfCallThroughInterface { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::DefaultOnRequiredMethod { .. } => DiagnosticId::DefaultOnRequiredMethod,
     }
 }

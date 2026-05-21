@@ -6,9 +6,9 @@ interface Named {
 }
 
 class Dog {
-  implements Named {
-    name: string
-  }
+  name: string
+
+  implements Named {}
 }
 
 function first_named<T extends Named>(items: T[]) -> string {

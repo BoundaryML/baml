@@ -1,4 +1,4 @@
-// BEP-044 §"self Access": `self.InterfaceName.method()` works from inside an
+// BEP-044 §"self Access": `self.as<InterfaceName>.method()` works from inside an
 // `implements` block to reach a sibling interface's method even when names
 // are flat.
 
@@ -21,7 +21,7 @@ class Polite {
 
   implements Farewell {
     function bye(self) -> string {
-      return self.Greeter.greet() + " — and goodbye!"
+      return self.as<Greeter>.greet() + " — and goodbye!"
     }
   }
 }

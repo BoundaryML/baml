@@ -2023,6 +2023,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 shadowed.truncate(saved_len);
             }
             Expr::MemberAccess { base, .. }
+            | Expr::Upcast { base, .. }
             | Expr::OptionalMemberAccess { base, .. }
             | Expr::OptionalChain { expr: base } => {
                 Self::collect_default_expr_forward_references(
@@ -2764,6 +2765,42 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 }
             }
+            Expr::Upcast { base, target } => {
+                let base_ty = self.infer_expr(*base, body);
+                let mut diags = Vec::new();
+                let target_ty = crate::lower_type_expr::lower_type_expr_in_ns(
+                    self.context.db(),
+                    target,
+                    self.package_items,
+                    &self.ns_context,
+                    &self.generic_params,
+                    &mut diags,
+                );
+                for diag in diags {
+                    self.context.report_simple(diag, expr_id);
+                }
+                let valid_target = matches!(target_ty, Ty::Interface(_, _, _));
+                if !valid_target && !matches!(target_ty, Ty::Unknown { .. } | Ty::Error { .. }) {
+                    self.context.report_simple(
+                        TirTypeError::InvalidInterfaceUpcastTarget {
+                            target: target_ty.clone(),
+                        },
+                        expr_id,
+                    );
+                } else if !self.is_subtype(&base_ty, &target_ty)
+                    && !matches!(base_ty, Ty::Unknown { .. } | Ty::Error { .. })
+                    && !matches!(target_ty, Ty::Unknown { .. } | Ty::Error { .. })
+                {
+                    self.context.report_simple(
+                        TirTypeError::TypeMismatch {
+                            expected: target_ty.clone(),
+                            got: base_ty,
+                        },
+                        expr_id,
+                    );
+                }
+                target_ty
+            }
             Expr::OptionalMemberAccess { base, member } => {
                 // Optional chaining: a?.b — if a is null, short-circuit to null.
                 // Type: if a: T?, resolve member on T, wrap result in Optional.
@@ -2940,7 +2977,21 @@ impl<'db> TypeInferenceBuilder<'db> {
                         .into_iter()
                         .collect();
                     for (field_name, field_expr) in fields {
-                        if let Some(declared_ty) = field_types.get(field_name) {
+                        if field_name.as_str().contains('.') {
+                            let suggested = field_name
+                                .as_str()
+                                .rsplit('.')
+                                .next()
+                                .unwrap_or(field_name.as_str());
+                            self.context.report_simple(
+                                TirTypeError::InterfaceFieldRequiresQualifiedConstruction {
+                                    field_name: field_name.clone(),
+                                    qualified_name: Name::new(suggested),
+                                },
+                                expr_id,
+                            );
+                            self.infer_expr(*field_expr, body);
+                        } else if let Some(declared_ty) = field_types.get(field_name) {
                             self.check_expr(*field_expr, body, declared_ty);
                         } else if !field_name.as_str().contains('.')
                             && let Some((qualified_name, declared_ty)) = self
@@ -3288,7 +3339,21 @@ impl<'db> TypeInferenceBuilder<'db> {
                         .into_iter()
                         .collect();
                     for (field_name, field_expr) in fields {
-                        if let Some(declared_ty) = field_types.get(field_name) {
+                        if field_name.as_str().contains('.') {
+                            let suggested = field_name
+                                .as_str()
+                                .rsplit('.')
+                                .next()
+                                .unwrap_or(field_name.as_str());
+                            self.context.report_simple(
+                                TirTypeError::InterfaceFieldRequiresQualifiedConstruction {
+                                    field_name: field_name.clone(),
+                                    qualified_name: Name::new(suggested),
+                                },
+                                expr_id,
+                            );
+                            self.infer_expr(*field_expr, body);
+                        } else if let Some(declared_ty) = field_types.get(field_name) {
                             self.check_expr(*field_expr, body, declared_ty);
                         } else if !field_name.as_str().contains('.')
                             && let Some((qualified_name, declared_ty)) = self
@@ -5188,7 +5253,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.collect_throw_facts_from_expr(*tail, body, out);
                 }
             }
-            Expr::MemberAccess { base, .. } | Expr::OptionalMemberAccess { base, .. } => {
+            Expr::MemberAccess { base, .. }
+            | Expr::Upcast { base, .. }
+            | Expr::OptionalMemberAccess { base, .. } => {
                 self.collect_throw_facts_from_expr(*base, body, out);
             }
             Expr::Index { base, index } | Expr::OptionalIndex { base, index } => {
@@ -6021,6 +6088,20 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
 
                 let field_sources = self.class_interface_field_sources(class_name, member);
+                if let [interface_name] = field_sources.as_slice() {
+                    self.context.report_at_member(
+                        TirTypeError::InterfaceFieldRequiresProjection {
+                            class_name: class_name.name().clone(),
+                            field_name: member.clone(),
+                            interface_name: interface_name.clone(),
+                        },
+                        at,
+                        Vec::new(),
+                    );
+                    return Ty::Unknown {
+                        attr: TyAttr::default(),
+                    };
+                }
                 if field_sources.len() > 1 {
                     let class_def = self
                         .package_items
@@ -6126,14 +6207,20 @@ impl<'db> TypeInferenceBuilder<'db> {
                     return alias_ty;
                 }
 
-                // BEP-044: member name might be an interface this class
-                // implements — `obj.InterfaceName` narrows `obj`'s static
-                // type to that interface, letting the next chained access
-                // resolve against the interface's contract.
-                if let Some(iface_qtn) =
-                    self.lookup_implemented_interface_by_name(class_name, member)
+                if self
+                    .lookup_implemented_interface_by_name(class_name, member)
+                    .is_some()
                 {
-                    return Ty::Interface(iface_qtn, Vec::new(), TyAttr::default());
+                    self.context.report_at_member(
+                        TirTypeError::DeprecatedInterfaceProjection {
+                            interface_name: member.clone(),
+                        },
+                        at,
+                        Vec::new(),
+                    );
+                    return Ty::Unknown {
+                        attr: TyAttr::default(),
+                    };
                 }
 
                 // Known class but member not found — error
@@ -6698,13 +6785,38 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if let Some(alias_ty) = self.try_resolve_generic_bound_alias(base_ty, member) {
                     return alias_ty;
                 }
-                // BEP-044: not a field/method — try interface-name qualifier.
-                if let Some(iface_qtn) =
-                    self.lookup_implemented_interface_by_name(class_name, member)
+                if self
+                    .lookup_implemented_interface_by_name(class_name, member)
+                    .is_some()
                 {
-                    return Ty::Interface(iface_qtn, Vec::new(), TyAttr::default());
+                    self.context.report_at_segment(
+                        TirTypeError::DeprecatedInterfaceProjection {
+                            interface_name: member.clone(),
+                        },
+                        path_id,
+                        seg_idx,
+                        Vec::new(),
+                    );
+                    return Ty::Unknown {
+                        attr: TyAttr::default(),
+                    };
                 }
                 let field_sources = self.class_interface_field_sources(class_name, member);
+                if let [interface_name] = field_sources.as_slice() {
+                    self.context.report_at_segment(
+                        TirTypeError::InterfaceFieldRequiresProjection {
+                            class_name: class_name.name().clone(),
+                            field_name: member.clone(),
+                            interface_name: interface_name.clone(),
+                        },
+                        path_id,
+                        seg_idx,
+                        Vec::new(),
+                    );
+                    return Ty::Unknown {
+                        attr: TyAttr::default(),
+                    };
+                }
                 if field_sources.len() > 1 {
                     let class_def = self
                         .package_items
@@ -6981,10 +7093,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    /// BEP-044 qualified call support: returns the QTN of an interface that
-    /// `class_name` directly or transitively implements and that has the
-    /// short name `member`. Used to recognise `obj.InterfaceName` as a
-    /// narrowing qualifier instead of a missing-member error.
+    /// Returns the QTN of an interface that `class_name` directly or
+    /// transitively implements and that has the short name `member`. Used to
+    /// emit a targeted diagnostic for the removed `obj.InterfaceName` projection
+    /// syntax.
     fn lookup_implemented_interface_by_name(
         &self,
         class_name: &crate::ty::QualifiedTypeName,
@@ -7181,6 +7293,22 @@ impl<'db> TypeInferenceBuilder<'db> {
                     TyAttr::default(),
                 );
                 let callable_throws = crate::callable::callable_throws(db, func_loc).clone();
+                let self_replacement = Self::interface_self_type_expr(iface_data);
+                if bound
+                    && sig
+                        .params
+                        .iter()
+                        .filter(|param| param.name.as_str() != "self")
+                        .any(|param| Self::type_expr_contains_self(&param.ty))
+                {
+                    self.context.report_simple(
+                        TirTypeError::InvalidSelfCallThroughInterface {
+                            interface_name: iface_data.name.clone(),
+                            method_name: member.clone(),
+                        },
+                        at,
+                    );
+                }
                 let params: Vec<FunctionParamTy> = sig
                     .params
                     .iter()
@@ -7190,17 +7318,25 @@ impl<'db> TypeInferenceBuilder<'db> {
                         {
                             iface_ty.clone()
                         } else if bindings.is_empty() {
+                            let ty_expr = crate::lower_type_expr::substitute_self_in(
+                                &param.ty,
+                                &self_replacement,
+                            );
                             crate::lower_type_expr::lower_type_expr_in_ns(
                                 db,
-                                &param.ty,
+                                &ty_expr,
                                 pkg_items,
                                 &iface_ns,
                                 &all_generic_params,
                                 &mut diags,
                             )
                         } else {
+                            let ty_expr = crate::lower_type_expr::substitute_self_in(
+                                &param.ty,
+                                &self_replacement,
+                            );
                             crate::generics::lower_type_expr_with_generics(
-                                db, &param.ty, pkg_items, &iface_ns, &bindings, &mut diags,
+                                db, &ty_expr, pkg_items, &iface_ns, &bindings, &mut diags,
                             )
                         };
                         FunctionParamTy {
@@ -7218,10 +7354,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .return_type
                     .as_ref()
                     .map(|te| {
+                        let ty_expr =
+                            crate::lower_type_expr::substitute_self_in(te, &self_replacement);
                         if bindings.is_empty() {
                             crate::lower_type_expr::lower_type_expr_in_ns(
                                 db,
-                                te,
+                                &ty_expr,
                                 pkg_items,
                                 &iface_ns,
                                 &all_generic_params,
@@ -7229,7 +7367,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             )
                         } else {
                             crate::generics::lower_type_expr_with_generics(
-                                db, te, pkg_items, &iface_ns, &bindings, &mut diags,
+                                db, &ty_expr, pkg_items, &iface_ns, &bindings, &mut diags,
                             )
                         }
                     })
@@ -7240,10 +7378,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .throws
                     .as_ref()
                     .map(|te| {
+                        let ty_expr =
+                            crate::lower_type_expr::substitute_self_in(te, &self_replacement);
                         if bindings.is_empty() {
                             crate::lower_type_expr::lower_type_expr_in_ns(
                                 db,
-                                te,
+                                &ty_expr,
                                 pkg_items,
                                 &iface_ns,
                                 &all_generic_params,
@@ -7251,7 +7391,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             )
                         } else {
                             crate::generics::lower_type_expr_with_generics(
-                                db, te, pkg_items, &iface_ns, &bindings, &mut diags,
+                                db, &ty_expr, pkg_items, &iface_ns, &bindings, &mut diags,
                             )
                         }
                     })
@@ -7312,6 +7452,23 @@ impl<'db> TypeInferenceBuilder<'db> {
                     TyAttr::default(),
                 );
                 let mut diags = Vec::new();
+                let self_replacement = Self::interface_self_type_expr(iface_data);
+                if bound
+                    && sig
+                        .params
+                        .iter()
+                        .filter(|param| param.name.as_str() != "self")
+                        .filter_map(|param| param.type_expr.as_ref())
+                        .any(|te| Self::type_expr_contains_self(&te.expr))
+                {
+                    self.context.report_simple(
+                        TirTypeError::InvalidSelfCallThroughInterface {
+                            interface_name: iface_data.name.clone(),
+                            method_name: member.clone(),
+                        },
+                        at,
+                    );
+                }
                 let params: Vec<FunctionParamTy> = sig
                     .params
                     .iter()
@@ -7320,10 +7477,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                         {
                             iface_ty.clone()
                         } else if let Some(te) = &param.type_expr {
+                            let ty_expr = crate::lower_type_expr::substitute_self_in(
+                                &te.expr,
+                                &self_replacement,
+                            );
                             if bindings.is_empty() {
                                 crate::lower_type_expr::lower_type_expr_in_ns(
                                     db,
-                                    &te.expr,
+                                    &ty_expr,
                                     pkg_items,
                                     &iface_ns,
                                     &all_generic_params,
@@ -7331,7 +7492,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                                 )
                             } else {
                                 crate::generics::lower_type_expr_with_generics(
-                                    db, &te.expr, pkg_items, &iface_ns, &bindings, &mut diags,
+                                    db, &ty_expr, pkg_items, &iface_ns, &bindings, &mut diags,
                                 )
                             }
                         } else {
@@ -7354,10 +7515,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .return_type
                     .as_ref()
                     .map(|te| {
+                        let ty_expr =
+                            crate::lower_type_expr::substitute_self_in(&te.expr, &self_replacement);
                         if bindings.is_empty() {
                             crate::lower_type_expr::lower_type_expr_in_ns(
                                 db,
-                                &te.expr,
+                                &ty_expr,
                                 pkg_items,
                                 &iface_ns,
                                 &all_generic_params,
@@ -7365,7 +7528,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             )
                         } else {
                             crate::generics::lower_type_expr_with_generics(
-                                db, &te.expr, pkg_items, &iface_ns, &bindings, &mut diags,
+                                db, &ty_expr, pkg_items, &iface_ns, &bindings, &mut diags,
                             )
                         }
                     })
@@ -7376,10 +7539,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .throws
                     .as_ref()
                     .map(|te| {
+                        let ty_expr =
+                            crate::lower_type_expr::substitute_self_in(&te.expr, &self_replacement);
                         if bindings.is_empty() {
                             crate::lower_type_expr::lower_type_expr_in_ns(
                                 db,
-                                &te.expr,
+                                &ty_expr,
                                 pkg_items,
                                 &iface_ns,
                                 &all_generic_params,
@@ -7387,7 +7552,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             )
                         } else {
                             crate::generics::lower_type_expr_with_generics(
-                                db, &te.expr, pkg_items, &iface_ns, &bindings, &mut diags,
+                                db, &ty_expr, pkg_items, &iface_ns, &bindings, &mut diags,
                             )
                         }
                     })
@@ -7426,6 +7591,54 @@ impl<'db> TypeInferenceBuilder<'db> {
         None
     }
 
+    fn interface_self_type_expr(iface_data: &baml_compiler2_hir::item_tree::Interface) -> TypeExpr {
+        TypeExpr::Path {
+            segments: vec![iface_data.name.clone()],
+            generic_args: iface_data
+                .generic_params
+                .iter()
+                .cloned()
+                .map(crate::lower_type_expr::type_expr_for_name)
+                .collect(),
+            attrs: Vec::new(),
+        }
+    }
+
+    fn type_expr_contains_self(ty: &TypeExpr) -> bool {
+        match ty {
+            TypeExpr::Path {
+                segments,
+                generic_args,
+                ..
+            } => {
+                segments.iter().any(|segment| segment.as_str() == "Self")
+                    || generic_args.iter().any(Self::type_expr_contains_self)
+            }
+            TypeExpr::List { inner, .. } | TypeExpr::Optional { inner, .. } => {
+                Self::type_expr_contains_self(inner)
+            }
+            TypeExpr::Map { key, value, .. } => {
+                Self::type_expr_contains_self(key) || Self::type_expr_contains_self(value)
+            }
+            TypeExpr::Union { variants, .. } => variants.iter().any(Self::type_expr_contains_self),
+            TypeExpr::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
+                params
+                    .iter()
+                    .any(|param| Self::type_expr_contains_self(&param.ty))
+                    || Self::type_expr_contains_self(ret)
+                    || throws
+                        .as_ref()
+                        .is_some_and(|throws| Self::type_expr_contains_self(throws))
+            }
+            _ => false,
+        }
+    }
+
     /// Look up class fields from the package items (via item tree).
     ///
     /// `class_type_args` are the concrete type arguments for the class (e.g.
@@ -7454,11 +7667,8 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     /// Compute the full ordered field list for `class_name`.
     ///
-    /// Actual runtime fields are the class's own bare fields followed by fields
-    /// redeclared inside each `implements I {}` block under the qualified name
-    /// `I.field`. When `include_aliases` is true, unambiguous interface fields
-    /// also get a bare alias for member access only; construction and emitted
-    /// runtime metadata use actual fields.
+    /// Actual runtime fields are the class's own bare fields. Interface fields
+    /// are views over those fields and never add qualified runtime slots.
     ///
     /// Emits diagnostics for field type lowering. Callers that don't want
     /// diagnostic side-effects should use a separate name-only check (e.g.
@@ -7467,7 +7677,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         &self,
         class_name: &crate::ty::QualifiedTypeName,
         class_type_args: &[Ty],
-        include_aliases: bool,
+        _include_aliases: bool,
     ) -> Vec<(Name, Ty)> {
         let mut out: Vec<(Name, Ty)> = Vec::new();
         let Some(pkg_items_for_class) = self.resolve_class_pkg_items(class_name.package()) else {
@@ -7526,9 +7736,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             out.push((name.clone(), field_ty));
         };
 
-        let mut class_own_names: FxHashSet<Name> = FxHashSet::default();
         for field in &class_data.fields {
-            class_own_names.insert(field.name.clone());
             push_field(
                 self,
                 &field.name,
@@ -7537,51 +7745,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 &ns_context,
                 &mut out,
             );
-        }
-
-        for impl_target in &class_data.implements {
-            let Some(iface_loc) = crate::interfaces::resolve_path_to_interface(
-                db,
-                &impl_target.target.expr,
-                pkg_items_for_class,
-                &ns_context,
-            ) else {
-                continue;
-            };
-            let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
-            let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
-                continue;
-            };
-            for field in &impl_target.fields {
-                let qualified = Name::new(format!("{}.{}", iface_data.name, field.name));
-                push_field(
-                    self,
-                    &qualified,
-                    field.type_expr.as_ref(),
-                    &class_data.generic_params,
-                    &ns_context,
-                    &mut out,
-                );
-            }
-        }
-
-        if include_aliases {
-            let mut by_bare_name: FxHashMap<Name, Vec<Ty>> = FxHashMap::default();
-            for (name, ty) in &out {
-                let Some((_, bare)) = name.as_str().split_once('.') else {
-                    continue;
-                };
-                let bare = Name::new(bare);
-                if class_own_names.contains(&bare) {
-                    continue;
-                }
-                by_bare_name.entry(bare).or_default().push(ty.clone());
-            }
-            for (bare, tys) in by_bare_name {
-                if tys.len() == 1 {
-                    out.push((bare, tys[0].clone()));
-                }
-            }
         }
 
         out
@@ -7637,36 +7800,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         if class_data.fields.iter().any(|f| &f.name == member) {
             return true;
         }
-        // BEP-044: qualified interface-field slots are also valid members.
-        if member.as_str().contains('.') {
-            for impl_target in &class_data.implements {
-                let Some(iface_loc) = crate::interfaces::resolve_path_to_interface(
-                    db,
-                    &impl_target.target.expr,
-                    pkg_items,
-                    &ns,
-                ) else {
-                    continue;
-                };
-                let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
-                let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
-                    continue;
-                };
-                if impl_target.fields.iter().any(|field| {
-                    Name::new(format!("{}.{}", iface_data.name, field.name)) == *member
-                }) {
-                    return true;
-                }
-            }
-        }
-        // An unqualified interface field is a member only when it is
-        // unambiguous; conflicting interface namespaces must be selected with
-        // qualified access.
-        let sources = self.class_interface_field_sources(class_name, member);
-        if sources.len() == 1 {
-            return true;
-        }
-        // BEP-044 interface qualifier pseudo-member (`obj.Interface.field`).
+        // Removed BEP-044 interface projection syntax (`obj.Interface.field`):
+        // treat the interface name as known so resolution can emit a targeted
+        // diagnostic instead of a generic missing-member error.
         for impl_target in &class_data.implements {
             let Some(iface_loc) = crate::interfaces::resolve_path_to_interface(
                 db,
@@ -7698,19 +7834,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         class_type_args: &[Ty],
         field_name: &Name,
     ) -> Option<(Name, Ty)> {
-        let mut matches = self
-            .class_actual_fields_ordered(class_name, class_type_args)
-            .into_iter()
-            .filter_map(|(name, ty)| {
-                let (_, bare) = name.as_str().split_once('.')?;
-                (bare == field_name.as_str()).then_some((name, ty))
-            });
-        let first = matches.next()?;
-        if matches.next().is_none() {
-            Some(first)
-        } else {
-            None
-        }
+        let _ = (class_name, class_type_args, field_name);
+        None
     }
 
     fn class_interface_field_sources(
@@ -7729,17 +7854,13 @@ impl<'db> TypeInferenceBuilder<'db> {
         let db = self.context.db();
         let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
         let class_data = &item_tree[class_loc.id(db)];
-        if class_data.fields.iter().any(|f| &f.name == member) {
-            return Vec::new();
-        }
         let ns =
             baml_compiler2_hir::file_package::file_package(db, class_loc.file(db)).namespace_path;
+        let mut seen = FxHashSet::default();
         let mut sources = Vec::new();
+
         for impl_target in &class_data.implements {
-            if !impl_target.fields.iter().any(|f| &f.name == member) {
-                continue;
-            }
-            let Some(iface_loc) = crate::interfaces::resolve_path_to_interface(
+            let Some(root_iface_loc) = crate::interfaces::resolve_path_to_interface(
                 db,
                 &impl_target.target.expr,
                 pkg_items,
@@ -7747,14 +7868,21 @@ impl<'db> TypeInferenceBuilder<'db> {
             ) else {
                 continue;
             };
-            let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
-            let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
-                continue;
-            };
-            if !sources.contains(&iface_data.name) {
-                sources.push(iface_data.name.clone());
+            for iface_loc in
+                crate::interfaces::interface_closure_locs(db, root_iface_loc, pkg_items, &ns)
+            {
+                let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+                let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
+                    continue;
+                };
+                if iface_data.fields.iter().any(|field| &field.name == member)
+                    && seen.insert(iface_data.name.clone())
+                {
+                    sources.push(iface_data.name.clone());
+                }
             }
         }
+
         sources
     }
 

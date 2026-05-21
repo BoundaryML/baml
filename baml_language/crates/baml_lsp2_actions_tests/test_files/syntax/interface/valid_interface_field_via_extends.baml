@@ -12,19 +12,14 @@ interface Person requires Named, Aged {
 }
 
 class Employee {
+  name: string
+  age: int
+  occupation: string
   salary: float
 
-  implements Named {
-    name: string
-  }
-
-  implements Aged {
-    age: int
-  }
-
-  implements Person {
-    occupation: string
-  }
+  implements Named {}
+  implements Aged {}
+  implements Person {}
 }
 
 function get_name(e: Employee) -> string {

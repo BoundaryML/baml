@@ -11,9 +11,17 @@ function first_named<T extends Named>(items: T[]) -> string {
 
 function bad() -> string {
   let ints: int[] = [1, 2, 3]
-  return first_named(ints)
+  return first_named<int>(ints)
 }
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: type mismatch: expected user.Named, got int
+//     ╭─[ interface_error_generic_bound_violation.baml:14:9 ]
+//     │
+//  14 │   return first_named<int>(ints)
+//     │         ───────────┬───────────  
+//     │                    ╰───────────── type mismatch: expected user.Named, got int
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯

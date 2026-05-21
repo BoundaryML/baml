@@ -8,9 +8,9 @@ interface Animal {
 }
 
 class Dog {
-  implements Animal {
-    parent: Animal?
+  parent: Animal?
 
+  implements Animal {
     function speak(self) -> string { return "Woof!" }
   }
 }

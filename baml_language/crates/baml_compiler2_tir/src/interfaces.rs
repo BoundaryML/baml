@@ -1,8 +1,9 @@
 //! Interface implementation registry for nominal subtyping (BEP-044).
 //!
 //! Per-package map from class qualified names to the set of interface
-//! qualified names that class implements — directly via `implements I {}`
-//! blocks plus transitively via interface `extends` chains.
+//! qualified names that class implements directly via `implements I {}`
+//! blocks. Interface `requires` is tracked separately for interface-to-interface
+//! subtyping; classes must explicitly implement required parents.
 //!
 //! `Class T <: Interface I` iff `I ∈ implements(T)` — there is no
 //! shape-matching escape hatch.
@@ -18,8 +19,7 @@ use crate::{
     ty::{QualifiedTypeName, Ty},
 };
 
-/// For every class in a package, the set of interfaces it implements
-/// (transitively closed over interface `extends`).
+/// For every class in a package, the set of interfaces it implements directly.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ImplementsRegistry {
     /// Class QTN → interfaces it implements.
@@ -125,8 +125,14 @@ pub fn package_implements_registry<'db>(
                         }
                     }
                 }
-                let closure = interface_closure(db, iface_loc, &mut closure_cache);
-                implemented.extend(closure.iter().cloned());
+                let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+                if let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) {
+                    implemented.insert(qualify_def(
+                        db,
+                        Definition::Interface(iface_loc),
+                        &iface_data.name,
+                    ));
+                }
             }
 
             class_implements.insert(class_qtn, implemented);

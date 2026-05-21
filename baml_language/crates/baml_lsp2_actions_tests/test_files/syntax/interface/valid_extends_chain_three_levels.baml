@@ -15,9 +15,9 @@ interface Polite requires Greeter {
 }
 
 class Robot {
-  implements HasName {
-    name: string
-  }
+  name: string
+
+  implements HasName {}
 
   implements Greeter {
     function greet(self) -> string { return "hello" }

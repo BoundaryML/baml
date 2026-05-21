@@ -1,5 +1,5 @@
 // BEP-044 §"Method Disambiguation": when two interfaces declare the same
-// method name, `obj.InterfaceName.method()` selects the right vtable.
+// method name, `obj.as<InterfaceName>.method()` selects the right vtable.
 
 interface Serializer {
   function encode(self) -> string
@@ -19,11 +19,11 @@ class Data {
 }
 
 function pick_text(d: Data) -> string {
-  return d.Serializer.encode()
+  return d.as<Serializer>.encode()
 }
 
 function pick_int(d: Data) -> int {
-  return d.IntSerializer.encode()
+  return d.as<IntSerializer>.encode()
 }
 
 //----

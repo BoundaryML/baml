@@ -163,6 +163,7 @@ ast_node!(EnumDef, ENUM_DEF);
 ast_node!(InterfaceDef, INTERFACE_DEF);
 ast_node!(ImplementsBlock, IMPLEMENTS_BLOCK);
 ast_node!(ImplementsTarget, IMPLEMENTS_TARGET);
+ast_node!(InterfaceFieldLink, INTERFACE_FIELD_LINK);
 ast_node!(ImplementsFor, IMPLEMENTS_FOR);
 ast_node!(ImplementsForTarget, IMPLEMENTS_FOR_TARGET);
 ast_node!(ExtendsClause, EXTENDS_CLAUSE);
@@ -878,6 +879,7 @@ ast_node!(BreakStmt, BREAK_STMT);
 ast_node!(ContinueStmt, CONTINUE_STMT);
 ast_node!(PathExpr, PATH_EXPR);
 ast_node!(FieldAccessExpr, FIELD_ACCESS_EXPR);
+ast_node!(UpcastExpr, UPCAST_EXPR);
 ast_node!(EnvAccessExpr, ENV_ACCESS_EXPR);
 ast_node!(MatchExpr, MATCH_EXPR);
 ast_node!(MatchArm, MATCH_ARM);
@@ -1326,9 +1328,68 @@ impl ImplementsBlock {
         self.syntax.children().filter_map(Field::cast)
     }
 
+    /// Explicit interface-field links, e.g. `name as display_name`.
+    pub fn field_links(&self) -> impl Iterator<Item = InterfaceFieldLink> {
+        self.syntax.children().filter_map(InterfaceFieldLink::cast)
+    }
+
     /// Method definitions (overrides) provided in this block.
     pub fn methods(&self) -> impl Iterator<Item = FunctionDef> {
         self.syntax.children().filter_map(FunctionDef::cast)
+    }
+}
+
+fn is_member_name_token(kind: SyntaxKind) -> bool {
+    matches!(
+        kind,
+        SyntaxKind::WORD
+            | SyntaxKind::KW_IMPLEMENTS
+            | SyntaxKind::KW_IMPLEMENT
+            | SyntaxKind::KW_EXTENDS
+            | SyntaxKind::KW_REQUIRES
+            | SyntaxKind::KW_INTERFACE
+    )
+}
+
+impl InterfaceFieldLink {
+    /// The interface field on the left side of `field as class_field`.
+    pub fn interface_field(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| {
+                !token.kind().is_trivia()
+                    && is_member_name_token(token.kind())
+                    && !(token.kind() == SyntaxKind::WORD && token.text() == "as")
+            })
+    }
+
+    /// The class field on the right side of `field as class_field`.
+    pub fn class_field(&self) -> Option<SyntaxToken> {
+        let mut after_as = false;
+        for token in self
+            .syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| !token.kind().is_trivia())
+        {
+            if token.kind() == SyntaxKind::WORD && token.text() == "as" {
+                after_as = true;
+                continue;
+            }
+            if after_as && is_member_name_token(token.kind()) {
+                return Some(token);
+            }
+        }
+        None
+    }
+
+    /// Span of the contextual `as` keyword when present.
+    pub fn as_token(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| token.kind() == SyntaxKind::WORD && token.text() == "as")
     }
 }
 
@@ -1353,6 +1414,11 @@ impl ImplementsFor {
     /// Field declarations inside the block.
     pub fn fields(&self) -> impl Iterator<Item = Field> {
         self.syntax.children().filter_map(Field::cast)
+    }
+
+    /// Explicit interface-field links, e.g. `name as display_name`.
+    pub fn field_links(&self) -> impl Iterator<Item = InterfaceFieldLink> {
+        self.syntax.children().filter_map(InterfaceFieldLink::cast)
     }
 
     /// Method definitions inside the block.
@@ -2552,6 +2618,7 @@ impl LetStmt {
                     | SyntaxKind::CALL_EXPR
                     | SyntaxKind::PATH_EXPR
                     | SyntaxKind::FIELD_ACCESS_EXPR
+                    | SyntaxKind::UPCAST_EXPR
                     | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR
                     | SyntaxKind::INDEX_EXPR
                     | SyntaxKind::OPTIONAL_INDEX_EXPR
@@ -2739,6 +2806,7 @@ impl BlockExpr {
                         | SyntaxKind::BLOCK_EXPR
                         | SyntaxKind::PATH_EXPR
                         | SyntaxKind::FIELD_ACCESS_EXPR
+                        | SyntaxKind::UPCAST_EXPR
                         | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR
                         | SyntaxKind::ENV_ACCESS_EXPR
                         | SyntaxKind::INDEX_EXPR

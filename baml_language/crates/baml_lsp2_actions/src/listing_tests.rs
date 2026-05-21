@@ -308,3 +308,38 @@ fn round_trip_member() {
 
     assert!(checked > 0, "expected at least one member to be checked");
 }
+
+#[test]
+fn out_of_body_implements_method_appears_in_class_outline() {
+    let mut builder = ProjectTest::builder();
+    builder.source(
+        "types.baml",
+        r#"
+interface Animal {
+    function speak(self) -> string
+}
+
+class Dog {}
+
+implements Animal for Dog {
+    function speak(self) -> string { return "woof" }
+}
+"#,
+    );
+    let project = builder.build();
+
+    let outline = crate::outline::file_outline(&project.db, project.files[0]);
+    let dog = outline
+        .iter()
+        .find(|item| item.name == "Dog")
+        .expect("Dog should appear in outline");
+
+    assert!(
+        dog.children.iter().any(|child| {
+            child.name == "speak"
+                && child.kind == baml_compiler2_hir::contributions::DefinitionKind::Method
+        }),
+        "expected out-of-body impl method to be visible as a Dog outline child, got: {:?}",
+        dog.children
+    );
+}

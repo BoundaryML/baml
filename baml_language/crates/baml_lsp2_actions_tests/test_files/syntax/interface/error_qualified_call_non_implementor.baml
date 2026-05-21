@@ -1,5 +1,5 @@
-// BEP-044: qualified call to an interface the receiver doesn't implement —
-// `d.Swimmer.swim()` when `Dog` only implements `Animal`.
+// BEP-044: `.as<I>` projection to an interface the receiver doesn't implement —
+// `d.as<Swimmer>.swim()` when `Dog` only implements `Animal`.
 
 interface Animal {
   function speak(self) -> string
@@ -16,17 +16,17 @@ class Dog {
 }
 
 function dunk(d: Dog) -> string {
-  return d.Swimmer.swim()
+  return d.as<Swimmer>.swim()
 }
 
 //----
 //- diagnostics
-// Error: type `user.Dog` has no member `Swimmer`
-//     ╭─[ interface_error_qualified_call_non_implementor.baml:19:12 ]
+// Error: type mismatch: expected user.Swimmer, got user.Dog
+//     ╭─[ interface_error_qualified_call_non_implementor.baml:19:10 ]
 //     │
-//  19 │   return d.Swimmer.swim()
-//     │            ───┬───  
-//     │               ╰───── type `user.Dog` has no member `Swimmer`
+//  19 │   return d.as<Swimmer>.swim()
+//     │          ──────┬──────  
+//     │                ╰──────── type mismatch: expected user.Swimmer, got user.Dog
 //     │ 
-//     │ Note: Error code: E0007
+//     │ Note: Error code: E0001
 // ────╯

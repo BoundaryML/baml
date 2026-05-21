@@ -112,6 +112,15 @@ pub enum LoweringDiagnostic {
         target_name: String,
         span: TextRange,
     },
+
+    /// Field declarations inside `implements` blocks are the obsolete
+    /// qualified-field model. Interface fields are satisfied by class fields
+    /// or explicit `field as class_field` links.
+    InterfaceFieldDeclaredInImplementsBlock {
+        interface_name: String,
+        field_name: String,
+        span: TextRange,
+    },
 }
 
 impl LoweringDiagnostic {
@@ -256,6 +265,18 @@ impl LoweringDiagnostic {
                 ),
                 *span,
                 "fields are not allowed for this target",
+            ),
+            LoweringDiagnostic::InterfaceFieldDeclaredInImplementsBlock {
+                interface_name,
+                field_name,
+                span,
+            } => (
+                DiagnosticId::InterfaceFieldDeclaredInImplementsBlock,
+                format!(
+                    "field `{field_name}` cannot be declared inside `implements {interface_name}`"
+                ),
+                *span,
+                "add a class field, or link it with `field as class_field`",
             ),
         };
 

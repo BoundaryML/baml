@@ -14,17 +14,18 @@ interface Person requires Named, Aged {
 }
 
 class Bad {
+    occupation: string
+
     implements Person {
-        occupation: string
     }
 }
 
 //----
 //- diagnostics
 // Error: class `Bad` implements `Person`, which requires `Named`, `Aged`, but `Bad` does not implement them
-//     ╭─[ interface_error_missing_required_interface.baml:17:15 ]
+//     ╭─[ interface_error_missing_required_interface.baml:19:15 ]
 //     │
-//  17 │     implements Person {
+//  19 │     implements Person {
 //     │               ───┬───  
 //     │                  ╰───── requires `Named`, `Aged`
 //     │ 

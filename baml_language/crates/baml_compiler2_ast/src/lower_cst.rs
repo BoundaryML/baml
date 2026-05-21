@@ -17,9 +17,9 @@ use crate::{
     ast::{
         AstSourceMap, BuiltinKind, CallArg, ConfigItemDef, EnumDef, Expr, ExprBody, ExprId,
         FieldDef, FunctionBodyDef, FunctionDef, FunctionDefaults, GeneratorDef, ImplementsBlockDef,
-        ImplementsForDef, InterfaceDef, Interpolation, Item, LetDef, LetOrigin, LlmBodyDef,
-        MethodSigDef, Param, RawAttribute, RawAttributeArg, RawPrompt, SpannedTypeExpr,
-        TemplateStringDef, TestDef, TypeAliasDef, VariantDef,
+        ImplementsForDef, InterfaceDef, InterfaceFieldLinkDef, Interpolation, Item, LetDef,
+        LetOrigin, LlmBodyDef, MethodSigDef, Param, RawAttribute, RawAttributeArg, RawPrompt,
+        SpannedTypeExpr, TemplateStringDef, TestDef, TypeAliasDef, VariantDef,
     },
     companions::expand_companions,
     lower_expr_body, lower_type_expr,
@@ -177,6 +177,7 @@ pub fn lower_file_with_file_id(
             let block = ImplementsBlockDef {
                 target: imp.interface_target,
                 fields: imp.fields,
+                field_links: imp.field_links,
                 methods: imp.methods,
                 is_out_of_body: true,
                 span: imp.span,
@@ -1323,47 +1324,23 @@ fn lower_implements_block(
         _ => "?".to_string(),
     };
 
-    let fields = block
-        .fields()
-        .filter_map(|f| {
-            let Some(fname) = f.name() else {
-                diags.push(LoweringDiagnostic::MissingFieldName {
-                    class_name: target_label.clone(),
-                    span: f.syntax().text_range(),
-                });
-                return None;
-            };
-            let field_name_str = fname.text().to_string();
-            let type_expr = f.ty().map(|te| {
-                let expr = lower_type_expr::lower_type_expr_node(&te);
-                let te_span = te.syntax().text_range();
-                check_unknown_type(
-                    &expr,
-                    format!("implements block field `{target_label}.{field_name_str}`"),
-                    te_span,
-                    diags,
-                );
-                lower_type_expr::check_void_type(
-                    &expr,
-                    "an implements block field type".to_string(),
-                    te_span,
-                    false,
-                    diags,
-                );
-                SpannedTypeExpr {
-                    expr,
-                    span: te_span,
-                }
-            });
-            Some(FieldDef {
-                name: Name::new(&field_name_str),
-                type_expr,
-                attributes: lower_attributes_from_node(f.syntax()),
-                docstring: crate::docstring::extract_docstring(f.syntax()),
+    for f in block.fields() {
+        let field_name = f
+            .name()
+            .map(|name| name.text().to_string())
+            .unwrap_or_else(|| "?".to_string());
+        diags.push(
+            LoweringDiagnostic::InterfaceFieldDeclaredInImplementsBlock {
+                interface_name: target_label.clone(),
+                field_name,
                 span: f.syntax().text_range(),
-                name_span: fname.text_range(),
-            })
-        })
+            },
+        );
+    }
+
+    let field_links = block
+        .field_links()
+        .filter_map(|link| lower_interface_field_link(&link, diags))
         .collect();
 
     let methods = block
@@ -1373,7 +1350,8 @@ fn lower_implements_block(
 
     Some(ImplementsBlockDef {
         target,
-        fields,
+        fields: Vec::new(),
+        field_links,
         methods,
         is_out_of_body: false,
         span: block.syntax().text_range(),
@@ -1425,47 +1403,23 @@ fn lower_implements_for(
         _ => "?".to_string(),
     };
 
-    let fields = imp
-        .fields()
-        .filter_map(|f| {
-            let Some(fname) = f.name() else {
-                diags.push(LoweringDiagnostic::MissingFieldName {
-                    class_name: iface_label.clone(),
-                    span: f.syntax().text_range(),
-                });
-                return None;
-            };
-            let field_name_str = fname.text().to_string();
-            let type_expr = f.ty().map(|te| {
-                let expr = lower_type_expr::lower_type_expr_node(&te);
-                let te_span = te.syntax().text_range();
-                check_unknown_type(
-                    &expr,
-                    format!("implements-for field `{iface_label}.{field_name_str}`"),
-                    te_span,
-                    diags,
-                );
-                lower_type_expr::check_void_type(
-                    &expr,
-                    "an implements-for field type".to_string(),
-                    te_span,
-                    false,
-                    diags,
-                );
-                SpannedTypeExpr {
-                    expr,
-                    span: te_span,
-                }
-            });
-            Some(FieldDef {
-                name: Name::new(&field_name_str),
-                type_expr,
-                attributes: lower_attributes_from_node(f.syntax()),
-                docstring: crate::docstring::extract_docstring(f.syntax()),
+    for f in imp.fields() {
+        let field_name = f
+            .name()
+            .map(|name| name.text().to_string())
+            .unwrap_or_else(|| "?".to_string());
+        diags.push(
+            LoweringDiagnostic::InterfaceFieldDeclaredInImplementsBlock {
+                interface_name: iface_label.clone(),
+                field_name,
                 span: f.syntax().text_range(),
-                name_span: fname.text_range(),
-            })
-        })
+            },
+        );
+    }
+
+    let field_links = imp
+        .field_links()
+        .filter_map(|link| lower_interface_field_link(&link, diags))
         .collect();
 
     let methods = imp
@@ -1476,9 +1430,37 @@ fn lower_implements_for(
     Some(ImplementsForDef {
         interface_target,
         for_target,
-        fields,
+        fields: Vec::new(),
+        field_links,
         methods,
         span: node.text_range(),
+    })
+}
+
+fn lower_interface_field_link(
+    link: &ast::InterfaceFieldLink,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> Option<InterfaceFieldLinkDef> {
+    let Some(interface_field) = link.interface_field() else {
+        diags.push(LoweringDiagnostic::MissingFieldName {
+            class_name: "interface field link".to_string(),
+            span: link.syntax().text_range(),
+        });
+        return None;
+    };
+    let Some(class_field) = link.class_field() else {
+        diags.push(LoweringDiagnostic::MissingFieldName {
+            class_name: "interface field link".to_string(),
+            span: link.syntax().text_range(),
+        });
+        return None;
+    };
+    Some(InterfaceFieldLinkDef {
+        interface_field: Name::new(interface_field.text()),
+        class_field: Name::new(class_field.text()),
+        span: link.syntax().text_range(),
+        interface_field_span: interface_field.text_range(),
+        class_field_span: class_field.text_range(),
     })
 }
 

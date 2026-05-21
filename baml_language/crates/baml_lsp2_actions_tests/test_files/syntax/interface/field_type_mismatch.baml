@@ -6,20 +6,20 @@ interface Config {
 }
 
 class Server {
-  implements Config {
-    host: string
-    port: string
-  }
+  host: string
+  port: string
+
+  implements Config {}
 }
 
 //----
 //- diagnostics
 // Error: class `Server` declares field `port: string` but interface `Config` requires `port: int`
-//     ╭─[ interface_field_type_mismatch.baml:11:10 ]
+//     ╭─[ interface_field_type_mismatch.baml:10:8 ]
 //     │
-//  11 │     port: string
-//     │          ───┬───  
-//     │             ╰───── expected `int`, found `string`
+//  10 │   port: string
+//     │        ───┬───  
+//     │           ╰───── expected `int`, found `string`
 //     │ 
 //     │ Note: Error code: E0116
 // ────╯

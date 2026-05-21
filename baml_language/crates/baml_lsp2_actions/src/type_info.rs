@@ -74,10 +74,11 @@ pub enum TypeInfo {
         throws: Option<String>,
         note: Option<String>,
     },
-    /// A class definition: name, fields (name + type string).
+    /// A class definition: name, fields (name + type string), implemented interfaces.
     Class {
         name: String,
         fields: Vec<(String, String)>,
+        implements: Vec<String>,
     },
     /// An enum definition: name, variants.
     Enum { name: String, variants: Vec<String> },
@@ -126,17 +127,27 @@ impl TypeInfo {
                 }
                 out
             }
-            TypeInfo::Class { name, fields } => {
-                let field_strs: Vec<String> = fields
+            TypeInfo::Class {
+                name,
+                fields,
+                implements,
+            } => {
+                let mut member_strs: Vec<String> = fields
                     .iter()
                     .map(|(n, t)| format!("    {n}: {t}"))
                     .collect();
-                if field_strs.is_empty() {
+                member_strs.extend(
+                    implements
+                        .iter()
+                        .map(|target| format!("    implements {target} {{}}")),
+                );
+
+                if member_strs.is_empty() {
                     format!("```baml\nclass {name} {{}}\n```")
                 } else {
                     format!(
                         "```baml\nclass {name} {{\n{}\n}}\n```",
-                        field_strs.join("\n")
+                        member_strs.join("\n")
                     )
                 }
             }
@@ -327,10 +338,16 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
                     (field_name.as_str().to_string(), utils::display_ty(ty))
                 })
                 .collect();
+            let implements = class_data
+                .implements
+                .iter()
+                .map(|block| format!("{}", block.target.expr))
+                .collect();
 
             TypeInfo::Class {
                 name: class_name,
                 fields,
+                implements,
             }
         }
 

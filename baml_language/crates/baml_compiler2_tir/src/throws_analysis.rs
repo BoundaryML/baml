@@ -256,7 +256,9 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
                 collect_from_expr(context, *tail, body, out);
             }
         }
-        Expr::MemberAccess { base, .. } | Expr::OptionalMemberAccess { base, .. } => {
+        Expr::MemberAccess { base, .. }
+        | Expr::Upcast { base, .. }
+        | Expr::OptionalMemberAccess { base, .. } => {
             collect_from_expr(context, *base, body, out);
         }
         Expr::Index { base, index } | Expr::OptionalIndex { base, index } => {

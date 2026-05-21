@@ -1,4 +1,4 @@
-// E0124: implements block is missing required field `port` from interface Config.
+// E0124: class is missing required field `port` from interface Config.
 
 interface Config {
     host: string
@@ -6,21 +6,21 @@ interface Config {
 }
 
 class Server {
-    implements Config {
-        host: string
-    }
+    host: string
+
+    implements Config {}
 }
 
 //----
 //- diagnostics
-// Error: class `Server` does not redeclare required field `port` of interface `Config` in its `implements` block
-//     ╭─[ interface_error_missing_field_in_implements_block.baml:8:15 ]
+// Error: class `Server` does not provide field `port` required by interface `Config`
+//     ╭─[ interface_error_missing_field_in_implements_block.baml:9:17 ]
 //     │
-//   8 │ ╭─▶ class Server {
+//   9 │ ╭─▶     host: string
 //     ┆ ┆   
-//  11 │ ├─▶     }
-//     │ │           
-//     │ ╰─────────── missing `port` here
+//  11 │ ├─▶     implements Config {}
+//     │ │                              
+//     │ ╰────────────────────────────── add class field `port`, or link it with `port as class_field`
 //     │     
 //     │     Note: Error code: E0124
 // ────╯

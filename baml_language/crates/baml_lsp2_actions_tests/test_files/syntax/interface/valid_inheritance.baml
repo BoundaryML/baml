@@ -15,19 +15,15 @@ interface Person requires Named, Aged {
 }
 
 class Employee {
+  name: string
+  age: int
+  occupation: string
   salary: float
 
-  implements Named {
-    name: string
-  }
-
-  implements Aged {
-    age: int
-  }
+  implements Named {}
+  implements Aged {}
 
   implements Person {
-    occupation: string
-
     function introduce(self) -> string {
       return "hello"
     }

@@ -240,6 +240,16 @@ pub enum DiagnosticId {
     /// Top-level `implements I for T` attempted to implement an interface
     /// that declares fields.
     OutOfBodyImplementsFieldInterface,
+    /// A field declaration appeared inside an `implements` block.
+    InterfaceFieldDeclaredInImplementsBlock,
+    /// The left side of `field as class_field` is not an interface field.
+    UnknownInterfaceFieldLink,
+    /// The right side of `field as class_field` is not a class field.
+    UnknownClassFieldInInterfaceLink,
+    /// The same interface field is linked more than once in one impl block.
+    DuplicateInterfaceFieldLink,
+    /// Interface field access is ambiguous.
+    AmbiguousInterfaceField,
 }
 
 impl DiagnosticId {
@@ -412,6 +422,11 @@ impl DiagnosticId {
             DiagnosticId::MissingInterfaceField => "E0124",
             DiagnosticId::MissingRequiredInterface => "E0125",
             DiagnosticId::OutOfBodyImplementsFieldInterface => "E0126",
+            DiagnosticId::InterfaceFieldDeclaredInImplementsBlock => "E0127",
+            DiagnosticId::UnknownInterfaceFieldLink => "E0128",
+            DiagnosticId::UnknownClassFieldInInterfaceLink => "E0129",
+            DiagnosticId::DuplicateInterfaceFieldLink => "E0130",
+            DiagnosticId::AmbiguousInterfaceField => "E0131",
         }
     }
 }

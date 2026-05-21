@@ -70,7 +70,9 @@ fn find_callee_generic_args(callee_node: &SyntaxNode) -> Option<SyntaxNode> {
         return Some(args);
     }
     match callee_node.kind() {
-        SyntaxKind::FIELD_ACCESS_EXPR | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR => {
+        SyntaxKind::FIELD_ACCESS_EXPR
+        | SyntaxKind::UPCAST_EXPR
+        | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR => {
             // Base is the first child node — it carries the receiver type's
             // `GENERIC_ARGS` for `<Type<...>>.method(args)` shape.
             let base = callee_node.children().next()?;
@@ -635,6 +637,7 @@ impl LoweringContext {
             }
             SyntaxKind::PATH_EXPR => self.lower_path_expr(node),
             SyntaxKind::FIELD_ACCESS_EXPR => self.lower_field_access_expr(node),
+            SyntaxKind::UPCAST_EXPR => self.lower_upcast_expr(node),
             SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR => self.lower_optional_field_access_expr(node),
             SyntaxKind::ENV_ACCESS_EXPR => self.lower_env_access_expr(node),
             SyntaxKind::INDEX_EXPR => self.lower_index_expr(node),
@@ -1695,6 +1698,7 @@ impl LoweringContext {
                     | SyntaxKind::CALL_EXPR
                     | SyntaxKind::PATH_EXPR
                     | SyntaxKind::FIELD_ACCESS_EXPR
+                    | SyntaxKind::UPCAST_EXPR
                     | SyntaxKind::ENV_ACCESS_EXPR
                     | SyntaxKind::INDEX_EXPR
                     | SyntaxKind::IF_EXPR
@@ -1999,6 +2003,41 @@ impl LoweringContext {
         if let Some(range) = field_range {
             self.source_map.member_access_member_spans.insert(id, range);
         }
+        if self.needs_chain_wrap.remove(&base) {
+            self.needs_chain_wrap.insert(id);
+        }
+        id
+    }
+
+    fn lower_upcast_expr(&mut self, node: &SyntaxNode) -> ExprId {
+        let mut base = None;
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Node(child)
+                    if child.kind() != SyntaxKind::GENERIC_ARGS && base.is_none() =>
+                {
+                    base = Some(self.lower_expr_in_chain(&child));
+                }
+                rowan::NodeOrToken::Token(token) if base.is_none() => {
+                    base = self.try_lower_bare_token(&token);
+                }
+                _ => {}
+            }
+        }
+        let base = base.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+
+        let target = node
+            .children()
+            .find(|child| child.kind() == SyntaxKind::GENERIC_ARGS)
+            .and_then(|args| {
+                args.children()
+                    .find(|child| child.kind() == SyntaxKind::TYPE_EXPR)
+            })
+            .and_then(baml_compiler_syntax::ast::TypeExpr::cast)
+            .map(|te| crate::lower_type_expr::lower_type_expr_node(&te))
+            .unwrap_or_else(|| TypeExpr::Unknown { attrs: Vec::new() });
+
+        let id = self.alloc_expr(Expr::Upcast { base, target }, node.text_range());
         if self.needs_chain_wrap.remove(&base) {
             self.needs_chain_wrap.insert(id);
         }

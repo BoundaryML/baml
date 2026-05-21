@@ -809,6 +809,14 @@ pub fn infer_scope_types<'db>(
                                     &param.ty,
                                     &bound_subst,
                                 );
+                                let resolved_te = if let Some(replacement) = &self_replacement {
+                                    crate::lower_type_expr::substitute_self_in(
+                                        &resolved_te,
+                                        replacement,
+                                    )
+                                } else {
+                                    resolved_te
+                                };
                                 let ty = crate::lower_type_expr::lower_type_expr_in_ns(
                                     db,
                                     &resolved_te,

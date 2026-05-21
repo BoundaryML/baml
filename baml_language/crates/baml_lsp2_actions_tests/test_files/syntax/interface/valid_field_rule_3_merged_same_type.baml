@@ -10,12 +10,10 @@ interface Labeled {
 }
 
 class Item {
-  implements Named {
-    name: string
-  }
-  implements Labeled {
-    name: string
-  }
+  name: string
+
+  implements Named {}
+  implements Labeled {}
 }
 
 //----

@@ -188,6 +188,26 @@ pub enum Hir2Diagnostic {
         /// Span of the `implements` block.
         span: TextRange,
     },
+    /// The left side of `field as class_field` does not name a field on the
+    /// target interface.
+    UnknownInterfaceFieldLink {
+        interface_name: Name,
+        field_name: Name,
+        span: TextRange,
+    },
+    /// The right side of `field as class_field` does not name a class field.
+    UnknownClassFieldInInterfaceLink {
+        class_name: Name,
+        interface_name: Name,
+        field_name: Name,
+        span: TextRange,
+    },
+    /// The same interface field is linked more than once in one implements block.
+    DuplicateInterfaceFieldLink {
+        interface_name: Name,
+        field_name: Name,
+        sites: Vec<TextRange>,
+    },
     /// A class implements an interface whose `requires` parents are not
     /// all explicitly implemented by the same class.
     MissingRequiredInterface {
@@ -656,8 +676,8 @@ impl Hir2Diagnostic {
             } => Diagnostic::error(
                 DiagnosticId::MissingInterfaceField,
                 format!(
-                    "class `{class_name}` does not redeclare required field `{field_name}` of \
-                     interface `{interface_name}` in its `implements` block"
+                    "class `{class_name}` does not provide field `{field_name}` required by \
+                     interface `{interface_name}`"
                 ),
             )
             .with_primary(
@@ -665,9 +685,75 @@ impl Hir2Diagnostic {
                     file_id,
                     range: *span,
                 },
-                format!("missing `{field_name}` here"),
+                format!("add class field `{field_name}`, or link it with `{field_name} as class_field`"),
             )
             .with_phase(DiagnosticPhase::Hir),
+            Hir2Diagnostic::UnknownInterfaceFieldLink {
+                interface_name,
+                field_name,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::UnknownInterfaceFieldLink,
+                format!("interface `{interface_name}` has no field `{field_name}`"),
+            )
+            .with_primary(
+                Span {
+                    file_id,
+                    range: *span,
+                },
+                "not a field of the interface",
+            )
+            .with_phase(DiagnosticPhase::Hir),
+            Hir2Diagnostic::UnknownClassFieldInInterfaceLink {
+                class_name,
+                interface_name,
+                field_name,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::UnknownClassFieldInInterfaceLink,
+                format!(
+                    "class `{class_name}` has no field `{field_name}` to link for interface `{interface_name}`"
+                ),
+            )
+            .with_primary(
+                Span {
+                    file_id,
+                    range: *span,
+                },
+                "not a field of the class",
+            )
+            .with_phase(DiagnosticPhase::Hir),
+            Hir2Diagnostic::DuplicateInterfaceFieldLink {
+                interface_name,
+                field_name,
+                sites,
+            } => {
+                let mut diag = Diagnostic::error(
+                    DiagnosticId::DuplicateInterfaceFieldLink,
+                    format!(
+                        "field `{field_name}` of interface `{interface_name}` is linked more than once"
+                    ),
+                );
+                if let Some((first, rest)) = sites.split_first() {
+                    diag = diag.with_secondary(
+                        Span {
+                            file_id,
+                            range: *first,
+                        },
+                        "first link here",
+                    );
+                    for span in rest {
+                        diag = diag.with_primary(
+                            Span {
+                                file_id,
+                                range: *span,
+                            },
+                            "duplicate link here",
+                        );
+                    }
+                }
+                diag.with_phase(DiagnosticPhase::Hir)
+            }
             Hir2Diagnostic::MissingRequiredInterface {
                 class_name,
                 interface_name,
@@ -711,7 +797,7 @@ impl Hir2Diagnostic {
                     file_id,
                     range: *span,
                 },
-                "move this `implements` block into the class body",
+                "field-bearing interfaces must be implemented inside the class body",
             )
             .with_phase(DiagnosticPhase::Hir),
         }

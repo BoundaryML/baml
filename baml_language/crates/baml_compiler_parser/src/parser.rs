@@ -401,6 +401,53 @@ impl<'a> Parser<'a> {
             || self.at(TokenKind::Interface)
     }
 
+    /// True for `field as class_field` inside an `implements` block.
+    fn looks_like_interface_field_link(&self) -> bool {
+        let first = self.skip_trivia_and_comments_from(self.current);
+        let Some(first_token) = self.tokens.get(first) else {
+            return false;
+        };
+        if !matches!(
+            first_token.kind,
+            TokenKind::Word
+                | TokenKind::Implements
+                | TokenKind::Implement
+                | TokenKind::Extends
+                | TokenKind::Requires
+                | TokenKind::Interface
+        ) {
+            return false;
+        }
+        let second = self.skip_trivia_and_comments_from(first + 1);
+        self.tokens
+            .get(second)
+            .is_some_and(|t| t.kind == TokenKind::Word && t.text == "as")
+    }
+
+    /// True for the BEP-044 projection operator `.as<T>`.
+    fn looks_like_as_projection(&self) -> bool {
+        let dot = self.skip_trivia_and_comments_from(self.current);
+        if self
+            .tokens
+            .get(dot)
+            .is_none_or(|t| t.kind != TokenKind::Dot)
+        {
+            return false;
+        }
+        let as_idx = self.skip_trivia_and_comments_from(dot + 1);
+        if self
+            .tokens
+            .get(as_idx)
+            .is_none_or(|t| !(t.kind == TokenKind::Word && t.text == "as"))
+        {
+            return false;
+        }
+        let less_idx = self.skip_trivia_and_comments_from(as_idx + 1);
+        self.tokens
+            .get(less_idx)
+            .is_some_and(|t| t.kind == TokenKind::Less)
+    }
+
     /// Check if there's a newline before the next non-trivia token.
     /// Comments are treated as trivia for this purpose.
     fn has_newline_ahead(&self) -> bool {
@@ -2679,6 +2726,11 @@ impl<'a> Parser<'a> {
                     p.parse_function();
                 } else if p.at(TokenKind::Function) {
                     p.parse_function();
+                } else if p.looks_like_interface_field_link() {
+                    p.parse_interface_field_link();
+                    if !p.eat(TokenKind::Comma) {
+                        p.eat(TokenKind::Semicolon);
+                    }
                 } else if p.at_member_name() {
                     p.parse_field();
                     if !p.eat(TokenKind::Comma) {
@@ -2693,6 +2745,30 @@ impl<'a> Parser<'a> {
             }
 
             p.expect(TokenKind::RBrace);
+        });
+    }
+
+    /// Parse an explicit interface-field link inside an `implements` block:
+    /// `interface_field as class_field`.
+    fn parse_interface_field_link(&mut self) {
+        self.with_node(SyntaxKind::INTERFACE_FIELD_LINK, |p| {
+            if p.at_member_name() {
+                p.bump();
+            } else {
+                p.error_unexpected_token("interface field name".to_string());
+            }
+
+            if p.at_contextual_kw("as") {
+                p.bump();
+            } else {
+                p.error_unexpected_token("`as`".to_string());
+            }
+
+            if p.at_member_name() {
+                p.bump();
+            } else {
+                p.error_unexpected_token("class field name".to_string());
+            }
         });
     }
 
@@ -2744,6 +2820,11 @@ impl<'a> Parser<'a> {
                     p.parse_function();
                 } else if p.at(TokenKind::Function) {
                     p.parse_function();
+                } else if p.looks_like_interface_field_link() {
+                    p.parse_interface_field_link();
+                    if !p.eat(TokenKind::Comma) {
+                        p.eat(TokenKind::Semicolon);
+                    }
                 } else if p.at_member_name() {
                     p.parse_field();
                     if !p.eat(TokenKind::Comma) {
@@ -2766,12 +2847,13 @@ impl<'a> Parser<'a> {
     /// This is different from `GENERIC_ARGS` (call-site: `fetch<Response>(url)`).
     /// This produces `GENERIC_PARAM_LIST` containing `GENERIC_PARAM` children.
     fn parse_generic_param_list(&mut self) {
+        self.type_args_depth += 1;
         self.with_node(SyntaxKind::GENERIC_PARAM_LIST, |p| {
             p.expect(TokenKind::Less); // <
 
             // Parse comma-separated type parameter names
             loop {
-                if p.at(TokenKind::Greater) || p.at_end() {
+                if p.at(TokenKind::Greater) || p.at(TokenKind::GreaterGreater) || p.at_end() {
                     break;
                 }
                 p.with_node(SyntaxKind::GENERIC_PARAM, |p| {
@@ -2808,8 +2890,30 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            p.expect(TokenKind::Greater); // >
+            p.expect_greater(); // >
         });
+        self.type_args_depth -= 1;
+
+        // If we just exited the outermost generic and have pending '>', report error.
+        if self.type_args_depth == 0 && self.pending_greaters > 0 {
+            if let Some(span) = self.pending_greater_span {
+                self.error(
+                    format!(
+                        "Unmatched '>' in type expression (found {} extra)",
+                        self.pending_greaters
+                    ),
+                    span,
+                );
+            }
+            for _ in 0..self.pending_greaters {
+                self.events.push(Event::Token {
+                    kind: SyntaxKind::GREATER,
+                    text: ">".to_string(),
+                });
+            }
+            self.pending_greaters = 0;
+            self.pending_greater_span = None;
+        }
     }
 
     fn parse_field(&mut self) {
@@ -4520,6 +4624,13 @@ impl<'a> Parser<'a> {
                     }
                     self.finish_node();
                 }
+            } else if op == TokenKind::Dot && self.looks_like_as_projection() {
+                let lhs_start = self.find_previous_expr_start_after(expr_start);
+                self.wrap_events_in_node(lhs_start, SyntaxKind::UPCAST_EXPR);
+                self.bump(); // .
+                self.bump(); // contextual `as`
+                self.parse_generic_args();
+                self.finish_node();
             } else if op == TokenKind::Dot || op == TokenKind::Dollar {
                 // Field access on a complex expression.
                 //
@@ -5284,13 +5395,18 @@ impl<'a> Parser<'a> {
         // Check if this looks like a path (ident.client followed by dot and another ident)
         if self.peek(1).map(|t| t.kind) == Some(TokenKind::Dot)
             && self.peek(2).map(|t| segment(t.kind)).unwrap_or(false)
+            && !(self
+                .peek(2)
+                .is_some_and(|t| t.kind == TokenKind::Word && t.text == "as")
+                && self.peek(3).map(|t| t.kind) == Some(TokenKind::Less))
         {
             // It's a path - all segments are identifiers
             self.with_node(SyntaxKind::PATH_EXPR, |p| {
                 p.bump(); // First segment
 
                 // Parse remaining segments
-                while p.eat(TokenKind::Dot) {
+                while p.at(TokenKind::Dot) && !p.looks_like_as_projection() {
+                    p.bump();
                     if p.at(TokenKind::Word) || p.at(TokenKind::Client) {
                         p.bump(); // Next segment
                     } else {
@@ -6248,6 +6364,47 @@ mod tests {
             .filter(|n| n.kind() == SyntaxKind::IS_EXPR)
             .count();
         assert_eq!(is_count, 2, "expected two IS_EXPR nodes");
+    }
+
+    #[test]
+    fn as_projection_parses_in_local_rooted_chain() {
+        let source = r#"
+function f(i: Item) -> string {
+  i.as<Named>.name
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let upcast_count = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::UPCAST_EXPR)
+            .count();
+        assert_eq!(upcast_count, 1, "expected one UPCAST_EXPR");
+    }
+
+    #[test]
+    fn nested_generic_bound_closes_function_generic_list() {
+        let source = r#"
+interface Converter<T> {
+  function convert(self) -> T
+}
+
+function read_int<T extends Converter<int>>(m: T) -> int {
+  m.as<Converter<int>>.convert()
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let generic_param_lists = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::GENERIC_PARAM_LIST)
+            .count();
+        assert_eq!(
+            generic_param_lists, 2,
+            "expected interface and function generic params"
+        );
     }
 
     #[test]

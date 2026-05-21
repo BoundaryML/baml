@@ -8,12 +8,11 @@ interface Animal {
 }
 
 class Dog {
+  name: string
+  age: int
   breed: string
 
   implements Animal {
-    name: string
-    age: int
-
     function speak(self) -> string {
       return "Woof!"
     }

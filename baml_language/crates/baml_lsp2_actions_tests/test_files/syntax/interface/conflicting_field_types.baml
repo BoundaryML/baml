@@ -10,11 +10,14 @@ interface HasNumId {
 }
 
 class Thing {
+  text_id: string
+  numeric_id: int
+
   implements HasId {
-    id: string
+    id as text_id
   }
   implements HasNumId {
-    id: int
+    id as numeric_id
   }
 }
 

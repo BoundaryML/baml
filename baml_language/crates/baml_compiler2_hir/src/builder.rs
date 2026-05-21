@@ -510,7 +510,9 @@ impl<'db> SemanticIndexBuilder<'db> {
                     self.walk_expr(value, body, source_map, true);
                 }
             }
-            ast::Expr::MemberAccess { base, .. } | ast::Expr::OptionalMemberAccess { base, .. } => {
+            ast::Expr::MemberAccess { base, .. }
+            | ast::Expr::Upcast { base, .. }
+            | ast::Expr::OptionalMemberAccess { base, .. } => {
                 self.walk_expr(*base, body, source_map, true);
             }
             ast::Expr::Index { base, index } | ast::Expr::OptionalIndex { base, index } => {

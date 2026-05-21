@@ -180,6 +180,7 @@ pub enum SyntaxKind {
     REQUIRES_CLAUSE,       // requires I1, I2
     IMPLEMENTS_BLOCK,      // implements I { ... } inside a class
     IMPLEMENTS_TARGET,     // the interface name (path) in `implements I`
+    INTERFACE_FIELD_LINK,  // interface_field as class_field inside `implements`
     IMPLEMENTS_FOR,        // implements I for T { ... } at top level
     IMPLEMENTS_FOR_TARGET, // the `T` in `implements I for T`
 
@@ -236,6 +237,8 @@ pub enum SyntaxKind {
     ///   module item, or function reference
     /// - `FIELD_ACCESS_EXPR` is always a field/method access on a computed value
     FIELD_ACCESS_EXPR,
+    /// Explicit interface/static upcast projection: `<expr>.as<T>`.
+    UPCAST_EXPR,
     /// Optional field access: `obj?.field` — short-circuits to null if base is null.
     ///
     /// Structure: `<base_expr> QUESTION_DOT WORD`

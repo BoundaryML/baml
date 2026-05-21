@@ -19,7 +19,7 @@
 //!   • interface field namespace/construction rules
 //!   • same-name fields from unrelated interfaces remain separate
 //!   • `requires` cycles
-//!   • interface inheritance (parent contracts injected)
+//!   • interface requirements (parent contracts available through `requires`)
 //!   • generic interfaces parse and resolve
 //!   • field-only interfaces and empty bodies
 
@@ -77,7 +77,7 @@ fn assert_compile_error_contains(source: &str, needle: &str) {
 #[track_caller]
 fn assert_no_interface_errors(source: &str) {
     let errors = collect_compile_errors(source);
-    // Interface errors all live in the E0112-E0126 range.
+    // Interface errors all live in the E0112-E0131 range.
     let interface_errors: Vec<_> = errors
         .iter()
         .filter(|e| {
@@ -96,6 +96,11 @@ fn assert_no_interface_errors(source: &str) {
                 || e.starts_with("[E0124]")
                 || e.starts_with("[E0125]")
                 || e.starts_with("[E0126]")
+                || e.starts_with("[E0127]")
+                || e.starts_with("[E0128]")
+                || e.starts_with("[E0129]")
+                || e.starts_with("[E0130]")
+                || e.starts_with("[E0131]")
         })
         .collect();
     assert!(
@@ -122,10 +127,10 @@ fn basic_interface_parses() {
         }
 
         class Dog {
+            name: string
+            age: int
             breed: string
             implements Animal {
-                name: string
-                age: int
                 function speak(self) -> string { return "Woof!" }
             }
         }
@@ -143,10 +148,9 @@ fn interface_with_only_fields_parses() {
         }
 
         class Server {
-            implements Config {
-                host: string
-                port: int
-            }
+            host: string
+            port: int
+            implements Config {}
         }
         "#,
     );
@@ -182,11 +186,13 @@ fn interface_requires_aggregates_contracts() {
         }
 
         class Employee {
+            name: string
+            age: int
+            occupation: string
             salary: float
-            implements Named { name: string }
-            implements Aged { age: int }
+            implements Named {}
+            implements Aged {}
             implements Person {
-                occupation: string
                 function introduce(self) -> string { return "hi" }
             }
         }
@@ -385,8 +391,9 @@ fn class_own_field_can_shadow_interface_field_with_different_type() {
 
         class Server {
             host: int
+            config_host: string
             implements Config {
-                host: string
+                host as config_host
             }
         }
         "#,
@@ -394,8 +401,8 @@ fn class_own_field_can_shadow_interface_field_with_different_type() {
 }
 
 #[test]
-fn class_field_does_not_satisfy_interface_field_without_implements_redeclaration() {
-    assert_compile_error_code(
+fn class_field_auto_satisfies_interface_field_with_empty_implements_block() {
+    assert_zero_compile_errors(
         r#"
         interface Config {
             host: string
@@ -405,6 +412,23 @@ fn class_field_does_not_satisfy_interface_field_without_implements_redeclaration
         class Server {
             host: string
             port: int
+            implements Config {}
+        }
+        "#,
+    );
+}
+
+#[test]
+fn missing_class_field_for_interface_field_is_error() {
+    assert_compile_error_code(
+        r#"
+        interface Config {
+            host: string
+            port: int
+        }
+
+        class Server {
+            host: string
             implements Config {}
         }
         "#,
@@ -420,8 +444,9 @@ fn two_interfaces_same_field_same_type_are_separate_namespaces() {
         interface Labeled { name: string }
 
         class Item {
-            implements Named { name: string }
-            implements Labeled { name: string }
+            name: string
+            implements Named {}
+            implements Labeled {}
         }
         "#,
     );
@@ -435,8 +460,10 @@ fn unrelated_interfaces_same_field_different_types_are_separate_namespaces() {
         interface HasNumId { id: int }
 
         class Thing {
-            implements HasId { id: string }
-            implements HasNumId { id: int }
+            text_id: string
+            numeric_id: int
+            implements HasId { id as text_id }
+            implements HasNumId { id as numeric_id }
         }
         "#,
     );
@@ -691,8 +718,8 @@ fn calling_method_through_interface_typed_param() {
         }
 
         class Dog {
+            name: string
             implements Animal {
-                name: string
                 function speak(self) -> string { return "Woof!" }
             }
         }
@@ -702,7 +729,7 @@ fn calling_method_through_interface_typed_param() {
         }
 
         function main() -> string {
-            let d = Dog { Animal.name: "Rex" }
+            let d = Dog { name: "Rex" }
             return name_of(d)
         }
         "#,
@@ -1043,7 +1070,8 @@ fn nominal_subtype_via_requires_chain() {
         }
 
         class Employee {
-            implements Named { name: string }
+            name: string
+            implements Named {}
             implements Person {
                 function introduce(self) -> string { return "hello" }
             }
@@ -1054,7 +1082,7 @@ fn nominal_subtype_via_requires_chain() {
         }
 
         function main() -> string {
-            let e = Employee { Named.name: "Alice" }
+            let e = Employee { name: "Alice" }
             return get_name(e)
         }
         "#,
@@ -1065,18 +1093,14 @@ fn nominal_subtype_via_requires_chain() {
 // Runtime tests (BEP-044). Each test below executes a small program through
 // the BAML VM and pins the returned value. These cover the behavioural
 // guarantees that compile-time checks above cannot — dispatch, default body
-// resolution, qualified calls, match narrowing, generic monomorphisation,
+// resolution, `.as<I>` projections, match narrowing, generic monomorphisation,
 // and reflection results.
-//
-// Tests in this section are **expected to fail** until the corresponding
-// implementation gap from BEP-044 is closed; failures highlight the work
-// remaining.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── Group L: interface field namespaces ──────────────────────────────────────
 
 #[tokio::test]
-async fn interface_fields_constructed_with_qualified_keys() {
+async fn interface_fields_constructed_with_class_keys() {
     let output = baml_test!(
         r#"
         interface Config {
@@ -1084,16 +1108,16 @@ async fn interface_fields_constructed_with_qualified_keys() {
             port: int
         }
         class Server {
+            host: string
+            port: int
             max_connections: int
-            implements Config {
-                host: string
-                port: int
-            }
+            implements Config {}
         }
         function main() -> bool {
-            let s = Server { Config.host: "localhost", Config.port: 8080, max_connections: 50 }
-            return s.Config.host == "localhost"
-                && s.Config.port == 8080
+            let s = Server { host: "localhost", port: 8080, max_connections: 50 }
+            let c: Config = s
+            return c.host == "localhost"
+                && c.port == 8080
                 && s.host == "localhost"
                 && s.max_connections == 50
         }
@@ -1103,20 +1127,19 @@ async fn interface_fields_constructed_with_qualified_keys() {
 }
 
 #[test]
-fn bare_interface_field_construction_is_compile_error() {
+fn qualified_interface_field_construction_is_compile_error() {
     assert_compile_error_contains(
         r#"
         interface Config {
             host: string
         }
         class Server {
-            implements Config {
-                host: string
-            }
+            host: string
+            implements Config {}
         }
         function main() -> string {
-            let s = Server { host: "localhost" }
-            return s.Config.host
+            let s = Server { Config.host: "localhost" }
+            return s.host
         }
         "#,
         "Config.host",
@@ -1132,13 +1155,15 @@ async fn class_own_field_shadowing_interface_field_is_separate_at_runtime() {
         }
         class Server {
             host: int
+            config_host: string
             implements Config {
-                host: string
+                host as config_host
             }
         }
         function main() -> bool {
-            let s = Server { host: 0, Config.host: "localhost" }
-            return s.host == 0 && s.Config.host == "localhost"
+            let s = Server { host: 0, config_host: "localhost" }
+            let c: Config = s
+            return s.host == 0 && c.host == "localhost"
         }
     "#
     );
@@ -1152,12 +1177,16 @@ async fn two_interfaces_same_field_not_merged_runtime() {
         interface Named { name: string }
         interface Labeled { name: string }
         class Item {
-            implements Named { name: string }
-            implements Labeled { name: string }
+            named_name: string
+            labeled_name: string
+            implements Named { name as named_name }
+            implements Labeled { name as labeled_name }
         }
         function main() -> bool {
-            let i = Item { Named.name: "widget", Labeled.name: "WIDGET-001" }
-            return i.Named.name == "widget" && i.Labeled.name == "WIDGET-001"
+            let i = Item { named_name: "widget", labeled_name: "WIDGET-001" }
+            let n: Named = i
+            let l: Labeled = i
+            return n.name == "widget" && l.name == "WIDGET-001"
         }
     "#
     );
@@ -1171,15 +1200,17 @@ fn unqualified_same_name_interface_field_access_is_ambiguous() {
         interface Named { name: string }
         interface Labeled { name: string }
         class Item {
-            implements Named { name: string }
-            implements Labeled { name: string }
+            named_name: string
+            labeled_name: string
+            implements Named { name as named_name }
+            implements Labeled { name as labeled_name }
         }
         function main() -> string {
-            let i = Item { Named.name: "widget", Labeled.name: "WIDGET-001" }
+            let i = Item { named_name: "widget", labeled_name: "WIDGET-001" }
             return i.name
         }
         "#,
-        "ambiguous",
+        "as<Named>",
     );
 }
 
@@ -1190,12 +1221,16 @@ async fn same_field_name_different_interface_types_not_conflicting_runtime() {
         interface HasId { id: string }
         interface HasNumId { id: int }
         class Thing {
-            implements HasId { id: string }
-            implements HasNumId { id: int }
+            text_id: string
+            numeric_id: int
+            implements HasId { id as text_id }
+            implements HasNumId { id as numeric_id }
         }
         function main() -> bool {
-            let t = Thing { HasId.id: "abc", HasNumId.id: 42 }
-            return t.HasId.id == "abc" && t.HasNumId.id == 42
+            let t = Thing { text_id: "abc", numeric_id: 42 }
+            let text: HasId = t
+            let numeric: HasNumId = t
+            return text.id == "abc" && numeric.id == 42
         }
     "#
     );
@@ -1212,14 +1247,18 @@ async fn interface_field_via_requires_chain_runtime() {
             occupation: string
         }
         class Employee {
+            name: string
+            age: int
+            occupation: string
             salary: float
-            implements Named { name: string }
-            implements Aged { age: int }
-            implements Person { occupation: string }
+            implements Named {}
+            implements Aged {}
+            implements Person {}
         }
         function main() -> int {
-            let e = Employee { Named.name: "Dan", Aged.age: 35, Person.occupation: "PM", salary: 1.0 }
-            return e.Aged.age
+            let e = Employee { name: "Dan", age: 35, occupation: "PM", salary: 1.0 }
+            let a: Aged = e
+            return a.age
         }
     "#
     );
@@ -1277,7 +1316,7 @@ async fn default_resolves_to_current_block() {
         }
         function main() -> string {
             let x = X {}
-            return x.A.tag()
+            return x.as<A>.tag()
         }
     "#
     );
@@ -1287,14 +1326,14 @@ async fn default_resolves_to_current_block() {
     );
 }
 
-// ── Group N: qualified calls ────────────────────────────────────────────────
+// ── Group N: `.as<I>` projections ───────────────────────────────────────────
 
 #[tokio::test]
-async fn qualified_call_same_signature_runtime() {
+async fn as_projection_same_signature_runtime() {
     // BEP-044 §"Method Disambiguation": a class may declare `encode` in
     // two `implements` blocks. The class compiles; only unqualified
-    // call sites would be ambiguous. Qualified calls like
-    // `h.Serializer.encode()` always resolve cleanly.
+    // call sites would be ambiguous. Projections like
+    // `h.as<Serializer>.encode()` select the target interface.
     let output = baml_test!(
         r#"
         interface Serializer {
@@ -1313,7 +1352,7 @@ async fn qualified_call_same_signature_runtime() {
         }
         function main() -> string {
             let h = Hybrid {}
-            return h.Serializer.encode()
+            return h.as<Serializer>.encode()
         }
     "#
     );
@@ -1324,7 +1363,7 @@ async fn qualified_call_same_signature_runtime() {
 }
 
 #[tokio::test]
-async fn qualified_call_works_when_unambiguous_runtime() {
+async fn as_projection_works_when_unambiguous_runtime() {
     let output = baml_test!(
         r#"
         interface Animal {
@@ -1337,7 +1376,7 @@ async fn qualified_call_works_when_unambiguous_runtime() {
         }
         function main() -> string {
             let d = Dog {}
-            return d.Animal.speak()
+            return d.as<Animal>.speak()
         }
     "#
     );
@@ -1348,7 +1387,7 @@ async fn qualified_call_works_when_unambiguous_runtime() {
 }
 
 #[tokio::test]
-async fn self_qualified_call_inside_unrelated_block() {
+async fn self_as_projection_call_inside_unrelated_block() {
     let output = baml_test!(
         r#"
         interface Greeter {
@@ -1366,7 +1405,7 @@ async fn self_qualified_call_inside_unrelated_block() {
             }
             implements Farewell {
                 function bye(self) -> string {
-                    return self.Greeter.greet() + " — and goodbye!"
+                    return self.as<Greeter>.greet() + " — and goodbye!"
                 }
             }
         }
@@ -1383,7 +1422,7 @@ async fn self_qualified_call_inside_unrelated_block() {
 }
 
 #[tokio::test]
-async fn diamond_qualified_call_runtime() {
+async fn diamond_as_projection_call_runtime() {
     let output = baml_test!(
         r#"
         interface Base {
@@ -1402,13 +1441,34 @@ async fn diamond_qualified_call_runtime() {
         }
         function main() -> string {
             let d = D {}
-            return d.Left.foo() + ":" + d.Right.foo()
+            return d.as<Left>.foo() + ":" + d.as<Right>.foo()
         }
     "#
     );
     assert_eq!(
         output.result.unwrap(),
         BexExternalValue::String("Left:Right".into())
+    );
+}
+
+#[test]
+fn old_interface_qualified_projection_is_compile_error() {
+    assert_compile_error_contains(
+        r#"
+        interface Animal {
+            function speak(self) -> string
+        }
+        class Dog {
+            implements Animal {
+                function speak(self) -> string { return "Woof!" }
+            }
+        }
+        function bad() -> string {
+            let d = Dog {}
+            return d.Animal.speak()
+        }
+        "#,
+        ".as<Animal>",
     );
 }
 
@@ -1476,13 +1536,14 @@ async fn cast_to_parent_interface_via_requires_runtime() {
             function introduce(self) -> string
         }
         class Employee {
-            implements Named { name: string }
+            name: string
+            implements Named {}
             implements Person {
                 function introduce(self) -> string { return "hi" }
             }
         }
         function main() -> string {
-            let e = Employee { Named.name: "Alice" }
+            let e = Employee { name: "Alice" }
             let n: Named = e
             return n.name
         }
@@ -1506,13 +1567,13 @@ async fn default_method_dispatch_through_interface_var() {
             }
         }
         class Dog {
+            name: string
             implements Animal {
-                name: string
                 function speak(self) -> string { return "Woof!" }
             }
         }
         function main() -> string {
-            let a: Animal = Dog { Animal.name: "Rex" }
+            let a: Animal = Dog { name: "Rex" }
             return a.describe()
         }
     "#
@@ -1534,15 +1595,15 @@ async fn override_dispatched_not_default() {
             }
         }
         class Cat {
+            name: string
             implements Animal {
-                name: string
                 function describe(self) -> string {
                     return "cat:" + self.name
                 }
             }
         }
         function main() -> string {
-            let a: Animal = Cat { Animal.name: "Luna" }
+            let a: Animal = Cat { name: "Luna" }
             return a.describe()
         }
     "#
@@ -1592,15 +1653,15 @@ async fn match_destructures_interface_fields() {
             function speak(self) -> string
         }
         class Dog {
+            name: string
             implements Animal {
-                name: string
                 function speak(self) -> string { return "Woof!" }
             }
         }
         function main() -> string {
-            let a: Animal = Dog { Animal.name: "Rex" }
+            let a: Animal = Dog { name: "Rex" }
             return match (a) {
-                let d: Dog => d.Animal.name
+                let d: Dog => d.name
                 _ => "other"
             }
         }
@@ -1682,7 +1743,7 @@ async fn generic_interface_concrete_type_param_runtime() {
 }
 
 #[tokio::test]
-async fn same_generic_interface_different_type_params_disambiguated_with_bound_aliases() {
+async fn same_generic_interface_different_type_params_disambiguated_with_as_projection() {
     let output = baml_test!(
         r#"
         interface Converter<T> {
@@ -1690,18 +1751,18 @@ async fn same_generic_interface_different_type_params_disambiguated_with_bound_a
         }
         class MultiFormat {
             data: string
-            implements Converter<int> { // TODO: this should have an error that you need to alias one (or both?) of them.
+            implements Converter<int> {
                 function convert(self) -> int { return 42 }
             }
             implements Converter<float> {
                 function convert(self) -> float { return 42.5 }
             }
         }
-        function read_int<T extends Converter<int> as IntConv>(m: T) -> int {
-            return m.convert() // should still work even if aliased
+        function read_int<T extends Converter<int>>(m: T) -> int {
+            return m.as<Converter<int>>.convert()
         }
-        function read_float<T extends Converter<float> as FloatConv>(m: T) -> float {
-            return m.FloatConv.convert()
+        function read_float<T extends Converter<float>>(m: T) -> float {
+            return m.as<Converter<float>>.convert()
         }
         function main() -> bool {
             let m = MultiFormat { data: "payload" }
@@ -1715,26 +1776,22 @@ async fn same_generic_interface_different_type_params_disambiguated_with_bound_a
 
 #[tokio::test]
 async fn generic_bound_runtime() {
-    // The BEP-044 spec calls for `<T extends Named>` generic bounds, but
-    // the parser does not yet accept that syntax. Until then this test
-    // exercises the equivalent runtime behaviour through an interface-
-    // typed parameter — every implementor of `Named` is acceptable, and
-    // dispatch reads the injected `name` field correctly.
+    // Interface-typed arrays preserve the interface field view and dispatch
+    // through the concrete implementor.
     let output = baml_test!(
         r#"
         interface Named { name: string }
         class Dog {
-            implements Named { 
-                name: string
-            }
+            name: string
+            implements Named {}
         }
         function first_name(items: Named[]) -> string {
             return items[0].name
         }
         function main() -> string {
-            let mydog = Dog { Named.name: "Rex" }
+            let mydog = Dog { name: "Rex" }
             mydog.name // works
-            let dogs: Named[] = [Dog { Named.name: "Rex" }, Dog { Named.name: "Buddy" }]
+            let dogs: Named[] = [Dog { name: "Rex" }, Dog { name: "Buddy" }]
             return first_name(dogs)
         }
     "#
@@ -1834,7 +1891,8 @@ async fn reflect_implements_transitive_via_requires() {
             function introduce(self) -> string
         }
         class Employee {
-            implements Named { name: string }
+            name: string
+            implements Named {}
             implements Person {
                 function introduce(self) -> string { return "hi" }
             }
@@ -1983,10 +2041,8 @@ async fn _unused_imports_compile() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tests for BEP-044 features that are NOT yet implemented. They pin the
-// intended runtime behaviour from the spec. Each test is expected to fail
-// until the corresponding feature lands; the comment block above each one
-// names the blocker so the maintainer can match a fix back to the test.
+// Additional BEP-044 coverage for generic bounds, `Self`, interface
+// conversions, out-of-body implementations, and subtyping edge cases.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── Group U: generic bounds (parser + bound enforcement) ────────────────────
@@ -1998,12 +2054,15 @@ async fn generic_bound_extends_named_runtime() {
     let output = baml_test!(
         r#"
         interface Named { name: string }
-        class Dog { implements Named { name: string } }
+        class Dog {
+            name: string
+            implements Named {}
+        }
         function first_name<T extends Named>(items: T[]) -> string {
             return items[0].name
         }
         function main() -> string {
-            let dogs: Dog[] = [Dog { Named.name: "Rex" }, Dog { Named.name: "Buddy" }]
+            let dogs: Dog[] = [Dog { name: "Rex" }, Dog { name: "Buddy" }]
             return first_name<Dog>(dogs)
         }
     "#
@@ -2034,7 +2093,7 @@ fn generic_bound_violation_is_compile_error() {
 }
 
 #[tokio::test]
-async fn generic_bound_alias_selects_generic_interface_instantiation() {
+async fn generic_bound_as_projection_selects_generic_interface_instantiation() {
     let output = baml_test!(
         r#"
         interface Converter<T> {
@@ -2049,8 +2108,8 @@ async fn generic_bound_alias_selects_generic_interface_instantiation() {
                 function convert(self) -> float { return 42.5 }
             }
         }
-        function read_int<T extends Converter<int> as IntConv>(m: T) -> int {
-            return m.IntConv.convert()
+        function read_int<T extends Converter<int>>(m: T) -> int {
+            return m.as<Converter<int>>.convert()
         }
         function main() -> int {
             return read_int<MultiFormat>(MultiFormat { data: "payload" })
@@ -2091,14 +2150,16 @@ async fn generic_bound_through_extends_chain() {
             occupation: string
         }
         class Employee {
-            implements Named { name: string }
-            implements Person { occupation: string }
+            name: string
+            occupation: string
+            implements Named {}
+            implements Person {}
         }
         function greet<T extends Person>(p: T) -> string {
             return "Hi, " + p.name + " the " + p.occupation
         }
         function main() -> string {
-            let e = Employee { Named.name: "Alice", Person.occupation: "PM" }
+            let e = Employee { name: "Alice", occupation: "PM" }
             return greet<Employee>(e)
         }
     "#
@@ -2212,11 +2273,12 @@ async fn self_return_type_carries_concrete_class() {
     assert_eq!(output.result.unwrap(), BexExternalValue::Int(42));
 }
 
-#[test]
-fn multi_self_method_rejected_on_interface_typed_receiver() {
-    assert_compile_error_contains(
+#[tokio::test]
+async fn self_return_on_interface_typed_receiver_collapses_to_interface() {
+    let output = baml_test!(
         r#"
         interface Cloneable {
+            value: int
             function clone(self) -> Self
         }
         class Box {
@@ -2227,11 +2289,61 @@ fn multi_self_method_rejected_on_interface_typed_receiver() {
                 }
             }
         }
-        function bad(c: Cloneable) -> Cloneable {
-            return c.clone()
+        function main() -> int {
+            let c: Cloneable = Box { value: 42 }
+            let cloned = c.clone()
+            return cloned.value
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(42));
+}
+
+#[tokio::test]
+async fn multi_self_method_accepts_concrete_receiver() {
+    let output = baml_test!(
+        r#"
+        interface Equatable {
+            function same(self, other: Self) -> bool
+        }
+        class Box {
+            value: int
+            implements Equatable {
+                function same(self, other: Self) -> bool {
+                    return self.value == other.value
+                }
+            }
+        }
+        function main() -> bool {
+            let a = Box { value: 7 }
+            let b = Box { value: 7 }
+            return a.same(b)
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
+}
+
+#[test]
+fn multi_self_method_rejected_on_interface_typed_receiver() {
+    assert_compile_error_contains(
+        r#"
+        interface Equatable {
+            function same(self, other: Self) -> bool
+        }
+        class Box {
+            value: int
+            implements Equatable {
+                function same(self, other: Self) -> bool {
+                    return self.value == other.value
+                }
+            }
+        }
+        function bad(a: Equatable, b: Equatable) -> bool {
+            return a.same(b)
         }
         "#,
-        "Self",
+        "concrete receiver",
     );
 }
 
@@ -2342,6 +2454,75 @@ async fn interface_to_interface_conversion_via_unknown_match_narrowing() {
     );
 }
 
+#[tokio::test]
+async fn as_upcast_selects_interface_field_link_runtime() {
+    let output = baml_test!(
+        r#"
+        interface Named { name: string }
+        interface Labeled { name: string }
+        class Item {
+            named_name: string
+            labeled_name: string
+            implements Named { name as named_name }
+            implements Labeled { name as labeled_name }
+        }
+        function main() -> bool {
+            let i = Item { named_name: "widget", labeled_name: "WIDGET-001" }
+            return i.as<Named>.name == "widget"
+                && i.as<Labeled>.name == "WIDGET-001"
+        }
+    "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
+}
+
+#[test]
+fn as_rejects_interface_downcast() {
+    assert_compile_error_contains(
+        r#"
+        interface Animal {
+            function speak(self) -> string
+        }
+        interface Swimmer {
+            function swim(self) -> string
+        }
+        class Dog {
+            implements Animal {
+                function speak(self) -> string { return "Woof!" }
+            }
+            implements Swimmer {
+                function swim(self) -> string { return "splash" }
+            }
+        }
+        function bad(a: Animal) -> string {
+            let s = a.as<Swimmer>
+            return s.swim()
+        }
+        "#,
+        "Animal",
+    );
+}
+
+#[test]
+fn as_requires_interface_target() {
+    assert_compile_error_contains(
+        r#"
+        interface Animal {
+            function speak(self) -> string
+        }
+        class Dog {
+            implements Animal {
+                function speak(self) -> string { return "Woof!" }
+            }
+        }
+        function bad(d: Dog) -> Dog {
+            return d.as<Dog>
+        }
+        "#,
+        "target must be an interface",
+    );
+}
+
 // ── Group AA: dispatch edge cases — non-local receivers ─────────────────────
 
 #[tokio::test]
@@ -2382,13 +2563,13 @@ async fn dispatch_through_array_index_with_field_access() {
             function speak(self) -> string
         }
         class Cat {
+            name: string
             implements Animal {
-                name: string
                 function speak(self) -> string { return "Meow." }
             }
         }
         function main() -> string {
-            let animals: Animal[] = [Cat { Animal.name: "Luna" }]
+            let animals: Animal[] = [Cat { name: "Luna" }]
             return animals[0].name
         }
     "#
@@ -3096,8 +3277,8 @@ fn llm_function_takes_interface_typed_parameter_compiles() {
             function speak(self) -> string
         }
         class Dog {
+            name: string
             implements Animal {
-                name: string
                 function speak(self) -> string { return "Woof!" }
             }
         }
@@ -3112,7 +3293,7 @@ fn llm_function_takes_interface_typed_parameter_compiles() {
     );
 }
 
-// ── Group AH: fields in implements blocks ────────────────────────────────────
+// ── Group AH: interface fields are class-owned ───────────────────────────────
 
 fn assert_zero_compile_errors(source: &str) {
     let errors = collect_compile_errors(source);
@@ -3124,7 +3305,7 @@ fn assert_zero_compile_errors(source: &str) {
 }
 
 #[test]
-fn field_in_implements_block_parses() {
+fn interface_fields_auto_link_from_class_fields() {
     assert_zero_compile_errors(
         r#"
         interface Config {
@@ -3132,18 +3313,17 @@ fn field_in_implements_block_parses() {
             port: int
         }
         class Server {
+            host: string
+            port: int
             max_connections: int
-            implements Config {
-                host: string
-                port: int
-            }
+            implements Config {}
         }
         "#,
     );
 }
 
 #[test]
-fn field_in_implements_block_with_method() {
+fn interface_fields_auto_link_with_method() {
     assert_zero_compile_errors(
         r#"
         interface Animal {
@@ -3152,10 +3332,10 @@ fn field_in_implements_block_with_method() {
             function speak(self) -> string
         }
         class Dog {
+            name: string
+            age: int
             breed: string
             implements Animal {
-                name: string
-                age: int
                 function speak(self) -> string { return "Woof!" }
             }
         }
@@ -3164,7 +3344,7 @@ fn field_in_implements_block_with_method() {
 }
 
 #[test]
-fn field_in_implements_block_fields_before_and_after_method() {
+fn interface_field_links_can_surround_methods() {
     assert_zero_compile_errors(
         r#"
         interface Widget {
@@ -3173,10 +3353,12 @@ fn field_in_implements_block_fields_before_and_after_method() {
             label: string
         }
         class Button {
+            button_id: string
+            text: string
             implements Widget {
-                id: string
+                id as button_id
                 function render(self) -> string { return "<button>" }
-                label: string
+                label as text
             }
         }
         "#,
@@ -3184,7 +3366,7 @@ fn field_in_implements_block_fields_before_and_after_method() {
 }
 
 #[test]
-fn missing_field_in_implements_block_is_error() {
+fn missing_class_field_for_interface_with_partial_links_is_error() {
     assert_compile_error_code(
         r#"
         interface Config {
@@ -3192,8 +3374,9 @@ fn missing_field_in_implements_block_is_error() {
             port: int
         }
         class Server {
+            host: string
             implements Config {
-                host: string
+                host as host
             }
         }
         "#,
@@ -3202,8 +3385,7 @@ fn missing_field_in_implements_block_is_error() {
 }
 
 #[test]
-fn field_type_mismatch_in_implements_block_is_error() {
-    // E0116: field type in implements block doesn't match interface
+fn declaring_field_in_implements_block_is_error() {
     assert_compile_error_code(
         r#"
         interface Config {
@@ -3215,7 +3397,63 @@ fn field_type_mismatch_in_implements_block_is_error() {
             }
         }
         "#,
-        "E0116",
+        "E0127",
+    );
+}
+
+#[test]
+fn unknown_interface_field_in_link_is_error() {
+    assert_compile_error_code(
+        r#"
+        interface Named {
+            name: string
+        }
+        class Person {
+            name: string
+            implements Named {
+                title as name
+            }
+        }
+        "#,
+        "E0128",
+    );
+}
+
+#[test]
+fn unknown_class_field_in_link_is_error() {
+    assert_compile_error_code(
+        r#"
+        interface Named {
+            name: string
+        }
+        class Person {
+            name: string
+            implements Named {
+                name as display_name
+            }
+        }
+        "#,
+        "E0129",
+    );
+}
+
+#[test]
+fn duplicate_interface_field_link_is_error() {
+    assert_compile_error_code(
+        r#"
+        interface Named {
+            name: string
+        }
+        class Person {
+            primary_name: string
+            secondary_name: string
+            implements Named {
+                name as primary_name
+                name as secondary_name
+            }
+        }
+        "#,
+        "E0130",
     );
 }
 
@@ -3232,11 +3470,10 @@ fn missing_required_parent_interface_is_error() {
             occupation: string
         }
         class Bad {
-            implements Person {
-                name: string
-                age: int
-                occupation: string
-            }
+            name: string
+            age: int
+            occupation: string
+            implements Person {}
         }
         "#,
         "E0125",
@@ -3253,12 +3490,11 @@ fn missing_one_of_two_required_parents_is_error() {
             occupation: string
         }
         class Partial {
-            implements Named { name: string }
-            implements Person {
-                name: string
-                age: int
-                occupation: string
-            }
+            name: string
+            age: int
+            occupation: string
+            implements Named {}
+            implements Person {}
         }
         "#,
         "E0125",
@@ -3275,10 +3511,13 @@ fn all_required_parents_satisfied_is_ok() {
             occupation: string
         }
         class Employee {
+            name: string
+            age: int
+            occupation: string
             salary: float
-            implements Named { name: string }
-            implements Aged { age: int }
-            implements Person { occupation: string }
+            implements Named {}
+            implements Aged {}
+            implements Person {}
         }
         "#,
     );
@@ -3295,11 +3534,13 @@ async fn requires_chain_exposes_parent_fields() {
             occupation: string
         }
         class Employee {
-            implements Named { name: string }
-            implements Person { occupation: string }
+            name: string
+            occupation: string
+            implements Named {}
+            implements Person {}
         }
         function main() -> string {
-            let p: Person = Employee { Named.name: "Alice", Person.occupation: "PM" }
+            let p: Person = Employee { name: "Alice", occupation: "PM" }
             return p.name
         }
     "#
@@ -3324,11 +3565,13 @@ async fn requires_chain_parent_field_in_default_method() {
             }
         }
         class Employee {
-            implements Named { name: string }
-            implements Person { occupation: string }
+            name: string
+            occupation: string
+            implements Named {}
+            implements Person {}
         }
         function main() -> string {
-            let p: Person = Employee { Named.name: "Alice", Person.occupation: "PM" }
+            let p: Person = Employee { name: "Alice", occupation: "PM" }
             return p.introduce()
         }
     "#
@@ -3348,10 +3591,9 @@ fn user_scenario_requires_field_check() {
         }
         interface B requires A {}
         class Blah {
+            foo: string
             implements B {}
-            implements A {
-                foo: string
-            }
+            implements A {}
         }
         "#,
     );
@@ -3359,6 +3601,22 @@ fn user_scenario_requires_field_check() {
         errors.is_empty(),
         "expected zero errors, got:\n  {}",
         errors.join("\n  ")
+    );
+}
+
+#[test]
+fn interface_requires_conflicting_field_types_is_error() {
+    assert_compile_error_code(
+        r#"
+        interface X {
+            id: string
+        }
+        interface Y {
+            id: int
+        }
+        interface Z requires X, Y {}
+        "#,
+        "E0122",
     );
 }
 
@@ -3532,7 +3790,7 @@ fn out_of_body_method_callable_on_instance() {
         }
         function run_describe() -> string {
             let c = Car { make: "Toyota" }
-            return c.Describable.describe()
+            return c.as<Describable>.describe()
         }
         "#,
     );
@@ -3618,9 +3876,11 @@ fn requires_chain_interface_subtype_is_ok() {
             occupation: string
         }
         class Employee {
+            name: string
+            occupation: string
             salary: float
-            implements Named { name: string }
-            implements Person { occupation: string }
+            implements Named {}
+            implements Person {}
         }
         function ok(p: Person) -> string {
             let n: Named = p

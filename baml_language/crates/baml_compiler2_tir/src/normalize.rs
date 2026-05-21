@@ -234,12 +234,8 @@ impl StructuralTy {
                 StructuralTy::Map { key: k2, value: v2 },
             ) => k1.is_subtype_of(k2, assumptions) && v1.is_subtype_of(v2, assumptions),
 
-            // Int <: Float
-            (StructuralTy::Int, StructuralTy::Float) => true,
-
             // Literal types are subtypes of their base types
             (StructuralTy::Literal(LiteralValue::Int(_)), StructuralTy::Int) => true,
-            (StructuralTy::Literal(LiteralValue::Int(_)), StructuralTy::Float) => true,
             (StructuralTy::Literal(LiteralValue::Float(_)), StructuralTy::Float) => true,
             (StructuralTy::Literal(LiteralValue::String(_)), StructuralTy::String) => true,
             (StructuralTy::Literal(LiteralValue::Bool(_)), StructuralTy::Bool) => true,
@@ -1217,9 +1213,9 @@ mod tests {
     }
 
     #[test]
-    fn test_int_subtype_of_float() {
+    fn test_int_not_subtype_of_float() {
         let aliases = HashMap::new();
-        assert!(is_subtype_of(
+        assert!(!is_subtype_of(
             &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
             &Ty::Primitive(PrimitiveType::Float, TyAttr::default()),
             &aliases
@@ -1241,6 +1237,11 @@ mod tests {
             &aliases
         ));
         assert!(is_subtype_of(
+            &Ty::Literal(LiteralValue::Int(42), Freshness::Regular, TyAttr::default()),
+            &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
+            &aliases
+        ));
+        assert!(!is_subtype_of(
             &Ty::Literal(LiteralValue::Int(42), Freshness::Regular, TyAttr::default()),
             &Ty::Primitive(PrimitiveType::Float, TyAttr::default()),
             &aliases
@@ -1290,7 +1291,11 @@ mod tests {
                 PrimitiveType::Int,
                 TyAttr::default(),
             ))],
-            ret: Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
+            ret: Box::new(Ty::Literal(
+                LiteralValue::String("ok".into()),
+                Freshness::Fresh,
+                TyAttr::default(),
+            )),
             throws: Box::new(Ty::Never {
                 attr: TyAttr::default(),
             }),
@@ -1301,7 +1306,7 @@ mod tests {
                 PrimitiveType::Int,
                 TyAttr::default(),
             ))],
-            ret: Box::new(Ty::Primitive(PrimitiveType::Float, TyAttr::default())),
+            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
             throws: Box::new(Ty::Never {
                 attr: TyAttr::default(),
             }),
@@ -1316,7 +1321,7 @@ mod tests {
         let aliases = HashMap::new();
         let f1 = Ty::Function {
             params: vec![required_param(Ty::Primitive(
-                PrimitiveType::Float,
+                PrimitiveType::String,
                 TyAttr::default(),
             ))],
             ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
@@ -1326,8 +1331,9 @@ mod tests {
             attr: TyAttr::default(),
         };
         let f2 = Ty::Function {
-            params: vec![required_param(Ty::Primitive(
-                PrimitiveType::Int,
+            params: vec![required_param(Ty::Literal(
+                LiteralValue::String("hi".into()),
+                Freshness::Fresh,
                 TyAttr::default(),
             ))],
             ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
@@ -1552,8 +1558,9 @@ mod tests {
     #[test]
     fn test_evolving_list_covariance() {
         let aliases = HashMap::new();
-        // EvolvingList(int) <: List(float) (int <: float)
-        assert!(is_subtype_of(
+        // EvolvingList(int) is not a subtype of List(float): int does not
+        // implicitly widen to float.
+        assert!(!is_subtype_of(
             &Ty::EvolvingList(
                 Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
                 TyAttr::default()
@@ -1713,8 +1720,9 @@ mod tests {
     #[test]
     fn test_map_value_covariance() {
         let aliases = HashMap::new();
-        // map<string, int> <: map<string, float>
-        assert!(is_subtype_of(
+        // map<string, int> is not a subtype of map<string, float>: int does not
+        // implicitly widen to float.
+        assert!(!is_subtype_of(
             &Ty::Map(
                 Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
                 Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
@@ -1907,7 +1915,7 @@ mod tests {
     }
 
     #[test]
-    fn test_union_of_int_and_float_literals_subtype_of_float() {
+    fn test_union_of_int_and_float_literals_not_subtype_of_float() {
         let aliases = HashMap::new();
         let sub = Ty::Union(
             vec![
@@ -1921,7 +1929,7 @@ mod tests {
             TyAttr::default(),
         );
         let sup = Ty::Primitive(PrimitiveType::Float, TyAttr::default());
-        assert!(is_subtype_of(&sub, &sup, &aliases));
+        assert!(!is_subtype_of(&sub, &sup, &aliases));
     }
 
     #[test]
