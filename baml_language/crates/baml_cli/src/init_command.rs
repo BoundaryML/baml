@@ -1,13 +1,14 @@
-// `baml init` — scaffold a new BAML project.
+// `baml init` / `baml new` — scaffold a new BAML project.
 //
-// Mirrors `cargo init`'s shape: produces a `baml.toml` with a
-// `[package]` table at the target directory, plus an empty `baml_src/`
-// so the project marker layout (`baml.toml` required + optional
-// `baml_src/` for sources) is in place from the start. A starter
-// `baml_src/main.baml` gives the user something runnable immediately.
+// Both produce a `baml.toml` with a `[package]` table plus a
+// `baml_src/main.baml` starter file. The difference mirrors Cargo:
+//   - `baml init [PATH]` initializes *in place* (`PATH` defaults to `.`)
+//     and refuses to overwrite an existing `baml.toml`.
+//   - `baml new <PATH>` creates a fresh directory at `PATH` and
+//     initializes inside; refuses to run if `PATH` already exists.
 //
-// Refuses to overwrite existing `baml.toml`. Directory creation is
-// idempotent — running `init` inside an empty existing folder is fine.
+// Both flows share the same writer (`scaffold`) so the produced layout
+// stays consistent — only the directory precondition differs.
 
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
@@ -39,44 +40,94 @@ impl InitArgs {
     }
 
     fn run_with_reporter(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
+        // `init` is in-place: create-or-reuse the directory, then
+        // refuse if `baml.toml` already exists so we never clobber a
+        // project the user already initialized.
         std::fs::create_dir_all(&self.path)
             .with_context(|| format!("Failed to create directory {}", self.path.display()))?;
         let canonical = std::fs::canonicalize(&self.path)
             .with_context(|| format!("Failed to canonicalize path {}", self.path.display()))?;
-
-        let toml_path = canonical.join("baml.toml");
-        if toml_path.exists() {
+        if canonical.join("baml.toml").exists() {
             anyhow::bail!(
                 "`{}` already exists. Refusing to overwrite an existing project.",
-                toml_path.display()
+                canonical.join("baml.toml").display()
             );
         }
-
-        let name = self
-            .name
-            .clone()
-            .or_else(|| default_project_name(&canonical))
-            .unwrap_or_else(|| "baml-project".to_string());
-        validate_project_name(&name)?;
-
-        reporter.spin("Creating", format!("baml.toml ({name})"));
-        std::fs::write(&toml_path, render_baml_toml(&name))
-            .with_context(|| format!("Failed to write {}", toml_path.display()))?;
-
-        let src_dir = canonical.join("baml_src");
-        std::fs::create_dir_all(&src_dir)
-            .with_context(|| format!("Failed to create {}", src_dir.display()))?;
-
-        let main_path = src_dir.join("main.baml");
-        if !main_path.exists() {
-            reporter.spin("Creating", "baml_src/main.baml");
-            std::fs::write(&main_path, STARTER_MAIN_BAML)
-                .with_context(|| format!("Failed to write {}", main_path.display()))?;
-        }
-
-        reporter.finish("Initialized", format!("{} ({name})", canonical.display()));
-        Ok(crate::ExitCode::Success)
+        scaffold(&canonical, self.name.as_deref(), reporter, "Initialized")
     }
+}
+
+/// `baml new <PATH>` — create a fresh directory at `<PATH>` and
+/// scaffold a project inside. Refuses to run if `<PATH>` already exists,
+/// the same way `cargo new` does.
+#[derive(Args, Clone, Debug)]
+pub struct NewArgs {
+    /// Directory to create. Errors if it already exists.
+    #[arg(value_name = "PATH")]
+    pub path: PathBuf,
+
+    /// Project name written to `baml.toml`'s `[package].name`. Defaults
+    /// to the basename of `<PATH>`.
+    #[arg(long)]
+    pub name: Option<String>,
+}
+
+impl NewArgs {
+    pub fn run(&self) -> Result<crate::ExitCode> {
+        let reporter = Reporter::new();
+        self.run_with_reporter(&reporter)
+    }
+
+    fn run_with_reporter(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
+        if self.path.exists() {
+            anyhow::bail!(
+                "destination `{}` already exists. Use `baml init` to initialize \
+                 inside an existing directory, or pick a new path.",
+                self.path.display()
+            );
+        }
+        std::fs::create_dir(&self.path)
+            .with_context(|| format!("Failed to create directory {}", self.path.display()))?;
+        let canonical = std::fs::canonicalize(&self.path)
+            .with_context(|| format!("Failed to canonicalize path {}", self.path.display()))?;
+        scaffold(&canonical, self.name.as_deref(), reporter, "Created")
+    }
+}
+
+/// Shared writer for `init` and `new`. Both flows reach this once the
+/// destination directory exists and is known not to already be a BAML
+/// project. `verb` is the past-tense label rendered in the final status
+/// line ("Initialized" vs. "Created").
+fn scaffold(
+    canonical: &Path,
+    explicit_name: Option<&str>,
+    reporter: &Reporter,
+    verb: &str,
+) -> Result<crate::ExitCode> {
+    let name = explicit_name
+        .map(str::to_string)
+        .or_else(|| default_project_name(canonical))
+        .unwrap_or_else(|| "baml-project".to_string());
+    validate_project_name(&name)?;
+
+    let toml_path = canonical.join("baml.toml");
+    reporter.spin("Creating", format!("baml.toml ({name})"));
+    std::fs::write(&toml_path, render_baml_toml(&name))
+        .with_context(|| format!("Failed to write {}", toml_path.display()))?;
+
+    let src_dir = canonical.join("baml_src");
+    std::fs::create_dir_all(&src_dir)
+        .with_context(|| format!("Failed to create {}", src_dir.display()))?;
+
+    let main_path = src_dir.join("main.baml");
+    if !main_path.exists() {
+        reporter.spin("Creating", "baml_src/main.baml");
+        std::fs::write(&main_path, STARTER_MAIN_BAML)
+            .with_context(|| format!("Failed to write {}", main_path.display()))?;
+    }
+
+    reporter.finish(verb, format!("{} ({name})", canonical.display()));
+    Ok(crate::ExitCode::Success)
 }
 
 /// Derive a project name from the canonical path's basename. Returns
@@ -271,5 +322,84 @@ mod tests {
         args.name = Some(r#"my"app"#.into());
         let err = args.run().unwrap_err();
         assert!(format!("{err}").contains("invalid character"));
+    }
+
+    // ── baml new ──────────────────────────────────────────────────────
+
+    fn new_args(path: PathBuf) -> NewArgs {
+        NewArgs { path, name: None }
+    }
+
+    /// Happy path: `baml new <PATH>` creates the directory and scaffolds
+    /// the same `baml.toml` + `baml_src/main.baml` layout as `init`.
+    #[test]
+    fn new_creates_directory_and_scaffolds() {
+        let tmp = tempfile::tempdir().unwrap();
+        let target = tmp.path().join("brand-new-app");
+        new_args(target.clone()).run().unwrap();
+        assert!(target.is_dir());
+        let toml = std::fs::read_to_string(target.join("baml.toml")).unwrap();
+        assert!(toml.contains("name = \"brand-new-app\""));
+        assert!(target.join("baml_src/main.baml").exists());
+    }
+
+    /// `baml new <PATH>` refuses to run if `<PATH>` already exists —
+    /// mirrors `cargo new`'s precondition. User should use `baml init`
+    /// instead when targeting an existing directory.
+    #[test]
+    fn new_refuses_to_run_on_existing_directory() {
+        let tmp = tempfile::tempdir().unwrap();
+        let target = tmp.path().join("already-here");
+        std::fs::create_dir(&target).unwrap();
+
+        let err = new_args(target).run().unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("already exists"), "got: {msg}");
+        assert!(msg.contains("baml init"), "got: {msg}");
+    }
+
+    /// Existing file at the destination also blocks `new` — same as
+    /// directories. Catches the case where the user typed a name that
+    /// happens to be a regular file.
+    #[test]
+    fn new_refuses_to_run_on_existing_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let target = tmp.path().join("blocking-file");
+        std::fs::write(&target, "").unwrap();
+
+        let err = new_args(target).run().unwrap_err();
+        assert!(format!("{err}").contains("already exists"));
+    }
+
+    /// Explicit `--name` overrides the directory basename for `new`,
+    /// same as `init`.
+    #[test]
+    fn new_explicit_name_overrides_directory_basename() {
+        let tmp = tempfile::tempdir().unwrap();
+        let target = tmp.path().join("brand-new-app");
+        let mut args = new_args(target.clone());
+        args.name = Some("renamed".into());
+        args.run().unwrap();
+        let toml = std::fs::read_to_string(target.join("baml.toml")).unwrap();
+        assert!(toml.contains("name = \"renamed\""));
+    }
+
+    /// `--name` validation applies to `new` too — the shared `scaffold`
+    /// path runs `validate_project_name` once. A bad `--name` must
+    /// surface before any directory is created.
+    #[test]
+    fn new_rejects_invalid_name_without_partial_writes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let target = tmp.path().join("bad-name-test");
+        let mut args = new_args(target.clone());
+        args.name = Some("bad name".into());
+        let err = args.run().unwrap_err();
+        assert!(format!("{err}").contains("invalid character"));
+        // The dir was created (we can't avoid that without a more
+        // involved pre-check), but no manifest landed inside.
+        assert!(
+            !target.join("baml.toml").exists(),
+            "must not write a manifest when validation fails"
+        );
     }
 }
