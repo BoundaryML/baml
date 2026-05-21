@@ -43,10 +43,11 @@ jobs:
           # Share cache across similar Linux WASM jobs for better hit rates
           shared-key: "linux-wasm"
 
-      - name: "Install wasm-pack"
-        uses: taiki-e/install-action@v2
+      # Only wasm-pack is needed here.
+      - name: "Install mise"
+        uses: ./.github/actions/setup-mise
         with:
-          tool: wasm-pack
+          install_args: "cargo:wasm-pack"
 
       # NOTE: if you add a crate with wasm-gated tests, add a step here.
       - name: "Run wasm-pack tests (baml_playground_wasm)"

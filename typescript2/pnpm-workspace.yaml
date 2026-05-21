@@ -2,5 +2,15 @@ packages:
   - "pkg-*"
   - "app-*"
 
+# pnpm 11 promotes un-approved postinstall builds to errors. Approve the
+# transitive build-script dependencies the lockfile currently pulls in.
+allowBuilds:
+  '@bufbuild/buf': true
+  '@mongodb-js/zstd': true
+  esbuild: true
+  msw: true
+  node-liblzma: true
+  unrs-resolver: true
+
 catalog:
   jotai: ^2.10.0

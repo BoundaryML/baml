@@ -1,0 +1,59 @@
+name: "Setup mise"
+description: |
+  Install mise and every tool pinned in mise.toml, sharing a single cache
+  scope across every baml_language workflow.
+
+  Centralizing the action version + cache settings here means future bumps
+  (e.g. when jdx/mise-action ships a new major, or when we want to bust
+  the cache prefix) only need to touch this one file.
+
+  Cache key composition (per the jdx/mise-action README): the default
+  cache key already includes a platform identifier such as
+  `linux-x64-ubuntu24` or `macos-arm64-macos15`, so cross-platform
+  isolation is automatic. Sharing `cache_key_prefix` (`mise-baml1` —
+  our own, not the upstream default) + the hash of mise.toml is what
+  makes the cache scope shared across workflows that run on the same
+  platform.
+
+inputs:
+  install_args:
+    description: |
+      Space-separated list of tool names passed through to `mise install`,
+      restricting installation to just those tools (e.g. "cargo:wasm-pack"
+      for a wasm-pack-only job). If empty, every tool in mise.toml is
+      installed.
+
+      Callers should pass the narrowest set their job actually uses —
+      mise.toml has a lot of `cargo:*` entries (cargo-watch, ripgrep,
+      just, bacon, cross, prek, wasm-pack) and even with binstall some
+      of them fall back to source compiles or hit crates.io rate limits.
+      Skipping them when they aren't needed is the cheapest win.
+    required: false
+    default: ""
+
+runs:
+  using: "composite"
+  steps:
+    # cargo-binstall must be on PATH *before* `mise install` resolves
+    # the `cargo:*` entries in mise.toml — otherwise mise's cargo
+    # backend silently falls back to `cargo install` (compile from
+    # source). With `cargo_binstall = true` set in mise.toml's [settings]
+    # and cargo-binstall on PATH here, every `cargo:bacon`, `cargo:cross`,
+    # `cargo:wasm-pack`, `cargo:prek`, ... in mise.toml installs from a
+    # prebuilt binary in seconds instead of minutes.
+    #
+    # Skipped when the job's install_args has no `cargo:*` entries
+    # (and isn't the all-tools default) — there's nothing for binstall
+    # to do then, and even the ~5s download adds up across the workflow.
+    - name: Install cargo-binstall
+      if: ${{ inputs.install_args == '' || contains(inputs.install_args, 'cargo:') }}
+      uses: cargo-bins/cargo-binstall@main
+
+    - name: Install mise
+      uses: jdx/mise-action@v4.0.1
+      with:
+        # Our own prefix (not the upstream default), shared across every
+        # baml_language workflow. Bump the trailing number to invalidate
+        # every consumer's cache at once.
+        cache_key_prefix: mise-baml1
+        install_args: ${{ inputs.install_args }}

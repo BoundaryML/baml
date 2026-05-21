@@ -244,11 +244,6 @@ jobs:
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     timeout-minutes: 20
-    env:
-      # Disable Python + pipx tools: mise 2025.12.12 downloads a broken
-      # freethreaded Python build that's missing a lib/ directory.
-      # Prek hooks only need Rust + cargo tools; Python scripts use system Python + uv.
-      MISE_DISABLE_TOOLS: python,pipx:uv,pipx:ruff,pipx:maturin
     steps:
       - name: "Checkout Branch"
         uses: actions/checkout@v6
@@ -267,22 +262,15 @@ jobs:
           save-if: false
           shared-key: "linux-cargo"
 
-      - name: "Install cargo-binstall"
-        run: |
-          curl -L --proto '=https' --tlsv1.2 -sSf \
-            https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh \
-            | bash
-        working-directory: baml_language
-
-      - name: "Install uv"
-        uses: astral-sh/setup-uv@v8.1.0
-
+      # prek hooks invoke cargo (from rustup), mise tasks that shell out
+      # to cargo, and python scripts that begin with `#!/usr/bin/env -S
+      # uv run --script` (e.g. bep:readme, validate-markdown). We don't
+      # need go/ruby/node/etc here, just the prek binary itself + a
+      # python/uv pair for the hook scripts.
       - name: "Install mise"
-        uses: jdx/mise-action@v2
-        # Pinning to old version because newer versions time out on the npm backend,
-        # see https://github.com/jdx/mise/discussions/7630
+        uses: ./.github/actions/setup-mise
         with:
-          version: 2025.12.12
+          install_args: "cargo:prek python uv"
 
       - name: "Cache prek"
         uses: actions/cache@v5
@@ -405,10 +393,6 @@ jobs:
     needs: determine_changes
     if: needs.determine_changes.outputs.proto == 'true'
     timeout-minutes: 20
-    env:
-      # See the matching comment on `prek` — mise 2025.12.12 ships a broken
-      # freethreaded Python build; this job doesn't need Python or pipx tools.
-      MISE_DISABLE_TOOLS: python,pipx:uv,pipx:ruff,pipx:maturin
     steps:
       - name: "Checkout"
         uses: actions/checkout@v6
@@ -427,13 +411,14 @@ jobs:
           save-if: false
           shared-key: "linux-cargo"
 
-      # mise provides go, node, pnpm, protoc, and protoc-gen-go per mise.toml.
+      # bridge_ctypes/build.rs needs `protoc`; bridge_go/build.sh needs
+      # `protoc` + `protoc-gen-go`; bridge_nodejs needs node + pnpm.
+      # The `cargo build -p bridge_ctypes` step uses cargo from rustup
+      # (not mise), so we don't need `go` itself here either.
       - name: "Install mise"
-        uses: jdx/mise-action@v2
-        # Pinning to old version because newer versions time out on the npm backend,
-        # see https://github.com/jdx/mise/discussions/7630
+        uses: ./.github/actions/setup-mise
         with:
-          version: 2025.12.12
+          install_args: "node npm:pnpm protoc protoc-gen-go"
 
       # Rust (prost) + Python (protoc) — both driven by bridge_ctypes/build.rs.
       # Writes Python pb2/pyi into baml_language/sdks/python/src/baml_core/cffi/v1/.
