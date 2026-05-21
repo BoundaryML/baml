@@ -70,12 +70,13 @@ fn find_callee_generic_args(callee_node: &SyntaxNode) -> Option<SyntaxNode> {
         return Some(args);
     }
     match callee_node.kind() {
-        SyntaxKind::FIELD_ACCESS_EXPR
-        | SyntaxKind::UPCAST_EXPR
-        | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR => {
+        SyntaxKind::FIELD_ACCESS_EXPR | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR => {
             // Base is the first child node — it carries the receiver type's
             // `GENERIC_ARGS` for `<Type<...>>.method(args)` shape.
             let base = callee_node.children().next()?;
+            if base.kind() == SyntaxKind::UPCAST_EXPR {
+                return None;
+            }
             find_callee_generic_args(&base)
         }
         _ => None,
@@ -703,7 +704,6 @@ impl LoweringContext {
                         name: Name::new("<spawn>"),
                         generic_params: Vec::new(),
                         generic_param_bounds: Vec::new(),
-                        generic_param_bound_aliases: Vec::new(),
                         params: Vec::new(),
                         defaults: crate::ast::FunctionDefaults::empty(),
                         return_type: None,
@@ -2641,7 +2641,6 @@ impl LoweringContext {
             name: Name::new("<anonymous function>"),
             generic_params,
             generic_param_bounds: Vec::new(),
-            generic_param_bound_aliases: Vec::new(),
             params,
             defaults,
             return_type,
@@ -3095,7 +3094,6 @@ impl LoweringContext {
             name: Name::new("<test body>"),
             generic_params: vec![],
             generic_param_bounds: vec![],
-            generic_param_bound_aliases: vec![],
             params: vec![],
             defaults: FunctionDefaults::empty(),
             return_type: None,
@@ -3193,7 +3191,6 @@ impl LoweringContext {
             name: Name::new("<testset collector>"),
             generic_params: vec![],
             generic_param_bounds: vec![],
-            generic_param_bound_aliases: vec![],
             params: vec![sub_param],
             defaults: FunctionDefaults::empty(),
             return_type: None,

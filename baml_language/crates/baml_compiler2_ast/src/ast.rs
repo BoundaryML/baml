@@ -1130,9 +1130,6 @@ pub struct FunctionDef {
     /// is the `TypeExpr` after `extends` (e.g. `T extends Named` stores
     /// `Some(Path(["Named"]))`); `None` for unbounded parameters.
     pub generic_param_bounds: Vec<Option<TypeExpr>>,
-    /// BEP-044 generic-bound aliases parallel to `generic_params`.
-    /// `T extends Container<int> as Ints` stores `Some("Ints")`.
-    pub generic_param_bound_aliases: Vec<Option<Name>>,
     pub params: Vec<Param>,
     pub defaults: FunctionDefaults,
     pub return_type: Option<SpannedTypeExpr>,

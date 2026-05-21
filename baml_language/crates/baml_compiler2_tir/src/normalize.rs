@@ -369,6 +369,12 @@ fn substitute(
                 .map(|t| substitute(t, var, replacement))
                 .collect(),
         ),
+        StructuralTy::Interface(qn, args) => StructuralTy::Interface(
+            qn.clone(),
+            args.iter()
+                .map(|t| substitute(t, var, replacement))
+                .collect(),
+        ),
         StructuralTy::Mu { var: v, body } if v != var => StructuralTy::Mu {
             var: v.clone(),
             body: Box::new(substitute(body, var, replacement)),
@@ -545,7 +551,7 @@ fn ty_has_cycle(
         Ty::Union(types, _) => types
             .iter()
             .any(|t| ty_has_cycle(t, aliases, visited, stack)),
-        Ty::Class(_, type_args, _) => type_args
+        Ty::Class(_, type_args, _) | Ty::Interface(_, type_args, _) => type_args
             .iter()
             .any(|t| ty_has_cycle(t, aliases, visited, stack)),
         Ty::Function {
@@ -691,10 +697,10 @@ fn extract_type_alias_deps(
                     visit(m, aliases, non_structural, structural, in_structural);
                 }
             }
-            Ty::Class(_, type_args, _) => {
-                // Class type_args are pass-through for cycle classification.
-                // A user-defined class is not itself a structural guard like List/Map,
-                // so its generic arguments inherit the surrounding context.
+            Ty::Class(_, type_args, _) | Ty::Interface(_, type_args, _) => {
+                // Nominal type_args are pass-through for cycle classification.
+                // User-defined nominal types are not structural guards like List/Map,
+                // so their generic arguments inherit the surrounding context.
                 for t in type_args {
                     visit(t, aliases, non_structural, structural, in_structural);
                 }
@@ -2009,6 +2015,23 @@ mod tests {
         assert!(
             recursive.contains(&qn("A")),
             "expected `type A = Box<A>` to be detected as recursive, got {recursive:?}"
+        );
+    }
+
+    #[test]
+    fn test_recursive_alias_through_interface_type_arg_is_detected() {
+        // `type A = BoxLike<A>` — recursion goes through an interface generic
+        // argument and must be detected just like class generic arguments.
+        let mut aliases = HashMap::new();
+        aliases.insert(
+            qn("A"),
+            Ty::Interface(qn("BoxLike"), vec![type_alias("A")], TyAttr::default()),
+        );
+
+        let recursive = find_recursive_aliases(&aliases);
+        assert!(
+            recursive.contains(&qn("A")),
+            "expected `type A = BoxLike<A>` to be detected as recursive, got {recursive:?}"
         );
     }
 }

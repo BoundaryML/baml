@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 4093
 ---
 === MIR2 ===
 
@@ -2803,7 +2802,7 @@ fn baml.llm.Client.build_attempt(self: baml.llm.Client) -> baml.llm.Orchestratio
     let _0: baml.llm.OrchestrationStep[] // _0 // return
     let _1: baml.llm.Client // self // param
     let _2: baml.llm.PlannerState // planner_state
-    let _3: void[]
+    let _3: string[]
     let _4: baml.llm.PlannerState
 
     bb0: {
@@ -2973,7 +2972,7 @@ fn baml.llm.Client.build_plan(self: baml.llm.Client) -> baml.llm.OrchestrationSt
     let _0: baml.llm.OrchestrationStep[] // _0 // return
     let _1: baml.llm.Client // self // param
     let _2: baml.llm.PlannerState // planner_state
-    let _3: void[]
+    let _3: string[]
     let _4: baml.llm.PlannerState
 
     bb0: {

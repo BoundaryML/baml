@@ -337,10 +337,9 @@ pub fn generate_project_bytecode_with_opt(
             // empty, `tir2_to_template` produces `TyTemplate::Concrete(...)`
             // for every leaf and `field_template == Concrete(field_type)`.
             let class_generic_params: Vec<baml_base::Name> = class_data.generic_params.clone();
-            // BEP-044: collect class's own fields plus fields contributed by
-            // each `implements I {}` block (transitively through `extends`).
-            // Each entry carries the type expression's binding context
-            // (generic params + namespace) needed to lower it correctly.
+            // BEP-044: collect only the class's actual runtime fields.
+            // Interface fields are typed views over class storage, and the
+            // validator enforces/link-checks them before emit.
             let merged_fields = collect_class_fields_with_implements(
                 db,
                 pkg_items,
@@ -1765,7 +1764,6 @@ mod tests {
             name: baml_base::Name::new("f"),
             generic_params: Vec::new(),
             generic_param_bounds: Vec::new(),
-            generic_param_bound_aliases: Vec::new(),
             params: vec![
                 param("required", None),
                 param("with_default", Some(default_ref)),

@@ -19,7 +19,7 @@
 //!    and type alias bodies, via `resolve_class_fields` and `resolve_type_alias`
 //!    (both Salsa-cached per item).
 
-use std::collections::HashSet;
+use std::{collections::HashSet, fmt::Write as _};
 
 use baml_base::{FileId, Name, SourceFile, Span};
 use baml_compiler_diagnostics::{Diagnostic, DiagnosticId, DiagnosticPhase, ToDiagnostic};
@@ -421,6 +421,19 @@ fn check_interfaces<'db>(
     }
 
     for item in items {
+        if let baml_compiler2_ast::Item::ImplementsFor(imp) = item {
+            validate_implements_for(
+                db,
+                file_id,
+                imp,
+                pkg_items,
+                namespace_path,
+                &mut diagnostics,
+            );
+        }
+    }
+
+    for item in items {
         if let baml_compiler2_ast::Item::Interface(iface) = item {
             for method in &iface.default_methods {
                 if let Some(ret) = &method.return_type
@@ -496,36 +509,42 @@ fn interface_has_cycle<'db>(
 ) -> bool {
     use baml_compiler2_ast::TypeExpr;
 
-    let mut frontier: Vec<Name> = iface
+    let self_probe = TypeExpr::Path {
+        segments: vec![iface.name.clone()],
+        generic_args: Vec::new(),
+        attrs: Vec::new(),
+    };
+    let self_loc =
+        resolve_interface_path(db, &self_probe, pkg_items, namespace_path).map(|(loc, _)| loc);
+    let mut frontier: Vec<Vec<Name>> = iface
         .extends
         .iter()
         .filter_map(|p| match &p.expr {
-            TypeExpr::Path { segments, .. } => segments.last().cloned(),
+            TypeExpr::Path { segments, .. } if !segments.is_empty() => Some(segments.clone()),
             _ => None,
         })
         .collect();
     let mut visited = HashSet::new();
-    while let Some(name) = frontier.pop() {
-        if name == iface.name {
-            return true;
-        }
-        if !visited.insert(name.clone()) {
+    while let Some(path) = frontier.pop() {
+        if !visited.insert(path.clone()) {
             continue;
         }
-        // Build a fake path expression so we can reuse `resolve_interface_path`.
         let probe = TypeExpr::Path {
-            segments: vec![name.clone()],
+            segments: path,
             generic_args: Vec::new(),
             attrs: Vec::new(),
         };
-        if let Some((_, parent_iface)) =
+        if let Some((parent_loc, parent_iface)) =
             resolve_interface_path(db, &probe, pkg_items, namespace_path)
         {
+            if self_loc.as_ref().is_some_and(|loc| *loc == parent_loc) {
+                return true;
+            }
             for parent in &parent_iface.extends {
                 if let TypeExpr::Path { segments, .. } = &parent.expr
-                    && let Some(last) = segments.last()
+                    && !segments.is_empty()
                 {
-                    frontier.push(last.clone());
+                    frontier.push(segments.clone());
                 }
             }
         }
@@ -543,28 +562,34 @@ struct MethodSignature {
     params: Vec<(Name, String)>,
     /// Rendered return type, or `"<unspecified>"` when missing.
     return_type: String,
+    /// Rendered declared throws type. `None` means the signature did not
+    /// declare `throws`; interface implementations must preserve that spelling.
+    throws: Option<String>,
 }
 
 impl MethodSignature {
     fn from_params_and_return(
         params: &[baml_compiler2_ast::Param],
         return_type: Option<&baml_compiler2_ast::SpannedTypeExpr>,
+        throws: Option<&baml_compiler2_ast::SpannedTypeExpr>,
     ) -> Self {
         Self::from_params_and_return_with_subst(
             params,
             return_type,
+            throws,
             &std::collections::HashMap::new(),
         )
     }
 
     /// Like [`from_params_and_return`] but substitutes generic parameter
-    /// references in the param/return types using `subst` before
+    /// references in the param/return/throws types using `subst` before
     /// stringifying. Used when comparing an `implements Container<int>`
     /// block against `interface Container<T>`: the interface signature is
     /// rebuilt with `T → int` so a concrete-typed override matches.
     fn from_params_and_return_with_subst(
         params: &[baml_compiler2_ast::Param],
         return_type: Option<&baml_compiler2_ast::SpannedTypeExpr>,
+        throws: Option<&baml_compiler2_ast::SpannedTypeExpr>,
         subst: &std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr>,
     ) -> Self {
         let params = params
@@ -582,9 +607,11 @@ impl MethodSignature {
         let return_type = return_type
             .map(|te| substitute_type_vars(&te.expr, subst).to_string())
             .unwrap_or_else(|| "<unspecified>".to_string());
+        let throws = throws.map(|te| substitute_type_vars(&te.expr, subst).to_string());
         Self {
             params,
             return_type,
+            throws,
         }
     }
 
@@ -594,7 +621,11 @@ impl MethodSignature {
             .iter()
             .map(|(n, t)| format!("{n}: {t}"))
             .collect();
-        format!("({}) -> {}", ps.join(", "), self.return_type)
+        let mut rendered = format!("({}) -> {}", ps.join(", "), self.return_type);
+        if let Some(throws) = &self.throws {
+            write!(rendered, " throws {throws}").expect("writing to String cannot fail");
+        }
+        rendered
     }
 }
 
@@ -651,6 +682,26 @@ fn substitute_type_vars(
             value: Box::new(substitute_type_vars(value, subst)),
             attrs: attrs.clone(),
         },
+        TypeExpr::Function {
+            params,
+            ret,
+            throws,
+            attrs,
+        } => TypeExpr::Function {
+            params: params
+                .iter()
+                .map(|param| baml_compiler2_ast::FunctionTypeParam {
+                    name: param.name.clone(),
+                    optional: param.optional,
+                    ty: substitute_type_vars(&param.ty, subst),
+                })
+                .collect(),
+            ret: Box::new(substitute_type_vars(ret, subst)),
+            throws: throws
+                .as_ref()
+                .map(|throws| Box::new(substitute_type_vars(throws, subst))),
+            attrs: attrs.clone(),
+        },
         _ => ty.clone(),
     }
 }
@@ -701,12 +752,12 @@ fn collect_interface_members_with_subst<'db>(
     use baml_compiler2_ast::TypeExpr;
 
     let mut out = InterfaceMembers::default();
-    let mut visited = HashSet::new();
+    let mut visited: HashSet<Vec<Name>> = HashSet::new();
     let mut stack: Vec<(
         baml_compiler2_hir::item_tree::Interface,
         baml_base::SourceFile,
     )> = vec![(iface.clone(), iface_file)];
-    visited.insert(iface.name.clone());
+    visited.insert(vec![iface.name.clone()]);
 
     while let Some((current, current_file)) = stack.pop() {
         for field in &current.fields {
@@ -738,6 +789,7 @@ fn collect_interface_members_with_subst<'db>(
             let signature = MethodSignature::from_params_and_return_with_subst(
                 &ast_params,
                 sig.return_type.as_ref(),
+                sig.throws.as_ref(),
                 subst,
             );
             out.required_methods
@@ -763,6 +815,7 @@ fn collect_interface_members_with_subst<'db>(
                 let signature = MethodSignature::from_params_and_return_with_subst(
                     &ast_params,
                     f.return_type.as_ref(),
+                    f.throws.as_ref(),
                     subst,
                 );
                 out.default_methods
@@ -774,14 +827,14 @@ fn collect_interface_members_with_subst<'db>(
             let TypeExpr::Path { segments, .. } = &parent_te.expr else {
                 continue;
             };
-            let Some(name) = segments.last() else {
+            if segments.is_empty() {
                 continue;
-            };
-            if !visited.insert(name.clone()) {
+            }
+            if !visited.insert(segments.clone()) {
                 continue;
             }
             let probe = TypeExpr::Path {
-                segments: vec![name.clone()],
+                segments: segments.clone(),
                 generic_args: Vec::new(),
                 attrs: Vec::new(),
             };
@@ -817,10 +870,10 @@ fn is_non_interface_type(
     } else {
         head
     };
-    match pkg_items.lookup_type(lookup_ns, name) {
-        Some(Definition::Class(_) | Definition::Enum(_)) => true,
-        _ => false,
-    }
+    matches!(
+        pkg_items.lookup_type(lookup_ns, name),
+        Some(Definition::Class(_) | Definition::Enum(_))
+    )
 }
 
 fn validate_interface_extends_fields<'db>(
@@ -885,6 +938,146 @@ fn validate_interface_extends_fields<'db>(
     }
 }
 
+fn validate_implements_for<'db>(
+    db: &'db dyn Db,
+    file_id: FileId,
+    imp: &baml_compiler2_ast::ImplementsForDef,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    namespace_path: &[Name],
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
+
+    let target_name = Name::new(format!("{}", imp.for_target.expr));
+    let Some((iface_loc, iface)) =
+        resolve_interface_path(db, &imp.interface_target.expr, pkg_items, namespace_path)
+    else {
+        let is_non_interface =
+            is_non_interface_type(&imp.interface_target.expr, pkg_items, namespace_path);
+        if is_non_interface {
+            diagnostics.push(
+                Hir2Diagnostic::NotAnInterface {
+                    class_name: target_name,
+                    target_name: format!("{}", imp.interface_target.expr),
+                    span: imp.interface_target.span,
+                }
+                .to_diagnostic(file_id),
+            );
+        } else {
+            diagnostics.push(
+                Hir2Diagnostic::UnknownInterface {
+                    class_name: target_name,
+                    target_name: format!("{}", imp.interface_target.expr),
+                    span: imp.interface_target.span,
+                }
+                .to_diagnostic(file_id),
+            );
+        }
+        return;
+    };
+
+    if !iface.fields.is_empty() {
+        diagnostics.push(
+            Hir2Diagnostic::OutOfBodyImplementsFieldInterface {
+                target_name: target_name.to_string(),
+                interface_name: iface.name,
+                span: imp.interface_target.span,
+            }
+            .to_diagnostic(file_id),
+        );
+        return;
+    }
+
+    let iface_file = iface_loc.file(db);
+    let subst: std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr> =
+        match &imp.interface_target.expr {
+            baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => iface
+                .generic_params
+                .iter()
+                .zip(generic_args.iter())
+                .map(|(p, a)| (p.clone(), a.clone()))
+                .collect(),
+            _ => std::collections::HashMap::new(),
+        };
+    let members = collect_interface_members_with_subst(
+        db,
+        &iface,
+        iface_file,
+        pkg_items,
+        namespace_path,
+        &subst,
+    );
+
+    let mut provided_method_names: HashSet<Name> = HashSet::new();
+    for method in &imp.methods {
+        let expected_sig = members
+            .required_methods
+            .iter()
+            .find_map(|(_, name, sig)| {
+                if *name == method.name {
+                    Some(sig.clone())
+                } else {
+                    None
+                }
+            })
+            .or_else(|| {
+                members.default_methods.iter().find_map(|(_, name, sig)| {
+                    if *name == method.name {
+                        Some(sig.clone())
+                    } else {
+                        None
+                    }
+                })
+            });
+        match expected_sig {
+            None => diagnostics.push(
+                Hir2Diagnostic::UnknownInterfaceMember {
+                    interface_name: iface.name.clone(),
+                    method_name: method.name.clone(),
+                    span: method.name_span,
+                }
+                .to_diagnostic(file_id),
+            ),
+            Some(expected) => {
+                let actual = MethodSignature::from_params_and_return(
+                    &method.params,
+                    method.return_type.as_ref(),
+                    method.throws.as_ref(),
+                );
+                if actual != expected {
+                    diagnostics.push(
+                        Hir2Diagnostic::InterfaceMethodSignatureMismatch {
+                            class_name: target_name.clone(),
+                            interface_name: iface.name.clone(),
+                            method_name: method.name.clone(),
+                            actual: actual.render(),
+                            expected: expected.render(),
+                            span: method.name_span,
+                        }
+                        .to_diagnostic(file_id),
+                    );
+                }
+            }
+        }
+        provided_method_names.insert(method.name.clone());
+    }
+
+    for (origin, req_name, _sig) in &members.required_methods {
+        if provided_method_names.contains(req_name) {
+            continue;
+        }
+        diagnostics.push(
+            Hir2Diagnostic::MissingInterfaceMethod {
+                class_name: target_name.clone(),
+                interface_name: origin.clone(),
+                method_name: req_name.clone(),
+                span: imp.span,
+            }
+            .to_diagnostic(file_id),
+        );
+    }
+}
+
 fn validate_class_implements<'db>(
     db: &'db dyn Db,
     file_id: FileId,
@@ -898,17 +1091,35 @@ fn validate_class_implements<'db>(
     let mut seen_targets: IndexMap<String, (Name, Vec<TextRange>)> = IndexMap::new();
     let mut seen_target_names: HashSet<Name> = HashSet::new();
     for block in &class.implements {
-        if let Some(name) = block.interface_name() {
-            seen_target_names.insert(name.clone());
-            // Use the target's span (the interface-name path) so the
-            // diagnostic underlines `Animal`, not the entire body of
-            // the `implements` block.
-            seen_targets
-                .entry(format!("{}", block.target.expr))
-                .or_insert_with(|| (name.clone(), Vec::new()))
-                .1
-                .push(block.target.span);
-        }
+        let Some((iface_loc, iface)) =
+            resolve_interface_path(db, &block.target.expr, pkg_items, namespace_path)
+        else {
+            continue;
+        };
+        seen_target_names.insert(iface.name.clone());
+        // Use the resolved interface identity plus its concrete type
+        // arguments for duplicate detection. `Foo` and `ns.Foo` should
+        // collide when they resolve to the same interface, but
+        // `Converter<int>` and `Converter<float>` are distinct views.
+        let type_arg_key = match &block.target.expr {
+            baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => generic_args
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(","),
+            _ => String::new(),
+        };
+        let key = format!(
+            "{}:{}<{}>",
+            iface_loc.file(db).file_id(db).as_u32(),
+            iface_loc.id(db).as_u32(),
+            type_arg_key
+        );
+        seen_targets
+            .entry(key)
+            .or_insert_with(|| (iface.name.clone(), Vec::new()))
+            .1
+            .push(block.target.span);
     }
     for (_target, (name, sites)) in &seen_targets {
         if sites.len() > 1 {
@@ -1013,8 +1224,11 @@ fn validate_class_implements<'db>(
                     .to_diagnostic(file_id),
                 ),
                 Some(expected) => {
-                    let actual =
-                        MethodSignature::from_params_and_return(&m.params, m.return_type.as_ref());
+                    let actual = MethodSignature::from_params_and_return(
+                        &m.params,
+                        m.return_type.as_ref(),
+                        m.throws.as_ref(),
+                    );
                     if actual != expected {
                         diagnostics.push(
                             Hir2Diagnostic::InterfaceMethodSignatureMismatch {
@@ -1225,13 +1439,10 @@ fn validate_class_implements<'db>(
     // `resolve_member` in TIR for the unqualified-call diagnostic.
 }
 
-/// Structural compatibility check on raw AST `TypeExpr`s.
+/// Invariant compatibility check on raw AST `TypeExpr`s.
 ///
-/// Conservative: two type expressions are compatible iff they render to the
-/// same canonical string. This sidesteps the full TIR subtyping machinery
-/// while still catching the obvious mismatches called out in BEP-044
-/// §"Field Conflict Rules". Once `Ty::Interface` lands in TIR we can swap
-/// this out for proper subtype checking and pick up subtypes for free.
+/// Interface fields are writeable through the interface view, so the class
+/// storage type must match the interface field type exactly.
 fn type_exprs_compatible(
     a: &baml_compiler2_ast::TypeExpr,
     b: &baml_compiler2_ast::TypeExpr,

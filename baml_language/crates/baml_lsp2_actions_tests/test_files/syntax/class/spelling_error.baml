@@ -21,23 +21,14 @@ class InterfaceOne {
 
 //----
 //- diagnostics
-// error: Expected Unexpected token in class body, found interface
-//    ╭─[ class_spelling_error.baml:2:3 ]
+// error: unresolved type: strin
+//    ╭─[ class_spelling_error.baml:2:12 ]
 //    │
 //  2 │   interface strin
-//    │   ────┬────  
-//    │       ╰────── Expected Unexpected token in class body, found interface
+//    │            ───┬──  
+//    │               ╰──── unresolved type: strin
 //    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// error: field 'strin' is missing a type annotation
-//    ╭─[ class_spelling_error.baml:2:13 ]
-//    │
-//  2 │   interface strin
-//    │             ──┬──  
-//    │               ╰──── field 'strin' is missing a type annotation
-//    │ 
-//    │ Note: Error code: E0010
+//    │ Note: Error code: E0002
 // ───╯
 // error: unresolved type: InterfaceT
 //    ╭─[ class_spelling_error.baml:6:7 ]

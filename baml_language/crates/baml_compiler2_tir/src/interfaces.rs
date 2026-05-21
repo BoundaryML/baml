@@ -16,7 +16,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     lower_type_expr::qualify_def,
-    ty::{QualifiedTypeName, Ty},
+    ty::{PrimitiveType, QualifiedTypeName, Ty, TyAttr},
 };
 
 /// For every class in a package, the set of interfaces it implements directly.
@@ -24,10 +24,19 @@ use crate::{
 pub struct ImplementsRegistry {
     /// Class QTN → interfaces it implements.
     pub class_implements: FxHashMap<QualifiedTypeName, FxHashSet<QualifiedTypeName>>,
+    /// Non-class concrete type → interfaces it implements.
+    ///
+    /// This is where top-level `implements I for int` lives. Class targets are
+    /// still stored in `class_implements` so existing class-oriented callers do
+    /// not need to special-case them.
+    pub type_implements: FxHashMap<Ty, FxHashSet<QualifiedTypeName>>,
     /// (class QTN, interface QTN) → type args used in `implements I<...>`.
     /// Only populated for generic interfaces; non-generic implements entries
     /// are absent (meaning: no type args to check).
     pub implements_type_args: FxHashMap<(QualifiedTypeName, QualifiedTypeName), Vec<Ty>>,
+    /// (non-class concrete type, interface QTN) → type args used in
+    /// `implements I<...>`.
+    pub type_implements_type_args: FxHashMap<(Ty, QualifiedTypeName), Vec<Ty>>,
     /// Interface QTN → interfaces it requires (transitively), including itself.
     /// Used for interface-to-interface subtyping: `A <: B` iff `B ∈ requires_closure[A]`.
     pub interface_requires: FxHashMap<QualifiedTypeName, FxHashSet<QualifiedTypeName>>,
@@ -45,12 +54,53 @@ impl ImplementsRegistry {
             .is_some_and(|set| set.contains(iface_qtn))
     }
 
+    pub fn type_implements(&self, ty: &Ty, iface_qtn: &QualifiedTypeName) -> bool {
+        match ty {
+            Ty::Class(class_qtn, _, _) => self.implements(class_qtn, iface_qtn),
+            _ => implementation_key_for_ty(ty)
+                .and_then(|key| self.type_implements.get(&key))
+                .is_some_and(|set| set.contains(iface_qtn)),
+        }
+    }
+
     /// True iff interface `sub` requires interface `sup` (transitively).
     /// Used for interface-to-interface subtyping: `A <: B` iff `A requires B`.
     pub fn interface_requires(&self, sub: &QualifiedTypeName, sup: &QualifiedTypeName) -> bool {
         self.interface_requires
             .get(sub)
             .is_some_and(|set| set.contains(sup))
+    }
+}
+
+pub fn implementation_key_for_ty(ty: &Ty) -> Option<Ty> {
+    match ty {
+        Ty::Primitive(primitive, _) => Some(Ty::Primitive(primitive.clone(), TyAttr::default())),
+        Ty::Literal(literal, _, _) => Some(Ty::Primitive(
+            PrimitiveType::from_literal(literal),
+            TyAttr::default(),
+        )),
+        Ty::List(inner, _) => Some(Ty::List(
+            Box::new(implementation_key_for_ty(inner)?),
+            TyAttr::default(),
+        )),
+        Ty::Map(key, value, _) => Some(Ty::Map(
+            Box::new(implementation_key_for_ty(key)?),
+            Box::new(implementation_key_for_ty(value)?),
+            TyAttr::default(),
+        )),
+        Ty::Optional(inner, _) => Some(Ty::Optional(
+            Box::new(implementation_key_for_ty(inner)?),
+            TyAttr::default(),
+        )),
+        Ty::Union(members, _) => Some(Ty::Union(
+            members
+                .iter()
+                .map(implementation_key_for_ty)
+                .collect::<Option<Vec<_>>>()?,
+            TyAttr::default(),
+        )),
+        Ty::Class(..) | Ty::Interface(..) | Ty::Enum(..) | Ty::TypeAlias(..) => None,
+        _ => None,
     }
 }
 
@@ -67,7 +117,10 @@ pub fn package_implements_registry<'db>(
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
     let mut class_implements: FxHashMap<QualifiedTypeName, FxHashSet<QualifiedTypeName>> =
         FxHashMap::default();
+    let mut type_implements: FxHashMap<Ty, FxHashSet<QualifiedTypeName>> = FxHashMap::default();
     let mut implements_type_args: FxHashMap<(QualifiedTypeName, QualifiedTypeName), Vec<Ty>> =
+        FxHashMap::default();
+    let mut type_implements_type_args: FxHashMap<(Ty, QualifiedTypeName), Vec<Ty>> =
         FxHashMap::default();
     // Multiple classes often implement the same interface (or an interface
     // higher up the extends chain). Cache the transitive closure per
@@ -78,14 +131,13 @@ pub fn package_implements_registry<'db>(
     > = FxHashMap::default();
 
     for ns_items in pkg_items.namespaces.values() {
-        for (_class_name, def) in &ns_items.types {
+        for def in ns_items.types.values() {
             let Definition::Class(class_loc) = def else {
                 continue;
             };
             let hir_tree = baml_compiler2_hir::file_item_tree(db, class_loc.file(db));
-            let class_data = match hir_tree.classes.get(&class_loc.id(db)) {
-                Some(c) => c,
-                None => continue,
+            let Some(class_data) = hir_tree.classes.get(&class_loc.id(db)) else {
+                continue;
             };
             let class_qtn = qualify_def(db, *def, &class_data.name);
 
@@ -139,12 +191,72 @@ pub fn package_implements_registry<'db>(
         }
     }
 
+    for file in baml_compiler2_hir::compiler2_all_files(db) {
+        let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+        if pkg_info.package != *pkg_id.name(db) {
+            continue;
+        }
+        let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+        for imp in &item_tree.implements_for {
+            let Some(iface_loc) = resolve_path_to_interface(
+                db,
+                &imp.interface_target.expr,
+                pkg_items,
+                &pkg_info.namespace_path,
+            ) else {
+                continue;
+            };
+            let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+            let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
+                continue;
+            };
+            let iface_qtn = qualify_def(db, Definition::Interface(iface_loc), &iface_data.name);
+            let mut diags = Vec::new();
+            let target_ty = crate::lower_type_expr::lower_type_expr_in_ns(
+                db,
+                &imp.for_target.expr,
+                pkg_items,
+                &pkg_info.namespace_path,
+                &[],
+                &mut diags,
+            );
+            let Some(target_key) = implementation_key_for_ty(&target_ty) else {
+                continue;
+            };
+            if let baml_compiler2_ast::TypeExpr::Path { generic_args, .. } =
+                &imp.interface_target.expr
+            {
+                if !generic_args.is_empty() {
+                    let lowered: Vec<Ty> = generic_args
+                        .iter()
+                        .map(|ga| {
+                            crate::lower_type_expr::lower_type_expr_in_ns(
+                                db,
+                                ga,
+                                pkg_items,
+                                &pkg_info.namespace_path,
+                                &[],
+                                &mut diags,
+                            )
+                        })
+                        .collect();
+                    type_implements_type_args
+                        .insert((target_key.clone(), iface_qtn.clone()), lowered);
+                }
+            }
+            type_implements
+                .entry(target_key)
+                .or_default()
+                .insert(iface_qtn);
+        }
+    }
+
     // Build the interface requires closure: for each interface, compute the
     // transitive set of interfaces it requires (including itself).
     let mut interface_requires: FxHashMap<QualifiedTypeName, FxHashSet<QualifiedTypeName>> =
         FxHashMap::default();
     for ns_items in pkg_items.namespaces.values() {
-        for (_iface_name, def) in &ns_items.types {
+        for def in ns_items.types.values() {
             let Definition::Interface(iface_loc) = def else {
                 continue;
             };
@@ -159,7 +271,9 @@ pub fn package_implements_registry<'db>(
 
     ImplementsRegistry {
         class_implements,
+        type_implements,
         implements_type_args,
+        type_implements_type_args,
         interface_requires,
     }
 }

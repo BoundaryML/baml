@@ -442,9 +442,6 @@ pub struct TypeInferenceBuilder<'db> {
     /// type `T`, and by call-site enforcement when a `T` is replaced by
     /// a concrete type that must satisfy its bound.
     pub generic_param_bounds: rustc_hash::FxHashMap<Name, Ty>,
-    /// BEP-044 generic-bound aliases in the current function body.
-    /// `T extends Container<int> as Ints` maps `Ints` to `Container<int>`.
-    pub generic_bound_aliases: rustc_hash::FxHashMap<Name, Ty>,
     /// Source map for the body being analyzed. Set by `infer_scope_types`
     /// before checking. Used to resolve `PatId` → `TextRange` when emitting
     /// pattern-position diagnostics.
@@ -467,6 +464,10 @@ pub struct TypeInferenceBuilder<'db> {
     /// Per-segment member resolutions for multi-segment local-rooted `Path`
     /// expressions. Populated by `infer_local_rooted_path`.
     pub path_member_resolutions: FxHashMap<ExprId, Vec<crate::inference::MemberResolution<'db>>>,
+    /// Interface method generic params keyed by the callee expression. Interface
+    /// required methods do not have a `FunctionLoc`, so this supplements
+    /// `resolutions` for explicit call-site type-arg checking.
+    interface_method_generic_params: FxHashMap<ExprId, (Name, Vec<Name>)>,
     /// Parameter types for this scope (populated for lambda/function scopes).
     /// Used by LSP to resolve lambda parameter types.
     pub param_types: Vec<(Name, Ty)>,
@@ -661,7 +662,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             ns_context,
             implements_block_interface: None,
             generic_param_bounds: rustc_hash::FxHashMap::default(),
-            generic_bound_aliases: rustc_hash::FxHashMap::default(),
             catch_residual_throws: FxHashMap::default(),
             exhaustive_matches: FxHashSet::default(),
             generic_params: Vec::new(),
@@ -669,6 +669,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             path_root_types: FxHashMap::default(),
             path_segment_types: FxHashMap::default(),
             path_member_resolutions: FxHashMap::default(),
+            interface_method_generic_params: FxHashMap::default(),
             param_types: Vec::new(),
             call_plans: FxHashMap::default(),
             function_coercions: FxHashMap::default(),
@@ -696,10 +697,6 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// entry are unbounded.
     pub fn set_generic_param_bounds(&mut self, bounds: rustc_hash::FxHashMap<Name, Ty>) {
         self.generic_param_bounds = bounds;
-    }
-
-    pub fn set_generic_bound_aliases(&mut self, aliases: rustc_hash::FxHashMap<Name, Ty>) {
-        self.generic_bound_aliases = aliases;
     }
 
     /// BEP-044: when this builder is analyzing a method body declared
@@ -1394,48 +1391,66 @@ impl<'db> TypeInferenceBuilder<'db> {
         type_args: &[TypeExpr],
         call_expr_id: ExprId,
     ) -> Option<FxHashMap<Name, Ty>> {
-        // Look up the callee's resolution to find the declared generic param names.
-        let resolution = self.resolutions.get(&callee_id).cloned()?;
-        let (func_loc, treat_as_static_method) = match resolution {
-            crate::inference::MemberResolution::Free { func_loc } => (func_loc, true),
-            // `UnboundMethod` covers `Class.method` / `Class<...>.method` call
-            // sites where the receiver is a type name.  When the call writes
-            // `Class<...>.method(...)`, the receiver-type's `<...>` is parsed
-            // as the call's type-args by `find_callee_generic_args` in
-            // `lower_expr_body.rs`; those args fill the *enclosing class's*
-            // generic params (BEP-039), so we include them in the
-            // expected-arity check below.
-            crate::inference::MemberResolution::UnboundMethod { func_loc, .. } => (func_loc, true),
-            // BoundMethod calls (`inst.method(args)`) get class type-args
-            // from the receiver instance's `class_type_args` at runtime, not
-            // from the call site.
-            crate::inference::MemberResolution::BoundMethod { func_loc, .. } => (func_loc, false),
-            _ => return None,
-        };
         let db = self.context.db();
-        let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
-        // Only user-declared generic params are supplied explicitly; synthetic effect params
-        // are always inferred.  For static-method-on-generic-class calls, prepend the
-        // class's generic params: type-args fill `[class_params..., function_params...]`.
-        let class_params: Vec<Name> = if treat_as_static_method {
-            let file = func_loc.file(db);
-            let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-            item_tree
-                .classes
-                .values()
-                .find(|class_data| class_data.methods.contains(&func_loc.id(db)))
-                .map(|class_data| class_data.generic_params.clone())
-                .unwrap_or_default()
-        } else {
-            Vec::new()
-        };
-        let mut declared_params: Vec<Name> = class_params;
-        declared_params.extend(sig.user_generic_params.iter().cloned());
+        let resolution = self.resolutions.get(&callee_id).cloned();
+        let (callee_name, declared_params, func_loc_for_bound_checks) =
+            if let Some(resolution) = resolution {
+                let (func_loc, treat_as_static_method) = match resolution {
+                    crate::inference::MemberResolution::Free { func_loc } => (func_loc, true),
+                    // `UnboundMethod` covers `Class.method` / `Class<...>.method` call
+                    // sites where the receiver is a type name.  When the call writes
+                    // `Class<...>.method(...)`, the receiver-type's `<...>` is parsed
+                    // as the call's type-args by `find_callee_generic_args` in
+                    // `lower_expr_body.rs`; those args fill the *enclosing class's*
+                    // generic params (BEP-039), so we include them in the
+                    // expected-arity check below.
+                    crate::inference::MemberResolution::UnboundMethod { func_loc, .. } => {
+                        (func_loc, true)
+                    }
+                    // BoundMethod calls (`inst.method(args)`) get class type-args
+                    // from the receiver instance's `class_type_args` at runtime, not
+                    // from the call site.
+                    crate::inference::MemberResolution::BoundMethod { func_loc, .. } => {
+                        (func_loc, false)
+                    }
+                    crate::inference::MemberResolution::InterfaceDefaultMethod {
+                        func_loc, ..
+                    } => (func_loc, false),
+                    _ => return None,
+                };
+                let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
+                // Only user-declared generic params are supplied explicitly; synthetic effect params
+                // are always inferred.  For static-method-on-generic-class calls, prepend the
+                // class's generic params: type-args fill `[class_params..., function_params...]`.
+                let class_params: Vec<Name> = if treat_as_static_method {
+                    let file = func_loc.file(db);
+                    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+                    item_tree
+                        .classes
+                        .values()
+                        .find(|class_data| class_data.methods.contains(&func_loc.id(db)))
+                        .map(|class_data| class_data.generic_params.clone())
+                        .unwrap_or_default()
+                } else {
+                    Vec::new()
+                };
+                let mut declared_params: Vec<Name> = class_params;
+                declared_params.extend(sig.user_generic_params.iter().cloned());
+                (sig.name.clone(), declared_params, Some(func_loc))
+            } else if let Some((callee_name, declared_params)) = self
+                .interface_method_generic_params
+                .get(&callee_id)
+                .cloned()
+            {
+                (callee_name, declared_params, None)
+            } else {
+                return None;
+            };
 
         if type_args.len() != declared_params.len() {
             self.context.report_simple(
                 TirTypeError::WrongTypeArgArity {
-                    callee_name: sig.name.clone(),
+                    callee_name,
                     expected: declared_params.len(),
                     got: type_args.len(),
                 },
@@ -1473,34 +1488,35 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             // BEP-044 generic-bound enforcement: when the declared
             // parameter has a bound, the supplied `ty` must satisfy it.
-            let func_loc_for_bounds = func_loc;
-            let file = func_loc_for_bounds.file(db);
-            let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-            let func_data = item_tree.functions.get(&func_loc_for_bounds.id(db));
-            if let Some(func_data) = func_data {
-                if let Some(idx) = func_data
-                    .generic_params
-                    .iter()
-                    .position(|n| n == param_name)
-                    && let Some(Some(bound_te)) = func_data.generic_param_bounds.get(idx)
-                {
-                    let mut bd = Vec::new();
-                    let bound_ty = crate::lower_type_expr::lower_type_expr_in_ns(
-                        db,
-                        bound_te,
-                        self.package_items,
-                        &ns,
-                        &caller_generic_params,
-                        &mut bd,
-                    );
-                    if !self.is_subtype(&ty, &bound_ty) && !suppress_diags {
-                        self.context.report_simple(
-                            TirTypeError::TypeMismatch {
-                                expected: bound_ty,
-                                got: ty.clone(),
-                            },
-                            call_expr_id,
+            if let Some(func_loc_for_bounds) = func_loc_for_bound_checks {
+                let file = func_loc_for_bounds.file(db);
+                let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+                let func_data = item_tree.functions.get(&func_loc_for_bounds.id(db));
+                if let Some(func_data) = func_data {
+                    if let Some(idx) = func_data
+                        .generic_params
+                        .iter()
+                        .position(|n| n == param_name)
+                        && let Some(Some(bound_te)) = func_data.generic_param_bounds.get(idx)
+                    {
+                        let mut bd = Vec::new();
+                        let bound_ty = crate::lower_type_expr::lower_type_expr_in_ns(
+                            db,
+                            bound_te,
+                            self.package_items,
+                            &ns,
+                            &caller_generic_params,
+                            &mut bd,
                         );
+                        if !self.is_subtype(&ty, &bound_ty) && !suppress_diags {
+                            self.context.report_simple(
+                                TirTypeError::TypeMismatch {
+                                    expected: bound_ty,
+                                    got: ty.clone(),
+                                },
+                                call_expr_id,
+                            );
+                        }
                     }
                 }
             }
@@ -3046,6 +3062,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                             );
                             self.infer_expr(*field_expr, body);
                         } else if let Some(declared_ty) = field_types.get(field_name) {
+                            if type_args.is_empty()
+                                && crate::generics::contains_typevar(declared_ty)
+                            {
+                                self.infer_expr(*field_expr, body);
+                                continue;
+                            }
                             self.check_expr(*field_expr, body, declared_ty);
                         } else if !field_name.as_str().contains('.')
                             && let Some((qualified_name, declared_ty)) = self
@@ -3479,6 +3501,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                             );
                             self.infer_expr(*field_expr, body);
                         } else if let Some(declared_ty) = field_types.get(field_name) {
+                            if type_args.is_empty()
+                                && crate::generics::contains_typevar(declared_ty)
+                            {
+                                self.infer_expr(*field_expr, body);
+                                continue;
+                            }
                             self.check_expr(*field_expr, body, declared_ty);
                         } else if !field_name.as_str().contains('.')
                             && let Some((qualified_name, declared_ty)) = self
@@ -6043,6 +6071,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                     let enum_qtn = crate::lower_type_expr::qualify_def(db, def, name);
                     return Some(Ty::Enum(enum_qtn, TyAttr::default()));
                 }
+                Definition::Interface(_) => {
+                    let iface_qtn = crate::lower_type_expr::qualify_def(db, def, name);
+                    return Some(Ty::Interface(iface_qtn, vec![], TyAttr::default()));
+                }
                 _ => {}
             }
         }
@@ -6203,6 +6235,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                     crate::lower_type_expr::qualify_def(db, def, name),
                     TyAttr::default(),
                 ),
+                Definition::Interface(_) => Ty::Interface(
+                    crate::lower_type_expr::qualify_def(db, def, name),
+                    vec![],
+                    TyAttr::default(),
+                ),
                 Definition::TypeAlias(_) => Ty::TypeAlias(
                     crate::lower_type_expr::qualify_def(db, def, name),
                     TyAttr::default(),
@@ -6360,10 +6397,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                     return ty;
                 }
 
-                if let Some(alias_ty) = self.try_resolve_generic_bound_alias(base_ty, member) {
-                    return alias_ty;
-                }
-
                 if self
                     .lookup_implemented_interface_by_name(class_name, member)
                     .is_some()
@@ -6405,9 +6438,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             Ty::Interface(iface_name, type_args, _) => {
-                if let Some(alias_ty) = self.try_resolve_generic_bound_alias(base_ty, member) {
-                    return alias_ty;
-                }
                 if let Some(ty) =
                     self.resolve_interface_member(iface_name, type_args, member, at, bound)
                 {
@@ -6689,11 +6719,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                     && member.as_str() != "from_json"
                     && self.generic_param_bounds.contains_key(name) =>
             {
-                if let Some(alias_ty) = self.try_resolve_generic_bound_alias(base_ty, member) {
-                    return alias_ty;
-                }
                 let bound_ty = self.generic_param_bounds[name].clone();
-                return self.resolve_member(&bound_ty, member, at, bound);
+                self.resolve_member(&bound_ty, member, at, bound)
             }
             Ty::TypeVar(_, _) if member.as_str() == "to_json" => {
                 // Type-check: every BAML type has `to_json(self) -> json` after Phase 5b.1.
@@ -6793,52 +6820,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
         }
-    }
-
-    fn try_resolve_generic_bound_alias(&self, base_ty: &Ty, alias: &Name) -> Option<Ty> {
-        let alias_ty = self.generic_bound_aliases.get(alias)?;
-        let Ty::Interface(alias_qtn, alias_args, _) = alias_ty else {
-            return None;
-        };
-
-        match base_ty {
-            Ty::Interface(base_qtn, base_args, _)
-                if self
-                    .same_interface_instantiation(base_qtn, base_args, alias_qtn, alias_args) =>
-            {
-                Some(alias_ty.clone())
-            }
-            Ty::TypeVar(name, _) => {
-                let Ty::Interface(bound_qtn, bound_args, _) =
-                    self.generic_param_bounds.get(name)?
-                else {
-                    return None;
-                };
-                self.same_interface_instantiation(bound_qtn, bound_args, alias_qtn, alias_args)
-                    .then(|| alias_ty.clone())
-            }
-            Ty::Class(class_qtn, class_args, _) => self
-                .class_implements_interface_instantiation(
-                    class_qtn, class_args, alias_qtn, alias_args,
-                )
-                .then(|| alias_ty.clone()),
-            _ => None,
-        }
-    }
-
-    fn same_interface_instantiation(
-        &self,
-        a_qtn: &crate::ty::QualifiedTypeName,
-        a_args: &[Ty],
-        b_qtn: &crate::ty::QualifiedTypeName,
-        b_args: &[Ty],
-    ) -> bool {
-        a_qtn == b_qtn
-            && a_args.len() == b_args.len()
-            && a_args
-                .iter()
-                .zip(b_args.iter())
-                .all(|(a, b)| self.types_equivalent(a, b))
     }
 
     fn types_equivalent(&self, a: &Ty, b: &Ty) -> bool {
@@ -6960,9 +6941,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                     // the resolution and handles field-type diagnostics once.
                     return self.resolve_member(base_ty, member, path_id, bound);
                 }
-                if let Some(alias_ty) = self.try_resolve_generic_bound_alias(base_ty, member) {
-                    return alias_ty;
-                }
                 if self
                     .lookup_implemented_interface_by_name(class_name, member)
                     .is_some()
@@ -7047,9 +7025,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             Ty::Interface(iface_name, type_args, _) => {
-                if let Some(alias_ty) = self.try_resolve_generic_bound_alias(base_ty, member) {
-                    return alias_ty;
-                }
                 if let Some(ty) =
                     self.resolve_interface_member(iface_name, type_args, member, path_id, bound)
                 {
@@ -7296,20 +7271,19 @@ impl<'db> TypeInferenceBuilder<'db> {
         };
         let class_tree = baml_compiler2_hir::file_item_tree(db, class_loc.file(db));
         let class_data = class_tree.classes.get(&class_loc.id(db))?;
-        let class_ns = baml_compiler2_hir::file_package::file_package(db, class_loc.file(db))
-            .namespace_path
-            .clone();
+        let class_pkg = baml_compiler2_hir::file_package::file_package(db, class_loc.file(db));
+        let class_ns = &class_pkg.namespace_path;
         for impl_target in &class_data.implements {
             let Some(iface_loc) = crate::interfaces::resolve_path_to_interface(
                 db,
                 &impl_target.target.expr,
                 pkg_items,
-                &class_ns,
+                class_ns,
             ) else {
                 continue;
             };
             for iface_loc in
-                crate::interfaces::interface_closure_locs(db, iface_loc, pkg_items, &class_ns)
+                crate::interfaces::interface_closure_locs(db, iface_loc, pkg_items, class_ns)
             {
                 let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
                 let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
@@ -7347,10 +7321,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             return false;
         };
         let db = self.context.db();
-        let pkg_ns = baml_compiler2_hir::file_package::file_package(db, root_loc.file(db))
-            .namespace_path
-            .clone();
-        for iface_loc in crate::interfaces::interface_closure_locs(db, root_loc, pkg_items, &pkg_ns)
+        let root_pkg = baml_compiler2_hir::file_package::file_package(db, root_loc.file(db));
+        let pkg_ns = &root_pkg.namespace_path;
+        for iface_loc in crate::interfaces::interface_closure_locs(db, root_loc, pkg_items, pkg_ns)
         {
             let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
             let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
@@ -7394,11 +7367,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             return None;
         };
         let db = self.context.db();
-        let pkg_ns = baml_compiler2_hir::file_package::file_package(db, root_loc.file(db))
-            .namespace_path
-            .clone();
+        let root_pkg = baml_compiler2_hir::file_package::file_package(db, root_loc.file(db));
+        let pkg_ns = &root_pkg.namespace_path;
 
-        for iface_loc in crate::interfaces::interface_closure_locs(db, root_loc, pkg_items, &pkg_ns)
+        for iface_loc in crate::interfaces::interface_closure_locs(db, root_loc, pkg_items, pkg_ns)
         {
             let file = iface_loc.file(db);
             let iface_tree = baml_compiler2_hir::file_item_tree(db, file);
@@ -7457,11 +7429,21 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, fn_id);
                 let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
                 let mut diags = Vec::new();
-                let bindings = if iface_type_args.is_empty() {
+                let mut bindings = if iface_type_args.is_empty() {
                     rustc_hash::FxHashMap::default()
                 } else {
                     crate::generics::bind_type_vars(&iface_data.generic_params, iface_type_args)
                 };
+                for generic_param in &iface_data.generic_params {
+                    bindings
+                        .entry(generic_param.clone())
+                        .or_insert_with(|| Ty::TypeVar(generic_param.clone(), TyAttr::default()));
+                }
+                for generic_param in &sig.user_generic_params {
+                    bindings
+                        .entry(generic_param.clone())
+                        .or_insert_with(|| Ty::TypeVar(generic_param.clone(), TyAttr::default()));
+                }
                 let mut all_generic_params = iface_data.generic_params.clone();
                 all_generic_params.extend(sig.user_generic_params.iter().cloned());
                 let iface_ty = Ty::Interface(
@@ -7607,7 +7589,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                         };
                     }
                 }
-                let _ = at; // resolution-storage TODO: track interface-default origin
+                self.resolutions.insert(
+                    at,
+                    crate::inference::MemberResolution::InterfaceDefaultMethod {
+                        iface_loc,
+                        func_loc,
+                    },
+                );
+                self.interface_method_generic_params
+                    .insert(at, (member.clone(), sig.user_generic_params.clone()));
                 return Some(fn_ty);
             }
 
@@ -7616,11 +7606,21 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if sig.name != *member {
                     continue;
                 }
-                let bindings = if iface_type_args.is_empty() {
+                let mut bindings = if iface_type_args.is_empty() {
                     rustc_hash::FxHashMap::default()
                 } else {
                     crate::generics::bind_type_vars(&iface_data.generic_params, iface_type_args)
                 };
+                for generic_param in &iface_data.generic_params {
+                    bindings
+                        .entry(generic_param.clone())
+                        .or_insert_with(|| Ty::TypeVar(generic_param.clone(), TyAttr::default()));
+                }
+                for generic_param in &sig.generic_params {
+                    bindings
+                        .entry(generic_param.clone())
+                        .or_insert_with(|| Ty::TypeVar(generic_param.clone(), TyAttr::default()));
+                }
                 let mut all_generic_params = iface_data.generic_params.clone();
                 all_generic_params.extend(sig.generic_params.iter().cloned());
                 let iface_ty = Ty::Interface(
@@ -7770,6 +7770,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                         };
                     }
                 }
+                self.interface_method_generic_params
+                    .insert(at, (member.clone(), sig.generic_params.clone()));
                 return Some(fn_ty);
             }
         }
@@ -7855,9 +7857,10 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// Actual runtime fields are the class's own bare fields. Interface fields
     /// are views over those fields and never add qualified runtime slots.
     ///
-    /// Emits diagnostics for field type lowering. Callers that don't want
-    /// diagnostic side-effects should use a separate name-only check (e.g.
-    /// `class_has_member`).
+    /// Field type diagnostics are owned by the structural
+    /// `resolve_class_fields` query and collected once at file level. This
+    /// helper is used from expression/pattern checking, so it must not
+    /// re-emit those diagnostics at every class use site.
     fn class_all_fields_ordered(
         &self,
         class_name: &crate::ty::QualifiedTypeName,
@@ -7875,61 +7878,21 @@ impl<'db> TypeInferenceBuilder<'db> {
         };
         let db = self.context.db();
         let file = class_loc.file(db);
-        let ns_context = baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
         let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
         let class_data = &item_tree[class_loc.id(db)];
+
+        let resolved = crate::inference::resolve_class_fields(db, class_loc);
 
         // Build bindings from declared generic params → concrete type args.
         let bindings = crate::generics::bind_type_vars(&class_data.generic_params, class_type_args);
 
-        let push_field = |this: &Self,
-                          name: &Name,
-                          type_expr: Option<&baml_compiler2_ast::SpannedTypeExpr>,
-                          generic_params: &[Name],
-                          ns: &[Name],
-                          out: &mut Vec<(Name, Ty)>| {
-            let field_ty = type_expr
-                .map(|te| {
-                    let mut diags = Vec::new();
-                    let ty = if bindings.is_empty() {
-                        crate::lower_type_expr::lower_type_expr_in_ns(
-                            this.context.db(),
-                            &te.expr,
-                            pkg_items_for_class,
-                            ns,
-                            generic_params,
-                            &mut diags,
-                        )
-                    } else {
-                        crate::generics::lower_type_expr_with_generics(
-                            this.context.db(),
-                            &te.expr,
-                            pkg_items_for_class,
-                            ns,
-                            &bindings,
-                            &mut diags,
-                        )
-                    };
-                    for diag in diags.drain(..) {
-                        this.context.report_at_span(diag, te.span);
-                    }
-                    ty
-                })
-                .unwrap_or(Ty::Unknown {
-                    attr: TyAttr::default(),
-                });
+        for (name, ty, _attrs) in &resolved.fields {
+            let field_ty = if bindings.is_empty() {
+                ty.clone()
+            } else {
+                crate::generics::substitute_ty(ty, &bindings)
+            };
             out.push((name.clone(), field_ty));
-        };
-
-        for field in &class_data.fields {
-            push_field(
-                self,
-                &field.name,
-                field.type_expr.as_ref(),
-                &class_data.generic_params,
-                &ns_context,
-                &mut out,
-            );
         }
 
         out
@@ -8019,7 +7982,121 @@ impl<'db> TypeInferenceBuilder<'db> {
         class_type_args: &[Ty],
         field_name: &Name,
     ) -> Option<(Name, Ty)> {
-        let _ = (class_name, class_type_args, field_name);
+        let pkg_items = self.resolve_class_pkg_items(class_name.package())?;
+        let Definition::Class(class_loc) =
+            pkg_items.lookup_type(class_name.namespace(), class_name.name())?
+        else {
+            return None;
+        };
+        let db = self.context.db();
+        let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
+        let class_data = &item_tree[class_loc.id(db)];
+        let class_ns =
+            baml_compiler2_hir::file_package::file_package(db, class_loc.file(db)).namespace_path;
+        let class_bindings =
+            crate::generics::bind_type_vars(&class_data.generic_params, class_type_args);
+
+        for impl_target in &class_data.implements {
+            let Some(root_iface_loc) = crate::interfaces::resolve_path_to_interface(
+                db,
+                &impl_target.target.expr,
+                pkg_items,
+                &class_ns,
+            ) else {
+                continue;
+            };
+
+            let root_iface_type_args = match &impl_target.target.expr {
+                TypeExpr::Path { generic_args, .. } => {
+                    let mut diags = Vec::new();
+                    generic_args
+                        .iter()
+                        .map(|arg| {
+                            if class_bindings.is_empty() {
+                                crate::lower_type_expr::lower_type_expr_in_ns(
+                                    db,
+                                    arg,
+                                    pkg_items,
+                                    &class_ns,
+                                    &class_data.generic_params,
+                                    &mut diags,
+                                )
+                            } else {
+                                crate::generics::lower_type_expr_with_generics(
+                                    db,
+                                    arg,
+                                    pkg_items,
+                                    &class_ns,
+                                    &class_bindings,
+                                    &mut diags,
+                                )
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                }
+                _ => Vec::new(),
+            };
+
+            for iface_loc in
+                crate::interfaces::interface_closure_locs(db, root_iface_loc, pkg_items, &class_ns)
+            {
+                let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+                let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
+                    continue;
+                };
+                let Some(field) = iface_data
+                    .fields
+                    .iter()
+                    .find(|field| field.name == *field_name)
+                else {
+                    continue;
+                };
+                let class_field_name = impl_target
+                    .field_links
+                    .iter()
+                    .find(|link| link.interface_field == field.name)
+                    .map(|link| link.class_field.clone())
+                    .unwrap_or_else(|| field.name.clone());
+                let iface_ns =
+                    baml_compiler2_hir::file_package::file_package(db, iface_loc.file(db))
+                        .namespace_path;
+                let iface_type_args = if iface_loc == root_iface_loc {
+                    root_iface_type_args.clone()
+                } else {
+                    Vec::new()
+                };
+                let bindings =
+                    crate::generics::bind_type_vars(&iface_data.generic_params, &iface_type_args);
+                let declared_ty = field
+                    .type_expr
+                    .as_ref()
+                    .map(|te| {
+                        let mut diags = Vec::new();
+                        let ty = if bindings.is_empty() {
+                            crate::lower_type_expr::lower_type_expr_in_ns(
+                                db,
+                                &te.expr,
+                                pkg_items,
+                                &iface_ns,
+                                &iface_data.generic_params,
+                                &mut diags,
+                            )
+                        } else {
+                            crate::generics::lower_type_expr_with_generics(
+                                db, &te.expr, pkg_items, &iface_ns, &bindings, &mut diags,
+                            )
+                        };
+                        for diag in diags {
+                            self.context.report_at_span(diag, te.span);
+                        }
+                        ty
+                    })
+                    .unwrap_or(Ty::Unknown {
+                        attr: TyAttr::default(),
+                    });
+                return Some((class_field_name, declared_ty));
+            }
+        }
         None
     }
 
@@ -8158,7 +8235,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     _ => None,
                 });
             if let Some(iface) = iface_name {
-                if !sources.iter().any(|s| *s == iface) {
+                if !sources.contains(&iface) {
                     sources.push(iface);
                 }
             }
@@ -9059,14 +9136,46 @@ impl<'db> TypeInferenceBuilder<'db> {
             // the structural path correctly reports "no, these are distinct
             // nominal types") and surface a TypeMismatch diagnostic.
         }
+        if let Ty::Interface(iface_qtn, iface_args, _) = sup
+            && !matches!(sub, Ty::Class(..))
+        {
+            let db = self.context.db();
+            let registry = crate::interfaces::package_implements_registry(db, self.package_id);
+            if registry.type_implements(sub, iface_qtn) {
+                if iface_args.is_empty() {
+                    return true;
+                }
+                if let Some(target_key) = crate::interfaces::implementation_key_for_ty(sub)
+                    && let Some(impl_args) = registry
+                        .type_implements_type_args
+                        .get(&(target_key, iface_qtn.clone()))
+                    && impl_args.len() == iface_args.len()
+                    && impl_args.iter().zip(iface_args.iter()).all(|(a, b)| {
+                        crate::normalize::is_subtype_of(a, b, &self.aliases)
+                            && crate::normalize::is_subtype_of(b, a, &self.aliases)
+                    })
+                {
+                    return true;
+                }
+            }
+        }
         // BEP-044 interface-to-interface subtyping: `Interface A <: Interface B`
         // iff A == B or A requires B (transitively). Two unrelated interfaces
         // that happen to share an implementor are NOT subtypes — the user must
         // narrow via `match`/`is` first.
-        if let (Ty::Interface(a_qtn, _, _), Ty::Interface(b_qtn, _, _)) = (sub, sup) {
+        if let (Ty::Interface(a_qtn, a_args, _), Ty::Interface(b_qtn, b_args, _)) = (sub, sup) {
             let db = self.context.db();
             let registry = crate::interfaces::package_implements_registry(db, self.package_id);
-            if a_qtn == b_qtn || registry.interface_requires(a_qtn, b_qtn) {
+            if a_qtn == b_qtn
+                && a_args.len() == b_args.len()
+                && a_args
+                    .iter()
+                    .zip(b_args.iter())
+                    .all(|(a, b)| self.types_equivalent(a, b))
+            {
+                return true;
+            }
+            if registry.interface_requires(a_qtn, b_qtn) && b_args.is_empty() {
                 return true;
             }
         }

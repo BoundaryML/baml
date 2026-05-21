@@ -357,6 +357,27 @@ fn duplicate_implements_block_is_compile_error() {
 }
 
 #[test]
+fn duplicate_same_generic_interface_instantiation_is_compile_error() {
+    assert_compile_error_code(
+        r#"
+        interface Converter<T> {
+            function convert(self) -> T
+        }
+
+        class MultiFormat {
+            implements Converter<int> {
+                function convert(self) -> int { return 1 }
+            }
+            implements Converter<int> {
+                function convert(self) -> int { return 2 }
+            }
+        }
+        "#,
+        "E0114",
+    );
+}
+
+#[test]
 fn requires_cycle_is_compile_error() {
     assert_compile_error_code(
         r#"
@@ -684,6 +705,30 @@ fn method_signature_mismatch_param_type() {
 }
 
 #[test]
+fn method_signature_mismatch_missing_throws_annotation() {
+    assert_compile_error_code(
+        r#"
+        class IoError {
+            message: string
+        }
+
+        interface Fallible {
+            function run(self) -> string throws IoError
+        }
+
+        class Worker {
+            implements Fallible {
+                function run(self) -> string {
+                    return "ok"
+                }
+            }
+        }
+        "#,
+        "E0120",
+    );
+}
+
+#[test]
 fn method_signature_match_is_ok() {
     assert_no_interface_errors(
         r#"
@@ -696,6 +741,55 @@ fn method_signature_match_is_ok() {
             }
         }
         "#,
+    );
+}
+
+#[test]
+fn method_signature_match_preserves_throws_annotation() {
+    assert_no_interface_errors(
+        r#"
+        class IoError {
+            message: string
+        }
+
+        interface Fallible {
+            function run(self) -> string throws IoError
+        }
+
+        class Worker {
+            implements Fallible {
+                function run(self) -> string throws IoError {
+                    return "ok"
+                }
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn interface_default_method_body_gets_exhaustiveness_checking() {
+    let errors = collect_compile_errors(
+        r#"
+        interface Labels {
+            function label(self, value: bool) -> string {
+                return match (value) {
+                    true => "yes"
+                }
+            }
+        }
+
+        class Thing {
+            implements Labels {}
+        }
+        "#,
+    );
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.contains("E0062") || e.to_lowercase().contains("non-exhaustive")),
+        "expected a NonExhaustiveMatch error, got:\n  {}",
+        errors.join("\n  ")
     );
 }
 
@@ -1146,6 +1240,44 @@ fn qualified_interface_field_construction_is_compile_error() {
     );
 }
 
+#[test]
+fn simple_interface_field_view_construction_is_compile_error() {
+    assert_compile_error_contains(
+        r#"
+        interface Named {
+            name: string
+        }
+        class Person {
+            title: string
+            implements Named {
+                name as title
+            }
+        }
+        function main() -> string {
+            let p = Person { name: "Ada" }
+            return p.title
+        }
+        "#,
+        "use class field `title`",
+    );
+}
+
+#[test]
+fn interface_field_type_must_match_invariantly() {
+    assert_compile_error_code(
+        r#"
+        interface Measured {
+            value: int | string
+        }
+        class Count {
+            value: int
+            implements Measured {}
+        }
+        "#,
+        "E0116",
+    );
+}
+
 #[tokio::test]
 async fn class_own_field_shadowing_interface_field_is_separate_at_runtime() {
     let output = baml_test!(
@@ -1581,6 +1713,64 @@ async fn default_method_dispatch_through_interface_var() {
     assert_eq!(
         output.result.unwrap(),
         BexExternalValue::String("animal: Rex".into())
+    );
+}
+
+#[tokio::test]
+async fn qualified_interface_default_method_call_runtime() {
+    let output = baml_test!(
+        r#"
+        interface Describable {
+            function describe(self) -> string {
+                return "default"
+            }
+        }
+        class Thing {
+            implements Describable {}
+        }
+        function main() -> string {
+            let t = Thing {}
+            return Describable.describe(t)
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("default".into())
+    );
+}
+
+#[tokio::test]
+async fn throwing_interface_dispatch_uses_active_catch() {
+    let output = baml_test!(
+        r#"
+        class Boom {
+            message: string
+        }
+
+        interface Fallible {
+            function run(self) -> string throws Boom
+        }
+
+        class Worker {
+            implements Fallible {
+                function run(self) -> string throws Boom {
+                    throw Boom { message: "caught" }
+                }
+            }
+        }
+
+        function main() -> string {
+            let f: Fallible = Worker {}
+            return f.run() catch (e) {
+                let err: Boom => err.message
+            }
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("caught".into())
     );
 }
 
@@ -2092,6 +2282,21 @@ fn generic_bound_violation_is_compile_error() {
     );
 }
 
+#[test]
+fn generic_bound_alias_syntax_is_compile_error() {
+    assert_compile_error_contains(
+        r#"
+        interface Converter<T> {
+            function convert(self) -> T
+        }
+        function read_int<T extends Converter<int> as Ints>(m: T) -> int {
+            return m.as<Converter<int>>.convert()
+        }
+        "#,
+        "generic bound aliases are not supported",
+    );
+}
+
 #[tokio::test]
 async fn generic_bound_as_projection_selects_generic_interface_instantiation() {
     let output = baml_test!(
@@ -2117,6 +2322,94 @@ async fn generic_bound_as_projection_selects_generic_interface_instantiation() {
         "#
     );
     assert_eq!(output.result.unwrap(), BexExternalValue::Int(42));
+}
+
+#[tokio::test]
+async fn generic_bound_direct_method_call_dispatches_through_interface() {
+    let output = baml_test!(
+        r#"
+        interface Converter<T> {
+            function convert(self) -> T
+        }
+        class IntBox {
+            value: int
+            implements Converter<int> {
+                function convert(self) -> int { return self.value }
+            }
+        }
+        function read_int<T extends Converter<int>>(m: T) -> int {
+            return m.convert()
+        }
+        function main() -> int {
+            return read_int<IntBox>(IntBox { value: 42 })
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(42));
+}
+
+#[test]
+fn same_interface_different_type_args_is_not_assignable() {
+    assert_compile_error_contains(
+        r#"
+        interface Box<T> {
+            function get(self) -> T
+        }
+        function bad(x: Box<int>) -> Box<string> {
+            return x
+        }
+        "#,
+        "type mismatch",
+    );
+}
+
+#[tokio::test]
+async fn generic_interface_method_preserves_method_type_param() {
+    let output = baml_test!(
+        r#"
+        interface Echo<T> {
+            function echo<U>(self, value: U) -> U
+        }
+        class Echoer {
+            implements Echo<int> {
+                function echo<U>(self, value: U) -> U {
+                    return value
+                }
+            }
+        }
+        function main() -> string {
+            let e: Echo<int> = Echoer {}
+            return e.echo<string>("ok")
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("ok".into())
+    );
+}
+
+#[test]
+fn generic_interface_method_explicit_type_args_are_checked() {
+    assert_compile_error_contains(
+        r#"
+        interface Echo<T> {
+            function echo<U>(self, value: U) -> U
+        }
+        class Echoer {
+            implements Echo<int> {
+                function echo<U>(self, value: U) -> U {
+                    return value
+                }
+            }
+        }
+        function bad() -> string {
+            let e: Echo<int> = Echoer {}
+            return e.echo<int>("nope")
+        }
+        "#,
+        "type mismatch",
+    );
 }
 
 #[test]
@@ -3759,6 +4052,82 @@ fn out_of_body_implements_for_primitive_method_only_compiles() {
             function debug(self) -> string { return "int" }
         }
         "#,
+    );
+}
+
+#[test]
+fn out_of_body_implements_for_primitive_satisfies_interface_type() {
+    assert_zero_compile_errors(
+        r#"
+        interface Debuggable {
+            function debug(self) -> string
+        }
+        implements Debuggable for int {
+            function debug(self) -> string { return "int" }
+        }
+        function use_debuggable() -> string {
+            let value: int = 1
+            let as_debuggable: Debuggable = value
+            return as_debuggable.debug()
+        }
+        "#,
+    );
+}
+
+#[test]
+fn out_of_body_implements_for_primitive_as_projection_compiles() {
+    assert_zero_compile_errors(
+        r#"
+        interface Debuggable {
+            function debug(self) -> string
+        }
+        implements Debuggable for int {
+            function debug(self) -> string { return "int" }
+        }
+        function use_debuggable() -> string {
+            let myInteger: int = 1
+            return myInteger.as<Debuggable>.debug()
+        }
+        "#,
+    );
+}
+
+#[tokio::test]
+async fn out_of_body_implements_for_primitive_as_projection_runtime() {
+    let output = baml_test!(
+        r#"
+        interface Debuggable {
+            function debug(self) -> string
+        }
+        implements Debuggable for int {
+            function debug(self) -> string { return "int" }
+        }
+        function main() -> string {
+            let myInteger: int = 1
+            let asDebuggable: Debuggable = myInteger
+            return myInteger.as<Debuggable>.debug() + ":" + asDebuggable.debug()
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("int:int".into())
+    );
+}
+
+#[test]
+fn out_of_body_implements_for_primitive_field_bearing_interface_is_error() {
+    assert_compile_error_code(
+        r#"
+        interface Named {
+            name: string
+            function display(self) -> string
+        }
+        implements Named for int {
+            function display(self) -> string { return "int" }
+        }
+        "#,
+        "E0126",
     );
 }
 

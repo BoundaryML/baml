@@ -43,7 +43,6 @@ function user.MakeJSON(i: user.NotJSON) -> user.JSON throws never {
   { : unknown
     i.inner : unknown
   }
-  !! 92..97: unresolved type: name
 }
 type user.JSON$stream = int | float | string | bool | user.JSON$stream[] | map<string, baml.json.json$stream>
 class user.NotJSON$stream {

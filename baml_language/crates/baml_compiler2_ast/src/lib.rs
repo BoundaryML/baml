@@ -374,6 +374,50 @@ function Search(query: string, max_results: int = 10) -> int {
     }
 
     #[test]
+    fn ast_does_not_treat_upcast_target_as_method_type_args() {
+        let source = r#"
+function main(m: MultiFormat) -> string {
+  return m.as<Converter<int>>.convert()
+}
+"#;
+        let function = first_function(parse_and_lower(source));
+        let Some(FunctionBodyDef::Expr(body, _source_map)) = &function.body else {
+            panic!("expected expression body");
+        };
+        let root = body.root_expr.expect("expected body root expression");
+        let Expr::Block { stmts, .. } = &body.exprs[root] else {
+            panic!("expected block root expression");
+        };
+        let return_expr = match &body.stmts[stmts[0]] {
+            Stmt::Return(Some(expr_id)) => *expr_id,
+            other => panic!("expected return statement, got {other:?}"),
+        };
+        let Expr::Call {
+            callee, type_args, ..
+        } = &body.exprs[return_expr]
+        else {
+            panic!("expected return expression to be a call");
+        };
+        assert!(
+            type_args.is_empty(),
+            ".as<Interface> target must not be lowered as method type args"
+        );
+
+        let Expr::MemberAccess { base, member } = &body.exprs[*callee] else {
+            panic!("expected call callee to be member access");
+        };
+        assert_eq!(member.as_str(), "convert");
+        let Expr::Upcast { target, .. } = &body.exprs[*base] else {
+            panic!("expected member receiver to be an upcast expression");
+        };
+        assert_eq!(
+            target.to_string(),
+            "Converter<int>",
+            "upcast target itself should still be preserved"
+        );
+    }
+
+    #[test]
     fn ast_default_indices_survive_recovered_parameter() {
         let source = r#"
 function Broken(: int = 1, value: int = 2) -> int {
@@ -465,6 +509,69 @@ class Response {
         assert_eq!(method.attributes[0].name.as_str(), "internal.uses");
         assert_eq!(method.attributes[0].args.len(), 1);
         assert_eq!(method.attributes[0].args[0].value, "engine_ctx");
+        let throws = method.throws.as_ref().expect("expected throws contract");
+        assert_eq!(
+            throws.expr,
+            TypeExpr::Path {
+                segments: vec![
+                    baml_base::Name::new("baml"),
+                    baml_base::Name::new("errors"),
+                    baml_base::Name::new("Io"),
+                ],
+                generic_args: vec![],
+                attrs: vec![]
+            }
+        );
+    }
+
+    #[test]
+    fn ast_lowers_keyword_named_class_field() {
+        let source = r#"
+class InterfaceTwo {
+  interface string
+}
+"#;
+        let items = parse_and_lower(source);
+        let class = items
+            .into_iter()
+            .find_map(|item| match item {
+                Item::Class(class) => Some(class),
+                _ => None,
+            })
+            .expect("expected ClassDef");
+
+        let field = class.fields.first().expect("expected field");
+        assert_eq!(field.name.as_str(), "interface");
+        assert_eq!(
+            field
+                .type_expr
+                .as_ref()
+                .map(|te| te.expr.to_string())
+                .as_deref(),
+            Some("string")
+        );
+    }
+
+    #[test]
+    fn ast_lowers_required_interface_method_throws() {
+        let source = r#"
+interface Response {
+  function text(self) -> string throws baml.errors.Io
+}
+"#;
+        let items = parse_and_lower(source);
+        let interface = items
+            .into_iter()
+            .find_map(|item| match item {
+                Item::Interface(interface) => Some(interface),
+                _ => None,
+            })
+            .expect("expected InterfaceDef");
+        let method = interface
+            .required_methods
+            .first()
+            .expect("expected required method");
+
         let throws = method.throws.as_ref().expect("expected throws contract");
         assert_eq!(
             throws.expr,

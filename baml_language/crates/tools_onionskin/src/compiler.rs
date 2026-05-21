@@ -564,6 +564,10 @@ fn expr_desc_spans<'db>(
             spans.extend(expr_desc_spans(*base, body, inference));
             spans.push(DetailSpan::Code(format!(".{member}")));
         }
+        Expr::Upcast { base, target } => {
+            spans.extend(expr_desc_spans(*base, body, inference));
+            spans.push(DetailSpan::Code(format!(".as<{target}>")));
+        }
         Expr::OptionalMemberAccess { base, member } => {
             spans.extend(expr_desc_spans(*base, body, inference));
             spans.push(DetailSpan::Code(format!("?.{member}")));
@@ -2083,6 +2087,9 @@ impl CompilerRunner {
                 }
                 Expr::MemberAccess { base, member } => {
                     format!("{}.{member}", expr_desc(*base, body))
+                }
+                Expr::Upcast { base, target } => {
+                    format!("{}.as<{target}>", expr_desc(*base, body))
                 }
                 Expr::OptionalMemberAccess { base, member } => {
                     format!("{}?.{member}", expr_desc(*base, body))

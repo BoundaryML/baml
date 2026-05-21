@@ -1461,6 +1461,11 @@ impl MethodSig {
     pub fn return_type(&self) -> Option<TypeExpr> {
         self.syntax.children().find_map(TypeExpr::cast)
     }
+
+    /// Get the throws clause if present.
+    pub fn throws_clause(&self) -> Option<ThrowsClause> {
+        self.syntax.children().find_map(ThrowsClause::cast)
+    }
 }
 
 impl Field {
@@ -1469,7 +1474,17 @@ impl Field {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| token.kind() == SyntaxKind::WORD)
+            .find(|token| {
+                matches!(
+                    token.kind(),
+                    SyntaxKind::WORD
+                        | SyntaxKind::KW_IMPLEMENTS
+                        | SyntaxKind::KW_IMPLEMENT
+                        | SyntaxKind::KW_EXTENDS
+                        | SyntaxKind::KW_REQUIRES
+                        | SyntaxKind::KW_INTERFACE
+                )
+            })
     }
 
     /// Get the field type.
@@ -3242,6 +3257,8 @@ pub enum Item {
     Function(FunctionDef),
     Class(ClassDef),
     Enum(EnumDef),
+    Interface(InterfaceDef),
+    ImplementsFor(ImplementsFor),
     Client(ClientDef),
     Test(TestDef),
     RetryPolicy(RetryPolicyDef),
@@ -3258,6 +3275,8 @@ impl AstNode for Item {
             SyntaxKind::FUNCTION_DEF
                 | SyntaxKind::CLASS_DEF
                 | SyntaxKind::ENUM_DEF
+                | SyntaxKind::INTERFACE_DEF
+                | SyntaxKind::IMPLEMENTS_FOR
                 | SyntaxKind::CLIENT_DEF
                 | SyntaxKind::TEST_DEF
                 | SyntaxKind::RETRY_POLICY_DEF
@@ -3271,6 +3290,8 @@ impl AstNode for Item {
             SyntaxKind::FUNCTION_DEF => Some(Item::Function(FunctionDef { syntax })),
             SyntaxKind::CLASS_DEF => Some(Item::Class(ClassDef { syntax })),
             SyntaxKind::ENUM_DEF => Some(Item::Enum(EnumDef { syntax })),
+            SyntaxKind::INTERFACE_DEF => Some(Item::Interface(InterfaceDef { syntax })),
+            SyntaxKind::IMPLEMENTS_FOR => Some(Item::ImplementsFor(ImplementsFor { syntax })),
             SyntaxKind::CLIENT_DEF => Some(Item::Client(ClientDef { syntax })),
             SyntaxKind::TEST_DEF => Some(Item::Test(TestDef { syntax })),
             SyntaxKind::RETRY_POLICY_DEF => Some(Item::RetryPolicy(RetryPolicyDef { syntax })),
@@ -3287,6 +3308,8 @@ impl AstNode for Item {
             Item::Function(it) => it.syntax(),
             Item::Class(it) => it.syntax(),
             Item::Enum(it) => it.syntax(),
+            Item::Interface(it) => it.syntax(),
+            Item::ImplementsFor(it) => it.syntax(),
             Item::Client(it) => it.syntax(),
             Item::Test(it) => it.syntax(),
             Item::RetryPolicy(it) => it.syntax(),

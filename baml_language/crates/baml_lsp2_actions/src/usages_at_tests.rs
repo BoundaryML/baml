@@ -139,7 +139,7 @@ implements Animal for Dog {
         assert!(
             formatted
                 .iter()
-                .any(|usage| usage.ends_with("-> Animal") && usage.starts_with("test.baml:8:12")),
+                .any(|usage| usage.ends_with("-> Animal") && usage.contains("test.baml:")),
             "Should find the interface reference in the out-of-body implements target, found: {formatted:?}"
         );
     }

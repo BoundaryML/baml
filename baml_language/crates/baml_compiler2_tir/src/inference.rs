@@ -22,7 +22,7 @@ use baml_compiler2_ast::{
 use baml_compiler2_hir::{
     body::{FunctionBody, LetBody},
     contributions::Definition,
-    loc::{ClassLoc, EnumLoc, FunctionLoc, LetLoc, TypeAliasLoc},
+    loc::{ClassLoc, EnumLoc, FunctionLoc, InterfaceLoc, LetLoc, TypeAliasLoc},
     package::{PackageId, PackageItems},
     scope::{FileScopeId, ScopeId, ScopeKind},
     semantic_index::{BindingId, BindingKind},
@@ -87,6 +87,12 @@ pub enum MemberResolution<'db> {
     /// e.g. `Person.get_name` where `Person` is a class type — type keeps `self`.
     UnboundMethod {
         class_loc: ClassLoc<'db>,
+        func_loc: FunctionLoc<'db>,
+    },
+    /// An interface default method referenced through the interface type
+    /// itself, e.g. `Named.describe(value)`.
+    InterfaceDefaultMethod {
+        iface_loc: InterfaceLoc<'db>,
         func_loc: FunctionLoc<'db>,
     },
 }
@@ -636,8 +642,6 @@ pub fn infer_scope_types<'db>(
                     // walks this map to expose the bound's contract.
                     let mut bounds: rustc_hash::FxHashMap<Name, Ty> =
                         rustc_hash::FxHashMap::default();
-                    let mut bound_aliases: rustc_hash::FxHashMap<Name, Ty> =
-                        rustc_hash::FxHashMap::default();
                     for (i, name) in func_data.generic_params.iter().enumerate() {
                         if let Some(Some(bound_te)) = func_data.generic_param_bounds.get(i) {
                             let mut bd = Vec::new();
@@ -652,15 +656,10 @@ pub fn infer_scope_types<'db>(
                             for d in bd {
                                 builder.report_at_span(d, func_data.span);
                             }
-                            if let Some(Some(alias)) = func_data.generic_param_bound_aliases.get(i)
-                            {
-                                bound_aliases.insert(alias.clone(), bound_ty.clone());
-                            }
                             bounds.insert(name.clone(), bound_ty);
                         }
                     }
                     builder.set_generic_param_bounds(bounds);
-                    builder.set_generic_bound_aliases(bound_aliases);
                     if let Some(sm) = baml_compiler2_ppir::function_body_source_map(db, func_loc) {
                         builder.set_body_source_map(sm);
                     }

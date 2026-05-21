@@ -968,9 +968,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::Item::RetryPolicy(rp) => self.lower_retry_policy(rp),
             ast::Item::Let(l) => self.lower_let(l),
             ast::Item::Interface(i) => self.lower_interface(i),
-            ast::Item::ImplementsFor(_) => {
-                // Merged into target ClassDef during AST lowering — nothing to do here.
-            }
+            ast::Item::ImplementsFor(imp) => self.lower_implements_for(imp),
         }
     }
 
@@ -1080,6 +1078,20 @@ impl<'db> SemanticIndexBuilder<'db> {
 
         self.item_tree.set_class_methods(local_id, method_ids);
         self.pop_scope();
+    }
+
+    fn lower_implements_for(&mut self, imp: &ast::ImplementsForDef) {
+        self.class_depth += 1;
+        let mut method_ids = Vec::new();
+        for method in &imp.methods {
+            let fid = self.lower_function(method);
+            self.item_tree
+                .method_to_iface_target
+                .insert(fid, imp.interface_target.clone());
+            method_ids.push(fid);
+        }
+        self.class_depth -= 1;
+        self.item_tree.add_implements_for(imp, method_ids);
     }
 
     /// Lower an `interface I { ... }` declaration (BEP-044).

@@ -61,49 +61,76 @@ pub fn substitute_paths_in(
     if subst.is_empty() {
         return type_expr.clone();
     }
-    fn walk(
-        ty: &TypeExpr,
-        subst: &std::collections::HashMap<baml_base::Name, TypeExpr>,
-    ) -> TypeExpr {
-        match ty {
-            TypeExpr::Path {
-                segments,
-                generic_args,
-                attrs,
-            } => {
-                if segments.len() == 1
-                    && generic_args.is_empty()
-                    && let Some(replacement) = subst.get(&segments[0])
-                {
-                    return replacement.clone();
-                }
-                TypeExpr::Path {
-                    segments: segments.clone(),
-                    generic_args: generic_args.iter().map(|a| walk(a, subst)).collect(),
-                    attrs: attrs.clone(),
-                }
+    substitute_paths_walk(type_expr, subst)
+}
+
+fn substitute_paths_walk(
+    ty: &TypeExpr,
+    subst: &std::collections::HashMap<baml_base::Name, TypeExpr>,
+) -> TypeExpr {
+    match ty {
+        TypeExpr::Path {
+            segments,
+            generic_args,
+            attrs,
+        } => {
+            if segments.len() == 1
+                && generic_args.is_empty()
+                && let Some(replacement) = subst.get(&segments[0])
+            {
+                return replacement.clone();
             }
-            TypeExpr::List { inner, attrs } => TypeExpr::List {
-                inner: Box::new(walk(inner, subst)),
+            TypeExpr::Path {
+                segments: segments.clone(),
+                generic_args: generic_args
+                    .iter()
+                    .map(|a| substitute_paths_walk(a, subst))
+                    .collect(),
                 attrs: attrs.clone(),
-            },
-            TypeExpr::Optional { inner, attrs } => TypeExpr::Optional {
-                inner: Box::new(walk(inner, subst)),
-                attrs: attrs.clone(),
-            },
-            TypeExpr::Map { key, value, attrs } => TypeExpr::Map {
-                key: Box::new(walk(key, subst)),
-                value: Box::new(walk(value, subst)),
-                attrs: attrs.clone(),
-            },
-            TypeExpr::Union { variants, attrs } => TypeExpr::Union {
-                variants: variants.iter().map(|v| walk(v, subst)).collect(),
-                attrs: attrs.clone(),
-            },
-            _ => ty.clone(),
+            }
         }
+        TypeExpr::List { inner, attrs } => TypeExpr::List {
+            inner: Box::new(substitute_paths_walk(inner, subst)),
+            attrs: attrs.clone(),
+        },
+        TypeExpr::Optional { inner, attrs } => TypeExpr::Optional {
+            inner: Box::new(substitute_paths_walk(inner, subst)),
+            attrs: attrs.clone(),
+        },
+        TypeExpr::Map { key, value, attrs } => TypeExpr::Map {
+            key: Box::new(substitute_paths_walk(key, subst)),
+            value: Box::new(substitute_paths_walk(value, subst)),
+            attrs: attrs.clone(),
+        },
+        TypeExpr::Union { variants, attrs } => TypeExpr::Union {
+            variants: variants
+                .iter()
+                .map(|v| substitute_paths_walk(v, subst))
+                .collect(),
+            attrs: attrs.clone(),
+        },
+        TypeExpr::Function {
+            params,
+            ret,
+            throws,
+            attrs,
+        } => TypeExpr::Function {
+            params: params
+                .iter()
+                .map(|param| {
+                    let mut param = param.clone();
+                    param.ty = substitute_paths_walk(&param.ty, subst);
+                    param
+                })
+                .collect(),
+            ret: Box::new(substitute_paths_walk(ret, subst)),
+            throws: throws
+                .as_ref()
+                .map(|ty| Box::new(substitute_paths_walk(ty, subst))),
+            attrs: attrs.clone(),
+        },
+        _ => ty.clone(),
     }
-    walk(type_expr, subst)
 }
 
 /// BEP-044: walk `type_expr` and replace any `Self` reference with
@@ -147,6 +174,26 @@ fn substitute_self(type_expr: &TypeExpr, replacement: &TypeExpr) -> TypeExpr {
                 .iter()
                 .map(|v| substitute_self(v, replacement))
                 .collect(),
+            attrs: attrs.clone(),
+        },
+        TypeExpr::Function {
+            params,
+            ret,
+            throws,
+            attrs,
+        } => TypeExpr::Function {
+            params: params
+                .iter()
+                .map(|param| {
+                    let mut param = param.clone();
+                    param.ty = substitute_self(&param.ty, replacement);
+                    param
+                })
+                .collect(),
+            ret: Box::new(substitute_self(ret, replacement)),
+            throws: throws
+                .as_ref()
+                .map(|ty| Box::new(substitute_self(ty, replacement))),
             attrs: attrs.clone(),
         },
         _ => type_expr.clone(),
@@ -620,6 +667,78 @@ mod tests {
 
     #[salsa::db]
     impl crate::Db for TestDb {}
+
+    fn path(name: &str) -> TypeExpr {
+        TypeExpr::Path {
+            segments: vec![Name::new(name)],
+            generic_args: vec![],
+            attrs: vec![],
+        }
+    }
+
+    #[test]
+    fn substitute_paths_recurses_into_function_type() {
+        let type_expr = TypeExpr::Function {
+            params: vec![FunctionTypeParam {
+                name: Some(Name::new("value")),
+                optional: false,
+                ty: path("T"),
+            }],
+            ret: Box::new(path("T")),
+            throws: Some(Box::new(path("E"))),
+            attrs: vec![],
+        };
+        let mut subst = std::collections::HashMap::new();
+        subst.insert(Name::new("T"), TypeExpr::String { attrs: vec![] });
+        subst.insert(Name::new("E"), TypeExpr::Bool { attrs: vec![] });
+
+        let TypeExpr::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } = substitute_paths_in(&type_expr, &subst)
+        else {
+            panic!("expected function type");
+        };
+
+        assert!(matches!(params[0].ty, TypeExpr::String { .. }));
+        assert!(matches!(*ret, TypeExpr::String { .. }));
+        assert!(matches!(throws.as_deref(), Some(TypeExpr::Bool { .. })));
+    }
+
+    #[test]
+    fn substitute_self_recurses_into_function_type() {
+        let type_expr = TypeExpr::Function {
+            params: vec![FunctionTypeParam {
+                name: Some(Name::new("value")),
+                optional: false,
+                ty: path("Self"),
+            }],
+            ret: Box::new(path("Self")),
+            throws: Some(Box::new(path("Self"))),
+            attrs: vec![],
+        };
+        let replacement = TypeExpr::Path {
+            segments: vec![Name::new("Named")],
+            generic_args: vec![TypeExpr::Int { attrs: vec![] }],
+            attrs: vec![],
+        };
+
+        let TypeExpr::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } = substitute_self_in(&type_expr, &replacement)
+        else {
+            panic!("expected function type");
+        };
+
+        assert_eq!(params[0].ty, replacement);
+        assert_eq!(*ret, replacement);
+        assert_eq!(throws.map(|ty| *ty), Some(replacement));
+    }
 
     #[test]
     fn lower_function_type_preserves_parameter_optionality() {

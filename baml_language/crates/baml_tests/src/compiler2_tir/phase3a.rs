@@ -140,6 +140,33 @@ function f() -> string {
 }
 
 #[test]
+fn raw_generic_constructor_infers_typevar_from_field_value() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Box<T> {
+  value T
+  function unwrap(self) -> T { self.value }
+}
+
+function f() -> int {
+  let b = Box { value: 42 }
+  let get = b.unwrap
+  get()
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("let b = Box { value: 42 } : user.Box"),
+        "{tir}"
+    );
+    assert!(tir.contains("get<T>() : int"), "{tir}");
+    assert!(!tir.contains("!!"), "unexpected diagnostics:\n{tir}");
+}
+
+#[test]
 fn optional_param_call_binding_diagnostics() {
     let mut db = make_db();
     let file = db.add_file(

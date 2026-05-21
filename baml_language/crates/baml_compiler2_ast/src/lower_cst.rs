@@ -157,9 +157,10 @@ pub fn lower_file_with_file_id(
         }
     }
 
-    // BEP-044: merge top-level `implements I for T` items into the target class.
-    // Extract ImplementsFor items, convert them to ImplementsBlockDefs, and
-    // append to the matching ClassDef.
+    // BEP-044: merge top-level `implements I for T` items into the target
+    // class when `T` names a local class. Primitive/fixed-shape targets lower
+    // to non-path TypeExprs (`int`, `string`, etc.) and must remain as
+    // first-class implementation records for later validation/registration.
     let impl_fors: Vec<ImplementsForDef> = items
         .iter()
         .filter_map(|item| match item {
@@ -198,11 +199,8 @@ pub fn lower_file_with_file_id(
                     span: imp.for_target.span,
                 });
             }
-        } else if !imp.fields.is_empty() {
-            diags.push(LoweringDiagnostic::InvalidImplementsForFieldsTarget {
-                target_name: format!("{}", imp.for_target.expr),
-                span: imp.for_target.span,
-            });
+        } else {
+            items.push(Item::ImplementsFor(imp));
         }
     }
 
@@ -258,18 +256,14 @@ fn lower_function(
     let name = Name::new(name_token.text());
     let name_span = name_token.text_range();
 
-    let generic_params_with_bounds = extract_generic_params_with_bounds_and_aliases(node);
+    let generic_params_with_bounds = extract_generic_params_with_bounds(node);
     let generic_params: Vec<Name> = generic_params_with_bounds
         .iter()
-        .map(|(n, _, _)| n.clone())
+        .map(|(n, _)| n.clone())
         .collect();
     let generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
-        .iter()
-        .map(|(_, b, _)| b.clone())
-        .collect();
-    let generic_param_bound_aliases: Vec<Option<Name>> = generic_params_with_bounds
         .into_iter()
-        .map(|(_, _, a)| a)
+        .map(|(_, b)| b)
         .collect();
     let parameter_context = format!("function `{}`", name.as_str());
 
@@ -360,7 +354,6 @@ fn lower_function(
         name,
         generic_params,
         generic_param_bounds,
-        generic_param_bound_aliases,
         params,
         defaults,
         return_type,
@@ -1016,18 +1009,9 @@ pub(crate) fn extract_generic_params(node: &SyntaxNode) -> Vec<Name> {
 pub(crate) fn extract_generic_params_with_bounds(
     node: &SyntaxNode,
 ) -> Vec<(Name, Option<crate::ast::TypeExpr>)> {
-    extract_generic_params_with_bounds_and_aliases(node)
-        .into_iter()
-        .map(|(name, bound, _)| (name, bound))
-        .collect()
-}
-
-pub(crate) fn extract_generic_params_with_bounds_and_aliases(
-    node: &SyntaxNode,
-) -> Vec<(Name, Option<crate::ast::TypeExpr>, Option<Name>)> {
     use baml_compiler_syntax::SyntaxKind;
 
-    let mut out: Vec<(Name, Option<crate::ast::TypeExpr>, Option<Name>)> = Vec::new();
+    let mut out: Vec<(Name, Option<crate::ast::TypeExpr>)> = Vec::new();
     for child in node.children() {
         let child_kind: SyntaxKind = child.kind();
         if child_kind != SyntaxKind::GENERIC_PARAM_LIST {
@@ -1062,29 +1046,8 @@ pub(crate) fn extract_generic_params_with_bounds_and_aliases(
                     let te = baml_compiler_syntax::ast::TypeExpr::cast(n)?;
                     Some(lower_type_expr::lower_type_expr_node(&te))
                 });
-            let alias: Option<Name> = param_node
-                .children()
-                .find(|n| n.kind() == SyntaxKind::GENERIC_PARAM_BOUNDS)
-                .and_then(|bounds_node| {
-                    let mut saw_as = false;
-                    for elem in bounds_node.children_with_tokens() {
-                        let Some(token) = elem.as_token() else {
-                            continue;
-                        };
-                        if token.kind() != SyntaxKind::WORD {
-                            continue;
-                        }
-                        if saw_as {
-                            return Some(Name::new(token.text()));
-                        }
-                        if token.text() == "as" {
-                            saw_as = true;
-                        }
-                    }
-                    None
-                });
             if let Some(n) = name {
-                out.push((n, bound, alias));
+                out.push((n, bound));
             }
         }
     }
@@ -1283,13 +1246,21 @@ fn lower_method_sig(
         }
     });
 
+    let throws = sig
+        .throws_clause()
+        .and_then(|tc| tc.type_expr())
+        .map(|te| SpannedTypeExpr {
+            expr: lower_type_expr::lower_type_expr_node(&te),
+            span: te.syntax().text_range(),
+        });
+
     Some(MethodSigDef {
         name,
         generic_params,
         params,
         defaults,
         return_type,
-        throws: None,
+        throws,
         attributes: lower_attributes_from_node(sig.syntax()),
         docstring: crate::docstring::extract_docstring(sig.syntax()),
         span: sig.syntax().text_range(),
@@ -1706,7 +1677,6 @@ fn synthesize_init_test_function(
         name: Name::new(&fn_name),
         generic_params: vec![],
         generic_param_bounds: vec![],
-        generic_param_bound_aliases: vec![],
         params: vec![registry_param],
         defaults: FunctionDefaults::empty(),
         return_type: None,
@@ -1746,7 +1716,6 @@ fn synthesize_register_call(
                 name: Name::new("<test body>"),
                 generic_params: vec![],
                 generic_param_bounds: vec![],
-                generic_param_bound_aliases: vec![],
                 params: vec![],
                 defaults: FunctionDefaults::empty(),
                 return_type: Some(SpannedTypeExpr {
@@ -1825,7 +1794,6 @@ fn synthesize_register_call(
                 name: Name::new("<testset collector>"),
                 generic_params: vec![],
                 generic_param_bounds: vec![],
-                generic_param_bound_aliases: vec![],
                 params: vec![testset_param],
                 defaults: FunctionDefaults::empty(),
                 return_type: Some(SpannedTypeExpr {
@@ -2542,7 +2510,6 @@ fn synthesize_client_new_companion(
         name: Name::new(&func_name),
         generic_params: vec![],
         generic_param_bounds: vec![],
-        generic_param_bound_aliases: vec![],
         params: vec![],
         defaults: FunctionDefaults::empty(),
         return_type: None,

@@ -143,7 +143,6 @@ function user.wrong_arity_missing() -> user.Box throws never {
   { : user.Box
     Box { value: 42 } : user.Box
   }
-  !! 3073..3075: type mismatch: expected T, got 42
 }
 function user.wrong_arity_extra() -> user.Box<int, string> throws never {
   { : user.Box<int, string>

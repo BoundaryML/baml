@@ -46,16 +46,6 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0001
 ─────╯
 
-  [type] error: type mismatch: expected T, got 42
-     ╭─[ classes.baml:124:18 ]
-     │
- 124 │     Box { value: 42 }
-     │                  ─┬  
-     │                   ╰── type mismatch: expected T, got 42
-     │ 
-     │ Note: Error code: E0001
-─────╯
-
   [type] error: unreachable arm
      ╭─[ classes.baml:197:21 ]
      │
