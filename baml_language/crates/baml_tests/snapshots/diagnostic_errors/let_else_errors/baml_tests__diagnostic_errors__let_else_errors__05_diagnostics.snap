@@ -1,0 +1,24 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 40435
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] error: irrefutable pattern in `let ... else`; the else block is unreachable — use a plain `let` instead
+   ╭─[ let_else_errors.baml:5:18 ]
+   │
+ 5 │     let n: int = v else { return 0; };
+   │                  ┬  
+   │                  ╰── irrefutable pattern in `let ... else`; the else block is unreachable — use a plain `let` instead
+   │ 
+   │ Note: Error code: E0111
+───╯
+
+  [type] error: `let ... else` block must diverge (`return`, `throw`, etc.); got type `0`
+    ╭─[ let_else_errors.baml:11:24 ]
+    │
+ 11 │     let n: int = v else { 0 };
+    │                        ───┬──  
+    │                           ╰──── `let ... else` block must diverge (`return`, `throw`, etc.); got type `0`
+    │ 
+    │ Note: Error code: E0001
+────╯

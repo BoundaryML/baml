@@ -1,0 +1,13 @@
+// Error cases for `let ... else`.
+
+// Irrefutable pattern in let-else — the else block is unreachable.
+function irrefutable_pattern(v: int) -> int {
+    let n: int = v else { return 0; };
+    n
+}
+
+// Else block doesn't diverge — falls through to nothing.
+function else_does_not_diverge(v: int | string) -> int {
+    let n: int = v else { 0 };
+    n
+}

@@ -1,0 +1,105 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 14527
+---
+=== MIR2 ===
+fn user.chain_two(v: int | string, w: int | string) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int | string // v // param
+    let _2: int | string // w // param
+    let _3: bool
+    let _4: int // a
+    let _5: bool
+    let _6: int // b
+    let _7: int
+    let _8: int
+
+    bb0: {
+        _3 = is_type(copy _1, int);
+        branch copy _3 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _0 = const -1_i64;
+        goto -> bb5;
+    }
+
+    bb2: {
+        _4 = copy _1;
+        _5 = is_type(copy _2, int);
+        branch copy _5 -> [bb4, bb3];
+    }
+
+    bb3: {
+        _0 = const -2_i64;
+        goto -> bb5;
+    }
+
+    bb4: {
+        _6 = copy _2;
+        _7 = copy _4;
+        _8 = copy _6;
+        _0 = copy _7 + copy _8;
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
+fn user.narrow_or_default(v: int | string) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int | string // v // param
+    let _2: bool
+    let _3: int // n
+
+    bb0: {
+        _2 = is_type(copy _1, int);
+        branch copy _2 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _0 = const 0_i64;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _3 = copy _1;
+        _0 = copy _3;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.narrow_or_throw(v: int | string) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int | string // v // param
+    let _2: bool
+    let _3: int // n
+
+    bb0: {
+        _2 = is_type(copy _1, int);
+        branch copy _2 -> [bb2, bb1];
+    }
+
+    bb1: {
+        throw const "expected int";
+    }
+
+    bb2: {
+        _3 = copy _1;
+        _0 = copy _3;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}

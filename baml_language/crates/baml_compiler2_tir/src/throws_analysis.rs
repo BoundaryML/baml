@@ -97,9 +97,16 @@ fn collect_from_stmt<C: ThrowsAnalysisContext>(
 ) {
     match &body.stmts[stmt_id] {
         Stmt::Expr(expr_id) => collect_from_expr(context, *expr_id, body, out),
-        Stmt::Let { initializer, .. } => {
+        Stmt::Let {
+            initializer,
+            else_block,
+            ..
+        } => {
             if let Some(init) = initializer {
                 collect_from_expr(context, *init, body, out);
+            }
+            if let Some(else_id) = else_block {
+                collect_from_expr(context, *else_id, body, out);
             }
         }
         Stmt::While {

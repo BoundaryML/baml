@@ -1,0 +1,11 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 40356
+---
+=== HIR2 ===
+function user.else_does_not_diverge(v: int | string) -> int  [expr] {
+  { let n: int = v else { ... } } n
+}
+function user.irrefutable_pattern(v: int) -> int  [expr] {
+  { let n: int = v else { ... } } n
+}

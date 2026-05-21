@@ -1,0 +1,176 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 14447
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "narrow_or_default"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "v"
+        COLON ":"
+        TYPE_EXPR "int | string"
+          WORD "int"
+          PIPE "|"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "n"
+              COLON ":"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "int"
+                    WORD "int"
+          EQUALS "="
+          WORD "v"
+          KW_ELSE "else"
+          BLOCK_EXPR
+            L_BRACE "{"
+            RETURN_STMT "return 0;"
+              KW_RETURN "return"
+              INTEGER_LITERAL "0"
+              SEMICOLON ";"
+            R_BRACE "}"
+          SEMICOLON ";"
+        WORD "n"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "chain_two"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "v"
+        COLON ":"
+        TYPE_EXPR "int | string"
+          WORD "int"
+          PIPE "|"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "w"
+        COLON ":"
+        TYPE_EXPR "int | string"
+          WORD "int"
+          PIPE "|"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "a"
+              COLON ":"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "int"
+                    WORD "int"
+          EQUALS "="
+          WORD "v"
+          KW_ELSE "else"
+          BLOCK_EXPR
+            L_BRACE "{"
+            RETURN_STMT
+              KW_RETURN "return"
+              UNARY_EXPR "-1"
+                MINUS "-"
+                INTEGER_LITERAL "1"
+              SEMICOLON ";"
+            R_BRACE "}"
+          SEMICOLON ";"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "b"
+              COLON ":"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "int"
+                    WORD "int"
+          EQUALS "="
+          WORD "w"
+          KW_ELSE "else"
+          BLOCK_EXPR
+            L_BRACE "{"
+            RETURN_STMT
+              KW_RETURN "return"
+              UNARY_EXPR "-2"
+                MINUS "-"
+                INTEGER_LITERAL "2"
+              SEMICOLON ";"
+            R_BRACE "}"
+          SEMICOLON ";"
+        BINARY_EXPR "a + b"
+          WORD "a"
+          PLUS "+"
+          WORD "b"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "narrow_or_throw"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "v"
+        COLON ":"
+        TYPE_EXPR "int | string"
+          WORD "int"
+          PIPE "|"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "n"
+              COLON ":"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "int"
+                    WORD "int"
+          EQUALS "="
+          WORD "v"
+          KW_ELSE "else"
+          BLOCK_EXPR
+            L_BRACE "{"
+            THROW_STMT
+              THROW_EXPR
+                KW_THROW "throw"
+                STRING_LITERAL "expected int"
+                  QUOTE """
+                  WORD "expected"
+                  WORD "int"
+                  QUOTE """
+              SEMICOLON ";"
+            R_BRACE "}"
+          SEMICOLON ";"
+        WORD "n"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

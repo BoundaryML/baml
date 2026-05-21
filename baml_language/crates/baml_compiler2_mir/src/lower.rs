@@ -4972,6 +4972,76 @@ impl LoweringContext<'_> {
                 pattern,
                 initializer,
                 is_watched,
+                else_block: Some(else_id),
+                ..
+            } => {
+                // Rust-style `let pat = init else { ... };`. Distinct
+                // lowering — we do NOT desugar into a Stmt::Match. The
+                // initializer is evaluated into a scrutinee local, the
+                // pattern is tested with the same machinery match-arms
+                // use, and on failure the else block is lowered (which
+                // diverges, so no merge edge is required).
+                //
+                // Bindings declared on the success path flow into the
+                // rest of the enclosing scope, matching plain `let` and
+                // mirroring Rust's let-else.
+                let init_ty = self.expr_ty(initializer.unwrap_or(else_id));
+                let scrutinee = self.builder.temp(init_ty);
+                if let Some(init) = initializer {
+                    self.lower_expr(init, Place::local(scrutinee));
+                }
+
+                let bb_success = self.builder.create_block();
+                let bb_fail = self.builder.create_block();
+                self.lower_pattern_test(scrutinee, pattern, bb_success, bb_fail);
+
+                // Failure path: lower the diverging else block. TIR
+                // enforces `Ty::Never`, so control must not fall through.
+                // If it does (recovery path past a TIR error), terminate
+                // the current block with `unreachable` so the builder
+                // doesn't end up with a dangling block.
+                self.builder.set_current_block(bb_fail);
+                let else_ty = self.expr_ty(else_id);
+                let else_dest = self.builder.temp(else_ty);
+                self.lower_expr(else_id, Place::local(else_dest));
+                if !self.builder.is_current_terminated() {
+                    self.builder.unreachable();
+                }
+
+                // Success path: bind pattern variables for the rest of
+                // the enclosing scope. Mirrors the structural-let arm
+                // below so binding_locals and watched stacks stay
+                // consistent.
+                self.builder.set_current_block(bb_success);
+                self.bind_pattern_inner(scrutinee, pattern, pattern, pattern, false, is_watched);
+
+                let names: Vec<Name> = self.body.patterns[pattern]
+                    .bound_names(&self.body.patterns)
+                    .into_iter()
+                    .cloned()
+                    .collect();
+                for name in names {
+                    if let Some(&local) = self.locals.get(&name)
+                        && let Some(binding_id) =
+                            self.binding_id_for_statement_name(stmt_id, pattern, &name)
+                    {
+                        self.binding_locals.insert(binding_id, local);
+                    }
+                }
+
+                if is_watched {
+                    for name in self.body.patterns[pattern].bound_names(&self.body.patterns) {
+                        if let Some(&local) = self.locals.get(name) {
+                            self.watched_locals_stack.push(local);
+                        }
+                    }
+                }
+            }
+
+            AstStmt::Let {
+                pattern,
+                initializer,
+                is_watched,
                 ..
             } if self.pattern_contains_structural(pattern) => {
                 let local_ty = self.pat_ty(pattern);

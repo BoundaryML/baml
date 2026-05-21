@@ -1,0 +1,25 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 40380
+---
+=== TIR2 ===
+function user.irrefutable_pattern(v: int) -> int throws never {
+  { : int
+    let n: int = v : int else { ... }
+      { : never
+        return 0 : 0
+      }
+    n : int
+  }
+  !! 169..170: irrefutable pattern in `let ... else`; the else block is unreachable — use a plain `let` instead
+}
+function user.else_does_not_diverge(v: int | string) -> int throws never {
+  { : int
+    let n: int = v : int | string -> int else { ... }
+      { : 0
+        0 : 0
+      }
+    n : int
+  }
+  !! 340..346: `let ... else` block must diverge (`return`, `throw`, etc.); got type `0`
+}

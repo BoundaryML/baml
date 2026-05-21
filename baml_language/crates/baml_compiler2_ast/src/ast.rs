@@ -743,6 +743,13 @@ pub enum Stmt {
         initializer: Option<ExprId>,
         is_watched: bool,
         origin: LetOrigin,
+        /// `let pat = init else { ... };` — Rust-style let-else. When
+        /// present, the pattern is required to be refutable and the block
+        /// must diverge (type `never`). Bindings from the pattern flow into
+        /// the rest of the enclosing scope on the success path. The block
+        /// is kept here (not desugared to `match`) so MIR can lower
+        /// let-else as a distinct construct, mirroring `Expr::Is`.
+        else_block: Option<ExprId>,
     },
     While {
         condition: ExprId,

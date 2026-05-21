@@ -2082,11 +2082,24 @@ impl<'db> TypeInferenceBuilder<'db> {
             Stmt::Let {
                 pattern,
                 initializer,
+                else_block,
                 ..
             } => {
                 if let Some(expr) = initializer {
                     Self::collect_default_expr_forward_references(
                         *expr,
+                        body,
+                        later_params,
+                        shadowed,
+                        refs,
+                    );
+                }
+                // The else block of a let-else doesn't see the pattern's
+                // bindings — they're introduced only on the success path.
+                // Walk it before pushing the bindings.
+                if let Some(else_id) = else_block {
+                    Self::collect_default_expr_forward_references(
+                        *else_id,
                         body,
                         later_params,
                         shadowed,
@@ -3682,14 +3695,26 @@ impl<'db> TypeInferenceBuilder<'db> {
             Stmt::Let {
                 pattern,
                 initializer,
+                else_block,
                 ..
             } => {
-                let (init_result_ty, pattern_subject_ty, declared_for_scope) =
-                    if let Some(init) = *initializer {
-                        let expected = self.pattern_expected_ty(*pattern, body);
-                        let is_structural_pattern =
-                            Self::pattern_contains_structural_syntax(*pattern, body);
-                        let expected_for_check = match expected {
+                let has_else = else_block.is_some();
+                let (init_result_ty, pattern_subject_ty, declared_for_scope) = if let Some(init) =
+                    *initializer
+                {
+                    let expected = self.pattern_expected_ty(*pattern, body);
+                    let is_structural_pattern =
+                        Self::pattern_contains_structural_syntax(*pattern, body);
+                    // For `let ... else`, the pattern is refutable, so
+                    // the initializer's type is *wider* than the
+                    // pattern's natural type — we must not use the
+                    // pattern type as the expected type for the init.
+                    // Just infer the init and let pattern lowering test
+                    // the runtime narrowing.
+                    let expected_for_check = if has_else {
+                        None
+                    } else {
+                        match expected {
                             Some(PatternExpectedTy::Full(ty)) if !is_structural_pattern => Some(ty),
                             Some(PatternExpectedTy::Partial(ty))
                                 if Self::expr_accepts_partial_pattern_expected(init, body) =>
@@ -3698,51 +3723,88 @@ impl<'db> TypeInferenceBuilder<'db> {
                             }
                             Some(PatternExpectedTy::Full(_) | PatternExpectedTy::Partial(_))
                             | None => None,
-                        };
-                        let ty = if let Some(expected) = expected_for_check.as_ref()
-                            && !matches!(expected, Ty::Void { .. })
-                        {
-                            self.check_expr(init, body, expected)
-                        } else {
-                            self.infer_expr(init, body)
-                        };
-                        if matches!(ty, Ty::Void { .. }) {
-                            let err = if matches!(
-                                body.exprs[init],
-                                Expr::Call { .. } | Expr::OptionalCall { .. }
-                            ) {
-                                TirTypeError::VoidFunctionResultUsed
-                            } else {
-                                TirTypeError::VoidUsedAsValue
-                            };
-                            self.context.report_simple(err, init);
                         }
-                        if let Some(expected) = expected_for_check {
-                            (Some(ty), Some(expected.clone()), Some(expected))
-                        } else {
-                            let flow_ty = ty.clone().widen_fresh().make_evolving();
-                            (Some(ty), Some(flow_ty), None)
-                        }
-                    } else {
-                        (None, None, None)
                     };
+                    let ty = if let Some(expected) = expected_for_check.as_ref()
+                        && !matches!(expected, Ty::Void { .. })
+                    {
+                        self.check_expr(init, body, expected)
+                    } else {
+                        self.infer_expr(init, body)
+                    };
+                    if matches!(ty, Ty::Void { .. }) {
+                        let err = if matches!(
+                            body.exprs[init],
+                            Expr::Call { .. } | Expr::OptionalCall { .. }
+                        ) {
+                            TirTypeError::VoidFunctionResultUsed
+                        } else {
+                            TirTypeError::VoidUsedAsValue
+                        };
+                        self.context.report_simple(err, init);
+                    }
+                    if let Some(expected) = expected_for_check {
+                        (Some(ty), Some(expected.clone()), Some(expected))
+                    } else {
+                        let flow_ty = ty.clone().widen_fresh().make_evolving();
+                        (Some(ty), Some(flow_ty), None)
+                    }
+                } else {
+                    (None, None, None)
+                };
 
-                let diverges = matches!(init_result_ty, Some(Ty::Never { .. }));
-                if !diverges && let Some(flow_ty) = pattern_subject_ty {
+                let init_diverges = matches!(init_result_ty, Some(Ty::Never { .. }));
+                if !init_diverges && let Some(flow_ty) = pattern_subject_ty {
                     let result =
                         self.analyze_and_lower(*pattern, &flow_ty, body, initializer.unwrap());
+                    // For plain `let`, enforce irrefutability. For
+                    // `let ... else`, the pattern is allowed (and required)
+                    // to be refutable — we report the inverse below.
+                    let irrefutable_ctx = if has_else {
+                        None
+                    } else {
+                        Some(IrrefutablePatternContext {
+                            context: IrrefutableContextKind::Let,
+                            fallback_expr: *initializer,
+                        })
+                    };
                     self.finalize_pattern_lowering(
                         *pattern,
                         &result,
                         declared_for_scope.as_ref(),
-                        Some(IrrefutablePatternContext {
-                            context: IrrefutableContextKind::Let,
-                            fallback_expr: *initializer,
-                        }),
+                        irrefutable_ctx,
                         &flow_ty,
                     );
+
+                    if has_else {
+                        // Irrefutable pattern + else block → else is dead.
+                        let is_irrefutable = crate::pattern_lowering::check_irrefutable(
+                            self,
+                            &result.dpat,
+                            self.matrix_normalize_scrut(&flow_ty),
+                        )
+                        .is_ok();
+                        if is_irrefutable {
+                            self.context.report_simple(
+                                TirTypeError::LetElsePatternIrrefutable,
+                                initializer.unwrap(),
+                            );
+                        }
+                    }
                 }
-                diverges
+
+                // Type-check the else block (if present). It must diverge.
+                if let Some(else_id) = *else_block {
+                    let else_ty = self.infer_expr(else_id, body);
+                    if !matches!(else_ty, Ty::Never { .. }) {
+                        self.context.report_simple(
+                            TirTypeError::LetElseBlockMustDiverge { actual: else_ty },
+                            else_id,
+                        );
+                    }
+                }
+
+                init_diverges
             }
             Stmt::Return(expr) => {
                 if let Some(e) = expr {
@@ -5270,9 +5332,16 @@ impl<'db> TypeInferenceBuilder<'db> {
     ) {
         match &body.stmts[stmt_id] {
             Stmt::Expr(expr_id) => self.collect_throw_facts_from_expr(*expr_id, body, out),
-            Stmt::Let { initializer, .. } => {
+            Stmt::Let {
+                initializer,
+                else_block,
+                ..
+            } => {
                 if let Some(init) = initializer {
                     self.collect_throw_facts_from_expr(*init, body, out);
+                }
+                if let Some(else_id) = else_block {
+                    self.collect_throw_facts_from_expr(*else_id, body, out);
                 }
             }
             Stmt::While {

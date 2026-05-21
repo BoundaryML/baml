@@ -134,6 +134,13 @@ pub enum TirTypeError {
     RefutablePatternInLet {
         context: crate::builder::IrrefutableContextKind,
     },
+    /// A `let ... else { }` statement uses a pattern that is irrefutable
+    /// against the initializer's type, making the else block unreachable.
+    LetElsePatternIrrefutable,
+    /// The `else { }` block of a `let ... else` must diverge — every path
+    /// out must `return`, `throw`, `break`, `continue`, or otherwise end
+    /// in a value of type `never`.
+    LetElseBlockMustDiverge { actual: Ty },
     /// Catch binding cannot be typed as `any` or `unknown`.
     InvalidCatchBindingType { type_name: String },
     /// Inferred escaping throws are not covered by the declared throws contract.
@@ -375,6 +382,14 @@ impl fmt::Display for TirTypeError {
                 f,
                 "refutable pattern in {} binding; refutable patterns belong in `match`",
                 context.as_str()
+            ),
+            TirTypeError::LetElsePatternIrrefutable => write!(
+                f,
+                "irrefutable pattern in `let ... else`; the else block is unreachable — use a plain `let` instead"
+            ),
+            TirTypeError::LetElseBlockMustDiverge { actual } => write!(
+                f,
+                "`let ... else` block must diverge (`return`, `throw`, etc.); got type `{actual}`"
             ),
             TirTypeError::InvalidCatchBindingType { type_name } => write!(
                 f,

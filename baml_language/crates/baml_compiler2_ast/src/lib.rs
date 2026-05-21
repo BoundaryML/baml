@@ -318,6 +318,53 @@ mod tests {
     }
 
     #[test]
+    fn ast_let_else_populates_else_block() {
+        // `let pat = init else { ... };` lowers to a single `Stmt::Let`
+        // with `else_block: Some(_)`. Plain `let` keeps `else_block: None`.
+        let source = r#"
+function f(x: int) -> int {
+  let v: int = x else { return 0; };
+  let y = 1;
+  v
+}
+"#;
+        let function = first_function(parse_and_lower(source));
+        let Some(FunctionBodyDef::Expr(body, _source_map)) = &function.body else {
+            panic!("expected expression body");
+        };
+        let block_id = body.root_expr.expect("expected body root expression");
+        let Expr::Block { stmts, .. } = &body.exprs[block_id] else {
+            panic!("expected block root, got {:?}", body.exprs[block_id]);
+        };
+
+        let mut found_let_else = false;
+        let mut found_plain_let = false;
+        for stmt_id in stmts {
+            if let Stmt::Let {
+                else_block,
+                initializer,
+                ..
+            } = &body.stmts[*stmt_id]
+            {
+                assert!(initializer.is_some(), "let must have initializer");
+                if else_block.is_some() {
+                    found_let_else = true;
+                    // The else block is an Expr::Block.
+                    let else_id = else_block.unwrap();
+                    assert!(
+                        matches!(&body.exprs[else_id], Expr::Block { .. }),
+                        "let-else else_block must be a Block expr"
+                    );
+                } else {
+                    found_plain_let = true;
+                }
+            }
+        }
+        assert!(found_let_else, "expected one let-else stmt");
+        assert!(found_plain_let, "expected one plain let stmt");
+    }
+
+    #[test]
     fn ast_function_def_has_generic_params() {
         let source = r#"
 function deep_copy<T>(value: T) -> T {

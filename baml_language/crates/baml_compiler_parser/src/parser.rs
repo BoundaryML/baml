@@ -2960,6 +2960,19 @@ impl<'a> Parser<'a> {
                 p.error_unexpected_token("initializer (=)".to_string());
             }
 
+            // Optional `else { ... }` tail — Rust-style let-else. The block
+            // is attached as a trailing BLOCK_EXPR child of LET_STMT; AST
+            // lowering detects let-else by the presence of this second
+            // expression sibling.
+            if p.at(TokenKind::Else) {
+                p.bump(); // `else`
+                if p.at(TokenKind::LBrace) {
+                    p.parse_block_expr();
+                } else {
+                    p.error_unexpected_token("'{' after 'else'".to_string());
+                }
+            }
+
             // Consume trailing semicolon
             p.eat(TokenKind::Semicolon);
         });
@@ -5839,6 +5852,83 @@ mod tests {
             errors.is_empty(),
             "expected no parse errors, got: {errors:#?}"
         );
+    }
+
+    #[test]
+    fn let_else_parses_as_let_stmt_with_block_tail() {
+        // `let pat = expr else { ... };` should produce a single LET_STMT
+        // with a trailing BLOCK_EXPR child after the initializer expression.
+        // We don't introduce a new syntax kind — consumers detect let-else
+        // by the presence of the second expression child. Whether the
+        // pattern is actually refutable is a TIR concern, not parser.
+        let source = r#"
+function f(x: int) -> int {
+  let v: int = x else { return 0; };
+  v
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let let_stmt = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::LET_STMT)
+            .expect("expected LET_STMT");
+        // KW_ELSE must appear as a token under LET_STMT.
+        let has_else = let_stmt.children_with_tokens().any(|elt| {
+            elt.as_token()
+                .map(|t| t.kind() == SyntaxKind::KW_ELSE)
+                .unwrap_or(false)
+        });
+        assert!(has_else, "expected KW_ELSE token inside LET_STMT");
+        // And the BLOCK_EXPR for the else body should be a child node.
+        let block_count = let_stmt
+            .children()
+            .filter(|c| c.kind() == SyntaxKind::BLOCK_EXPR)
+            .count();
+        assert_eq!(
+            block_count, 1,
+            "expected one BLOCK_EXPR child for else body"
+        );
+    }
+
+    #[test]
+    fn let_else_missing_block_reports_error() {
+        // `let x = 1 else;` is invalid — the else must be followed by `{`.
+        let source = r#"
+function f() -> int {
+  let x = 1 else ;
+  x
+}
+"#;
+        let (_root, errors) = parse_source(source);
+        assert!(
+            !errors.is_empty(),
+            "expected a parse error for else without block"
+        );
+    }
+
+    #[test]
+    fn plain_let_still_has_no_else_block() {
+        // Regression: a regular `let x = 1;` must not pick up a stray else
+        // from a following construct.
+        let source = r#"
+function f() -> int {
+  let x = 1;
+  if (x == 1) { 1 } else { 2 }
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let let_stmt = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::LET_STMT)
+            .expect("expected LET_STMT");
+        let has_else = let_stmt.children_with_tokens().any(|elt| {
+            elt.as_token()
+                .map(|t| t.kind() == SyntaxKind::KW_ELSE)
+                .unwrap_or(false)
+        });
+        assert!(!has_else, "plain let should not consume the if's else");
     }
 
     #[test]

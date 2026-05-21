@@ -12,7 +12,14 @@ use crate::{
 };
 
 /// Does not correspond to a specific [`SyntaxKind`], but contains all possible statements.
+//
+// The `For` variant is the largest (~600 B); adding `LetStmt.else_branch`
+// brought `Let` close enough that clippy's `large_enum_variant` fires.
+// All these statement structs are formatter-side mirrors of the CST and
+// are constructed once per format pass, so the size delta doesn't
+// matter — boxing every variant would be more code for no gain.
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum Statement {
     /// Assignment operations are parsed as binary expressions.
     ///
@@ -181,6 +188,10 @@ pub struct LetStmt {
     pub let_keyword: Option<t::Let>,
     pub pattern: super::MatchPattern,
     pub initializer: Option<(t::Equals, Expression)>,
+    /// `let pat = init else { ... };` — Rust-style let-else. The block
+    /// runs when the pattern doesn't match and must diverge (TIR
+    /// enforces).
+    pub else_branch: Option<(t::Else, BlockExpr)>,
     /// Not required in some contexts like for-let loops
     pub semicolon: Option<t::Semicolon>,
 }
@@ -218,6 +229,16 @@ impl FromCST for LetStmt {
             None
         };
 
+        // Optional `else { ... }` for Rust-style let-else.
+        let else_branch = if let Some(else_elem) = it.next_if_kind(SyntaxKind::KW_ELSE) {
+            let else_token = t::Else::from_cst(else_elem)?;
+            let block_node = it.expect_node("let-else block")?;
+            let block = BlockExpr::from_cst(SyntaxElement::Node(block_node))?;
+            Some((else_token, block))
+        } else {
+            None
+        };
+
         let semicolon = it.next().map(t::Semicolon::from_cst).transpose()?;
         it.expect_end()?;
 
@@ -226,6 +247,7 @@ impl FromCST for LetStmt {
             let_keyword,
             pattern,
             initializer,
+            else_branch,
             semicolon,
         })
     }
@@ -260,11 +282,18 @@ impl Printable for LetStmt {
             printer.print_trivia_squished(equals_trailing);
             let expr_leading = printer.trivia.get_leading_for_element(expr);
             printer.print_trivia_squished(expr_leading);
-            multi_lined |= printer.print(expr, shape).multi_lined;
-            if self.semicolon.is_some() {
+            multi_lined |= printer.print(expr, shape.clone()).multi_lined;
+            if self.else_branch.is_none() && self.semicolon.is_some() {
                 let expr_trailing = printer.trivia.get_trailing_for_element(expr);
                 printer.print_trivia_squished(expr_trailing);
             }
+        }
+
+        if let Some((else_token, block)) = &self.else_branch {
+            printer.print_str(" ");
+            printer.print_raw_token(else_token);
+            printer.print_str(" ");
+            multi_lined |= printer.print(block, shape).multi_lined;
         }
 
         if let Some(semicolon) = &self.semicolon {
@@ -288,6 +317,9 @@ impl Printable for LetStmt {
     fn rightmost_token(&self) -> TextRange {
         if let Some(semicolon) = &self.semicolon {
             return semicolon.span();
+        }
+        if let Some((_, block)) = &self.else_branch {
+            return block.rightmost_token();
         }
         if let Some((_, expr)) = &self.initializer {
             return expr.rightmost_token();

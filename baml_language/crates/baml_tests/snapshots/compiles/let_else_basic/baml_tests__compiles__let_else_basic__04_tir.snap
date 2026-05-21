@@ -1,0 +1,36 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 14495
+---
+=== TIR2 ===
+function user.narrow_or_default(v: int | string) -> int throws never {
+  { : int
+    let n: int = v : int | string -> int else { ... }
+      { : never
+        return 0 : 0
+      }
+    n : int
+  }
+}
+function user.chain_two(v: int | string, w: int | string) -> int throws never {
+  { : int
+    let a: int = v : int | string -> int else { ... }
+      { : never
+        return Neg 1 : -1
+      }
+    let b: int = w : int | string -> int else { ... }
+      { : never
+        return Neg 2 : -2
+      }
+    a + b : int
+  }
+}
+function user.narrow_or_throw(v: int | string) -> int throws never {
+  { : int
+    let n: int = v : int | string -> int else { ... }
+      { : never
+        throw "expected int" : "expected int"
+      }
+    n : int
+  }
+}

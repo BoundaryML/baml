@@ -641,6 +641,7 @@ pub(crate) mod support {
             Stmt::Let {
                 pattern,
                 initializer,
+                else_block,
                 ..
             } => {
                 let pat = pat_desc(*pattern, body);
@@ -654,11 +655,19 @@ pub(crate) mod support {
                         }
                     })
                     .unwrap_or_default();
-                writeln!(output, "{pad}let {pat}{init}").ok();
+                let else_marker = if else_block.is_some() {
+                    " else { ... }"
+                } else {
+                    ""
+                };
+                writeln!(output, "{pad}let {pat}{init}{else_marker}").ok();
                 if let Some(e) = *initializer
                     && is_compound(&body.exprs[e])
                 {
                     render_expr_body_untyped(body, e, indent + 2, output);
+                }
+                if let Some(eb) = *else_block {
+                    render_expr_body_untyped(body, eb, indent + 2, output);
                 }
             }
             Stmt::Expr(expr_id) => {
@@ -769,9 +778,15 @@ pub(crate) mod support {
             Stmt::Let {
                 pattern,
                 initializer,
+                else_block,
                 ..
             } => {
                 let pat_name = pat_desc(*pattern, body);
+                let else_marker = if else_block.is_some() {
+                    " else { ... }"
+                } else {
+                    ""
+                };
                 if let Some(init) = initializer {
                     let init_ty = expr_ty(inference, *init);
                     let binding_ty = inference.binding_type(*pattern).map(|t| t.to_string());
@@ -780,14 +795,21 @@ pub(crate) mod support {
                         _ => init_ty,
                     };
                     if is_compound(&body.exprs[*init]) {
-                        writeln!(output, "{pad}let {pat_name} = : {ty_display}").ok();
+                        writeln!(output, "{pad}let {pat_name} = : {ty_display}{else_marker}").ok();
                         render_expr(*init, body, inference, indent + 2, output);
                     } else {
                         let init_desc = expr_desc_rich(*init, body, inference);
-                        writeln!(output, "{pad}let {pat_name} = {init_desc} : {ty_display}").ok();
+                        writeln!(
+                            output,
+                            "{pad}let {pat_name} = {init_desc} : {ty_display}{else_marker}"
+                        )
+                        .ok();
                     }
                 } else {
-                    writeln!(output, "{pad}let {pat_name}").ok();
+                    writeln!(output, "{pad}let {pat_name}{else_marker}").ok();
+                }
+                if let Some(eb) = *else_block {
+                    render_expr(eb, body, inference, indent + 2, output);
                 }
             }
             Stmt::Return(Some(expr_id)) => {
@@ -1680,6 +1702,7 @@ pub(crate) mod support {
                 Stmt::Let {
                     pattern,
                     initializer,
+                    else_block,
                     ..
                 } => {
                     // The annotation is now part of the pattern (a `Chain`
@@ -1688,7 +1711,12 @@ pub(crate) mod support {
                     let init = initializer
                         .map(|e| format!(" = {}", expr_desc_hir(e, body, prefix, local_type_names)))
                         .unwrap_or_default();
-                    format!("let {pat}{init}")
+                    let else_marker = if else_block.is_some() {
+                        " else { ... }"
+                    } else {
+                        ""
+                    };
+                    format!("let {pat}{init}{else_marker}")
                 }
                 Stmt::Return(Some(expr_id)) => {
                     format!(

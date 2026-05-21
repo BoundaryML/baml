@@ -1,0 +1,64 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 14665
+---
+function user.chain_two(v: int | string, w: int | string) -> int {
+    load_var v
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const -1
+    jump L4
+
+  L1:
+    load_var w
+    is_type int
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_const -2
+    jump L4
+
+  L3:
+    load_var v
+    load_var w
+    add_int
+
+  L4:
+    return
+}
+
+function user.narrow_or_default(v: int | string) -> int {
+    load_var v
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    jump L2
+
+  L1:
+    load_var v
+
+  L2:
+    return
+}
+
+function user.narrow_or_throw(v: int | string) -> int {
+    load_var v
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "expected int"
+    throw
+
+  L1:
+    load_var v
+    return
+}

@@ -348,10 +348,18 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::Stmt::Let {
                 pattern,
                 initializer,
+                else_block,
                 ..
             } => {
                 if let Some(initializer) = initializer {
                     self.walk_expr(*initializer, body, source_map, true);
+                }
+                // For `let pat = init else { ... };`, the else block runs
+                // when the pattern doesn't match — so it cannot see the
+                // pattern's bindings. Walk the else block before
+                // registering the pattern locals.
+                if let Some(else_id) = else_block {
+                    self.walk_expr(*else_id, body, source_map, true);
                 }
                 self.register_local_pattern(
                     *pattern,

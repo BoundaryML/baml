@@ -1298,6 +1298,8 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::GenericClassDestructureRequiresTypeArgs { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::RestSubPatternNotSupported => DiagnosticId::TypeMismatch,
         TirTypeError::RefutablePatternInLet { .. } => DiagnosticId::RefutablePatternInLet,
+        TirTypeError::LetElsePatternIrrefutable => DiagnosticId::RefutablePatternInLet,
+        TirTypeError::LetElseBlockMustDiverge { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::InvalidCatchBindingType { .. } => DiagnosticId::InvalidCatchBindingType,
         TirTypeError::ThrowsContractViolation { .. }
         | TirTypeError::CallbackThrowsContractViolation { .. } => {
