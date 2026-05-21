@@ -15,11 +15,12 @@ def test_root_imports_cleanly():
 
 
 def test_all_namespaces_reachable():
-    import baml_sdk
-    # `ns_` prefix on the baml_src/ directory is stripped by
-    # baml_project; the Python namespace is what's left.
-    for ns in ("ty_variants", "literals", "maps", "complex", "unions", "defaults"):
-        assert hasattr(baml_sdk, ns), f"baml_sdk.{ns} missing"
+    import baml_sdk.ty_variants  # noqa: F401
+    import baml_sdk.literals  # noqa: F401
+    import baml_sdk.maps  # noqa: F401
+    import baml_sdk.complex  # noqa: F401
+    import baml_sdk.unions  # noqa: F401
+    import baml_sdk.defaults  # noqa: F401
 
 
 # ---------- ns_ty_variants: every Ty variant round-trips ----------

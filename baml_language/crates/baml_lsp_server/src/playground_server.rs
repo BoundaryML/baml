@@ -307,7 +307,7 @@ async fn handle_ws_in_message(
                     .await
                 {
                     Ok(result) => {
-                        match bridge_ctypes::external_to_baml_value(&result, &handle_options) {
+                        match bridge_ctypes::external_to_outbound(&result, &handle_options) {
                             Ok(baml_val) => {
                                 let b64 = base64::engine::general_purpose::STANDARD
                                     .encode(baml_val.encode_to_vec());
@@ -365,7 +365,7 @@ async fn handle_ws_in_message(
                 {
                     Ok(result) => {
                         let handle_options = bridge_ctypes::CffiHandleTableOptions::for_wire();
-                        match bridge_ctypes::external_to_baml_value(&result, &handle_options) {
+                        match bridge_ctypes::external_to_outbound(&result, &handle_options) {
                             Ok(baml_val) => {
                                 let b64 = base64::engine::general_purpose::STANDARD
                                     .encode(baml_val.encode_to_vec());

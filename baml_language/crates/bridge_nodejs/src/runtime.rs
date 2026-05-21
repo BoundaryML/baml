@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use bex_project::Bex;
-use bridge_ctypes::{HANDLE_TABLE, external_to_baml_value, kwargs_to_bex_values};
+use bridge_ctypes::{HANDLE_TABLE, external_to_outbound, kwargs_to_bex_values};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use prost::Message;
@@ -77,7 +77,7 @@ impl BamlRuntime {
         // (returned NAPI classes directly, no encode step). bridge_python has the same
         // misclassification. Leaving as-is for parity; fix in both bridges together.
         let handle_options = bridge_ctypes::CffiHandleTableOptions::for_in_process();
-        let baml_value = external_to_baml_value(&result, &handle_options)
+        let baml_value = external_to_outbound(&result, &handle_options)
             .map_err(|e| invalid_argument_error(format!("Failed to encode result: {e}")))?;
 
         Ok(Buffer::from(baml_value.encode_to_vec()))
@@ -124,7 +124,7 @@ impl BamlRuntime {
 
             // FIXME: Same misclassification as the sync path above.
             let handle_options = bridge_ctypes::CffiHandleTableOptions::for_in_process();
-            let baml_value = external_to_baml_value(&result, &handle_options)
+            let baml_value = external_to_outbound(&result, &handle_options)
                 .map_err(|e| invalid_argument_error(format!("Failed to encode result: {e}")))?;
 
             Ok(Buffer::from(baml_value.encode_to_vec()))

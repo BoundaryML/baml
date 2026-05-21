@@ -6,19 +6,9 @@ IR → codegen → import).
 """
 
 
-def test_root_imports_cleanly():
+def test_imports():
     import baml_sdk  # noqa: F401
-
-
-def test_docs_namespace_reachable():
-    import baml_sdk
-
-    # `ns_` prefix on the baml_src/ directory is stripped by
-    # baml_project; the Python namespace is what's left.
-    assert hasattr(baml_sdk, "docs"), "baml_sdk.docs missing"
-
-
-def test_docs_imports_cleanly():
+    import baml_sdk.docs  # noqa: F401
     from baml_sdk.docs import Doc, Note, Priority, Sentiment  # noqa: F401
 
 
@@ -86,7 +76,7 @@ def test_enum_summary_only_omits_members_section_when_no_variant_documented():
     doc = inspect.getdoc(Priority)
     assert doc is not None
     assert doc == (
-        "Pin the \"summary only, no member rollup\" case: this enum has a\n"
+        'Pin the "summary only, no member rollup" case: this enum has a\n'
         "class-level `///` but every variant is bare."
     ), f"got:\n{doc!r}"
     assert "Members:" not in doc, f"Members: section leaked in:\n{doc}"
