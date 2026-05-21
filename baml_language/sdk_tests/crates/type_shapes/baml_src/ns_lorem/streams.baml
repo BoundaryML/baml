@@ -18,30 +18,30 @@ class Box<T> {
   v T
 }
 
-function PassResumeStream(r: Resume$stream) -> Resume$stream {
+function RoundTripResumeStream(r: Resume$stream) -> Resume$stream {
   r
 }
 
-function PassRootFooStream(f: root.Foo$stream) -> root.Foo$stream {
+function RoundTripRootFooStream(f: root.Foo$stream) -> root.Foo$stream {
   f
 }
 
-function PassBamlHttpResponseStream(r: baml.http.Response$stream) -> baml.http.Response$stream {
+function RoundTripBamlHttpResponseStream(r: baml.http.Response$stream) -> baml.http.Response$stream {
   r
 }
 
-function PassBoxOfResumeStream(b: Box<Resume$stream>) -> Box<Resume$stream> {
+function RoundTripBoxOfResumeStream(b: Box<Resume$stream>) -> Box<Resume$stream> {
   b
 }
 
-function PassListOfHttpResponse(xs: baml.http.Response[]) -> baml.http.Response[] {
+function RoundTripListOfHttpResponse(xs: baml.http.Response[]) -> baml.http.Response[] {
   xs
 }
 
-function PassResumeOrHttpResponse(u: Resume | baml.http.Response) -> Resume | baml.http.Response {
+function RoundTripResumeOrHttpResponse(u: Resume | baml.http.Response) -> Resume | baml.http.Response {
   u
 }
 
-function PassResumeOrResumeStream(u: Resume | Resume$stream) -> Resume | Resume$stream {
+function RoundTripResumeOrResumeStream(u: Resume | Resume$stream) -> Resume | Resume$stream {
   u
 }

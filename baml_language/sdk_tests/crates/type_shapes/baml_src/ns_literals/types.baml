@@ -39,3 +39,27 @@ function ReturnLiteralTrue() -> true {
 function ReturnLiteralFalse() -> false {
   false
 }
+
+function RoundTripLiteral42(x: 42) -> 42 {
+  x
+}
+
+function RoundTripLiteralDraft(x: "draft") -> "draft" {
+  x
+}
+
+function RoundTripLiteralEscaped(x: "has \"quotes\"") -> "has \"quotes\"" {
+  x
+}
+
+function RoundTripLiteralTrue(x: true) -> true {
+  x
+}
+
+function RoundTripLiteralFalse(x: false) -> false {
+  x
+}
+
+function RoundTripLiterals(l: Literals) -> Literals {
+  l
+}

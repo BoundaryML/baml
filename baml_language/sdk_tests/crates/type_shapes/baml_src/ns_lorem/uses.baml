@@ -10,14 +10,14 @@
 // case in 18a is misleading; the absolute `root.Foo` form covered above
 // is the only correct way to write it.
 
-function PassResume(r: Resume) -> Resume {
+function RoundTripResume(r: Resume) -> Resume {
   r
 }
 
-function PassRootFoo(f: root.Foo) -> root.Foo {
+function RoundTripRootFoo(f: root.Foo) -> root.Foo {
   f
 }
 
-function PassHttpResponse(r: baml.http.Response) -> baml.http.Response {
+function RoundTripHttpResponse(r: baml.http.Response) -> baml.http.Response {
   r
 }

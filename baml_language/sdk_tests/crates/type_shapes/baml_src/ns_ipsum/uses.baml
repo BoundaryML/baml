@@ -3,6 +3,6 @@
 //
 // BAML cross-namespace refs use the absolute `root.<ns>.<name>` form.
 
-function PassLoremResumeFromIpsum(r: root.lorem.Resume) -> root.lorem.Resume {
+function RoundTripLoremResumeFromIpsum(r: root.lorem.Resume) -> root.lorem.Resume {
   r
 }

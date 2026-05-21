@@ -13,3 +13,7 @@ function MakeIpsum(
 ) -> Ipsum {
   Ipsum { bar1: bar1, bar2: bar2, bar3: bar3 }
 }
+
+function RoundTripIpsum(i: Ipsum) -> Ipsum {
+  i
+}

@@ -9,14 +9,18 @@ class ListContainer {
   union_list (int | string)[]
 }
 
-function PassInts(xs: int[]) -> int[] {
+function RoundTripInts(xs: int[]) -> int[] {
   xs
 }
 
-function PassOptionalStrings(xs: string?[]) -> string?[] {
+function RoundTripOptionalStrings(xs: string?[]) -> string?[] {
   xs
 }
 
-function PassUnionList(xs: (int | string)[]) -> (int | string)[] {
+function RoundTripUnionList(xs: (int | string)[]) -> (int | string)[] {
   xs
+}
+
+function RoundTripListContainer(c: ListContainer) -> ListContainer {
+  c
 }

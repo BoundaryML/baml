@@ -97,15 +97,6 @@ function StreamE2EExtract(text: string) -> string {
 // (`(null | string)[]` and `string`), sidestepping the `Ty::TypeVar →
 // Ty::Void` fallback in `tir2_to_template` that the host-side
 // `test_stream_next_reaches_finished` runs into.
-// Host-side construction of a `Wrapper<string>` so Python can call
-// `.get_value()` on it. Mirrors the host-driven path that
-// `test_stream_next_reaches_finished` takes against `Stream<T, S>` —
-// builds the generic instance on one side, calls the generic instance
-// method from the other.
-function MakeWrapper(text: string) -> Wrapper<string> {
-  Wrapper<string> { value: text }
-}
-
 function StreamE2ECollect(text: string) -> StreamE2ECollectResult {
   let s = StreamE2EExtract$stream(text);
   let next_calls: (null | string)[] = [];

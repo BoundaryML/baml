@@ -57,3 +57,39 @@ class T6 {
   via4 T4?
   via5 T5?
 }
+
+function RoundTripIntBinaryTree(t: IntBinaryTree) -> IntBinaryTree {
+  t
+}
+
+function RoundTripA(a: A) -> A {
+  a
+}
+
+function RoundTripB(b: B) -> B {
+  b
+}
+
+function RoundTripT1(t: T1) -> T1 {
+  t
+}
+
+function RoundTripT2(t: T2) -> T2 {
+  t
+}
+
+function RoundTripT3(t: T3) -> T3 {
+  t
+}
+
+function RoundTripT4(t: T4) -> T4 {
+  t
+}
+
+function RoundTripT5(t: T5) -> T5 {
+  t
+}
+
+function RoundTripT6(t: T6) -> T6 {
+  t
+}

@@ -35,6 +35,30 @@ function ReturnNull() -> null {
   null
 }
 
-function PassUint8Array(b: uint8array) -> uint8array {
+function RoundTripUint8Array(b: uint8array) -> uint8array {
   b
+}
+
+function RoundTripInt(x: int) -> int {
+  x
+}
+
+function RoundTripFloat(x: float) -> float {
+  x
+}
+
+function RoundTripString(x: string) -> string {
+  x
+}
+
+function RoundTripBool(x: bool) -> bool {
+  x
+}
+
+function RoundTripNull(x: null) -> null {
+  x
+}
+
+function RoundTripPrimitives(p: Primitives) -> Primitives {
+  p
 }

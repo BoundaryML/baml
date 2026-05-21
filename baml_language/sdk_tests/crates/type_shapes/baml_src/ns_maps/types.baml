@@ -18,14 +18,26 @@ class MapContainer {
   list_valued map<string, int[]>
 }
 
-function PassSimpleMap(m: map<string, int>) -> map<string, int> {
+function RoundTripSimpleMap(m: map<string, int>) -> map<string, int> {
   m
 }
 
-function PassEnumKeyedMap(m: map<Sentiment, Resume>) -> map<Sentiment, Resume> {
+function RoundTripEnumKeyedMap(m: map<Sentiment, Resume>) -> map<Sentiment, Resume> {
   m
 }
 
-function PassListValuedMap(m: map<string, int[]>) -> map<string, int[]> {
+function RoundTripListValuedMap(m: map<string, int[]>) -> map<string, int[]> {
   m
+}
+
+function RoundTripSentiment(s: Sentiment) -> Sentiment {
+  s
+}
+
+function RoundTripResume(r: Resume) -> Resume {
+  r
+}
+
+function RoundTripMapContainer(c: MapContainer) -> MapContainer {
+  c
 }

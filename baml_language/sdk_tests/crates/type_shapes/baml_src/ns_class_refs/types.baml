@@ -13,3 +13,11 @@ class Outer {
 function MakeOuter(value: int) -> Outer {
   Outer { inner: Inner { value: value } }
 }
+
+function RoundTripInner(i: Inner) -> Inner {
+  i
+}
+
+function RoundTripOuter(o: Outer) -> Outer {
+  o
+}

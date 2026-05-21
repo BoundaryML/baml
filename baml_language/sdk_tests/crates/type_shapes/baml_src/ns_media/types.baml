@@ -26,3 +26,23 @@ function ReturnVideo(url: string, mime: string?) -> video {
 function ReturnPdf(url: string, mime: string?) -> pdf {
   pdf.from_url(url, mime)
 }
+
+function RoundTripImage(x: image) -> image {
+  x
+}
+
+function RoundTripAudio(x: audio) -> audio {
+  x
+}
+
+function RoundTripVideo(x: video) -> video {
+  x
+}
+
+function RoundTripPdf(x: pdf) -> pdf {
+  x
+}
+
+function RoundTripMedia(m: Media) -> Media {
+  m
+}

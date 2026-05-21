@@ -15,3 +15,7 @@ function MakeDeep(
 ) -> Deep {
   Deep { here: here, there: there, further: further, nested: nested }
 }
+
+function RoundTripDeep(d: Deep) -> Deep {
+  d
+}

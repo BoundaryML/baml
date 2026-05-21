@@ -11,3 +11,7 @@ class Foo {
 function MakeFoo(v: int) -> Foo {
   Foo { v: v }
 }
+
+function RoundTripFoo(f: Foo) -> Foo {
+  f
+}

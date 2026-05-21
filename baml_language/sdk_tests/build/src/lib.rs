@@ -153,6 +153,10 @@ pub fn run(crate_name: &str) {
     //    satisfies maturin's `uv pip install --group dev` step.
     let short_name = crate_name.strip_prefix("sdk_test_").unwrap_or(crate_name);
     let pyproject_name = format!("baml-test-{}", short_name.replace('_', "-"));
+    // `pytest-asyncio` + `asyncio_mode = "auto"` are included
+    // universally so `async def test_*` works without per-crate config.
+    // Harmless for crates that have no async tests — the dep is a tiny
+    // wheel and the mode flag is inert without async tests.
     let pyproject_toml = r#"[project]
 name = "__PYPROJECT_NAME__"
 version = "0.1.0"
@@ -162,6 +166,7 @@ dependencies = [
     "pydantic>=2",
     "typing-extensions",
     "pytest>=7",
+    "pytest-asyncio>=0.23",
     "ruff",
     "pyright>=1.1",
 ]
@@ -181,6 +186,7 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v"
+asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 120

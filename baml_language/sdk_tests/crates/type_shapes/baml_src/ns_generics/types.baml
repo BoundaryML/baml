@@ -45,3 +45,29 @@ class NestedGenerics {
 class DifferingInstantiation {
   list GenericLinkedList<Wrapper<int>>
 }
+
+// Generic classes can't be passed without a concrete instantiation, so we
+// pick `<int>` for each to exercise the lowered specialization.
+function RoundTripWrapperInt(w: Wrapper<int>) -> Wrapper<int> {
+  w
+}
+
+function RoundTripGenericLinkedListInt(l: GenericLinkedList<int>) -> GenericLinkedList<int> {
+  l
+}
+
+function RoundTripGenericBinaryTreeInt(t: GenericBinaryTree<int>) -> GenericBinaryTree<int> {
+  t
+}
+
+function RoundTripBoxInt(b: Box<int>) -> Box<int> {
+  b
+}
+
+function RoundTripNestedGenerics(n: NestedGenerics) -> NestedGenerics {
+  n
+}
+
+function RoundTripDifferingInstantiation(d: DifferingInstantiation) -> DifferingInstantiation {
+  d
+}

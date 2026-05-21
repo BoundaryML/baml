@@ -19,20 +19,28 @@ class UnionContainer {
   optional_plus_null T? | string
 }
 
-function PassNullToEnd(u: int | null | string) -> int | null | string {
+function RoundTripNullToEnd(u: int | null | string) -> int | null | string {
   u
 }
 
-function PassDedup(u: int | int | string) -> int | int | string {
+function RoundTripDedup(u: int | int | string) -> int | int | string {
   u
 }
 
 // After dedup the union collapses to a single `int`; codegen renders this
 // as plain `int`, not `typing.Union[int]`.
-function PassSingletonUnwrap(u: int | int) -> int | int {
+function RoundTripSingletonUnwrap(u: int | int) -> int | int {
   u
 }
 
-function PassOptionalPlusNull(u: T? | string) -> T? | string {
+function RoundTripOptionalPlusNull(u: T? | string) -> T? | string {
   u
+}
+
+function RoundTripT(t: T) -> T {
+  t
+}
+
+function RoundTripUnionContainer(c: UnionContainer) -> UnionContainer {
+  c
 }

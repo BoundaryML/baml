@@ -8,3 +8,7 @@ class Bar {
 function MakeFizzFooBar(tag: string, ratio: float) -> Bar {
   Bar { tag: tag, ratio: ratio }
 }
+
+function RoundTripFizzFooBar(b: Bar) -> Bar {
+  b
+}

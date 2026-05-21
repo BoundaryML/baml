@@ -31,3 +31,23 @@ class Node {
 class GNode<T> {
   children GNode<T>[]
 }
+
+function RoundTripOther(o: Other) -> Other {
+  o
+}
+
+function RoundTripRecList(r: RecList) -> RecList {
+  r
+}
+
+function RoundTripRecListWithOther(r: RecListWithOther) -> RecListWithOther {
+  r
+}
+
+function RoundTripNode(n: Node) -> Node {
+  n
+}
+
+function RoundTripGNodeInt(g: GNode<int>) -> GNode<int> {
+  g
+}

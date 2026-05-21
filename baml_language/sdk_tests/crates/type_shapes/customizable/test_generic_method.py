@@ -15,8 +15,8 @@ type, so the union still contains `Ty::TypeVar`, which collapses to
 fails to find a member of `[Void, StreamFinished]` that accepts it.
 
 This test isolates the same pattern in a single-shot call, no LLM, no
-streams, no `StreamFinished` union — just `Wrapper<T>.get_value(self)
--> T` invoked from Python on a `Wrapper<string>` instance. If the
+streams, no `StreamFinished` union — just `WrapperMethods<T>.get_value(self)
+-> T` invoked from Python on a `WrapperMethods<string>` instance. If the
 fix lands, this test goes green without touching the streaming path.
 """
 
@@ -25,18 +25,18 @@ import pytest
 
 @pytest.mark.skip(
     reason="Phase 4 (engine boundary substitution) not yet landed — "
-    "Wrapper<T>.get_value_or_marker's `T | WrapperMarker` return type "
+    "WrapperMethods<T>.get_value_or_marker's `T | WrapperMarker` return type "
     "still lowers `T` to `Ty::Void`, so a concrete `string` payload "
     "fails the union-member check. Tracked in 23a §'Engine boundary "
     "substitution' / 22f. Flip back to enabled when Ty::TypeVar lands."
 )
 def test_generic_wrapper_get_value_or_marker():
-    """`Wrapper<string>.get_value_or_marker()` should still round-trip
+    """`WrapperMethods<string>.get_value_or_marker()` should still round-trip
     a string when the declared return is `T | WrapperMarker`.
 
     Equivalent BAML:
 
-        class Wrapper<T> {
+        class WrapperMethods<T> {
           value T
           function get_value_or_marker(self) -> T | WrapperMarker {
             self.value
@@ -51,24 +51,24 @@ def test_generic_wrapper_get_value_or_marker():
     [Void { ... }, Class(... WrapperMarker ...)]" — the same shape as
     the streaming smoke's error.
     """
-    from baml_sdk.lorem import MakeWrapper
+    from baml_sdk.generics import MakeWrapperMethods
 
-    w = MakeWrapper("hello")
+    w = MakeWrapperMethods("hello")
     assert w.get_value_or_marker() == "hello"
 
 
 def test_generic_wrapper_get_value():
-    """`Wrapper<string>.get_value()` should round-trip a string.
+    """`WrapperMethods<string>.get_value()` should round-trip a string.
 
     Equivalent BAML:
 
-        class Wrapper<T> {
+        class WrapperMethods<T> {
           value T
           function get_value(self) -> T { self.value }
         }
 
-        function MakeWrapper(text: string) -> Wrapper<string> {
-          Wrapper<string> { value: text }
+        function MakeWrapperMethods(text: string) -> WrapperMethods<string> {
+          WrapperMethods<string> { value: text }
         }
 
     On the buggy path the lifted return type for `get_value` is
@@ -77,7 +77,7 @@ def test_generic_wrapper_get_value():
     with the "does not match any member of union [Void { ... }]"
     shape from the issue description.
     """
-    from baml_sdk.lorem import MakeWrapper
+    from baml_sdk.generics import MakeWrapperMethods
 
-    w = MakeWrapper("hello")
+    w = MakeWrapperMethods("hello")
     assert w.get_value() == "hello"

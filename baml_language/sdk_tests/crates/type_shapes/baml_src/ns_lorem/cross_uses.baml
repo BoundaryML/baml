@@ -3,6 +3,6 @@
 //
 // BAML cross-namespace refs use the absolute `root.<ns>.<name>` form.
 
-function PassDeepThingFromLorem(t: root.a.b.Thing) -> root.a.b.Thing {
+function RoundTripDeepThingFromLorem(t: root.a.b.Thing) -> root.a.b.Thing {
   t
 }

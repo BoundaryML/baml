@@ -9,3 +9,7 @@ class Bar {
 function MakeFizzBuzzFooBar(flavor: string, weight: float, active: bool) -> Bar {
   Bar { flavor: flavor, weight: weight, active: active }
 }
+
+function RoundTripFizzBuzzFooBar(b: Bar) -> Bar {
+  b
+}

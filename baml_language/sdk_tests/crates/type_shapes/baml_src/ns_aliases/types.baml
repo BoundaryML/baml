@@ -22,10 +22,14 @@ class AliasContainer {
   rec_field RecList
 }
 
-function PassStringList(s: StringList) -> StringList {
+function RoundTripStringList(s: StringList) -> StringList {
   s
 }
 
-function PassRecList(r: RecList) -> RecList {
+function RoundTripRecList(r: RecList) -> RecList {
   r
+}
+
+function RoundTripAliasContainer(c: AliasContainer) -> AliasContainer {
+  c
 }

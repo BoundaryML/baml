@@ -23,3 +23,15 @@ function PickSentiment(b: bool) -> Sentiment {
 function PickPositive() -> Sentiment.Positive {
   Sentiment.Positive
 }
+
+function RoundTripSentiment(s: Sentiment) -> Sentiment {
+  s
+}
+
+function RoundTripSentimentPositive(s: Sentiment.Positive) -> Sentiment.Positive {
+  s
+}
+
+function RoundTripEnums(e: Enums) -> Enums {
+  e
+}
