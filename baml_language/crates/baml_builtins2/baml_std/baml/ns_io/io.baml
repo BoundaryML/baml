@@ -1,3 +1,4 @@
+/// Reads a line of text from stdin. If `prompt` is provided, it is printed first (without a newline).
 function input(prompt: string?) -> string {
   $rust_io_function
 }

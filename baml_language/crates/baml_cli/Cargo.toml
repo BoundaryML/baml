@@ -17,6 +17,7 @@ doctest = false
 workspace = true
 
 [dependencies]
+baml_builtins2 = { workspace = true }
 baml_db = { workspace = true }
 baml_exec = { workspace = true }
 baml_fmt = { workspace = true }
@@ -43,7 +44,9 @@ indicatif = { workspace = true }
 libsui = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true, features = [ "blocking" ] }
+serde = { workspace = true }
 serde_json = { workspace = true }
+serde_yaml = { workspace = true }
 sha2 = { workspace = true }
 strsim = { workspace = true }
 tar = { workspace = true }

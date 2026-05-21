@@ -1,0 +1,7 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+interface — BAML uses `class` for structured types.
+
+See: baml describe class

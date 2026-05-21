@@ -1,0 +1,245 @@
+class:
+  summary: "Defines a structured data type with named fields."
+  syntax: |
+    class MyClass {
+      field1 string
+      field2 int
+    }
+  details: "Fields can have default values, docstrings, and attributes."
+
+enum:
+  summary: "Defines a type with a fixed set of named variants."
+  syntax: |
+    enum Color {
+      Red,
+      Green,
+      Blue,
+    }
+
+function:
+  summary: "Declares a named callable with typed parameters and a return type."
+  syntax: |
+    function greet(name: string) -> string {
+      "Hello, " + name
+    }
+
+client:
+  summary: "Configures an LLM client with a provider, model, and options."
+  syntax: |
+    client MyClient {
+      provider openai
+      options {
+        model "gpt-4o"
+        temperature 0.7
+      }
+    }
+
+generator:
+  summary: "Configures code generation for a target language."
+  syntax: |
+    generator python {
+      output_type python/pydantic
+      output_dir "../generated"
+    }
+
+test:
+  summary: "Defines a test case for a BAML function."
+  syntax: |
+    test MyTest {
+      functions [ExtractResume]
+      args {
+        text "John Doe, Software Engineer"
+      }
+    }
+
+testset:
+  summary: "Defines a set of test cases that share configuration."
+  syntax: |
+    testset MySuite {
+      functions [ExtractResume]
+      cases [
+        { args { text "case 1" } },
+        { args { text "case 2" } },
+      ]
+    }
+
+template_string:
+  summary: "Defines a reusable prompt template with Jinja2 syntax."
+  syntax: |
+    template_string Greeting(name: string) #"
+      Hello, {{ name }}! How can I help you?
+    "#
+
+retry_policy:
+  summary: "Configures automatic retry behavior for LLM calls."
+  syntax: |
+    retry_policy MyPolicy {
+      max_retries 3
+      strategy {
+        type exponential_backoff
+      }
+    }
+
+type:
+  summary: "Creates a type alias — a new name for an existing type."
+  syntax: |
+    type UserId = string
+    type Result = string | int
+    type MaybeInt = int?
+
+if:
+  summary: "Conditional branching — executes a block if the condition is true."
+  syntax: |
+    if x > 0 {
+      "positive"
+    } else if x == 0 {
+      "zero"
+    } else {
+      "negative"
+    }
+
+else:
+  summary: "The alternative branch of an `if` expression."
+  syntax: |
+    if condition {
+      // true branch
+    } else {
+      // false branch
+    }
+
+for:
+  summary: "Iterates over elements of an array."
+  syntax: |
+    for item in items {
+      process(item)
+    }
+
+while:
+  summary: "Repeats a block as long as the condition is true."
+  syntax: |
+    while count < 10 {
+      count = count + 1
+    }
+
+let:
+  summary: "Binds a value to a name. Use `let` for all variable declarations."
+  syntax: |
+    let name = "Alice"
+    let count = items.length()
+
+in:
+  summary: "Used with `for` loops to iterate over a collection."
+  syntax: |
+    for item in [1, 2, 3] {
+      item
+    }
+
+break:
+  summary: "Exits the innermost `for` or `while` loop immediately."
+  syntax: |
+    for item in items {
+      if item == target {
+        break
+      }
+    }
+
+continue:
+  summary: "Skips the rest of the current loop iteration and continues with the next."
+  syntax: |
+    for item in items {
+      if item.is_empty() {
+        continue
+      }
+      process(item)
+    }
+
+return:
+  summary: "Returns a value from the current function."
+  syntax: |
+    function add(a: int, b: int) -> int {
+      return a + b
+    }
+
+watch:
+  summary: "Observes a stream of values as they arrive."
+  syntax: |
+    watch stream {
+      on_value(value) { process(value) }
+      on_done(final) { handle(final) }
+    }
+
+throw:
+  summary: "Raises an error value, unwinding to the nearest `catch`."
+  syntax: |
+    throw baml.errors.InvalidArgument {
+      message: "value must be positive"
+    }
+
+throws:
+  summary: "Declares that a function may raise an error of the given type."
+  syntax: |
+    function parse(text: string) -> int throws ParseError {
+      // ...
+    }
+
+catch:
+  summary: "Catches a specific error type from a preceding expression."
+  syntax: |
+    let result = risky_call() catch errors.Timeout {
+      default_value
+    }
+
+catch_all:
+  summary: "Catches any error from a preceding expression."
+  syntax: |
+    let result = risky_call() catch_all {
+      fallback_value
+    }
+
+match:
+  summary: "Pattern matching — branches based on the shape or type of a value."
+  syntax: |
+    match value {
+      x is string => handle_string(x),
+      x is int    => handle_int(x),
+    }
+
+is:
+  summary: "Tests whether a value matches a type or pattern."
+  syntax: |
+    if x is string {
+      // x is narrowed to string here
+    }
+
+spawn:
+  summary: "Launches a concurrent task that runs in the background."
+  syntax: |
+    let future = spawn {
+      expensive_computation()
+    }
+    let result = await future
+
+await:
+  summary: "Waits for a spawned future to complete and returns its result."
+  syntax: |
+    let future = spawn { compute() }
+    let result = await future
+
+dynamic:
+  summary: "Marks a class as dynamic — fields can be added at runtime."
+  syntax: |
+    class DynamicConfig dynamic {
+      // fields can be added dynamically
+    }
+
+type_builder:
+  summary: "Marks a class for use with the type builder API."
+  syntax: |
+    class Flexible type_builder {
+      // ...
+    }
+
+with:
+  summary: "Attaches context or configuration to an expression."
+  syntax: |
+    call_llm_function(MyFunc, args) with { client: MyClient }

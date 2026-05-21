@@ -1,6 +1,6 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf, sync::LazyLock};
 
 use anyhow::{Context, Result};
 use baml_db::baml_compiler2_hir;
@@ -9,6 +9,32 @@ use baml_project::ProjectDatabase;
 use clap::Args;
 
 use crate::project_load::load_project_from;
+
+#[derive(serde::Deserialize)]
+struct BamlKeywordDoc {
+    summary: String,
+    #[serde(default)]
+    syntax: Option<String>,
+    #[serde(default)]
+    details: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct TsKeywordDoc {
+    message: String,
+    #[serde(default)]
+    see: Option<String>,
+}
+
+static BAML_KEYWORDS: LazyLock<HashMap<String, BamlKeywordDoc>> = LazyLock::new(|| {
+    serde_yaml::from_str(baml_builtins2::BAML_KEYWORDS_YAML)
+        .expect("failed to parse baml_keywords.yaml")
+});
+
+static TS_KEYWORDS: LazyLock<HashMap<String, TsKeywordDoc>> = LazyLock::new(|| {
+    serde_yaml::from_str(baml_builtins2::TS_KEYWORDS_YAML)
+        .expect("failed to parse ts_keywords.yaml")
+});
 
 #[derive(Args, Clone, Debug)]
 pub struct DescribeArgs {
@@ -136,6 +162,17 @@ pub fn dispatch<'db>(db: &'db ProjectDatabase, name: &str) -> Option<ResolvedTar
         return Some(ResolvedTarget::Package(user_pkg));
     }
 
+    // Check for keyword (BAML or TS/JS crosswalk) before package routing.
+    if BAML_KEYWORDS.contains_key(name) || TS_KEYWORDS.contains_key(name) {
+        return Some(ResolvedTarget::Keyword(name.to_string()));
+    }
+
+    // Force user-package resolution with `root.` prefix.
+    if let Some(rest) = name.strip_prefix("root.") {
+        let user_pkg = baml_compiler2_hir::package::PackageId::new(db, baml_db::Name::new("user"));
+        return baml_lsp2_actions::resolve_target(db, user_pkg, rest);
+    }
+
     let (first, rest) = name.split_once('.').unwrap_or((name, ""));
 
     // Builtin package shadows user namespace with same name.
@@ -173,6 +210,19 @@ impl DescribeArgs {
         let target = dispatch(&db, name);
 
         match target {
+            Some(ResolvedTarget::Keyword(ref kw)) => {
+                if self.json {
+                    let json = render_keyword_json(kw);
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&json)
+                            .context("Failed to serialize keyword output as JSON")?
+                    );
+                } else {
+                    render_keyword(kw);
+                }
+                Ok(crate::ExitCode::Success)
+            }
             Some(ResolvedTarget::Package(pkg)) => {
                 let entries = baml_lsp2_actions::list_package_items(&db, pkg);
                 if entries.is_empty() {
@@ -187,6 +237,24 @@ impl DescribeArgs {
                     );
                 } else {
                     render_listing(&entries, &from);
+                }
+                // Check for name collision: does the user also have an item
+                // matching the package name? Only hint when the resolved package
+                // is a builtin (i.e., the bare name matches a non-user package).
+                let pkg_name = name.split('.').next().unwrap_or(name);
+                let builtin_names = baml_lsp2_actions::non_user_package_names(&db);
+                if builtin_names.contains(pkg_name) {
+                    let user_pkg = baml_compiler2_hir::package::PackageId::new(
+                        &db,
+                        baml_db::Name::new("user"),
+                    );
+                    if baml_lsp2_actions::resolve_target(&db, user_pkg, pkg_name).is_some() {
+                        eprintln!();
+                        eprintln!(
+                            "Note: your project also defines `{pkg_name}`. \
+                             Use `baml describe root.{pkg_name}` to see your definition."
+                        );
+                    }
                 }
                 Ok(crate::ExitCode::Success)
             }
@@ -307,6 +375,58 @@ impl DescribeArgs {
     }
 }
 
+/// Render keyword documentation to a writer.
+pub fn write_keyword(w: &mut impl std::io::Write, name: &str) -> std::io::Result<()> {
+    if let Some(doc) = BAML_KEYWORDS.get(name) {
+        writeln!(w, "{name} — {}", doc.summary)?;
+        if let Some(ref syntax) = doc.syntax {
+            writeln!(w)?;
+            writeln!(w, "Syntax:")?;
+            for line in syntax.trim_end().lines() {
+                writeln!(w, "  {line}")?;
+            }
+        }
+        if let Some(ref details) = doc.details {
+            writeln!(w)?;
+            writeln!(w, "{details}")?;
+        }
+    } else if let Some(doc) = TS_KEYWORDS.get(name) {
+        writeln!(w, "{name} — {}", doc.message)?;
+        if let Some(ref see) = doc.see {
+            writeln!(w)?;
+            writeln!(w, "See: baml describe {see}")?;
+        }
+    }
+    Ok(())
+}
+
+/// Render keyword documentation to stdout.
+fn render_keyword(name: &str) {
+    let _ = write_keyword(&mut std::io::stdout(), name);
+}
+
+/// Render keyword documentation as JSON.
+fn render_keyword_json(name: &str) -> serde_json::Value {
+    if let Some(doc) = BAML_KEYWORDS.get(name) {
+        serde_json::json!({
+            "type": "keyword",
+            "name": name,
+            "summary": doc.summary,
+            "syntax": doc.syntax,
+            "details": doc.details,
+        })
+    } else if let Some(doc) = TS_KEYWORDS.get(name) {
+        serde_json::json!({
+            "type": "crosswalk",
+            "name": name,
+            "message": doc.message,
+            "see": doc.see,
+        })
+    } else {
+        serde_json::json!(null)
+    }
+}
+
 /// Render a SymbolDescription to stdout with budget-based output.
 pub fn render_description(
     db: &ProjectDatabase,
@@ -358,6 +478,7 @@ pub fn write_description(
     if !is_local {
         writeln!(w)?;
         let available_for_body = budget.saturating_sub(lines_used);
+        let was_truncated = body_lines.len() > available_for_body;
         if body_lines.len() <= available_for_body {
             for line in &body_lines {
                 writeln!(w, "{line}")?;
@@ -375,6 +496,16 @@ pub fn write_description(
                 writeln!(w, "{line}")?;
             }
             lines_used += elided.lines().count();
+        }
+        if was_truncated {
+            writeln!(w)?;
+            writeln!(
+                w,
+                "[INFO] Showing {shown} of {total} lines. Use --budget {needed} for full output.",
+                shown = available_for_body.min(body_lines.len()),
+                total = body_lines.len(),
+                needed = body_lines.len() + 1,
+            )?;
         }
     }
 
@@ -580,7 +711,7 @@ fn render_body_with_context(
     let remaining_budget = available_budget.saturating_sub(lines_printed + 2); // reserve for skip markers
     if remaining_budget == 0 {
         if total_lines > 1 {
-            println!("  ... skipped {} lines ...", total_lines - 1);
+            println!("  [... skipped {} lines ...]", total_lines - 1);
             lines_printed += 1;
         }
         return lines_printed;
@@ -594,7 +725,7 @@ fn render_body_with_context(
             lines_printed += 1;
         }
         if end < total_lines {
-            println!("  ... skipped {} lines ...", total_lines - end);
+            println!("  [... skipped {} lines ...]", total_lines - end);
             lines_printed += 1;
         }
         return lines_printed;
@@ -607,7 +738,7 @@ fn render_body_with_context(
 
     // Print skip marker if there's a gap after the header.
     if context_start > 1 {
-        println!("  ... skipped {} lines ...", context_start - 1);
+        println!("  [... skipped {} lines ...]", context_start - 1);
         lines_printed += 1;
     }
 
@@ -619,7 +750,7 @@ fn render_body_with_context(
 
     // Print skip marker if there's more after context.
     if context_end < total_lines {
-        println!("  ... skipped {} lines ...", total_lines - context_end);
+        println!("  [... skipped {} lines ...]", total_lines - context_end);
         lines_printed += 1;
     }
 
@@ -729,7 +860,7 @@ pub fn truncate_body(body_lines: &[&str], available_lines: usize) -> Vec<String>
                     // Detect indentation from the current line.
                     let indent = line.len() - line.trim_start().len();
                     let indent_str: String = line.chars().take(indent).collect();
-                    result.push(format!("{}... skipped {} lines ...", indent_str, skipped));
+                    result.push(format!("{}[... skipped {} lines ...]", indent_str, skipped));
                 }
             }
             result.push(line.to_string());

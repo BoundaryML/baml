@@ -1,4 +1,6 @@
+/// A 64-bit signed integer (i64). Range: -2^63 to 2^63-1.
 class Int {
+  /// Serializes this integer to a JSON number.
   function to_json(self) -> baml.json.json {
     $rust_function
   }

@@ -184,6 +184,7 @@ salsa = { git = "https://github.com/salsa-rs/salsa.git", rev = "cdd0b85516a52c18
 serde = { version = "1.0.197", features = [ "derive" ] }
 serde-wasm-bindgen = "0.6"
 serde_json = { version = "1.0.113", features = [ "preserve_order" ] }
+serde_yaml = "0.9"
 similar = { version = "2.4.0", features = [ "inline" ] }
 smol_str = { version = "0.3", features = [ "serde" ] }
 strsim = { version = "0.11.1" }

@@ -29,6 +29,8 @@ class PlannerState {
   }
 }
 
+/// Renders the Jinja prompt template for `function_name` with the given `args` using `client`'s configuration.
+/// Returns the specialized `PromptAst` ready to be sent to the LLM provider.
 function render_prompt(client: Client, function_name: string, args: map<string, unknown>) -> PromptAst {
   let jinja_string = get_jinja_template(function_name);
   let return_type = get_return_type(function_name);
