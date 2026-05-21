@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [hir] Error: Duplicate field `age` in class destructure pattern
+  [hir] error: Duplicate field `age` in class destructure pattern
     ╭─[ patterns_class_destructure.baml:42:9 ]
     │
  41 │         age: let first,
@@ -15,7 +15,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0012
 ────╯
 
-  [type] Error: unresolved name: first
+  [type] error: unresolved name: first
     ╭─[ patterns_class_destructure.baml:48:5 ]
     │
  48 │     first + second
@@ -25,7 +25,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0003
 ────╯
 
-  [hir] Error: Duplicate field `age` in class destructure pattern
+  [hir] error: Duplicate field `age` in class destructure pattern
     ╭─[ patterns_class_destructure.baml:53:26 ]
     │
  53 │         Person { age: _, age: _ } => 1
@@ -37,7 +37,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0012
 ────╯
 
-  [hir] Error: Duplicate binding `age` in pattern
+  [hir] error: Duplicate binding `age` in pattern
     ╭─[ patterns_class_destructure.baml:60:22 ]
     │
  58 │ ╭─▶     let Person {
@@ -51,7 +51,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │     Note: Error code: E0094
 ────╯
 
-  [hir] Error: Duplicate binding `field` in pattern
+  [hir] error: Duplicate binding `field` in pattern
     ╭─[ patterns_class_destructure.baml:71:42 ]
     │
  71 │         field: let field: SameNameInner { field }
@@ -63,7 +63,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0094
 ────╯
 
-  [hir] Error: Duplicate binding `field` in pattern
+  [hir] error: Duplicate binding `field` in pattern
     ╭─[ patterns_class_destructure.baml:82:31 ]
     │
  81 │         field: SameNameInner { field },
@@ -76,7 +76,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0094
 ────╯
 
-  [type] Error: unreachable arm
+  [type] error: unreachable arm
      ╭─[ patterns_class_destructure.baml:104:14 ]
      │
  104 │         _ => 0
@@ -86,7 +86,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0063
 ─────╯
 
-  [type] Error: unresolved name: MissingClass
+  [type] error: unresolved name: MissingClass
      ╭─[ patterns_class_destructure.baml:108:55 ]
      │
  108 │ ╭─▶ function class_destructure_unresolved_class() -> int {
@@ -97,7 +97,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0003
 ─────╯
 
-  [type] Error: type mismatch: expected int, got string
+  [type] error: type mismatch: expected int, got string
      ╭─[ patterns_class_destructure.baml:119:22 ]
      │
  119 │         Person { age: string } => 1,
@@ -107,7 +107,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0001
 ─────╯
 
-  [type] Error: unreachable arm
+  [type] error: unreachable arm
      ╭─[ patterns_class_destructure.baml:120:14 ]
      │
  120 │         _ => 0
@@ -117,7 +117,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0063
 ─────╯
 
-  [type] Error: type mismatch: expected user.Box<int>, got user.Box
+  [type] error: type mismatch: expected user.Box<int>, got user.Box
      ╭─[ patterns_class_destructure.baml:134:20 ]
      │
  134 │ ╭─▶     match (boxed) {
@@ -128,7 +128,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0001
 ─────╯
 
-  [type] Error: type mismatch: expected user.Box<int>, got user.Box
+  [type] error: type mismatch: expected user.Box<int>, got user.Box
      ╭─[ patterns_class_destructure.baml:140:20 ]
      │
  140 │ ╭─▶     match (boxed) {
@@ -139,7 +139,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0001
 ─────╯
 
-  [type] Error: type mismatch: expected user.Box<int>, got user.Box
+  [type] error: type mismatch: expected user.Box<int>, got user.Box
      ╭─[ patterns_class_destructure.baml:145:80 ]
      │
  145 │ ╭─▶ function generic_class_destructure_requires_type_args(boxed: Box<int>) -> int {
@@ -150,7 +150,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0001
 ─────╯
 
-  [type] Error: generic class destructure `Box { ... }` must specify type arguments
+  [type] error: generic class destructure `Box { ... }` must specify type arguments
      ╭─[ patterns_class_destructure.baml:146:25 ]
      │
  146 │     let Box { value } = boxed;
@@ -160,7 +160,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0001
 ─────╯
 
-  [type] Error: type mismatch: expected int, got T
+  [type] error: type mismatch: expected int, got T
      ╭─[ patterns_class_destructure.baml:147:5 ]
      │
  147 │     value
@@ -170,7 +170,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0001
 ─────╯
 
-  [type] Error: refutable pattern in let binding; refutable patterns belong in `match`
+  [type] error: refutable pattern in let binding; refutable patterns belong in `match`
      ╭─[ patterns_class_destructure.baml:163:92 ]
      │
  163 │ ╭─▶ function let_top_level_class_narrows_union_scrutinee_is_refutable(v: Person | int) -> int {
@@ -181,7 +181,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0111
 ─────╯
 
-  [type] Error: refutable pattern in for-let binding; refutable patterns belong in `match`
+  [type] error: refutable pattern in for-let binding; refutable patterns belong in `match`
      ╭─[ patterns_class_destructure.baml:169:10 ]
      │
  169 │     for (let Person { age } in [
@@ -191,7 +191,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0111
 ─────╯
 
-  [type] Error: refutable pattern in let binding; refutable patterns belong in `match`
+  [type] error: refutable pattern in let binding; refutable patterns belong in `match`
      ╭─[ patterns_class_destructure.baml:178:74 ]
      │
  178 │ ╭─▶ function let_class_field_type_narrower_than_field_is_refutable() -> int {
@@ -202,7 +202,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0111
 ─────╯
 
-  [type] Error: refutable pattern in let binding; refutable patterns belong in `match`
+  [type] error: refutable pattern in let binding; refutable patterns belong in `match`
      ╭─[ patterns_class_destructure.baml:187:77 ]
      │
  187 │ ╭─▶ function let_class_field_literal_narrower_than_field_is_refutable() -> int {
@@ -213,7 +213,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0111
 ─────╯
 
-  [type] Error: refutable pattern in let binding; refutable patterns belong in `match`
+  [type] error: refutable pattern in let binding; refutable patterns belong in `match`
      ╭─[ patterns_class_destructure.baml:196:77 ]
      │
  196 │ ╭─▶ function nested_class_field_type_narrower_than_field_is_refutable() -> int {
@@ -225,7 +225,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0111
 ─────╯
 
-  [type] Error: refutable pattern in for-let binding; refutable patterns belong in `match`
+  [type] error: refutable pattern in for-let binding; refutable patterns belong in `match`
      ╭─[ patterns_class_destructure.baml:208:10 ]
      │
  208 │     for (let Person { flexible_age: int } in [
@@ -235,7 +235,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0111
 ─────╯
 
-  [type] Error: refutable pattern in let binding; refutable patterns belong in `match`
+  [type] error: refutable pattern in let binding; refutable patterns belong in `match`
      ╭─[ patterns_class_destructure.baml:216:78 ]
      │
  216 │ ╭─▶ function let_optional_class_field_narrower_than_field_is_refutable() -> int {
@@ -246,7 +246,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0111
 ─────╯
 
-  [type] Error: type mismatch: expected string, got int
+  [type] error: type mismatch: expected string, got int
      ╭─[ patterns_class_destructure.baml:223:29 ]
      │
  223 │     let Box<string> { value: int } = boxed;
@@ -256,7 +256,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0001
 ─────╯
 
-  [hir] Error: Or-pattern alternatives must bind the same names. Inconsistent across branches: age
+  [hir] error: Or-pattern alternatives must bind the same names. Inconsistent across branches: age
      ╭─[ patterns_class_destructure.baml:236:16 ]
      │
  236 │ ╭─▶     match (v) {
@@ -267,7 +267,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0094
 ─────╯
 
-  [type] Error: Or-pattern alternatives bind `age` with conflicting types: `int` vs `string`
+  [type] error: Or-pattern alternatives bind `age` with conflicting types: `int` vs `string`
      ╭─[ patterns_class_destructure.baml:243:33 ]
      │
  243 │         Person { age } | Admin { age } => 1
@@ -277,7 +277,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0001
 ─────╯
 
-  [type] Error: Or-pattern alternatives bind `value` with conflicting types: `int` vs `string`
+  [type] error: Or-pattern alternatives bind `value` with conflicting types: `int` vs `string`
      ╭─[ patterns_class_destructure.baml:249:61 ]
      │
  249 │         Box<int> { value: let value } | Box<string> { value: let value } => 1
@@ -287,7 +287,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0001
 ─────╯
 
-  [hir] Error: Duplicate binding `value` in pattern
+  [hir] error: Duplicate binding `value` in pattern
      ╭─[ patterns_class_destructure.baml:258:49 ]
      │
  258 │         value: let value: SameNameInner { field: let value }
@@ -299,7 +299,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0094
 ─────╯
 
-  [type] Error: type mismatch: expected int, got string
+  [type] error: type mismatch: expected int, got string
      ╭─[ patterns_class_destructure.baml:265:41 ]
      │
  265 │         Person { address: Address { zip: string } } => 1,
@@ -309,7 +309,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0001
 ─────╯
 
-  [type] Error: unreachable arm
+  [type] error: unreachable arm
      ╭─[ patterns_class_destructure.baml:266:14 ]
      │
  266 │         _ => 0
@@ -319,7 +319,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0063
 ─────╯
 
-  [type] Error: unresolved name: renamed
+  [type] error: unresolved name: renamed
      ╭─[ patterns_class_destructure.baml:278:5 ]
      │
  278 │     renamed
@@ -329,7 +329,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0003
 ─────╯
 
-  [type] Error: type mismatch: expected int, got string
+  [type] error: type mismatch: expected int, got string
      ╭─[ patterns_class_destructure.baml:283:26 ]
      │
  283 │         let Person { age: string } = p;
@@ -339,7 +339,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0001
 ─────╯
 
-  [type] Error: type mismatch: expected int, got string
+  [type] error: type mismatch: expected int, got string
      ╭─[ patterns_class_destructure.baml:283:38 ]
      │
  283 │         let Person { age: string } = p;

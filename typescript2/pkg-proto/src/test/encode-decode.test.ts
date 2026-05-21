@@ -243,7 +243,11 @@ describe('decodeCallResult', () => {
     const bytes = encodeResult({
       value: {
         $case: 'handleValue',
-        handleValue: { key: 42, handleType: BamlHandleType.FUNCTION_REF },
+        handleValue: {
+          key: 42,
+          handleType: BamlHandleType.FUNCTION_REF,
+          name: { name: '', genericArgs: [] },
+        },
       },
     });
     const result = decodeCallResult(bytes, (key, handleType, typeName) => {
@@ -408,7 +412,11 @@ describe('structuredClone round-trip', () => {
     const bytes = encodeResult({
       value: {
         $case: 'handleValue',
-        handleValue: { key: 42, handleType: BamlHandleType.FUNCTION_REF },
+        handleValue: {
+          key: 42,
+          handleType: BamlHandleType.FUNCTION_REF,
+          name: { name: '', genericArgs: [] },
+        },
       },
     });
     const decoded = decodeCallResult(bytes, cloneWrapHandle);
@@ -452,7 +460,11 @@ describe('structuredClone round-trip', () => {
               value: {
                 value: {
                   $case: 'handleValue',
-                  handleValue: { key: 99, handleType: BamlHandleType.FUNCTION_REF },
+                  handleValue: {
+                    key: 99,
+                    handleType: BamlHandleType.FUNCTION_REF,
+                    name: { name: '', genericArgs: [] },
+                  },
                 },
               },
             },

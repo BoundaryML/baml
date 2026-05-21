@@ -172,18 +172,22 @@ jobs:
           - target: aarch64-apple-darwin
             os: macos-14
             binary: baml-cli
+            pack_host: baml-pack-host
             archive_ext: tar.gz
           - target: x86_64-apple-darwin
             os: macos-15-intel
             binary: baml-cli
+            pack_host: baml-pack-host
             archive_ext: tar.gz
           - target: x86_64-unknown-linux-gnu
             os: blacksmith-4vcpu-ubuntu-2204
             binary: baml-cli
+            pack_host: baml-pack-host
             archive_ext: tar.gz
           - target: x86_64-pc-windows-msvc
             os: blacksmith-4vcpu-windows-2025
             binary: baml-cli.exe
+            pack_host: baml-pack-host.exe
             archive_ext: zip
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
@@ -210,6 +214,13 @@ jobs:
         run: cargo build --release --bin baml-cli --target "${TARGET}"
         working-directory: baml_language
 
+      - name: Build baml-pack-host
+        env:
+          BAML_RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+          TARGET: ${{ matrix.target }}
+        run: cargo build --release -p baml_pack_host --bin baml-pack-host --target "${TARGET}"
+        working-directory: baml_language
+
       - name: Smoke test version
         env:
           EXPECTED_VERSION: ${{ needs.prepare.outputs.version }}
@@ -227,6 +238,7 @@ jobs:
           VERSION: ${{ needs.prepare.outputs.version }}
           TARGET: ${{ matrix.target }}
           BINARY: ${{ matrix.binary }}
+          PACK_HOST: ${{ matrix.pack_host }}
           ARCHIVE_EXT: ${{ matrix.archive_ext }}
         run: |
           set -euo pipefail
@@ -241,23 +253,27 @@ jobs:
           version = os.environ["VERSION"]
           target = os.environ["TARGET"]
           binary = os.environ["BINARY"]
+          pack_host = os.environ["PACK_HOST"]
           archive_ext = os.environ["ARCHIVE_EXT"]
 
           root = Path.cwd()
           staging = root / "dist" / target / "staging"
           staging.mkdir(parents=True, exist_ok=True)
-          shutil.copy2(root / "baml_language" / "target" / target / "release" / binary, staging / binary)
+          release_dir = root / "baml_language" / "target" / target / "release"
+          shutil.copy2(release_dir / binary, staging / binary)
+          shutil.copy2(release_dir / pack_host, staging / pack_host)
           shutil.copy2(root / "README.md", staging / "README.md")
           shutil.copy2(root / "LICENSE", staging / "LICENSE")
 
           archive = root / "dist" / target / f"baml-language-{version}-{target}.{archive_ext}"
+          contents = (binary, pack_host, "README.md", "LICENSE")
           if archive_ext == "zip":
               with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-                  for item in (binary, "README.md", "LICENSE"):
+                  for item in contents:
                       zf.write(staging / item, item)
           else:
               with tarfile.open(archive, "w:gz") as tf:
-                  for item in (binary, "README.md", "LICENSE"):
+                  for item in contents:
                       tf.add(staging / item, item)
 
           digest = hashlib.sha256(archive.read_bytes()).hexdigest()

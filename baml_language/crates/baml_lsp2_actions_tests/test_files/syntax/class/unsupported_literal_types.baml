@@ -12,7 +12,7 @@ class TestLiterals {
 
 //----
 //- diagnostics
-// Error: Float literal values are not supported: 3.25
+// error: Float literal values are not supported: 3.25
 //    ╭─[ class_unsupported_literal_types.baml:3:9 ]
 //    │
 //  3 │   b 2 | 3.25

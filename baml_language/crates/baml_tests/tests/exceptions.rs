@@ -3026,13 +3026,13 @@ async fn panic_alias_catches_any_panic() {
         jump L2
         load_var e
         type_tag
-        jump_table [L1, L1, L1, L1, _, _, _, L1, _, L1, _, L1, L1, _, L1, L1], default L0
+        jump_table [L1, L1, L1, L1, _, _, _, L1, _, L1, _, L1, L1, _, L1, L1, _, _, _, _, L1], default L0
 
       L0:
         load_var e
         throw
 
-      L1: Unreachable
+      L1: Exit
         load_const 1
         unary_op -
 
@@ -3067,7 +3067,7 @@ async fn panic_alias_plus_wildcard_dispatch() {
         jump L2
         load_var e
         type_tag
-        jump_table [L1, L1, L1, L1, _, _, _, L1, _, L1, _, L1, L1, _, L1, L1], default L0
+        jump_table [L1, L1, L1, L1, _, _, _, L1, _, L1, _, L1, L1, _, L1, L1, _, _, _, _, L1], default L0
 
       L0:
         load_var e
@@ -3075,7 +3075,7 @@ async fn panic_alias_plus_wildcard_dispatch() {
         load_const 2
         jump L2
 
-      L1: Unreachable
+      L1: Exit
         load_const 1
 
       L2:

@@ -62,7 +62,7 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 
 //----
 //- diagnostics
-// Error: unresolved name: GetEmails
+// error: unresolved name: GetEmails
 //    ╭─[ headers_ai_content_pipeline.baml:6:18 ]
 //    │
 //  6 │     let emails = GetEmails();
@@ -71,7 +71,7 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯
-// Error: unresolved name: GetPosts
+// error: unresolved name: GetPosts
 //    ╭─[ headers_ai_content_pipeline.baml:7:17 ]
 //    │
 //  7 │     let posts = GetPosts();
@@ -80,7 +80,7 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯
-// Error: unresolved name: ProcessVideo
+// error: unresolved name: ProcessVideo
 //     ╭─[ headers_ai_content_pipeline.baml:10:21 ]
 //     │
 //  10 │     let processed = ProcessVideo(video_id, zoom_meeting_id);
@@ -89,7 +89,7 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: unresolved name: GetVideo
+// error: unresolved name: GetVideo
 //     ╭─[ headers_ai_content_pipeline.baml:11:17 ]
 //     │
 //  11 │     let video = GetVideo(video_id);
@@ -98,7 +98,7 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: unresolved name: SummarizeVideo
+// error: unresolved name: SummarizeVideo
 //     ╭─[ headers_ai_content_pipeline.baml:21:17 ]
 //     │
 //  21 │         let s = SummarizeVideo(transcript, title);
@@ -107,7 +107,7 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: unresolved name: LabelSummaryCategory
+// error: unresolved name: LabelSummaryCategory
 //     ╭─[ headers_ai_content_pipeline.baml:24:24 ]
 //     │
 //  24 │         let category = LabelSummaryCategory(s);
@@ -116,7 +116,7 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: unresolved name: SaveSummary
+// error: unresolved name: SaveSummary
 //     ╭─[ headers_ai_content_pipeline.baml:27:29 ]
 //     │
 //  27 │         let saved_summary = SaveSummary(video_id, s);
@@ -125,7 +125,7 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: unresolved name: GetStructure
+// error: unresolved name: GetStructure
 //     ╭─[ headers_ai_content_pipeline.baml:40:25 ]
 //     │
 //  40 │         let structure = GetStructure(kind);
@@ -134,7 +134,7 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: unresolved name: GenerateContent
+// error: unresolved name: GenerateContent
 //     ╭─[ headers_ai_content_pipeline.baml:41:21 ]
 //     │
 //  41 │         let draft = GenerateContent(kind, video_id, summary);
@@ -143,7 +143,7 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: unresolved name: SaveDraft
+// error: unresolved name: SaveDraft
 //     ╭─[ headers_ai_content_pipeline.baml:44:27 ]
 //     │
 //  44 │         let saved_draft = SaveDraft(video_id, draft);
@@ -152,7 +152,7 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: unresolved name: CreatePR
+// error: unresolved name: CreatePR
 //     ╭─[ headers_ai_content_pipeline.baml:52:18 ]
 //     │
 //  52 │         let pr = CreatePR(video_id, summary);
@@ -161,7 +161,7 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: unresolved name: pr_status
+// error: unresolved name: pr_status
 //     ╭─[ headers_ai_content_pipeline.baml:53:9 ]
 //     │
 //  53 │         pr_status

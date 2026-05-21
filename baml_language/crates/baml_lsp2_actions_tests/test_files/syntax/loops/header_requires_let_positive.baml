@@ -19,7 +19,7 @@ function InitWithLet() -> int {
 
 //----
 //- diagnostics
-// Error: Expected ')', found ';'
+// error: Expected ')', found ';'
 //    ╭─[ loops_header_requires_let_positive.baml:4:19 ]
 //    │
 //  4 │     for (i = 0; i < 3; i += 1) {
@@ -28,7 +28,7 @@ function InitWithLet() -> int {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected block after for expression, found ';'
+// error: Expected block after for expression, found ';'
 //    ╭─[ loops_header_requires_let_positive.baml:4:19 ]
 //    │
 //  4 │     for (i = 0; i < 3; i += 1) {
@@ -37,7 +37,7 @@ function InitWithLet() -> int {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected expression, found ')'
+// error: Expected expression, found ')'
 //    ╭─[ loops_header_requires_let_positive.baml:4:27 ]
 //    │
 //  4 │     for (i = 0; i < 3; i += 1) {

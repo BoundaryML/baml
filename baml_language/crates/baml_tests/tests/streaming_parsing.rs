@@ -77,7 +77,7 @@ async fn stream_string_final_value() {
         {llm_source}
 
         function main() -> string {{
-            let stream: baml.llm.Stream<string, null | string> = baml.llm.stream_llm_function(TestClient, "TestFunc", {{"input": "world"}});
+            let stream: baml.llm.Stream<null | string, string> = baml.llm.stream_llm_function(TestClient, "TestFunc", {{"input": "world"}});
             stream.final()
         }}
     "#,
@@ -106,7 +106,7 @@ async fn stream_server_error_propagates() {
         {llm_source}
 
         function main() -> string {{
-            let stream: baml.llm.Stream<string, null | string> = baml.llm.stream_llm_function(TestClient, "TestFunc", {{"input": "world"}});
+            let stream: baml.llm.Stream<null | string, string> = baml.llm.stream_llm_function(TestClient, "TestFunc", {{"input": "world"}});
             stream.final()
         }}
     "#,
@@ -141,7 +141,7 @@ async fn stream_done_signal_required() {
         {llm_source}
 
         function main() -> string {{
-            let stream: baml.llm.Stream<string, null | string> = baml.llm.stream_llm_function(TestClient, "TestFunc", {{"input": "world"}});
+            let stream: baml.llm.Stream<null | string, string> = baml.llm.stream_llm_function(TestClient, "TestFunc", {{"input": "world"}});
             stream.final()
         }}
     "#,

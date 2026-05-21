@@ -51,11 +51,21 @@ class BamlOutboundValue(_message.Message):
     list_value: BamlValueList
     map_value: BamlValueMap
     union_variant_value: BamlValueUnionVariant
-    handle_value: _baml_inbound_pb2.BamlHandle
+    handle_value: BamlOutboundHandle
     media_value: BamlValueMedia
     prompt_ast_value: BamlValuePromptAst
     uint8array_value: bytes
-    def __init__(self, null_value: _Optional[_Union[BamlValueNull, _Mapping]] = ..., string_value: _Optional[str] = ..., int_value: _Optional[int] = ..., float_value: _Optional[float] = ..., bool_value: bool = ..., class_value: _Optional[_Union[BamlValueClass, _Mapping]] = ..., enum_value: _Optional[_Union[BamlValueEnum, _Mapping]] = ..., literal_value: _Optional[_Union[BamlTyLiteral, _Mapping]] = ..., list_value: _Optional[_Union[BamlValueList, _Mapping]] = ..., map_value: _Optional[_Union[BamlValueMap, _Mapping]] = ..., union_variant_value: _Optional[_Union[BamlValueUnionVariant, _Mapping]] = ..., handle_value: _Optional[_Union[_baml_inbound_pb2.BamlHandle, _Mapping]] = ..., media_value: _Optional[_Union[BamlValueMedia, _Mapping]] = ..., prompt_ast_value: _Optional[_Union[BamlValuePromptAst, _Mapping]] = ..., uint8array_value: _Optional[bytes] = ...) -> None: ...
+    def __init__(self, null_value: _Optional[_Union[BamlValueNull, _Mapping]] = ..., string_value: _Optional[str] = ..., int_value: _Optional[int] = ..., float_value: _Optional[float] = ..., bool_value: bool = ..., class_value: _Optional[_Union[BamlValueClass, _Mapping]] = ..., enum_value: _Optional[_Union[BamlValueEnum, _Mapping]] = ..., literal_value: _Optional[_Union[BamlTyLiteral, _Mapping]] = ..., list_value: _Optional[_Union[BamlValueList, _Mapping]] = ..., map_value: _Optional[_Union[BamlValueMap, _Mapping]] = ..., union_variant_value: _Optional[_Union[BamlValueUnionVariant, _Mapping]] = ..., handle_value: _Optional[_Union[BamlOutboundHandle, _Mapping]] = ..., media_value: _Optional[_Union[BamlValueMedia, _Mapping]] = ..., prompt_ast_value: _Optional[_Union[BamlValuePromptAst, _Mapping]] = ..., uint8array_value: _Optional[bytes] = ...) -> None: ...
+
+class BamlOutboundHandle(_message.Message):
+    __slots__ = ("key", "handle_type", "name")
+    KEY_FIELD_NUMBER: _ClassVar[int]
+    HANDLE_TYPE_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    key: int
+    handle_type: _baml_inbound_pb2.BamlHandleType
+    name: BamlTyName
+    def __init__(self, key: _Optional[int] = ..., handle_type: _Optional[_Union[_baml_inbound_pb2.BamlHandleType, str]] = ..., name: _Optional[_Union[BamlTyName, _Mapping]] = ...) -> None: ...
 
 class BamlTyName(_message.Message):
     __slots__ = ("name", "generic_args")

@@ -24,7 +24,7 @@ function Ok() -> int {
 
 //----
 //- diagnostics
-// Error: type mismatch: expected int, got 10.0
+// error: type mismatch: expected int, got 10.0
 //    ╭─[ expr_let_annotations.baml:5:17 ]
 //    │
 //  5 │   let y : int = 10.0;
@@ -33,7 +33,7 @@ function Ok() -> int {
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯
-// Error: type mismatch: expected int, got "hello"
+// error: type mismatch: expected int, got "hello"
 //    ╭─[ expr_let_annotations.baml:6:16 ]
 //    │
 //  6 │   let c: int = "hello";

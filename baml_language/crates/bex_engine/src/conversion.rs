@@ -127,6 +127,29 @@ impl BexEngine {
                     panic!("Instance.class should point to a Class object")
                 };
 
+                // Lift `baml.llm.Stream` to an opaque ADT handle.  The four
+                // child fields (_client/_acc/_sse/_cache) stay on the heap
+                // behind the GC-rooted handle so the BAML interpreter can
+                // walk them when running `Stream.next` / `Stream.final`
+                // bodies on subsequent calls.  See plan 21b §"Phase 1a".
+                //
+                // `ty` is computed from the class FQN + `class_type_args`
+                // once at lift time and carried inline on the variant so
+                // the wire encoder doesn't need a heap permit. See plan
+                // 23a §"Engine-side ripple effects".
+                if class.name.display_name.as_str() == "baml.llm.Stream" {
+                    let handle = self.heap.create_handle(ptr);
+                    let ty = Ty::Class(
+                        class.name.clone(),
+                        instance.class_type_args.clone(),
+                        baml_type::TyAttr::default(),
+                    );
+                    return Ok(BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
+                        ty,
+                        heap_handle: handle,
+                    }));
+                }
+
                 debug_assert_eq!(
                     class.fields.len(),
                     instance.fields.len(),
@@ -364,6 +387,11 @@ impl BexEngine {
             BexExternalValue::Adt(BexExternalAdt::Media(arc)) => {
                 Value::object(holder.holder_mut().tlab_mut().alloc_rust_data(arc))
             }
+            BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { heap_handle, .. }) => {
+                Value::object(self.resolve_handle(holder.proof(), &heap_handle).expect(
+                    "TaggedHeapHandle should be valid - object was returned to external code",
+                ))
+            }
             BexExternalValue::FunctionRef { global_index } => {
                 // `convert_external_to_vm_value` runs while `holder`'s
                 // active heap permit is held, so we route through the
@@ -494,9 +522,19 @@ pub(crate) fn maybe_wrap_union(
 }
 
 /// Find which union member matches a value.
+///
+/// `BuiltinUnknown` arms match any value (see `value_matches_type`) and are
+/// considered last so a more-specific arm wins. This keeps the union
+/// metadata's `selected_option` faithful when concrete arms (e.g.
+/// `StreamFinished` in `BuiltinUnknown | StreamFinished`) actually fit.
 fn find_matching_member(value: &BexExternalValue, members: &[Ty]) -> Result<Ty, EngineError> {
     for member in members {
-        if value_matches_type(value, member) {
+        if !matches!(member, Ty::BuiltinUnknown { .. }) && value_matches_type(value, member) {
+            return Ok(member.clone());
+        }
+    }
+    for member in members {
+        if matches!(member, Ty::BuiltinUnknown { .. }) {
             return Ok(member.clone());
         }
     }
@@ -555,6 +593,12 @@ fn resolve_named_object<'a>(
 /// Check if a value matches a declared type.
 fn value_matches_type(value: &BexExternalValue, ty: &Ty) -> bool {
     match (value, ty) {
+        // `BuiltinUnknown` is the engine's "any value matches" sentinel
+        // (TypeScript `unknown` semantics — see `baml_type::Ty::BuiltinUnknown`).
+        // Used by the stdlib generics hardcode in `baml_compiler2_mir::lower`
+        // so e.g. `Stream<TStream, TFinal>.next() -> TStream | StreamFinished`
+        // accepts any partial-stream payload as the `TStream` arm.
+        (_, Ty::BuiltinUnknown { .. }) => true,
         (BexExternalValue::Null, Ty::Null { .. }) => true,
         (BexExternalValue::Int(_), Ty::Int { .. }) => true,
         (BexExternalValue::Float(_), Ty::Float { .. }) => true,

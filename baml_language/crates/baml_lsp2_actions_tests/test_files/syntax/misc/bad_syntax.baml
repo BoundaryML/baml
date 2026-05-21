@@ -38,7 +38,7 @@ test Foo {
 
 //----
 //- diagnostics
-// Error: Expected identifier, found ','
+// error: Expected identifier, found ','
 //     ╭─[ misc_bad_syntax.baml:15:7 ]
 //     │
 //  15 │     },,

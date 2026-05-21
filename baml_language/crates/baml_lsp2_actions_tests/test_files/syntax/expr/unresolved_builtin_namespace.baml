@@ -18,7 +18,7 @@ function TestBamlEventsTypo() -> void {
 
 //----
 //- diagnostics
-// Error: unresolved name: ev
+// error: unresolved name: ev
 //    ╭─[ expr_unresolved_builtin_namespace.baml:3:32 ]
 //    │
 //  3 │ ╭─▶ function TestBamlEv() -> void {
@@ -28,7 +28,7 @@ function TestBamlEventsTypo() -> void {
 //    │     
 //    │     Note: Error code: E0003
 // ───╯
-// Error: unresolved name: lo
+// error: unresolved name: lo
 //    ╭─[ expr_unresolved_builtin_namespace.baml:7:32 ]
 //    │
 //  7 │ ╭─▶ function TestBamlLo() -> void {
@@ -38,7 +38,7 @@ function TestBamlEventsTypo() -> void {
 //    │     
 //    │     Note: Error code: E0003
 // ───╯
-// Error: unresolved name: inf
+// error: unresolved name: inf
 //     ╭─[ expr_unresolved_builtin_namespace.baml:11:32 ]
 //     │
 //  11 │ ╭─▶ function TestLogInf() -> void {
@@ -48,7 +48,7 @@ function TestBamlEventsTypo() -> void {
 //     │     
 //     │     Note: Error code: E0003
 // ────╯
-// Error: unresolved name: event
+// error: unresolved name: event
 //     ╭─[ expr_unresolved_builtin_namespace.baml:15:40 ]
 //     │
 //  15 │ ╭─▶ function TestBamlEventsTypo() -> void {

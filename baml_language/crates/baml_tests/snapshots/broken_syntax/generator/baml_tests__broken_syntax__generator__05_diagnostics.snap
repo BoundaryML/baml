@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: type mismatch: expected baml.llm.Client, got null
+  [type] error: type mismatch: expected baml.llm.Client, got null
     ╭─[ valid_generator.baml:19:2 ]
     │
  19 │ ╭─▶ }
@@ -14,7 +14,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │     Note: Error code: E0001
 ────╯
 
-  [type] Error: type mismatch: expected baml.llm.Client, got null
+  [type] error: type mismatch: expected baml.llm.Client, got null
     ╭─[ valid_generator.baml:21:30 ]
     │
  21 │ ╭─▶ function GetUser() -> MyClass {
@@ -26,7 +26,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │     Note: Error code: E0001
 ────╯
 
-  [parse] Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '<', found '<'
+  [parse] error: Expected Only 'client' and 'prompt' allowed in LLM function, found '<', found '<'
     ╭─[ valid_generator.baml:22:11 ]
     │
  22 │     client<llm> MyClient
@@ -36,7 +36,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0010
 ────╯
 
-  [parse] Error: Expected client name, found '<'
+  [parse] error: Expected client name, found '<'
     ╭─[ valid_generator.baml:22:11 ]
     │
  22 │     client<llm> MyClient
@@ -46,7 +46,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0010
 ────╯
 
-  [parse] Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'llm', found identifier
+  [parse] error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'llm', found identifier
     ╭─[ valid_generator.baml:22:12 ]
     │
  22 │     client<llm> MyClient
@@ -56,7 +56,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0010
 ────╯
 
-  [parse] Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '>', found '>'
+  [parse] error: Expected Only 'client' and 'prompt' allowed in LLM function, found '>', found '>'
     ╭─[ valid_generator.baml:22:15 ]
     │
  22 │     client<llm> MyClient
@@ -66,7 +66,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0010
 ────╯
 
-  [parse] Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'MyClient', found identifier
+  [parse] error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'MyClient', found identifier
     ╭─[ valid_generator.baml:22:17 ]
     │
  22 │     client<llm> MyClient

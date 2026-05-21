@@ -18,7 +18,7 @@ function ThrowsVariantExact(x: int) -> string throws Errors {
 
 //----
 //- diagnostics
-// Error: throws contract violation: `user.Errors` is missing user.Errors.AuthError, user.Errors.NotFoundError
+// error: throws contract violation: `user.Errors` is missing user.Errors.AuthError, user.Errors.NotFoundError
 //     ╭─[ throw_throws_enum_variant_precise.baml:12:53 ]
 //     │
 //  12 │ function ThrowsVariantExact(x: int) -> string throws Errors {
@@ -27,7 +27,7 @@ function ThrowsVariantExact(x: int) -> string throws Errors {
 //     │ 
 //     │ Note: Error code: E0096
 // ────╯
-// Warning: extraneous throws declaration: user.Errors
+// warning: extraneous throws declaration: user.Errors
 //     ╭─[ throw_throws_enum_variant_precise.baml:12:53 ]
 //     │
 //  12 │ function ThrowsVariantExact(x: int) -> string throws Errors {

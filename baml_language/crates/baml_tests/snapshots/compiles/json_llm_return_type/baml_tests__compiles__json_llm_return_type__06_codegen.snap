@@ -40,7 +40,7 @@ function user.ExtractAny$parse(json: string) -> baml.json.json {
     return
 }
 
-function user.ExtractAny$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<baml.json.json, null | baml.json.json$stream> {
+function user.ExtractAny$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<null | baml.json.json$stream, baml.json.json> {
     load_var sse
     load_const "ExtractAny"
     load_const null
@@ -56,7 +56,7 @@ function user.ExtractAny$render_prompt() -> baml.llm.PromptAst {
     return
 }
 
-function user.ExtractAny$stream() -> baml.llm.Stream<baml.json.json, null | baml.json.json$stream> {
+function user.ExtractAny$stream() -> baml.llm.Stream<null | baml.json.json$stream, baml.json.json> {
     load_global user.TestClient
     load_const "ExtractAny"
     alloc_map 0

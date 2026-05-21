@@ -64,7 +64,7 @@ function Go3(x:int) -> int {
 
 //----
 //- diagnostics
-// Error: unresolved name: a
+// error: unresolved name: a
 //    ╭─[ expr_unknown_name.baml:2:13 ]
 //    │
 //  2 │     let y = a;
@@ -73,7 +73,7 @@ function Go3(x:int) -> int {
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯
-// Error: expected 1 argument(s), got 3
+// error: expected 1 argument(s), got 3
 //    ╭─[ expr_unknown_name.baml:9:5 ]
 //    │
 //  9 │     Go(z,a,b)
@@ -82,7 +82,7 @@ function Go3(x:int) -> int {
 //    │ 
 //    │ Note: Error code: E0005
 // ───╯
-// Error: unresolved name: b
+// error: unresolved name: b
 //    ╭─[ expr_unknown_name.baml:9:12 ]
 //    │
 //  9 │     Go(z,a,b)
@@ -91,7 +91,7 @@ function Go3(x:int) -> int {
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯
-// Error: unresolved name: Unknown
+// error: unresolved name: Unknown
 //     ╭─[ expr_unknown_name.baml:13:5 ]
 //     │
 //  13 │     Unknown(x)

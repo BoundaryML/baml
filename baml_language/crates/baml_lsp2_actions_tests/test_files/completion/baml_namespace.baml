@@ -6,7 +6,7 @@ function TestLogCompletion() -> void {
 
 //----
 //- diagnostics
-// Error: Expected Expected field name after '.', found '}'
+// error: Expected Expected field name after '.', found '}'
 //    ╭─[ baml_namespace.baml:5:1 ]
 //    │
 //  5 │ }

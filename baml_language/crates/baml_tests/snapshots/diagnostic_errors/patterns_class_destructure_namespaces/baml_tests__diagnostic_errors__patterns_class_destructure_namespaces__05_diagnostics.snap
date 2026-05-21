@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: type mismatch: expected user.llm.openai.Box<int>, got user.llm.openai.Box
+  [type] error: type mismatch: expected user.llm.openai.Box<int>, got user.llm.openai.Box
    ╭─[ main.baml:2:20 ]
    │
  2 │ ╭─▶     match (boxed) {
@@ -13,7 +13,7 @@ source: crates/baml_tests/src/generated_tests.rs
    │     Note: Error code: E0001
 ───╯
 
-  [type] Error: type mismatch: expected user.llm.openai.Box<int>, got user.llm.openai.Box
+  [type] error: type mismatch: expected user.llm.openai.Box<int>, got user.llm.openai.Box
    ╭─[ main.baml:8:20 ]
    │
  8 │ ╭─▶     match (boxed) {
@@ -24,7 +24,7 @@ source: crates/baml_tests/src/generated_tests.rs
    │     Note: Error code: E0001
 ───╯
 
-  [type] Error: type mismatch: expected user.llm.openai.Box<int>, got user.llm.openai.Box<int, string>
+  [type] error: type mismatch: expected user.llm.openai.Box<int>, got user.llm.openai.Box<int, string>
     ╭─[ main.baml:14:20 ]
     │
  14 │ ╭─▶     match (boxed) {
@@ -35,7 +35,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │     Note: Error code: E0001
 ────╯
 
-  [type] Error: unreachable arm
+  [type] error: unreachable arm
     ╭─[ main.baml:16:14 ]
     │
  16 │         _ => 0
@@ -45,7 +45,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0063
 ────╯
 
-  [type] Error: type mismatch: expected user.llm.openai.Response, got user.llm.openai.Response<int>
+  [type] error: type mismatch: expected user.llm.openai.Response, got user.llm.openai.Response<int>
     ╭─[ main.baml:21:23 ]
     │
  21 │ ╭─▶     match (response) {
@@ -56,7 +56,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │     Note: Error code: E0001
 ────╯
 
-  [type] Error: unreachable arm
+  [type] error: unreachable arm
     ╭─[ main.baml:29:14 ]
     │
  29 │         _ => 0

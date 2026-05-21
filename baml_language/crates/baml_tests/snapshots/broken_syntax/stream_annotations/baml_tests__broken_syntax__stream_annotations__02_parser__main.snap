@@ -504,7 +504,7 @@ SOURCE_FILE
     R_BRACE "}"
 
 === ERRORS ===
-Error: Expected ')', found '['
+error: Expected ')', found '['
     ╭─[ main.baml:24:54 ]
     │
  24 │     certifications Education[] @stream.type(Education[])
@@ -514,7 +514,7 @@ Error: Expected ')', found '['
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected Unexpected token in class body, found ')'
+error: Expected Unexpected token in class body, found ')'
     ╭─[ main.baml:24:56 ]
     │
  24 │     certifications Education[] @stream.type(Education[])

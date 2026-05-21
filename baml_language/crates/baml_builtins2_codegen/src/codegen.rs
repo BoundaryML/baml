@@ -34,6 +34,7 @@ fn is_fallible(b: &NativeBuiltin) -> bool {
         || matches!(
             b.path.as_str(),
             "baml.sys.panic"
+                | "baml.sys.exit"
                 | "baml.media.Pdf.to_json"
                 | "baml.media.Audio.to_json"
                 | "baml.media.Video.to_json"

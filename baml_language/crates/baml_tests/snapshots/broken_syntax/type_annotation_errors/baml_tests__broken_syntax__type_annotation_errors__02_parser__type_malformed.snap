@@ -15,7 +15,7 @@ SOURCE_FILE
     TYPE_EXPR
 
 === ERRORS ===
-Error: Expected '=', found identifier
+error: Expected '=', found identifier
    ╭─[ type_malformed.baml:7:6 ]
    │
  7 │ type Foo
@@ -25,7 +25,7 @@ Error: Expected '=', found identifier
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected type, found EOF
+error: Expected type, found EOF
     ╭─[ type_malformed.baml:10:11 ]
     │
  10 │ type Bar =

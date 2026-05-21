@@ -132,6 +132,7 @@ dependencies = [
     "pydantic>=2",
     "typing-extensions",
     "pytest>=7",
+    "pytest-asyncio>=0.23",
     "ruff",
     "pyright>=1.1",
 ]
@@ -151,6 +152,10 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v"
+# `auto` lets `async def test_*` functions run without an explicit
+# `@pytest.mark.asyncio` decorator. test_streaming_e2e.py uses it for
+# the async-bridge smoke test.
+asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 120

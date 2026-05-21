@@ -40,7 +40,7 @@ SOURCE_FILE
         R_BRACE "}"
 
 === ERRORS ===
-Error: Expected class name, found integer
+error: Expected class name, found integer
    ╭─[ invalid_syntax.baml:1:7 ]
    │
  1 │ class 123Invalid {  // Invalid class name
@@ -50,7 +50,7 @@ Error: Expected class name, found integer
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected '{', found integer
+error: Expected '{', found integer
    ╭─[ invalid_syntax.baml:1:7 ]
    │
  1 │ class 123Invalid {  // Invalid class name
@@ -60,7 +60,7 @@ Error: Expected '{', found integer
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected top-level declaration, found integer
+error: Expected top-level declaration, found integer
    ╭─[ invalid_syntax.baml:1:7 ]
    │
  1 │ class 123Invalid {  // Invalid class name
@@ -70,7 +70,7 @@ Error: Expected top-level declaration, found integer
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected top-level declaration, found identifier
+error: Expected top-level declaration, found identifier
    ╭─[ invalid_syntax.baml:1:10 ]
    │
  1 │ class 123Invalid {  // Invalid class name
@@ -80,7 +80,7 @@ Error: Expected top-level declaration, found identifier
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected top-level declaration, found '{'
+error: Expected top-level declaration, found '{'
    ╭─[ invalid_syntax.baml:1:18 ]
    │
  1 │ class 123Invalid {  // Invalid class name
@@ -90,7 +90,7 @@ Error: Expected top-level declaration, found '{'
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected top-level declaration, found identifier
+error: Expected top-level declaration, found identifier
    ╭─[ invalid_syntax.baml:2:3 ]
    │
  2 │   field string
@@ -100,7 +100,7 @@ Error: Expected top-level declaration, found identifier
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected top-level declaration, found identifier
+error: Expected top-level declaration, found identifier
    ╭─[ invalid_syntax.baml:2:9 ]
    │
  2 │   field string
@@ -110,7 +110,7 @@ Error: Expected top-level declaration, found identifier
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected top-level declaration, found '}'
+error: Expected top-level declaration, found '}'
    ╭─[ invalid_syntax.baml:3:1 ]
    │
  3 │ }
@@ -120,7 +120,7 @@ Error: Expected top-level declaration, found '}'
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected type, found '{'
+error: Expected type, found '{'
     ╭─[ invalid_syntax.baml:10:19 ]
     │
  10 │ function Foo() -> {  // Missing return type

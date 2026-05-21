@@ -22,7 +22,7 @@ SOURCE_FILE
     R_BRACE "}"
 
 === ERRORS ===
-Error: Expected '}', found class
+error: Expected '}', found class
    ╭─[ missing_braces.baml:5:1 ]
    │
  5 │ class Another {  // Should still parse this class

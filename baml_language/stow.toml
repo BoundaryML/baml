@@ -59,7 +59,19 @@ bex_vm_types = ["bex_resource_types"]
 # Global dependency rules (apply to ALL crate namespaces)
 [[dependency_rules]]
 pattern = "anyhow"
-allowed_crates = ["*_cli", "tools_*", "cargo-*", "baml_lsp_*"]
+allowed_crates = [
+    "*_cli",
+    "tools_*",
+    "cargo-*",
+    "baml_lsp_*",
+    # `baml_exec` and `baml_pack_host` are surface-area crates per
+    # BEP-027: the shared `baml run` / `baml pack` executor and the
+    # runtime host binary embedded in packed executables. They sit at
+    # the application boundary (same as `baml_cli`) and use anyhow for
+    # the same reason — top-level error surfacing.
+    "baml_exec",
+    "baml_pack_host",
+]
 regular_deps_only = true
 reason = "Use thiserror for proper error types in library crates."
 
@@ -80,12 +92,16 @@ reason = "Use baml_db or baml_project to access compiler interfaces."
 [[namespaces.dependency_rules]]
 pattern.select = "bex_*"
 pattern.exclude = ["bex_vm_types"]
-allowed_crates = ["bridge_cffi", "baml_cli"]
+# `baml_exec` and `baml_pack_host` are BEP-027 surface-area crates
+# (shared executor + packed-binary runtime host) and sit at the same
+# application boundary as `baml_cli` — they need direct access to the
+# engine, events, and VM types.
+allowed_crates = ["bridge_cffi", "baml_cli", "baml_exec", "baml_pack_host"]
 reason = "baml_* crates should not depend on bex_* crates."
 
 [[namespaces.dependency_rules]]
 pattern.select = "bex_vm_types"
-allowed_crates = ["baml_compiler_emit", "baml_compiler2_emit", "baml_project", "baml_cli"]
+allowed_crates = ["baml_compiler_emit", "baml_compiler2_emit", "baml_project", "baml_cli", "baml_exec", "baml_pack_host"]
 reason = "Only compiler_emit and baml_project crates should depend on bex_vm_types (pure data layer)."
 
 
@@ -131,4 +147,11 @@ name = "codegen"
 
 [[namespaces]]
 name = "surface"
-name_exceptions = {"baml_cli" = "baml_cli", "baml_playground_wasm" = "baml_playground_wasm" }
+# Surface-area crates that don't fit the prefix-based namespaces — they
+# sit at the application boundary and depend on bex_* internals
+# directly (where `baml_*` crates normally cannot). `baml_exec` is the
+# BEP-027 shared executor used by `baml run` and the packed host;
+# `baml_pack_host` is the runtime binary embedded in packed
+# executables. Listed here so they're exempt from the baml-namespace
+# rules forbidding bex_* deps.
+name_exceptions = {"baml_cli" = "baml_cli", "baml_playground_wasm" = "baml_playground_wasm", "baml_exec" = "baml_exec", "baml_pack_host" = "baml_pack_host" }

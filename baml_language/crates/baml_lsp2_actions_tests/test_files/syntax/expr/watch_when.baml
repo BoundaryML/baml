@@ -44,7 +44,7 @@ function BadFunction2(i: string) -> bool {
 
 //----
 //- diagnostics
-// Error: type `int` has no member `$watch`
+// error: type `int` has no member `$watch`
 //    ╭─[ expr_watch_when.baml:2:20 ]
 //    │
 //  2 │ ╭─▶   watch let x = 10;
@@ -54,7 +54,7 @@ function BadFunction2(i: string) -> bool {
 //    │     
 //    │     Note: Error code: E0007
 // ───╯
-// Error: type `int` has no member `$watch`
+// error: type `int` has no member `$watch`
 //    ╭─[ expr_watch_when.baml:3:61 ]
 //    │
 //  3 │ ╭─▶   x.$watch.options(baml.WatchOptions{ when: GoodFunction });
@@ -64,7 +64,7 @@ function BadFunction2(i: string) -> bool {
 //    │     
 //    │     Note: Error code: E0007
 // ───╯
-// Error: type `int` has no member `$watch`
+// error: type `int` has no member `$watch`
 //    ╭─[ expr_watch_when.baml:4:61 ]
 //    │
 //  4 │ ╭─▶   x.$watch.options(baml.WatchOptions{ when: BadFunction1 });

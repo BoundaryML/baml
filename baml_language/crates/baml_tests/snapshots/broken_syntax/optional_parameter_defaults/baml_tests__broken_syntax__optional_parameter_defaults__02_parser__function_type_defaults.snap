@@ -28,7 +28,7 @@ SOURCE_FILE
         WORD "int"
 
 === ERRORS ===
-Error: default expressions are not allowed in function types
+error: default expressions are not allowed in function types
    ╭─[ function_type_defaults.baml:1:68 ]
    │
  1 │ type BadDefaultInFunctionType = (query: string, max_results: int = 10) -> int

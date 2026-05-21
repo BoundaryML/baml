@@ -24,7 +24,7 @@ function TripleChainedCatch(x: int) -> string {
 
 //----
 //- diagnostics
-// Warning: unreachable arm
+// warning: unreachable arm
 //    ╭─[ catch_chained_catch.baml:8:15 ]
 //    │
 //  8 │     string => "string error"
@@ -33,7 +33,7 @@ function TripleChainedCatch(x: int) -> string {
 //    │ 
 //    │ Note: Error code: E0063
 // ───╯
-// Warning: unreachable arm
+// warning: unreachable arm
 //     ╭─[ catch_chained_catch.baml:10:12 ]
 //     │
 //  10 │     int => "int error"
@@ -42,7 +42,7 @@ function TripleChainedCatch(x: int) -> string {
 //     │ 
 //     │ Note: Error code: E0063
 // ────╯
-// Warning: unreachable arm
+// warning: unreachable arm
 //     ╭─[ catch_chained_catch.baml:17:15 ]
 //     │
 //  17 │     string => "first"
@@ -51,7 +51,7 @@ function TripleChainedCatch(x: int) -> string {
 //     │ 
 //     │ Note: Error code: E0063
 // ────╯
-// Warning: unreachable arm
+// warning: unreachable arm
 //     ╭─[ catch_chained_catch.baml:19:12 ]
 //     │
 //  19 │     int => "second"
@@ -60,7 +60,7 @@ function TripleChainedCatch(x: int) -> string {
 //     │ 
 //     │ Note: Error code: E0063
 // ────╯
-// Warning: unreachable arm
+// warning: unreachable arm
 //     ╭─[ catch_chained_catch.baml:21:10 ]
 //     │
 //  21 │     _ => "third"

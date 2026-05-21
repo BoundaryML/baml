@@ -1,9 +1,8 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 28483
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: expected 1 argument(s), got 2
+  [type] error: expected 1 argument(s), got 2
     ╭─[ closure_errors.baml:21:3 ]
     │
  21 │   transform(fmt, "hello")
@@ -13,7 +12,7 @@ assertion_line: 28483
     │ Note: Error code: E0005
 ────╯
 
-  [type] Error: type mismatch: expected string, got user.Formatter
+  [type] error: type mismatch: expected string, got user.Formatter
     ╭─[ closure_errors.baml:21:13 ]
     │
  21 │   transform(fmt, "hello")
@@ -23,7 +22,7 @@ assertion_line: 28483
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: expected 1 argument(s), got 0
+  [type] error: expected 1 argument(s), got 0
     ╭─[ closure_errors.baml:27:3 ]
     │
  27 │   f()
@@ -33,7 +32,7 @@ assertion_line: 28483
     │ Note: Error code: E0005
 ────╯
 
-  [type] Error: type mismatch: expected (user.Counter) -> int throws never, got () -> int throws never
+  [type] error: type mismatch: expected (user.Counter) -> int throws never, got () -> int throws never
     ╭─[ closure_errors.baml:33:30 ]
     │
  33 │   let inc: (Counter) -> int = c.increment;
@@ -43,7 +42,7 @@ assertion_line: 28483
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: type mismatch: expected () -> string throws never, got (self: user.Employee) -> string throws never
+  [type] error: type mismatch: expected () -> string throws never, got (self: user.Employee) -> string throws never
     ╭─[ closure_errors.baml:39:24 ]
     │
  39 │   let f: () -> string = Employee.full_name;
@@ -53,7 +52,7 @@ assertion_line: 28483
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: type mismatch: expected (user.Employee) -> string throws never, got () -> string throws never
+  [type] error: type mismatch: expected (user.Employee) -> string throws never, got () -> string throws never
     ╭─[ closure_errors.baml:50:17 ]
     │
  50 │   takes_unbound(e.full_name)

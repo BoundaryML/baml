@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: unresolved type: B
+  [type] error: unresolved type: B
     ╭─[ classes.baml:40:11 ]
     │
  40 │     second B
@@ -12,7 +12,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0002
 ────╯
 
-  [type] Error: type mismatch: expected T, got string
+  [type] error: type mismatch: expected T, got string
     ╭─[ classes.baml:75:26 ]
     │
  75 │         Maker<T> { data: params }
@@ -22,7 +22,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: type mismatch: expected T, got string
+  [type] error: type mismatch: expected T, got string
     ╭─[ classes.baml:94:35 ]
     │
  94 │ ╭─▶     function get_data(self) -> T {
@@ -34,7 +34,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │     Note: Error code: E0001
 ────╯
 
-  [type] Error: type parameter `T` on method shadows the same parameter on class `Shadow`. Please use a different name for the type parameter.
+  [type] error: type parameter `T` on method shadows the same parameter on class `Shadow`. Please use a different name for the type parameter.
      ╭─[ classes.baml:110:12 ]
      │
  110 │ ╭─▶     value T
@@ -46,7 +46,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0001
 ─────╯
 
-  [type] Error: type mismatch: expected T, got 42
+  [type] error: type mismatch: expected T, got 42
      ╭─[ classes.baml:124:18 ]
      │
  124 │     Box { value: 42 }
@@ -56,7 +56,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0001
 ─────╯
 
-  [type] Error: unreachable arm
+  [type] error: unreachable arm
      ╭─[ classes.baml:197:21 ]
      │
  197 │             null => default,
@@ -66,7 +66,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0063
 ─────╯
 
-  [type] Error: unresolved name: fetch_as
+  [type] error: unresolved name: fetch_as
    ╭─[ fetch_as.baml:8:29 ]
    │
  8 │ ╭─▶ function GetTodo() -> Todo {
@@ -77,7 +77,7 @@ source: crates/baml_tests/src/generated_tests.rs
    │     Note: Error code: E0003
 ───╯
 
-  [type] Error: unresolved name: HttpMethod
+  [type] error: unresolved name: HttpMethod
     ╭─[ fetch_as.baml:10:16 ]
     │
  10 │         method: baml.HttpMethod.Get,

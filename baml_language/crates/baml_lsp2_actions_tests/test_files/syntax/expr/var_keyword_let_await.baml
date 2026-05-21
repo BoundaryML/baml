@@ -12,7 +12,7 @@ function UseReserved() -> int {
 
 //----
 //- diagnostics
-// Error: Expected identifier after 'let', found await
+// error: Expected identifier after 'let', found await
 //    ╭─[ expr_var_keyword_let_await.baml:2:7 ]
 //    │
 //  2 │   let await = 1;
@@ -21,7 +21,7 @@ function UseReserved() -> int {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected initializer (=), found await
+// error: Expected initializer (=), found await
 //    ╭─[ expr_var_keyword_let_await.baml:2:7 ]
 //    │
 //  2 │   let await = 1;
@@ -30,7 +30,7 @@ function UseReserved() -> int {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected expression, found '='
+// error: Expected expression, found '='
 //    ╭─[ expr_var_keyword_let_await.baml:2:13 ]
 //    │
 //  2 │   let await = 1;
@@ -39,7 +39,7 @@ function UseReserved() -> int {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected expression, found '}'
+// error: Expected expression, found '}'
 //    ╭─[ expr_var_keyword_let_await.baml:4:1 ]
 //    │
 //  4 │ }
@@ -48,7 +48,7 @@ function UseReserved() -> int {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected '}', found EOF
+// error: Expected '}', found EOF
 //     ╭─[ expr_var_keyword_let_await.baml:11:7 ]
 //     │
 //  11 │ //    |

@@ -27,7 +27,7 @@ function MayThrowMultiple(x: int) -> string throws string | int {
 
 //----
 //- diagnostics
-// Warning: extraneous throws declaration: int
+// warning: extraneous throws declaration: int
 //     ╭─[ throw_throws_basic_syntax.baml:21:51 ]
 //     │
 //  21 │ function MayThrowMultiple(x: int) -> string throws string | int {

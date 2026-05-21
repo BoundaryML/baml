@@ -51,7 +51,7 @@ function user.GetUser$build_request_stream(id: int) -> baml.http.Request throws 
   baml.llm.build_request_stream(baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "GetUser", map { "id": id }) : baml.http.Request
 }
 function user.GetUser$parse(json: string) -> user.User throws never {
-  baml.llm.parse<T>("GetUser", json) : user.User
+  baml.llm.parse<TFinal>("GetUser", json) : user.User
 }
 function user.GetStatus() -> user.Status throws never {
   baml.llm.call_llm_function<T>(GPT4, "GetStatus", map {  }) : user.Status
@@ -70,7 +70,7 @@ function user.GetStatus$build_request_stream() -> baml.http.Request throws never
   !! 95..173: unresolved name: GPT4
 }
 function user.GetStatus$parse(json: string) -> user.Status throws never {
-  baml.llm.parse<T>("GetStatus", json) : user.Status
+  baml.llm.parse<TFinal>("GetStatus", json) : user.Status
 }
 function user.GetMixedList() -> (int | string)[] throws never {
   baml.llm.call_llm_function<T>(GPT4, "GetMixedList", map {  }) : (int | string)[]
@@ -89,7 +89,7 @@ function user.GetMixedList$build_request_stream() -> baml.http.Request throws ne
   !! 173..308: unresolved name: GPT4
 }
 function user.GetMixedList$parse(json: string) -> (int | string)[] throws never {
-  baml.llm.parse<T>("GetMixedList", json) : (int | string)[]
+  baml.llm.parse<TFinal>("GetMixedList", json) : (int | string)[]
 }
 function user.GetMixedMap() -> map<string, int | string> throws never {
   baml.llm.call_llm_function<T>(GPT4, "GetMixedMap", map {  }) : map<string, int | string>
@@ -108,19 +108,19 @@ function user.GetMixedMap$build_request_stream() -> baml.http.Request throws nev
   !! 308..410: unresolved name: GPT4
 }
 function user.GetMixedMap$parse(json: string) -> map<string, int | string> throws never {
-  baml.llm.parse<T>("GetMixedMap", json) : map<string, int | string>
+  baml.llm.parse<TFinal>("GetMixedMap", json) : map<string, int | string>
 }
-function user.GetUser$stream(id: int) -> baml.llm.Stream<user.User, null | user.User$stream> throws never {
-  baml.llm.stream_llm_function(baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "GetUser", map { "id": id }) : baml.llm.Stream<user.User, null | user.User$stream>
+function user.GetUser$stream(id: int) -> baml.llm.Stream<null | user.User$stream, user.User> throws never {
+  baml.llm.stream_llm_function(baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "GetUser", map { "id": id }) : baml.llm.Stream<null | user.User$stream, user.User>
 }
-function user.GetUser$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<user.User, null | user.User$stream> throws never {
-  baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }.__make_stream(sse, "GetUser") : baml.llm.Stream<user.User, null | user.User$stream>
+function user.GetUser$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<null | user.User$stream, user.User> throws never {
+  baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }.__make_stream(sse, "GetUser") : baml.llm.Stream<null | user.User$stream, user.User>
 }
-function user.GetStatus$stream() -> baml.llm.Stream<user.Status, null | user.Status> throws never {
-  baml.llm.stream_llm_function(GPT4, "GetStatus", map {  }) : baml.llm.Stream<user.Status, null | user.Status>
+function user.GetStatus$stream() -> baml.llm.Stream<null | user.Status, user.Status> throws never {
+  baml.llm.stream_llm_function(GPT4, "GetStatus", map {  }) : baml.llm.Stream<null | user.Status, user.Status>
   !! 95..173: unresolved name: GPT4
 }
-function user.GetStatus$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<user.Status, null | user.Status> throws never {
+function user.GetStatus$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<null | user.Status, user.Status> throws never {
   GPT4.__make_stream(sse, "GetStatus") : unknown
   !! 95..173: unresolved name: GPT4
 }

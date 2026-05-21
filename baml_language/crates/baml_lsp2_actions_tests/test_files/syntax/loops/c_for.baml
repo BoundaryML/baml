@@ -101,7 +101,7 @@ function BreakContinue() -> int {
 
 //----
 //- diagnostics
-// Error: unresolved name: i
+// error: unresolved name: i
 //     ╭─[ loops_c_for.baml:21:9 ]
 //     │
 //  21 │     for (; i <= 10; i += 1) {
@@ -110,7 +110,7 @@ function BreakContinue() -> int {
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: unresolved name: i
+// error: unresolved name: i
 //     ╭─[ loops_c_for.baml:22:8 ]
 //     │
 //  22 │        s += i;
@@ -119,7 +119,7 @@ function BreakContinue() -> int {
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: unresolved name: i
+// error: unresolved name: i
 //     ╭─[ loops_c_for.baml:21:18 ]
 //     │
 //  21 │     for (; i <= 10; i += 1) {
@@ -128,7 +128,7 @@ function BreakContinue() -> int {
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: unresolved name: x
+// error: unresolved name: x
 //     ╭─[ loops_c_for.baml:42:32 ]
 //     │
 //  42 │     for (let i = 0; i <= 10; i += x) {
@@ -137,7 +137,7 @@ function BreakContinue() -> int {
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Warning: unreachable code: 1 statement(s) after diverging statement
+// warning: unreachable code: 1 statement(s) after diverging statement
 //     ╭─[ loops_c_for.baml:51:12 ]
 //     │
 //  51 │ ╭─▶     for (;;) {

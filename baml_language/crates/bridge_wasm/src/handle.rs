@@ -18,6 +18,7 @@ fn type_name(ht: BamlHandleType) -> &'static str {
         BamlHandleType::AdtPromptAst => "prompt_ast",
         BamlHandleType::AdtCollector => "collector",
         BamlHandleType::AdtType => "type",
+        BamlHandleType::AdtTaggedHeapHandle => "tagged_heap_handle",
     }
 }
 
