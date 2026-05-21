@@ -90,20 +90,22 @@ fn default_project_name(canonical: &Path) -> Option<String> {
         .map(|s| s.to_string())
 }
 
-/// Cargo-style project-name rules: non-empty, no whitespace, no path
-/// separators. Lets dashes / underscores / dots through so common names
-/// like `my-app` and `my.tool` are fine.
+/// Cargo-style project-name rules: non-empty, ASCII alphanumeric plus
+/// `-`, `_`, `.`. Whitelist beats blacklist here — `render_baml_toml`
+/// drops the name straight into a `"..."` TOML string, so a stray `"`
+/// (or any control char) in the name produces an unparseable manifest.
 fn validate_project_name(name: &str) -> Result<()> {
     if name.is_empty() {
         anyhow::bail!("Project name cannot be empty.");
     }
-    if name
+    let bad: Vec<char> = name
         .chars()
-        .any(|c| c.is_whitespace() || c == '/' || c == '\\')
-    {
+        .filter(|c| !(c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')))
+        .collect();
+    if !bad.is_empty() {
         anyhow::bail!(
-            "Project name `{name}` contains invalid characters \
-             (whitespace or path separators). Use letters, digits, `-`, `_`, or `.`."
+            "Project name `{name}` contains invalid character(s) {bad:?}. \
+             Use ASCII letters, digits, `-`, `_`, or `.`."
         );
     }
     Ok(())
@@ -209,7 +211,7 @@ mod tests {
         args.name = Some("bad name".to_string());
         let err = args.run().unwrap_err();
         let msg = format!("{err}");
-        assert!(msg.contains("invalid characters"), "got: {msg}");
+        assert!(msg.contains("invalid character"), "got: {msg}");
     }
 
     #[test]
@@ -225,5 +227,49 @@ mod tests {
         assert!(validate_project_name("a/b").is_err());
         assert!(validate_project_name("a\\b").is_err());
         assert!(validate_project_name("a b").is_err());
+    }
+
+    /// `render_baml_toml` drops the name straight into a `"..."` literal,
+    /// so a name containing `"` would produce unparseable TOML. The
+    /// validator's whitelist catches this before we ever try to write.
+    #[test]
+    fn validate_project_name_rejects_toml_breakers() {
+        assert!(
+            validate_project_name(r#"my"app"#).is_err(),
+            "double quote must be rejected (would break TOML literal)",
+        );
+        assert!(
+            validate_project_name("my'app").is_err(),
+            "single quote must be rejected",
+        );
+        assert!(
+            validate_project_name("my\nname").is_err(),
+            "newline must be rejected",
+        );
+        assert!(
+            validate_project_name("my\tname").is_err(),
+            "tab must be rejected",
+        );
+    }
+
+    /// Non-ASCII names are rejected by the whitelist — keep package
+    /// names ASCII so they map cleanly onto filesystem-name conventions
+    /// the binary outputs use.
+    #[test]
+    fn validate_project_name_rejects_non_ascii() {
+        assert!(validate_project_name("café").is_err());
+        assert!(validate_project_name("プロジェクト").is_err());
+    }
+
+    /// Whatever the validator rejects, the `baml init` happy path must
+    /// also reject. Defensive against the validator and the init flow
+    /// drifting apart.
+    #[test]
+    fn init_rejects_quote_in_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut args = init_args(tmp.path().to_path_buf());
+        args.name = Some(r#"my"app"#.into());
+        let err = args.run().unwrap_err();
+        assert!(format!("{err}").contains("invalid character"));
     }
 }
