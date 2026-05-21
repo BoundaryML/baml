@@ -515,6 +515,22 @@ impl Ty {
     /// - Unknown/Error are mapped to Null during TIR→baml_type conversion
     /// - Never is mapped to Void during VIR lowering
     /// - All real type checking (where those variants matter) happens in TIR
+    ///
+    /// Structural subtyping for `Ty`. This is the runtime / SAP analogue of
+    /// `baml_compiler2_tir::normalize::is_subtype_of` and is intentionally
+    /// **coercion-free** — only representation-preserving widenings are
+    /// allowed. Representation-changing numeric coercions (`int → bigint`,
+    /// `int → float`, and their literal forms) are rejected here even at
+    /// scalar position, because:
+    ///   1. `List`/`Map` are invariant (see TIR `normalize.rs`); allowing the
+    ///      coercive numeric rules would silently re-enable container
+    ///      covariance through the structural recursion below.
+    ///   2. The TIR-side scalar widening is realised by an explicit MIR
+    ///      coercion (`Rvalue::IntToBigint`), not by a subtype relation, so
+    ///      this `Ty::is_subtype_of` does not need to model it.
+    ///
+    /// Keep behaviour aligned with `crate::normalize::is_subtype_of`'s
+    /// coercion-free branch in TIR.
     pub fn is_subtype_of(&self, other: &Ty) -> bool {
         // Same types are subtypes
         if self == other {
@@ -527,16 +543,13 @@ impl Ty {
         }
 
         match (self, other) {
-            // Literal types are subtypes of their corresponding primitives
+            // Literal types are subtypes of their corresponding primitives.
+            // (Same representation — these are free widenings, like
+            // `Literal(Int 42) <: Int`.)
             (Ty::Literal(Literal::Int(_), _), Ty::Int { .. }) => true,
             (Ty::Literal(Literal::Float(_), _), Ty::Float { .. }) => true,
             (Ty::Literal(Literal::String(_), _), Ty::String { .. }) => true,
             (Ty::Literal(Literal::Bool(_), _), Ty::Bool { .. }) => true,
-            // Literal int widens to float
-            (Ty::Literal(Literal::Int(_), _), Ty::Float { .. }) => true,
-            // Literal int widens to bigint
-            (Ty::Literal(Literal::Int(_), _), Ty::Bigint { .. }) => true,
-            // Literal bigint widens to bigint
             (Ty::Literal(Literal::Bigint(_), _), Ty::Bigint { .. }) => true,
 
             // Null is a subtype of Optional<T>
@@ -551,10 +564,14 @@ impl Ty {
             // Union<T1, T2> is a subtype of U if all Ti are subtypes of U
             (Ty::Union(types, _), other) => types.iter().all(|t| t.is_subtype_of(other)),
 
-            // List covariance
+            // List: structural recursion. Since this impl is coercion-free,
+            // recursion via `is_subtype_of` only admits free widenings —
+            // `int[]` is **not** a subtype of `bigint[]`/`float[]`.
             (Ty::List(inner1, _), Ty::List(inner2, _)) => inner1.is_subtype_of(inner2),
 
-            // Map covariance in value (key invariant)
+            // Map: structural recursion in both key and value. Same coercion-
+            // free semantics as `List` — values cannot widen across
+            // representation boundaries.
             (
                 Ty::Map {
                     key: k1, value: v1, ..
@@ -562,13 +579,14 @@ impl Ty {
                 Ty::Map {
                     key: k2, value: v2, ..
                 },
-            ) => k1 == k2 && v1.is_subtype_of(v2),
+            ) => k1.is_subtype_of(k2) && v1.is_subtype_of(v2),
 
-            // Int is a subtype of Bigint (numeric widening)
-            (Ty::Int { .. }, Ty::Bigint { .. }) => true,
-            // Int is a subtype of Float (numeric widening)
-            (Ty::Int { .. }, Ty::Float { .. }) => true,
-
+            // Note: `int <: bigint`, `int <: float`, and the literal-int
+            // widenings to bigint/float are intentionally absent — see the
+            // type-level doc comment. The TIR side keeps them as coercive
+            // scalar rules realised via MIR `IntToBigint` / runtime coercion;
+            // `baml_type::Ty::is_subtype_of` deliberately does not model
+            // those.
             _ => false,
         }
     }
@@ -796,9 +814,13 @@ mod tests {
     }
 
     #[test]
-    fn test_literal_int_widens_to_float() {
+    fn test_literal_int_does_not_widen_to_float() {
+        // `baml_type::Ty::is_subtype_of` is coercion-free; the int-literal
+        // → float widening is a representation change, not a structural
+        // subtype. TIR keeps the scalar widening as a runtime coercion
+        // (MIR-level), not as a subtype relation modeled here.
         let lit_42 = Ty::Literal(Literal::Int(42), TyAttr::default());
-        assert!(lit_42.is_subtype_of(&ty_float()));
+        assert!(!lit_42.is_subtype_of(&ty_float()));
     }
 
     #[test]
@@ -841,8 +863,35 @@ mod tests {
     }
 
     #[test]
-    fn test_int_subtype_of_float() {
-        assert!(ty_int().is_subtype_of(&ty_float()));
+    fn test_int_not_subtype_of_float() {
+        // Coercion-free: `int` is i64, `float` is f64. Values past 2^53 lose
+        // precision; TIR removed this scalar rule, and `baml_type` mirrors it.
+        assert!(!ty_int().is_subtype_of(&ty_float()));
+    }
+
+    #[test]
+    fn test_int_not_subtype_of_bigint() {
+        // Scalar int→bigint widening is a representation change (i64 → heap
+        // BigInt). TIR realises it via MIR `IntToBigint`, not via subtyping;
+        // `baml_type::Ty::is_subtype_of` is coercion-free so the rule is
+        // absent here too.
+        assert!(!ty_int().is_subtype_of(&Ty::Bigint {
+            attr: TyAttr::default()
+        }));
+    }
+
+    #[test]
+    fn test_int_array_not_subtype_of_bigint_array() {
+        // Regression: container invariance. `int[]` must not be a subtype
+        // of `bigint[]`.
+        let int_arr = Ty::List(Box::new(ty_int()), TyAttr::default());
+        let bigint_arr = Ty::List(
+            Box::new(Ty::Bigint {
+                attr: TyAttr::default(),
+            }),
+            TyAttr::default(),
+        );
+        assert!(!int_arr.is_subtype_of(&bigint_arr));
     }
 
     #[test]

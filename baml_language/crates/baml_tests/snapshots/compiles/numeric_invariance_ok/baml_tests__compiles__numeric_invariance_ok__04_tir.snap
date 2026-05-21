@@ -1,0 +1,53 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+function user.BigintLiteralArray() -> bigint[] throws never {
+  { : bigint[]
+    [1n, 2n] : bigint[]
+  }
+}
+function user.EmptyBigintArray() -> bigint[] throws never {
+  { : bigint[]
+    [] : bigint[]
+  }
+}
+function user.EvolvingRetype() -> bigint[] throws never {
+  { : bigint[]
+    let a = [] : never[] -> bigint[] (evolving)
+    a : bigint[]
+  }
+}
+function user.ScalarIntToBigint(x: int) -> bigint throws never {
+  { : int
+    x : int
+  }
+}
+function user.IntArrayIdentity() -> int[] throws never {
+  { : int[]
+    let a = [1, 2] : int[]
+    a : int[]
+  }
+}
+function user.BigintMapLiteral() -> map<string, bigint> throws never {
+  { : map<string, bigint>
+    map { "a": 1n } : map<string, bigint>
+  }
+}
+class user.BigintCounter {
+  count: bigint
+}
+function user.BigintCounter.to_json(self: user.BigintCounter) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "count": self.count.to_json() } : map<string, baml.json.json>
+}
+function user.BigintCounter.from_json(j: baml.json.json) -> user.BigintCounter throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  BigintCounter { count: baml.json.from_json<bigint>(baml.json.field(j, "count")) } : user.BigintCounter
+}
+function user.BigintFieldOk() -> user.BigintCounter throws never {
+  { : user.BigintCounter
+    BigintCounter { count: 1n } : user.BigintCounter
+  }
+}
+class user.BigintCounter$stream {
+  count: null | bigint
+}

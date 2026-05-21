@@ -1,0 +1,163 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] Error: type mismatch: expected float, got int
+    ╭─[ numeric_invariance.baml:10:5 ]
+    │
+ 10 │     x
+    │     ┬  
+    │     ╰── type mismatch: expected float, got int
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: type mismatch: expected float, got 1
+    ╭─[ numeric_invariance.baml:15:5 ]
+    │
+ 15 │     1
+    │     ┬  
+    │     ╰── type mismatch: expected float, got 1
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: type mismatch: expected bigint[], got int[]
+    ╭─[ numeric_invariance.baml:21:5 ]
+    │
+ 21 │     a
+    │     ┬  
+    │     ╰── type mismatch: expected bigint[], got int[]
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: type mismatch: expected bigint, got 1
+    ╭─[ numeric_invariance.baml:27:6 ]
+    │
+ 27 │     [1, 2]
+    │      ┬  
+    │      ╰── type mismatch: expected bigint, got 1
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: type mismatch: expected bigint, got 2
+    ╭─[ numeric_invariance.baml:27:9 ]
+    │
+ 27 │     [1, 2]
+    │         ┬  
+    │         ╰── type mismatch: expected bigint, got 2
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: type mismatch: expected float[], got int[]
+    ╭─[ numeric_invariance.baml:33:5 ]
+    │
+ 33 │     a
+    │     ┬  
+    │     ╰── type mismatch: expected float[], got int[]
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: type mismatch: expected bigint, got 1
+    ╭─[ numeric_invariance.baml:38:7 ]
+    │
+ 38 │     [[1], [2]]
+    │       ┬  
+    │       ╰── type mismatch: expected bigint, got 1
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: type mismatch: expected bigint, got 2
+    ╭─[ numeric_invariance.baml:38:12 ]
+    │
+ 38 │     [[1], [2]]
+    │            ┬  
+    │            ╰── type mismatch: expected bigint, got 2
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: type mismatch: expected map<string, bigint>, got map<string, int>
+    ╭─[ numeric_invariance.baml:44:5 ]
+    │
+ 44 │     m
+    │     ┬  
+    │     ╰── type mismatch: expected map<string, bigint>, got map<string, int>
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: type mismatch: expected bigint, got 1
+    ╭─[ numeric_invariance.baml:49:11 ]
+    │
+ 49 │     {"a": 1}
+    │           ┬  
+    │           ╰── type mismatch: expected bigint, got 1
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: operator `Add` cannot be applied to `int?` and `int`
+    ╭─[ numeric_invariance.baml:55:5 ]
+    │
+ 55 │     x + y
+    │     ──┬──  
+    │       ╰──── operator `Add` cannot be applied to `int?` and `int`
+    │ 
+    │ Note: Error code: E0004
+────╯
+
+  [type] Error: operator `BitAnd` cannot be applied to `int?` and `int`
+    ╭─[ numeric_invariance.baml:60:5 ]
+    │
+ 60 │     x & y
+    │     ──┬──  
+    │       ╰──── operator `BitAnd` cannot be applied to `int?` and `int`
+    │ 
+    │ Note: Error code: E0004
+────╯
+
+  [type] Error: operator `Lt` cannot be applied to `int?` and `int`
+    ╭─[ numeric_invariance.baml:67:5 ]
+    │
+ 67 │     x < y
+    │     ──┬──  
+    │       ╰──── operator `Lt` cannot be applied to `int?` and `int`
+    │ 
+    │ Note: Error code: E0004
+────╯
+
+  [type] Error: operator `Eq` cannot be applied to `float?` and `bigint`
+    ╭─[ numeric_invariance.baml:73:5 ]
+    │
+ 73 │     x == y
+    │     ───┬──  
+    │        ╰──── operator `Eq` cannot be applied to `float?` and `bigint`
+    │ 
+    │ Note: Error code: E0004
+────╯
+
+  [type] Error: operator `Lt` cannot be applied to `float?` and `bigint`
+    ╭─[ numeric_invariance.baml:79:5 ]
+    │
+ 79 │     x < y
+    │     ──┬──  
+    │       ╰──── operator `Lt` cannot be applied to `float?` and `bigint`
+    │ 
+    │ Note: Error code: E0004
+────╯
+
+  [type] Error: type mismatch: expected bigint, got 1
+    ╭─[ numeric_invariance.baml:87:27 ]
+    │
+ 87 │     BigintHolder { count: 1 }
+    │                           ┬  
+    │                           ╰── type mismatch: expected bigint, got 1
+    │ 
+    │ Note: Error code: E0001
+────╯

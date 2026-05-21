@@ -898,8 +898,10 @@ pub(crate) fn coerce_arg_to_declared_type(
 
 /// Coerce an **outgoing** return value to match the declared return type.
 ///
-/// Restricted to direction-symmetric coercions: int↔bigint widening, optional
-/// unwrap, and numeric-singleton unions. Class / enum naming is intentionally
+/// Restricted to direction-symmetric coercions: int↔bigint conversion (int→bigint
+/// widens unconditionally; bigint→int succeeds when the value fits in i64 and
+/// errors otherwise), optional unwrap, and numeric-singleton unions. Class /
+/// enum naming is intentionally
 /// *not* rewritten here — the engine-side FQN (e.g. `user.lorem.MyLorem`) is
 /// the authoritative output and stripping it back to the bare display name
 /// would break host-side type lookups.
@@ -919,6 +921,17 @@ fn coerce_numeric_to_declared_type(
         // Int → Bigint widening
         (BexExternalValue::Int(i), Ty::Bigint { .. } | Ty::Literal(Literal::Bigint(_), _)) => {
             Ok(BexExternalValue::Bigint(num_bigint::BigInt::from(i)))
+        }
+
+        // Bigint → Int narrowing: host-supplied bigint must fit in i64, otherwise
+        // there is no safe representation in the `int` slot and we reject the
+        // call rather than silently truncate.
+        (BexExternalValue::Bigint(bi), Ty::Int { .. } | Ty::Literal(Literal::Int(_), _)) => {
+            i64::try_from(&bi)
+                .map(BexExternalValue::Int)
+                .map_err(|_| EngineError::TypeMismatch {
+                    message: format!("bigint value {bi} does not fit in i64"),
+                })
         }
 
         // Optional<inner>: null short-circuits; otherwise unwrap and recurse.

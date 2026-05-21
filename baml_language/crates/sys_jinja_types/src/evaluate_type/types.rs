@@ -69,7 +69,19 @@ pub enum Type {
 }
 
 impl Type {
-    /// This is very similar to FieldType::is_subtype_of.
+    /// Subtyping for the Jinja template type lattice.
+    ///
+    /// This is a **third** subtyping implementation alongside
+    /// `baml_compiler2_tir::normalize::is_subtype_of` (the TIR) and
+    /// `baml_type::Ty::is_subtype_of` (runtime / SAP). It is intentionally
+    /// isolated: Jinja templates have their own value semantics
+    /// (`Bigint` never widens to anything — see the `Bigint` arm below),
+    /// so this impl mirrors neither the TIR coercive scalar rules nor the
+    /// coercion-free container rules.
+    ///
+    /// Do **not** keep this in sync with the TIR rules by reflex — it is
+    /// a separate dialect by design. Any change here should be motivated
+    /// by Jinja template semantics, not by the BAML type system.
     pub fn is_subtype_of(&self, other: &Self) -> bool {
         if self == other {
             return true;

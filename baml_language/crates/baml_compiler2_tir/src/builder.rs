@@ -1245,23 +1245,31 @@ impl<'db> TypeInferenceBuilder<'db> {
         let expanded_expected = self.expand_alias_chains(expected.clone());
         let expanded_got = self.expand_alias_chains(got.clone());
 
+        // The arms below bridge between the builtin `Class<Array, [T]>` /
+        // `Class<Map, [K, V]>` wrapper types and their raw `List<T>` /
+        // `Map<K, V>` shapes. The element-type checks must use the
+        // coercion-free relation — `List`/`Map` are invariant, so an
+        // `int[]` argument must not slide into an `Array<bigint>` slot via
+        // the scalar `int <: bigint` rule. (If the outer `is_subtype` had
+        // permitted this it would have returned `true` above; we get here
+        // only when the shapes differ.)
         match (&expanded_expected, &expanded_got) {
             (Ty::Class(class_name, expected_args, _), Ty::List(actual_inner, _))
                 if class_name.is_builtin_root_type("Array") && expected_args.len() == 1 =>
             {
-                self.is_subtype(actual_inner, &expected_args[0])
+                self.is_coercion_free_subtype(actual_inner, &expected_args[0])
             }
             (Ty::Class(class_name, expected_args, _), Ty::EvolvingList(actual_inner, _))
                 if class_name.is_builtin_root_type("Array") && expected_args.len() == 1 =>
             {
-                self.is_subtype(actual_inner, &expected_args[0])
+                self.is_coercion_free_subtype(actual_inner, &expected_args[0])
             }
             (
                 Ty::Class(class_name, expected_args, _),
                 Ty::Map(actual_key, actual_val, _) | Ty::EvolvingMap(actual_key, actual_val, _),
             ) if class_name.is_builtin_root_type("Map") && expected_args.len() == 2 => {
-                self.is_subtype(actual_key, &expected_args[0])
-                    && self.is_subtype(actual_val, &expected_args[1])
+                self.is_coercion_free_subtype(actual_key, &expected_args[0])
+                    && self.is_coercion_free_subtype(actual_val, &expected_args[1])
             }
             _ => false,
         }
@@ -3187,6 +3195,9 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     /// Checking mode: verify an expression against an expected type.
     pub fn check_expr(&mut self, expr_id: ExprId, body: &ExprBody, expected: &Ty) -> Ty {
+        // Fix the element type of an empty evolving container the first time
+        // it is used in a typed context (see `retype_evolving_empty`).
+        self.retype_evolving_empty(expr_id, body, expected);
         let expr = &body.exprs[expr_id];
         match expr {
             // Block: check the tail expression against expected type
@@ -3293,7 +3304,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                 };
                 if let Some(elem_ty) = elem_ty {
                     for e in elements {
-                        self.check_expr(*e, body, elem_ty);
+                        let et = self.check_expr(*e, body, elem_ty);
+                        self.reject_coercive_container_element(*e, &et, elem_ty);
                     }
                     let ty = expected.clone();
                     self.record_expr_type(expr_id, ty.clone());
@@ -3303,12 +3315,22 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             // Object: if expected is Class(name), check fields against declared types.
+            //
+            // Class fields are invariant — the same reasoning as `Array`/`Map`
+            // element types. Without the coercion-free element check, an `int`
+            // expression silently lands in a `bigint`-typed field (the runtime
+            // does no field-level widening), so the field would hold an int at
+            // runtime despite its declared type. Mirror the `Array`/`Map`
+            // arms above: still call `check_expr` for nested promotion
+            // (object → class, etc.), then re-verify with the coercion-free
+            // relation.
             Expr::Object { fields, .. } => {
                 if let Ty::Class(class_name, type_args, _) = expected {
                     let field_types = self.lookup_class_fields(class_name, type_args);
                     for (field_name, field_expr) in fields {
                         if let Some(declared_ty) = field_types.get(field_name) {
-                            self.check_expr(*field_expr, body, declared_ty);
+                            let ft = self.check_expr(*field_expr, body, declared_ty);
+                            self.reject_coercive_container_element(*field_expr, &ft, declared_ty);
                         } else {
                             self.infer_expr(*field_expr, body);
                         }
@@ -3327,8 +3349,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                 };
                 if let Some((key_ty, val_ty)) = kv {
                     for (k, v) in entries {
-                        self.check_expr(*k, body, key_ty);
-                        self.check_expr(*v, body, val_ty);
+                        let kt = self.check_expr(*k, body, key_ty);
+                        self.reject_coercive_container_element(*k, &kt, key_ty);
+                        let vt = self.check_expr(*v, body, val_ty);
+                        self.reject_coercive_container_element(*v, &vt, val_ty);
                     }
                     let ty = expected.clone();
                     self.record_expr_type(expr_id, ty.clone());
@@ -7386,6 +7410,39 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    /// An unannotated `let a = []` produces an `EvolvingList(Never)` whose
+    /// element type is meant to be fixed by usage — the same way `.push`
+    /// evolves it. When such an *empty* evolving container is read in a
+    /// context that expects a concrete `List`/`Map`, adopt that element type
+    /// so the binding (and any later mutation) stays consistent with the use.
+    ///
+    /// A later, conflicting typed use no longer matches the `Never` guard, so
+    /// it falls through to a normal invariance mismatch.
+    fn retype_evolving_empty(&mut self, expr_id: ExprId, body: &ExprBody, expected: &Ty) {
+        let Some(name) = self.expr_local_name(expr_id, body) else {
+            return;
+        };
+        let Some(binding) = self.locals.get(&name) else {
+            return;
+        };
+        let new_ty = match (&binding.current_ty, expected) {
+            (Ty::EvolvingList(inner, attr), Ty::List(exp, _) | Ty::EvolvingList(exp, _))
+                if matches!(**inner, Ty::Never { .. }) =>
+            {
+                Ty::EvolvingList(exp.clone(), attr.clone())
+            }
+            (
+                Ty::EvolvingMap(k, v, attr),
+                Ty::Map(exp_k, exp_v, _) | Ty::EvolvingMap(exp_k, exp_v, _),
+            ) if matches!(**k, Ty::Never { .. }) && matches!(**v, Ty::Never { .. }) => {
+                Ty::EvolvingMap(exp_k.clone(), exp_v.clone(), attr.clone())
+            }
+            _ => return,
+        };
+        self.assign_local(name.clone(), new_ty.clone());
+        self.sync_let_binding_type(&name, new_ty);
+    }
+
     /// Try to handle a container mutation method call: `x.push(val)` or `x?.push?.(val)`.
     ///
     /// This is the "evolving path" for container mutations — it intercepts
@@ -7716,6 +7773,44 @@ impl<'db> TypeInferenceBuilder<'db> {
         crate::normalize::is_subtype_of(sub, sup, &self.aliases)
     }
 
+    /// Subtype check that rejects representation-changing numeric coercions
+    /// (`int` → `bigint`). Used to check the element types of container
+    /// literals — `List`/`Map` are invariant, so `[1, 2]` does not satisfy
+    /// a `bigint[]` slot.
+    fn is_coercion_free_subtype(&self, sub: &Ty, sup: &Ty) -> bool {
+        crate::normalize::is_coercion_free_subtype_of(sub, sup, &self.aliases)
+    }
+
+    /// Container element types and class field types are invariant. A numeric
+    /// coercion (`int` → `bigint`) that is valid at a scalar position must
+    /// not slip through a container literal or class-literal field — `[1, 2]`
+    /// is an `int[]`, not a `bigint[]` (write `[1n, 2n]`), and `{ x: 1 }` is
+    /// not an instance of `{ x: bigint }`. Reports a mismatch when
+    /// `elem_actual` only satisfies `elem_expected` via such a coercion.
+    ///
+    /// Used by the `Expr::Array`, `Expr::Map`, and `Expr::Object` arms of
+    /// `check_expr` — each one calls this after the per-element/field
+    /// `check_expr` to enforce invariance.
+    fn reject_coercive_container_element(
+        &mut self,
+        elem: ExprId,
+        elem_actual: &Ty,
+        elem_expected: &Ty,
+    ) {
+        if self.is_subtype(elem_actual, elem_expected)
+            && !self.is_coercion_free_subtype(elem_actual, elem_expected)
+        {
+            self.context.report(
+                TirTypeError::TypeMismatch {
+                    expected: elem_expected.clone(),
+                    got: elem_actual.clone(),
+                },
+                elem,
+                Vec::new(),
+            );
+        }
+    }
+
     /// Type intersection (greatest common subtype). Used by match-arm
     /// narrowing to compute the actual reachable type for an arm body —
     /// the values that satisfy both the scrutinee's type AND the arm
@@ -7781,17 +7876,41 @@ impl<'db> TypeInferenceBuilder<'db> {
         let lhs = &expanded_lhs;
         let rhs = &expanded_rhs;
         match op {
-            // Comparison / equality → bool
-            BinaryOp::Eq
-            | BinaryOp::Ne
-            | BinaryOp::Lt
-            | BinaryOp::Le
-            | BinaryOp::Gt
-            | BinaryOp::Ge => {
+            // Equality (`==`, `!=`): finds a common upcast and compares at
+            // that type. `x == null` and `int? == int` are the canonical
+            // null-check / nullable-equality cases and are intentionally
+            // allowed. The only thing rejected here is a common upcast that
+            // would still contain the float/bigint pair, since that pairing
+            // is itself unsound (see `is_float_bigint_mix`).
+            BinaryOp::Eq | BinaryOp::Ne => {
                 if Self::is_float_bigint_mix(lhs, rhs)
                     && !matches!(lhs, Ty::Unknown { .. } | Ty::Error { .. })
                     && !matches!(rhs, Ty::Unknown { .. } | Ty::Error { .. })
                 {
+                    self.context.report_simple(
+                        TirTypeError::InvalidBinaryOp {
+                            op,
+                            lhs: lhs.clone(),
+                            rhs: rhs.clone(),
+                        },
+                        at,
+                    );
+                }
+                Ty::Primitive(PrimitiveType::Bool, TyAttr::default())
+            }
+
+            // Ordering (`<`, `<=`, `>`, `>=`): unlike equality, there is no
+            // meaningful ordering between `null` and a real value. Reject
+            // any operand that could be null (Optional / Union containing
+            // `null` / bare `null`) before the float-bigint mix check.
+            BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
+                let invalid_null = (Self::may_be_null(lhs) || Self::may_be_null(rhs))
+                    && !matches!(lhs, Ty::Unknown { .. } | Ty::Error { .. })
+                    && !matches!(rhs, Ty::Unknown { .. } | Ty::Error { .. });
+                let invalid_mix = Self::is_float_bigint_mix(lhs, rhs)
+                    && !matches!(lhs, Ty::Unknown { .. } | Ty::Error { .. })
+                    && !matches!(rhs, Ty::Unknown { .. } | Ty::Error { .. });
+                if invalid_null || invalid_mix {
                     self.context.report_simple(
                         TirTypeError::InvalidBinaryOp {
                             op,
@@ -7948,13 +8067,42 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    /// Returns true if one operand is `float`-rooted and the other is
-    /// `bigint`-rooted. Used to reject ambiguous numeric comparisons /
-    /// arithmetic since bigint values past 2^53 don't round-trip through f64.
+    /// Returns true if any runtime value of `ty` could be `null` — i.e. the
+    /// type is `Optional<_>`, the bare `null` primitive, or a union that
+    /// contains either.
+    ///
+    /// Used by the ordering arms of [`infer_binary_op`] to reject operands
+    /// whose runtime value might be `null`. Arithmetic / bitwise rely on
+    /// their respective `base_ty` classifiers (which return `None` for
+    /// `Optional`/`null` and short-circuit via the catch-all to `Unknown`),
+    /// so they do not need this helper.
+    fn may_be_null(ty: &Ty) -> bool {
+        match ty {
+            Ty::Optional(_, _) => true,
+            Ty::Primitive(PrimitiveType::Null, _) => true,
+            Ty::Union(members, _) => members.iter().any(Self::may_be_null),
+            _ => false,
+        }
+    }
+
+    /// Returns true if the common upcast of `lhs` and `rhs` would contain
+    /// both `float` and `bigint`, which has no sound comparison (bigint
+    /// values past 2^53 don't round-trip through f64).
+    ///
+    /// Models the "is there a valid common type for these two values?"
+    /// question used by the equality and ordering arms of
+    /// [`infer_binary_op`]. `int? == int` upcasts both sides to `int?` and
+    /// is fine; `float? == bigint` upcasts to `float | null | bigint`,
+    /// which still pairs float with bigint inside the upcast — so even
+    /// though only one runtime branch realizes the bad pairing, the type
+    /// itself is unsound.
     fn is_float_bigint_mix(lhs: &Ty, rhs: &Ty) -> bool {
-        /// `(could_be_float, could_be_bigint)` for a primitive/literal/union
-        /// type. Recurses into unions so a mixed operand like `float | int`
-        /// is seen as possibly-float when paired against a `bigint` side.
+        /// `(could_be_float, could_be_bigint)` for a primitive/literal/union/
+        /// optional type — i.e. the set of primitive shapes any runtime branch
+        /// could carry. Optional **is** unwrapped here because this helper
+        /// asks about the *upcast* type, not about whether the operand itself
+        /// is a valid scalar (the latter check belongs at the operator's arm
+        /// entry, e.g. ordering rejecting nullable operands via `may_be_null`).
         fn shape(ty: &Ty) -> (bool, bool) {
             match ty {
                 Ty::Primitive(PrimitiveType::Float, _)
@@ -7965,12 +8113,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                     let (mf, mb) = shape(m);
                     (f || mf, b || mb)
                 }),
+                Ty::Optional(inner, _) => shape(inner),
                 _ => (false, false),
             }
         }
         let (lhs_float, lhs_bigint) = shape(lhs);
         let (rhs_float, rhs_bigint) = shape(rhs);
-        (lhs_float && rhs_bigint) || (lhs_bigint && rhs_float)
+        // The upcast of the two operands contains both `float` and `bigint`
+        // iff either side could be float **and** either side could be bigint.
+        // (A single side containing both — e.g. `float | bigint` — is just as
+        // unsound as the classic cross-side case `float vs bigint`.)
+        (lhs_float || rhs_float) && (lhs_bigint || rhs_bigint)
     }
 
     /// Determine the result type of a bitwise operation.
@@ -8390,6 +8543,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if b.sign() == Sign::Minus {
                     return None;
                 }
+                // Shl and Shr handle huge counts asymmetrically *on purpose*.
+                // Shl growth is bounded by `MAX_BIGINT_BITS`; if the count
+                // overflows `usize` (or would push the result past the cap)
+                // we refuse to fold, deferring to the runtime which raises
+                // `AllocFailure` rather than producing a value the VM
+                // couldn't materialise. Shr cannot grow the value, so a
+                // count past `usize::MAX` simply saturates to `0n` / `-1n`
+                // — see the comment in the `Shr` arm.
                 let shift = usize::try_from(b).ok()?;
                 let shift_u64 = u64::try_from(shift).ok()?;
                 if a.bits().saturating_add(shift_u64) > baml_type::MAX_BIGINT_BITS {
@@ -8403,6 +8564,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
                 // Mirror `Instruction::ShrBigint`: counts that don't fit in
                 // `usize` saturate to 0n (or -1n for negative operands).
+                // (The asymmetry with `Shl` is intentional — see that arm.)
                 match usize::try_from(b) {
                     Ok(shift) => lit_bigint(a >> shift),
                     Err(_) => lit_bigint(if a.sign() == Sign::Minus {

@@ -1,0 +1,157 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.BigintFieldOk() -> BigintCounter {
+    // Locals:
+    let _0: BigintCounter // _0 // return
+
+    bb0: {
+        _0 = user.BigintCounter { const 1n };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.BigintLiteralArray() -> bigint[] {
+    // Locals:
+    let _0: bigint[] // _0 // return
+
+    bb0: {
+        _0 = [const 1n, const 2n];
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.BigintMapLiteral() -> map<string, bigint> {
+    // Locals:
+    let _0: map<string, bigint> // _0 // return
+
+    bb0: {
+        _0 = { const "a": const 1n };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.EmptyBigintArray() -> bigint[] {
+    // Locals:
+    let _0: bigint[] // _0 // return
+
+    bb0: {
+        _0 = [];
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.EvolvingRetype() -> bigint[] {
+    // Locals:
+    let _0: bigint[] // _0 // return
+    let _1: bigint[] // a
+
+    bb0: {
+        _1 = [];
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.IntArrayIdentity() -> int[] {
+    // Locals:
+    let _0: int[] // _0 // return
+    let _1: int[] // a
+
+    bb0: {
+        _1 = [const 1_i64, const 2_i64];
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ScalarIntToBigint(x: int) -> bigint {
+    // Locals:
+    let _0: bigint // _0 // return
+    let _1: int // x // param
+
+    bb0: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.BigintCounter.from_json(j: baml.json.json) -> BigintCounter {
+    // Locals:
+    let _0: BigintCounter // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: bigint
+    let _3: baml.json.json
+    let _4: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "count") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(bigint);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _0 = user.BigintCounter { copy _2 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.BigintCounter.to_json(self: BigintCounter) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: BigintCounter // self // param
+    let _2: baml.json.json
+    let _3: bigint
+    let _4: BigintCounter
+
+    bb0: {
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.Bigint.to_json(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _0 = { const "count": copy _2 };
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}

@@ -1,0 +1,105 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+function user.IntToFloat(x: int) -> float throws never {
+  { : int
+    x : int
+  }
+  !! 429..430: type mismatch: expected float, got int
+}
+function user.IntLiteralToFloat() -> float throws never {
+  { : 1
+    1 : 1
+  }
+  !! 558..559: type mismatch: expected float, got 1
+}
+function user.IntArrayToBigintArray() -> bigint[] throws never {
+  { : int[]
+    let a = [1, 2] : int[]
+    a : int[]
+  }
+  !! 697..698: type mismatch: expected bigint[], got int[]
+}
+function user.IntLiteralArrayToBigint() -> bigint[] throws never {
+  { : bigint[]
+    [1, 2] : bigint[]
+  }
+  !! 900..901: type mismatch: expected bigint, got 1
+  !! 903..904: type mismatch: expected bigint, got 2
+}
+function user.IntArrayToFloatArray() -> float[] throws never {
+  { : int[]
+    let a = [1, 2] : int[]
+    a : int[]
+  }
+  !! 1021..1022: type mismatch: expected float[], got int[]
+}
+function user.NestedIntArrayToBigint() -> bigint[][] throws never {
+  { : bigint[][]
+    [[1], [2]] : bigint[][]
+  }
+  !! 1138..1139: type mismatch: expected bigint, got 1
+  !! 1143..1144: type mismatch: expected bigint, got 2
+}
+function user.IntMapToBigintMap() -> map<string, bigint> throws never {
+  { : map<string, int>
+    let m = map { "a": 1 } : map<string, int>
+    m : map<string, int>
+  }
+  !! 1296..1297: type mismatch: expected map<string, bigint>, got map<string, int>
+}
+function user.IntMapLiteralToBigint() -> map<string, bigint> throws never {
+  { : map<string, bigint>
+    map { "a": 1 } : map<string, bigint>
+  }
+  !! 1449..1450: type mismatch: expected bigint, got 1
+}
+function user.OptionalIntPlusInt(x: int?, y: int) -> int throws never {
+  { : unknown
+    x + y : unknown
+  }
+  !! 1637..1642: operator `Add` cannot be applied to `int?` and `int`
+}
+function user.OptionalIntAndInt(x: int?, y: int) -> int throws never {
+  { : unknown
+    x & y : unknown
+  }
+  !! 1771..1776: operator `BitAnd` cannot be applied to `int?` and `int`
+}
+function user.OptionalIntLtInt(x: int?, y: int) -> bool throws never {
+  { : bool
+    x < y : bool
+  }
+  !! 2030..2035: operator `Lt` cannot be applied to `int?` and `int`
+}
+function user.OptionalFloatEqBigint(x: float?, y: bigint) -> bool throws never {
+  { : bool
+    x == y : bool
+  }
+  !! 2251..2257: operator `Eq` cannot be applied to `float?` and `bigint`
+}
+function user.OptionalFloatLtBigint(x: float?, y: bigint) -> bool throws never {
+  { : bool
+    x < y : bool
+  }
+  !! 2458..2463: operator `Lt` cannot be applied to `float?` and `bigint`
+}
+class user.BigintHolder {
+  count: bigint
+}
+function user.BigintHolder.to_json(self: user.BigintHolder) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "count": self.count.to_json() } : map<string, baml.json.json>
+}
+function user.BigintHolder.from_json(j: baml.json.json) -> user.BigintHolder throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  BigintHolder { count: baml.json.from_json<bigint>(baml.json.field(j, "count")) } : user.BigintHolder
+}
+function user.IntFieldIntoBigintClass() -> user.BigintHolder throws never {
+  { : user.BigintHolder
+    BigintHolder { count: 1 } : user.BigintHolder
+  }
+  !! 2791..2792: type mismatch: expected bigint, got 1
+}
+class user.BigintHolder$stream {
+  count: null | bigint
+}
