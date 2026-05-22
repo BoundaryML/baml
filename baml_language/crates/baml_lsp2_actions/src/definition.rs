@@ -57,8 +57,10 @@ pub fn definition_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Option<
     // ── Step 1: find the token at the cursor ─────────────────────────────────
     let token = utils::find_token_at_offset(db, file, offset)?;
 
-    // Only WORD tokens can be names that resolve to definitions.
-    if token.kind() != SyntaxKind::WORD {
+    // WORD tokens and keyword tokens may both be names in member position
+    // (`obj.implements()`), so let the resolver decide whether the text is
+    // actually a definition-bearing symbol.
+    if token.kind() != SyntaxKind::WORD && !token.kind().is_keyword() {
         return None;
     }
 

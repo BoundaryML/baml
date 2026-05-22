@@ -254,6 +254,13 @@ pub enum TirTypeError {
     /// interface type.
     InvalidInterfaceUpcastTarget { target: Ty },
 
+    /// Interface members are instance/view members, not static members on the
+    /// interface type. Call through an interface-typed value or `.as<I>`.
+    InterfaceMemberRequiresReceiver {
+        interface_name: Name,
+        member_name: Name,
+    },
+
     /// Interface-typed receivers cannot call methods with additional `Self`
     /// parameters. The concrete implementor must be known for those arguments.
     InvalidSelfCallThroughInterface {
@@ -645,6 +652,13 @@ impl fmt::Display for TirTypeError {
             TirTypeError::InvalidInterfaceUpcastTarget { target } => {
                 write!(f, "`.as<T>` target must be an interface, got `{target}`")
             }
+            TirTypeError::InterfaceMemberRequiresReceiver {
+                interface_name,
+                member_name,
+            } => write!(
+                f,
+                "interface member `{member_name}` on `{interface_name}` must be accessed through a value; use value.as<{interface_name}>.{member_name}"
+            ),
             TirTypeError::InvalidSelfCallThroughInterface {
                 interface_name,
                 method_name,

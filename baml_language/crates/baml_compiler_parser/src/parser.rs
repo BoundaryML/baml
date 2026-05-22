@@ -942,11 +942,11 @@ impl<'a> Parser<'a> {
             }
             let token = &self.tokens[i];
             match token.kind {
-                TokenKind::Whitespace => {
+                TokenKind::Whitespace | TokenKind::Newline => {
                     i += 1;
                 }
                 TokenKind::LBrace => return true,
-                TokenKind::Newline | TokenKind::RBrace | TokenKind::Semicolon => return false,
+                TokenKind::RBrace | TokenKind::Semicolon => return false,
                 _ => {
                     i += 1;
                 }
@@ -6754,6 +6754,32 @@ interface Named {
             root.children()
                 .any(|n| n.kind() == SyntaxKind::INTERFACE_DEF),
             "interface should recover as a top-level item, not be swallowed by the class"
+        );
+    }
+
+    #[test]
+    fn multiline_interface_keyword_recovers_as_top_level_after_missing_class_brace() {
+        let source = r#"
+class Person {
+  name string
+
+interface Named
+requires Base
+{
+  name string
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert!(
+            !errors.is_empty(),
+            "missing class brace should still produce a parse error"
+        );
+
+        assert!(
+            root.children()
+                .any(|n| n.kind() == SyntaxKind::INTERFACE_DEF),
+            "multiline interface should recover as a top-level item"
         );
     }
 

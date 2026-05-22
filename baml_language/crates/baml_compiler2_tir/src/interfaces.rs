@@ -15,6 +15,7 @@ use baml_compiler2_hir::{contributions::Definition, package::PackageId};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
+    generics,
     lower_type_expr::qualify_def,
     ty::{PrimitiveType, QualifiedTypeName, Ty, TyAttr},
 };
@@ -92,13 +93,15 @@ pub fn implementation_key_for_ty(ty: &Ty) -> Option<Ty> {
             Box::new(implementation_key_for_ty(inner)?),
             TyAttr::default(),
         )),
-        Ty::Union(members, _) => Some(Ty::Union(
-            members
+        Ty::Union(members, _) => {
+            let mut keys = members
                 .iter()
                 .map(implementation_key_for_ty)
-                .collect::<Option<Vec<_>>>()?,
-            TyAttr::default(),
-        )),
+                .collect::<Option<Vec<_>>>()?;
+            keys.sort();
+            keys.dedup();
+            Some(Ty::Union(keys, TyAttr::default()))
+        }
         Ty::Class(..) | Ty::Interface(..) | Ty::Enum(..) | Ty::TypeAlias(..) => None,
         _ => None,
     }
@@ -388,4 +391,100 @@ pub fn interface_closure_locs<'db>(
         }
     }
     out
+}
+
+/// Walk the transitive `requires` closure of `root_iface`, carrying the concrete
+/// generic arguments for each interface in the closure. For example,
+/// `Child<int> requires Parent<T>` yields `(Child, [int])` and `(Parent, [int])`.
+pub fn interface_closure_locs_with_args<'db>(
+    db: &'db dyn crate::Db,
+    root_iface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+    root_args: &[Ty],
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    current_ns: &[Name],
+) -> Vec<(baml_compiler2_hir::loc::InterfaceLoc<'db>, Vec<Ty>)> {
+    let mut out: Vec<(baml_compiler2_hir::loc::InterfaceLoc<'db>, Vec<Ty>)> = Vec::new();
+    let mut seen: FxHashSet<(baml_compiler2_hir::loc::InterfaceLoc<'db>, Vec<Ty>)> =
+        FxHashSet::default();
+    let mut queue: std::collections::VecDeque<(
+        baml_compiler2_hir::loc::InterfaceLoc<'db>,
+        Vec<Ty>,
+    )> = std::collections::VecDeque::new();
+    queue.push_back((root_iface, root_args.to_vec()));
+
+    while let Some((loc, args)) = queue.pop_front() {
+        if !seen.insert((loc, args.clone())) {
+            continue;
+        }
+        out.push((loc, args.clone()));
+
+        let tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
+        let Some(iface) = tree.interfaces.get(&loc.id(db)) else {
+            continue;
+        };
+        let pkg_info = baml_compiler2_hir::file_package::file_package(db, loc.file(db));
+        let pkg_id = PackageId::new(db, pkg_info.package.clone());
+        let parent_pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+        let bindings = generics::bind_type_vars(&iface.generic_params, &args);
+
+        for parent in &iface.extends {
+            let Some(parent_loc) = resolve_path_to_interface(
+                db,
+                &parent.expr,
+                parent_pkg_items,
+                &pkg_info.namespace_path,
+            ) else {
+                continue;
+            };
+            let parent_args = match &parent.expr {
+                baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => {
+                    let mut diags = Vec::new();
+                    generic_args
+                        .iter()
+                        .map(|arg| {
+                            generics::lower_type_expr_with_generics(
+                                db,
+                                arg,
+                                parent_pkg_items,
+                                &pkg_info.namespace_path,
+                                &bindings,
+                                &mut diags,
+                            )
+                        })
+                        .collect()
+                }
+                _ => Vec::new(),
+            };
+            queue.push_back((parent_loc, parent_args));
+        }
+    }
+
+    let _ = (pkg_items, current_ns);
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn implementation_key_for_ty_canonicalizes_union_members() {
+        let int = Ty::Primitive(PrimitiveType::Int, TyAttr::default());
+        let string = Ty::Primitive(PrimitiveType::String, TyAttr::default());
+        let lhs = Ty::Union(vec![int.clone(), string.clone()], TyAttr::default());
+        let rhs = Ty::Union(vec![string, int], TyAttr::default());
+
+        assert_eq!(implementation_key_for_ty(&lhs), implementation_key_for_ty(&rhs));
+    }
+
+    #[test]
+    fn implementation_key_for_ty_dedupes_union_members() {
+        let int = Ty::Primitive(PrimitiveType::Int, TyAttr::default());
+        let duplicated = Ty::Union(vec![int.clone(), int.clone()], TyAttr::default());
+
+        assert_eq!(
+            implementation_key_for_ty(&duplicated),
+            Some(Ty::Union(vec![int], TyAttr::default()))
+        );
+    }
 }

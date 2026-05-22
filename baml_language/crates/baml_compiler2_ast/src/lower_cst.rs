@@ -171,7 +171,9 @@ pub fn lower_file_with_file_id(
     items.retain(|item| !matches!(item, Item::ImplementsFor(_)));
     for imp in impl_fors {
         let target_name = match &imp.for_target.expr {
-            crate::ast::TypeExpr::Path { segments, .. } => segments.last().cloned(),
+            crate::ast::TypeExpr::Path { segments, .. } if segments.len() == 1 => {
+                segments.first().cloned()
+            }
             _ => None,
         };
         if let Some(target_name) = target_name {
@@ -1107,7 +1109,13 @@ fn lower_interface(
         return None;
     };
     let iface_name = name_token.text().to_string();
-    let generic_params = extract_generic_params(node);
+    let generic_params_with_bounds = extract_generic_params_with_bounds(node);
+    let generic_params: Vec<Name> = generic_params_with_bounds
+        .iter()
+        .map(|(n, _)| n.clone())
+        .collect();
+    let generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> =
+        generic_params_with_bounds.into_iter().map(|(_, b)| b).collect();
 
     // BEP-044: `requires` is the canonical keyword; `extends` is accepted as
     // a legacy alias. Both produce the same AST `extends` field.
@@ -1193,6 +1201,7 @@ fn lower_interface(
     Some(InterfaceDef {
         name: Name::new(&iface_name),
         generic_params,
+        generic_param_bounds,
         extends,
         fields,
         required_methods,

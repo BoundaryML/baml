@@ -211,6 +211,8 @@ pub struct Interface {
     pub name: Name,
     /// Generic type parameters declared on the interface.
     pub generic_params: Vec<Name>,
+    /// BEP-044 generic bounds parallel to `generic_params`.
+    pub generic_param_bounds: Vec<Option<ast::TypeExpr>>,
     /// Parent interfaces from `extends I1, I2, …`.
     pub extends: Vec<ast::SpannedTypeExpr>,
     /// Field signatures declared on the interface. Interface fields cannot
@@ -665,6 +667,7 @@ impl ItemTree {
             Interface {
                 name: i.name.clone(),
                 generic_params: i.generic_params.clone(),
+                generic_param_bounds: i.generic_param_bounds.clone(),
                 extends: i.extends.clone(),
                 fields,
                 default_methods: default_method_ids,

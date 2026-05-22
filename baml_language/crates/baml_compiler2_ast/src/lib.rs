@@ -444,6 +444,81 @@ implements ToJson for Dog {
     }
 
     #[test]
+    fn ast_does_not_merge_qualified_out_of_body_implements_into_local_class() {
+        let source = r#"
+interface ToJson {
+  function to_json(self) -> string
+}
+
+class Dog {
+  name string
+}
+
+implements ToJson for other.Dog {
+  function to_json(self) -> string {
+    return "dog"
+  }
+}
+"#;
+        let items = parse_and_lower(source);
+        let class = items
+            .iter()
+            .find_map(|item| match item {
+                Item::Class(class) if class.name.as_str() == "Dog" => Some(class),
+                _ => None,
+            })
+            .expect("expected local Dog class");
+        assert!(
+            class.implements.is_empty(),
+            "qualified target other.Dog must not merge into local Dog"
+        );
+
+        let imp = items
+            .iter()
+            .find_map(|item| match item {
+                Item::ImplementsFor(imp) => Some(imp),
+                _ => None,
+            })
+            .expect("qualified target should remain an ImplementsFor item");
+        assert_eq!(imp.for_target.expr.to_string(), "other.Dog");
+    }
+
+    #[test]
+    fn ast_preserves_interface_generic_param_bounds() {
+        let source = r#"
+interface Named {
+  name string
+}
+
+interface Box<T extends Named, E> {
+  value T
+}
+"#;
+        let items = parse_and_lower(source);
+        let interface = items
+            .iter()
+            .find_map(|item| match item {
+                Item::Interface(interface) if interface.name.as_str() == "Box" => Some(interface),
+                _ => None,
+            })
+            .expect("expected Box interface");
+
+        assert_eq!(
+            interface.generic_params.iter().map(|n| n.as_str()).collect::<Vec<_>>(),
+            vec!["T", "E"]
+        );
+        assert_eq!(interface.generic_param_bounds.len(), 2);
+        assert_eq!(
+            interface.generic_param_bounds[0]
+                .as_ref()
+                .map(ToString::to_string)
+                .as_deref(),
+            Some("Named")
+        );
+        assert!(interface.generic_param_bounds[1].is_none());
+    }
+
+    #[test]
     fn ast_default_indices_survive_recovered_parameter() {
         let source = r#"
 function Broken(: int = 1, value: int = 2) -> int {

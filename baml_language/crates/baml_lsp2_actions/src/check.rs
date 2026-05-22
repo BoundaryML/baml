@@ -430,6 +430,7 @@ fn check_interfaces<'db>(
                 db,
                 file_id,
                 imp,
+                items,
                 pkg_items,
                 namespace_path,
                 &mut diagnostics,
@@ -715,9 +716,15 @@ struct InterfaceMembers {
     /// (origin interface name, field name, field type)
     fields: Vec<(Name, Name, Option<baml_compiler2_ast::SpannedTypeExpr>)>,
     /// (origin interface name, required method name, signature)
-    required_methods: Vec<(Name, Name, MethodSignature)>,
+    required_methods: Vec<(InterfaceMemberOrigin, Name, MethodSignature)>,
     /// (origin interface name, default method name, signature)
-    default_methods: Vec<(Name, Name, MethodSignature)>,
+    default_methods: Vec<(InterfaceMemberOrigin, Name, MethodSignature)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct InterfaceMemberOrigin {
+    name: Name,
+    type_args: Vec<baml_compiler2_ast::TypeExpr>,
 }
 
 /// Walk `extends` of `iface` (including `iface` itself) and gather all members
@@ -757,20 +764,37 @@ fn collect_interface_members_with_subst<'db>(
 
     let mut out = InterfaceMembers::default();
     let mut visited: HashSet<Vec<Name>> = HashSet::new();
+    let root_type_args: Vec<baml_compiler2_ast::TypeExpr> = iface
+        .generic_params
+        .iter()
+        .map(|param| {
+            subst.get(param).cloned().unwrap_or_else(|| TypeExpr::Path {
+                segments: vec![param.clone()],
+                generic_args: Vec::new(),
+                attrs: Vec::new(),
+            })
+        })
+        .collect();
     let mut stack: Vec<(
         baml_compiler2_hir::item_tree::Interface,
         baml_base::SourceFile,
-    )> = vec![(iface.clone(), iface_file)];
+        std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr>,
+        Vec<baml_compiler2_ast::TypeExpr>,
+    )> = vec![(iface.clone(), iface_file, subst.clone(), root_type_args)];
     visited.insert(vec![iface.name.clone()]);
 
-    while let Some((current, current_file)) = stack.pop() {
+    while let Some((current, current_file, current_subst, current_type_args)) = stack.pop() {
+        let origin = InterfaceMemberOrigin {
+            name: current.name.clone(),
+            type_args: current_type_args.clone(),
+        };
         for field in &current.fields {
             let substituted =
                 field
                     .type_expr
                     .as_ref()
                     .map(|te| baml_compiler2_ast::SpannedTypeExpr {
-                        expr: substitute_type_vars(&te.expr, subst),
+                        expr: substitute_type_vars(&te.expr, &current_subst),
                         span: te.span,
                     });
             out.fields
@@ -794,10 +818,10 @@ fn collect_interface_members_with_subst<'db>(
                 &ast_params,
                 sig.return_type.as_ref(),
                 sig.throws.as_ref(),
-                subst,
+                &current_subst,
             );
             out.required_methods
-                .push((current.name.clone(), sig.name.clone(), signature));
+                .push((origin.clone(), sig.name.clone(), signature));
         }
         // Default-method ids point into the same file's item tree as the
         // interface itself — fetch each function's name + signature from
@@ -820,10 +844,10 @@ fn collect_interface_members_with_subst<'db>(
                     &ast_params,
                     f.return_type.as_ref(),
                     f.throws.as_ref(),
-                    subst,
+                    &current_subst,
                 );
                 out.default_methods
-                    .push((current.name.clone(), f.name.clone(), signature));
+                    .push((origin.clone(), f.name.clone(), signature));
             }
         }
 
@@ -845,7 +869,20 @@ fn collect_interface_members_with_subst<'db>(
             if let Some((loc, parent)) =
                 resolve_interface_path(db, &probe, pkg_items, namespace_path)
             {
-                stack.push((parent, loc.file(db)));
+                let parent_args = match &parent_te.expr {
+                    TypeExpr::Path { generic_args, .. } => generic_args
+                        .iter()
+                        .map(|arg| substitute_type_vars(arg, &current_subst))
+                        .collect::<Vec<_>>(),
+                    _ => Vec::new(),
+                };
+                let parent_subst = parent
+                    .generic_params
+                    .iter()
+                    .zip(parent_args.iter())
+                    .map(|(param, arg)| (param.clone(), arg.clone()))
+                    .collect();
+                stack.push((parent, loc.file(db), parent_subst, parent_args));
             }
         }
     }
@@ -878,6 +915,92 @@ fn is_non_interface_type(
         pkg_items.lookup_type(lookup_ns, name),
         Some(Definition::Class(_) | Definition::Enum(_))
     )
+}
+
+fn rendered_type_args(args: &[baml_compiler2_ast::TypeExpr]) -> Vec<String> {
+    args.iter().map(ToString::to_string).collect()
+}
+
+fn type_args_from_target_expr(target: &baml_compiler2_ast::TypeExpr) -> Vec<String> {
+    match target {
+        baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => {
+            rendered_type_args(generic_args)
+        }
+        _ => Vec::new(),
+    }
+}
+
+fn interface_origin_matches_target_expr<'db>(
+    db: &'db dyn Db,
+    target: &baml_compiler2_ast::TypeExpr,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    namespace_path: &[Name],
+    origin: &InterfaceMemberOrigin,
+) -> bool {
+    let Some((_loc, iface)) = resolve_interface_path(db, target, pkg_items, namespace_path) else {
+        return false;
+    };
+    iface.name == origin.name
+        && type_args_from_target_expr(target) == rendered_type_args(&origin.type_args)
+}
+
+fn implements_for_targets_match<'db>(
+    db: &'db dyn Db,
+    lhs: &baml_compiler2_ast::TypeExpr,
+    rhs: &baml_compiler2_ast::TypeExpr,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    namespace_path: &[Name],
+) -> bool {
+    let mut lhs_diags = Vec::new();
+    let mut rhs_diags = Vec::new();
+    let lhs_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+        db,
+        lhs,
+        pkg_items,
+        namespace_path,
+        &[],
+        &mut lhs_diags,
+    );
+    let rhs_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+        db,
+        rhs,
+        pkg_items,
+        namespace_path,
+        &[],
+        &mut rhs_diags,
+    );
+    lhs_diags.is_empty() && rhs_diags.is_empty() && lhs_ty == rhs_ty
+}
+
+fn has_sibling_implements_for_origin<'db>(
+    db: &'db dyn Db,
+    current: &baml_compiler2_ast::ImplementsForDef,
+    all_items: &[baml_compiler2_ast::Item],
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    namespace_path: &[Name],
+    origin: &InterfaceMemberOrigin,
+) -> bool {
+    all_items.iter().any(|item| {
+        let baml_compiler2_ast::Item::ImplementsFor(candidate) = item else {
+            return false;
+        };
+        if candidate.span == current.span {
+            return false;
+        }
+        implements_for_targets_match(
+            db,
+            &candidate.for_target.expr,
+            &current.for_target.expr,
+            pkg_items,
+            namespace_path,
+        ) && interface_origin_matches_target_expr(
+            db,
+            &candidate.interface_target.expr,
+            pkg_items,
+            namespace_path,
+            origin,
+        )
+    })
 }
 
 fn validate_interface_extends_fields<'db>(
@@ -960,6 +1083,7 @@ fn validate_implements_for<'db>(
     db: &'db dyn Db,
     file_id: FileId,
     imp: &baml_compiler2_ast::ImplementsForDef,
+    all_items: &[baml_compiler2_ast::Item],
     pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
     diagnostics: &mut Vec<Diagnostic>,
@@ -1107,10 +1231,22 @@ fn validate_implements_for<'db>(
         if provided_method_names.contains(req_name) {
             continue;
         }
+        if origin.name != iface.name
+            && has_sibling_implements_for_origin(
+                db,
+                imp,
+                all_items,
+                pkg_items,
+                namespace_path,
+                origin,
+            )
+        {
+            continue;
+        }
         diagnostics.push(
             Hir2Diagnostic::MissingInterfaceMethod {
                 class_name: target_name.clone(),
-                interface_name: origin.clone(),
+                interface_name: origin.name.clone(),
                 method_name: req_name.clone(),
                 span: imp.span,
             }
@@ -1303,13 +1439,23 @@ fn validate_class_implements<'db>(
             // If the method originates from a parent interface that this
             // class explicitly implements in a separate block, skip the
             // check — that block is responsible for providing the method.
-            if *origin != iface.name && seen_target_names.contains(origin) {
+            if origin.name != iface.name
+                && class.implements.iter().any(|candidate| {
+                    interface_origin_matches_target_expr(
+                        db,
+                        &candidate.target.expr,
+                        pkg_items,
+                        namespace_path,
+                        origin,
+                    )
+                })
+            {
                 continue;
             }
             diagnostics.push(
                 Hir2Diagnostic::MissingInterfaceMethod {
                     class_name: class.name.clone(),
-                    interface_name: origin.clone(),
+                    interface_name: origin.name.clone(),
                     method_name: req_name.clone(),
                     span: block.span,
                 }
@@ -2568,6 +2714,7 @@ fn tir_type_error_to_diagnostic_id(
         }
         TirTypeError::DeprecatedInterfaceProjection { .. } => DiagnosticId::NoSuchField,
         TirTypeError::InvalidInterfaceUpcastTarget { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::InterfaceMemberRequiresReceiver { .. } => DiagnosticId::NoSuchField,
         TirTypeError::InvalidSelfCallThroughInterface { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::DefaultOnRequiredMethod { .. } => DiagnosticId::DefaultOnRequiredMethod,
     }

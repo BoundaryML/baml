@@ -131,9 +131,7 @@ impl StructuralTy {
             StructuralTy::Interface(qn, args) => {
                 StructuralTy::Interface(qn, args.into_iter().map(Self::canonicalize).collect())
             }
-            StructuralTy::Optional(inner) => {
-                StructuralTy::Optional(Box::new(inner.canonicalize()))
-            }
+            StructuralTy::Optional(inner) => StructuralTy::Optional(Box::new(inner.canonicalize())),
             StructuralTy::List(inner) => StructuralTy::List(Box::new(inner.canonicalize())),
             StructuralTy::Map { key, value } => StructuralTy::Map {
                 key: Box::new(key.canonicalize()),
@@ -161,14 +159,23 @@ impl StructuralTy {
                 params,
                 ret,
                 throws,
-            } => StructuralTy::Function {
-                params: params
-                    .into_iter()
-                    .map(StructuralFunctionParam::canonicalize)
-                    .collect(),
-                ret: Box::new(ret.canonicalize()),
-                throws: Box::new(throws.canonicalize()),
-            },
+            } => {
+                let mut required = Vec::new();
+                let mut optional = Vec::new();
+                for param in params.into_iter().map(StructuralFunctionParam::canonicalize) {
+                    match param.mode {
+                        FunctionParamMode::Required => required.push(param),
+                        FunctionParamMode::Optional => optional.push(param),
+                    }
+                }
+                optional.sort();
+                required.extend(optional);
+                StructuralTy::Function {
+                    params: required,
+                    ret: Box::new(ret.canonicalize()),
+                    throws: Box::new(throws.canonicalize()),
+                }
+            }
             StructuralTy::Mu { var, body } => StructuralTy::Mu {
                 var,
                 body: Box::new(body.canonicalize()),
@@ -352,7 +359,10 @@ impl StructuralTy {
 impl StructuralFunctionParam {
     fn canonicalize(self) -> Self {
         Self {
-            name: self.name,
+            name: match self.mode {
+                FunctionParamMode::Required => None,
+                FunctionParamMode::Optional => self.name,
+            },
             ty: self.ty.canonicalize(),
             mode: self.mode,
         }
@@ -1211,6 +1221,63 @@ mod tests {
             &direct,
             &aliases
         ));
+    }
+
+    #[test]
+    fn same_normalized_type_ignores_required_function_param_names() {
+        let aliases = HashMap::new();
+        let int = Ty::Primitive(PrimitiveType::Int, TyAttr::default());
+        let string = Ty::Primitive(PrimitiveType::String, TyAttr::default());
+        let lhs = Ty::Function {
+            params: vec![FunctionParamTy::required(Some(Name::new("x")), int.clone())],
+            ret: Box::new(string.clone()),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        };
+        let rhs = Ty::Function {
+            params: vec![FunctionParamTy::required(Some(Name::new("y")), int)],
+            ret: Box::new(string),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        };
+
+        assert!(is_same_normalized_type(&lhs, &rhs, &aliases));
+    }
+
+    #[test]
+    fn same_normalized_type_sorts_optional_function_params() {
+        let aliases = HashMap::new();
+        let int = Ty::Primitive(PrimitiveType::Int, TyAttr::default());
+        let string = Ty::Primitive(PrimitiveType::String, TyAttr::default());
+        let bool_ty = Ty::Primitive(PrimitiveType::Bool, TyAttr::default());
+        let lhs = Ty::Function {
+            params: vec![
+                FunctionParamTy::optional(Some(Name::new("a")), int.clone()),
+                FunctionParamTy::optional(Some(Name::new("b")), string.clone()),
+            ],
+            ret: Box::new(bool_ty.clone()),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        };
+        let rhs = Ty::Function {
+            params: vec![
+                FunctionParamTy::optional(Some(Name::new("b")), string),
+                FunctionParamTy::optional(Some(Name::new("a")), int),
+            ],
+            ret: Box::new(bool_ty),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        };
+
+        assert!(is_same_normalized_type(&lhs, &rhs, &aliases));
     }
 
     #[test]

@@ -982,26 +982,28 @@ impl<'db> LoweringContext<'db> {
                     baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => generic_args
                         .iter()
                         .map(|arg| {
-                            let ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-                                db,
-                                arg,
-                                pkg_items,
-                                &pkg_info.namespace_path,
-                                &[],
-                                &mut diags,
-                            );
-                            resolved_aliases.convert(&ty)
+	                            baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+	                                db,
+	                                arg,
+	                                pkg_items,
+	                                &pkg_info.namespace_path,
+	                                &[],
+	                                &mut diags,
+	                            )
                         })
                         .collect::<Vec<_>>(),
                     _ => Vec::new(),
                 };
 
-                for iface_loc in baml_compiler2_tir::interfaces::interface_closure_locs(
+                for (iface_loc, iface_args) in
+                    baml_compiler2_tir::interfaces::interface_closure_locs_with_args(
                     db,
                     root_iface_loc,
+                    &root_iface_args,
                     pkg_items,
                     &pkg_info.namespace_path,
-                ) {
+                )
+                {
                     let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
                     let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
                         continue;
@@ -1010,17 +1012,16 @@ impl<'db> LoweringContext<'db> {
                         baml_compiler2_hir::file_package::file_package(db, iface_loc.file(db));
                     let mut iface_module_path: Vec<Name> = vec![iface_pkg.package.clone()];
                     iface_module_path.extend(iface_pkg.namespace_path.iter().cloned());
-                    let iface_tn = TypeName {
-                        name: iface_data.name.clone(),
-                        module_path: iface_module_path,
-                        display_name: iface_data.name.clone(),
-                    };
-                    let iface_args = if iface_loc == root_iface_loc {
-                        root_iface_args.clone()
-                    } else {
-                        Vec::new()
-                    };
-                    let entry = out.interface_type_implementors.entry(iface_tn).or_default();
+	                    let iface_tn = TypeName {
+	                        name: iface_data.name.clone(),
+	                        module_path: iface_module_path,
+	                        display_name: iface_data.name.clone(),
+	                    };
+	                    let iface_args: Vec<Ty> = iface_args
+	                        .iter()
+	                        .map(|arg| convert_tir2_ty(arg, resolved_aliases))
+	                        .collect();
+	                    let entry = out.interface_type_implementors.entry(iface_tn).or_default();
                     if !entry
                         .iter()
                         .any(|(ty, args)| *ty == target_ty && *args == iface_args)
@@ -4107,13 +4108,20 @@ impl LoweringContext<'_> {
                         )
                     })
                 {
-                    // Check if base is a value receiver or a package path.
-                    // Package paths have Unknown type in TIR (baml, baml.Array, etc.)
-                    let base_is_value = self
-                        .expr_types
-                        .get(&self.expr_metadata_key(*base))
-                        .map(|ty| !matches!(ty, Tir2Ty::Unknown { .. }))
-                        .unwrap_or(false);
+	                    // Check if base is a value receiver or a bare type/package path.
+	                    // Type-name bases like `Label<int>.method` can have concrete
+	                    // TIR types (`Interface`, `Class`) but are not runtime values.
+	                    let base_is_value = match &self.body.exprs[*base] {
+	                        AstExpr::Path(segments) if !segments.is_empty() => {
+	                            self.locals.contains_key(&segments[0])
+	                                || self.capture_index_for_name_at(*base, &segments[0]).is_some()
+	                        }
+	                        _ => self
+	                            .expr_types
+	                            .get(&self.expr_metadata_key(*base))
+	                            .map(|ty| !matches!(ty, Tir2Ty::Unknown { .. }))
+	                            .unwrap_or(false),
+	                    };
                     // Check if the resolved method expects a `self` receiver.
                     // Static methods (e.g. StreamCache.new) have no `self` param
                     // and must not get the class reference prepended as an argument.
@@ -5368,17 +5376,19 @@ impl<'db> LoweringContext<'db> {
                     field: idx,
                 })),
             );
-        } else if let Some((iface_tn, iface_type_args)) =
-            self.interface_receiver_for_field_access(base, unwrapped_ty)
+        } else if self
+            .interface_receiver_for_field_access(base, unwrapped_ty)
+            .is_some_and(|(iface_tn, iface_type_args)| {
+                self.try_lower_interface_field_access(
+                    expr_id,
+                    base_local,
+                    &iface_tn,
+                    &iface_type_args,
+                    field,
+                    &dest,
+                )
+            })
         {
-            self.try_lower_interface_field_access(
-                expr_id,
-                base_local,
-                &iface_tn,
-                &iface_type_args,
-                field,
-                &dest,
-            );
         } else if self.lower_union_class_field_access(
             expr_id,
             base_local,
@@ -5916,12 +5926,16 @@ impl<'db> LoweringContext<'db> {
         else {
             return None;
         };
-        for iface_loc in baml_compiler2_tir::interfaces::interface_closure_locs(
+        let root_iface_args: Vec<Tir2Ty> = iface_type_args.to_vec();
+        for (iface_loc, dispatch_iface_type_args) in
+            baml_compiler2_tir::interfaces::interface_closure_locs_with_args(
             self.db,
             root_iface_loc,
+            &root_iface_args,
             iface_pkg_items,
             &iface_ns,
-        ) {
+        )
+        {
             let iface_tree = baml_compiler2_hir::file_item_tree(self.db, iface_loc.file(self.db));
             let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(self.db)) else {
                 continue;
@@ -5932,11 +5946,6 @@ impl<'db> LoweringContext<'db> {
                 &iface_data.name,
             );
             let dispatch_iface_tn = qtn_to_type_name(&iface_qtn);
-            let dispatch_iface_type_args: &[Tir2Ty] = if dispatch_iface_tn == *iface_tn {
-                iface_type_args
-            } else {
-                &[]
-            };
 
             for &method_id in &class_data.methods {
                 if class_tree[method_id].name != *method {
@@ -5949,7 +5958,7 @@ impl<'db> LoweringContext<'db> {
                     target,
                     class_loc,
                     &dispatch_iface_tn,
-                    dispatch_iface_type_args,
+                    &dispatch_iface_type_args,
                 ) {
                     let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(
                         self.db,
@@ -5992,6 +6001,21 @@ impl<'db> LoweringContext<'db> {
                 })
     }
 
+    fn interface_tir_type_args_match(
+        &self,
+        impl_iface_args: &[Tir2Ty],
+        iface_type_args: &[Tir2Ty],
+    ) -> bool {
+        impl_iface_args.len() == iface_type_args.len()
+            && impl_iface_args
+                .iter()
+                .zip(iface_type_args.iter())
+                .all(|(impl_arg, iface_arg)| {
+                    self.resolved_aliases.convert(impl_arg)
+                        == self.resolved_aliases.convert(iface_arg)
+                })
+    }
+
     fn resolve_type_implementor_method(
         &self,
         impl_ty: &Ty,
@@ -5999,6 +6023,41 @@ impl<'db> LoweringContext<'db> {
         iface_type_args: &[Tir2Ty],
         method: &Name,
     ) -> Option<ItemRef> {
+        let iface_pkg_name = iface_tn.module_path.first()?;
+        let iface_pkg_items = self.resolve_class_pkg_items_by_name(iface_pkg_name);
+        let iface_ns: Vec<Name> = iface_tn.module_path.iter().skip(1).cloned().collect();
+        let Definition::Interface(requested_root_loc) =
+            iface_pkg_items.lookup_type(&iface_ns, &iface_tn.name)?
+        else {
+            return None;
+        };
+        let requested_views: Vec<(TypeName, Vec<Tir2Ty>)> =
+            baml_compiler2_tir::interfaces::interface_closure_locs_with_args(
+                self.db,
+                requested_root_loc,
+                iface_type_args,
+                iface_pkg_items,
+                &iface_ns,
+            )
+            .into_iter()
+            .filter_map(|(loc, args)| {
+                let tree = baml_compiler2_hir::file_item_tree(self.db, loc.file(self.db));
+                let iface_data = tree.interfaces.get(&loc.id(self.db))?;
+                let iface_pkg =
+                    baml_compiler2_hir::file_package::file_package(self.db, loc.file(self.db));
+                let mut module_path: Vec<Name> = vec![iface_pkg.package.clone()];
+                module_path.extend(iface_pkg.namespace_path.iter().cloned());
+                Some((
+                    TypeName {
+                        name: iface_data.name.clone(),
+                        module_path,
+                        display_name: iface_data.name.clone(),
+                    },
+                    args,
+                ))
+            })
+            .collect();
+
         for file in compiler2_all_files(self.db) {
             let pkg_info = file_package(self.db, file);
             let pkg_items = self.resolve_class_pkg_items_by_name(&pkg_info.package);
@@ -6032,26 +6091,28 @@ impl<'db> LoweringContext<'db> {
                     baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => generic_args
                         .iter()
                         .map(|arg| {
-                            let ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-                                self.db,
-                                arg,
-                                pkg_items,
-                                &pkg_info.namespace_path,
-                                &[],
-                                &mut diags,
-                            );
-                            self.resolved_aliases.convert(&ty)
+	                            baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+	                                self.db,
+	                                arg,
+	                                pkg_items,
+	                                &pkg_info.namespace_path,
+	                                &[],
+	                                &mut diags,
+	                            )
                         })
                         .collect::<Vec<_>>(),
                     _ => Vec::new(),
                 };
 
-                for current_iface_loc in baml_compiler2_tir::interfaces::interface_closure_locs(
+                for (current_iface_loc, current_iface_args) in
+                    baml_compiler2_tir::interfaces::interface_closure_locs_with_args(
                     self.db,
                     root_iface_loc,
+                    &root_iface_args,
                     pkg_items,
                     &pkg_info.namespace_path,
-                ) {
+                )
+                {
                     let iface_tree = baml_compiler2_hir::file_item_tree(
                         self.db,
                         current_iface_loc.file(self.db),
@@ -6072,15 +6133,11 @@ impl<'db> LoweringContext<'db> {
                         module_path: iface_module_path,
                         display_name: iface_data.name.clone(),
                     };
-                    if &current_iface_tn != iface_tn {
-                        continue;
-                    }
-                    let current_iface_args = if current_iface_loc == root_iface_loc {
-                        root_iface_args.clone()
-                    } else {
-                        Vec::new()
-                    };
-                    if !self.interface_type_args_match(&current_iface_args, iface_type_args) {
+                    if !requested_views.iter().any(|(requested_tn, requested_args)| {
+                        current_iface_tn == *requested_tn
+                            && self
+                                .interface_tir_type_args_match(&current_iface_args, requested_args)
+                    }) {
                         continue;
                     }
 
@@ -7954,6 +8011,15 @@ impl LoweringContext<'_> {
             Ty::Bool { .. } => Some(baml_type::typetag::BOOL),
             Ty::Null { .. } => Some(baml_type::typetag::NULL),
             Ty::Float { .. } => Some(baml_type::typetag::FLOAT),
+            Ty::Uint8Array { .. } => Some(baml_type::typetag::UINT8ARRAY),
+            Ty::Enum(..) | Ty::EnumVariant(..) => Some(baml_type::typetag::ENUM),
+            Ty::List(..) => Some(baml_type::typetag::LIST),
+            Ty::Map { .. } => Some(baml_type::typetag::MAP),
+            Ty::Function { .. } => Some(baml_type::typetag::FUNCTION),
+            Ty::Future(..) => Some(baml_type::typetag::FUTURE),
+            Ty::Opaque(tn, _) if tn.display_name.as_str() == "type" => {
+                Some(baml_type::typetag::TYPE)
+            }
             Ty::Class(tn, _, _) => self.class_type_tags.get(tn).copied(),
             _ => None,
         }

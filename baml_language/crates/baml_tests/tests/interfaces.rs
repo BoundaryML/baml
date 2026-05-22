@@ -1293,6 +1293,21 @@ fn interface_field_union_order_is_exactly_equivalent() {
     );
 }
 
+#[test]
+fn generic_interface_field_union_order_is_exactly_equivalent() {
+    assert_zero_compile_errors(
+        r#"
+        interface Measured<T, E> {
+            value: T | E
+        }
+        class Reading<T, E> {
+            value: E | T
+            implements Measured<T, E> {}
+        }
+        "#,
+    );
+}
+
 #[tokio::test]
 async fn class_own_field_shadowing_interface_field_is_separate_at_runtime() {
     let output = baml_test!(
@@ -1731,9 +1746,9 @@ async fn default_method_dispatch_through_interface_var() {
     );
 }
 
-#[tokio::test]
-async fn qualified_interface_default_method_call_runtime() {
-    let output = baml_test!(
+#[test]
+fn interface_default_method_requires_receiver_projection() {
+    assert_compile_error_contains(
         r#"
         interface Describable {
             function describe(self) -> string {
@@ -1747,11 +1762,8 @@ async fn qualified_interface_default_method_call_runtime() {
             let t = Thing {}
             return Describable.describe(t)
         }
-        "#
-    );
-    assert_eq!(
-        output.result.unwrap(),
-        BexExternalValue::String("default".into())
+        "#,
+        "must be accessed through a value",
     );
 }
 
@@ -4127,6 +4139,76 @@ async fn out_of_body_implements_for_primitive_as_projection_runtime() {
     assert_eq!(
         output.result.unwrap(),
         BexExternalValue::String("int:int".into())
+    );
+}
+
+#[tokio::test]
+async fn generic_requires_parent_args_dispatch_on_class_implementor() {
+    let output = baml_test!(
+        r#"
+        interface Parent<T> {
+            function describe(self) -> string
+        }
+        interface Child<T> requires Parent<T> {}
+        class Box {
+            implements Parent<int> {
+                function describe(self) -> string { return "parent-int" }
+            }
+            implements Child<int> {}
+        }
+        function main() -> string {
+            let child: Child<int> = Box {}
+            return child.describe()
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("parent-int".into())
+    );
+}
+
+#[tokio::test]
+async fn generic_requires_parent_args_dispatch_on_type_implementor() {
+    let output = baml_test!(
+        r#"
+        interface Parent<T> {
+            function describe(self) -> string
+        }
+        interface Child<T> requires Parent<T> {}
+        implements Parent<int> for int {
+            function describe(self) -> string { return "parent-int" }
+        }
+        implements Child<int> for int {}
+        function main() -> string {
+            let child: Child<int> = 1
+            return child.describe()
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("parent-int".into())
+    );
+}
+
+#[test]
+fn generic_interface_default_method_requires_receiver_projection() {
+    assert_compile_error_contains(
+        r#"
+        interface Label<T> {
+            function label(self) -> string {
+                return "ok"
+            }
+        }
+        class Box {
+            implements Label<int> {}
+        }
+        function main() -> string {
+            return Label<int>.label(Box {})
+        }
+        "#,
+        "must be accessed through a value",
     );
 }
 

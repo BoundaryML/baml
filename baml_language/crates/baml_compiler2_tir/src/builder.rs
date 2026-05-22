@@ -1707,6 +1707,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         let saved_path_root_types = std::mem::take(&mut self.path_root_types);
         let saved_path_segment_types = std::mem::take(&mut self.path_segment_types);
         let saved_path_member_resolutions = std::mem::take(&mut self.path_member_resolutions);
+        let saved_interface_method_generic_params =
+            std::mem::take(&mut self.interface_method_generic_params);
         let saved_call_plans = std::mem::take(&mut self.call_plans);
         let saved_function_coercions = std::mem::take(&mut self.function_coercions);
         let saved_lambda_effective_throws = std::mem::take(&mut self.lambda_effective_throws);
@@ -1798,6 +1800,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.path_root_types = saved_path_root_types;
         self.path_segment_types = saved_path_segment_types;
         self.path_member_resolutions = saved_path_member_resolutions;
+        self.interface_method_generic_params = saved_interface_method_generic_params;
         self.call_plans = saved_call_plans;
         self.function_coercions = saved_function_coercions;
         self.lambda_effective_throws = saved_lambda_effective_throws;
@@ -3619,7 +3622,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
 
                 let is_method_call = match &body.exprs[*callee] {
-                    Expr::MemberAccess { .. } => true,
+                    Expr::MemberAccess { base, .. } => match &body.exprs[*base] {
+                        Expr::Path(segments) if !segments.is_empty() => {
+                            self.locals.contains_key(&segments[0])
+                        }
+                        _ => true,
+                    },
                     Expr::Path(segs) if segs.len() >= 2 => {
                         // A multi-segment Path callee is a method call only when the
                         // root is a local variable (e.g. `obj.method()`).  Package-
@@ -7369,7 +7377,13 @@ impl<'db> TypeInferenceBuilder<'db> {
         let root_pkg = baml_compiler2_hir::file_package::file_package(db, root_loc.file(db));
         let pkg_ns = &root_pkg.namespace_path;
 
-        for iface_loc in crate::interfaces::interface_closure_locs(db, root_loc, pkg_items, pkg_ns)
+        for (iface_loc, iface_type_args) in crate::interfaces::interface_closure_locs_with_args(
+            db,
+            root_loc,
+	                                &iface_type_args,
+            pkg_items,
+            pkg_ns,
+        )
         {
             let file = iface_loc.file(db);
             let iface_tree = baml_compiler2_hir::file_item_tree(db, file);
@@ -7384,6 +7398,18 @@ impl<'db> TypeInferenceBuilder<'db> {
             for field in &iface_data.fields {
                 if &field.name != member {
                     continue;
+                }
+                if !bound {
+                    self.context.report_simple(
+                        TirTypeError::InterfaceMemberRequiresReceiver {
+                            interface_name: iface_data.name.clone(),
+                            member_name: member.clone(),
+                        },
+                        at,
+                    );
+                    return Some(Ty::Error {
+                        attr: TyAttr::default(),
+                    });
                 }
                 let ty = field
                     .type_expr
@@ -7402,7 +7428,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         } else {
                             let bindings = crate::generics::bind_type_vars(
                                 &iface_data.generic_params,
-                                iface_type_args,
+                                &iface_type_args,
                             );
                             crate::generics::lower_type_expr_with_generics(
                                 db, &te.expr, pkg_items, &iface_ns, &bindings, &mut diags,
@@ -7425,13 +7451,25 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if method_data.name != *member {
                     continue;
                 }
+                if !bound {
+                    self.context.report_simple(
+                        TirTypeError::InterfaceMemberRequiresReceiver {
+                            interface_name: iface_data.name.clone(),
+                            member_name: member.clone(),
+                        },
+                        at,
+                    );
+                    return Some(Ty::Error {
+                        attr: TyAttr::default(),
+                    });
+                }
                 let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, fn_id);
                 let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
                 let mut diags = Vec::new();
                 let mut bindings = if iface_type_args.is_empty() {
                     rustc_hash::FxHashMap::default()
                 } else {
-                    crate::generics::bind_type_vars(&iface_data.generic_params, iface_type_args)
+	                    crate::generics::bind_type_vars(&iface_data.generic_params, &iface_type_args)
                 };
                 for generic_param in &iface_data.generic_params {
                     bindings
@@ -7605,10 +7643,22 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if sig.name != *member {
                     continue;
                 }
+                if !bound {
+                    self.context.report_simple(
+                        TirTypeError::InterfaceMemberRequiresReceiver {
+                            interface_name: iface_data.name.clone(),
+                            member_name: member.clone(),
+                        },
+                        at,
+                    );
+                    return Some(Ty::Error {
+                        attr: TyAttr::default(),
+                    });
+                }
                 let mut bindings = if iface_type_args.is_empty() {
                     rustc_hash::FxHashMap::default()
                 } else {
-                    crate::generics::bind_type_vars(&iface_data.generic_params, iface_type_args)
+	                    crate::generics::bind_type_vars(&iface_data.generic_params, &iface_type_args)
                 };
                 for generic_param in &iface_data.generic_params {
                     bindings
@@ -9729,6 +9779,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         let saved_path_root_types = std::mem::take(&mut self.path_root_types);
         let saved_path_segment_types = std::mem::take(&mut self.path_segment_types);
         let saved_path_member_resolutions = std::mem::take(&mut self.path_member_resolutions);
+        let saved_interface_method_generic_params =
+            std::mem::take(&mut self.interface_method_generic_params);
         let saved_lambda_effective_throws = std::mem::take(&mut self.lambda_effective_throws);
         let saved_call_plans = std::mem::take(&mut self.call_plans);
         let saved_function_coercions = std::mem::take(&mut self.function_coercions);
@@ -9831,6 +9883,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.path_root_types = saved_path_root_types;
         self.path_segment_types = saved_path_segment_types;
         self.path_member_resolutions = saved_path_member_resolutions;
+        self.interface_method_generic_params = saved_interface_method_generic_params;
         self.lambda_effective_throws = saved_lambda_effective_throws;
         self.call_plans = saved_call_plans;
         self.function_coercions = saved_function_coercions;

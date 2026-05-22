@@ -1252,6 +1252,10 @@ pub struct InterfaceDef {
     pub name: Name,
     /// Generic type parameters (e.g., `["T"]` for `Container<T>`). Empty for non-generic interfaces.
     pub generic_params: Vec<Name>,
+    /// BEP-044 generic bounds parallel to `generic_params`. `Some(te)`
+    /// means the parameter at the matching index was declared with
+    /// `T extends <te>`; `None` means unbounded.
+    pub generic_param_bounds: Vec<Option<TypeExpr>>,
     /// Parent interfaces from `extends I1, I2, ...`. Each is parsed as a
     /// `TypeExpr` so we can accept generic parents like `Container<int>`.
     pub extends: Vec<SpannedTypeExpr>,
