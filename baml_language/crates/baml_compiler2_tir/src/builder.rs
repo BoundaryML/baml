@@ -3581,12 +3581,30 @@ impl<'db> TypeInferenceBuilder<'db> {
                             ));
                         }
 
-                        // Determine return type: annotation > expected
+                        // Determine return type: annotation > expected.
+                        //
+                        // When the expected return contains an unbound TypeVar
+                        // (e.g. checking a lambda against `() -> T` where the
+                        // surrounding call has no context to bind `T`), don't
+                        // thread the TypeVar into the body as a strict expected
+                        // type — the body literal `"hi"` would fail to unify
+                        // with `T`.  Instead, infer the body in synthesis mode
+                        // (`None`) and let the outer call's argument bindings
+                        // (`bind_call_args` → `infer_bindings`) unify `T` with
+                        // the body's actual return type.
                         let return_annotation = func_def.return_type.as_ref().map(|te| {
                             self.lower_lambda_type_expr(&te.expr, &all_generic_params, te.span)
                         });
-                        let effective_ret =
-                            return_annotation.as_ref().unwrap_or(expected_ret.as_ref());
+                        let effective_ret: Option<Ty> = match return_annotation.as_ref() {
+                            Some(annot) => Some(annot.clone()),
+                            None => {
+                                if crate::generics::contains_typevar(expected_ret.as_ref()) {
+                                    None
+                                } else {
+                                    Some(expected_ret.as_ref().clone())
+                                }
+                            }
+                        };
                         let (throws_ty, throws_span, warn_extraneous_throws) = self
                             .choose_lambda_throws_surface(
                                 func_def,
@@ -3599,7 +3617,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             self.infer_lambda_body(
                                 func_def,
                                 &param_tys,
-                                Some(effective_ret),
+                                effective_ret.as_ref(),
                                 &throws_ty,
                                 throws_span,
                                 warn_extraneous_throws,

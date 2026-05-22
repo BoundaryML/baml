@@ -193,6 +193,37 @@ function caller() -> int {
     insta::assert_snapshot!(render_tir(&db, file));
 }
 
+/// Regression: passing a literal-returning lambda to a generic function
+/// parameter `y: () -> T` must let T be inferred from the lambda body
+/// rather than strict-checking the literal against the still-unbound `T`.
+///
+/// Previously this produced `type mismatch: expected T, got "hi"` because
+/// the lambda's body was checked against `T` in a `let` context that
+/// provided no upstream binding.  The fix routes an unbound-TypeVar
+/// expected return through synthesis mode (`None`), letting the outer
+/// call's argument bindings unify T.
+#[test]
+fn lambda_arg_to_generic_function_infers_typevar_from_body() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f<T>(param2: bool, y: () -> T) -> T {
+  return y()
+}
+
+function bar() -> void {
+  let y = f(true, () => { return "hi"; });
+}
+"#,
+    );
+    let out = render_tir(&db, file);
+    assert!(
+        !out.contains("type mismatch"),
+        "expected no diagnostic; got:\n{out}",
+    );
+}
+
 /// Property access after an instantiation expression: `f<int>.method`.
 /// BAML's parser accepts it (`.` is in our follow set) and the
 /// FIELD_ACCESS_EXPR parent of EXPR_WITH_TYPE_ARGS short-circuits the
