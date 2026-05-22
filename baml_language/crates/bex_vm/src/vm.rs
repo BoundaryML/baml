@@ -2105,7 +2105,7 @@ impl BexVm {
         Ok(filtered_notifications)
     }
 
-    fn init_fields_from_object(
+    fn init_spread(
         &mut self,
         dest_value: Value,
         source_value: Value,
@@ -2739,11 +2739,11 @@ impl BexVm {
                 }
             }
 
-            Instruction::InitFieldsFromObject(index) => {
+            Instruction::InitSpread(index) => {
                 let source_value = self.stack.ensure_pop();
                 let dest_slot = self.stack.ensure_slot_from_top(0);
                 let dest_value = self.stack[dest_slot];
-                if let Some(state) = self.init_fields_from_object(
+                if let Some(state) = self.init_spread(
                     dest_value,
                     source_value,
                     &function.bytecode.field_copy_sets[index],
@@ -5514,12 +5514,12 @@ impl BexVm {
                     self.stack.push(instance_value);
                 }
 
-                OpCode::InitFieldsFromObject => {
+                OpCode::InitSpread => {
                     let idx = { read_u32_unchecked(code, pc) as usize };
                     let source_value = self.stack.ensure_pop();
                     let dest_slot = self.stack.ensure_slot_from_top(0);
                     let dest_value = self.stack[dest_slot];
-                    if let Some(state) = self.init_fields_from_object(
+                    if let Some(state) = self.init_spread(
                         dest_value,
                         source_value,
                         &function.bytecode.field_copy_sets[idx],

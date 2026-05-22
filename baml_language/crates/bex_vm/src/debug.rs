@@ -159,7 +159,7 @@ pub(crate) fn display_instruction(
         Instruction::LoadField(_)
         | Instruction::StoreField(_)
         | Instruction::InitField(_)
-        | Instruction::InitFieldsFromObject(_) => operand_meta
+        | Instruction::InitSpread(_) => operand_meta
             .map(|m| format!("({})", m.as_str()))
             .unwrap_or_default(),
         Instruction::Jump(offset)
@@ -350,7 +350,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
         | Instruction::StoreGlobal(_)
         | Instruction::StoreField(_)
         | Instruction::InitField(_)
-        | Instruction::InitFieldsFromObject(_)
+        | Instruction::InitSpread(_)
         | Instruction::StoreArrayElement
         | Instruction::StoreMapElement => Color::Green,
         Instruction::BinOp(_)
@@ -708,9 +708,7 @@ fn display_instruction_textual(
             let name = meta_str(idx);
             format!("init_field .{name}")
         }
-        Instruction::InitFieldsFromObject(idx) => {
-            format!("init_fields_from_object {}", meta_str(idx))
-        }
+        Instruction::InitSpread(idx) => format!("init_spread {}", meta_str(idx)),
 
         // --- Stack ---
         Instruction::Pop(n) => format!("pop {n}"),
@@ -1064,7 +1062,7 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         | Instruction::LoadField(_)
         | Instruction::StoreField(_)
         | Instruction::InitField(_)
-        | Instruction::InitFieldsFromObject(_)
+        | Instruction::InitSpread(_)
         | Instruction::Call { .. }
         | Instruction::SysOp(_)
         | Instruction::AllocInstance { .. }
@@ -1243,7 +1241,7 @@ pub fn display_compact_bytecode(
             | OpCode::LoadField
             | OpCode::StoreField
             | OpCode::InitField
-            | OpCode::InitFieldsFromObject
+            | OpCode::InitSpread
             | OpCode::Pop
             | OpCode::Copy
             | OpCode::AllocArray

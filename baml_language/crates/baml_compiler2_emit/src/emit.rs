@@ -1159,14 +1159,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         unwrap_infallible(pull_semantics::walk_operand_pull(self, operand));
     }
 
-    fn emit_init_fields_from_object(
-        &mut self,
-        fields: Vec<FieldCopy>,
-        display_fields: Vec<String>,
-    ) {
+    fn emit_init_spread(&mut self, fields: Vec<FieldCopy>, display_fields: &[String]) {
         let set_idx = self.bytecode.field_copy_sets.len();
         self.bytecode.field_copy_sets.push(FieldCopySet { fields });
-        let inst = self.emit(Instruction::InitFieldsFromObject(set_idx));
+        let inst = self.emit(Instruction::InitSpread(set_idx));
         self.set_operand(inst, OperandMeta::Field(display_fields.join(", ")));
     }
 
@@ -1275,7 +1271,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
 
             unwrap_infallible(pull_semantics::walk_place_pull(self, base));
-            self.emit_init_fields_from_object(copies, display_fields);
+            self.emit_init_spread(copies, &display_fields);
         }
 
         true

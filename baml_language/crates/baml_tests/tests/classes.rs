@@ -416,7 +416,7 @@ async fn spread_before_named_fields() {
         load_const 2
         init_field .y
         load_var _2
-        init_fields_from_object .z, .w
+        init_spread .z, .w
         return
     }
     ");
@@ -476,7 +476,7 @@ async fn spread_after_named_fields() {
         store_var _2
         alloc_instance user.Point
         load_var _2
-        init_fields_from_object .x, .y, .z, .w
+        init_spread .x, .y, .z, .w
         return
     }
     ");
@@ -529,7 +529,7 @@ async fn multiple_spreads() {
         store_var _3
         alloc_instance user.Point
         load_var _3
-        init_fields_from_object .x, .y, .z, .w
+        init_spread .x, .y, .z, .w
         return
     }
 
