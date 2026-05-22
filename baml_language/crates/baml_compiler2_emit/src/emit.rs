@@ -19,8 +19,9 @@ use bex_vm_types::{
     BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionKind, FunctionOrigin,
     GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp,
     bytecode::{
-        BlockNotification, BlockNotificationType, DebugLocalScope, InstructionMeta, JumpTableData,
-        LineTableEntry, MatchHashEntry, MatchHashTable, OperandMeta,
+        BlockNotification, BlockNotificationType, DebugLocalScope, FieldCopy, FieldCopySet,
+        InstructionMeta, JumpTableData, LineTableEntry, MatchHashEntry, MatchHashTable,
+        OperandMeta,
     },
 };
 
@@ -1158,6 +1159,128 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         unwrap_infallible(pull_semantics::walk_operand_pull(self, operand));
     }
 
+    fn emit_init_fields_from_object(
+        &mut self,
+        fields: Vec<FieldCopy>,
+        display_fields: Vec<String>,
+    ) {
+        let set_idx = self.bytecode.field_copy_sets.len();
+        self.bytecode.field_copy_sets.push(FieldCopySet { fields });
+        let inst = self.emit(Instruction::InitFieldsFromObject(set_idx));
+        self.set_operand(inst, OperandMeta::Field(display_fields.join(", ")));
+    }
+
+    fn field_copy_operand(operand: &Operand) -> Option<(&Place, usize)> {
+        let place = match operand {
+            Operand::Copy(place) | Operand::Move(place) => place,
+            Operand::Constant(_) => return None,
+        };
+        let Place::Field { base, field } = place else {
+            return None;
+        };
+        Some((base, *field))
+    }
+
+    fn place_mentions_stack_carried_local(&self, place: &Place) -> bool {
+        match place {
+            Place::Local(local) => matches!(
+                self.analysis
+                    .classifications
+                    .get(local)
+                    .copied()
+                    .unwrap_or(LocalClassification::Real),
+                LocalClassification::PhiLike
+                    | LocalClassification::ReturnPhi
+                    | LocalClassification::CallResultImmediate
+            ),
+            Place::Field { base, .. } => self.place_mentions_stack_carried_local(base),
+            Place::Index { base, index, .. } => {
+                self.place_mentions_stack_carried_local(base)
+                    || matches!(
+                        self.analysis
+                            .classifications
+                            .get(index)
+                            .copied()
+                            .unwrap_or(LocalClassification::Real),
+                        LocalClassification::PhiLike
+                            | LocalClassification::ReturnPhi
+                            | LocalClassification::CallResultImmediate
+                    )
+            }
+            Place::Capture(_) => false,
+        }
+    }
+
+    fn try_emit_class_aggregate_field_copy_sets(
+        &mut self,
+        class_name: &str,
+        type_arg_templates: &[TyTemplate],
+        fields: &[Operand],
+    ) -> bool {
+        if !fields
+            .iter()
+            .any(|field| Self::field_copy_operand(field).is_some())
+        {
+            return false;
+        }
+
+        let ntypeargs =
+            u16::try_from(type_arg_templates.len()).expect("type_arg_templates count fits in u16");
+        for template in type_arg_templates {
+            unwrap_infallible(self.load_type(template));
+        }
+        unwrap_infallible(self.alloc_class_instance(class_name, ntypeargs));
+
+        let mut field_idx = 0usize;
+        while field_idx < fields.len() {
+            let Some((base, source_field)) = Self::field_copy_operand(&fields[field_idx]) else {
+                let name = self.class_field_name(class_name, field_idx);
+                self.emit_operand_pull(&fields[field_idx]);
+                unwrap_infallible(self.init_field(field_idx, &name));
+                field_idx += 1;
+                continue;
+            };
+
+            if self.place_mentions_stack_carried_local(base) {
+                let name = self.class_field_name(class_name, field_idx);
+                self.emit_operand_pull(&fields[field_idx]);
+                unwrap_infallible(self.init_field(field_idx, &name));
+                field_idx += 1;
+                continue;
+            }
+
+            let mut copies = vec![FieldCopy {
+                source: source_field,
+                dest: field_idx,
+            }];
+            let mut display_fields =
+                vec![format!(".{}", self.class_field_name(class_name, field_idx))];
+            field_idx += 1;
+
+            while field_idx < fields.len() {
+                let Some((next_base, next_source_field)) =
+                    Self::field_copy_operand(&fields[field_idx])
+                else {
+                    break;
+                };
+                if next_base != base || self.place_mentions_stack_carried_local(next_base) {
+                    break;
+                }
+                copies.push(FieldCopy {
+                    source: next_source_field,
+                    dest: field_idx,
+                });
+                display_fields.push(format!(".{}", self.class_field_name(class_name, field_idx)));
+                field_idx += 1;
+            }
+
+            unwrap_infallible(pull_semantics::walk_place_pull(self, base));
+            self.emit_init_fields_from_object(copies, display_fields);
+        }
+
+        true
+    }
+
     /// Emit `base.field = base.field <op> rhs` as:
     ///
     /// `base; copy 0; load_field; rhs; op; store_field`
@@ -1218,6 +1341,19 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 type_arg_templates.len(),
             ));
             return;
+        }
+        if let Rvalue::Aggregate {
+            kind:
+                baml_compiler2_mir::AggregateKind::Class {
+                    name,
+                    type_arg_templates,
+                },
+            fields,
+        } = rvalue
+        {
+            if self.try_emit_class_aggregate_field_copy_sets(name, type_arg_templates, fields) {
+                return;
+            }
         }
         // Specialize BinaryOp when both operand types are statically known.
         if let Rvalue::BinaryOp { op, left, right } = rvalue {
@@ -2223,9 +2359,16 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 // is called rather than the generic `walk_rvalue_pull` inlining path.
                 // MakeBoundMethod must also be handled specially: it is not handled by
                 // `walk_rvalue_pull` (which panics on it), so route through `emit_rvalue_pull`.
+                // Class aggregates may use emitter-only spread helpers, so they
+                // also need to flow through `emit_rvalue_pull` when inlined.
                 if matches!(
                     rvalue,
-                    Rvalue::MakeClosure { .. } | Rvalue::MakeBoundMethod { .. }
+                    Rvalue::MakeClosure { .. }
+                        | Rvalue::MakeBoundMethod { .. }
+                        | Rvalue::Aggregate {
+                            kind: baml_compiler2_mir::AggregateKind::Class { .. },
+                            ..
+                        }
                 ) {
                     self.emit_rvalue_pull(&rvalue);
                     return Ok(LocalPullAction::Done);

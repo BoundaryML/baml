@@ -125,6 +125,23 @@ pub struct MatchHashEntry {
     pub dense_index: u8,
 }
 
+/// One field copy performed by `Instruction::InitFieldsFromObject`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FieldCopy {
+    /// Field index read from the source instance.
+    pub source: usize,
+    /// Field index written to the destination instance.
+    pub dest: usize,
+}
+
+/// A compact field-copy program for class/object spread initialization.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FieldCopySet {
+    /// Ordered field copies. Runtime reads all source values before writing so
+    /// overlapping source/destination objects behave like a simultaneous copy.
+    pub fields: Vec<FieldCopy>,
+}
+
 /// Individual bytecode instruction.
 ///
 /// For faster iteration we'll start with an in-memory data structure that
@@ -216,6 +233,14 @@ pub enum Instruction {
     ///
     /// Format: `INIT_FIELD i` where `i` is the index of the field.
     InitField(usize),
+
+    /// Initialize several destination fields from a source instance during construction.
+    ///
+    /// Stack effect: `[..., dest, source] -> [..., dest]`.
+    ///
+    /// Format: `INIT_FIELDS_FROM_OBJECT i` where `i` indexes into
+    /// [`Bytecode::field_copy_sets`].
+    InitFieldsFromObject(usize),
 
     /// Pop N values from the top of `Vm::stack` (the evaluation stack).
     ///
@@ -723,6 +748,7 @@ pub enum OpCode {
     LoadField,
     StoreField,
     InitField,
+    InitFieldsFromObject,
     Pop,
     Copy,
     AllocArray,
@@ -833,6 +859,7 @@ impl OpCode {
             | Self::LoadField
             | Self::StoreField
             | Self::InitField
+            | Self::InitFieldsFromObject
             | Self::Pop
             | Self::Copy
             | Self::AllocArray
@@ -940,6 +967,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::LoadField as u8 => Ok(Self::LoadField),
             x if x == Self::StoreField as u8 => Ok(Self::StoreField),
             x if x == Self::InitField as u8 => Ok(Self::InitField),
+            x if x == Self::InitFieldsFromObject as u8 => Ok(Self::InitFieldsFromObject),
             x if x == Self::Pop as u8 => Ok(Self::Pop),
             x if x == Self::Copy as u8 => Ok(Self::Copy),
             x if x == Self::AllocArray as u8 => Ok(Self::AllocArray),
@@ -1042,6 +1070,7 @@ impl std::fmt::Display for OpCode {
             Self::LoadField => "LOAD_FIELD",
             Self::StoreField => "STORE_FIELD",
             Self::InitField => "INIT_FIELD",
+            Self::InitFieldsFromObject => "INIT_FIELDS_FROM_OBJECT",
             Self::Pop => "POP",
             Self::Copy => "COPY",
             Self::AllocArray => "ALLOC_ARRAY",
@@ -1269,6 +1298,7 @@ impl std::fmt::Display for Instruction {
             Instruction::LoadField(i) => write!(f, "LOAD_FIELD {i}"),
             Instruction::StoreField(i) => write!(f, "STORE_FIELD {i}"),
             Instruction::InitField(i) => write!(f, "INIT_FIELD {i}"),
+            Instruction::InitFieldsFromObject(i) => write!(f, "INIT_FIELDS_FROM_OBJECT {i}"),
             Instruction::Pop(n) => write!(f, "POP {n}"),
             Instruction::Copy(i) => write!(f, "COPY {i}"),
             Instruction::Jump(o) => write!(f, "JUMP {o:+}"),
@@ -1557,6 +1587,9 @@ pub struct Bytecode {
     /// Jump tables for switch dispatch (indexed by `JumpTable` instruction).
     pub jump_tables: Vec<JumpTableData>,
 
+    /// Field-copy programs used by `InitFieldsFromObject`.
+    pub field_copy_sets: Vec<FieldCopySet>,
+
     /// Perfect hash tables for sparse `TypeTag` switch dispatch.
     /// Indexed by `DenseTag` instruction operand.
     pub match_hash_tables: Vec<MatchHashTable>,
@@ -1596,6 +1629,7 @@ impl Bytecode {
             constants: Vec::new(),
             resolved_constants: Vec::new(),
             jump_tables: Vec::new(),
+            field_copy_sets: Vec::new(),
             match_hash_tables: Vec::new(),
             line_table: Vec::new(),
             meta: Vec::new(),
@@ -1759,6 +1793,7 @@ impl Bytecode {
                 | Instruction::LoadField(v)
                 | Instruction::StoreField(v)
                 | Instruction::InitField(v)
+                | Instruction::InitFieldsFromObject(v)
                 | Instruction::Pop(v)
                 | Instruction::Copy(v)
                 | Instruction::AllocArray(v)
@@ -2032,6 +2067,7 @@ impl Bytecode {
             Instruction::LoadField(_) => OpCode::LoadField,
             Instruction::StoreField(_) => OpCode::StoreField,
             Instruction::InitField(_) => OpCode::InitField,
+            Instruction::InitFieldsFromObject(_) => OpCode::InitFieldsFromObject,
             Instruction::Pop(_) => OpCode::Pop,
             Instruction::Copy(_) => OpCode::Copy,
             Instruction::AllocArray(_) => OpCode::AllocArray,

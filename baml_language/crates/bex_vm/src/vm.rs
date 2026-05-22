@@ -2105,6 +2105,69 @@ impl BexVm {
         Ok(filtered_notifications)
     }
 
+    fn init_fields_from_object(
+        &mut self,
+        dest_value: Value,
+        source_value: Value,
+        field_copy_set: &bytecode::FieldCopySet,
+    ) -> Result<Option<VmExecState>, VmError> {
+        let dest_ptr = self.as_object_ptr(&dest_value, ObjectType::Instance)?;
+        let source_ptr = self.as_object_ptr(&source_value, ObjectType::Instance)?;
+
+        let copied_fields: Vec<(usize, Value, Value)> = {
+            let Object::Instance(source) = self.get_object(source_ptr) else {
+                return Err(VmInternalError::TypeError {
+                    expected: ObjectType::Instance.into(),
+                    got: ObjectType::of(self.get_object(source_ptr)).into(),
+                }
+                .into());
+            };
+            let Object::Instance(dest) = self.get_object(dest_ptr) else {
+                return Err(VmInternalError::TypeError {
+                    expected: ObjectType::Instance.into(),
+                    got: ObjectType::of(self.get_object(dest_ptr)).into(),
+                }
+                .into());
+            };
+
+            field_copy_set
+                .fields
+                .iter()
+                .map(|copy| {
+                    (
+                        copy.dest,
+                        dest.fields[copy.dest],
+                        source.fields[copy.source],
+                    )
+                })
+                .collect()
+        };
+
+        let watched_node = NodeId::HeapObject(dest_ptr);
+        for (dest_field, old_value, new_value) in copied_fields {
+            self.update_watched_node(
+                watched_node,
+                watch::Path::InstanceField(dest_field),
+                old_value,
+                new_value,
+            );
+            self.heap.write_barrier(dest_ptr, new_value);
+            let Object::Instance(dest) = self.get_object_mut(dest_ptr) else {
+                unreachable!("destination instance already type-checked above");
+            };
+            dest.fields[dest_field] = new_value;
+        }
+
+        let notifications = self.process_notifications(watched_node)?;
+        if !notifications.is_empty() {
+            return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
+                notifications,
+            ))));
+        }
+
+        Ok(None)
+    }
+
     /// When a watched node changes, we need to update the graph topology
     /// and copy the previous values of the affected roots.
     fn update_watched_node(
@@ -2673,6 +2736,19 @@ impl BexVm {
                     return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
                         notifications,
                     ))));
+                }
+            }
+
+            Instruction::InitFieldsFromObject(index) => {
+                let source_value = self.stack.ensure_pop();
+                let dest_slot = self.stack.ensure_slot_from_top(0);
+                let dest_value = self.stack[dest_slot];
+                if let Some(state) = self.init_fields_from_object(
+                    dest_value,
+                    source_value,
+                    &function.bytecode.field_copy_sets[index],
+                )? {
+                    return Ok(Some(state));
                 }
             }
 
@@ -5436,6 +5512,20 @@ impl BexVm {
                     };
                     instance.fields[idx] = new_value;
                     self.stack.push(instance_value);
+                }
+
+                OpCode::InitFieldsFromObject => {
+                    let idx = { read_u32_unchecked(code, pc) as usize };
+                    let source_value = self.stack.ensure_pop();
+                    let dest_slot = self.stack.ensure_slot_from_top(0);
+                    let dest_value = self.stack[dest_slot];
+                    if let Some(state) = self.init_fields_from_object(
+                        dest_value,
+                        source_value,
+                        &function.bytecode.field_copy_sets[idx],
+                    )? {
+                        return Ok(Some(state));
+                    }
                 }
 
                 // ── Pop / Copy ────────────────────────────────────────────────
