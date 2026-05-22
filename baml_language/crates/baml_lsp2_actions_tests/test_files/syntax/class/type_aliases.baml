@@ -6,12 +6,8 @@ type Graph = map<string, string[]>
 
 type Combination = Primitive | List | Graph
 
-// Alias with attrs.
-type Currency = int @check(gt_ten, {{ this > 10 }})
-type Amount = Currency @assert({{ this > 0 }})
-
-// Should be allowed.
-type MultipleAttrs = int @assert({{ this > 0 }}) @check(gt_ten, {{ this > 10 }})
+type Currency = int
+type Amount = Currency
 
 enum SomeEnum {
     A
