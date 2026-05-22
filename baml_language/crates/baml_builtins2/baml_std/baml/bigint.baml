@@ -6,6 +6,23 @@
 /// they had an infinite sign-extended bit string. So `(-1n) & 1n == 1n`,
 /// `(-1n) | 0n == -1n`, `(-1n) ^ 0n == -1n`. This matches JavaScript `BigInt`
 /// and Python `int`.
+///
+/// # Panics
+///
+/// Bigint operators and methods can raise the following unrecoverable
+/// panics. These are not declared via `throws` because they signal that
+/// the program tried to do something invalid (rather than a recoverable
+/// runtime condition):
+///
+/// - `baml.panics.DivisionByZero` — `a / 0n` or `a % 0n`.
+/// - `baml.panics.NegativeBitShift` — `a << -1n` or `a >> -1n`. The shift
+///   count must be non-negative.
+/// - `baml.panics.AllocFailure` — the operand or result would require
+///   more than ~268M bits (`bigint`'s workspace cap). Sources:
+///     * `a * b`, `a << n`, `a.pow(n)` where the predicted result exceeds
+///       the cap.
+///     * `bigint.parse(s)` where `s` carries more decimal digits than the
+///       cap permits.
 class Bigint {
   //baml:mut_vm
   function to_json(self) -> baml.json.json {

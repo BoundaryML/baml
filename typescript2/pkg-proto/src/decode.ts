@@ -38,11 +38,22 @@ export type WrapHandleFn<T> = (key: bigint, handleType: number, typeName: string
  * Guards against empty or sign-only input: `BigInt('0x')` throws an opaque
  * `SyntaxError`, so we surface a clearer error for malformed wire data.
  */
+// Workspace bigint cap = 2^28 bits ⇒ at most (2^28)/4 hex digits (plus
+// slack), matching the Rust-side `MAX_BIGINT_HEX_LEN` in
+// `bridge_ctypes/src/value_decode.rs`. Reject longer inputs before
+// calling `BigInt()` so a malicious payload can't drive an unbounded
+// allocation on the JS heap.
+const MAX_BIGINT_HEX_LEN = (1 << 28) / 4 + 2;
 function hexToBigInt(hex: string): bigint {
   const negative = hex.startsWith('-');
   const magnitude = negative ? hex.slice(1) : hex;
   if (magnitude.length === 0 || !/^[0-9a-fA-F]+$/.test(magnitude)) {
     throw new Error(`Invalid bigint hex on the wire: ${JSON.stringify(hex)}`);
+  }
+  if (magnitude.length > MAX_BIGINT_HEX_LEN) {
+    throw new Error(
+      `bigint hex exceeds the workspace cap (${magnitude.length} chars, limit ${MAX_BIGINT_HEX_LEN})`,
+    );
   }
   const value = BigInt(`0x${magnitude}`);
   return negative ? -value : value;

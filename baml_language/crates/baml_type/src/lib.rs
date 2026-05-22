@@ -35,6 +35,17 @@ pub use template::TyTemplate;
 /// constant-folding refusal threshold.
 pub const MAX_BIGINT_BITS: u64 = 1 << 28;
 
+/// Permissive upper bound on the number of base-ten digits a `bigint` may
+/// have before it cannot possibly fit in [`MAX_BIGINT_BITS`].
+///
+/// Each base-ten digit carries `log2(10) ≈ 3.32` bits, so any decimal string
+/// longer than `MAX_BIGINT_BITS / 3 + 2` is guaranteed to overflow the cap.
+/// Used as a cheap pre-flight reject before `BigInt::parse_bytes`; callers
+/// follow up with an exact `bits()` check for borderline inputs. Shared by
+/// SAP deserialization, the jsonish number visitor, and `bigint.parse`.
+#[allow(clippy::cast_possible_truncation)] // MAX_BIGINT_BITS is 2^28; fits in usize on 32/64-bit
+pub const MAX_BIGINT_DECIMAL_DIGITS: usize = (MAX_BIGINT_BITS / 3 + 2) as usize;
+
 /// A lightweight name type for class/enum/type-alias references.
 ///
 /// Replaces both `QualifiedName` (VIR+) and plain `String` keys.

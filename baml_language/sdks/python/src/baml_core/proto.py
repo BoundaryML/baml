@@ -439,6 +439,26 @@ def _decode_handle(handle, type_map: BamlTypeMap) -> Any:
     return pyhandle
 
 
+# Workspace bigint cap = 2^28 bits ⇒ at most (2^28)/4 hex digits (plus a
+# small slack), matching the Rust-side `MAX_BIGINT_HEX_LEN` in
+# `bridge_ctypes/src/value_decode.rs`. Reject longer inputs before calling
+# `int(..., 16)` so a malicious wire payload can't drive an unbounded
+# Python `int` allocation.
+_MAX_BIGINT_HEX_LEN = (1 << 28) // 4 + 2
+
+
+def _parse_hex_bigint(s: str) -> int:
+    # Strip exactly one leading minus (matching the Node.js bridge); any
+    # other malformed prefix is left for `int(s, 16)` to reject.
+    magnitude = s[1:] if s.startswith("-") else s
+    if len(magnitude) > _MAX_BIGINT_HEX_LEN:
+        raise ValueError(
+            f"bigint hex exceeds the workspace cap ({len(magnitude)} chars, "
+            f"limit {_MAX_BIGINT_HEX_LEN})"
+        )
+    return int(s, base=16)
+
+
 def _decode_literal(literal) -> Any:
     which = literal.WhichOneof("literal")
     if which == "string_literal":
@@ -448,9 +468,9 @@ def _decode_literal(literal) -> Any:
     if which == "bool_literal":
         return literal.bool_literal.value
     if which == "bigint_literal":
-        # Hex / base sixteen on the wire, matching `bigint_value`. `int(s, 16)`
-        # handles a leading minus sign natively.
-        return int(literal.bigint_literal.value, base=16)
+        # Hex / base sixteen on the wire, matching `bigint_value`. The
+        # helper guards against megabyte-scale payloads before parsing.
+        return _parse_hex_bigint(literal.bigint_literal.value)
     return None
 
 
@@ -470,8 +490,9 @@ def decode_value(holder, type_map: BamlTypeMap) -> Any:
     if which == "int_value":
         return holder.int_value
     if which == "bigint_value":
-        # Hex / base sixteen on the wire `int(s, 16)` handles a leading minus sign natively.
-        return int(holder.bigint_value, base=16)
+        # Hex / base sixteen on the wire; the helper guards against
+        # megabyte-scale payloads before parsing.
+        return _parse_hex_bigint(holder.bigint_value)
     if which == "float_value":
         return holder.float_value
     if which == "bool_value":

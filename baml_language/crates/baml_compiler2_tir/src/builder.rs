@@ -8096,6 +8096,12 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// which still pairs float with bigint inside the upcast — so even
     /// though only one runtime branch realizes the bad pairing, the type
     /// itself is unsound.
+    ///
+    /// Note this is conservative for a single union that already contains
+    /// both: `(float | bigint) == (float | bigint)` (and even `x == x` for
+    /// such an `x`) is rejected, because the type admits a float-vs-bigint
+    /// pairing even though any one concrete value is only ever one
+    /// representation. Narrow the operand first if you hit this.
     fn is_float_bigint_mix(lhs: &Ty, rhs: &Ty) -> bool {
         /// `(could_be_float, could_be_bigint)` for a primitive/literal/union/
         /// optional type — i.e. the set of primitive shapes any runtime branch

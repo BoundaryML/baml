@@ -178,6 +178,25 @@ impl BamlClassBigint for PackageBamlImpl {
             .into());
         }
 
+        // Pre-flight: reject inputs that would produce a bigint past the
+        // workspace cap before allocating the parsed value. Each decimal
+        // digit contributes at most ~3.32 bits, so a string longer than
+        // `MAX_BIGINT_DECIMAL_DIGITS` cannot fit and must be refused.
+        // `bigint.parse` is user-callable from BAML, so this is a reachable
+        // allocation vector — match the SAP / FFI guards.
+        if digits.len() > baml_type::MAX_BIGINT_DECIMAL_DIGITS {
+            return Err(VmPanic::AllocFailure {
+                message: format!(
+                    "bigint.parse: input has {} decimal digits, more than the \
+                     {}-digit limit (bigint cap: {} bits)",
+                    digits.len(),
+                    baml_type::MAX_BIGINT_DECIMAL_DIGITS,
+                    MAX_BIGINT_BITS
+                ),
+            }
+            .into());
+        }
+
         let full = format!("{sign_str}{digits}");
         BigInt::parse_bytes(full.as_bytes(), 10)
             .map(Arc::new)

@@ -3510,17 +3510,19 @@ impl BexVm {
                 };
                 let shift = shift_or_panic
                     .map_err(|p| VmError::Thrown(self.panic_to_exception_value(p)))?;
-                let val_bits = {
+                // Clone the `Arc<BigInt>` once so we can read `lb` across
+                // the bound check, the error-message formatting, and the
+                // actual shift without re-`get_object`-ing the heap each
+                // time. Cloning an `Arc` is cheap (refcount bump).
+                let lb = {
                     let Object::Bigint(lb) = self.get_object(li) else {
                         unsafe { std::hint::unreachable_unchecked() }
                     };
-                    lb.bits()
+                    lb.clone()
                 };
+                let val_bits = lb.bits();
                 let estimated_bits = val_bits.saturating_add(shift as u64);
                 if estimated_bits > crate::package_baml::bigint::MAX_BIGINT_BITS {
-                    let Object::Bigint(lb) = self.get_object(li) else {
-                        unsafe { std::hint::unreachable_unchecked() }
-                    };
                     return Err(VmError::Thrown(self.panic_to_exception_value(
                         VmPanic::AllocFailure {
                             message: format!(
@@ -3530,12 +3532,7 @@ impl BexVm {
                         },
                     )));
                 }
-                let result = {
-                    let Object::Bigint(lb) = self.get_object(li) else {
-                        unsafe { std::hint::unreachable_unchecked() }
-                    };
-                    lb.as_ref() << shift
-                };
+                let result = lb.as_ref() << shift;
                 let value = self.alloc_bigint(std::sync::Arc::new(result))?;
                 self.stack.push(value);
             }

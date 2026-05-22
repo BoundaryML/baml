@@ -86,11 +86,21 @@ export function encodeCallArgs(kwargs: Record<string, unknown>): Buffer {
 // hex literal; strip a leading minus so we can parse the magnitude. Guard
 // against empty or sign-only inputs — `BigInt("0x")` throws `SyntaxError`,
 // so we surface a clearer error instead.
+// Workspace bigint cap = 2^28 bits ⇒ at most (2^28)/4 hex digits, plus a
+// small slack to match the Rust-side `MAX_BIGINT_HEX_LEN` constant in
+// `bridge_ctypes/src/value_decode.rs`. Reject longer inputs before calling
+// `BigInt()` so a megabyte-scale payload can't drive an unbounded allocation.
+const MAX_BIGINT_HEX_LEN = (1 << 28) / 4 + 2;
 function parseHexBigint(s: string): bigint {
     const magnitude = s.startsWith('-') ? s.slice(1) : s;
     if (magnitude.length === 0 || !/^[0-9a-fA-F]+$/.test(magnitude)) {
         throw new Error(
             `Invalid bigint hex on the wire: ${JSON.stringify(s)}`,
+        );
+    }
+    if (magnitude.length > MAX_BIGINT_HEX_LEN) {
+        throw new Error(
+            `bigint hex exceeds the workspace cap (${magnitude.length} chars, limit ${MAX_BIGINT_HEX_LEN})`,
         );
     }
     return s.startsWith('-')
@@ -122,12 +132,18 @@ function decodeValueHolder(holder: baml_core.cffi.v1.IBamlOutboundValue): unknow
         if (holder.literalValue.stringLiteral != null) return holder.literalValue.stringLiteral.value;
         if (holder.literalValue.intLiteral != null) return Number(holder.literalValue.intLiteral.value);
         if (holder.literalValue.boolLiteral != null) return holder.literalValue.boolLiteral.value;
-        // Hex / base sixteen on the wire, matching `bigint_value`. `value` is
-        // a required proto field so the wire form always carries a string;
-        // coalesce defensively for missing-field decoding (an empty `'0'`
-        // decodes as `0n`).
+        // Hex / base sixteen on the wire, matching `bigint_value`. `value`
+        // is a required field on `BamlTyLiteralBigint`, so its absence
+        // indicates a corrupted / malformed wire message — reject loudly
+        // rather than silently coercing a missing field to `0n`.
         if (holder.literalValue.bigintLiteral != null) {
-            return parseHexBigint(holder.literalValue.bigintLiteral.value ?? '0');
+            const hex = holder.literalValue.bigintLiteral.value;
+            if (hex == null) {
+                throw new Error(
+                    'wire message: BamlTyLiteralBigint missing required `value`',
+                );
+            }
+            return parseHexBigint(hex);
         }
     }
     if (holder.listValue) {

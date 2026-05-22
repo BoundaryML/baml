@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: type mismatch: expected float, got int
+  [type] error: type mismatch: expected float, got int
     ╭─[ numeric_invariance.baml:10:5 ]
     │
  10 │     x
@@ -12,7 +12,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: type mismatch: expected float, got 1
+  [type] error: type mismatch: expected float, got 1
     ╭─[ numeric_invariance.baml:15:5 ]
     │
  15 │     1
@@ -22,7 +22,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: type mismatch: expected bigint[], got int[]
+  [type] error: type mismatch: expected bigint[], got int[]
     ╭─[ numeric_invariance.baml:21:5 ]
     │
  21 │     a
@@ -32,7 +32,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: type mismatch: expected bigint, got 1
+  [type] error: type mismatch: expected bigint, got 1
     ╭─[ numeric_invariance.baml:27:6 ]
     │
  27 │     [1, 2]
@@ -42,7 +42,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: type mismatch: expected bigint, got 2
+  [type] error: type mismatch: expected bigint, got 2
     ╭─[ numeric_invariance.baml:27:9 ]
     │
  27 │     [1, 2]
@@ -52,7 +52,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: type mismatch: expected float[], got int[]
+  [type] error: type mismatch: expected float[], got int[]
     ╭─[ numeric_invariance.baml:33:5 ]
     │
  33 │     a
@@ -62,7 +62,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: type mismatch: expected bigint, got 1
+  [type] error: type mismatch: expected bigint, got 1
     ╭─[ numeric_invariance.baml:38:7 ]
     │
  38 │     [[1], [2]]
@@ -72,7 +72,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: type mismatch: expected bigint, got 2
+  [type] error: type mismatch: expected bigint, got 2
     ╭─[ numeric_invariance.baml:38:12 ]
     │
  38 │     [[1], [2]]
@@ -82,7 +82,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: type mismatch: expected map<string, bigint>, got map<string, int>
+  [type] error: type mismatch: expected map<string, bigint>, got map<string, int>
     ╭─[ numeric_invariance.baml:44:5 ]
     │
  44 │     m
@@ -92,7 +92,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: type mismatch: expected bigint, got 1
+  [type] error: type mismatch: expected bigint, got 1
     ╭─[ numeric_invariance.baml:49:11 ]
     │
  49 │     {"a": 1}
@@ -102,7 +102,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: operator `Add` cannot be applied to `int?` and `int`
+  [type] error: operator `Add` cannot be applied to `int?` and `int`
     ╭─[ numeric_invariance.baml:55:5 ]
     │
  55 │     x + y
@@ -112,7 +112,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0004
 ────╯
 
-  [type] Error: operator `BitAnd` cannot be applied to `int?` and `int`
+  [type] error: operator `BitAnd` cannot be applied to `int?` and `int`
     ╭─[ numeric_invariance.baml:60:5 ]
     │
  60 │     x & y
@@ -122,7 +122,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0004
 ────╯
 
-  [type] Error: operator `Lt` cannot be applied to `int?` and `int`
+  [type] error: operator `Lt` cannot be applied to `int?` and `int`
     ╭─[ numeric_invariance.baml:67:5 ]
     │
  67 │     x < y
@@ -132,7 +132,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0004
 ────╯
 
-  [type] Error: operator `Eq` cannot be applied to `float?` and `bigint`
+  [type] error: operator `Eq` cannot be applied to `float?` and `bigint`
     ╭─[ numeric_invariance.baml:73:5 ]
     │
  73 │     x == y
@@ -142,7 +142,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0004
 ────╯
 
-  [type] Error: operator `Lt` cannot be applied to `float?` and `bigint`
+  [type] error: operator `Lt` cannot be applied to `float?` and `bigint`
     ╭─[ numeric_invariance.baml:79:5 ]
     │
  79 │     x < y
@@ -152,7 +152,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0004
 ────╯
 
-  [type] Error: type mismatch: expected bigint, got 1
+  [type] error: type mismatch: expected bigint, got 1
     ╭─[ numeric_invariance.baml:87:27 ]
     │
  87 │     BigintHolder { count: 1 }

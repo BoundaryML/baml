@@ -272,6 +272,22 @@ impl BexEngine {
             BexExternalValue::Null => Value::Null,
             BexExternalValue::Int(i) => Value::Int(i),
             BexExternalValue::Bigint(bi) => {
+                // Defense-in-depth: every upstream decoder (FFI hex,
+                // SAP, Node.js/Python bridges) already caps oversized
+                // bigints, but `Tlab::alloc_bigint` itself is the raw
+                // allocator with no bound check. Guard here so any
+                // future entry point that bypasses an upstream cap
+                // still surfaces a graceful error instead of allocating
+                // hundreds of MB on the VM heap.
+                let bits = bi.bits();
+                if bits > baml_type::MAX_BIGINT_BITS {
+                    return Err(EngineError::TypeMismatch {
+                        message: format!(
+                            "bigint value requires {bits} bits (limit: {})",
+                            baml_type::MAX_BIGINT_BITS
+                        ),
+                    });
+                }
                 Value::Object(holder.holder_mut().tlab_mut().alloc_bigint(bi))
             }
             BexExternalValue::Float(f) => Value::Float(f),
@@ -898,13 +914,20 @@ pub(crate) fn coerce_arg_to_declared_type(
 
 /// Coerce an **outgoing** return value to match the declared return type.
 ///
-/// Restricted to direction-symmetric coercions: int↔bigint conversion (int→bigint
-/// widens unconditionally; bigint→int succeeds when the value fits in i64 and
-/// errors otherwise), optional unwrap, and numeric-singleton unions. Class /
-/// enum naming is intentionally
-/// *not* rewritten here — the engine-side FQN (e.g. `user.lorem.MyLorem`) is
-/// the authoritative output and stripping it back to the bare display name
-/// would break host-side type lookups.
+/// Handles the int↔bigint conversion at the FFI boundary: `int → bigint`
+/// widens unconditionally (mirrors the TIR scalar rule, realised at MIR
+/// level by `Rvalue::IntToBigint`), and `bigint → int` succeeds when the
+/// value fits in i64 — the latter is **not** a TIR subtype rule
+/// (`baml_type::Ty::is_subtype_of` is coercion-free; see
+/// `baml_compiler2_tir::normalize::is_subtype_of`), it is an
+/// FFI-boundary narrowing that errors on overflow rather than silently
+/// truncate. Also performs optional unwrap and numeric-singleton union
+/// routing.
+///
+/// Class / enum naming is intentionally *not* rewritten here — the
+/// engine-side FQN (e.g. `user.lorem.MyLorem`) is the authoritative
+/// output and stripping it back to the bare display name would break
+/// host-side type lookups.
 pub(crate) fn coerce_return_to_declared_type(
     value: BexExternalValue,
     ty: &Ty,
@@ -912,13 +935,20 @@ pub(crate) fn coerce_return_to_declared_type(
     coerce_numeric_to_declared_type(value, ty)
 }
 
-/// Shared numeric / optional / union coercion used by both arg and return paths.
+/// Shared numeric / optional / union coercion used by both arg and return
+/// paths.
+///
+/// Each arm here is the FFI-boundary realisation of a TIR coercion. See
+/// `baml_compiler2_tir::normalize::is_subtype_of` for the compile-time
+/// counterparts; `baml_type::Ty::is_subtype_of` documents the
+/// coercion-free relation these arms intentionally extend at runtime.
 fn coerce_numeric_to_declared_type(
     value: BexExternalValue,
     ty: &Ty,
 ) -> Result<BexExternalValue, EngineError> {
     match (value, ty) {
-        // Int → Bigint widening
+        // Int → Bigint widening. Mirrors the TIR scalar coercion (TIR keeps
+        // `Int <: Bigint` as a coercive rule realised by MIR `IntToBigint`).
         (BexExternalValue::Int(i), Ty::Bigint { .. } | Ty::Literal(Literal::Bigint(_), _)) => {
             Ok(BexExternalValue::Bigint(num_bigint::BigInt::from(i)))
         }

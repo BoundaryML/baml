@@ -20,6 +20,26 @@ use crate::{
     },
 };
 
+/// Parse a decimal byte slice into a `BigInt`, rejecting inputs that would
+/// exceed the workspace bigint cap ([`baml_type::MAX_BIGINT_DECIMAL_DIGITS`]).
+///
+/// The digit-count check is a cheap pre-flight reject (so a malicious LLM
+/// payload doesn't reach `BigInt::parse_bytes` at all); the exact `bi.bits()`
+/// check after parsing catches borderline cases. Mirrors the VM
+/// (`vm.rs:try_alloc_bigint`) and FFI (`bridge_ctypes/src/value_decode.rs`)
+/// guards so a host- or LLM-supplied value can't drive an unbounded
+/// allocation through SAP deserialization.
+fn parse_bigint_decimal_bounded(bytes: &[u8]) -> Option<BigInt> {
+    if bytes.len() > baml_type::MAX_BIGINT_DECIMAL_DIGITS {
+        return None;
+    }
+    let bi = BigInt::parse_bytes(bytes, 10)?;
+    if bi.bits() > baml_type::MAX_BIGINT_BITS {
+        return None;
+    }
+    Some(bi)
+}
+
 impl<'s, 'v, 't, N: TypeIdent> TypeCoercer<'s, 'v, 't, N> for PrimitiveTy
 where
     't: 's,
@@ -278,7 +298,7 @@ fn parse_bigint_from_number_text(n: &serde_json::Number) -> Option<BigInt> {
     if s.contains('.') || s.contains('e') || s.contains('E') {
         return None;
     }
-    BigInt::parse_bytes(s.as_bytes(), 10)
+    parse_bigint_decimal_bounded(s.as_bytes())
 }
 
 /// Converts a finite `f64` to a `BigInt` via "round half away from zero".
@@ -311,9 +331,11 @@ fn bigint_from_finite_f64(f: f64) -> Option<BigInt> {
         }
     }
     // Out-of-i128-range (or lossy near the boundary): format with no fractional
-    // digits and parse via BigInt.
+    // digits and parse via the bounded helper. (An `f64` past `i128` range is
+    // `> 1.7e38`, well under the bigint cap, so this never actually overflows
+    // in practice — using the bounded parser keeps the SAP path uniform.)
     let s = format!("{rounded:.0}");
-    BigInt::parse_bytes(s.as_bytes(), 10)
+    parse_bigint_decimal_bounded(s.as_bytes())
 }
 
 #[allow(clippy::cast_precision_loss)]
@@ -380,7 +402,7 @@ where
                 let trimmed = s.trim();
                 // Trim trailing commas
                 let trimmed = trimmed.trim_end_matches(',');
-                if let Some(bi) = BigInt::parse_bytes(trimmed.as_bytes(), 10) {
+                if let Some(bi) = parse_bigint_decimal_bounded(trimmed.as_bytes()) {
                     flags.add_flag(Flag::StringToBigint(s.clone()));
                     BamlBigint { value: bi }
                 } else if let Some(n) = trimmed
@@ -1171,5 +1193,40 @@ mod tests {
         let baml_value = result.unwrap().unwrap();
         // Should fall back to the raw input string
         assert_eq!(&*baml_value.value.value, "some raw input");
+    }
+
+    // ── Bigint size-cap helper tests ─────────────────────────────────────
+    //
+    // The integration path (through SAP coercion) needs a string that
+    // exceeds the bigint cap, which is ~80M digits — too expensive to
+    // construct on every test run. These unit tests exercise the bounds
+    // logic directly with small inputs, and the cap branch is verified via
+    // an `oversize` test gated on the cap constant.
+
+    #[test]
+    fn parse_bigint_decimal_bounded_accepts_small() {
+        let bi = super::parse_bigint_decimal_bounded(b"42").unwrap();
+        assert_eq!(bi, BigInt::from(42));
+    }
+
+    #[test]
+    fn parse_bigint_decimal_bounded_accepts_negative() {
+        let bi = super::parse_bigint_decimal_bounded(b"-42").unwrap();
+        assert_eq!(bi, BigInt::from(-42));
+    }
+
+    #[test]
+    fn parse_bigint_decimal_bounded_rejects_garbage() {
+        // The underlying parser refuses non-digit bytes.
+        assert!(super::parse_bigint_decimal_bounded(b"not-a-number").is_none());
+        assert!(super::parse_bigint_decimal_bounded(b"").is_none());
+    }
+
+    #[test]
+    fn parse_bigint_decimal_bounded_rejects_oversized() {
+        // Construct a digit string one byte past the pre-flight cap. The
+        // function must reject it without performing the BigInt allocation.
+        let oversized: Vec<u8> = vec![b'9'; baml_type::MAX_BIGINT_DECIMAL_DIGITS + 1];
+        assert!(super::parse_bigint_decimal_bounded(&oversized).is_none());
     }
 }

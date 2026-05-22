@@ -283,20 +283,32 @@ pub enum Instruction {
     DivFloat,
 
     /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]`
+    /// — raises `VmPanic::AllocFailure` if the result would exceed
+    /// `MAX_BIGINT_BITS`.
     AddBigint,
     /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]`
+    /// — raises `VmPanic::AllocFailure` if the result would exceed
+    /// `MAX_BIGINT_BITS`.
     SubBigint,
     /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]`
+    /// — the VM pre-checks `lb.bits() + rb.bits() > MAX_BIGINT_BITS` and
+    /// raises `VmPanic::AllocFailure` before computing the product.
     MulBigint,
     /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]` — throws `DivisionByZero` if right == 0n
     DivBigint,
     /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]` — throws `DivisionByZero` if right == 0n
     ModBigint,
     /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]`
+    /// — bitwise AND uses two's-complement on negatives; result bit-length
+    /// is bounded by the operands, so no `AllocFailure`.
     BitAndBigint,
     /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]`
+    /// — bitwise OR uses two's-complement on negatives; result bit-length
+    /// is bounded by the operands, so no `AllocFailure`.
     BitOrBigint,
     /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]`
+    /// — bitwise XOR uses two's-complement on negatives; result bit-length
+    /// is bounded by the operands, so no `AllocFailure`.
     BitXorBigint,
     /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]`
     ///
