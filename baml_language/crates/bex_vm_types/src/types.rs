@@ -740,28 +740,9 @@ impl Value {
         Value(a.0.wrapping_sub(b.0).wrapping_add(1))
     }
 
-    /// Signed comparison of two `Int`-tagged Values, computed without
-    /// untagging. Returns the same ordering as `a.as_int().unwrap()`
-    /// vs `b.as_int().unwrap()`.
-    ///
-    /// See [`Value::tagged_int_add`] for the safety contract.
-    #[inline(always)]
-    pub const fn tagged_int_cmp(a: Value, b: Value) -> core::cmp::Ordering {
-        debug_assert!(
-            a.is_int() && b.is_int(),
-            "tagged_int_cmp: both inputs must be Int"
-        );
-        // i64 cmp on the bits respects the shift-left-by-1 of the i63
-        // payload (sign bit is preserved through the shift).
-        let (a, b) = (a.0 as i64, b.0 as i64);
-        if a < b {
-            core::cmp::Ordering::Less
-        } else if a > b {
-            core::cmp::Ordering::Greater
-        } else {
-            core::cmp::Ordering::Equal
-        }
-    }
+    // The OpCode::CmpInt* path does signed comparison directly on the
+    // tagged bits (`(l.bits() as i64) < (r.bits() as i64)`); we don't
+    // need a separate `tagged_int_cmp` helper.
 
     // ── Constructors ──────────────────────────────────────────────────────
 
@@ -837,11 +818,6 @@ impl Value {
     #[inline(always)]
     pub const fn is_bool(self) -> bool {
         self.0 == Self::FALSE.0 || self.0 == Self::TRUE.0
-    }
-
-    #[inline(always)]
-    pub const fn is_omitted_arg(self) -> bool {
-        self.0 == Self::OMITTED_ARG.0
     }
 
     /// True iff `self` is a non-null heap object pointer.
@@ -942,14 +918,11 @@ impl Value {
         self.0
     }
 
-    /// Construct a `Value` from raw bits. **Unsafe in spirit** — the
-    /// caller must guarantee the bit pattern was produced by
-    /// `Value::bits` or by one of the constructors. Currently used by
-    /// the upcoming atomic-load path.
-    #[inline(always)]
-    pub const fn from_bits(bits: u64) -> Self {
-        Value(bits)
-    }
+    // `from_bits` has no callers yet; the originally-planned atomic-load
+    // path will add one when it lands. Re-introduce as `pub(crate) const
+    // unsafe fn from_bits(bits: u64) -> Self` at that point so the
+    // invariant (bits came from `Value::bits` or a safe constructor) is
+    // upheld by callers via `unsafe`.
 }
 
 impl Default for Value {
@@ -1981,12 +1954,20 @@ impl<O: Into<ObjectType>> From<O> for Type {
 
 impl Type {
     /// Get the type of a value.
+    ///
+    /// Heap-boxed floats are normalised back to the top-level `Type::Float`
+    /// so callers comparing `expected` against `got` see the same variant
+    /// regardless of which side originated as an inline label vs. a
+    /// runtime heap deref.
     pub fn of(value: &Value, when_object: impl FnOnce(HeapPtr) -> ObjectType) -> Self {
         match value.kind() {
             ValueKind::OmittedArg => Type::OmittedArg,
             ValueKind::Int(_) => Type::Int,
             ValueKind::Bool(_) => Type::Bool,
-            ValueKind::Object(ptr) => Type::Object(when_object(ptr)),
+            ValueKind::Object(ptr) => match when_object(ptr) {
+                ObjectType::Float => Type::Float,
+                other => Type::Object(other),
+            },
             // TODO: Actually?
             ValueKind::Null => Type::Object(ObjectType::Any),
         }

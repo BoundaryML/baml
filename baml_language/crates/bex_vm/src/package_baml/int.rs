@@ -74,8 +74,10 @@ impl BamlClassInt for PackageBamlImpl {
         };
         // Saturation value if checked_pow overflows or if the result
         // doesn't fit in i63: positive if base >= 0, or if exp is even
-        // (i.e. mathematical sign of result).
-        let saturated = if int >= 0 || exp_u32 % 2 == 0 {
+        // (i.e. mathematical sign of result). Use the *original* `exp`
+        // for the parity check: clamping to `u32::MAX` (odd) above would
+        // otherwise flip the sign for even exponents above u32 range.
+        let saturated = if int >= 0 || exp & 1 == 0 {
             Value::INT_MAX
         } else {
             Value::INT_MIN

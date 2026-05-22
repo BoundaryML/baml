@@ -136,30 +136,26 @@ impl<'a> BexValue<'a> {
         }
     }
 
-    pub fn as_float(self) -> Result<f64, AccessError> {
+    /// Extract an `f64` from a heap-boxed float.
+    ///
+    /// Floats are no longer inline in `Value`; they live as
+    /// `Object::Float(f64)` behind a `HeapPtr`. Reading one requires a
+    /// `PermitProof` exactly like [`BexValue::as_string`] — the proof
+    /// witnesses that a GC permit is held so the heap deref is sound.
+    pub fn as_float(self, heap: &BexHeap, permit: PermitProof<'a>) -> Result<f64, AccessError> {
         match self {
             BexValue::ExternalValue(BexExternalValue::Float(f)) => Ok(*f),
-            // Float is now heap-boxed as Object::Float(f64). Reading it
-            // requires dereferencing the HeapPtr. The 'a lifetime on
-            // BexValue<'a> guarantees the underlying Value reference is
-            // live, which transitively requires that the GC permit is held
-            // (the caller can only obtain &Value while permitted).
-            BexValue::Value(v) if v.is_object() => {
-                let ptr = v.as_object_ptr().expect("just checked is_object");
-                // SAFETY: see comment above re: 'a lifetime witnessing permit.
+            other => other.as_object("float", heap, permit, |ptr| {
+                // SAFETY: `as_object` only invokes this closure after
+                // resolving a valid heap pointer under the permit witness.
                 let obj = unsafe { ptr.get() };
-                if let Object::Float(f) = obj {
-                    Ok(*f)
-                } else {
-                    Err(AccessError::TypeMismatch {
+                let Object::Float(f) = obj else {
+                    return Err(AccessError::TypeMismatch {
                         expected: "float",
                         actual: obj.to_string(),
-                    })
-                }
-            }
-            other => Err(AccessError::TypeMismatch {
-                expected: "float",
-                actual: other.type_name(),
+                    });
+                };
+                Ok(*f)
             }),
         }
     }

@@ -269,10 +269,12 @@ fn gen_accessor_return_type(kind: &FieldTypeKind) -> TokenStream2 {
 }
 
 fn accessor_needs_heap(kind: &FieldTypeKind) -> bool {
+    // Float is heap-boxed (`Object::Float`); its accessor needs the
+    // permit, unlike Int / Bool which round-trip inline through the
+    // tagged-pointer encoding.
     !matches!(
         kind,
         FieldTypeKind::Int
-            | FieldTypeKind::Float
             | FieldTypeKind::Bool
             | FieldTypeKind::BuiltinEnum(_)
             | FieldTypeKind::ArrayBuiltinStruct(_)
@@ -296,7 +298,7 @@ fn gen_accessor_body(field: &AccessorFieldDef) -> TokenStream2 {
         FieldTypeKind::Float => quote! {
             self.cls
                 .field(#name_str)
-                .and_then(|value| value.as_float())
+                .and_then(|value| value.as_float(heap, permit))
         },
         FieldTypeKind::Bool => quote! {
             self.cls

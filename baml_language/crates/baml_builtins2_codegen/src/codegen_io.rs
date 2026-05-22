@@ -222,7 +222,12 @@ fn owned_rust_type(
 fn view_return_type(ty: &BamlType, needs_heap: &mut bool) -> TokenStream {
     match ty {
         BamlType::Int => quote! { Result<i64, AccessError> },
-        BamlType::Float => quote! { Result<f64, AccessError> },
+        // Float is heap-boxed (`Object::Float`); the accessor needs a
+        // `PermitProof` to deref the pointer soundly.
+        BamlType::Float => {
+            *needs_heap = true;
+            quote! { Result<f64, AccessError> }
+        }
         BamlType::Bool => quote! { Result<bool, AccessError> },
         BamlType::String => {
             *needs_heap = true;
@@ -244,7 +249,7 @@ fn view_accessor_body(field_name: &str, ty: &BamlType) -> TokenStream {
     let field_lit = field_name;
     match ty {
         BamlType::Int => quote! { self.cls.field(#field_lit)?.as_int() },
-        BamlType::Float => quote! { self.cls.field(#field_lit)?.as_float() },
+        BamlType::Float => quote! { self.cls.field(#field_lit)?.as_float(heap, permit) },
         BamlType::Bool => quote! { self.cls.field(#field_lit)?.as_bool() },
         BamlType::String => quote! { self.cls.field(#field_lit)?.as_string(heap, permit) },
         BamlType::RustType => quote! { self.cls.field(#field_lit)?.as_rust_data(heap, permit) },
@@ -376,9 +381,11 @@ fn into_owned_expr(
 ) -> TokenStream {
     let field_ident = format_ident!("{}", field_name);
     match ty {
-        BamlType::Int | BamlType::Float | BamlType::Bool => {
+        BamlType::Int | BamlType::Bool => {
             quote! { self.#field_ident()? }
         }
+        // Float accessor is now heap-aware (`Object::Float` deref).
+        BamlType::Float => quote! { self.#field_ident(heap, permit)? },
         BamlType::String => quote! { self.#field_ident(heap, permit)?.clone() },
         BamlType::RustType => quote! { self.#field_ident(heap, permit)? },
         BamlType::Uint8Array | BamlType::List(_) | BamlType::Map(_, _) | BamlType::Optional(_) => {
@@ -499,7 +506,7 @@ fn glue_extract_expr(
     match ty {
         BamlType::String => quote! { #arg_ident.as_string(heap.as_ref(), permit)?.to_string() },
         BamlType::Int => quote! { #arg_ident.as_int()? },
-        BamlType::Float => quote! { #arg_ident.as_float()? },
+        BamlType::Float => quote! { #arg_ident.as_float(heap.as_ref(), permit)? },
         BamlType::Bool => quote! { #arg_ident.as_bool()? },
         BamlType::Named(name) => {
             if let Some(ns) = class_ns_map.get(name.as_str()) {

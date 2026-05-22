@@ -572,7 +572,8 @@ impl BexEngine {
         // constants and module globals, allocate a compile-time Object::Float
         // for each unique bit pattern, and rewrite the ConstValue::Float
         // entries to ConstValue::Object(idx). Required because Value can no
-        // longer hold a float inline (heap-boxed; see spawn_value_tearing.md).
+        // longer hold a float inline (heap-boxed under the tagged-pointer
+        // encoding).
         let mut float_indices: std::collections::HashMap<u64, usize> =
             std::collections::HashMap::new();
         // Pre-scan to discover unique floats.
