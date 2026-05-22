@@ -330,6 +330,122 @@ function deep_copy<T>(value: T) -> T {
         assert_eq!(function.generic_params[0].as_str(), "T");
     }
 
+    /// Walk every expression in the function body and return references that
+    /// satisfy the predicate. Used by the instantiation-expression tests to
+    /// check whether the lowered tree contains an `Instantiation` node.
+    fn find_exprs(body: &crate::ast::ExprBody, mut pred: impl FnMut(&Expr) -> bool) -> Vec<&Expr> {
+        body.exprs
+            .iter()
+            .map(|(_, e)| e)
+            .filter(|e| pred(e))
+            .collect()
+    }
+
+    #[test]
+    fn ast_instantiation_expression_in_let_binding_lowers_to_instantiation() {
+        // `f<string>` as a standalone value (no call follows) lowers to
+        // `Expr::Instantiation { base: Path("f"), type_args: [string] }`.
+        let source = r#"
+function f<T>(x: T) -> T { x }
+
+function Demo() -> int {
+  let cb = f<string>;
+  1
+}
+"#;
+        let items = parse_and_lower(source);
+        let demo = items
+            .iter()
+            .filter_map(|i| {
+                if let Item::Function(f) = i {
+                    Some(f)
+                } else {
+                    None
+                }
+            })
+            .find(|f| f.name.as_str() == "Demo")
+            .expect("expected Demo function");
+        let Some(FunctionBodyDef::Expr(body, _)) = &demo.body else {
+            panic!("expected expression body");
+        };
+
+        let instantiations: Vec<&Expr> =
+            find_exprs(body, |e| matches!(e, Expr::Instantiation { .. }));
+        assert_eq!(
+            instantiations.len(),
+            1,
+            "expected exactly one Instantiation node, got: {:?}",
+            body.exprs
+        );
+        let Expr::Instantiation { base, type_args } = instantiations[0] else {
+            unreachable!()
+        };
+        assert_eq!(type_args.len(), 1);
+        match &body.exprs[*base] {
+            Expr::Path(segs) => {
+                assert_eq!(segs.len(), 1);
+                assert_eq!(segs[0].as_str(), "f");
+            }
+            other => panic!("expected base to be Path(f), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn ast_generic_call_callee_stays_plain_path() {
+        // `f<string>(x)` keeps the callee as `Expr::Path`; the call's own
+        // `type_args` field captures the type arguments.
+        let source = r#"
+function f<T>(x: T) -> T { x }
+
+function Demo() -> int {
+  f<int>(1)
+}
+"#;
+        let function = items_function(parse_and_lower(source), "Demo");
+        let Some(FunctionBodyDef::Expr(body, _)) = &function.body else {
+            panic!("expected expression body");
+        };
+
+        let instantiations: Vec<&Expr> =
+            find_exprs(body, |e| matches!(e, Expr::Instantiation { .. }));
+        assert!(
+            instantiations.is_empty(),
+            "expected no Instantiation nodes for a generic call site"
+        );
+
+        let calls: Vec<&Expr> = find_exprs(body, |e| matches!(e, Expr::Call { .. }));
+        assert_eq!(calls.len(), 1);
+        let Expr::Call {
+            callee, type_args, ..
+        } = calls[0]
+        else {
+            unreachable!()
+        };
+        assert_eq!(
+            type_args.len(),
+            1,
+            "expected one explicit call-site type arg"
+        );
+        match &body.exprs[*callee] {
+            Expr::Path(segs) => assert_eq!(segs[0].as_str(), "f"),
+            other => panic!("expected plain Path callee, got {other:?}"),
+        }
+    }
+
+    fn items_function(items: Vec<Item>, name: &str) -> crate::ast::FunctionDef {
+        items
+            .into_iter()
+            .filter_map(|i| {
+                if let Item::Function(f) = i {
+                    Some(f)
+                } else {
+                    None
+                }
+            })
+            .find(|f| f.name.as_str() == name)
+            .unwrap_or_else(|| panic!("expected function {name}"))
+    }
+
     #[test]
     fn ast_preserves_parameter_defaults_and_call_labels() {
         let source = r#"
