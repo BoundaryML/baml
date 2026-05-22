@@ -1215,7 +1215,7 @@ impl BexVm {
         Value::object(self.tlab.alloc_rust_data(data))
     }
 
-    /// Downcast a `Value::Object` pointing to `Object::RustData` to `&T`.
+    /// Downcast a `Value` carrying a heap pointer to `Object::RustData` to `&T`.
     ///
     /// Used by generated `view::` struct accessors for `$rust_type` fields.
     pub fn as_rust_data<T: 'static>(&self, value: &Value) -> Result<&T, VmInternalError> {
@@ -1241,7 +1241,7 @@ impl BexVm {
         }
     }
 
-    /// Extract an `&Instance` from a `Value::Object`.
+    /// Extract an `&Instance` from a `Value` carrying a heap-object pointer.
     ///
     /// Used by generated glue code to construct `view::` structs.
     pub fn as_instance(&self, value: &Value) -> Result<&Instance, VmInternalError> {
@@ -2723,6 +2723,32 @@ impl BexVm {
         // own encoder which only emits valid opcode bytes.
         #[allow(unsafe_code)]
         let op: OpCode = unsafe { std::mem::transmute(op_byte) };
+
+        // Tagged-int comparisons skip untagging by comparing bits directly
+        // (see `Value::tagged_int_add` for the encoding rationale; the
+        // shift-left-by-1 preserves signed ordering between operands that
+        // share the same tag bit). Float comparisons unwrap two heap-boxed
+        // floats and apply the operator; both pops are guaranteed Float by
+        // the bytecode encoder, so the `else` arms are unreachable.
+        macro_rules! cmp_int_op {
+            ($op:tt) => {{
+                let r = self.stack.ensure_pop();
+                let l = self.stack.ensure_pop();
+                self.stack
+                    .push(Value::bool((l.bits() as i64) $op (r.bits() as i64)));
+            }};
+        }
+        macro_rules! cmp_float_op {
+            ($op:tt) => {{
+                let Some(r) = value_as_float(self.stack.ensure_pop()) else {
+                    std::hint::unreachable_unchecked()
+                };
+                let Some(l) = value_as_float(self.stack.ensure_pop()) else {
+                    std::hint::unreachable_unchecked()
+                };
+                self.stack.push(Value::bool(l $op r));
+            }};
+        }
 
         // SAFETY: see above — bytecode invariants guarantee all reads are in bounds.
         #[allow(unused_unsafe)]
@@ -4256,102 +4282,22 @@ impl BexVm {
                 }
 
                 // ── Specialized int comparison (skip type dispatch) ───────────
-                // CmpInt* skip untagging by comparing tagged bits directly
-                // as i64. The `(real << 1) | 1` encoding preserves signed
-                // ordering (sign bit moves left but both operands share
-                // the same tag bit, so they cancel in the comparison).
-                OpCode::CmpIntEq => {
-                    let r = self.stack.ensure_pop();
-                    let l = self.stack.ensure_pop();
-                    self.stack.push(Value::bool(l.bits() == r.bits()));
-                }
-                OpCode::CmpIntNotEq => {
-                    let r = self.stack.ensure_pop();
-                    let l = self.stack.ensure_pop();
-                    self.stack.push(Value::bool(l.bits() != r.bits()));
-                }
-                OpCode::CmpIntLt => {
-                    let r = self.stack.ensure_pop();
-                    let l = self.stack.ensure_pop();
-                    self.stack
-                        .push(Value::bool((l.bits() as i64) < (r.bits() as i64)));
-                }
-                OpCode::CmpIntLtEq => {
-                    let r = self.stack.ensure_pop();
-                    let l = self.stack.ensure_pop();
-                    self.stack
-                        .push(Value::bool((l.bits() as i64) <= (r.bits() as i64)));
-                }
-                OpCode::CmpIntGt => {
-                    let r = self.stack.ensure_pop();
-                    let l = self.stack.ensure_pop();
-                    self.stack
-                        .push(Value::bool((l.bits() as i64) > (r.bits() as i64)));
-                }
-                OpCode::CmpIntGtEq => {
-                    let r = self.stack.ensure_pop();
-                    let l = self.stack.ensure_pop();
-                    self.stack
-                        .push(Value::bool((l.bits() as i64) >= (r.bits() as i64)));
-                }
+                OpCode::CmpIntEq => cmp_int_op!(==),
+                OpCode::CmpIntNotEq => cmp_int_op!(!=),
+                OpCode::CmpIntLt => cmp_int_op!(<),
+                OpCode::CmpIntLtEq => cmp_int_op!(<=),
+                OpCode::CmpIntGt => cmp_int_op!(>),
+                OpCode::CmpIntGtEq => cmp_int_op!(>=),
 
                 // ── Specialized float comparison (skip type dispatch) ─────────
                 #[allow(clippy::float_cmp)]
-                OpCode::CmpFloatEq => {
-                    let Some(r) = value_as_float(self.stack.ensure_pop()) else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Some(l) = value_as_float(self.stack.ensure_pop()) else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    self.stack.push(Value::bool(l == r));
-                }
+                OpCode::CmpFloatEq => cmp_float_op!(==),
                 #[allow(clippy::float_cmp)]
-                OpCode::CmpFloatNotEq => {
-                    let Some(r) = value_as_float(self.stack.ensure_pop()) else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Some(l) = value_as_float(self.stack.ensure_pop()) else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    self.stack.push(Value::bool(l != r));
-                }
-                OpCode::CmpFloatLt => {
-                    let Some(r) = value_as_float(self.stack.ensure_pop()) else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Some(l) = value_as_float(self.stack.ensure_pop()) else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    self.stack.push(Value::bool(l < r));
-                }
-                OpCode::CmpFloatLtEq => {
-                    let Some(r) = value_as_float(self.stack.ensure_pop()) else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Some(l) = value_as_float(self.stack.ensure_pop()) else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    self.stack.push(Value::bool(l <= r));
-                }
-                OpCode::CmpFloatGt => {
-                    let Some(r) = value_as_float(self.stack.ensure_pop()) else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Some(l) = value_as_float(self.stack.ensure_pop()) else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    self.stack.push(Value::bool(l > r));
-                }
-                OpCode::CmpFloatGtEq => {
-                    let Some(r) = value_as_float(self.stack.ensure_pop()) else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Some(l) = value_as_float(self.stack.ensure_pop()) else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    self.stack.push(Value::bool(l >= r));
-                }
+                OpCode::CmpFloatNotEq => cmp_float_op!(!=),
+                OpCode::CmpFloatLt => cmp_float_op!(<),
+                OpCode::CmpFloatLtEq => cmp_float_op!(<=),
+                OpCode::CmpFloatGt => cmp_float_op!(>),
+                OpCode::CmpFloatGtEq => cmp_float_op!(>=),
 
                 // ── Expanded unary ────────────────────────────────────────────
                 OpCode::Not => {

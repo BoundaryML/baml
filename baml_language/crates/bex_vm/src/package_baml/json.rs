@@ -188,14 +188,15 @@ impl BamlNamespaceJson for PackageBamlImpl {
 /// Parse a JSON string and return a `json`-typed VM value.
 ///
 /// The `json` type alias is `null | bool | int | float | string | json[] | map<string, json>`,
-/// which maps directly onto VM value types:
-/// - JSON `null`   → `Value::Null`
-/// - JSON `bool`   → `Value::Bool`
-/// - JSON integer  → `Value::Int`
-/// - JSON float    → `Value::Float`
-/// - JSON `string` → `Value::Object(String)`
-/// - JSON array    → `Value::Object(Array)`
-/// - JSON object   → `Value::Object(Map)`
+/// which maps directly onto VM value kinds:
+/// - JSON `null`   → `Value::NULL`
+/// - JSON `bool`   → tagged Bool
+/// - JSON integer  → tagged i63 (out-of-range falls through to float, see
+///   [`serde_to_value`])
+/// - JSON float    → heap-boxed `Object::Float`
+/// - JSON `string` → heap-boxed `Object::String`
+/// - JSON array    → heap-boxed `Object::Array`
+/// - JSON object   → heap-boxed `Object::Map`
 ///
 /// On failure, throws a `baml.json.JsonParseError { message }` instance.
 pub fn json_parse(vm: &mut BexVm, s: &str) -> Result<Value, VmRustFnError> {

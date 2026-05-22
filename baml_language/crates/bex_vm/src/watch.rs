@@ -504,7 +504,7 @@ pub fn track_watch_dependencies(watch: &mut Watch, parent: NodeId, path: Path, c
 
 // --- Garbage Collection ---
 
-/// Forward a `Value::Object` pointer if present in the forwarding map.
+/// Forward an object-tagged `Value`'s heap pointer if present in the forwarding map.
 fn forward_value(value: &mut Value, forwarding: &HashMap<HeapPtr, HeapPtr>) {
     if let Some(ptr) = value.as_object_ptr() {
         if let Some(&new_ptr) = forwarding.get(&ptr) {
@@ -552,8 +552,8 @@ impl RootHaver for Watch {
     ///
     /// Specifically:
     /// - `state.value`, `state.last_assigned`, `state.last_notified`:
-    ///   `Value::Object` payloads must be rooted because `forward_roots`
-    ///   patches them in place.
+    ///   object-tagged `Value`s must be rooted because `forward_roots`
+    ///   patches their heap pointers in place.
     /// - `state.filter` if `WatchFilter::Function(ptr)`: the function
     ///   pointer is a heap reference (closure object) and is patched in
     ///   place by `forward_roots`, so it must be a root.

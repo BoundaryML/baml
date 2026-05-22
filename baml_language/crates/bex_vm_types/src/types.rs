@@ -1727,8 +1727,8 @@ impl Future {
     /// Fires the generational write barrier on `heap` for `self_ptr`
     /// before the value write. This is required because a `Future` can
     /// survive across GCs (rooted by `FutureManagerInner::active_futures`)
-    /// and may end up in Gen2; if `value` is a `Value::Object` referring
-    /// to a younger-generation heap object, the next Minor GC's
+    /// and may end up in Gen2; if `value` carries a heap-object pointer
+    /// (`value.is_object()`) to a younger-generation object, the next Minor GC's
     /// dirty-card scan must find this reference. Without the barrier the
     /// young object would be reclaimed and the `Future`'s `value` left
     /// dangling.
