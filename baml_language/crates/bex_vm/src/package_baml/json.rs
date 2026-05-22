@@ -292,19 +292,28 @@ pub fn raise_serialize_no_path(
 
 /// Convert a `serde_json::Value` into a VM `Value`.
 ///
-/// JSON numbers: integer-representable numbers become `Value::Int`; all others
-/// become `Value::Float`.  This matches SAP's disambiguation behaviour.
+/// JSON numbers: i63-representable integers become integers; anything that
+/// overflows the i63 range (or doesn't parse as `i64` to begin with) falls
+/// through to a heap-boxed float, with the usual f64 precision loss above
+/// 2^53. Matches SAP's disambiguation behaviour.
 pub fn serde_to_value(vm: &mut BexVm, v: &serde_json::Value) -> Value {
     match v {
         serde_json::Value::Null => Value::NULL,
         serde_json::Value::Bool(b) => Value::bool(*b),
         serde_json::Value::Number(n) => {
-            if let Some(i) = n.as_i64() {
-                Value::int(i)
+            if let Some(i) = n.as_i64()
+                && let Some(v) = Value::try_int(i)
+            {
+                v
             } else if let Some(f) = n.as_f64() {
                 vm.alloc_float(f)
             } else {
-                vm.alloc_float(n.as_f64().unwrap_or(f64::NAN))
+                // Only reachable with serde_json's `arbitrary_precision`
+                // feature (not enabled here). NaN is a sentinel for "we
+                // were handed a number we can't represent at all"; if you
+                // hit this in practice, refuse arbitrary-precision input
+                // upstream rather than relying on this fallback.
+                vm.alloc_float(f64::NAN)
             }
         }
         serde_json::Value::String(s) => vm.alloc_string(s.clone()),
@@ -733,10 +742,13 @@ fn ty_serde_to_value(
         },
 
         Ty::Int { .. } => match json {
-            serde_json::Value::Number(n) => n
-                .as_i64()
-                .map(Value::int)
-                .ok_or_else(|| raise_decode(vm, "expected integer", path)),
+            serde_json::Value::Number(n) => n.as_i64().and_then(Value::try_int).ok_or_else(|| {
+                raise_decode(
+                    vm,
+                    "expected integer in the BAML int range [-2^62, 2^62 - 1]",
+                    path,
+                )
+            }),
             _ => Err(raise_decode(vm, "expected integer", path)),
         },
 

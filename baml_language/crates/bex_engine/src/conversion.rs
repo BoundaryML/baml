@@ -22,7 +22,7 @@ impl BexEngine {
     /// If the declared type is a union, the value is wrapped in `Union { value, metadata }`.
     pub(crate) fn convert_vm_value_to_external_with_type(
         &self,
-        value: &Value,
+        value: Value,
         declared_type: &Ty,
         permit: PermitProof<'_>,
     ) -> Result<BexExternalValue, EngineError> {
@@ -80,7 +80,7 @@ impl BexEngine {
 
                 let items: Result<Vec<_>, _> = arr
                     .iter()
-                    .map(|v| self.convert_vm_value_to_external_with_type(v, element_type, permit))
+                    .map(|v| self.convert_vm_value_to_external_with_type(*v, element_type, permit))
                     .collect();
                 Ok(BexExternalValue::Array {
                     element_type: element_type.clone(),
@@ -109,7 +109,9 @@ impl BexEngine {
                         .map(|(k, v)| {
                             Ok((
                                 k.clone(),
-                                self.convert_vm_value_to_external_with_type(v, value_type, permit)?,
+                                self.convert_vm_value_to_external_with_type(
+                                    *v, value_type, permit,
+                                )?,
                             ))
                         })
                         .collect();
@@ -169,7 +171,7 @@ impl BexEngine {
                             Ok((
                                 class_field.name.clone(),
                                 self.convert_vm_value_to_external_with_type(
-                                    value,
+                                    *value,
                                     &class_field.field_type,
                                     permit,
                                 )?,
@@ -421,7 +423,7 @@ impl BexEngine {
 // ============================================================================
 
 impl BexEngine {
-    pub(crate) fn vm_arg_to_bex_value(&self, value: &Value) -> BexExternalValue {
+    pub(crate) fn vm_arg_to_bex_value(&self, value: Value) -> BexExternalValue {
         match value.kind() {
             ValueKind::OmittedArg => {
                 panic!("Cannot convert omitted argument sentinel to BexExternalValue")
@@ -449,7 +451,7 @@ impl BexEngine {
     pub(crate) fn vm_value_to_owned(
         &self,
         permit: PermitProof<'_>,
-        value: &Value,
+        value: Value,
     ) -> BexExternalValue {
         match value.kind() {
             ValueKind::OmittedArg => {
@@ -486,7 +488,7 @@ impl BexEngine {
     /// primitives, strings, arrays, maps, and resources - not instances/variants.
     #[allow(unused)]
     pub(crate) fn vm_args_to_external(vm: &BexVm, args: &[Value]) -> Vec<BexExternalValue> {
-        args.iter().map(|v| vm_arg_to_external(vm, v)).collect()
+        args.iter().map(|v| vm_arg_to_external(vm, *v)).collect()
     }
 }
 
@@ -643,7 +645,7 @@ fn value_matches_type(value: &BexExternalValue, ty: &Ty) -> bool {
 /// For union types, find which member matches the actual runtime value.
 ///
 /// If the declared type is not a union, returns it unchanged.
-fn resolve_effective_type<'a>(value: &Value, declared_type: &'a Ty) -> &'a Ty {
+fn resolve_effective_type(value: Value, declared_type: &Ty) -> &Ty {
     match declared_type {
         Ty::Union(members, _) => find_matching_union_member(value, members)
             .unwrap_or_else(|| members.first().unwrap_or(declared_type)),
@@ -659,7 +661,7 @@ fn resolve_effective_type<'a>(value: &Value, declared_type: &'a Ty) -> &'a Ty {
 }
 
 /// Find the union member that matches the runtime value's type.
-fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'a Ty> {
+fn find_matching_union_member(value: Value, members: &[Ty]) -> Option<&Ty> {
     match value.kind() {
         ValueKind::OmittedArg => None,
         ValueKind::Null => members.iter().find(|m| matches!(m, Ty::Null { .. })),
@@ -713,7 +715,7 @@ fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'
                     if let Some(first) = elements.first() {
                         members.iter().find(|m| {
                             if let Ty::List(elem_ty, _) = m {
-                                find_matching_union_member(first, &[elem_ty.as_ref().clone()])
+                                find_matching_union_member(*first, &[elem_ty.as_ref().clone()])
                                     .is_some()
                             } else {
                                 false
@@ -751,7 +753,7 @@ fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'
 ///
 /// This is simpler than `vm_value_to_external` because sys ops only receive
 /// primitives, strings, arrays, maps, and resources - not instances/variants.
-pub(crate) fn vm_arg_to_external(vm: &BexVm, value: &Value) -> BexExternalValue {
+pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
     match value.kind() {
         ValueKind::OmittedArg => {
             panic!("Cannot convert omitted argument sentinel to BexExternalValue")
@@ -766,7 +768,7 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: &Value) -> BexExternalValue 
                 Object::String(s) => BexExternalValue::String(s.clone()),
                 Object::Array(arr) => {
                     let items: Vec<BexExternalValue> =
-                        arr.iter().map(|v| vm_arg_to_external(vm, v)).collect();
+                        arr.iter().map(|v| vm_arg_to_external(vm, *v)).collect();
                     BexExternalValue::Array {
                         element_type: bex_external_types::Ty::Null {
                             attr: baml_type::TyAttr::default(),
@@ -777,7 +779,7 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: &Value) -> BexExternalValue 
                 Object::Map(map) => {
                     let entries: indexmap::IndexMap<String, BexExternalValue> = map
                         .iter()
-                        .map(|(k, v)| (k.clone(), vm_arg_to_external(vm, v)))
+                        .map(|(k, v)| (k.clone(), vm_arg_to_external(vm, *v)))
                         .collect();
                     BexExternalValue::Map {
                         key_type: bex_external_types::Ty::String {
@@ -807,7 +809,7 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: &Value) -> BexExternalValue 
                         .iter()
                         .zip(instance.fields.iter())
                         .map(|(class_field, value)| {
-                            (class_field.name.clone(), vm_arg_to_external(vm, value))
+                            (class_field.name.clone(), vm_arg_to_external(vm, *value))
                         })
                         .collect();
 

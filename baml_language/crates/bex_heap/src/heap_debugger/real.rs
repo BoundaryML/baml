@@ -363,15 +363,16 @@ impl BexHeap {
             | Object::Uint8Array(_)
             | Object::RustData(_)
             | Object::Collector(_)
-            | Object::Type(_) => {}
+            | Object::Type(_)
+            | Object::Float(_) => {}
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
         }
     }
 
     fn debug_assert_valid_value(&self, value: &Value) {
-        if let Value::object(idx) = value {
-            let _ = unsafe { self.get_object(*idx) };
+        if let Some(idx) = value.as_object_ptr() {
+            let _ = unsafe { self.get_object(idx) };
         }
     }
 

@@ -141,14 +141,14 @@ mod tests {
     fn omitted_arg_uses_unknown_type_tag() {
         let value = Value::OMITTED_ARG;
 
-        assert_eq!(value_type_tag(&value), type_tags::UNKNOWN);
+        assert_eq!(value_type_tag(value), type_tags::UNKNOWN);
         assert!(matches!(
             Value::int(type_tags::UNKNOWN).kind(),
-            ValueKind::Int(tag) if value_type_tag(&value) == tag
+            ValueKind::Int(tag) if value_type_tag(value) == tag
         ));
         assert!(!matches!(
             Value::int(type_tags::INT).kind(),
-            ValueKind::Int(tag) if value_type_tag(&value) == tag
+            ValueKind::Int(tag) if value_type_tag(value) == tag
         ));
     }
 }
@@ -584,7 +584,7 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
 /// behind a `HeapPtr`. Returns `None` for any other variant (including ints —
 /// callers that want int→float promotion must combine this with `as_int`).
 #[inline]
-fn value_as_float(value: &Value) -> Option<f64> {
+fn value_as_float(value: Value) -> Option<f64> {
     let ptr = value.as_object_ptr()?;
     // SAFETY: HeapPtr from a live Value is valid for read.
     match unsafe { ptr.get() } {
@@ -597,7 +597,7 @@ fn value_as_float(value: &Value) -> Option<f64> {
 ///
 /// This is a free function to avoid borrow checker issues when called
 /// from within the instruction dispatch loop.
-fn value_type_tag(value: &Value) -> i64 {
+fn value_type_tag(value: Value) -> i64 {
     use bex_vm_types::{ValueKind, types::type_tags};
 
     match value.kind() {
@@ -833,13 +833,13 @@ impl BexVm {
     /// Helper method to get `HeapPtr` from a Value, with type checking.
     fn as_object_ptr(
         &self,
-        value: &Value,
+        value: Value,
         object_type: ObjectType,
     ) -> Result<HeapPtr, VmInternalError> {
         let Some(ptr) = value.as_object_ptr() else {
             return Err(VmInternalError::TypeError {
                 expected: object_type.into(),
-                got: self.type_of(value),
+                got: self.type_of(&value),
             });
         };
         Ok(ptr)
@@ -847,13 +847,13 @@ impl BexVm {
 
     /// Get string from a Value.
     pub fn as_string(&self, value: &Value) -> Result<&String, VmInternalError> {
-        let ptr = self.as_object_ptr(value, ObjectType::String)?;
+        let ptr = self.as_object_ptr(*value, ObjectType::String)?;
         self.get_object(ptr).as_string()
     }
 
     /// Get uint8array from a Value.
     pub fn as_uint8array(&self, value: &Value) -> Result<&Vec<u8>, VmInternalError> {
-        let ptr = self.as_object_ptr(value, ObjectType::Uint8Array)?;
+        let ptr = self.as_object_ptr(*value, ObjectType::Uint8Array)?;
         let obj = self.get_object(ptr);
         match obj {
             Object::Uint8Array(bytes) => Ok(bytes),
@@ -866,7 +866,7 @@ impl BexVm {
 
     /// Get mutable uint8array from a Value.
     pub fn as_uint8array_mut(&mut self, value: &Value) -> Result<&mut Vec<u8>, VmInternalError> {
-        let ptr = self.as_object_ptr(value, ObjectType::Uint8Array)?;
+        let ptr = self.as_object_ptr(*value, ObjectType::Uint8Array)?;
         match self.get_object_mut(ptr) {
             Object::Uint8Array(bytes) => Ok(bytes),
             other => Err(VmInternalError::TypeError {
@@ -883,13 +883,13 @@ impl BexVm {
 
     /// Get mutable string from a Value.
     pub fn as_string_mut(&mut self, value: &Value) -> Result<&mut String, VmInternalError> {
-        let ptr = self.as_object_ptr(value, ObjectType::String)?;
+        let ptr = self.as_object_ptr(*value, ObjectType::String)?;
         self.get_object_mut(ptr).as_string_mut()
     }
 
     /// Get array from a Value.
     pub fn as_array(&self, value: &Value) -> Result<&[Value], VmInternalError> {
-        let ptr = self.as_object_ptr(value, ObjectType::Array)?;
+        let ptr = self.as_object_ptr(*value, ObjectType::Array)?;
         let obj = self.get_object(ptr);
         match obj {
             Object::Array(arr) => Ok(arr.as_slice()),
@@ -902,7 +902,7 @@ impl BexVm {
 
     /// Get mutable array from a Value.
     pub fn as_array_mut(&mut self, value: &Value) -> Result<&mut Vec<Value>, VmInternalError> {
-        let ptr = self.as_object_ptr(value, ObjectType::Array)?;
+        let ptr = self.as_object_ptr(*value, ObjectType::Array)?;
         // Conservative write barrier: any mutable access to an older-generation
         // array may introduce cross-generation references. Used by builtin dispatch
         // (Array.push, Array.pop, etc.) where the actual written values are not
@@ -923,7 +923,7 @@ impl BexVm {
 
     /// Get map from a Value.
     pub fn as_map(&self, value: &Value) -> Result<&IndexMap<String, Value>, VmInternalError> {
-        let index = self.as_object_ptr(value, ObjectType::Map)?;
+        let index = self.as_object_ptr(*value, ObjectType::Map)?;
         let obj = self.get_object(index);
         match obj {
             Object::Map(map) => Ok(map),
@@ -939,7 +939,7 @@ impl BexVm {
         &mut self,
         value: &Value,
     ) -> Result<&mut IndexMap<String, Value>, VmInternalError> {
-        let index = self.as_object_ptr(value, ObjectType::Map)?;
+        let index = self.as_object_ptr(*value, ObjectType::Map)?;
         // Conservative write barrier: any mutable access to an older-generation
         // map may introduce cross-generation references. Used by builtin dispatch
         // (Map.set, etc.) where the actual written values are not visible here.
@@ -1011,9 +1011,9 @@ impl BexVm {
         for (bits, _) in float_entries {
             compile_time_objects.push(Object::Float(f64::from_bits(bits)));
         }
-        for obj in compile_time_objects.iter_mut() {
+        for obj in &mut compile_time_objects {
             if let Object::Function(func) = obj {
-                for cv in func.bytecode.constants.iter_mut() {
+                for cv in &mut func.bytecode.constants {
                     if let bex_vm_types::ConstValue::Float(f) = cv {
                         let idx = float_indices[&f.to_bits()];
                         *cv = bex_vm_types::ConstValue::Object(
@@ -1227,7 +1227,7 @@ impl BexVm {
         &self,
         value: &Value,
     ) -> Result<&bex_vm_types::CollectorRef, VmInternalError> {
-        let index = self.as_object_ptr(value, ObjectType::Collector)?;
+        let index = self.as_object_ptr(*value, ObjectType::Collector)?;
         let obj = self.get_object(index);
         match obj {
             Object::Collector(c) => Ok(c),
@@ -1249,14 +1249,11 @@ impl BexVm {
     ///
     /// Used by generated `view::` struct accessors for `$rust_type` fields.
     pub fn as_rust_data<T: 'static>(&self, value: &Value) -> Result<&T, VmInternalError> {
-        let ptr = match value.as_object_ptr() {
-            Some(ptr) => ptr,
-            None => {
-                return Err(VmInternalError::TypeError {
-                    expected: Type::Object(ObjectType::RustData),
-                    got: self.type_of(value),
-                });
-            }
+        let Some(ptr) = value.as_object_ptr() else {
+            return Err(VmInternalError::TypeError {
+                expected: Type::Object(ObjectType::RustData),
+                got: self.type_of(value),
+            });
         };
         let obj = self.get_object(ptr);
         match obj {
@@ -1278,14 +1275,11 @@ impl BexVm {
     ///
     /// Used by generated glue code to construct `view::` structs.
     pub fn as_instance(&self, value: &Value) -> Result<&Instance, VmInternalError> {
-        let ptr = match value.as_object_ptr() {
-            Some(ptr) => ptr,
-            None => {
-                return Err(VmInternalError::TypeError {
-                    expected: Type::Object(ObjectType::Instance),
-                    got: self.type_of(value),
-                });
-            }
+        let Some(ptr) = value.as_object_ptr() else {
+            return Err(VmInternalError::TypeError {
+                expected: Type::Object(ObjectType::Instance),
+                got: self.type_of(value),
+            });
         };
         let obj = self.get_object(ptr);
         match obj {
@@ -1752,7 +1746,7 @@ impl BexVm {
         callee_value: Value,
     ) -> Result<(HeapPtr, usize), VmInternalError> {
         let expected_type = FunctionType::Callable;
-        let callee_ptr = self.as_object_ptr(&callee_value, expected_type.into())?;
+        let callee_ptr = self.as_object_ptr(callee_value, expected_type.into())?;
         let obj = self.get_object(callee_ptr);
         match obj {
             Object::Function(callee_fn) => Ok((callee_ptr, callee_fn.arity)),
@@ -2416,6 +2410,7 @@ impl BexVm {
                     let stack = self
                         .stack
                         .iter()
+                        .copied()
                         .map(crate::debug::display_value)
                         .collect::<Vec<_>>()
                         .join(", ");
@@ -2627,7 +2622,7 @@ impl BexVm {
             Instruction::LoadField(index) => {
                 let top = self.stack.ensure_pop();
 
-                let reference = self.as_object_ptr(&top, ObjectType::Instance)?;
+                let reference = self.as_object_ptr(top, ObjectType::Instance)?;
 
                 // Extract the field value before pushing to stack
                 let field_value = {
@@ -2651,7 +2646,7 @@ impl BexVm {
 
                 // Consume the instance value from the stack.
                 let instance_value = self.stack.ensure_pop();
-                let instance_index = self.as_object_ptr(&instance_value, ObjectType::Instance)?;
+                let instance_index = self.as_object_ptr(instance_value, ObjectType::Instance)?;
 
                 // Read old value (and typecheck).
                 let old_value = match self.get_object(instance_index) {
@@ -2700,7 +2695,7 @@ impl BexVm {
                 // Peek — do NOT pop the instance; it stays on the stack for the next field.
                 let instance_slot = self.stack.ensure_slot_from_top(0);
                 let instance_value = self.stack[instance_slot];
-                let instance_index = self.as_object_ptr(&instance_value, ObjectType::Instance)?;
+                let instance_index = self.as_object_ptr(instance_value, ObjectType::Instance)?;
 
                 // Read old value for watch graph update (and typecheck).
                 let old_value = match self.get_object(instance_index) {
@@ -2878,11 +2873,11 @@ impl BexVm {
                 } else if let (Some(left_f), Some(right_f)) = (
                     left.as_int()
                         .map(|i| i as f64)
-                        .or_else(|| value_as_float(&left)),
+                        .or_else(|| value_as_float(left)),
                     right
                         .as_int()
                         .map(|i| i as f64)
-                        .or_else(|| value_as_float(&right)),
+                        .or_else(|| value_as_float(right)),
                 ) {
                     // At least one side is a float; pure-int was handled above.
                     let left_ty = if left.as_int().is_some() {
@@ -2962,11 +2957,11 @@ impl BexVm {
                 } else if let (Some(left_f), Some(right_f)) = (
                     left.as_int()
                         .map(|i| i as f64)
-                        .or_else(|| value_as_float(&left)),
+                        .or_else(|| value_as_float(left)),
                     right
                         .as_int()
                         .map(|i| i as f64)
-                        .or_else(|| value_as_float(&right)),
+                        .or_else(|| value_as_float(right)),
                 ) {
                     Value::bool(match op {
                         CmpOp::Eq => left_f == right_f,
@@ -3141,40 +3136,40 @@ impl BexVm {
 
             // ── Specialized float arithmetic ─────────────────────────
             Instruction::AddFloat => {
-                let Some(r) = value_as_float(&self.stack.ensure_pop()) else {
+                let Some(r) = value_as_float(self.stack.ensure_pop()) else {
                     unsafe { std::hint::unreachable_unchecked() }
                 };
-                let Some(l) = value_as_float(&self.stack.ensure_pop()) else {
+                let Some(l) = value_as_float(self.stack.ensure_pop()) else {
                     unsafe { std::hint::unreachable_unchecked() }
                 };
                 let v = self.alloc_float(l + r);
                 self.stack.push(v);
             }
             Instruction::SubFloat => {
-                let Some(r) = value_as_float(&self.stack.ensure_pop()) else {
+                let Some(r) = value_as_float(self.stack.ensure_pop()) else {
                     unsafe { std::hint::unreachable_unchecked() }
                 };
-                let Some(l) = value_as_float(&self.stack.ensure_pop()) else {
+                let Some(l) = value_as_float(self.stack.ensure_pop()) else {
                     unsafe { std::hint::unreachable_unchecked() }
                 };
                 let v = self.alloc_float(l - r);
                 self.stack.push(v);
             }
             Instruction::MulFloat => {
-                let Some(r) = value_as_float(&self.stack.ensure_pop()) else {
+                let Some(r) = value_as_float(self.stack.ensure_pop()) else {
                     unsafe { std::hint::unreachable_unchecked() }
                 };
-                let Some(l) = value_as_float(&self.stack.ensure_pop()) else {
+                let Some(l) = value_as_float(self.stack.ensure_pop()) else {
                     unsafe { std::hint::unreachable_unchecked() }
                 };
                 let v = self.alloc_float(l * r);
                 self.stack.push(v);
             }
             Instruction::DivFloat => {
-                let Some(r) = value_as_float(&self.stack.ensure_pop()) else {
+                let Some(r) = value_as_float(self.stack.ensure_pop()) else {
                     unsafe { std::hint::unreachable_unchecked() }
                 };
-                let Some(l) = value_as_float(&self.stack.ensure_pop()) else {
+                let Some(l) = value_as_float(self.stack.ensure_pop()) else {
                     unsafe { std::hint::unreachable_unchecked() }
                 };
                 if r == 0.0 {
@@ -3212,10 +3207,10 @@ impl BexVm {
             // ── Specialized float comparison ─────────────────────────
             #[allow(clippy::float_cmp)]
             Instruction::CmpFloatOp(op) => {
-                let Some(r) = value_as_float(&self.stack.ensure_pop()) else {
+                let Some(r) = value_as_float(self.stack.ensure_pop()) else {
                     unsafe { std::hint::unreachable_unchecked() }
                 };
-                let Some(l) = value_as_float(&self.stack.ensure_pop()) else {
+                let Some(l) = value_as_float(self.stack.ensure_pop()) else {
                     unsafe { std::hint::unreachable_unchecked() }
                 };
                 self.stack.push(Value::bool(match op {
@@ -3235,7 +3230,7 @@ impl BexVm {
                     Value::bool(!b)
                 } else if let (UnaryOp::Neg, Some(i)) = (op, value.as_int()) {
                     Value::int(-i)
-                } else if let (UnaryOp::Neg, Some(f)) = (op, value_as_float(&value)) {
+                } else if let (UnaryOp::Neg, Some(f)) = (op, value_as_float(value)) {
                     self.alloc_float(-f)
                 } else {
                     return Err(VmInternalError::CannotApplyUnaryOp {
@@ -3266,7 +3261,7 @@ impl BexVm {
                 let index_value = self.stack.ensure_pop();
                 let array_value = self.stack.ensure_pop();
 
-                let array_obj_index = self.as_object_ptr(&array_value, ObjectType::Array)?;
+                let array_obj_index = self.as_object_ptr(array_value, ObjectType::Array)?;
 
                 // Get the array length for bounds checking.
                 let array_len = match self.get_object(array_obj_index) {
@@ -3366,7 +3361,7 @@ impl BexVm {
                 let key_value = self.stack.ensure_pop();
                 let map_value = self.stack.ensure_pop();
 
-                let map_index = self.as_object_ptr(&map_value, ObjectType::Map)?;
+                let map_index = self.as_object_ptr(map_value, ObjectType::Map)?;
 
                 let Object::Map(map) = self.get_object(map_index) else {
                     return Err(VmInternalError::TypeError {
@@ -3377,7 +3372,7 @@ impl BexVm {
                 };
 
                 // Get the string key from the objects pool
-                let key_index = self.as_object_ptr(&key_value, ObjectType::String)?;
+                let key_index = self.as_object_ptr(key_value, ObjectType::String)?;
                 let key = self.get_object(key_index).as_string()?;
 
                 // Look up the value in the map
@@ -3394,7 +3389,7 @@ impl BexVm {
                 let new_value = self.stack.ensure_pop();
                 let index_value = self.stack.ensure_pop();
                 let array_value = self.stack.ensure_pop();
-                let array_object_index = self.as_object_ptr(&array_value, ObjectType::Array)?;
+                let array_object_index = self.as_object_ptr(array_value, ObjectType::Array)?;
 
                 // Get the array length for bounds checking.
                 let array_len = match self.get_object(array_object_index) {
@@ -3518,10 +3513,10 @@ impl BexVm {
                 let map_value = self.stack.ensure_pop();
 
                 // Get the string key from the objects pool.
-                let key_index = self.as_object_ptr(&key_value, ObjectType::String)?;
+                let key_index = self.as_object_ptr(key_value, ObjectType::String)?;
                 let key = self.get_object(key_index).as_string()?.clone();
 
-                let map_index = self.as_object_ptr(&map_value, ObjectType::Map)?;
+                let map_index = self.as_object_ptr(map_value, ObjectType::Map)?;
 
                 // Read old value (and typecheck).
                 //
@@ -3586,7 +3581,7 @@ impl BexVm {
                     let mut collected = Vec::with_capacity(n);
                     for slot in base..(base + n) {
                         let v = self.stack[StackIndex::from_raw(slot)];
-                        let ptr = self.as_object_ptr(&v, ObjectType::Type)?;
+                        let ptr = self.as_object_ptr(v, ObjectType::Type)?;
                         let Object::Type(ty) = self.get_object(ptr) else {
                             unreachable!("as_object_ptr guarantees Type variant");
                         };
@@ -3678,7 +3673,7 @@ impl BexVm {
             Instruction::SysOp(callee) => {
                 let callee_value = self.globals.get(self.proof(), callee);
                 let expected_type = FunctionType::SysOp;
-                let callee_ptr = self.as_object_ptr(&callee_value, expected_type.into())?;
+                let callee_ptr = self.as_object_ptr(callee_value, expected_type.into())?;
 
                 // Can't invoke if it's not a function
                 let Object::Function(callable_future) = self.get_object(callee_ptr) else {
@@ -3725,7 +3720,7 @@ impl BexVm {
                 let closure_value = self.stack.ensure_pop();
 
                 let closure_ptr =
-                    self.as_object_ptr(&closure_value, ObjectType::Function(FunctionType::Any))?;
+                    self.as_object_ptr(closure_value, ObjectType::Function(FunctionType::Any))?;
                 let name_ptr = if name_value.is_null() {
                     None
                 } else if let Some(ptr) = name_value.as_object_ptr() {
@@ -3751,7 +3746,7 @@ impl BexVm {
 
                 let wanted_type = FutureType::Any;
 
-                let index = self.as_object_ptr(&self.stack[value], wanted_type.into())?;
+                let index = self.as_object_ptr(self.stack[value], wanted_type.into())?;
 
                 // Check if future is ready and extract value if so
                 let ready_value = {
@@ -3952,7 +3947,7 @@ impl BexVm {
                     let mut collected = Vec::with_capacity(ntypeargs_usize);
                     for slot in base..(base + ntypeargs_usize) {
                         let v = self.stack[StackIndex::from_raw(slot)];
-                        let ptr = self.as_object_ptr(&v, ObjectType::Type)?;
+                        let ptr = self.as_object_ptr(v, ObjectType::Type)?;
                         let obj = self.get_object(ptr);
                         match obj {
                             Object::Type(ty) => {
@@ -4067,8 +4062,7 @@ impl BexVm {
                 // Stack layout: [arg1, arg2, ..., argN, callee]
                 let callee_slot = self.stack.ensure_stack_top();
                 let callee_value = self.stack[callee_slot];
-                let callee_ptr =
-                    self.as_object_ptr(&callee_value, FunctionType::Callable.into())?;
+                let callee_ptr = self.as_object_ptr(callee_value, FunctionType::Callable.into())?;
                 let obj = self.get_object(callee_ptr);
 
                 if let Object::BoundMethod(bm) = obj {
@@ -4227,7 +4221,7 @@ impl BexVm {
                     // branches which is not ideal for performance. Might want to consider this
                     // in map accesses.
                     let keys = self.stack[idx_of_last_key..].iter().map(|k| {
-                        let obj_index = self.as_object_ptr(k, ObjectType::String)?;
+                        let obj_index = self.as_object_ptr(*k, ObjectType::String)?;
 
                         self.get_object(obj_index).as_string().cloned()
                     });
@@ -4320,7 +4314,7 @@ impl BexVm {
 
             Instruction::TypeTag => {
                 let value = self.stack.ensure_pop();
-                let tag = value_type_tag(&value);
+                let tag = value_type_tag(value);
                 self.stack.push(Value::int(tag));
             }
 
@@ -4377,7 +4371,7 @@ impl BexVm {
                             }
                         } else if let Some(tag) = expected.as_int() {
                             // Type tag check: does value's type tag match?
-                            value_type_tag(&value) == tag
+                            value_type_tag(value) == tag
                         } else {
                             false
                         }
@@ -4393,16 +4387,13 @@ impl BexVm {
             )]
             Instruction::DenseTag(table_idx) => {
                 let popped = self.stack.ensure_pop();
-                let tag = match popped.as_int() {
-                    Some(t) => t,
-                    None => {
-                        // TypeTag always pushes Int, so this shouldn't happen.
-                        return Err(VmInternalError::TypeError {
-                            expected: Type::Int,
-                            got: self.type_of(&popped),
-                        }
-                        .into());
+                let Some(tag) = popped.as_int() else {
+                    // TypeTag always pushes Int, so this shouldn't happen.
+                    return Err(VmInternalError::TypeError {
+                        expected: Type::Int,
+                        got: self.type_of(&popped),
                     }
+                    .into());
                 };
                 let table = &function.bytecode.match_hash_tables[table_idx];
                 let h =
@@ -4468,7 +4459,7 @@ impl BexVm {
                     let mut type_args = Vec::with_capacity(ntypeargs);
                     for _ in 0..ntypeargs {
                         let v = self.stack.ensure_pop();
-                        let ptr = self.as_object_ptr(&v, ObjectType::Type)?;
+                        let ptr = self.as_object_ptr(v, ObjectType::Type)?;
                         let obj = self.get_object(ptr);
                         match obj {
                             Object::Type(ty) => type_args.push(*ty.clone()),
@@ -4502,7 +4493,7 @@ impl BexVm {
                 let receiver = self.stack.ensure_pop();
                 let callee_value = self.globals.get(self.proof(), global_idx);
                 let function_ptr =
-                    self.as_object_ptr(&callee_value, FunctionType::Callable.into())?;
+                    self.as_object_ptr(callee_value, FunctionType::Callable.into())?;
                 debug_assert!(
                     matches!(self.get_object(function_ptr), Object::Function(_)),
                     "MakeBoundMethod expects a Function global, got {:?}",
@@ -4745,11 +4736,11 @@ impl BexVm {
         } else if let (Some(l), Some(r)) = (
             left.as_int()
                 .map(|i| i as f64)
-                .or_else(|| value_as_float(&left)),
+                .or_else(|| value_as_float(left)),
             right
                 .as_int()
                 .map(|i| i as f64)
-                .or_else(|| value_as_float(&right)),
+                .or_else(|| value_as_float(right)),
         ) {
             Value::bool(match op {
                 CmpOp::Eq => l == r,
@@ -4879,11 +4870,11 @@ impl BexVm {
         } else if let (Some(l), Some(r)) = (
             left.as_int()
                 .map(|i| i as f64)
-                .or_else(|| value_as_float(&left)),
+                .or_else(|| value_as_float(left)),
             right
                 .as_int()
                 .map(|i| i as f64)
-                .or_else(|| value_as_float(&right)),
+                .or_else(|| value_as_float(right)),
         ) {
             let left_ty = if left.as_int().is_some() {
                 bex_vm_types::types::Type::Int
@@ -5292,7 +5283,7 @@ impl BexVm {
                 OpCode::LoadField => {
                     let idx = { read_u32_unchecked(code, pc) as usize };
                     let top = self.stack.ensure_pop();
-                    let obj_ptr = self.as_object_ptr(&top, ObjectType::Instance)?;
+                    let obj_ptr = self.as_object_ptr(top, ObjectType::Instance)?;
                     let Object::Instance(instance) = self.get_object(obj_ptr) else {
                         return Err(VmInternalError::TypeError {
                             expected: ObjectType::Instance.into(),
@@ -5308,7 +5299,7 @@ impl BexVm {
                     let idx = { read_u32_unchecked(code, pc) as usize };
                     let new_value = self.stack.ensure_pop();
                     let instance_value = self.stack.ensure_pop();
-                    let obj_ptr = self.as_object_ptr(&instance_value, ObjectType::Instance)?;
+                    let obj_ptr = self.as_object_ptr(instance_value, ObjectType::Instance)?;
 
                     let old_value = {
                         let Object::Instance(instance) = self.get_object(obj_ptr) else {
@@ -5346,7 +5337,7 @@ impl BexVm {
                     let idx = { read_u32_unchecked(code, pc) as usize };
                     let new_value = self.stack.ensure_pop();
                     let instance_value = self.stack.ensure_pop();
-                    let obj_ptr = self.as_object_ptr(&instance_value, ObjectType::Instance)?;
+                    let obj_ptr = self.as_object_ptr(instance_value, ObjectType::Instance)?;
                     self.heap.write_barrier(obj_ptr, new_value);
                     let Object::Instance(instance) = self.get_object_mut(obj_ptr) else {
                         return Err(VmInternalError::TypeError {
@@ -5391,7 +5382,7 @@ impl BexVm {
                         let idx_of_last_key = self.stack.ensure_slot_from_top(n - 1);
                         let values = self.stack[end_of_values..end_of_keys].iter().copied();
                         let keys = self.stack[idx_of_last_key..].iter().map(|k| {
-                            let obj_index = self.as_object_ptr(k, ObjectType::String)?;
+                            let obj_index = self.as_object_ptr(*k, ObjectType::String)?;
                             self.get_object(obj_index).as_string().cloned()
                         });
                         let pairs = values
@@ -5423,7 +5414,7 @@ impl BexVm {
                         let mut collected = Vec::with_capacity(ntypeargs);
                         for slot in base..(base + ntypeargs) {
                             let v = self.stack[StackIndex::from_raw(slot)];
-                            let ptr = self.as_object_ptr(&v, ObjectType::Type)?;
+                            let ptr = self.as_object_ptr(v, ObjectType::Type)?;
                             let Object::Type(ty) = self.get_object(ptr) else {
                                 unreachable!("as_object_ptr guarantees Type variant");
                             };
@@ -5501,7 +5492,7 @@ impl BexVm {
                     let callee = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                     let callee_value = self.globals.get(self.proof(), callee);
                     let expected_type = FunctionType::SysOp;
-                    let callee_ptr = self.as_object_ptr(&callee_value, expected_type.into())?;
+                    let callee_ptr = self.as_object_ptr(callee_value, expected_type.into())?;
                     let Object::Function(callable_future) = self.get_object(callee_ptr) else {
                         return Err(VmInternalError::TypeError {
                             expected: expected_type.into(),
@@ -5531,8 +5522,8 @@ impl BexVm {
                 OpCode::Spawn => {
                     let name_value = self.stack.ensure_pop();
                     let closure_value = self.stack.ensure_pop();
-                    let closure_ptr = self
-                        .as_object_ptr(&closure_value, ObjectType::Function(FunctionType::Any))?;
+                    let closure_ptr =
+                        self.as_object_ptr(closure_value, ObjectType::Function(FunctionType::Any))?;
                     let name_ptr = if name_value.is_null() {
                         None
                     } else if let Some(ptr) = name_value.as_object_ptr() {
@@ -5706,7 +5697,7 @@ impl BexVm {
                         let mut collected = Vec::with_capacity(ntypeargs);
                         for slot in base..(base + ntypeargs) {
                             let v = self.stack[StackIndex::from_raw(slot)];
-                            let ptr = self.as_object_ptr(&v, ObjectType::Type)?;
+                            let ptr = self.as_object_ptr(v, ObjectType::Type)?;
                             let Object::Type(ty) = self.get_object(ptr) else {
                                 unreachable!("as_object_ptr guarantees Type variant");
                             };
@@ -5766,7 +5757,7 @@ impl BexVm {
                     let callee_slot = self.stack.ensure_stack_top();
                     let callee_value = self.stack[callee_slot];
                     let callee_ptr =
-                        self.as_object_ptr(&callee_value, FunctionType::Callable.into())?;
+                        self.as_object_ptr(callee_value, FunctionType::Callable.into())?;
                     let obj = self.get_object(callee_ptr);
 
                     if let Object::BoundMethod(bm) = obj {
@@ -5884,7 +5875,7 @@ impl BexVm {
                     const AWAIT_OPCODE_LEN: usize = 1;
                     let value = self.stack.ensure_stack_top();
                     let wanted_type = bex_vm_types::types::FutureType::Any;
-                    let index = self.as_object_ptr(&self.stack[value], wanted_type.into())?;
+                    let index = self.as_object_ptr(self.stack[value], wanted_type.into())?;
                     let ready_value = {
                         let Object::Future(awaiting) = self.get_object(index) else {
                             return Err(VmInternalError::TypeError {
@@ -6019,7 +6010,7 @@ impl BexVm {
                 // ── TypeTag ───────────────────────────────────────────────────
                 OpCode::TypeTag => {
                     let value = self.stack.ensure_pop();
-                    let tag = value_type_tag(&value);
+                    let tag = value_type_tag(value);
                     self.stack.push(Value::int(tag));
                 }
 
@@ -6068,7 +6059,7 @@ impl BexVm {
                                     None => false,
                                 }
                             } else if let Some(tag) = expected.as_int() {
-                                value_type_tag(&value) == tag
+                                value_type_tag(value) == tag
                             } else {
                                 false
                             }
@@ -6086,15 +6077,12 @@ impl BexVm {
                 OpCode::DenseTag => {
                     let table_idx = { read_u32_unchecked(code, pc) as usize };
                     let popped = self.stack.ensure_pop();
-                    let tag = match popped.as_int() {
-                        Some(t) => t,
-                        None => {
-                            return Err(VmInternalError::TypeError {
-                                expected: bex_vm_types::types::Type::Int,
-                                got: self.type_of(&popped),
-                            }
-                            .into());
+                    let Some(tag) = popped.as_int() else {
+                        return Err(VmInternalError::TypeError {
+                            expected: bex_vm_types::types::Type::Int,
+                            got: self.type_of(&popped),
                         }
+                        .into());
                     };
                     let table = &function.bytecode.match_hash_tables[table_idx];
                     let h = ((tag as u64).wrapping_mul(table.multiply) >> table.shift)
@@ -6162,7 +6150,7 @@ impl BexVm {
                         let mut type_args = Vec::with_capacity(ntypeargs);
                         for _ in 0..ntypeargs {
                             let v = self.stack.ensure_pop();
-                            let ptr = self.as_object_ptr(&v, ObjectType::Type)?;
+                            let ptr = self.as_object_ptr(v, ObjectType::Type)?;
                             let Object::Type(ty) = self.get_object(ptr) else {
                                 unreachable!("as_object_ptr guarantees Type variant");
                             };
@@ -6223,7 +6211,7 @@ impl BexVm {
                     let receiver = self.stack.ensure_pop();
                     let callee_value = self.globals.get(self.proof(), global_idx);
                     let function_ptr =
-                        self.as_object_ptr(&callee_value, FunctionType::Callable.into())?;
+                        self.as_object_ptr(callee_value, FunctionType::Callable.into())?;
                     let bound = Object::BoundMethod(BoundMethod {
                         function: function_ptr,
                         receiver,
@@ -6375,7 +6363,7 @@ impl BexVm {
                 OpCode::LoadArrayElement => {
                     let index_value = self.stack.ensure_pop();
                     let array_value = self.stack.ensure_pop();
-                    let array_obj_index = self.as_object_ptr(&array_value, ObjectType::Array)?;
+                    let array_obj_index = self.as_object_ptr(array_value, ObjectType::Array)?;
                     let array_len = match self.get_object(array_obj_index) {
                         Object::Array(arr) => arr.len(),
                         Object::Uint8Array(bytes) => bytes.len(),
@@ -6446,7 +6434,7 @@ impl BexVm {
                 OpCode::LoadMapElement => {
                     let key_value = self.stack.ensure_pop();
                     let map_value = self.stack.ensure_pop();
-                    let map_index = self.as_object_ptr(&map_value, ObjectType::Map)?;
+                    let map_index = self.as_object_ptr(map_value, ObjectType::Map)?;
                     let Object::Map(map) = self.get_object(map_index) else {
                         return Err(VmInternalError::TypeError {
                             expected: ObjectType::Map.into(),
@@ -6454,7 +6442,7 @@ impl BexVm {
                         }
                         .into());
                     };
-                    let key_index = self.as_object_ptr(&key_value, ObjectType::String)?;
+                    let key_index = self.as_object_ptr(key_value, ObjectType::String)?;
                     let key = self.get_object(key_index).as_string()?;
                     let value = map.get(key).copied().ok_or(VmError::Thrown(
                         self.panic_to_exception_value(VmPanic::MapKeyNotFound),
@@ -6466,7 +6454,7 @@ impl BexVm {
                     let new_value = self.stack.ensure_pop();
                     let index_value = self.stack.ensure_pop();
                     let array_value = self.stack.ensure_pop();
-                    let array_object_index = self.as_object_ptr(&array_value, ObjectType::Array)?;
+                    let array_object_index = self.as_object_ptr(array_value, ObjectType::Array)?;
                     let array_len = match self.get_object(array_object_index) {
                         Object::Array(arr) => arr.len(),
                         Object::Uint8Array(bytes) => bytes.len(),
@@ -6567,9 +6555,9 @@ impl BexVm {
                     let new_value = self.stack.ensure_pop();
                     let key_value = self.stack.ensure_pop();
                     let map_value = self.stack.ensure_pop();
-                    let key_index = self.as_object_ptr(&key_value, ObjectType::String)?;
+                    let key_index = self.as_object_ptr(key_value, ObjectType::String)?;
                     let key = self.get_object(key_index).as_string()?.clone();
-                    let map_index = self.as_object_ptr(&map_value, ObjectType::Map)?;
+                    let map_index = self.as_object_ptr(map_value, ObjectType::Map)?;
                     let old_value = match self.get_object(map_index) {
                         Object::Map(map) => map.get(&key).copied().unwrap_or(Value::NULL),
                         other => {
@@ -6682,40 +6670,40 @@ impl BexVm {
 
                 // ── Specialized float arithmetic (skip type dispatch) ─────────
                 OpCode::AddFloat => {
-                    let Some(r) = value_as_float(&self.stack.ensure_pop()) else {
+                    let Some(r) = value_as_float(self.stack.ensure_pop()) else {
                         std::hint::unreachable_unchecked()
                     };
-                    let Some(l) = value_as_float(&self.stack.ensure_pop()) else {
+                    let Some(l) = value_as_float(self.stack.ensure_pop()) else {
                         std::hint::unreachable_unchecked()
                     };
                     let v = self.alloc_float(l + r);
                     self.stack.push(v);
                 }
                 OpCode::SubFloat => {
-                    let Some(r) = value_as_float(&self.stack.ensure_pop()) else {
+                    let Some(r) = value_as_float(self.stack.ensure_pop()) else {
                         std::hint::unreachable_unchecked()
                     };
-                    let Some(l) = value_as_float(&self.stack.ensure_pop()) else {
+                    let Some(l) = value_as_float(self.stack.ensure_pop()) else {
                         std::hint::unreachable_unchecked()
                     };
                     let v = self.alloc_float(l - r);
                     self.stack.push(v);
                 }
                 OpCode::MulFloat => {
-                    let Some(r) = value_as_float(&self.stack.ensure_pop()) else {
+                    let Some(r) = value_as_float(self.stack.ensure_pop()) else {
                         std::hint::unreachable_unchecked()
                     };
-                    let Some(l) = value_as_float(&self.stack.ensure_pop()) else {
+                    let Some(l) = value_as_float(self.stack.ensure_pop()) else {
                         std::hint::unreachable_unchecked()
                     };
                     let v = self.alloc_float(l * r);
                     self.stack.push(v);
                 }
                 OpCode::DivFloat => {
-                    let Some(r) = value_as_float(&self.stack.ensure_pop()) else {
+                    let Some(r) = value_as_float(self.stack.ensure_pop()) else {
                         std::hint::unreachable_unchecked()
                     };
-                    let Some(l) = value_as_float(&self.stack.ensure_pop()) else {
+                    let Some(l) = value_as_float(self.stack.ensure_pop()) else {
                         std::hint::unreachable_unchecked()
                     };
                     if r == 0.0 {
@@ -6750,77 +6738,81 @@ impl BexVm {
                 OpCode::CmpIntLt => {
                     let r = self.stack.ensure_pop();
                     let l = self.stack.ensure_pop();
-                    self.stack.push(Value::bool((l.bits() as i64) < (r.bits() as i64)));
+                    self.stack
+                        .push(Value::bool((l.bits() as i64) < (r.bits() as i64)));
                 }
                 OpCode::CmpIntLtEq => {
                     let r = self.stack.ensure_pop();
                     let l = self.stack.ensure_pop();
-                    self.stack.push(Value::bool((l.bits() as i64) <= (r.bits() as i64)));
+                    self.stack
+                        .push(Value::bool((l.bits() as i64) <= (r.bits() as i64)));
                 }
                 OpCode::CmpIntGt => {
                     let r = self.stack.ensure_pop();
                     let l = self.stack.ensure_pop();
-                    self.stack.push(Value::bool((l.bits() as i64) > (r.bits() as i64)));
+                    self.stack
+                        .push(Value::bool((l.bits() as i64) > (r.bits() as i64)));
                 }
                 OpCode::CmpIntGtEq => {
                     let r = self.stack.ensure_pop();
                     let l = self.stack.ensure_pop();
-                    self.stack.push(Value::bool((l.bits() as i64) >= (r.bits() as i64)));
+                    self.stack
+                        .push(Value::bool((l.bits() as i64) >= (r.bits() as i64)));
                 }
 
                 // ── Specialized float comparison (skip type dispatch) ─────────
                 #[allow(clippy::float_cmp)]
                 OpCode::CmpFloatEq => {
-                    let Some(r) = value_as_float(&self.stack.ensure_pop()) else {
+                    let Some(r) = value_as_float(self.stack.ensure_pop()) else {
                         std::hint::unreachable_unchecked()
                     };
-                    let Some(l) = value_as_float(&self.stack.ensure_pop()) else {
+                    let Some(l) = value_as_float(self.stack.ensure_pop()) else {
                         std::hint::unreachable_unchecked()
                     };
                     self.stack.push(Value::bool(l == r));
                 }
                 #[allow(clippy::float_cmp)]
                 OpCode::CmpFloatNotEq => {
-                    let Some(r) = value_as_float(&self.stack.ensure_pop()) else {
+                    let Some(r) = value_as_float(self.stack.ensure_pop()) else {
                         std::hint::unreachable_unchecked()
                     };
-                    let Some(l) = value_as_float(&self.stack.ensure_pop()) else {
+                    let Some(l) = value_as_float(self.stack.ensure_pop()) else {
                         std::hint::unreachable_unchecked()
                     };
                     self.stack.push(Value::bool(l != r));
                 }
                 OpCode::CmpFloatLt => {
-                    let Some(r) = value_as_float(&self.stack.ensure_pop()) else {
+                    let Some(r) = value_as_float(self.stack.ensure_pop()) else {
                         std::hint::unreachable_unchecked()
                     };
-                    let Some(l) = value_as_float(&self.stack.ensure_pop()) else {
+                    let Some(l) = value_as_float(self.stack.ensure_pop()) else {
                         std::hint::unreachable_unchecked()
                     };
                     self.stack.push(Value::bool(l < r));
                 }
                 OpCode::CmpFloatLtEq => {
-                    let Some(r) = value_as_float(&self.stack.ensure_pop()) else {
+                    let Some(r) = value_as_float(self.stack.ensure_pop()) else {
                         std::hint::unreachable_unchecked()
                     };
-                    let Some(l) = value_as_float(&self.stack.ensure_pop()) else {
+                    let Some(l) = value_as_float(self.stack.ensure_pop()) else {
                         std::hint::unreachable_unchecked()
                     };
                     self.stack.push(Value::bool(l <= r));
                 }
                 OpCode::CmpFloatGt => {
-                    let Some(r) = value_as_float(&self.stack.ensure_pop()) else {
+                    let Some(r) = value_as_float(self.stack.ensure_pop()) else {
                         std::hint::unreachable_unchecked()
                     };
-                    let Some(l) = value_as_float(&self.stack.ensure_pop()) else {
+                    let Some(l) = value_as_float(self.stack.ensure_pop()) else {
                         std::hint::unreachable_unchecked()
                     };
                     self.stack.push(Value::bool(l > r));
                 }
                 OpCode::CmpFloatGtEq => {
-                    let Some(r) = value_as_float(&self.stack.ensure_pop()) else {
+                    let Some(r) = value_as_float(self.stack.ensure_pop()) else {
                         std::hint::unreachable_unchecked()
                     };
-                    let Some(l) = value_as_float(&self.stack.ensure_pop()) else {
+                    let Some(l) = value_as_float(self.stack.ensure_pop()) else {
                         std::hint::unreachable_unchecked()
                     };
                     self.stack.push(Value::bool(l >= r));
@@ -6844,7 +6836,7 @@ impl BexVm {
                     let val = self.stack.ensure_pop();
                     if let Some(n) = val.as_int() {
                         self.stack.push(Value::int(-n));
-                    } else if let Some(n) = value_as_float(&val) {
+                    } else if let Some(n) = value_as_float(val) {
                         let v = self.alloc_float(-n);
                         self.stack.push(v);
                     } else {

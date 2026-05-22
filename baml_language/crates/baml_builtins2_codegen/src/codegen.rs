@@ -415,7 +415,13 @@ fn view_optional_type_and_expr(
         BamlType::Float => (
             "Option<f64>".to_string(),
             format!(
-                "match self.instance.fields[{field_index}].as_object_ptr() {{ Some(ptr) => match unsafe {{ ptr.get() }} {{ bex_vm_types::Object::Float(f) => *f, _ => panic!(\"{class_name}.{field_name}: expected Float\") }}, None => panic!(\"{class_name}.{field_name}: expected Float\") }}"
+                "{{ \
+                    let Some(ptr) = self.instance.fields[{field_index}].as_object_ptr() \
+                        else {{ panic!(\"{class_name}.{field_name}: expected Float\") }}; \
+                    let bex_vm_types::Object::Float(f) = (unsafe {{ ptr.get() }}) \
+                        else {{ panic!(\"{class_name}.{field_name}: expected Float\") }}; \
+                    *f \
+                }}"
             ),
         ),
         BamlType::Bool => (
@@ -1189,12 +1195,26 @@ fn receiver_immut_extraction_expr(val: &str, recv: &Receiver, needs_owned: bool)
         }
         // Primitive value receivers: extract the underlying scalar. `int` is
         // backed by `i64`, `float` by `f64` — both `Copy`, so `needs_owned` is
-        // irrelevant.
+        // irrelevant. The local `__v: &Value` binding lets `.as_int()` /
+        // `.as_object_ptr()` (which take `&self`) resolve without the explicit
+        // borrow that would trip `clippy::needless_borrow`.
         "Int" => format!(
-            "match ({val}).as_int() {{ Some(i) => i, None => return Err(VmInternalError::TypeError {{ expected: Type::Int, got: vm.type_of({val}) }}.into()) }}"
+            "{{ \
+                let __v = {val}; \
+                let Some(i) = __v.as_int() \
+                    else {{ return Err(VmInternalError::TypeError {{ expected: Type::Int, got: vm.type_of(__v) }}.into()); }}; \
+                i \
+            }}"
         ),
         "Float" => format!(
-            "match ({val}).as_object_ptr() {{ Some(ptr) => match unsafe {{ ptr.get() }} {{ bex_vm_types::Object::Float(f) => *f, _ => return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of({val}) }}.into()) }}, None => return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of({val}) }}.into()) }}"
+            "{{ \
+                let __v = {val}; \
+                let Some(ptr) = __v.as_object_ptr() \
+                    else {{ return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of(__v) }}.into()); }}; \
+                let bex_vm_types::Object::Float(f) = (unsafe {{ ptr.get() }}) \
+                    else {{ return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of(__v) }}.into()); }}; \
+                *f \
+            }}"
         ),
         name if is_media_class(name) => {
             let kind = media_kind_expr(&recv.class_name);
@@ -1225,14 +1245,34 @@ fn extraction_expr(val: &str, ty: &BamlType, is_mut: bool, needs_owned: bool) ->
                 format!("vm.as_string({val})?")
             }
         }
+        // The local `__v: &Value` binding lets the `Value::as_*` methods
+        // (which take `&self`) resolve without an explicit borrow that
+        // would trip `clippy::needless_borrow`.
         BamlType::Int => format!(
-            "match ({val}).as_int() {{ Some(i) => i, None => return Err(VmInternalError::TypeError {{ expected: Type::Int, got: vm.type_of({val}) }}.into()) }}"
+            "{{ \
+                let __v = {val}; \
+                let Some(i) = __v.as_int() \
+                    else {{ return Err(VmInternalError::TypeError {{ expected: Type::Int, got: vm.type_of(__v) }}.into()); }}; \
+                i \
+            }}"
         ),
         BamlType::Float => format!(
-            "match ({val}).as_object_ptr() {{ Some(ptr) => match unsafe {{ ptr.get() }} {{ bex_vm_types::Object::Float(f) => *f, _ => return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of({val}) }}.into()) }}, None => return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of({val}) }}.into()) }}"
+            "{{ \
+                let __v = {val}; \
+                let Some(ptr) = __v.as_object_ptr() \
+                    else {{ return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of(__v) }}.into()); }}; \
+                let bex_vm_types::Object::Float(f) = (unsafe {{ ptr.get() }}) \
+                    else {{ return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of(__v) }}.into()); }}; \
+                *f \
+            }}"
         ),
         BamlType::Bool => format!(
-            "match ({val}).as_bool() {{ Some(b) => b, None => return Err(VmInternalError::TypeError {{ expected: Type::Bool, got: vm.type_of({val}) }}.into()) }}"
+            "{{ \
+                let __v = {val}; \
+                let Some(b) = __v.as_bool() \
+                    else {{ return Err(VmInternalError::TypeError {{ expected: Type::Bool, got: vm.type_of(__v) }}.into()); }}; \
+                b \
+            }}"
         ),
         BamlType::List(_) => {
             if is_mut {
@@ -1254,8 +1294,10 @@ fn extraction_expr(val: &str, ty: &BamlType, is_mut: bool, needs_owned: bool) ->
         }
         BamlType::Optional(inner) => {
             let inner_expr = extraction_expr("other", inner, false, needs_owned);
+            // Bind `__v` so `.is_null()` (Value method) resolves through
+            // the `&Value` without triggering `clippy::needless_borrow`.
             format!(
-                "if ({val}).is_null() {{ None }} else {{ let other = {val}; Some({inner_expr}) }}"
+                "{{ let other = {val}; if other.is_null() {{ None }} else {{ Some({inner_expr}) }} }}"
             )
         }
         BamlType::Uint8Array => {

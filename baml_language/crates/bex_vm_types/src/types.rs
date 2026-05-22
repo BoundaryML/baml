@@ -611,7 +611,7 @@ pub enum SentinelKind {
 /// This is a packed tagged-pointer representation. The low bit (or low
 /// 3 bits, depending on the category) carries a type tag; the upper
 /// bits carry the payload. Hardware-atomic on aligned 8-byte stores
-/// across all supported targets (x86-64, ARM64, ARMv7, RISC-V).
+/// across all supported targets (x86-64, ARM64, `ARMv7`, RISC-V).
 ///
 /// # Encoding (low 3 bits = tag category)
 ///
@@ -665,6 +665,18 @@ pub enum ValueKind {
     Object(HeapPtr),
 }
 
+// The tagged-pointer encoding *is* a hot path: every Value access
+// goes through `as_int`/`as_object_ptr`/`kind`, and the encoding round-trips
+// between `u64` and signed `i64` by design (shift-left/right with sign
+// extension is what gives us i63 ints in a u64). The explicit `bits & 0b111`
+// checks for "low 3 bits clear" are more idiomatic for tagged pointers than
+// the suggested `.trailing_zeros() >= 3`.
+#[allow(
+    clippy::inline_always,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::verbose_bit_mask
+)]
 impl Value {
     // ── Singletons ────────────────────────────────────────────────────────
     pub const NULL: Value = Value(0);
@@ -709,7 +721,10 @@ impl Value {
     /// not enforce this — it's a perf shortcut for the hot path.
     #[inline(always)]
     pub const fn tagged_int_add(a: Value, b: Value) -> Value {
-        debug_assert!(a.is_int() && b.is_int(), "tagged_int_add: both inputs must be Int");
+        debug_assert!(
+            a.is_int() && b.is_int(),
+            "tagged_int_add: both inputs must be Int"
+        );
         Value(a.0.wrapping_add(b.0).wrapping_sub(1))
     }
 
@@ -718,7 +733,10 @@ impl Value {
     /// See [`Value::tagged_int_add`] for the safety contract.
     #[inline(always)]
     pub const fn tagged_int_sub(a: Value, b: Value) -> Value {
-        debug_assert!(a.is_int() && b.is_int(), "tagged_int_sub: both inputs must be Int");
+        debug_assert!(
+            a.is_int() && b.is_int(),
+            "tagged_int_sub: both inputs must be Int"
+        );
         Value(a.0.wrapping_sub(b.0).wrapping_add(1))
     }
 
@@ -729,26 +747,54 @@ impl Value {
     /// See [`Value::tagged_int_add`] for the safety contract.
     #[inline(always)]
     pub const fn tagged_int_cmp(a: Value, b: Value) -> core::cmp::Ordering {
-        debug_assert!(a.is_int() && b.is_int(), "tagged_int_cmp: both inputs must be Int");
+        debug_assert!(
+            a.is_int() && b.is_int(),
+            "tagged_int_cmp: both inputs must be Int"
+        );
         // i64 cmp on the bits respects the shift-left-by-1 of the i63
         // payload (sign bit is preserved through the shift).
         let (a, b) = (a.0 as i64, b.0 as i64);
-        if a < b { core::cmp::Ordering::Less }
-        else if a > b { core::cmp::Ordering::Greater }
-        else { core::cmp::Ordering::Equal }
+        if a < b {
+            core::cmp::Ordering::Less
+        } else if a > b {
+            core::cmp::Ordering::Greater
+        } else {
+            core::cmp::Ordering::Equal
+        }
     }
 
     // ── Constructors ──────────────────────────────────────────────────────
 
-    /// Build a `Value` carrying an `i63` integer. Values outside the
-    /// i63 range are truncated by the encoding shift — callers must
-    /// ensure `i` fits (range check at the BAML compiler / VM level).
+    /// Build a `Value` carrying an `i63` integer.
+    ///
+    /// Debug-asserts that `i` is in `[INT_MIN, INT_MAX]`. Values outside
+    /// that range are truncated by the encoding shift, so passing one
+    /// here is a caller bug. Code that ingests integers from outside the
+    /// VM (deserializers, JSON decoders, etc.) should range-check first
+    /// or use [`Value::try_int`].
     #[inline(always)]
     pub const fn int(i: i64) -> Self {
-        // SAFETY of cast: i63 fits in u64 bits; the (i as u64) << 1 may
-        // overflow for full-range i64s but the result is still a valid
-        // u64 bit pattern that decodes via arithmetic shift right.
+        debug_assert!(
+            i >= Self::INT_MIN && i <= Self::INT_MAX,
+            "Value::int called with i64 outside the i63 range; use Value::try_int at boundaries"
+        );
+        // Cast is well-defined: `(i as u64) << 1` may technically
+        // overflow at the i64 boundary but the result is still a valid
+        // u64 bit pattern that decodes back via `as_int`'s arithmetic
+        // shift right.
         Value(((i as u64) << 1) | 1)
+    }
+
+    /// Build a `Value` carrying an `i63` integer, or `None` if `i` is
+    /// outside the i63 range. Use this at boundaries that accept
+    /// arbitrary `i64`s (JSON decoders, `Deserialize`, FFI).
+    #[inline(always)]
+    pub const fn try_int(i: i64) -> Option<Self> {
+        if i >= Self::INT_MIN && i <= Self::INT_MAX {
+            Some(Value(((i as u64) << 1) | 1))
+        } else {
+            None
+        }
     }
 
     /// Build a `Value` carrying a boolean.
@@ -840,8 +886,16 @@ impl Value {
             // SAFETY: bit pattern was constructed from a valid HeapPtr
             // via [`Value::object`] (which debug-asserts alignment +
             // non-null). The pointer's GC liveness is the caller's
-            // concern (same as for the old enum variant).
-            Some(unsafe { HeapPtr::from_ptr(self.0 as *mut Object) })
+            // concern (same as for the old enum variant). Under
+            // `heap_debug` we lose the original epoch (Value is a
+            // packed u64 with no room) and pass 0, matching the
+            // `resolve_function_constants` reconstruction path.
+            let ptr = self.0 as *mut Object;
+            #[cfg(feature = "heap_debug")]
+            let hp = unsafe { HeapPtr::from_ptr(ptr, 0) };
+            #[cfg(not(feature = "heap_debug"))]
+            let hp = unsafe { HeapPtr::from_ptr(ptr) };
+            Some(hp)
         } else {
             None
         }
@@ -868,7 +922,12 @@ impl Value {
                 // sentinel pattern.
                 debug_assert_eq!(self.0 & 0b111, 0, "malformed Value bits 0x{:x}", self.0);
                 // SAFETY: see [`Value::as_object_ptr`].
-                ValueKind::Object(unsafe { HeapPtr::from_ptr(self.0 as *mut Object) })
+                let ptr = self.0 as *mut Object;
+                #[cfg(feature = "heap_debug")]
+                let hp = unsafe { HeapPtr::from_ptr(ptr, 0) };
+                #[cfg(not(feature = "heap_debug"))]
+                let hp = unsafe { HeapPtr::from_ptr(ptr) };
+                ValueKind::Object(hp)
             }
         }
     }
@@ -876,7 +935,7 @@ impl Value {
     // ── Raw bit access for debugging / advanced use ──────────────────────
 
     /// The raw `u64` bit pattern. Exposed for diagnostics, formatting,
-    /// and concurrency machinery (e.g. AtomicU64 stores of `Value`).
+    /// and concurrency machinery (e.g. `AtomicU64` stores of `Value`).
     /// Prefer the typed accessors for normal use.
     #[inline(always)]
     pub const fn bits(self) -> u64 {
@@ -895,6 +954,7 @@ impl Value {
 
 impl Default for Value {
     #[inline(always)]
+    #[allow(clippy::inline_always)]
     fn default() -> Self {
         Self::NULL
     }
@@ -954,11 +1014,20 @@ impl Serialize for Value {
 
 impl<'de> Deserialize<'de> for Value {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        use serde::de::Error;
         let proxy = ValueSerde::deserialize(deserializer)?;
         Ok(match proxy {
             ValueSerde::Null => Value::NULL,
             ValueSerde::OmittedArg => Value::OMITTED_ARG,
-            ValueSerde::Int(i) => Value::int(i),
+            ValueSerde::Int(i) => Value::try_int(i).ok_or_else(|| {
+                D::Error::custom(format!(
+                    "Value::Int payload {i} is outside the i63 range [{}, {}]; \
+                     pre-tagged-pointer payloads with |value| >= 2^62 cannot be \
+                     loaded",
+                    Value::INT_MIN,
+                    Value::INT_MAX,
+                ))
+            })?,
             ValueSerde::Bool(b) => Value::bool(b),
             ValueSerde::Object(ptr) => Value::object(ptr),
         })

@@ -11,24 +11,29 @@ use crate::{
 /// Equality matching BAML's `==` operator: by-value for primitives, by-content
 /// for strings / uint8arrays / variants, by-`HeapPtr` reference for arrays /
 /// maps / class instances. Used by `includes`, `index_of`, `last_index_of`.
-fn baml_eq(vm: &BexVm, a: &Value, b: &Value) -> bool {
+fn baml_eq(vm: &BexVm, a: Value, b: Value) -> bool {
     if let (Some(la), Some(rb)) = (a.as_object_ptr(), b.as_object_ptr()) {
         // Try content comparison for the types where `==` is content-based;
         // fall through to HeapPtr equality otherwise.
         let lobj = vm.get_object(la);
         let robj = vm.get_object(rb);
         match (lobj, robj) {
-            (Object::String(_), Object::String(_)) => match (vm.as_string(a), vm.as_string(b)) {
+            (Object::String(_), Object::String(_)) => match (vm.as_string(&a), vm.as_string(&b)) {
                 (Ok(ls), Ok(rs)) => ls == rs,
                 _ => false,
             },
             (Object::Uint8Array(_), Object::Uint8Array(_)) => {
-                match (vm.as_uint8array(a), vm.as_uint8array(b)) {
+                match (vm.as_uint8array(&a), vm.as_uint8array(&b)) {
                     (Ok(lb), Ok(rb)) => lb == rb,
                     _ => false,
                 }
             }
             (Object::Variant(lv), Object::Variant(rv)) => lv.enm == rv.enm && lv.index == rv.index,
+            // Heap-boxed floats compare by content (the post-tagged-pointer
+            // encoding allocates a fresh `Object::Float` per float, so two
+            // semantically-equal floats land at distinct `HeapPtr`s and
+            // would otherwise miss the reference-equality fallback).
+            (Object::Float(lf), Object::Float(rf)) => lf == rf,
             _ => la == rb,
         }
     } else {
@@ -66,26 +71,27 @@ fn forward_ptr(ptr: &mut HeapPtr, forwarding: &HashMap<HeapPtr, HeapPtr>) {
     }
 }
 
-/// Extract the callback `HeapPtr` from a `Value::Object`, or return a
-/// type-error `NativeCallResult` for any other variant.
-fn extract_callable(vm: &BexVm, f: &Value) -> Result<HeapPtr, NativeCallResult> {
+/// Extract the callback `HeapPtr` from a `Value` carrying a heap
+/// object, or return a type-error `NativeCallResult` for any other
+/// variant.
+fn extract_callable(vm: &BexVm, f: Value) -> Result<HeapPtr, NativeCallResult> {
     if let Some(p) = f.as_object_ptr() {
         Ok(p)
     } else {
         Err(NativeCallResult::from(VmInternalError::TypeError {
             expected: bex_vm_types::types::Type::Object(bex_vm_types::ObjectType::Any),
-            got: vm.type_of(f),
+            got: vm.type_of(&f),
         }))
     }
 }
 
-fn expect_bool(vm: &BexVm, value: &Value) -> Result<bool, NativeCallResult> {
+fn expect_bool(vm: &BexVm, value: Value) -> Result<bool, NativeCallResult> {
     if let Some(b) = value.as_bool() {
         Ok(b)
     } else {
         Err(NativeCallResult::from(VmInternalError::TypeError {
             expected: bex_vm_types::types::Type::Bool,
-            got: vm.type_of(value),
+            got: vm.type_of(&value),
         }))
     }
 }
@@ -162,7 +168,7 @@ struct SomeContinuation {
 
 impl Continuation for SomeContinuation {
     fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
-        let b = match expect_bool(vm, &value) {
+        let b = match expect_bool(vm, value) {
             Ok(b) => b,
             Err(e) => return e,
         };
@@ -192,7 +198,7 @@ struct EveryContinuation {
 
 impl Continuation for EveryContinuation {
     fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
-        let b = match expect_bool(vm, &value) {
+        let b = match expect_bool(vm, value) {
             Ok(b) => b,
             Err(e) => return e,
         };
@@ -226,7 +232,7 @@ struct FindContinuation {
 
 impl Continuation for FindContinuation {
     fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
-        let b = match expect_bool(vm, &value) {
+        let b = match expect_bool(vm, value) {
             Ok(b) => b,
             Err(e) => return e,
         };
@@ -268,7 +274,7 @@ struct FindLastContinuation {
 
 impl Continuation for FindLastContinuation {
     fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
-        let b = match expect_bool(vm, &value) {
+        let b = match expect_bool(vm, value) {
             Ok(b) => b,
             Err(e) => return e,
         };
@@ -530,7 +536,7 @@ impl BamlClassArray for PackageBamlImpl {
     }
 
     fn map(vm: &mut BexVm, array: &[Value], f: &Value) -> NativeCallResult {
-        let f_ptr = match extract_callable(vm, f) {
+        let f_ptr = match extract_callable(vm, *f) {
             Ok(p) => p,
             Err(e) => return e,
         };
@@ -581,7 +587,7 @@ impl BamlClassArray for PackageBamlImpl {
     // ── Predicate scans ───────────────────────────────────────────────────────
 
     fn some(vm: &mut BexVm, array: &[Value], predicate: &Value) -> NativeCallResult {
-        let f_ptr = match extract_callable(vm, predicate) {
+        let f_ptr = match extract_callable(vm, *predicate) {
             Ok(p) => p,
             Err(e) => return e,
         };
@@ -603,7 +609,7 @@ impl BamlClassArray for PackageBamlImpl {
     }
 
     fn every(vm: &mut BexVm, array: &[Value], predicate: &Value) -> NativeCallResult {
-        let f_ptr = match extract_callable(vm, predicate) {
+        let f_ptr = match extract_callable(vm, *predicate) {
             Ok(p) => p,
             Err(e) => return e,
         };
@@ -625,7 +631,7 @@ impl BamlClassArray for PackageBamlImpl {
     }
 
     fn find(vm: &mut BexVm, array: &[Value], predicate: &Value) -> NativeCallResult {
-        let f_ptr = match extract_callable(vm, predicate) {
+        let f_ptr = match extract_callable(vm, *predicate) {
             Ok(p) => p,
             Err(e) => return e,
         };
@@ -648,7 +654,7 @@ impl BamlClassArray for PackageBamlImpl {
     }
 
     fn find_index(vm: &mut BexVm, array: &[Value], predicate: &Value) -> NativeCallResult {
-        let f_ptr = match extract_callable(vm, predicate) {
+        let f_ptr = match extract_callable(vm, *predicate) {
             Ok(p) => p,
             Err(e) => return e,
         };
@@ -671,7 +677,7 @@ impl BamlClassArray for PackageBamlImpl {
     }
 
     fn find_last(vm: &mut BexVm, array: &[Value], predicate: &Value) -> NativeCallResult {
-        let f_ptr = match extract_callable(vm, predicate) {
+        let f_ptr = match extract_callable(vm, *predicate) {
             Ok(p) => p,
             Err(e) => return e,
         };
@@ -695,7 +701,7 @@ impl BamlClassArray for PackageBamlImpl {
     }
 
     fn find_last_index(vm: &mut BexVm, array: &[Value], predicate: &Value) -> NativeCallResult {
-        let f_ptr = match extract_callable(vm, predicate) {
+        let f_ptr = match extract_callable(vm, *predicate) {
             Ok(p) => p,
             Err(e) => return e,
         };
@@ -719,14 +725,14 @@ impl BamlClassArray for PackageBamlImpl {
     }
 
     fn includes(vm: &BexVm, array: &[Value], item: &Value) -> bool {
-        array.iter().any(|v| baml_eq(vm, v, item))
+        array.iter().any(|v| baml_eq(vm, *v, *item))
     }
 
     #[allow(clippy::cast_possible_wrap)]
     fn index_of(vm: &BexVm, array: &[Value], item: &Value) -> Option<i64> {
         array
             .iter()
-            .position(|v| baml_eq(vm, v, item))
+            .position(|v| baml_eq(vm, *v, *item))
             .map(|i| i as i64)
     }
 
@@ -734,7 +740,7 @@ impl BamlClassArray for PackageBamlImpl {
     fn last_index_of(vm: &BexVm, array: &[Value], item: &Value) -> Option<i64> {
         array
             .iter()
-            .rposition(|v| baml_eq(vm, v, item))
+            .rposition(|v| baml_eq(vm, *v, *item))
             .map(|i| i as i64)
     }
 
@@ -744,7 +750,7 @@ impl BamlClassArray for PackageBamlImpl {
         reducer: &Value,
         initial: &Value,
     ) -> NativeCallResult {
-        let f_ptr = match extract_callable(vm, reducer) {
+        let f_ptr = match extract_callable(vm, *reducer) {
             Ok(p) => p,
             Err(e) => return e,
         };
@@ -766,7 +772,7 @@ impl BamlClassArray for PackageBamlImpl {
     }
 
     fn flat_map(vm: &mut BexVm, array: &[Value], f: &Value) -> NativeCallResult {
-        let f_ptr = match extract_callable(vm, f) {
+        let f_ptr = match extract_callable(vm, *f) {
             Ok(p) => p,
             Err(e) => return e,
         };

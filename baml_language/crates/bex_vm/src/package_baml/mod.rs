@@ -104,8 +104,12 @@ pub trait Continuation: Send {
 }
 
 // Generate the BamlClass*/BamlNamespace*/BamlPackageBaml trait hierarchy.
+// `unsafe_code` is intentional: float-boxed Object reads use `ptr.get()`
+// which is unsafe; the surrounding accessors uphold the heap-permit
+// contract (see `BexVm::get_object`).
 #[allow(
     unused_variables,
+    unsafe_code,
     clippy::wildcard_imports,
     clippy::pub_underscore_fields,
     clippy::used_underscore_binding,
