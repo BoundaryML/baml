@@ -328,7 +328,7 @@ impl BexHeap {
     fn add_references_to_worklist(&self, obj: &Object, worklist: &mut Vec<HeapPtr>) {
         match obj {
             Object::Array(arr) => {
-                for value in arr {
+                for value in arr.iter() {
                     if let Some(ptr) = value.as_object_ptr() {
                         worklist.push(ptr);
                     }
@@ -2206,7 +2206,7 @@ mod tests {
         }));
         // Patch A to reference B, forming a cycle
         unsafe {
-            *a.get_mut() = Object::Array(vec![Value::object(b)]);
+            *a.get_mut() = Object::Array(vec![Value::object(b)].into());
         }
 
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&[a]) };
@@ -2242,7 +2242,7 @@ mod tests {
         let y = tlab.alloc_array(vec![Value::object(x)]);
         let z = tlab.alloc_array(vec![Value::object(y)]);
         unsafe {
-            *x.get_mut() = Object::Array(vec![Value::object(z)]);
+            *x.get_mut() = Object::Array(vec![Value::object(z)].into());
         }
 
         // Separate rooted survivor

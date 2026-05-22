@@ -291,7 +291,7 @@ impl BexHeap {
     fn verify_object_invariants(&self, idx: HeapPtr, obj: &Object, _ct_len: usize) {
         match obj {
             Object::Array(values) => {
-                for value in values {
+                for value in values.iter() {
                     self.debug_assert_valid_value(value);
                 }
             }

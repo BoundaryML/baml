@@ -320,14 +320,14 @@ pub fn serde_to_value(vm: &mut BexVm, v: &serde_json::Value) -> Value {
         serde_json::Value::String(s) => vm.alloc_string(s.clone()),
         serde_json::Value::Array(arr) => {
             let items: Vec<Value> = arr.iter().map(|elem| serde_to_value(vm, elem)).collect();
-            Value::object(vm.tlab.alloc(Object::Array(items)))
+            Value::object(vm.tlab.alloc(Object::Array(items.into())))
         }
         serde_json::Value::Object(map) => {
             let entries: IndexMap<String, Value> = map
                 .iter()
                 .map(|(k, v)| (k.clone(), serde_to_value(vm, v)))
                 .collect();
-            Value::object(vm.tlab.alloc(Object::Map(entries)))
+            Value::object(vm.tlab.alloc(Object::Map(Box::new(entries.into()))))
         }
     }
 }
@@ -433,7 +433,7 @@ fn ty_value_to_serde(
         Ty::List(elem, _) => {
             let items = match value.as_object_ptr() {
                 Some(ptr) => match vm.get_object(ptr) {
-                    Object::Array(arr) => arr.clone(),
+                    Object::Array(arr) => arr.data.clone(),
                     _ => return Err(raise_serialize(vm, "expected array", path, "list")),
                 },
                 None => return Err(raise_serialize(vm, "expected array", path, "list")),
@@ -457,7 +457,7 @@ fn ty_value_to_serde(
                 None => return Err(raise_serialize(vm, "expected map", path, "map")),
             };
             let mut out = serde_json::Map::with_capacity(entries.len());
-            for (k, v) in entries {
+            for (k, v) in entries.data {
                 let val_json = with_path_segment(path, format_args!("[{k:?}]"), |p| {
                     ty_value_to_serde(vm, v, vty, p)
                 })?;
@@ -784,7 +784,7 @@ fn ty_serde_to_value(
                     })?;
                     items.push(v);
                 }
-                Ok(Value::object(vm.tlab.alloc(Object::Array(items))))
+                Ok(Value::object(vm.tlab.alloc(Object::Array(items.into()))))
             }
             _ => Err(raise_decode(vm, "expected array", path)),
         },
@@ -798,7 +798,9 @@ fn ty_serde_to_value(
                     })?;
                     entries.insert(k.clone(), v);
                 }
-                Ok(Value::object(vm.tlab.alloc(Object::Map(entries))))
+                Ok(Value::object(
+                    vm.tlab.alloc(Object::Map(Box::new(entries.into()))),
+                ))
             }
             _ => Err(raise_decode(vm, "expected object", path)),
         },
@@ -1157,7 +1159,7 @@ impl Continuation for IdentityFromJsonCont {
 fn list_from_json_start(vm: &mut BexVm, j: Value, elem_ty: &Ty) -> NativeCallResult {
     let array = match j.as_object_ptr() {
         Some(p) => match vm.get_object(p) {
-            Object::Array(a) => a.clone(),
+            Object::Array(a) => a.data.clone(),
             _ => {
                 return NativeCallResult::Error(raise_decode(vm, "expected JSON array", ""));
             }
@@ -1199,7 +1201,7 @@ fn list_drive(
             Err(e) => return NativeCallResult::Error(e),
         }
     }
-    let arr_val = Value::object(vm.tlab.alloc(Object::Array(results)));
+    let arr_val = Value::object(vm.tlab.alloc(Object::Array(results.into())));
     NativeCallResult::Done(arr_val)
 }
 
@@ -1309,7 +1311,7 @@ fn map_drive(
             Err(e) => return NativeCallResult::Error(e),
         }
     }
-    let map_val = Value::object(vm.tlab.alloc(Object::Map(results)));
+    let map_val = Value::object(vm.tlab.alloc(Object::Map(Box::new(results.into()))));
     NativeCallResult::Done(map_val)
 }
 

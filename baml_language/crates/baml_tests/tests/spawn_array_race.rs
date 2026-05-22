@@ -1,53 +1,214 @@
-//! Reproducer: BEP-034 spawn closes over a HeapPtr to a shared Array.
-//! Both parent and child VMs can mutate the same `Vec<Value>` concurrently
-//! → true Rust data race on `Vec::push`.
+//! Regression test for the racing-Array-mutation crash that motivated the
+//! lazy biased mutex on `Object::Array`.
+//!
+//! Before this PR: two BAML fibers each pushing to the same shared array
+//! could corrupt `Vec`'s internal `(ptr, len, cap)` state — lost pushes,
+//! `Vec` `debug_assert!` SIGTRAP, or use-after-free if a grow happened
+//! mid-write.
+//!
+//! After this PR: the per-container `LazyBiasedMutex` serializes mutators.
+//! User-visible logic races (lost-push semantics) are still permitted —
+//! same contract as JVM `ArrayList`. The runtime itself does not crash.
+//!
+//! This test does not assert exact final contents (logic races are
+//! accepted); it only asserts that no panic / SIGTRAP / SIGSEGV occurred
+//! and that the array is in a consistent state at the end.
 
-use baml_tests::baml_test;
-use bex_engine::BexExternalValue;
+use std::sync::Arc;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-#[ignore = "reproducer for the open BEP-034 shared-heap-object data race; \
-            captured arrays/maps/instances passed to spawn aliase the parent's \
-            heap object, and concurrent mutation is a true Rust data race. \
-            Empirically: 3/9 runs lose a push (length=1002 not 1003), 1/10 \
-            runs hits SIGTRAP from a Vec internal debug_assert. Un-ignore \
-            once we land deep-copy-on-spawn or a Send-check in the type system."]
-async fn shared_array_concurrent_push_is_racy() {
-    let output = baml_test!(
+use baml_tests::engine::{OptLevel, compile_source_with_opt};
+use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
+use sys_native::SysOpsExt;
+
+/// Each of N fibers pushes M values to the same shared array. With the
+/// mutex in place, the run completes without crashes. The final length is
+/// between 0 and N*M (logic-race: a push reading the same `len` as a peer
+/// may be clobbered, but the structural invariants of `Vec` always hold).
+#[tokio::test]
+async fn racing_array_push_does_not_crash() {
+    let program = compile_source_with_opt(
         r#"
-        function nap() -> int {
-            baml.sys.sleep(0) catch (e) { let e => 0 };
-            1
-        }
-        function child_pushes(a: int[]) -> int {
+        function push_n(arr: int[], n: int) -> int {
             let i = 0;
-            while (i < 500) {
-                a.push(1000 + i);
-                let _ = nap();
+            while i < n {
+                arr.push(i);
                 i = i + 1;
-            }
-            0
+            };
+            arr.length()
         }
+
         function main() -> int {
-            let array = [1, 2, 3];
-            let f = spawn { child_pushes(array) };
-            let i = 0;
-            while (i < 500) {
-                array.push(i);
-                let _ = nap();
-                i = i + 1;
-            }
-            let _ = (await f) catch (e) { let e => 0 };
-            array.length()
+            let arr = [];
+            let a = spawn { push_n(arr, 200) };
+            let b = spawn { push_n(arr, 200) };
+            let c = spawn { push_n(arr, 200) };
+            let d = spawn { push_n(arr, 200) };
+            (await a) + (await b) + (await c) + (await d);
+            arr.length()
         }
-        "#
+        "#,
+        OptLevel::One,
+    );
+    let engine = Arc::new(
+        BexEngine::new(
+            program,
+            Arc::new(sys_ops::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("engine"),
     );
 
-    eprintln!("OUTCOME: {:?}", output.result);
-    match output.result {
-        Ok(BexExternalValue::Int(n)) => {
-            eprintln!("final array length = {n} (expected 1003 if both pushed cleanly)");
+    let result = engine
+        .call_function_bound_args(
+            "user.main",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    // We don't assert exact length — logic races may drop pushes. We do
+    // assert the program completed and the result is a valid bounded
+    // integer (0 ≤ len ≤ 4 * 200 = 800).
+    match result {
+        Ok(BexExternalValue::Int(len)) => {
+            assert!(
+                (0..=800).contains(&len),
+                "expected array length in 0..=800, got {len}"
+            );
         }
-        other => eprintln!("unexpected: {other:?}"),
+        other => panic!("expected Int result, got {other:?}"),
+    }
+}
+
+/// Racing push vs pop. After both threads finish, the array is in a valid
+/// state (no torn `(ptr, len, cap)` from concurrent grow + remove).
+#[tokio::test]
+async fn racing_array_push_pop_does_not_crash() {
+    let program = compile_source_with_opt(
+        r#"
+        function push_n(arr: int[], n: int) -> int {
+            let i = 0;
+            while i < n {
+                arr.push(i);
+                i = i + 1;
+            };
+            0
+        }
+
+        function pop_n(arr: int[], n: int) -> int {
+            let i = 0;
+            while i < n {
+                arr.pop();
+                i = i + 1;
+            };
+            0
+        }
+
+        function main() -> int {
+            let arr = [1, 2, 3, 4, 5];
+            let p = spawn { push_n(arr, 500) };
+            let q = spawn { pop_n(arr, 500) };
+            (await p) + (await q);
+            arr.length()
+        }
+        "#,
+        OptLevel::One,
+    );
+    let engine = Arc::new(
+        BexEngine::new(
+            program,
+            Arc::new(sys_ops::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("engine"),
+    );
+
+    let result = engine
+        .call_function_bound_args(
+            "user.main",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    // Initial length 5, 500 pushes, 500 pops. Final length is bounded but
+    // not deterministic under racing pops.
+    match result {
+        Ok(BexExternalValue::Int(len)) => {
+            assert!(
+                (0..=505).contains(&len),
+                "expected array length in 0..=505, got {len}"
+            );
+        }
+        other => panic!("expected Int result, got {other:?}"),
+    }
+}
+
+/// Racing `map.set` and `map.delete`. The map's internal hash chains
+/// should not form cycles or torn pointers under the lazy biased mutex.
+#[tokio::test]
+async fn racing_map_set_delete_does_not_crash() {
+    let program = compile_source_with_opt(
+        r#"
+        function set_n(m: map<string, int>, base: string, n: int) -> int {
+            let i = 0;
+            while i < n {
+                m.set(base, i);
+                i = i + 1;
+            };
+            0
+        }
+
+        function del_n(m: map<string, int>, base: string, n: int) -> int {
+            let i = 0;
+            while i < n {
+                m.delete(base);
+                i = i + 1;
+            };
+            0
+        }
+
+        function main() -> int {
+            let m: map<string, int> = {};
+            let s = spawn { set_n(m, "a", 200) };
+            let t = spawn { set_n(m, "b", 200) };
+            let d = spawn { del_n(m, "a", 200) };
+            (await s) + (await t) + (await d);
+            m.length()
+        }
+        "#,
+        OptLevel::One,
+    );
+    let engine = Arc::new(
+        BexEngine::new(
+            program,
+            Arc::new(sys_ops::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("engine"),
+    );
+
+    let result = engine
+        .call_function_bound_args(
+            "user.main",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    match result {
+        Ok(BexExternalValue::Int(len)) => {
+            assert!(
+                (0..=200).contains(&len),
+                "expected map length in 0..=200, got {len}"
+            );
+        }
+        other => panic!("expected Int result, got {other:?}"),
     }
 }

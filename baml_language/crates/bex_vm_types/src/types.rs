@@ -23,7 +23,10 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 pub use tokio_util::sync::CancellationToken;
 
-use crate::{bytecode::Bytecode, heap_ptr::HeapPtr, indexable::ObjectPool};
+use crate::{
+    bytecode::Bytecode, heap_ptr::HeapPtr, indexable::ObjectPool,
+    lazy_biased_mutex::LazyBiasedMutex,
+};
 
 // ============================================================================
 // Type Tags for Jump Table Dispatch
@@ -1233,6 +1236,210 @@ impl PartialEq for CollectorRef {
     }
 }
 
+/// Heap-mutable array container. Pairs a `Vec<Value>` with a
+/// [`LazyBiasedMutex`] so cross-fiber `spawn`-racing mutations don't
+/// corrupt the Vec's internal `(ptr, len, cap)` triple.
+///
+/// Held inline by `Object::Array`. Size: 24 (Vec) + 16 (mutex) = 40 bytes.
+#[derive(Debug)]
+pub struct ArrayContainer {
+    /// Synchronization word for cross-thread access. See
+    /// [`LazyBiasedMutex`] docs for the protocol.
+    pub mutex: LazyBiasedMutex,
+    /// The Vec is only accessed while holding `mutex`.
+    pub data: Vec<Value>,
+}
+
+impl ArrayContainer {
+    pub fn new(data: Vec<Value>) -> Self {
+        Self {
+            mutex: LazyBiasedMutex::new(),
+            data,
+        }
+    }
+}
+
+impl From<Vec<Value>> for ArrayContainer {
+    fn from(data: Vec<Value>) -> Self {
+        Self::new(data)
+    }
+}
+
+// Deref to the inner `Vec<Value>` so existing `Object::Array(arr) => arr.len()`
+// pattern matches keep working unchanged. Note: this is a convenience for
+// read-side use; cross-thread writers MUST go through the `BexVm`
+// `as_array_mut` API to take the mutex.
+impl std::ops::Deref for ArrayContainer {
+    type Target = Vec<Value>;
+    fn deref(&self) -> &Vec<Value> {
+        &self.data
+    }
+}
+
+impl std::ops::DerefMut for ArrayContainer {
+    fn deref_mut(&mut self) -> &mut Vec<Value> {
+        &mut self.data
+    }
+}
+
+// Cloning yields a fresh container — the contention state of the source
+// (the in-flight access counter and any allocated OS mutex) is not
+// part of the logical value.
+impl Clone for ArrayContainer {
+    fn clone(&self) -> Self {
+        Self::new(self.data.clone())
+    }
+}
+
+impl ArrayContainer {
+    /// Acquire the container's mutex and return a write guard that
+    /// derefs to `&mut Vec<Value>`. The lock is released when the guard
+    /// is dropped.
+    pub fn lock_mut(&mut self) -> ArrayWriteGuard<'_> {
+        let access = self.mutex.enter();
+        ArrayWriteGuard {
+            data: &mut self.data,
+            _access: access,
+        }
+    }
+
+    /// Acquire the container's mutex and return a read guard that
+    /// derefs to `&[Value]`. The lock is released when the guard is dropped.
+    pub fn lock(&self) -> ArrayReadGuard<'_> {
+        let access = self.mutex.enter();
+        ArrayReadGuard {
+            data: &self.data,
+            _access: access,
+        }
+    }
+}
+
+/// Read guard for an [`ArrayContainer`]. Holds the container's
+/// [`LazyBiasedMutex`] for the duration of the guard's lifetime.
+pub struct ArrayReadGuard<'a> {
+    data: &'a Vec<Value>,
+    _access: crate::lazy_biased_mutex::AccessGuard<'a>,
+}
+
+impl std::ops::Deref for ArrayReadGuard<'_> {
+    type Target = Vec<Value>;
+    fn deref(&self) -> &Vec<Value> {
+        self.data
+    }
+}
+
+/// Write guard for an [`ArrayContainer`]. Holds the container's
+/// [`LazyBiasedMutex`] for the duration of the guard's lifetime.
+pub struct ArrayWriteGuard<'a> {
+    data: &'a mut Vec<Value>,
+    _access: crate::lazy_biased_mutex::AccessGuard<'a>,
+}
+
+impl std::ops::Deref for ArrayWriteGuard<'_> {
+    type Target = Vec<Value>;
+    fn deref(&self) -> &Vec<Value> {
+        self.data
+    }
+}
+
+impl std::ops::DerefMut for ArrayWriteGuard<'_> {
+    fn deref_mut(&mut self) -> &mut Vec<Value> {
+        self.data
+    }
+}
+
+/// Heap-mutable map container. Pairs an `IndexMap<String, Value>` with a
+/// [`LazyBiasedMutex`]. Boxed by `Object::Map` because `IndexMap` is
+/// already 72 bytes — inlining the mutex would push the Object variant
+/// past the 80-byte size cap.
+#[derive(Debug)]
+pub struct MapContainer {
+    pub mutex: LazyBiasedMutex,
+    pub data: IndexMap<String, Value>,
+}
+
+impl MapContainer {
+    pub fn new(data: IndexMap<String, Value>) -> Self {
+        Self {
+            mutex: LazyBiasedMutex::new(),
+            data,
+        }
+    }
+}
+
+impl From<IndexMap<String, Value>> for MapContainer {
+    fn from(data: IndexMap<String, Value>) -> Self {
+        Self::new(data)
+    }
+}
+
+impl std::ops::Deref for MapContainer {
+    type Target = IndexMap<String, Value>;
+    fn deref(&self) -> &IndexMap<String, Value> {
+        &self.data
+    }
+}
+
+impl std::ops::DerefMut for MapContainer {
+    fn deref_mut(&mut self) -> &mut IndexMap<String, Value> {
+        &mut self.data
+    }
+}
+
+impl Clone for MapContainer {
+    fn clone(&self) -> Self {
+        Self::new(self.data.clone())
+    }
+}
+
+impl MapContainer {
+    pub fn lock_mut(&mut self) -> MapWriteGuard<'_> {
+        let access = self.mutex.enter();
+        MapWriteGuard {
+            data: &mut self.data,
+            _access: access,
+        }
+    }
+
+    pub fn lock(&self) -> MapReadGuard<'_> {
+        let access = self.mutex.enter();
+        MapReadGuard {
+            data: &self.data,
+            _access: access,
+        }
+    }
+}
+
+pub struct MapReadGuard<'a> {
+    data: &'a IndexMap<String, Value>,
+    _access: crate::lazy_biased_mutex::AccessGuard<'a>,
+}
+
+impl std::ops::Deref for MapReadGuard<'_> {
+    type Target = IndexMap<String, Value>;
+    fn deref(&self) -> &IndexMap<String, Value> {
+        self.data
+    }
+}
+
+pub struct MapWriteGuard<'a> {
+    data: &'a mut IndexMap<String, Value>,
+    _access: crate::lazy_biased_mutex::AccessGuard<'a>,
+}
+
+impl std::ops::Deref for MapWriteGuard<'_> {
+    type Target = IndexMap<String, Value>;
+    fn deref(&self) -> &IndexMap<String, Value> {
+        self.data
+    }
+}
+
+impl std::ops::DerefMut for MapWriteGuard<'_> {
+    fn deref_mut(&mut self) -> &mut IndexMap<String, Value> {
+        self.data
+    }
+}
+
 /// Any data that the Baml program can reference and is allocated on heap.
 ///
 /// `Vm` (in `bex_vm` crate) should own objects and give references to them to the running Baml
@@ -1291,11 +1498,15 @@ pub enum Object {
     /// Byte array (uint8array).
     Uint8Array(Vec<u8>),
 
-    /// List of values.
-    Array(Vec<Value>),
+    /// List of values. Wrapped in [`ArrayContainer`] so the underlying
+    /// `Vec<Value>` is protected by a [`LazyBiasedMutex`] against racing
+    /// mutation under `spawn`.
+    Array(ArrayContainer),
 
-    /// Map of values.
-    Map(IndexMap<String, Value>),
+    /// Map of values. Boxed because `MapContainer` is heavy (`IndexMap` +
+    /// mutex) and Map ops are less hot than Array ops; the indirection
+    /// keeps `Object` total size under 80 bytes.
+    Map(Box<MapContainer>),
 
     /// Boxed 64-bit float. Floats are heap-allocated because `Value`
     /// itself is a single tagged 64-bit word with no inline encoding
@@ -1361,8 +1572,8 @@ impl Serialize for Object {
             Self::Cell(v) => ObjectSerde::Cell(v.clone()),
             Self::String(v) => ObjectSerde::String(v.clone()),
             Self::Uint8Array(v) => ObjectSerde::Uint8Array(v.clone()),
-            Self::Array(v) => ObjectSerde::Array(v.clone()),
-            Self::Map(v) => ObjectSerde::Map(v.clone()),
+            Self::Array(v) => ObjectSerde::Array(v.data.clone()),
+            Self::Map(v) => ObjectSerde::Map(v.data.clone()),
             Self::Float(v) => ObjectSerde::Float(*v),
             Self::Future(v) => ObjectSerde::Future(v.clone()),
             Self::UnscheduledFuture(v) => ObjectSerde::UnscheduledFuture(v.clone()),
@@ -1401,8 +1612,8 @@ impl<'de> Deserialize<'de> for Object {
             ObjectSerde::Cell(v) => Self::Cell(v),
             ObjectSerde::String(v) => Self::String(v),
             ObjectSerde::Uint8Array(v) => Self::Uint8Array(v),
-            ObjectSerde::Array(v) => Self::Array(v),
-            ObjectSerde::Map(v) => Self::Map(v),
+            ObjectSerde::Array(v) => Self::Array(ArrayContainer::new(v)),
+            ObjectSerde::Map(v) => Self::Map(Box::new(MapContainer::new(v))),
             ObjectSerde::Float(v) => Self::Float(v),
             ObjectSerde::Future(v) => Self::Future(v),
             ObjectSerde::UnscheduledFuture(v) => Self::UnscheduledFuture(v),

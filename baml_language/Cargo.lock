@@ -1768,6 +1768,7 @@ dependencies = [
  "bex_resource_types",
  "codspeed-divan-compat",
  "indexmap 2.14.0",
+ "parking_lot",
  "serde",
  "serde_json",
  "tokio",

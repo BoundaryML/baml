@@ -332,7 +332,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
             BamlType::List(_) => {
                 writeln!(
                     out,
-                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> &'v [Value] {{"
+                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> ArrayReadGuard<'v> {{"
                 )
                 .unwrap();
                 writeln!(
@@ -349,9 +349,11 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 writeln!(out, "{inner}}}\n").unwrap();
             }
             BamlType::Map(_, _) => {
-                writeln!(out,
-                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> &'v IndexMap<String, Value> {{"
-                ).unwrap();
+                writeln!(
+                    out,
+                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> MapReadGuard<'v> {{"
+                )
+                .unwrap();
                 writeln!(
                     out,
                     "{inner2}vm.as_map(&self.instance.fields[{}])",
@@ -1129,7 +1131,14 @@ fn emit_mut_receiver_extraction_indented(
         "Uint8Array" => "vm.as_uint8array_mut(&args[0])?".to_string(),
         _ => "vm.as_value_mut(&args[0])?".to_string(),
     };
-    writeln!(out, "{indent}let {name} = {expr};").unwrap();
+    // Array/Map now return a guard rather than `&mut Vec/IndexMap`. Bind
+    // mutably so the call site can take `&mut name` and let the
+    // DerefMut impl coerce to the underlying container.
+    let mut_kw = match recv.class_name.as_str() {
+        "Array" | "Map" => "mut ",
+        _ => "",
+    };
+    writeln!(out, "{indent}let {mut_kw}{name} = {expr};").unwrap();
 }
 
 /// Like `emit_arg_extractions` but uses `indent` for each line.
@@ -1174,20 +1183,11 @@ fn emit_arg_extractions_indented(
 
 fn receiver_immut_extraction_expr(val: &str, recv: &Receiver, needs_owned: bool) -> String {
     match recv.class_name.as_str() {
-        "Array" => {
-            if needs_owned {
-                format!("vm.as_array({val})?.to_vec()")
-            } else {
-                format!("vm.as_array({val})?")
-            }
-        }
-        "Map" => {
-            if needs_owned {
-                format!("vm.as_map({val})?.clone()")
-            } else {
-                format!("vm.as_map({val})?")
-            }
-        }
+        // Always clone for Array/Map read receivers — see `extraction_expr`
+        // for the rationale (guard borrows on vm conflict with subsequent
+        // `&mut vm` calls in the same glue function).
+        "Array" => format!("vm.as_array({val})?.to_vec()"),
+        "Map" => format!("vm.as_map({val})?.clone()"),
         "String" => {
             if needs_owned {
                 format!("vm.as_string({val})?.clone()")
@@ -1286,19 +1286,23 @@ fn extraction_expr(val: &str, ty: &BamlType, is_mut: bool, needs_owned: bool) ->
         BamlType::List(_) => {
             if is_mut {
                 format!("vm.as_array_mut({val})?")
-            } else if needs_owned {
-                format!("vm.as_array({val})?.to_vec()")
             } else {
-                format!("vm.as_array({val})?")
+                // `as_array` returns an `ArrayReadGuard` that holds a borrow
+                // on `vm` via the container's lazy biased mutex. To avoid the
+                // guard's lifetime blocking subsequent `&mut vm` calls in the
+                // same glue function (e.g. `vm.alloc_array(result)`), we
+                // unconditionally clone into an owned `Vec<Value>` and drop
+                // the guard before the call site.
+                format!("vm.as_array({val})?.to_vec()")
             }
         }
         BamlType::Map(_, _) => {
             if is_mut {
                 format!("vm.as_map_mut({val})?")
-            } else if needs_owned {
-                format!("vm.as_map({val})?.clone()")
             } else {
-                format!("vm.as_map({val})?")
+                // Same rationale as `List` above — clone to release the
+                // `MapReadGuard` borrow on `vm` immediately.
+                format!("vm.as_map({val})?.clone()")
             }
         }
         BamlType::Optional(inner) => {
@@ -1339,7 +1343,13 @@ fn call_arg_list(b: &NativeBuiltin, needs_owned: bool) -> String {
         if !recv.receiver_type.is_static() {
             let name = receiver_param_name(recv);
             if recv.receiver_type.is_mut() {
-                args.push(name);
+                // Array/Map mut receivers are now guards; take &mut name so
+                // DerefMut coerces to &mut Vec<Value> / &mut IndexMap.
+                let arg = match recv.class_name.as_str() {
+                    "Array" | "Map" => format!("&mut {name}"),
+                    _ => name,
+                };
+                args.push(arg);
             } else if needs_owned && is_media_class(recv.class_name.as_str()) {
                 // For `//baml:mut_vm` media methods the extraction emits
                 // `let pdf = &args[0];` (a `&Value` copy).  Pass `name` directly —
@@ -1359,11 +1369,18 @@ fn call_arg_list(b: &NativeBuiltin, needs_owned: bool) -> String {
 
 fn call_arg_for_type(name: &str, ty: &BamlType, is_ref: bool) -> String {
     match ty {
-        BamlType::String
-        | BamlType::Uint8Array
-        | BamlType::List(_)
-        | BamlType::Map(_, _)
-        | BamlType::Media(_) => {
+        BamlType::List(_) | BamlType::Map(_, _) => {
+            if is_ref {
+                // Extraction returns an `Array/MapReadGuard`; take `&name` so
+                // its `Deref` impl coerces through `Vec<Value>` /
+                // `IndexMap<..>` to the slice / map reference the trait
+                // method signature expects.
+                format!("&{name}")
+            } else {
+                format!("&{name}")
+            }
+        }
+        BamlType::String | BamlType::Uint8Array | BamlType::Media(_) => {
             if is_ref {
                 // Extraction already returned a reference — don't double-ref
                 name.to_string()

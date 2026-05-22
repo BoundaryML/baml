@@ -91,7 +91,7 @@ fn format_value_recursive(vm: &BexVm, value: Value, depth: usize) -> Result<Stri
                 let mut result = String::from("{\n");
                 let field_indent = "    ".repeat(depth + 1);
 
-                for (key, value) in &map {
+                for (key, value) in map.iter() {
                     let formatted_value = format_value_recursive(vm, *value, depth + 1)?;
                     let _ = writeln!(result, "{field_indent}\"{key}\": {formatted_value}");
                 }

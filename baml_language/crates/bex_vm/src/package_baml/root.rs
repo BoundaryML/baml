@@ -54,31 +54,32 @@ fn deep_copy_value_recursive(
                 Object::Uint8Array(bytes) => vm.tlab.alloc(Object::Uint8Array(bytes)),
 
                 Object::Array(values) => {
-                    let placeholder_ptr = vm.tlab.alloc(Object::Array(Vec::new()));
+                    let placeholder_ptr = vm.tlab.alloc(Object::Array(Vec::new().into()));
                     copied_objects.insert(ptr, placeholder_ptr);
 
                     let mut new_values = Vec::with_capacity(values.len());
-                    for value in values {
+                    for value in values.data {
                         new_values.push(deep_copy_value_recursive(vm, value, copied_objects));
                     }
 
                     // no GC write barrier because it is all in gen0
-                    *vm.get_object_mut(placeholder_ptr) = Object::Array(new_values);
+                    *vm.get_object_mut(placeholder_ptr) = Object::Array(new_values.into());
                     placeholder_ptr
                 }
 
                 Object::Map(map) => {
-                    let placeholder_ptr = vm.tlab.alloc(Object::Map(IndexMap::new()));
+                    let placeholder_ptr =
+                        vm.tlab.alloc(Object::Map(Box::new(IndexMap::new().into())));
                     copied_objects.insert(ptr, placeholder_ptr);
 
                     let mut new_map = IndexMap::new();
-                    for (key, value) in &map {
+                    for (key, value) in map.iter() {
                         let new_value = deep_copy_value_recursive(vm, *value, copied_objects);
                         new_map.insert(key.clone(), new_value);
                     }
 
                     // no GC write barrier because it is all in gen0
-                    *vm.get_object_mut(placeholder_ptr) = Object::Map(new_map);
+                    *vm.get_object_mut(placeholder_ptr) = Object::Map(Box::new(new_map.into()));
                     placeholder_ptr
                 }
 

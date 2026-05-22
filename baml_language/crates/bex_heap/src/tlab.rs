@@ -168,13 +168,13 @@ impl Tlab {
     /// Allocate an array object.
     #[inline]
     pub fn alloc_array(&mut self, values: Vec<Value>) -> HeapPtr {
-        self.alloc(Object::Array(values))
+        self.alloc(Object::Array(values.into()))
     }
 
     /// Allocate a map object.
     #[inline]
     pub fn alloc_map(&mut self, values: IndexMap<String, Value>) -> HeapPtr {
-        self.alloc(Object::Map(values))
+        self.alloc(Object::Map(Box::new(values.into())))
     }
 
     /// Allocate an instance object.

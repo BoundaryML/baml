@@ -891,12 +891,16 @@ impl BexVm {
         self.get_object_mut(ptr).as_string_mut()
     }
 
-    /// Get array from a Value.
-    pub fn as_array(&self, value: &Value) -> Result<&[Value], VmInternalError> {
+    /// Get array from a Value. Acquires the container's mutex; the
+    /// returned guard derefs to `&[Value]` and releases the lock on drop.
+    pub fn as_array(
+        &self,
+        value: &Value,
+    ) -> Result<bex_vm_types::ArrayReadGuard<'_>, VmInternalError> {
         let ptr = self.as_object_ptr(*value, ObjectType::Array)?;
         let obj = self.get_object(ptr);
         match obj {
-            Object::Array(arr) => Ok(arr.as_slice()),
+            Object::Array(arr) => Ok(arr.lock()),
             _ => Err(VmInternalError::TypeError {
                 expected: ObjectType::Array.into(),
                 got: ObjectType::of(obj).into(),
@@ -904,8 +908,13 @@ impl BexVm {
         }
     }
 
-    /// Get mutable array from a Value.
-    pub fn as_array_mut(&mut self, value: &Value) -> Result<&mut Vec<Value>, VmInternalError> {
+    /// Get mutable array from a Value. Acquires the container's mutex;
+    /// the returned guard derefs to `&mut Vec<Value>` and releases the
+    /// lock on drop, serializing concurrent mutators under `spawn`.
+    pub fn as_array_mut(
+        &mut self,
+        value: &Value,
+    ) -> Result<bex_vm_types::ArrayWriteGuard<'_>, VmInternalError> {
         let ptr = self.as_object_ptr(*value, ObjectType::Array)?;
         // Conservative write barrier: any mutable access to an older-generation
         // array may introduce cross-generation references. Used by builtin dispatch
@@ -920,17 +929,17 @@ impl BexVm {
             });
         }
         match self.get_object_mut(ptr) {
-            Object::Array(arr) => Ok(arr),
+            Object::Array(arr) => Ok(arr.lock_mut()),
             _ => unreachable!("type was just checked"),
         }
     }
 
-    /// Get map from a Value.
-    pub fn as_map(&self, value: &Value) -> Result<&IndexMap<String, Value>, VmInternalError> {
+    /// Get map from a Value. Acquires the container's mutex.
+    pub fn as_map(&self, value: &Value) -> Result<bex_vm_types::MapReadGuard<'_>, VmInternalError> {
         let index = self.as_object_ptr(*value, ObjectType::Map)?;
         let obj = self.get_object(index);
         match obj {
-            Object::Map(map) => Ok(map),
+            Object::Map(map) => Ok(map.lock()),
             _ => Err(VmInternalError::TypeError {
                 expected: ObjectType::Map.into(),
                 got: ObjectType::of(obj).into(),
@@ -938,11 +947,11 @@ impl BexVm {
         }
     }
 
-    /// Get mutable map from a Value.
+    /// Get mutable map from a Value. Acquires the container's mutex.
     pub fn as_map_mut(
         &mut self,
         value: &Value,
-    ) -> Result<&mut IndexMap<String, Value>, VmInternalError> {
+    ) -> Result<bex_vm_types::MapWriteGuard<'_>, VmInternalError> {
         let index = self.as_object_ptr(*value, ObjectType::Map)?;
         // Conservative write barrier: any mutable access to an older-generation
         // map may introduce cross-generation references. Used by builtin dispatch
@@ -956,7 +965,7 @@ impl BexVm {
             });
         }
         match self.get_object_mut(index) {
-            Object::Map(map) => Ok(map),
+            Object::Map(map) => Ok(map.lock_mut()),
             _ => unreachable!("type was just checked"),
         }
     }
@@ -1153,11 +1162,11 @@ impl BexVm {
 
     /// Allocates an array on the heap and returns it to the caller.
     pub fn alloc_array(&mut self, values: Vec<Value>) -> Value {
-        Value::object(self.tlab.alloc(Object::Array(values)))
+        Value::object(self.tlab.alloc(Object::Array(values.into())))
     }
 
     pub fn alloc_map(&mut self, values: IndexMap<String, Value>) -> Value {
-        Value::object(self.tlab.alloc(Object::Map(values)))
+        Value::object(self.tlab.alloc(Object::Map(Box::new(values.into()))))
     }
 
     pub fn alloc_string(&mut self, s: String) -> Value {
@@ -1479,7 +1488,7 @@ impl BexVm {
             })
             .collect();
 
-        let frames_array = Value::object(self.tlab.alloc(Object::Array(frames)));
+        let frames_array = Value::object(self.tlab.alloc(Object::Array(frames.into())));
         self.alloc_error_value(ErrorClass::StackTrace, vec![frames_array])
     }
 
@@ -1809,7 +1818,7 @@ impl BexVm {
             "HostClosure call: drained {} args but declared arity is {arity}",
             user_args.len(),
         );
-        let args_array_ptr = self.tlab.alloc(Object::Array(user_args));
+        let args_array_ptr = self.tlab.alloc(Object::Array(user_args.into()));
         let ret_ty_ptr = self.tlab.alloc(Object::Type(Box::new(ret_ty)));
         VmExecState::SysOp {
             operation: bex_vm_types::SysOp::BamlHostCallHostValue,
@@ -2993,8 +3002,8 @@ impl BexVm {
                 OpCode::AllocArray => {
                     let size = { read_u32_unchecked(code, pc) as usize };
                     let drain_range = StackIndex::from_raw(self.stack.len() - size)..;
-                    let array = self.stack.drain(drain_range).collect();
-                    let array_index = self.tlab.alloc(Object::Array(array));
+                    let array: Vec<Value> = self.stack.drain(drain_range).collect();
+                    let array_index = self.tlab.alloc(Object::Array(array.into()));
                     self.stack.push(Value::object(array_index));
                 }
 
@@ -3018,7 +3027,7 @@ impl BexVm {
                     } else {
                         IndexMap::new()
                     };
-                    let obj_index = self.tlab.alloc(Object::Map(map));
+                    let obj_index = self.tlab.alloc(Object::Map(Box::new(map.into())));
                     self.stack.push(Value::object(obj_index));
                 }
 
