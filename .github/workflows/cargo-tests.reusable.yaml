@@ -99,7 +99,7 @@ jobs:
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -135,7 +135,7 @@ jobs:
 
       - name: "Upload test results on failure"
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-failures-linux
           path: |
@@ -144,7 +144,7 @@ jobs:
 
       - name: "Upload cargo timings"
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cargo-timings-test-linux
           path: baml_language/target/cargo-timings/
@@ -155,7 +155,7 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 35
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -191,7 +191,7 @@ jobs:
 
       - name: "Upload cargo timings"
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cargo-timings-test-macos
           path: baml_language/target/cargo-timings/
@@ -204,7 +204,7 @@ jobs:
     # Right now it needs to download our repo every time which is very slow
     timeout-minutes: 50
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -240,7 +240,7 @@ jobs:
 
       - name: "Upload cargo timings"
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cargo-timings-test-windows
           path: baml_language/target/cargo-timings/
@@ -278,7 +278,7 @@ jobs:
     runs-on: ${{ matrix.runs-on }}
     timeout-minutes: ${{ matrix.timeout }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -297,7 +297,7 @@ jobs:
           shared-key: ${{ matrix.rust-cache-key }}
 
       - name: "Setup Python 3.10+"
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.10"
 
@@ -307,7 +307,7 @@ jobs:
           tool: cargo-nextest
 
       - name: "Install uv"
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v7
 
       # `cargo test --no-run` drives each sdk_test crate's build.rs,
       # which is where the editable `baml_core` install + per-fixture
@@ -326,7 +326,7 @@ jobs:
 
       - name: "Upload test results on failure"
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sdk-test-failures-${{ matrix.os-label }}
           path: |
@@ -336,7 +336,7 @@ jobs:
 
       - name: "Upload cargo timings"
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cargo-timings-sdk-tests-${{ matrix.os-label }}
           path: baml_language/target/cargo-timings/
@@ -347,7 +347,7 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -379,7 +379,7 @@ jobs:
 
       - name: "Upload cargo timings"
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cargo-timings-test-wasm
           path: baml_language/target/cargo-timings/
@@ -393,7 +393,7 @@ jobs:
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -429,7 +429,7 @@ jobs:
 
       - name: "Upload cargo timings"
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cargo-timings-msrv
           path: baml_language/target/cargo-timings/
@@ -444,7 +444,7 @@ jobs:
     # bypass later doesn't accidentally start blocking required CI.
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -467,7 +467,7 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -492,7 +492,7 @@ jobs:
 
       - name: "Upload cargo timings"
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cargo-timings-doc
           path: baml_language/target/cargo-timings/
@@ -509,7 +509,7 @@ jobs:
       # mise installs handles its own Python via `uv run`).
       MISE_DISABLE_TOOLS: python,pipx:uv,pipx:ruff,pipx:maturin
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -533,7 +533,7 @@ jobs:
           tool: cargo-insta,cargo-nextest
 
       - name: "Install mise"
-        uses: jdx/mise-action@v2
+        uses: jdx/mise-action@v4
         # Pinning to old version because newer versions time out on the npm backend,
         # see https://github.com/jdx/mise/discussions/7630
         with:
@@ -561,7 +561,7 @@ jobs:
 
       - name: "Upload snapshot failures"
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: snapshot-failures
           path: |
@@ -570,7 +570,7 @@ jobs:
 
       - name: "Upload cargo timings"
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cargo-timings-snapshot
           path: baml_language/target/cargo-timings/
@@ -591,7 +591,7 @@ jobs:
       - snapshot-tests
     steps:
       - name: "Merge cargo timings artifacts"
-        uses: actions/upload-artifact/merge@v4
+        uses: actions/upload-artifact/merge@v7
         with:
           name: cargo-timings
           pattern: cargo-timings-*

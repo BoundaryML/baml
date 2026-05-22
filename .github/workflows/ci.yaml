@@ -53,7 +53,7 @@ jobs:
       # Flag for proto codegen changes - triggers generated file sync check
       proto: ${{ steps.check_proto.outputs.changed }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -251,7 +251,7 @@ jobs:
       MISE_DISABLE_TOOLS: python,pipx:uv,pipx:ruff,pipx:maturin
     steps:
       - name: "Checkout Branch"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -275,17 +275,17 @@ jobs:
         working-directory: baml_language
 
       - name: "Install uv"
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v7
 
       - name: "Install mise"
-        uses: jdx/mise-action@v2
+        uses: jdx/mise-action@v4
         # Pinning to old version because newer versions time out on the npm backend,
         # see https://github.com/jdx/mise/discussions/7630
         with:
           version: 2025.12.12
 
       - name: "Cache prek"
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
@@ -309,7 +309,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: "Checkout"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -385,7 +385,7 @@ jobs:
     timeout-minutes: 25
     steps:
       - name: "Checkout"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -411,7 +411,7 @@ jobs:
       MISE_DISABLE_TOOLS: python,pipx:uv,pipx:ruff,pipx:maturin
     steps:
       - name: "Checkout"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -429,7 +429,7 @@ jobs:
 
       # mise provides go, node, pnpm, protoc, and protoc-gen-go per mise.toml.
       - name: "Install mise"
-        uses: jdx/mise-action@v2
+        uses: jdx/mise-action@v4
         # Pinning to old version because newer versions time out on the npm backend,
         # see https://github.com/jdx/mise/discussions/7630
         with:
@@ -506,7 +506,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: "Checkout Branch"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
