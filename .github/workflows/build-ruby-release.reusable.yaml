@@ -36,7 +36,7 @@ jobs:
       run:
         working-directory: engine/language_client_ruby
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: oxidize-rb/actions/setup-ruby-and-rust@main
         with:
@@ -116,7 +116,7 @@ jobs:
       #################################################################################################################
 
       - name: Upload Ruby artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: gem-${{ matrix._.platform }}
           path: engine/language_client_ruby/pkg/*.gem

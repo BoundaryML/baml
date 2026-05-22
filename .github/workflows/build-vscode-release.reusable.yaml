@@ -49,7 +49,7 @@ jobs:
             rust-target: aarch64-unknown-linux-musl
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
@@ -83,7 +83,7 @@ jobs:
           echo "Determined artifact name for ${{ matrix.code-target }}: ${ARTIFACT_NAME}"
 
       - name: Download specific CLI artifact for ${{ matrix.code-target }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: baml-cli-${{ matrix.rust-target }}
           path: cli-artifact-${{ matrix.code-target }}
@@ -214,7 +214,7 @@ jobs:
         working-directory: typescript/apps/vscode-ext
 
       - name: Upload VSIX artifact for ${{ matrix.code-target }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: baml-vscode-vsix-${{ matrix.code-target }}
           path: typescript/apps/vscode-ext/${{ steps.package.outputs.vsix_path }}
@@ -245,7 +245,7 @@ jobs:
         working-directory: .
       - name: Upload Playground Artifact (conditional)
         if: matrix.code-target == 'linux-x64'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playground-dist-${{ inputs.version }}
           path: |
