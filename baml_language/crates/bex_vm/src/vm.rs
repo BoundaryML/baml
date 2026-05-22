@@ -1717,6 +1717,19 @@ impl BexVm {
                     }),
                 }
             }
+            Object::InstantiatedFunction(inst) => {
+                // Same shape as Closure for arity purposes — unwrap to the inner
+                // Function.  Type-arg seeding happens later in
+                // `execute_call_from_locals_offset`.
+                let func_obj = unsafe { inst.function.get() };
+                match func_obj {
+                    Object::Function(callee_fn) => Ok((callee_ptr, callee_fn.arity)),
+                    _ => Err(VmInternalError::TypeError {
+                        expected: expected_type.into(),
+                        got: ObjectType::of(func_obj).into(),
+                    }),
+                }
+            }
             _ => Err(VmInternalError::TypeError {
                 expected: expected_type.into(),
                 got: ObjectType::of(obj).into(),
@@ -1755,6 +1768,13 @@ impl BexVm {
         // These are injected into the new BytecodeFrame after it is created.
         let closure_type_args: Vec<baml_type::Ty> = match self.get_object(callee_ptr) {
             Object::Closure(c) => c.captured_type_args.clone(),
+            _ => vec![],
+        };
+
+        // Same idea for an InstantiatedFunction (TS-style `let cb = f<T>;`):
+        // the pre-bound type arguments become the initial `frame.type_args`.
+        let instantiated_fn_type_args: Vec<baml_type::Ty> = match self.get_object(callee_ptr) {
+            Object::InstantiatedFunction(inst) => inst.bound_type_args.clone(),
             _ => vec![],
         };
 
@@ -1797,6 +1817,21 @@ impl BexVm {
                 // compile-time object pool or TLAB, with lifetime at least as long
                 // as the BoundMethod.
                 let func_obj: &'static Object = unsafe { bm.function.get() };
+                match func_obj {
+                    Object::Function(f) => f,
+                    _ => {
+                        return Err(VmInternalError::TypeError {
+                            expected: FunctionType::Callable.into(),
+                            got: ObjectType::of(func_obj).into(),
+                        }
+                        .into());
+                    }
+                }
+            }
+            Object::InstantiatedFunction(inst) => {
+                // SAFETY: inst.function points to a Function object with at least
+                // the InstantiatedFunction's lifetime, same as Closure/BoundMethod.
+                let func_obj: &'static Object = unsafe { inst.function.get() };
                 match func_obj {
                     Object::Function(f) => f,
                     _ => {
@@ -1953,12 +1988,17 @@ impl BexVm {
                 //     taken at MakeClosure time; enclosing_generic_params()
                 //     already widened to class+fn params so the ordering is
                 //     consistent).
-                //  3. Plain Function callees: vec![] (no-op).
+                //  3. InstantiatedFunction callees: pre-bound type args from
+                //     a TS-style instantiation expression (`let cb = f<T>;`).
+                //  4. Plain Function callees: vec![] (no-op).
                 //
-                // Note: BoundMethod takes priority over Closure; a method can
-                // never be both simultaneously.
+                // BoundMethod / Closure / InstantiatedFunction are mutually
+                // exclusive — only one of these vecs is non-empty for a given
+                // callee.
                 let initial_type_args = if !bound_method_class_type_args.is_empty() {
                     bound_method_class_type_args
+                } else if !instantiated_fn_type_args.is_empty() {
+                    instantiated_fn_type_args
                 } else {
                     closure_type_args
                 };
@@ -2175,6 +2215,12 @@ impl BexVm {
                 // SAFETY: See doc comment — same lifetime guarantee applies to the
                 // inner function referenced by the bound method.
                 let func_obj: &'static Object = unsafe { bm.function.get() };
+                func_obj.as_function()
+            }
+            Object::InstantiatedFunction(inst) => {
+                // SAFETY: See doc comment — same lifetime guarantee applies to
+                // the inner function referenced by the instantiated function.
+                let func_obj: &'static Object = unsafe { inst.function.get() };
                 func_obj.as_function()
             }
             _ => Err(VmInternalError::TypeError {
@@ -4524,6 +4570,47 @@ impl BexVm {
                 self.stack.push(Value::Object(ptr));
             }
 
+            Instruction::MakeInstantiatedFunction {
+                global_idx,
+                ntypeargs,
+            } => {
+                // Pop `ntypeargs` Object::Type values into bound_type_args.
+                let mut bound_type_args: Vec<baml_type::Ty> = Vec::with_capacity(ntypeargs.into());
+                for _ in 0..ntypeargs {
+                    let v = self.stack.ensure_pop();
+                    let ptr = self.as_object_ptr(&v, ObjectType::Type)?;
+                    let obj = self.get_object(ptr);
+                    match obj {
+                        Object::Type(ty) => bound_type_args.push(*ty.clone()),
+                        other => {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Type.into(),
+                                got: ObjectType::of(other).into(),
+                            }
+                            .into());
+                        }
+                    }
+                }
+                // Type args were pushed left-to-right, popped right-to-left.
+                bound_type_args.reverse();
+
+                let callee_value = self.globals.get(self.proof(), global_idx);
+                let function_ptr =
+                    self.as_object_ptr(&callee_value, FunctionType::Callable.into())?;
+                debug_assert!(
+                    matches!(self.get_object(function_ptr), Object::Function(_)),
+                    "MakeInstantiatedFunction expects a Function global, got {:?}",
+                    ObjectType::of(self.get_object(function_ptr)),
+                );
+                let inst =
+                    Object::InstantiatedFunction(bex_vm_types::types::InstantiatedFunction {
+                        function: function_ptr,
+                        bound_type_args,
+                    });
+                let ptr = self.tlab.alloc(inst);
+                self.stack.push(Value::Object(ptr));
+            }
+
             Instruction::LoadDeref(slot) => {
                 let bf = unsafe {
                     match self.frames.get_unchecked(*frame_idx) {
@@ -6303,6 +6390,35 @@ impl BexVm {
                         receiver,
                     });
                     let ptr = self.tlab.alloc(bound);
+                    self.stack.push(Value::Object(ptr));
+                }
+
+                // ── MakeInstantiatedFunction ──────────────────────────────────
+                OpCode::MakeInstantiatedFunction => {
+                    let raw = { read_u32_unchecked(code, pc) };
+                    let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
+                    let ntypeargs = { read_u16_unchecked(code, pc) as usize };
+
+                    let mut bound_type_args: Vec<baml_type::Ty> = Vec::with_capacity(ntypeargs);
+                    for _ in 0..ntypeargs {
+                        let v = self.stack.ensure_pop();
+                        let ptr = self.as_object_ptr(&v, ObjectType::Type)?;
+                        let Object::Type(ty) = self.get_object(ptr) else {
+                            unreachable!("as_object_ptr guarantees Type variant");
+                        };
+                        bound_type_args.push(*ty.clone());
+                    }
+                    bound_type_args.reverse();
+
+                    let callee_value = self.globals.get(self.proof(), global_idx);
+                    let function_ptr =
+                        self.as_object_ptr(&callee_value, FunctionType::Callable.into())?;
+                    let inst =
+                        Object::InstantiatedFunction(bex_vm_types::types::InstantiatedFunction {
+                            function: function_ptr,
+                            bound_type_args,
+                        });
+                    let ptr = self.tlab.alloc(inst);
                     self.stack.push(Value::Object(ptr));
                 }
 

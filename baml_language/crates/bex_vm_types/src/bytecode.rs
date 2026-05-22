@@ -577,6 +577,20 @@ pub enum Instruction {
     /// Stack: `[receiver]` -> `[bound_method]`
     MakeBoundMethod(GlobalIndex),
 
+    /// Create an instantiated function from a global function index and N
+    /// `Object::Type` values on the stack.
+    ///
+    /// Pops `ntypeargs` `Object::Type` values, looks up the function at
+    /// `global_idx` in `Vm::globals`, and pushes the resulting
+    /// `Object::InstantiatedFunction { function, bound_type_args }`.
+    /// At call time the VM uses `bound_type_args` to seed `frame.type_args`.
+    ///
+    /// Stack: `[type_arg_1, ..., type_arg_N]` -> `[instantiated_fn]`
+    MakeInstantiatedFunction {
+        global_idx: GlobalIndex,
+        ntypeargs: u16,
+    },
+
     /// Wrap the top-of-stack value in a `Cell` object.
     ///
     /// Stack: `[value]` -> `[cell]`
@@ -742,6 +756,7 @@ pub enum OpCode {
     DenseTag,
     LoadType,
     MakeBoundMethod,
+    MakeInstantiatedFunction,
     LoadDeref,
     StoreDeref,
     LoadCapture,
@@ -859,7 +874,7 @@ impl OpCode {
             | Self::JumpIfFalse => 5,
 
             // 7-byte: opcode + u32 + u16 (type-arg threading)
-            Self::AllocInstance | Self::Call => 7,
+            Self::AllocInstance | Self::Call | Self::MakeInstantiatedFunction => 7,
 
             // 9-byte: opcode + u32 + u16 + u16 (closure with capture+typearg counts)
             Self::MakeClosure => 9,
@@ -959,6 +974,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::DenseTag as u8 => Ok(Self::DenseTag),
             x if x == Self::LoadType as u8 => Ok(Self::LoadType),
             x if x == Self::MakeBoundMethod as u8 => Ok(Self::MakeBoundMethod),
+            x if x == Self::MakeInstantiatedFunction as u8 => Ok(Self::MakeInstantiatedFunction),
             x if x == Self::LoadDeref as u8 => Ok(Self::LoadDeref),
             x if x == Self::StoreDeref as u8 => Ok(Self::StoreDeref),
             x if x == Self::LoadCapture as u8 => Ok(Self::LoadCapture),
@@ -1061,6 +1077,7 @@ impl std::fmt::Display for OpCode {
             Self::DenseTag => "DENSE_TAG",
             Self::LoadType => "LOAD_TYPE",
             Self::MakeBoundMethod => "MAKE_BOUND_METHOD",
+            Self::MakeInstantiatedFunction => "MAKE_INSTANTIATED_FUNCTION",
             Self::LoadDeref => "LOAD_DEREF",
             Self::StoreDeref => "STORE_DEREF",
             Self::LoadCapture => "LOAD_CAPTURE",
@@ -1348,6 +1365,15 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::MakeBoundMethod(global_idx) => {
                 write!(f, "MAKE_BOUND_METHOD {global_idx}")
+            }
+            Instruction::MakeInstantiatedFunction {
+                global_idx,
+                ntypeargs,
+            } => {
+                write!(
+                    f,
+                    "MAKE_INSTANTIATED_FUNCTION {global_idx} ntypeargs={ntypeargs}"
+                )
             }
             Instruction::MakeCell => f.write_str("MAKE_CELL"),
             Instruction::LoadDeref(slot) => write!(f, "LOAD_DEREF {slot}"),
@@ -1826,6 +1852,19 @@ impl Bytecode {
                     code.extend_from_slice(&ntypeargs.to_le_bytes());
                 }
 
+                // ── MakeInstantiatedFunction: u32 global + u16 ntypeargs ──
+                Instruction::MakeInstantiatedFunction {
+                    global_idx,
+                    ntypeargs,
+                } => {
+                    code.extend_from_slice(
+                        &u32::try_from(global_idx.into_raw())
+                            .expect("global index fits u32")
+                            .to_le_bytes(),
+                    );
+                    code.extend_from_slice(&ntypeargs.to_le_bytes());
+                }
+
                 // ── Jump operands: translate to byte offsets ────────
                 Instruction::Jump(offset)
                 | Instruction::PopJumpIfFalse(offset)
@@ -2051,6 +2090,7 @@ impl Bytecode {
             Instruction::DenseTag(_) => OpCode::DenseTag,
             Instruction::LoadType(_) => OpCode::LoadType,
             Instruction::MakeBoundMethod(_) => OpCode::MakeBoundMethod,
+            Instruction::MakeInstantiatedFunction { .. } => OpCode::MakeInstantiatedFunction,
             Instruction::LoadDeref(_) => OpCode::LoadDeref,
             Instruction::StoreDeref(_) => OpCode::StoreDeref,
             Instruction::LoadCapture(_) => OpCode::LoadCapture,

@@ -227,6 +227,7 @@ pub(crate) fn display_instruction(
         | Instruction::Unreachable
         | Instruction::MakeClosure { .. }
         | Instruction::MakeBoundMethod(_)
+        | Instruction::MakeInstantiatedFunction { .. }
         | Instruction::MakeCell
         | Instruction::LoadDeref(_)
         | Instruction::StoreDeref(_)
@@ -391,6 +392,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
         Instruction::Unreachable => Color::BrightRed,
         Instruction::MakeClosure { .. }
         | Instruction::MakeBoundMethod(_)
+        | Instruction::MakeInstantiatedFunction { .. }
         | Instruction::MakeCell => Color::Cyan,
         Instruction::LoadDeref(_) | Instruction::LoadCapture(_) | Instruction::CaptureRef(_) => {
             Color::Blue
@@ -889,6 +891,10 @@ fn display_instruction_textual(
             let name = meta_str(&"");
             format!("make_bound_method {name}")
         }
+        Instruction::MakeInstantiatedFunction { ntypeargs, .. } => {
+            let name = meta_str(&"");
+            format!("make_instantiated_fn {name}, ntypeargs={ntypeargs}")
+        }
         Instruction::MakeCell => "make_cell".to_string(),
         Instruction::LoadDeref(slot) => {
             let name = meta_str(slot);
@@ -1289,6 +1295,12 @@ pub fn display_compact_bytecode(
                 let class_obj = read_u32(code, &mut pc);
                 let ntypeargs = read_u16(code, &mut pc);
                 writeln!(f, "class={class_obj}  ntypeargs={ntypeargs}")?;
+            }
+
+            OpCode::MakeInstantiatedFunction => {
+                let global_idx = read_u32(code, &mut pc);
+                let ntypeargs = read_u16(code, &mut pc);
+                writeln!(f, "global={global_idx}  ntypeargs={ntypeargs}")?;
             }
 
             OpCode::MakeClosure => {
