@@ -12,6 +12,12 @@ conflicts=('baml-bin')
 source=("$pkgname-$pkgver.tar.gz::https://github.com/BoundaryML/baml/archive/refs/tags/baml-language-__VERSION_ORIG__.tar.gz")
 sha256sums=('__SHA256__')
 
+prepare() {
+    cd "baml-baml-language-__VERSION_ORIG__/baml_language"
+    export RUSTUP_TOOLCHAIN=stable
+    cargo fetch --locked
+}
+
 build() {
     cd "baml-baml-language-__VERSION_ORIG__/baml_language"
     export RUSTUP_TOOLCHAIN=stable
