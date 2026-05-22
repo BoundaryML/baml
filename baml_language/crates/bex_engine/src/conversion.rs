@@ -422,6 +422,21 @@ impl BexEngine {
 // SysOp Argument Conversion
 // ============================================================================
 
+/// If `ptr` references an `Object::Float`, return its `BexExternalValue::Float`
+/// projection so callers can surface a primitive instead of an opaque handle.
+///
+/// # Safety
+///
+/// Caller must hold a GC permit (the `HeapPtr` deref invariant). Mirrors the
+/// surrounding accessors that take `PermitProof` and dereference `HeapPtr`.
+unsafe fn unbox_float_object(ptr: HeapPtr) -> Option<BexExternalValue> {
+    if let Object::Float(f) = unsafe { ptr.get() } {
+        Some(BexExternalValue::Float(*f))
+    } else {
+        None
+    }
+}
+
 impl BexEngine {
     pub(crate) fn vm_arg_to_bex_value(&self, value: Value) -> BexExternalValue {
         match value.kind() {
@@ -432,10 +447,9 @@ impl BexEngine {
             ValueKind::Int(i) => BexExternalValue::Int(i),
             ValueKind::Bool(b) => BexExternalValue::Bool(b),
             ValueKind::Object(ptr) => {
-                // Heap-boxed float: unwrap to inline Float external value so
-                // downstream consumers see a primitive, not an opaque handle.
-                if let Object::Float(f) = unsafe { ptr.get() } {
-                    return BexExternalValue::Float(*f);
+                // SAFETY: caller holds the engine permit (heap is borrowed).
+                if let Some(v) = unsafe { unbox_float_object(ptr) } {
+                    return v;
                 }
                 let handle = self.heap.create_handle(ptr);
                 BexExternalValue::Handle(handle)
@@ -461,9 +475,9 @@ impl BexEngine {
             ValueKind::Int(i) => BexExternalValue::Int(i),
             ValueKind::Bool(b) => BexExternalValue::Bool(b),
             ValueKind::Object(ptr) => {
-                // Heap-boxed float: unwrap to inline Float external value.
-                if let Object::Float(f) = unsafe { ptr.get() } {
-                    return BexExternalValue::Float(*f);
+                // SAFETY: `permit` witnesses GC liveness for the deref.
+                if let Some(v) = unsafe { unbox_float_object(ptr) } {
+                    return v;
                 }
                 BexValue::HeapPtr(&ptr)
                     .as_owned_for_trace(&self.heap, permit)

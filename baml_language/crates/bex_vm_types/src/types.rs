@@ -1007,6 +1007,61 @@ impl<'de> Deserialize<'de> for Value {
     }
 }
 
+/// Box every unique `ConstValue::Float` reachable from `compile_time_objects`
+/// (in `Object::Function` constants) and `globals` into a fresh
+/// `Object::Float` entry appended to `compile_time_objects`, and rewrite the
+/// function `ConstValue::Float` entries to `ConstValue::Object(idx)`. Returns
+/// the bit-pattern → object-index map so callers can rewrite their globals.
+///
+/// Required because the tagged-pointer `Value` encoding can no longer hold a
+/// float inline.
+///
+/// Globals are *not* rewritten in place — callers typically need to consume
+/// them by value (to convert `ConstValue` → `Value`) and rewrite during that
+/// pass.
+pub fn box_compile_time_floats(
+    compile_time_objects: &mut Vec<Object>,
+    globals: &[crate::ConstValue],
+) -> HashMap<u64, usize> {
+    let mut float_indices: HashMap<u64, usize> = HashMap::new();
+    // Pre-scan to discover unique floats.
+    for obj in &*compile_time_objects {
+        if let Object::Function(func) = obj {
+            for cv in &func.bytecode.constants {
+                if let ConstValue::Float(f) = cv {
+                    let next_idx = compile_time_objects.len() + float_indices.len();
+                    float_indices.entry(f.to_bits()).or_insert(next_idx);
+                }
+            }
+        }
+    }
+    for cv in globals {
+        if let ConstValue::Float(f) = cv {
+            let next_idx = compile_time_objects.len() + float_indices.len();
+            float_indices.entry(f.to_bits()).or_insert(next_idx);
+        }
+    }
+    // Append boxes in index order.
+    let mut float_entries: Vec<(u64, usize)> =
+        float_indices.iter().map(|(k, v)| (*k, *v)).collect();
+    float_entries.sort_by_key(|(_, idx)| *idx);
+    for (bits, _) in float_entries {
+        compile_time_objects.push(Object::Float(f64::from_bits(bits)));
+    }
+    // Rewrite each function-constant ConstValue::Float -> ConstValue::Object(idx).
+    for obj in compile_time_objects.iter_mut() {
+        if let Object::Function(func) = obj {
+            for cv in &mut func.bytecode.constants {
+                if let ConstValue::Float(f) = cv {
+                    let idx = float_indices[&f.to_bits()];
+                    *cv = ConstValue::Object(crate::indexable::ObjectIndex::from_raw(idx));
+                }
+            }
+        }
+    }
+    float_indices
+}
+
 /// Format an f64 to string, following JS/TS conventions for special values
 /// and preserving `.0` for whole-number floats.
 ///

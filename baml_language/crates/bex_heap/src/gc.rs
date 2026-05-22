@@ -27,7 +27,7 @@
 
 use std::{cell::UnsafeCell, collections::HashMap};
 
-use bex_vm_types::{HeapPtr, Object, Value};
+use bex_vm_types::{HeapPtr, Object, Value, types::Future};
 
 use crate::{
     BexHeap,
@@ -35,6 +35,21 @@ use crate::{
     chunked_vec::ChunkedVec,
     heap::Generation,
 };
+
+/// Extract the inner `HeapPtr` held by a settled future (Ready / Error), if
+/// the held value is an object reference. Pending / Cancelled / InternalError
+/// futures hold no reachable outgoing references; this returns `None` for
+/// those, and for settled futures whose payload is a non-object `Value`.
+///
+/// Centralizes the GC's view of "what does a Future point at?" so the worklist
+/// and young-generation walks can't drift apart.
+fn future_object_ref(fut: &Future) -> Option<HeapPtr> {
+    use bex_vm_types::FutureRead;
+    match fut.read() {
+        FutureRead::Ready(v) | FutureRead::Error(v) => v.as_object_ptr(),
+        FutureRead::Pending(_) | FutureRead::Cancelled | FutureRead::InternalError(_) => None,
+    }
+}
 
 /// Which generation level to collect.
 ///
@@ -357,14 +372,7 @@ impl BexHeap {
                 worklist.push(var.enm);
             }
             Object::Future(fut) => {
-                use bex_vm_types::FutureRead;
-                let inner = match fut.read() {
-                    FutureRead::Ready(v) | FutureRead::Error(v) => Some(v),
-                    FutureRead::Pending(_)
-                    | FutureRead::Cancelled
-                    | FutureRead::InternalError(_) => None,
-                };
-                if let Some(ptr) = inner.and_then(|v| v.as_object_ptr()) {
+                if let Some(ptr) = future_object_ref(fut) {
                     worklist.push(ptr);
                 }
             }
@@ -740,14 +748,7 @@ impl BexHeap {
                 }
             }
             Object::Future(fut) => {
-                use bex_vm_types::FutureRead;
-                let inner = match fut.read() {
-                    FutureRead::Ready(v) | FutureRead::Error(v) => Some(v),
-                    FutureRead::Pending(_)
-                    | FutureRead::Cancelled
-                    | FutureRead::InternalError(_) => None,
-                };
-                if let Some(ptr) = inner.and_then(|v| v.as_object_ptr())
+                if let Some(ptr) = future_object_ref(fut)
                     && self.generation_of(ptr).is_young()
                 {
                     worklist.push(ptr);

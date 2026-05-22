@@ -568,53 +568,14 @@ impl BexEngine {
         // Extract compile-time objects for the heap
         let mut compile_time_objects: Vec<Object> = bytecode.objects.into_iter().collect();
 
-        // Float boxing pre-pass: scan every ConstValue::Float in function
-        // constants and module globals, allocate a compile-time Object::Float
-        // for each unique bit pattern, and rewrite the ConstValue::Float
-        // entries to ConstValue::Object(idx). Required because Value can no
-        // longer hold a float inline (heap-boxed under the tagged-pointer
-        // encoding).
-        let mut float_indices: std::collections::HashMap<u64, usize> =
-            std::collections::HashMap::new();
-        // Pre-scan to discover unique floats.
-        for obj in &compile_time_objects {
-            if let Object::Function(func) = obj {
-                for cv in &func.bytecode.constants {
-                    if let bex_vm_types::ConstValue::Float(f) = cv {
-                        let next_idx = compile_time_objects.len() + float_indices.len();
-                        float_indices.entry(f.to_bits()).or_insert(next_idx);
-                    }
-                }
-            }
-        }
-        for cv in &bytecode.globals {
-            if let bex_vm_types::ConstValue::Float(f) = cv {
-                let next_idx = compile_time_objects.len() + float_indices.len();
-                float_indices.entry(f.to_bits()).or_insert(next_idx);
-            }
-        }
-        // Append boxes in index order.
-        let mut float_entries: Vec<(u64, usize)> =
-            float_indices.iter().map(|(k, v)| (*k, *v)).collect();
-        float_entries.sort_by_key(|(_, idx)| *idx);
-        for (bits, _) in float_entries {
-            compile_time_objects.push(Object::Float(f64::from_bits(bits)));
-        }
-        // Rewrite each ConstValue::Float -> ConstValue::Object(idx).
-        for obj in &mut compile_time_objects {
-            if let Object::Function(func) = obj {
-                for cv in &mut func.bytecode.constants {
-                    if let bex_vm_types::ConstValue::Float(f) = cv {
-                        let idx = float_indices[&f.to_bits()];
-                        *cv = bex_vm_types::ConstValue::Object(
-                            bex_vm_types::ObjectIndex::from_raw(idx),
-                        );
-                    }
-                }
-            }
-        }
-        // We can't rewrite bytecode.globals in place (immutable borrow), so we
-        // do it just before the globals_vec conversion below.
+        // Box every reachable `ConstValue::Float` into a compile-time
+        // `Object::Float` (floats can no longer live inline in `Value`).
+        // `bytecode.globals` are rewritten further down, during the
+        // `ConstValue` → `Value` conversion, using the returned index map.
+        let float_indices = bex_vm_types::types::box_compile_time_floats(
+            &mut compile_time_objects,
+            &bytecode.globals,
+        );
 
         // Encode compact bytecode for all functions before the heap freezes them.
         // This must happen before BexHeap::new() because objects become immutable

@@ -987,45 +987,12 @@ impl BexVm {
         // Extract compile-time objects for the heap
         let mut compile_time_objects: Vec<Object> = bytecode.objects.into_iter().collect();
 
-        // Float boxing pre-pass: same idea as `bex_engine::BexEngine::new`.
-        // Floats can no longer live inline in `Value`; redirect each
-        // `ConstValue::Float` through a compile-time `Object::Float` entry.
-        let mut float_indices: std::collections::HashMap<u64, usize> =
-            std::collections::HashMap::new();
-        for obj in &compile_time_objects {
-            if let Object::Function(func) = obj {
-                for cv in &func.bytecode.constants {
-                    if let bex_vm_types::ConstValue::Float(f) = cv {
-                        let next_idx = compile_time_objects.len() + float_indices.len();
-                        float_indices.entry(f.to_bits()).or_insert(next_idx);
-                    }
-                }
-            }
-        }
-        for cv in &bytecode.globals {
-            if let bex_vm_types::ConstValue::Float(f) = cv {
-                let next_idx = compile_time_objects.len() + float_indices.len();
-                float_indices.entry(f.to_bits()).or_insert(next_idx);
-            }
-        }
-        let mut float_entries: Vec<(u64, usize)> =
-            float_indices.iter().map(|(k, v)| (*k, *v)).collect();
-        float_entries.sort_by_key(|(_, idx)| *idx);
-        for (bits, _) in float_entries {
-            compile_time_objects.push(Object::Float(f64::from_bits(bits)));
-        }
-        for obj in &mut compile_time_objects {
-            if let Object::Function(func) = obj {
-                for cv in &mut func.bytecode.constants {
-                    if let bex_vm_types::ConstValue::Float(f) = cv {
-                        let idx = float_indices[&f.to_bits()];
-                        *cv = bex_vm_types::ConstValue::Object(
-                            bex_vm_types::ObjectIndex::from_raw(idx),
-                        );
-                    }
-                }
-            }
-        }
+        // Box every reachable `ConstValue::Float` into a compile-time
+        // `Object::Float` (floats can no longer live inline in `Value`).
+        let float_indices = bex_vm_types::types::box_compile_time_floats(
+            &mut compile_time_objects,
+            &bytecode.globals,
+        );
 
         // Create heap with compile-time objects
         let heap = BexHeap::new(compile_time_objects);
