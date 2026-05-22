@@ -2110,23 +2110,19 @@ impl BexVm {
 
                 // Run user function to decide if we should notify.
                 WatchFilter::Function(filter_func) => {
-                    match self.interrupt(filter_func, &[state.value]) {
-                        Ok(VmExecState::Complete(v)) if v.as_bool().is_some() => {
-                            if v.as_bool() == Some(true) {
-                                filtered_notifications.push(notification);
+                    match self.interrupt(filter_func, &[state.value])? {
+                        VmExecState::Complete(v) => match v.as_bool() {
+                            Some(true) => filtered_notifications.push(notification),
+                            Some(false) => {}
+                            None => {
+                                return Err(VmInternalError::TypeError {
+                                    expected: Type::Bool,
+                                    got: self.type_of(&v),
+                                }
+                                .into());
                             }
-                        }
-                        Ok(VmExecState::Complete(other)) => {
-                            return Err(VmInternalError::TypeError {
-                                expected: Type::Bool,
-                                got: self.type_of(&other),
-                            }
-                            .into());
-                        }
-                        Ok(_) => {
-                            return Err(VmInternalError::ExpectedCompletion.into());
-                        }
-                        Err(err) => return Err(err),
+                        },
+                        _ => return Err(VmInternalError::ExpectedCompletion.into()),
                     }
                 }
             }
@@ -2405,20 +2401,22 @@ impl BexVm {
                 .map(|i| i as f64)
                 .or_else(|| value_as_float(right)),
         ) {
-            let left_ty = if left.as_int().is_some() {
-                bex_vm_types::types::Type::Int
-            } else {
-                bex_vm_types::types::Type::Float
-            };
-            let right_ty = if right.as_int().is_some() {
-                bex_vm_types::types::Type::Int
-            } else {
-                bex_vm_types::types::Type::Float
-            };
             let f = match op {
                 BinOp::Div if r == 0.0 => {
-                    let left_v = self.alloc_float(l);
-                    let right_v = self.alloc_float(r);
+                    // Reuse the heap-boxed float operands directly; only
+                    // allocate when a side was an Int promoted to f64
+                    // (since the panic payload is conventionally a Float
+                    // value here, matching the operation's result type).
+                    let left_v = if left.is_object() {
+                        left
+                    } else {
+                        self.alloc_float(l)
+                    };
+                    let right_v = if right.is_object() {
+                        right
+                    } else {
+                        self.alloc_float(r)
+                    };
                     return Err(VmError::Thrown(self.panic_to_exception_value(
                         VmPanic::DivisionByZero {
                             left: left_v,
@@ -2433,8 +2431,8 @@ impl BexVm {
                 BinOp::Mod => l % r,
                 BinOp::BitAnd | BinOp::BitOr | BinOp::BitXor | BinOp::Shl | BinOp::Shr => {
                     return Err(VmInternalError::CannotApplyBinOp {
-                        left: left_ty,
-                        right: right_ty,
+                        left: self.type_of(&left),
+                        right: self.type_of(&right),
                         op,
                     }
                     .into());
@@ -4261,15 +4259,18 @@ impl BexVm {
                     self.stack.push(v);
                 }
                 OpCode::DivFloat => {
-                    let Some(r) = value_as_float(self.stack.ensure_pop()) else {
+                    // Keep the Value handles around so the DivisionByZero
+                    // panic can reuse them instead of allocating two more
+                    // `Object::Float` boxes on the TLAB just to error.
+                    let right_v = self.stack.ensure_pop();
+                    let left_v = self.stack.ensure_pop();
+                    let Some(r) = value_as_float(right_v) else {
                         std::hint::unreachable_unchecked()
                     };
-                    let Some(l) = value_as_float(self.stack.ensure_pop()) else {
+                    let Some(l) = value_as_float(left_v) else {
                         std::hint::unreachable_unchecked()
                     };
                     if r == 0.0 {
-                        let left_v = self.alloc_float(l);
-                        let right_v = self.alloc_float(r);
                         return Err(VmError::Thrown(self.panic_to_exception_value(
                             VmPanic::DivisionByZero {
                                 left: left_v,
