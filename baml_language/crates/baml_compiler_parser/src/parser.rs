@@ -7808,6 +7808,72 @@ function Demo() -> int {
     }
 
     #[test]
+    fn chained_type_args_are_rejected_at_parse_time() {
+        // `f<int><string>` — chained type args.  TS-go errors on this
+        // shape too (the second `<...>` becomes a relational expression),
+        // but our parser bails earlier: the postfix loop completes
+        // `f<int>` and then the second `<` doesn't pass the
+        // `looks_like_generic_args` follow check, so parsing aborts with
+        // "expected expression".  Captured here so any future change to
+        // the parse-recovery path is visible.
+        let source = r#"
+function Demo() -> int {
+  let cb = f<int><string>;
+  1
+}
+"#;
+        let (_root, errors) = parse_source(source);
+        assert!(
+            !errors.is_empty(),
+            "chained `<...><...>` should not parse cleanly",
+        );
+    }
+
+    #[test]
+    fn newline_before_paren_still_parses_as_call() {
+        // TS-go's note: `f<true>\n(true)` parses as a call even though
+        // ASI in JS would split it. Our parser skips newlines as trivia
+        // in lookahead, so `(` is still a postfix call follow.
+        let source = "
+function Demo() -> int {
+  f<int>
+  (1)
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(count_instantiated_paths(&root), 1);
+        assert_eq!(
+            root.descendants()
+                .filter(|n| n.kind() == SyntaxKind::CALL_EXPR)
+                .count(),
+            1,
+            "newline-before-`(` should still produce a single CALL_EXPR",
+        );
+    }
+
+    #[test]
+    fn parenthesized_instantiation_parses() {
+        // `(f<int>)` — parens around an instantiation expression.  The
+        // PAREN_EXPR should wrap an EXPR_WITH_TYPE_ARGS node so callers
+        // (e.g. `(f<int>)(args)`) can still pick up the type args.
+        let source = r#"
+function Demo() -> int {
+  let cb = (f<int>);
+  1
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(count_instantiated_paths(&root), 1);
+        assert!(
+            root.descendants()
+                .any(|n| n.kind() == SyntaxKind::PAREN_EXPR),
+            "expected a PAREN_EXPR wrapping the instantiation",
+        );
+    }
+
+    #[test]
     fn property_access_after_instantiation_parses() {
         // `f<int>.method` — `.` follows the closing `>`.  The `.` is a
         // postfix follow that commits to type-args.  Compare with TS, which
