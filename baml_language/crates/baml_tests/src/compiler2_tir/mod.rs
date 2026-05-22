@@ -300,6 +300,15 @@ pub(crate) mod support {
                 format!("spawn {{ {} }}", expr_desc(*spawn_body, body))
             }
             Expr::Await { future } => format!("await {}", expr_desc(*future, body)),
+            Expr::Instantiation { base, type_args } => format!(
+                "{}<{}>",
+                expr_desc(*base, body),
+                type_args
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
             Expr::Missing => "<missing>".into(),
         }
     }
@@ -1663,6 +1672,15 @@ pub(crate) mod support {
                 Expr::Await { future } => format!(
                     "await {}",
                     expr_desc_hir(*future, body, prefix, local_type_names)
+                ),
+                Expr::Instantiation { base, type_args } => format!(
+                    "{}<{}>",
+                    expr_desc_hir(*base, body, prefix, local_type_names),
+                    type_args
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 ),
                 Expr::Missing => "<missing>".into(),
             }

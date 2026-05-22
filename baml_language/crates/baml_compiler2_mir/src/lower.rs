@@ -2427,6 +2427,18 @@ impl LoweringContext<'_> {
             AstExpr::Await { future } => {
                 self.lower_await(expr_id, future, dest);
             }
+
+            AstExpr::Instantiation { .. } => {
+                // Runtime support for instantiation expressions (a function
+                // value with bound type args) lands in a follow-up commit.
+                // For now, emit a panic so the type-checker stays sound
+                // (TIR still infers the right shape) but execution surfaces
+                // a clear error if anyone actually tries to call this.
+                self.emit_panic_call(
+                    "instantiation expression runtime support not yet implemented",
+                    expr_id,
+                );
+            }
         }
 
         self.builder.current_source_span = prev_span;

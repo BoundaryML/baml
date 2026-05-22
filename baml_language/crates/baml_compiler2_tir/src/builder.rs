@@ -2058,6 +2058,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                     refs,
                 );
             }
+            Expr::Instantiation { base, .. } => {
+                Self::collect_default_expr_forward_references(
+                    *base,
+                    body,
+                    later_params,
+                    shadowed,
+                    refs,
+                );
+            }
             Expr::Literal(_) | Expr::ByteStringLiteral(_) | Expr::Null | Expr::Missing => {}
         }
     }
@@ -3175,6 +3184,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                             attr: TyAttr::default(),
                         }
                     }
+                }
+            }
+            Expr::Instantiation { .. } => {
+                // Real inference lands in a follow-up commit; this arm keeps
+                // exhaustiveness happy and returns `Unknown` so downstream
+                // type-checking is permissive until the proper substitution
+                // is wired up.
+                Ty::Unknown {
+                    attr: TyAttr::default(),
                 }
             }
             Expr::Missing => Ty::Unknown {
@@ -5252,6 +5270,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if let Some(Ty::Future(_value, error, _)) = self.expressions.get(future) {
                     out.extend(crate::throw_inference::flatten_ty_to_facts(error));
                 }
+            }
+            Expr::Instantiation { base, .. } => {
+                self.collect_throw_facts_from_expr(*base, body, out);
             }
             Expr::Lambda(_)
             | Expr::Literal(_)

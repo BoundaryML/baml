@@ -539,6 +539,9 @@ impl<'db> SemanticIndexBuilder<'db> {
                     }
                 }
             }
+            ast::Expr::Instantiation { base, .. } => {
+                self.walk_expr(*base, body, source_map, true);
+            }
             ast::Expr::Literal(_)
             | ast::Expr::ByteStringLiteral(_)
             | ast::Expr::Null

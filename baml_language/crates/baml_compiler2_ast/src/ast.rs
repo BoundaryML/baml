@@ -709,6 +709,18 @@ pub enum Expr {
     OptionalChain {
         expr: ExprId,
     },
+    /// TS-style instantiation expression: `f<string>` taken as a value
+    /// (no call follows). Binds the type arguments to the generic function
+    /// `base` and produces a non-generic function value.
+    ///
+    /// Only emitted by the lowerer when the syntactic `PATH_EXPR + GENERIC_ARGS`
+    /// is *not* the callee of a call and is *not* the receiver of a method
+    /// call (`Class<T>.method(...)`). Those cases continue to read the
+    /// generic args via `Call.type_args` and keep `base` as a plain `Path`.
+    Instantiation {
+        base: ExprId,
+        type_args: Vec<TypeExpr>,
+    },
     Missing,
 }
 

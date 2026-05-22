@@ -280,6 +280,9 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
         Expr::Await { future } => {
             collect_from_expr(context, *future, body, out);
         }
+        Expr::Instantiation { base, .. } => {
+            collect_from_expr(context, *base, body, out);
+        }
         Expr::Lambda(_)
         | Expr::Literal(_)
         | Expr::ByteStringLiteral(_)

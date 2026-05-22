@@ -647,6 +647,17 @@ fn expr_desc_spans<'db>(
             spans.push(DetailSpan::Code("await ".into()));
             spans.extend(expr_desc_spans(*future, body, inference));
         }
+        Expr::Instantiation { base, type_args } => {
+            spans.extend(expr_desc_spans(*base, body, inference));
+            spans.push(DetailSpan::Code(format!(
+                "<{}>",
+                type_args
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )));
+        }
         Expr::Missing => {
             spans.push(DetailSpan::Code("<missing>".into()));
         }
@@ -2105,6 +2116,15 @@ impl CompilerRunner {
                     format!("spawn {{ {} }}", expr_desc(*spawn_body, body))
                 }
                 Expr::Await { future } => format!("await {}", expr_desc(*future, body)),
+                Expr::Instantiation { base, type_args } => format!(
+                    "{}<{}>",
+                    expr_desc(*base, body),
+                    type_args
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
                 Expr::Missing => "<missing>".into(),
             }
         }
