@@ -157,6 +157,66 @@ function caller() -> string {
     insta::assert_snapshot!(render_tir(&db, file));
 }
 
+/// Multi-arg instantiation expression: `pair<int, string>` substitutes both
+/// type variables into the resulting non-generic signature.
+#[test]
+fn instantiation_expression_with_multiple_type_args() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function pair<A, B>(a: A, b: B) -> string { "ok" }
+function caller() -> string {
+    let cb = pair<int, string>;
+    "ok"
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file));
+}
+
+/// Wrong arity on an instantiation expression: `identity<int, string>`
+/// when `identity` takes one type parameter reports `WrongTypeArgArity`.
+#[test]
+fn instantiation_expression_wrong_arity_errors() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function identity<T>(x: T) -> T { x }
+function caller() -> int {
+    let cb = identity<int, string>;
+    1
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file));
+}
+
+/// Property access after an instantiation expression: `f<int>.method`.
+/// BAML's parser accepts it (`.` is in our follow set) and the
+/// FIELD_ACCESS_EXPR parent of EXPR_WITH_TYPE_ARGS short-circuits the
+/// `Expr::Instantiation` wrap.  This locks in the current behavior; a
+/// follow-up could choose to error like TS (TS1477) but for now we accept.
+#[test]
+fn instantiation_followed_by_member_access() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Holder<T> {
+    value T
+    function get(self) -> T { self.value }
+}
+function caller() -> int {
+    let inst = Holder<int> { value: 5 };
+    inst.get()
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file));
+}
+
 /// Multiple type params: explicit binding of two type vars resolves cleanly.
 #[test]
 fn explicit_two_type_args() {

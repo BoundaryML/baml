@@ -1,0 +1,27 @@
+---
+source: crates/baml_tests/src/compiler2_tir/explicit_type_args.rs
+expression: "render_tir(&db, file)"
+---
+class user.Holder {
+  value: T
+}
+function user.Holder.get(self: user.Holder) -> unknown throws never {
+  { : T
+    self.value : T
+  }
+}
+function user.Holder.to_json(self: user.Holder) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "value": baml.json.to_json(self.value) } : map<string, baml.json.json>
+}
+function user.Holder.from_json(j: baml.json.json) -> user.Holder<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Holder { value: baml.json.from_json<T>(baml.json.field(j, "value")) } : user.Holder<T>
+}
+function user.caller() -> int throws never {
+  { : int
+    let inst = Holder { value: 5 } : user.Holder<int>
+    inst.get() : int
+  }
+}
+class user.Holder$stream {
+  value: null | T
+}

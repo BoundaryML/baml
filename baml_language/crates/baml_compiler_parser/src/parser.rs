@@ -7615,4 +7615,217 @@ function Demo() -> int {
             .count();
         assert!(calls >= 1, "expected at least one CALL_EXPR");
     }
+
+    // ── TS-style instantiation expression disambiguation ────────────────────
+    //
+    // The follow-set committee mirrors TS-go's
+    // `canFollowTypeArgumentsInExpression`. The tests below pin the
+    // boundaries: which follow tokens commit to type-args and which keep
+    // `<` as a comparison.
+
+    #[test]
+    fn instantiation_followed_by_logical_and() {
+        let source = r#"
+function Demo() -> bool {
+  let r = f<int> && true;
+  r
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(count_instantiated_paths(&root), 1);
+    }
+
+    #[test]
+    fn instantiation_followed_by_logical_or() {
+        let source = r#"
+function Demo() -> bool {
+  let r = f<int> || true;
+  r
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(count_instantiated_paths(&root), 1);
+    }
+
+    #[test]
+    fn instantiation_followed_by_paren_starts_a_call() {
+        // `f<int>(x)` is the existing generic-call form — the `(` is a
+        // postfix call, not a follow that ambiguates with `(c)` grouping.
+        // We rely on this for all generic calls already.
+        let source = r#"
+function Demo() -> int {
+  f<int>(1)
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(count_instantiated_paths(&root), 1);
+        assert_eq!(
+            root.descendants()
+                .filter(|n| n.kind() == SyntaxKind::CALL_EXPR)
+                .count(),
+            1,
+        );
+    }
+
+    #[test]
+    fn paren_follow_commits_to_type_args() {
+        // TS-go documents this edge case: `(` after the closing `>` always
+        // commits to a type-arg interpretation, so `a < b > (c)` parses as
+        // a generic call `(a<b>)(c)` — same shape that lets `f<T>(args)`
+        // work.  Type-checking is what catches the bad shape (`a` isn't
+        // generic).  Compare TS-go's `f<true>\n(true)` test.
+        let source = r#"
+function Demo() -> bool {
+  let r = a < b > (c);
+  r
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(
+            count_instantiated_paths(&root),
+            1,
+            "`(` follow always commits to type args (matches TS-go)",
+        );
+    }
+
+    #[test]
+    fn comparison_followed_by_subscript_stays_comparison() {
+        // `f<int>['g']` — the `[` after `>` starts an expression, so the
+        // `<...>` must stay a comparison (mirrors TS-go: `[` is an
+        // expression-starter and cannot follow a type argument list).
+        let source = r#"
+function Demo() -> bool {
+  let r = f < int > ["g"];
+  r
+}
+"#;
+        let (root, errors) = parse_source(source);
+        // Whitespace matters: the spaces force the lexer to keep `int` as a
+        // distinct token rather than letting the parser commit to type-args.
+        // The interpretation we care about: closing `>` is followed by `[`
+        // (expression starter) so the lookahead must reject the type-arg
+        // interpretation.
+        assert_no_errors(&errors);
+        assert_eq!(count_instantiated_paths(&root), 0);
+    }
+
+    #[test]
+    fn instantiation_with_multiple_type_args() {
+        let source = r#"
+function Demo() -> int {
+  let cb = pair<int, string>;
+  1
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(count_instantiated_paths(&root), 1);
+        let type_args_count = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::GENERIC_ARGS)
+            .map(|args| {
+                args.children()
+                    .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+                    .count()
+            })
+            .unwrap_or(0);
+        assert_eq!(type_args_count, 2, "expected two TYPE_EXPR children");
+    }
+
+    #[test]
+    fn instantiation_in_return_position() {
+        let source = r#"
+function Demo() -> (x: int) -> int {
+  return f<int>;
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(count_instantiated_paths(&root), 1);
+    }
+
+    #[test]
+    fn instantiation_as_call_argument() {
+        let source = r#"
+function Demo() -> int {
+  g(f<int>)
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        // Two CALL_EXPRs would mean both `g(...)` and `f<int>(...)` —
+        // but `f<int>` here is a value, not a call, so we should see
+        // exactly one CALL_EXPR (for g) and one EXPR_WITH_TYPE_ARGS
+        // (for f<int>).
+        assert_eq!(count_instantiated_paths(&root), 1);
+        assert_eq!(
+            root.descendants()
+                .filter(|n| n.kind() == SyntaxKind::CALL_EXPR)
+                .count(),
+            1,
+        );
+    }
+
+    #[test]
+    fn instantiation_inside_array_literal() {
+        let source = r#"
+function Demo() -> int {
+  let xs = [f<int>, g<string>];
+  1
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(
+            count_instantiated_paths(&root),
+            2,
+            "expected two instantiation expressions inside the array",
+        );
+    }
+
+    #[test]
+    fn instantiation_followed_by_optional_call_parses() {
+        // `f<int>?.(x)` — optional call after instantiation.  The `?.`
+        // sequence is `QuestionDot`, which is in our follow set for
+        // committing to type-args.
+        let source = r#"
+function Demo() -> int {
+  f<int>?.(1)
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(count_instantiated_paths(&root), 1);
+        assert!(
+            root.descendants()
+                .any(|n| n.kind() == SyntaxKind::OPTIONAL_CALL_EXPR),
+            "expected an OPTIONAL_CALL_EXPR",
+        );
+    }
+
+    #[test]
+    fn property_access_after_instantiation_parses() {
+        // `f<int>.method` — `.` follows the closing `>`.  The `.` is a
+        // postfix follow that commits to type-args.  Compare with TS, which
+        // ERRORS on `instantiation expression cannot be followed by a
+        // property access` — BAML currently accepts it at the parser level
+        // and lets downstream handling decide.
+        let source = r#"
+function Demo() -> int {
+  f<int>.method
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(count_instantiated_paths(&root), 1);
+        assert!(
+            root.descendants()
+                .any(|n| n.kind() == SyntaxKind::FIELD_ACCESS_EXPR),
+            "expected the `.method` to attach as a FIELD_ACCESS_EXPR",
+        );
+    }
 }

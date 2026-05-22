@@ -504,3 +504,111 @@ async fn parenthesized_lambda_instantiation_runs() {
         Ok(BexExternalValue::String("hi".to_string()))
     );
 }
+
+/// Instantiation as a function-call argument.  `g(f<string>)` lowers the
+/// inner `f<string>` to an `InstantiatedFunction` value that `g` receives
+/// and can invoke.
+#[tokio::test]
+async fn instantiation_as_call_argument_runs() {
+    let output = baml_test!(
+        "
+        function identity<T>(x: T) -> T { x }
+        function apply(cb: (x: string) -> string) -> string {
+            cb(\"called\")
+        }
+        function main() -> string {
+            apply(identity<string>)
+        }
+    "
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("called".to_string()))
+    );
+}
+
+/// Instantiation in return position: `return f<string>;`.  The returned
+/// value is invokable by the caller.
+#[tokio::test]
+async fn instantiation_in_return_position_runs() {
+    let output = baml_test!(
+        "
+        function identity<T>(x: T) -> T { x }
+        function get_callback() -> (x: string) -> string {
+            return identity<string>;
+        }
+        function main() -> string {
+            let cb = get_callback();
+            cb(\"returned\")
+        }
+    "
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("returned".to_string()))
+    );
+}
+
+/// Instantiation inside an array literal.  Stores two instantiated function
+/// values and invokes the first one.
+#[tokio::test]
+async fn instantiation_in_array_runs() {
+    let output = baml_test!(
+        "
+        function identity<T>(x: T) -> T { x }
+        function main() -> string {
+            let fns = [identity<string>, identity<string>];
+            fns[0](\"arr\")
+        }
+    "
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("arr".to_string()))
+    );
+}
+
+/// Multi-arg instantiation.  `pair<int, string>` binds both `A` and `B`
+/// into the function's signature; calling it then returns the right shape.
+#[tokio::test]
+async fn instantiation_with_multiple_type_args_runs() {
+    let output = baml_test!(
+        "
+        function pair<A, B>(a: A, b: B) -> string { \"ok\" }
+        function main() -> string {
+            let p = pair<int, string>;
+            p(1, \"two\")
+        }
+    "
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("ok".to_string()))
+    );
+}
+
+/// Calling an instantiated callback twice in a row exercises the
+/// no-shared-state guarantee — `bound_type_args` shouldn't be consumed by
+/// the first call.
+#[tokio::test]
+async fn instantiated_callback_can_be_invoked_twice() {
+    let output = baml_test!(
+        "
+        function identity<T>(x: T) -> T { x }
+        function main() -> string {
+            let cb = identity<string>;
+            cb(\"once\")
+            cb(\"twice\")
+        }
+    "
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("twice".to_string()))
+    );
+}
+
+// Wrong-arity diagnostic is exercised at the TIR layer; see
+// `instantiation_expression_wrong_arity_errors` in
+// `compiler2_tir::explicit_type_args`. `baml_test!` panics on TIR-level
+// compile errors, so it isn't a great fit for asserting on them.
