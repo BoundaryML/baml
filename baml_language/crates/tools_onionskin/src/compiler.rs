@@ -4055,7 +4055,7 @@ impl CompilerRunner {
 
             // Format the source code using baml_fmt
             let format_options = baml_fmt::FormatOptions::default();
-            match baml_fmt::format_salsa(&self.db, *source_file, &format_options) {
+            match baml_fmt::format_salsa(&self.db, *source_file, format_options) {
                 Ok(formatted) => {
                     writeln!(output, "{}", formatted).ok();
                     let status = if file_recomputed {
