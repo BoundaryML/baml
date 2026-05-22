@@ -98,12 +98,10 @@ function user.Point.to_json(self: null) -> baml.json.json {
 
 function user.add_assign() -> int {
     load_const 10
-    store_var x
-    load_var x
+    store_var_load_var x
     load_const 5
     add_int
-    store_var x
-    load_var x
+    store_var_load_var x
     return
 }
 
@@ -350,12 +348,10 @@ function user.let_statements() -> int {
 
 function user.mul_assign() -> int {
     load_const 3
-    store_var x
-    load_var x
+    store_var_load_var x
     load_const 4
     mul_int
-    store_var x
-    load_var x
+    store_var_load_var x
     return
 }
 
@@ -484,8 +480,7 @@ function user.simple_assign() -> int {
     load_const 1
     store_var x
     load_const 5
-    store_var x
-    load_var x
+    store_var_load_var x
     return
 }
 
@@ -534,11 +529,9 @@ function user.simple_while_loop() -> int {
 
 function user.sub_assign() -> int {
     load_const 10
-    store_var x
-    load_var x
+    store_var_load_var x
     load_const 3
     sub_int
-    store_var x
-    load_var x
+    store_var_load_var x
     return
 }

@@ -303,6 +303,9 @@ struct StackifyCodegen<'ctx, 'obj> {
     /// The next block in RPO order (for fall-through optimization).
     next_block: Option<BlockId>,
 
+    /// Instruction index where the currently emitted basic block starts.
+    current_block_start: usize,
+
     /// Watched locals that have already had Watch instruction emitted.
     /// We only emit Watch once per watched local (at initialization).
     watched_locals_initialized: HashSet<Local>,
@@ -374,6 +377,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             pending_sequence_point: false,
             next_line_discriminator: HashMap::new(),
             next_block: None,
+            current_block_start: 0,
             watched_locals_initialized: HashSet::new(),
             block_notifications: Vec::new(),
             local_types: HashMap::new(),
@@ -604,7 +608,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 continue;
             }
 
-            self.block_addresses.insert(block_id, self.current_pc());
+            let block_start = self.current_pc();
+            self.block_addresses.insert(block_id, block_start);
+            self.current_block_start = block_start;
             let block = mir.block(block_id);
             self.emit_block(block);
         }
@@ -826,6 +832,22 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         self.bytecode.meta.push(InstructionMeta { operand: None });
         self.emit_line_table_entry(index);
         index
+    }
+
+    fn emit_load_var(&mut self, slot: usize) {
+        if matches!(
+            self.bytecode.instructions.last(),
+            Some(Instruction::StoreVar(prev_slot)) if *prev_slot == slot
+        ) {
+            let last_idx = self.bytecode.instructions.len() - 1;
+            if last_idx >= self.current_block_start {
+                self.bytecode.instructions[last_idx] = Instruction::StoreVarLoadVar(slot);
+                return;
+            }
+        }
+
+        let inst = self.emit(Instruction::LoadVar(slot));
+        self.set_var_operand(inst, slot);
     }
 
     /// Set the resolved operand metadata for an already-emitted instruction.
@@ -2381,8 +2403,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 if self.captured_locals.contains(&source) && !self.loading_for_closure_capture {
                     self.emit(Instruction::LoadDeref(slot));
                 } else {
-                    let inst = self.emit(Instruction::LoadVar(slot));
-                    self.set_var_operand(inst, slot);
+                    self.emit_load_var(slot);
                 }
                 LocalPullAction::Done
             }
@@ -2395,8 +2416,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
                     self.emit(Instruction::LoadDeref(slot));
                 } else {
                     // Normal local or loading cell pointer for MakeClosure.
-                    let inst = self.emit(Instruction::LoadVar(slot));
-                    self.set_var_operand(inst, slot);
+                    self.emit_load_var(slot);
                 }
                 LocalPullAction::Done
             }

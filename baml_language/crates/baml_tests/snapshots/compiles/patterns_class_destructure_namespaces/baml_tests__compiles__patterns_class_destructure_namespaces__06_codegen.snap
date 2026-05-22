@@ -44,8 +44,7 @@ function user.DestructureNamespaceQualifiedMatch() -> int {
     init_field .text
     load_const 46
     init_field .score
-    store_var response
-    load_var response
+    store_var_load_var response
     is_type llm.openai.Response
     pop_jump_if_false L0
     load_var response
@@ -83,8 +82,7 @@ function user.DestructureQualifiedMatch() -> int {
     init_field .text
     load_const 42
     init_field .score
-    store_var response
-    load_var response
+    store_var_load_var response
     is_type llm.openai.Response
     pop_jump_if_false L0
     load_var response

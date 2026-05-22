@@ -2403,8 +2403,7 @@ function baml.llm.Client.build_plan(self: null) -> baml.llm.OrchestrationStep[] 
 function baml.llm.Client.build_plan_with_state(self: null, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] {
     load_var self
     load_field .retry
-    store_var _3
-    load_var _3
+    store_var_load_var _3
     is_type baml.llm.RetryPolicy
     pop_jump_if_false L0
     jump L1
@@ -2456,8 +2455,7 @@ function baml.llm.Client.build_plan_with_state(self: null, planner_state: baml.l
     load_var r
     load_field .multiplier
     mul_float
-    store_var next
-    load_var next
+    store_var_load_var next
     load_var r
     load_field .max_delay_ms
     load_const 0.0
@@ -2827,8 +2825,7 @@ function baml.llm.Client.execute_once_stream(self: null, context: baml.llm.Execu
 function baml.llm.Client.execute_oneshot(self: null, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> void {
     load_var self
     load_field .retry
-    store_var _4
-    load_var _4
+    store_var_load_var _4
     is_type baml.llm.RetryPolicy
     pop_jump_if_false L0
     jump L1
@@ -2843,8 +2840,7 @@ function baml.llm.Client.execute_oneshot(self: null, context: baml.llm.Execution
 
   L1:
     load_var _4
-    store_var r
-    load_var r
+    store_var_load_var r
     load_field .initial_delay_ms
     load_const 0.0
     bin_op +
@@ -2880,8 +2876,7 @@ function baml.llm.Client.execute_oneshot(self: null, context: baml.llm.Execution
     load_var r
     load_field .multiplier
     mul_float
-    store_var next
-    load_var next
+    store_var_load_var next
     load_var r
     load_field .max_delay_ms
     load_const 0.0
@@ -2933,8 +2928,7 @@ function baml.llm.Client.execute_oneshot(self: null, context: baml.llm.Execution
 function baml.llm.Client.execute_stream(self: null, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> baml.llm.Stream<unknown, unknown> {
     load_var self
     load_field .retry
-    store_var _4
-    load_var _4
+    store_var_load_var _4
     is_type baml.llm.RetryPolicy
     pop_jump_if_false L0
     jump L1
@@ -2950,8 +2944,7 @@ function baml.llm.Client.execute_stream(self: null, context: baml.llm.ExecutionC
 
   L1:
     load_var _4
-    store_var r
-    load_var r
+    store_var_load_var r
     load_field .initial_delay_ms
     load_const 0.0
     bin_op +
@@ -2987,8 +2980,7 @@ function baml.llm.Client.execute_stream(self: null, context: baml.llm.ExecutionC
     load_var r
     load_field .multiplier
     mul_float
-    store_var next
-    load_var next
+    store_var_load_var next
     load_var r
     load_field .max_delay_ms
     load_const 0.0

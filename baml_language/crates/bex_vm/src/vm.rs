@@ -1375,6 +1375,57 @@ impl BexVm {
         StackIndex::from_raw(locals_offset.raw() + slot - 1)
     }
 
+    fn store_local_value(
+        &mut self,
+        local_var_index: StackIndex,
+        value: Value,
+    ) -> Result<Option<VmExecState>, VmError> {
+        // Old value being replaced.
+        let old_value = std::mem::replace(&mut self.stack[local_var_index], value);
+
+        // If this local is watched, update the watch graph.
+        //
+        // A watched local is a root in the watch graph. When
+        // reassigned (e.g. `v = new_val`), three things happen:
+        //
+        // 1. `update_watched_node` handles edge topology: unlinks
+        //    the old binding (so mutations to the old object no
+        //    longer trigger notifications), links the new one, and
+        //    deep-copies the previous root state into
+        //    `last_assigned` so the notification filter can diff
+        //    old vs new.
+        //
+        // 2. `state.value` is updated to the new value. This is
+        //    specific to local stores — for field/array/map stores
+        //    the root's top-level binding hasn't changed, but here
+        //    the root itself is being rebound.
+        //
+        // 3. `process_notifications` walks all roots reaching this
+        //    node (just itself, since it IS a root) and applies
+        //    the watch filter to decide whether to notify.
+        if unlikely(!self.watched_vars.is_empty())
+            && self.watched_vars.contains_key(&local_var_index)
+        {
+            let watched_node = NodeId::LocalVar(local_var_index);
+
+            self.update_watched_node(watched_node, watch::Path::Binding, old_value, value);
+
+            if let Some(state) = self.watch.root_state_mut(watched_node) {
+                state.value = value;
+            }
+
+            let notifications = self.process_notifications(watched_node)?;
+
+            if !notifications.is_empty() {
+                return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
+                    notifications,
+                ))));
+            }
+        }
+
+        Ok(None)
+    }
+
     pub fn error_to_exception_value(&mut self, error: VmBamlError) -> Value {
         let (class, fields) = match error {
             VmBamlError::InvalidArgument { message } => (
@@ -2561,47 +2612,27 @@ impl BexVm {
                 // New value.
                 let value = self.stack.ensure_pop();
 
-                // Old value being replaced.
-                let old_value = std::mem::replace(&mut self.stack[local_var_index], value);
+                if let Some(state) = self.store_local_value(local_var_index, value)? {
+                    return Ok(Some(state));
+                }
+            }
 
-                // If this local is watched, update the watch graph.
-                //
-                // A watched local is a root in the watch graph. When
-                // reassigned (e.g. `v = new_val`), three things happen:
-                //
-                // 1. `update_watched_node` handles edge topology: unlinks
-                //    the old binding (so mutations to the old object no
-                //    longer trigger notifications), links the new one, and
-                //    deep-copies the previous root state into
-                //    `last_assigned` so the notification filter can diff
-                //    old vs new.
-                //
-                // 2. `state.value` is updated to the new value. This is
-                //    specific to `StoreVar` — for field/array/map stores
-                //    the root's top-level binding hasn't changed, but here
-                //    the root itself is being rebound.
-                //
-                // 3. `process_notifications` walks all roots reaching this
-                //    node (just itself, since it IS a root) and applies
-                //    the watch filter to decide whether to notify.
-                if unlikely(!self.watched_vars.is_empty())
-                    && self.watched_vars.contains_key(&local_var_index)
-                {
-                    let watched_node = NodeId::LocalVar(local_var_index);
-
-                    self.update_watched_node(watched_node, watch::Path::Binding, old_value, value);
-
-                    if let Some(state) = self.watch.root_state_mut(watched_node) {
-                        state.value = value;
+            Instruction::StoreVarLoadVar(index) => {
+                let bf = unsafe {
+                    match self.frames.get_unchecked(*frame_idx) {
+                        Frame::Bytecode(bf) => bf,
+                        Frame::Native(_) => std::hint::unreachable_unchecked(),
                     }
+                };
+                // Absolute index of the local variable.
+                let local_var_index = Self::local_slot_stack_index(bf.locals_offset, index);
 
-                    let notifications = self.process_notifications(watched_node)?;
+                // Store a copy of the top value and leave it available for the next instruction.
+                let value_slot = self.stack.ensure_slot_from_top(0);
+                let value = self.stack[value_slot];
 
-                    if !notifications.is_empty() {
-                        return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
-                            notifications,
-                        ))));
-                    }
+                if let Some(state) = self.store_local_value(local_var_index, value)? {
+                    return Ok(Some(state));
                 }
             }
 
@@ -5403,25 +5434,21 @@ impl BexVm {
                     };
                     let local_var_index = Self::local_slot_stack_index(bf.locals_offset, slot);
                     let value = self.stack.ensure_pop();
-                    let old_value = std::mem::replace(&mut self.stack[local_var_index], value);
+                    if let Some(state) = self.store_local_value(local_var_index, value)? {
+                        return Ok(Some(state));
+                    }
+                }
 
-                    if self.watched_vars.contains_key(&local_var_index) {
-                        let watched_node = NodeId::LocalVar(local_var_index);
-                        self.update_watched_node(
-                            watched_node,
-                            watch::Path::Binding,
-                            old_value,
-                            value,
-                        );
-                        if let Some(state) = self.watch.root_state_mut(watched_node) {
-                            state.value = value;
-                        }
-                        let notifications = self.process_notifications(watched_node)?;
-                        if !notifications.is_empty() {
-                            return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
-                                notifications,
-                            ))));
-                        }
+                OpCode::StoreVarLoadVar => {
+                    let slot = { read_u32_unchecked(code, pc) as usize };
+                    let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                        unreachable!()
+                    };
+                    let local_var_index = Self::local_slot_stack_index(bf.locals_offset, slot);
+                    let value_slot = self.stack.ensure_slot_from_top(0);
+                    let value = self.stack[value_slot];
+                    if let Some(state) = self.store_local_value(local_var_index, value)? {
+                        return Ok(Some(state));
                     }
                 }
 

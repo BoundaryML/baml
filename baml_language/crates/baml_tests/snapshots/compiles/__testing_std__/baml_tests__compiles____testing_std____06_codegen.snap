@@ -177,8 +177,7 @@ function testing.TestCollector.find_testset(self: null, name: string) -> testing
     load_var _3
     load_var __for_idx
     load_array_element
-    store_var ts
-    load_var ts
+    store_var_load_var ts
     load_field .name
     load_var name
     cmp_op ==
@@ -332,8 +331,7 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
     load_var _13
     load_var __for_idx
     load_array_element
-    store_var t
-    load_var t
+    store_var_load_var t
     load_field .name
     load_var full_name
     cmp_op ==
@@ -451,8 +449,7 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
     load_var _13
     load_var __for_idx
     load_array_element
-    store_var ts
-    load_var ts
+    store_var_load_var ts
     load_field .name
     load_var full_name
     cmp_op ==
@@ -620,8 +617,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
     load_var _3
     load_var __for_idx
     load_array_element
-    store_var ts
-    load_var ts
+    store_var_load_var ts
     load_field .name
     load_var name
     cmp_op ==
@@ -645,8 +641,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
     init_field .tests
     alloc_array 0
     init_field .testsets
-    store_var sub_collector
-    load_var sub_collector
+    store_var_load_var sub_collector
     load_var ts
     load_field .collector
     call_indirect
@@ -793,8 +788,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
     load_var _3
     load_var __for_idx
     load_array_element
-    store_var t
-    load_var t
+    store_var_load_var t
     load_field .name
     load_var name
     cmp_op ==

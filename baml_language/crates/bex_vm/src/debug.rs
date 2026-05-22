@@ -150,6 +150,7 @@ pub(crate) fn display_instruction(
         }
         Instruction::LoadVar(index)
         | Instruction::StoreVar(index)
+        | Instruction::StoreVarLoadVar(index)
         | Instruction::Watch(index)
         | Instruction::Unwatch(index)
         | Instruction::Notify(index) => match function.local_names.get(*index) {
@@ -347,6 +348,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
         | Instruction::LoadArrayElement
         | Instruction::LoadMapElement => Color::Blue,
         Instruction::StoreVar(_)
+        | Instruction::StoreVarLoadVar(_)
         | Instruction::StoreGlobal(_)
         | Instruction::StoreField(_)
         | Instruction::InitField(_)
@@ -690,6 +692,7 @@ fn display_instruction_textual(
         // --- Variables ---
         Instruction::LoadVar(idx) => format!("load_var {}", meta_str(idx)),
         Instruction::StoreVar(idx) => format!("store_var {}", meta_str(idx)),
+        Instruction::StoreVarLoadVar(idx) => format!("store_var_load_var {}", meta_str(idx)),
 
         // --- Globals ---
         Instruction::LoadGlobal(idx) => format!("load_global {}", meta_str(&idx.raw())),
@@ -1057,6 +1060,7 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         Instruction::LoadConst(_)
         | Instruction::LoadVar(_)
         | Instruction::StoreVar(_)
+        | Instruction::StoreVarLoadVar(_)
         | Instruction::LoadGlobal(_)
         | Instruction::StoreGlobal(_)
         | Instruction::LoadField(_)
@@ -1236,6 +1240,7 @@ pub fn display_compact_bytecode(
             // Single u32 operand (index/slot)
             OpCode::LoadVar
             | OpCode::StoreVar
+            | OpCode::StoreVarLoadVar
             | OpCode::LoadGlobal
             | OpCode::StoreGlobal
             | OpCode::LoadField

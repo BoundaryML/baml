@@ -413,8 +413,7 @@ function user.test_mutation_after_bind() -> int {
     alloc_instance user.Counter
     load_const 0
     init_field .value
-    store_var c
-    load_var c
+    store_var_load_var c
     make_bound_method user.Counter.increment
     store_var inc
     load_var c
@@ -430,8 +429,7 @@ function user.test_repeated_bound_calls() -> int {
     load_const 0
     init_field .value
     make_bound_method user.Counter.increment
-    store_var inc
-    load_var inc
+    store_var_load_var inc
     call_indirect
     pop 1
     load_var inc

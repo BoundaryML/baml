@@ -191,6 +191,14 @@ pub enum Instruction {
     /// `Vm::stack` array.
     StoreVar(usize),
 
+    /// Stores the stack top in the frame's local variable slots and leaves it on the stack.
+    ///
+    /// Equivalent to `STORE_VAR i; LOAD_VAR i`, but without the redundant local reload.
+    ///
+    /// Format: `STORE_VAR_LOAD_VAR i` where `i` is the relative index of the variable
+    /// in `Vm::stack` array.
+    StoreVarLoadVar(usize),
+
     /// Load a global variable from the `Vm::globals` array.
     ///
     /// Format: `LOAD_GLOBAL i` where `i` is the index of the global variable
@@ -743,6 +751,7 @@ pub enum OpCode {
     LoadConst,
     LoadVar,
     StoreVar,
+    StoreVarLoadVar,
     LoadGlobal,
     StoreGlobal,
     LoadField,
@@ -854,6 +863,7 @@ impl OpCode {
             Self::LoadConst
             | Self::LoadVar
             | Self::StoreVar
+            | Self::StoreVarLoadVar
             | Self::LoadGlobal
             | Self::StoreGlobal
             | Self::LoadField
@@ -962,6 +972,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::LoadConst as u8 => Ok(Self::LoadConst),
             x if x == Self::LoadVar as u8 => Ok(Self::LoadVar),
             x if x == Self::StoreVar as u8 => Ok(Self::StoreVar),
+            x if x == Self::StoreVarLoadVar as u8 => Ok(Self::StoreVarLoadVar),
             x if x == Self::LoadGlobal as u8 => Ok(Self::LoadGlobal),
             x if x == Self::StoreGlobal as u8 => Ok(Self::StoreGlobal),
             x if x == Self::LoadField as u8 => Ok(Self::LoadField),
@@ -1065,6 +1076,7 @@ impl std::fmt::Display for OpCode {
             Self::LoadConst => "LOAD_CONST",
             Self::LoadVar => "LOAD_VAR",
             Self::StoreVar => "STORE_VAR",
+            Self::StoreVarLoadVar => "STORE_VAR_LOAD_VAR",
             Self::LoadGlobal => "LOAD_GLOBAL",
             Self::StoreGlobal => "STORE_GLOBAL",
             Self::LoadField => "LOAD_FIELD",
@@ -1293,6 +1305,7 @@ impl std::fmt::Display for Instruction {
             Instruction::LoadConst(i) => write!(f, "LOAD_CONST {i}"),
             Instruction::LoadVar(i) => write!(f, "LOAD_VAR {i}"),
             Instruction::StoreVar(i) => write!(f, "STORE_VAR {i}"),
+            Instruction::StoreVarLoadVar(i) => write!(f, "STORE_VAR_LOAD_VAR {i}"),
             Instruction::LoadGlobal(i) => write!(f, "LOAD_GLOBAL {i}"),
             Instruction::StoreGlobal(i) => write!(f, "STORE_GLOBAL {i}"),
             Instruction::LoadField(i) => write!(f, "LOAD_FIELD {i}"),
@@ -1790,6 +1803,7 @@ impl Bytecode {
                 // ── Single usize operand → u32 ─────────────────────
                 Instruction::LoadVar(v)
                 | Instruction::StoreVar(v)
+                | Instruction::StoreVarLoadVar(v)
                 | Instruction::LoadField(v)
                 | Instruction::StoreField(v)
                 | Instruction::InitField(v)
@@ -2062,6 +2076,7 @@ impl Bytecode {
             // Single-operand variants
             Instruction::LoadVar(_) => OpCode::LoadVar,
             Instruction::StoreVar(_) => OpCode::StoreVar,
+            Instruction::StoreVarLoadVar(_) => OpCode::StoreVarLoadVar,
             Instruction::LoadGlobal(_) => OpCode::LoadGlobal,
             Instruction::StoreGlobal(_) => OpCode::StoreGlobal,
             Instruction::LoadField(_) => OpCode::LoadField,
