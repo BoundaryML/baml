@@ -16,6 +16,25 @@
 
 use std::{collections::HashMap, sync::Arc};
 
+/// Branch hint: tells the compiler this condition is almost never true.
+/// Used on the cold side of `if unlikely(cond) { ... }` in the dispatch
+/// loop's hot path — measurably faster than letting the compiler guess
+/// for checks like "any watch installed?" that fire on every variable
+/// store but are virtually always false outside of a debug session.
+#[allow(clippy::inline_always)]
+#[inline(always)]
+#[cold]
+fn cold() {}
+
+#[allow(clippy::inline_always)]
+#[inline(always)]
+fn unlikely(b: bool) -> bool {
+    if b {
+        cold();
+    }
+    b
+}
+
 use ::bex_heap::TlabHolder;
 use ::bex_vm_types::{
     EarlyYieldCheck, RootHaver,
@@ -2784,7 +2803,13 @@ impl BexVm {
                     let value = self.stack.ensure_pop();
                     let old_value = std::mem::replace(&mut self.stack[local_var_index], value);
 
-                    if self.watched_vars.contains_key(&local_var_index) {
+                    // Short-circuit the common case (no watches installed)
+                    // via the branch hint before paying for the hashmap
+                    // lookup. Measurable on `StoreVar`-heavy workloads
+                    // (every variable assignment hits this path).
+                    if unlikely(!self.watched_vars.is_empty())
+                        && self.watched_vars.contains_key(&local_var_index)
+                    {
                         let watched_node = NodeId::LocalVar(local_var_index);
                         self.update_watched_node(
                             watched_node,
