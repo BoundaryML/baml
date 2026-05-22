@@ -659,6 +659,23 @@ fn simulate_rvalue_pull_stack(
         sim.push();
         return true;
     }
+    // MakeInstantiatedFunction: pushes one Object::Type per type arg,
+    // then a single Object::InstantiatedFunction.  Net stack effect: +1
+    // (type args are popped during MakeInstantiatedFunction execution).
+    if let Rvalue::MakeInstantiatedFunction {
+        type_arg_templates, ..
+    } = rvalue
+    {
+        // ntypeargs pushes, then they're consumed and a single value is pushed.
+        for _ in 0..type_arg_templates.len() {
+            sim.push();
+        }
+        if !sim.pop_n(type_arg_templates.len()) {
+            return false;
+        }
+        sim.push();
+        return true;
+    }
     let mut sink = StackCarryPullSink {
         sim,
         carried_local,

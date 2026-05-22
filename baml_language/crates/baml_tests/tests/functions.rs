@@ -452,3 +452,28 @@ async fn function_as_value() {
 
     assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
 }
+
+/// TS-style instantiation expression: bind type args at the value site.
+///
+/// `let cb = identity<string>;` produces an
+/// `Object::InstantiatedFunction` with `bound_type_args = [string]`.
+/// At call time the VM seeds `frame.type_args = [string]` so any
+/// `reflect.type_of<T>()` (or other `TypeArgRef(N)` use) inside
+/// `identity` resolves correctly.
+#[tokio::test]
+async fn instantiation_expression_runs() {
+    let output = baml_test!(
+        "
+        function identity<T>(x: T) -> T { x }
+        function main() -> string {
+            let cb = identity<string>;
+            cb(\"hi\")
+        }
+    "
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("hi".to_string()))
+    );
+}

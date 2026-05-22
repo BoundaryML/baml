@@ -2428,16 +2428,8 @@ impl LoweringContext<'_> {
                 self.lower_await(expr_id, future, dest);
             }
 
-            AstExpr::Instantiation { .. } => {
-                // Runtime support for instantiation expressions (a function
-                // value with bound type args) lands in a follow-up commit.
-                // For now, emit a panic so the type-checker stays sound
-                // (TIR still infers the right shape) but execution surfaces
-                // a clear error if anyone actually tries to call this.
-                self.emit_panic_call(
-                    "instantiation expression runtime support not yet implemented",
-                    expr_id,
-                );
+            AstExpr::Instantiation { base, type_args } => {
+                self.lower_instantiation(expr_id, base, &type_args, dest);
             }
         }
 
@@ -2527,6 +2519,127 @@ impl LoweringContext<'_> {
             self.builder
                 .assign(projection, Rvalue::Use(Operand::Copy(await_dest)));
         }
+    }
+
+    /// Lower a TS-style instantiation expression `f<T1, T2, ...>`.
+    ///
+    /// Resolves the base to a free-function `ItemRef`, lowers each
+    /// `TypeExpr` to a `TyTemplate` (so the VM can substitute
+    /// enclosing-frame `TypeArgRef(N)` slots at execution time), and
+    /// emits `Rvalue::MakeInstantiatedFunction`.  At call time, the VM
+    /// pops the bound type args and seeds them into `frame.type_args`.
+    ///
+    /// If the base cannot be resolved to a free function (e.g. it's a
+    /// method reference, a local, or unresolved), falls back to lowering
+    /// the base as-is — TIR will have already reported the diagnostic.
+    fn lower_instantiation(
+        &mut self,
+        expr_id: AstExprId,
+        base: AstExprId,
+        type_args: &[AstTypeExpr],
+        dest: Place,
+    ) {
+        let item_ref = self.resolve_instantiation_base_to_item_ref(base);
+
+        if let Some(item_ref) = item_ref {
+            let type_arg_templates = self.lower_type_args_to_templates(type_args);
+            self.builder.assign(
+                dest,
+                Rvalue::MakeInstantiatedFunction {
+                    item_ref,
+                    type_arg_templates,
+                },
+            );
+            return;
+        }
+
+        // Fallback: base is not a resolvable free-function reference (TIR
+        // should have reported the relevant diagnostic).  Lower the base
+        // as a value — the type-args information is dropped at this layer
+        // but TIR's `Expr::Instantiation` arm already populated the
+        // expression's type, so type-checking remains sound.
+        self.lower_expr(base, dest);
+        let _ = expr_id;
+    }
+
+    /// Resolve an instantiation-expression base to its underlying free
+    /// function's `ItemRef`, returning `None` for any shape we don't
+    /// currently support (bound methods, locals, unresolved).
+    fn resolve_instantiation_base_to_item_ref(&self, base: AstExprId) -> Option<ItemRef> {
+        let segments = match &self.body.exprs[base] {
+            AstExpr::Path(segs) if !segs.is_empty() => segs.clone(),
+            _ => return None,
+        };
+
+        // Single-segment: name resolution via the binding scope.
+        if segments.len() == 1 {
+            let name = &segments[0];
+            if self.locals.contains_key(name) {
+                return None;
+            }
+            let span_start = self
+                .source_map
+                .as_ref()
+                .map(|sm| sm.expr_span(base).start())
+                .unwrap_or_default();
+            let resolved = resolve_name_at_in_scope(
+                self.db,
+                self.file,
+                span_start,
+                name,
+                self.scope_func_name.as_ref(),
+            );
+            return match resolved {
+                ResolvedName::Item(def) | ResolvedName::Builtin(def) => {
+                    Some(def_to_item_ref(self.db, def))
+                }
+                _ => None,
+            };
+        }
+
+        // Multi-segment: prefer the flat TIR resolution (set by
+        // `infer_multi_segment_path` for package-rooted paths).
+        if let Some(resolution) = self.resolutions.get(&self.expr_metadata_key(base)) {
+            return resolution_to_item_ref(self.db, resolution);
+        }
+        // Then fall back to the per-segment path resolutions captured by
+        // `infer_local_rooted_path` (the last entry corresponds to the
+        // final segment).
+        if let Some(member_resolutions) = self
+            .path_member_resolutions
+            .get(&self.expr_metadata_key(base))
+        {
+            if let Some(last) = member_resolutions.last() {
+                return resolution_to_item_ref(self.db, last);
+            }
+        }
+        None
+    }
+
+    /// Convert an instantiation's `Vec<TypeExpr>` into a `Vec<TyTemplate>`
+    /// suitable for `Rvalue::MakeInstantiatedFunction`. Mirrors the
+    /// `reflect.type_of<T>()` path used for call-site type args.
+    fn lower_type_args_to_templates(&self, type_args: &[AstTypeExpr]) -> Vec<TyTemplate> {
+        use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
+        let pkg_info = file_package(self.db, self.file);
+        let pkg_id = PackageId::new(self.db, pkg_info.package);
+        let pkg_items = package_items(self.db, pkg_id);
+        let generic_params = self.enclosing_generic_params();
+
+        let mut templates = Vec::with_capacity(type_args.len());
+        for ty_expr in type_args {
+            let mut diags = Vec::new();
+            let tir_ty = lower_type_expr_in_ns(
+                self.db,
+                ty_expr,
+                pkg_items,
+                &pkg_info.namespace_path,
+                &generic_params,
+                &mut diags,
+            );
+            templates.push(self.ty_to_template(&tir_ty, &generic_params));
+        }
+        templates
     }
 }
 

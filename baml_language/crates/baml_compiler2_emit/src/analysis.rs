@@ -723,6 +723,9 @@ fn walk_rvalue_locals(rvalue: &Rvalue, f: &mut impl FnMut(Local)) {
         Rvalue::MakeBoundMethod { receiver, .. } => {
             walk_operand_locals(receiver, f);
         }
+        Rvalue::MakeInstantiatedFunction { .. } => {
+            // No local operands — only compile-time type-arg templates.
+        }
         Rvalue::LoadType(_) => {
             // LoadType takes no local operands — the template is compile-time data.
         }
@@ -1462,6 +1465,7 @@ fn rvalue_has_projection_reads(rvalue: &Rvalue) -> bool {
         Rvalue::IsType { operand, .. } => operand_has_projection(operand),
         Rvalue::MakeClosure { captures, .. } => captures.iter().any(operand_has_projection),
         Rvalue::MakeBoundMethod { receiver, .. } => operand_has_projection(receiver),
+        Rvalue::MakeInstantiatedFunction { .. } => false,
         Rvalue::LoadType(_) => false,
     }
 }

@@ -1354,6 +1354,20 @@ impl BexVm {
                     }
                 }
             }
+            Object::InstantiatedFunction(inst) => {
+                // SAFETY: inst.function points to a Function object with at
+                // least the InstantiatedFunction's lifetime.
+                let func_obj = unsafe { inst.function.get() };
+                match func_obj {
+                    Object::Function(f) => f.real_local_count,
+                    _ => {
+                        return Err(VmInternalError::TypeError {
+                            expected: Type::Object(ObjectType::Function(FunctionType::Any)),
+                            got: Type::Object(ObjectType::of(func_obj)),
+                        });
+                    }
+                }
+            }
             _ => {
                 return Err(VmInternalError::TypeError {
                     expected: Type::Object(ObjectType::Any),

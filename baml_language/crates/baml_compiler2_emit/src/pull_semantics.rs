@@ -426,6 +426,12 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
             // Handled specially in emit_rvalue_pull before this function is called.
             unreachable!("MakeBoundMethod must be handled in emit_rvalue_pull")
         }
+        Rvalue::MakeInstantiatedFunction { .. } => {
+            // Handled specially in emit_rvalue_pull (same reason as
+            // MakeBoundMethod: needs the global-table lookup which only the
+            // bytecode emitter has).
+            unreachable!("MakeInstantiatedFunction must be handled in emit_rvalue_pull")
+        }
         Rvalue::LoadType(template) => sink.load_type(template),
     }
 }

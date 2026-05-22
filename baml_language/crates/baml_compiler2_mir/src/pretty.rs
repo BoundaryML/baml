@@ -466,6 +466,19 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
             write_operand(f, receiver)?;
             write!(f, ")")
         }
+        Rvalue::MakeInstantiatedFunction {
+            item_ref,
+            type_arg_templates,
+        } => {
+            write!(f, "make_instantiated_fn {item_ref}<")?;
+            for (i, t) in type_arg_templates.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "{t}")?;
+            }
+            write!(f, ">")
+        }
         Rvalue::LoadType(template) => {
             write!(f, "load_type({template})")
         }

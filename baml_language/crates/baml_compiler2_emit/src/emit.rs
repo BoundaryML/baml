@@ -1206,6 +1206,30 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             self.set_operand(inst, OperandMeta::Global(func_name));
             return;
         }
+        if let Rvalue::MakeInstantiatedFunction {
+            item_ref,
+            type_arg_templates,
+        } = rvalue
+        {
+            // Push one Object::Type per type-arg template, then emit the
+            // make-instantiated-function instruction so the VM can pop them
+            // into the resulting Object::InstantiatedFunction's bound_type_args.
+            for template in type_arg_templates {
+                unwrap_infallible(self.load_type(template));
+            }
+            let func_name = item_ref.to_string();
+            let global_idx = *self.globals.get(&func_name).unwrap_or_else(|| {
+                panic!("MakeInstantiatedFunction: global not found for {func_name}")
+            });
+            let ntypeargs = u16::try_from(type_arg_templates.len())
+                .expect("type_arg_templates count fits in u16");
+            let inst = self.emit(Instruction::MakeInstantiatedFunction {
+                global_idx: GlobalIndex::from_raw(global_idx),
+                ntypeargs,
+            });
+            self.set_operand(inst, OperandMeta::Global(func_name));
+            return;
+        }
         unwrap_infallible(pull_semantics::walk_rvalue_pull(self, rvalue));
     }
 
@@ -2184,11 +2208,14 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 // cell pointers (LoadVar) not cell values (LoadDeref). We intercept
                 // here so that `emit_rvalue_pull` (which sets loading_for_closure_capture)
                 // is called rather than the generic `walk_rvalue_pull` inlining path.
-                // MakeBoundMethod must also be handled specially: it is not handled by
-                // `walk_rvalue_pull` (which panics on it), so route through `emit_rvalue_pull`.
+                // MakeBoundMethod and MakeInstantiatedFunction also need the
+                // global-table lookup, which `walk_rvalue_pull` doesn't do — route
+                // them through `emit_rvalue_pull`.
                 if matches!(
                     rvalue,
-                    Rvalue::MakeClosure { .. } | Rvalue::MakeBoundMethod { .. }
+                    Rvalue::MakeClosure { .. }
+                        | Rvalue::MakeBoundMethod { .. }
+                        | Rvalue::MakeInstantiatedFunction { .. }
                 ) {
                     self.emit_rvalue_pull(&rvalue);
                     return Ok(LocalPullAction::Done);
