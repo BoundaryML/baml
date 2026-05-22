@@ -48,7 +48,7 @@
 # the broadest target/ tree (`cargo test --no-run --all-features`
 # across the whole workspace) — that's the most useful seed for the
 # subcommand variants the readers run (`cargo doc`, narrower
-# snapshot tests, codspeed builds, the bridge_nodejs build, prek's
+# snapshot tests, codspeed builds, the sdks/nodejs/bridge_nodejs build, prek's
 # checks). Per-OS cargo-test jobs are the savers on macos/windows
 # for the same reason.
 #
@@ -309,22 +309,19 @@ jobs:
       - name: "Install uv"
         uses: astral-sh/setup-uv@v5
 
+      # `cargo test --no-run` drives each sdk_test crate's build.rs,
+      # which is where the editable `baml_core` install + per-fixture
+      # `uv sync` / `pnpm install` happens (serially, once). Failures
+      # there are recorded into `$OUT_DIR/build_diagnostics.txt`
+      # instead of aborting the build — they surface via the
+      # `build_diagnostics::no_build_failures` test in the run-step
+      # below. See `sdk_tests/build/src/lib.rs::BuildDiagnostics`.
       - name: "Build tests with --timings"
         run: cargo test --no-run --all-features --timings
         working-directory: baml_language
 
-      # Pre-warm: run only the `sync_only` test from each sdk_test crate,
-      # serialized via `--test-threads=1`. The first sync builds the
-      # editable `baml_core` and extracts wheels into the shared
-      # `target/uv-cache`; subsequent syncs hardlink from cache into each
-      # crate's own `generated/.venv`. After this, the parallel test step
-      # below only does cheap cache reads + per-venv hardlinks.
-      - name: "Pre-warm uv cache (sync_only, serial)"
-        run: cargo nextest run --all-features --test-threads=1 -E 'package(/^sdk_test_/) and test(=sync_only)'
-        working-directory: baml_language
-
       - name: "Run sdk tests"
-        run: cargo nextest run --all-features -E 'package(/^sdk_test_/) and not test(=sync_only)'
+        run: cargo nextest run --all-features -E 'package(/^sdk_test_/)'
         working-directory: baml_language
 
       - name: "Upload test results on failure"

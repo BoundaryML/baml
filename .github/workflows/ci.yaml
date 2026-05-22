@@ -441,29 +441,29 @@ jobs:
         run: cargo build -p bridge_ctypes
         working-directory: baml_language
 
-      # Go (protoc-gen-go) — writes into bridge_go/cffi/proto/baml_core/cffi/v1/.
-      - name: "Generate Go proto bindings (bridge_go)"
+      # Go (protoc-gen-go) — writes into sdks/go/bridge_go/cffi/proto/baml_core/cffi/v1/.
+      - name: "Generate Go proto bindings (sdks/go/bridge_go)"
         run: ./build.sh
-        working-directory: baml_language/crates/bridge_go
+        working-directory: baml_language/sdks/go/bridge_go
 
-      - name: "Install bridge_nodejs dependencies"
+      - name: "Install Node SDK dependencies"
         run: pnpm install --frozen-lockfile
-        working-directory: baml_language/crates/bridge_nodejs
+        working-directory: baml_language/sdks/nodejs/bridge_nodejs
 
-      # Node / TypeScript (protobufjs) — writes into bridge_nodejs/typescript_src/proto/.
+      # Node / TypeScript (protobufjs) — writes into sdks/nodejs/bridge_nodejs/typescript_src/proto/.
       # build:debug also regenerates typescript2/pkg-proto/src/generated/ (ts-proto / buf).
-      - name: "Generate Node/TypeScript proto bindings (bridge_nodejs)"
+      - name: "Generate Node/TypeScript proto bindings (sdks/nodejs/bridge_nodejs)"
         run: pnpm build:debug
-        working-directory: baml_language/crates/bridge_nodejs
+        working-directory: baml_language/sdks/nodejs/bridge_nodejs
 
       - name: "Check generated proto files are in sync"
         run: |
           # Check for both modified tracked files and untracked files across every
           # codegen output documented in baml_language/crates/bridge_ctypes/README.md.
           PATHS=(
-            baml_language/crates/bridge_nodejs
+            baml_language/sdks/nodejs/bridge_nodejs
             baml_language/crates/bridge_ctypes
-            baml_language/crates/bridge_go
+            baml_language/sdks/go/bridge_go
             baml_language/sdks/python/src/baml_core/cffi
             typescript2/pkg-proto
           )
