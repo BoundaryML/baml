@@ -99,7 +99,7 @@ where
                 if matches!(c, CompletionState::Incomplete) {
                     flags.add_flag(Flag::Incomplete);
                 }
-                let res = if let Some(n) = n.as_i64() {
+                if let Some(n) = n.as_i64() {
                     BamlInt { value: n } // also covers u64
                 } else if n.as_u64().is_some() {
                     return Err(ctx.error_integer_out_of_bounds(n));
@@ -115,9 +115,7 @@ where
                     }
                 } else {
                     return Err(ctx.error_integer_out_of_bounds(n));
-                };
-                target.meta.expect_asserts(&BamlValue::Int(res), ctx)?;
-                res
+                }
             }
             (jsonish::Value::String(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
                 return Ok(None);
@@ -134,7 +132,7 @@ where
                 let s = s.trim();
                 // Trim trailing commas
                 let s = s.trim_end_matches(',');
-                let res = if let Ok(n) = s.parse::<i64>() {
+                if let Ok(n) = s.parse::<i64>() {
                     BamlInt { value: n }
                 } else if let Ok(n) = s.parse::<u64>() {
                     let Ok(n) = i64::try_from(n) else {
@@ -167,9 +165,7 @@ where
                     }
                 } else {
                     return Err(ctx.error_unexpected_type(&target, &value));
-                };
-                target.meta.expect_asserts(&BamlValue::Int(res), ctx)?;
-                res
+                }
             }
             (jsonish::Value::Array(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
                 return Ok(None);
@@ -196,7 +192,6 @@ where
                 else {
                     return Ok(None);
                 };
-                target.meta.expect_asserts(&singular.value, ctx)?;
                 flags.flags.extend_from_slice(&singular.meta.flags.flags);
                 let BamlValue::Int(singular) = singular.value else {
                     unreachable!("coerce_array_to_singular should only return Int");
@@ -285,7 +280,7 @@ where
                 if matches!(c, CompletionState::Incomplete) {
                     flags.add_flag(Flag::Incomplete);
                 }
-                let res = if let Some(n) = n.as_f64() {
+                if let Some(n) = n.as_f64() {
                     BamlFloat { value: n }
                 } else if let Some(n) = n.as_i64() {
                     BamlFloat { value: n as f64 }
@@ -293,9 +288,7 @@ where
                     BamlFloat { value: n as f64 }
                 } else {
                     return Err(ctx.error_unexpected_type(&target, &value));
-                };
-                target.meta.expect_asserts(&BamlValue::Float(res), ctx)?;
-                res
+                }
             }
             (jsonish::Value::String(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
                 return Ok(None);
@@ -312,7 +305,7 @@ where
                 let s = s.trim();
                 // Trim trailing commas
                 let s = s.trim_end_matches(',');
-                let res = if let Ok(n) = s.parse::<f64>() {
+                if let Ok(n) = s.parse::<f64>() {
                     BamlFloat { value: n }
                 } else if let Ok(n) = s.parse::<i64>() {
                     BamlFloat { value: n as f64 }
@@ -330,9 +323,7 @@ where
                     BamlFloat { value: frac }
                 } else {
                     return Err(ctx.error_unexpected_type(&target, &value));
-                };
-                target.meta.expect_asserts(&BamlValue::Float(res), ctx)?;
-                res
+                }
             }
             (jsonish::Value::Array(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
                 return Ok(None);
@@ -359,7 +350,6 @@ where
                 else {
                     return Ok(None);
                 };
-                target.meta.expect_asserts(&singular.value, ctx)?;
                 flags.flags.extend_from_slice(&singular.meta.flags.flags);
                 let BamlValue::Float(singular) = singular.value else {
                     unreachable!("coerce_array_to_singular should only return Float");
@@ -435,11 +425,7 @@ where
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlBool, N>>, ParsingError> {
         let mut flags = DeserializerConditions::new();
         let result = match (value, target.meta.in_progress.as_ref()) {
-            (crate::jsonish::Value::Boolean(b), _) => {
-                let res = BamlBool { value: *b };
-                target.meta.expect_asserts(&BamlValue::Bool(res), ctx)?;
-                res
-            }
+            (crate::jsonish::Value::Boolean(b), _) => BamlBool { value: *b },
             (jsonish::Value::String(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
                 return Ok(None);
             }
@@ -452,7 +438,7 @@ where
                 if matches!(c, CompletionState::Incomplete) {
                     flags.add_flag(Flag::Incomplete);
                 }
-                let res = match s.to_lowercase().as_str() {
+                match s.to_lowercase().as_str() {
                     "true" => {
                         flags.add_flag(Flag::StringToBool(s.clone()));
                         BamlBool { value: true }
@@ -461,34 +447,30 @@ where
                         flags.add_flag(Flag::StringToBool(s.clone()));
                         BamlBool { value: false }
                     }
-                    _ => {
-                        match super::match_string::match_string(
-                            ctx,
-                            TyWithMeta::new(TyResolvedRef::Bool(BoolTy), target.meta),
-                            Cow::Borrowed(value),
-                            &[
-                                ("true", vec!["true", "True", "TRUE"]),
-                                ("false", vec!["false", "False", "FALSE"]),
-                            ],
-                            true,
-                        ) {
-                            Ok(val) => match val.value {
-                                "true" => {
-                                    flags.add_flag(Flag::StringToBool(Cow::Borrowed(val.value)));
-                                    BamlBool { value: true }
-                                }
-                                "false" => {
-                                    flags.add_flag(Flag::StringToBool(Cow::Borrowed(val.value)));
-                                    BamlBool { value: false }
-                                }
-                                _ => return Err(ctx.error_unexpected_type(&target, &value)),
-                            },
-                            Err(_) => return Err(ctx.error_unexpected_type(&target, &value)),
-                        }
-                    }
-                };
-                target.meta.expect_asserts(&BamlValue::Bool(res), ctx)?;
-                res
+                    _ => match super::match_string::match_string(
+                        ctx,
+                        TyWithMeta::new(TyResolvedRef::Bool(BoolTy), target.meta),
+                        Cow::Borrowed(value),
+                        &[
+                            ("true", vec!["true", "True", "TRUE"]),
+                            ("false", vec!["false", "False", "FALSE"]),
+                        ],
+                        true,
+                    ) {
+                        Ok(val) => match val.value {
+                            "true" => {
+                                flags.add_flag(Flag::StringToBool(Cow::Borrowed(val.value)));
+                                BamlBool { value: true }
+                            }
+                            "false" => {
+                                flags.add_flag(Flag::StringToBool(Cow::Borrowed(val.value)));
+                                BamlBool { value: false }
+                            }
+                            _ => return Err(ctx.error_unexpected_type(&target, &value)),
+                        },
+                        Err(_) => return Err(ctx.error_unexpected_type(&target, &value)),
+                    },
+                }
             }
             (jsonish::Value::Array(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
                 return Ok(None);
@@ -515,7 +497,6 @@ where
                 else {
                     return Ok(None);
                 };
-                target.meta.expect_asserts(&singular.value, ctx)?;
                 flags.flags.extend_from_slice(&singular.meta.flags.flags);
                 let BamlValue::Bool(singular) = singular.value else {
                     unreachable!("coerce_array_to_singular should only return Bool");
@@ -595,7 +576,6 @@ where
         }
 
         let result = BamlNull;
-        target.meta.expect_asserts(&BamlValue::Null(result), ctx)?;
 
         Ok(Some(ValueWithFlags::new(
             result,
@@ -698,9 +678,6 @@ where
         let result = BamlString {
             value: result.into(),
         };
-        target
-            .meta
-            .expect_asserts(&BamlValue::String(result.clone()), ctx)?;
 
         Ok(Some(ValueWithFlags::new(
             result,

@@ -148,12 +148,6 @@ macro_rules! __parse_ty_attrs {
     {} => {
         $crate::sap_model::TypeAnnotations::default()
     };
-    // TODO: asserts
-    {@assert($($assert:tt)*) $($rest:tt)*} => {{
-        let mut attrs = $crate::__parse_ty_attrs!{$($rest)*};
-        // attrs.asserts.push($crate::__parse_assert!{$($assert)*});
-        attrs
-    }};
     {@parse_without_null $($rest:tt)*} => {{
         let mut attrs = $crate::__parse_ty_attrs!{$($rest)*};
         attrs.parse_without_null = true;
@@ -548,22 +542,6 @@ macro_rules! __class_field_args {
                 ta.parse_without_null = true;
                 ta
             }]
-            [$in_progress_opt]
-            [$completed_opt]
-            { $($rest)* }
-        )
-    };
-    (<><><> __INTERNAL__
-        [$($aliases:expr),*]
-        [$type_annotations:expr]
-        [$in_progress_opt:expr]
-        [$completed_opt:expr]
-        { @assert($($assertion:tt)+) $($rest:tt)* }
-    ) => {
-        // TODO: make assertions work
-        $crate::__class_field_args!(<><><> __INTERNAL__
-            [$($aliases),*]
-            [$type_annotations]
             [$in_progress_opt]
             [$completed_opt]
             { $($rest)* }

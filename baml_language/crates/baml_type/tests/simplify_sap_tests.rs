@@ -7,9 +7,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use baml_type::{
-    Literal, Span, Ty, TyAssert, TyAttr, TyAttrValue, TypeName, simplify_sap::simplify,
-};
+use baml_type::{Literal, Ty, TyAttr, TyAttrValue, TypeName, simplify_sap::simplify};
 
 // =========================================================================
 // Markdown → TestCase parser
@@ -202,7 +200,6 @@ fn collect_alias_refs_inner(ty: &Ty, out: &mut Vec<TypeName>) {
 //   attr        := '@sap.parse_without_null'
 //                | '@sap.pending_never'
 //                | '@sap.in_progress_never'
-//                | '@assert(' balanced ')'
 
 struct Parser {
     chars: Vec<char>,
@@ -401,54 +398,12 @@ impl Parser {
             } else if self.starts_with("@sap.in_progress_never") {
                 self.consume_str("@sap.in_progress_never");
                 attr.sap_in_progress_never = TyAttrValue::Set;
-            } else if self.starts_with("@assert(") {
-                self.consume_str("@assert(");
-                let content = self.read_balanced_parens();
-                let func_idx = extract_func_idx(&content);
-                attr.asserts.push(TyAssert {
-                    func_idx,
-                    span: Span::default(),
-                });
             } else {
                 break;
             }
         }
         attr
     }
-
-    /// Read content inside balanced parens (the opening `(` already consumed).
-    /// Consumes the closing `)`.
-    fn read_balanced_parens(&mut self) -> String {
-        let mut content = String::new();
-        let mut depth = 1u32;
-        while depth > 0 {
-            let c = self.advance();
-            match c {
-                '(' => depth += 1,
-                ')' => depth -= 1,
-                _ => {}
-            }
-            if depth > 0 {
-                content.push(c);
-            }
-        }
-        content
-    }
-}
-
-/// Extract func_idx from assert content like `(_) => f1` or bare `f1`.
-fn extract_func_idx(content: &str) -> u32 {
-    let trimmed = content.trim();
-    // Try "(_) => fN" form first.
-    if let Some(rest) = trimmed.strip_prefix("(_) => f") {
-        return rest.parse().expect("expected number after `f` in @assert");
-    }
-    // Bare "fN".
-    if let Some(rest) = trimmed.strip_prefix('f') {
-        return rest.parse().expect("expected number after `f` in @assert");
-    }
-    // Bare number.
-    trimmed.parse().expect("expected func_idx in @assert")
 }
 
 /// Apply a parsed attr to a Ty. If the attr is all-default, return ty unchanged.

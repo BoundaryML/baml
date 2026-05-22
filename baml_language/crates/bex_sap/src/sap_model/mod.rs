@@ -1,7 +1,6 @@
 //! Based on the compiler-internal type system and SAP annotations: [BEP-006: Semantic Streaming (but better)](https://beps.boundaryml.com/beps/6)
 //! These are the interface used to transform JSON-like data into a typed representation.
 
-mod assertions;
 mod convert;
 mod from_literal;
 mod test_macros;
@@ -9,19 +8,15 @@ mod type_name;
 
 use std::{borrow::Cow, fmt::Display};
 
-pub use assertions::*;
 pub use convert::*;
 use derive_more::From;
 pub use from_literal::FromLiteral;
 use indexmap::IndexMap;
 pub use type_name::TypeName;
 
-use crate::{
-    baml_value::{
-        BamlArray, BamlBool, BamlClass, BamlEnum, BamlFloat, BamlInt, BamlMap, BamlMedia, BamlNull,
-        BamlPrimitive, BamlStreamState, BamlString, BamlValue,
-    },
-    deserializer::coercer::{ParsingContext, ParsingError},
+use crate::baml_value::{
+    BamlArray, BamlBool, BamlClass, BamlEnum, BamlFloat, BamlInt, BamlMap, BamlMedia, BamlNull,
+    BamlPrimitive, BamlStreamState, BamlString, BamlValue,
 };
 
 /// An identifier for a type. Used to look up a type in a [`TypeRefDb`].
@@ -711,46 +706,13 @@ pub struct TypeAnnotations<'t, N: TypeIdent> {
     /// This is used to indicate that while fill-in values may be `null`,
     /// a value from the input stream may not be parsed as `null`.
     pub parse_without_null: bool,
-
-    /// The set of assertions that should be run on the value.
-    /// Note that if the value is filled by some default (such as [`TypeAnnotations::in_progress`]),
-    /// the assertions may or may not be run on the default value (TODO: make this behavior consistent).
-    pub asserts: Vec<Assertion<'t, N>>,
 }
 impl<N: TypeIdent> Default for TypeAnnotations<'_, N> {
     fn default() -> Self {
         Self {
             in_progress: None,
             parse_without_null: false,
-            asserts: Vec::new(),
         }
-    }
-}
-impl<'t, N: TypeIdent> TypeAnnotations<'t, N> {
-    /// Runs [`TypeAnnotations::check_asserts`] but also gives an error if the assertions fail
-    pub fn expect_asserts<'s, 'v>(
-        &self,
-        value: &BamlValue<'s, 'v, 't, N>,
-        ctx: &ParsingContext<'_, '_, 't, N>,
-    ) -> Result<(), ParsingError> {
-        match self.check_asserts(value, ctx) {
-            Ok(true) => Ok(()),
-            Ok(false) => Err(ctx.error_assertion_failure()),
-            Err(err) => Err(err),
-        }
-    }
-
-    pub fn check_asserts<'s, 'v>(
-        &self,
-        value: &BamlValue<'s, 'v, 't, N>,
-        ctx: &ParsingContext<'_, '_, 't, N>,
-    ) -> Result<bool, ParsingError> {
-        for assert in &self.asserts {
-            if !assert.evaluate(value, ctx)? {
-                return Ok(false);
-            }
-        }
-        Ok(true)
     }
 }
 
