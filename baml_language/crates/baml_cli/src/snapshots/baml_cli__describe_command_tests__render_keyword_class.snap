@@ -1,0 +1,13 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+class — Defines a structured data type with named fields.
+
+Syntax:
+  class MyClass {
+    field1 string
+    field2 int
+  }
+
+Fields can have default values, docstrings, and attributes.

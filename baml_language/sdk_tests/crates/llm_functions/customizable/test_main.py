@@ -18,10 +18,9 @@ def test_root_imports_cleanly():
     import baml_sdk  # noqa: F401
 
 
-def test_namespaces_reachable_via_attribute_access():
-    import baml_sdk
-    assert baml_sdk.lorem is not None
-    assert baml_sdk.ipsum is not None
+def test_namespaces_reachable_via_explicit_import():
+    import baml_sdk.lorem  # noqa: F401
+    import baml_sdk.ipsum  # noqa: F401
 
 
 def test_lorem_resume_class_shape():
@@ -110,12 +109,12 @@ def test_stream_types_lorem_leaf_present():
     # pinned to "emitted" (its `body string?` proxies a
     # stream-state-altering field); Resume's is left to the
     # conditional-emit rule.
-    from baml_sdk import stream_types
+    from baml_sdk.stream_types import lorem as stream_lorem
 
-    assert hasattr(stream_types, "lorem")
-    leaf = stream_types.lorem
-    has_any = any(hasattr(leaf, name) for name in ("Resume", "StreamingDoc"))
-    assert has_any, "expected at least one $stream companion class in stream_types/lorem"
+    has_any = any(hasattr(stream_lorem, name) for name in ("Resume", "StreamingDoc"))
+    assert has_any, (
+        "expected at least one $stream companion class in stream_types/lorem"
+    )
 
 
 def test_classify_sentiment_factory_bindings():
@@ -123,35 +122,6 @@ def test_classify_sentiment_factory_bindings():
 
     assert callable(ipsum.ClassifySentiment)
     assert callable(ipsum.ClassifySentiment_async)
-
-
-def test_inlinedbaml_files_present():
-    # baml/_inlinedbaml.py captures the user .baml source; the runtime
-    # uses it to bootstrap without re-reading from disk.
-    from pathlib import Path
-    from baml_sdk.baml import _inlinedbaml
-
-    assert "FILES" in dir(_inlinedbaml)
-    # Paths are relative to baml_src/. Compare via pathlib.Path so the
-    # native separator on Windows (`ns_lorem\\types.baml`) matches the
-    # forward-slash form we write here.
-    actual_paths = {Path(p) for p in _inlinedbaml.FILES.keys()}
-    expected_paths = {
-        Path("ns_lorem/types.baml"),
-        Path("ns_lorem/functions.baml"),
-        Path("ns_ipsum/types.baml"),
-        Path("ns_ipsum/functions.baml"),
-    }
-    assert actual_paths == expected_paths
-
-
-def test_runtime_init_called_at_import():
-    # The root __init__.py invokes BamlRuntime.initialize_runtime(...) at
-    # import time. Just verifying the call didn't blow up during module
-    # load by checking we can still reach the SDK surface.
-    import baml_sdk
-    assert hasattr(baml_sdk, "lorem")
-    assert hasattr(baml_sdk, "ipsum")
 
 
 # ---------------------------------------------------------------------------

@@ -7,6 +7,7 @@
 /// Users never construct `Type` directly; they receive `type` values via
 /// `reflect.type_of<User>()` and call methods on them.
 class TypeValue {
+    /// Returns the type name as a human-readable string.
     //baml:vm
     function to_string(self) -> string {
         $rust_function

@@ -10,6 +10,7 @@ pub(crate) mod enum_;
 pub(crate) mod function;
 pub(crate) mod method;
 pub(crate) mod type_alias;
+pub(crate) mod typemap_file;
 
 use baml_codegen_types::{FunctionArgumentDefault, Name, Symbol, SymbolPool, Ty};
 

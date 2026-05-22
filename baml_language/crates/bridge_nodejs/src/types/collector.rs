@@ -3,7 +3,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use bridge_ctypes::external_to_baml_value;
+use bridge_ctypes::external_to_outbound;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use prost::Message;
@@ -120,7 +120,7 @@ impl FunctionLog {
             .result
             .as_ref()
             .map(|val| {
-                let baml_val = external_to_baml_value(val, &handle_options).map_err(|e| {
+                let baml_val = external_to_outbound(val, &handle_options).map_err(|e| {
                     napi::Error::from_reason(format!(
                         "FunctionLog.result: failed to convert value: {e}"
                     ))

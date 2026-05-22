@@ -1,4 +1,6 @@
+/// A 64-bit IEEE 754 floating-point number (f64).
 class Float {
+  /// Serializes this float to a JSON number. NaN and Infinity are serialized as null.
   function to_json(self) -> baml.json.json {
     $rust_function
   }

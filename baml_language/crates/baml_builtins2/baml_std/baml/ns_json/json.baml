@@ -1,12 +1,16 @@
+/// The BAML JSON value type — a union of all JSON-representable values.
 type json = null | bool | int | float | string | json[] | map<string, json>
 
+/// Thrown when a JSON string cannot be parsed (syntax error).
 class JsonParseError {
   message string
 }
+/// Thrown when a parsed JSON value does not match the expected BAML type.
 class JsonDecodeError {
   message string
   path string
 }
+/// Thrown when a BAML value cannot be serialized to JSON.
 class JsonSerializationError {
   message string
   path string
@@ -14,16 +18,19 @@ class JsonSerializationError {
 }
 
 //baml:mut_vm
+/// Parses a JSON string `s` and returns a `json` value. Throws `JsonParseError` on invalid JSON.
 function parse(s string) -> json throws JsonParseError {
   $rust_function
 }
 
 //baml:mut_vm
+/// Serializes a `json` value `j` to a compact JSON string.
 function stringify(j json) -> string {
   $rust_function
 }
 
 //baml:mut_vm
+/// Serializes a `json` value `j` to a pretty-printed (indented) JSON string.
 function stringify_pretty(j json) -> string {
   $rust_function
 }

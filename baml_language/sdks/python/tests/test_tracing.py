@@ -355,7 +355,7 @@ class TraceFileReader:
 def make_runtime() -> BamlRuntime:
     """Create a BamlRuntime from test BAML source."""
     return BamlRuntime.initialize_runtime(
-        ".", {"main.baml": BAML_SOURCE}, sdk_root="__bridge_python_tests__"
+        ".", {"main.baml": BAML_SOURCE}
     )
 
 
@@ -363,7 +363,7 @@ def make_ctx(rt: BamlRuntime) -> BamlCtxManager:
     """Create a BamlCtxManager wrapping a runtime.
 
     This is the same pattern the codegen uses:
-        rt = BamlRuntime.initialize_runtime(..., sdk_root=...)
+        rt = BamlRuntime.initialize_runtime(...)
         ctx = BamlCtxManager(rt)
         trace = ctx.trace_fn
         set_tags = ctx.upsert_tags
@@ -1761,7 +1761,7 @@ class TestCrossBoundaryLLMTracing:
             "__MOCK_URL__", f"http://127.0.0.1:{mock_server}"
         )
         return BamlRuntime.initialize_runtime(
-            ".", {"main.baml": source}, sdk_root="__bridge_python_tests__"
+            ".", {"main.baml": source}
         )
 
     @pytest.fixture

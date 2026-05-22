@@ -62,16 +62,16 @@ def parse_bep_ref(ref: str) -> tuple[int | None, str | None]:
     Returns (number, slug) where one is None.
     """
     ref = ref.strip()
-    
+
     # Try to parse as number
     if ref.isdigit():
         return int(ref), None
-    
+
     # Try BEP-XXX format
     m = re.match(r"(?:BEP-)?(\\d+)", ref, re.IGNORECASE)
     if m:
         return int(m.group(1)), None
-    
+
     # It's a slug
     return None, ref
 
@@ -79,28 +79,28 @@ def parse_bep_ref(ref: str) -> tuple[int | None, str | None]:
 def find_local_bep(ref: str) -> Path | None:
     """Find a local BEP folder by number or slug."""
     num, slug = parse_bep_ref(ref)
-    
+
     if not ALL_BEPS_DIR.exists():
         return None
-    
+
     for folder in ALL_BEPS_DIR.iterdir():
         if not folder.is_dir() or not folder.name.startswith("BEP-"):
             continue
-        
+
         # Parse folder name: BEP-XXX-slug
         m = re.match(r"BEP-(\\d+|\\?)(?:-(.+))?", folder.name)
         if not m:
             continue
-        
+
         folder_num_str = m.group(1)
         folder_num = int(folder_num_str) if folder_num_str != "?" else None
         folder_slug = m.group(2) or ""
-        
+
         if num is not None and folder_num == num:
             return folder
         if slug is not None and slug.lower() == folder_slug.lower():
             return folder
-    
+
     return None
 
 
@@ -135,15 +135,15 @@ def read_local_bep(folder: Path) -> dict:
         "pages": [],
         "meta": None,
     }
-    
+
     readme_path = folder / "README.md"
     if readme_path.exists():
         result["readme"] = readme_path.read_text(encoding="utf-8")
-    
+
     meta_path = folder / "meta.json"
     if meta_path.exists():
         result["meta"] = json.loads(meta_path.read_text(encoding="utf-8"))
-    
+
     pages_dir = folder / "pages"
     if pages_dir.exists() and pages_dir.is_dir():
         for page_file in sorted(pages_dir.glob("*.md")):
@@ -151,7 +151,7 @@ def read_local_bep(folder: Path) -> dict:
                 "slug": page_file.stem,
                 "content": page_file.read_text(encoding="utf-8"),
             })
-    
+
     return result
 
 
@@ -162,26 +162,26 @@ def read_local_bep(folder: Path) -> dict:
 def cmd_pull(args: argparse.Namespace) -> int:
     """Fetch all BEPs from server and extract to current directory."""
     import httpx
-    
+
     print(f"Pulling BEPs from {PULL_ENDPOINT}...")
-    
+
     try:
         response = httpx.get(PULL_ENDPOINT, timeout=60.0)
         response.raise_for_status()
     except httpx.HTTPError as e:
         print(f"Error: Failed to fetch BEPs: {e}", file=sys.stderr)
         return 1
-    
+
     # Extract ZIP
     zip_data = BytesIO(response.content)
-    
+
     with zipfile.ZipFile(zip_data, "r") as zf:
         # First, show what would change
         existing_files = set()
         for f in ALL_BEPS_DIR.rglob("*"):
             if f.is_file() and f.name != "bep":  # Don't count the script itself
                 existing_files.add(f.relative_to(ALL_BEPS_DIR))
-        
+
         new_files = set()
         for name in zf.namelist():
             # Strip "all-beps/" prefix if present
@@ -191,11 +191,11 @@ def cmd_pull(args: argparse.Namespace) -> int:
                 rel_path = name
             if rel_path and not rel_path.endswith("/"):
                 new_files.add(Path(rel_path))
-        
+
         added = new_files - existing_files
         removed = existing_files - new_files
         updated = new_files & existing_files
-        
+
         if added or removed:
             print(f"\\nChanges:")
             if added:
@@ -216,13 +216,13 @@ def cmd_pull(args: argparse.Namespace) -> int:
             print("\\nNo changes detected.")
             if not args.force:
                 return 0
-        
+
         if not args.yes:
             response_input = input("\\nApply changes? [y/N]: ").strip().lower()
             if response_input not in ("y", "yes"):
                 print("Aborted.")
                 return 0
-        
+
         # Clear existing BEP folders and extract
         import shutil
         for item in ALL_BEPS_DIR.iterdir():
@@ -235,30 +235,30 @@ def cmd_pull(args: argparse.Namespace) -> int:
                 shutil.rmtree(item)
             elif item.name in ("Claude.md",):
                 item.unlink()
-        
+
         # Extract
         for name in zf.namelist():
             if name.startswith("all-beps/"):
                 rel_path = name[len("all-beps/"):]
             else:
                 rel_path = name
-            
+
             if not rel_path or rel_path.endswith("/"):
                 continue
-            
+
             # Skip the bep script from the archive (we already have it)
             if rel_path == "bep":
                 continue
-            
+
             # Validate path to prevent directory traversal attacks
             target_path = (ALL_BEPS_DIR / rel_path).resolve()
             if not target_path.is_relative_to(ALL_BEPS_DIR.resolve()):
                 print(f"Error: Unsafe path in archive: {rel_path}", file=sys.stderr)
                 return 1
-            
+
             target_path.parent.mkdir(parents=True, exist_ok=True)
             target_path.write_bytes(zf.read(name))
-        
+
         print(f"\\nExtracted to {ALL_BEPS_DIR}")
         return 0
 
@@ -269,11 +269,11 @@ def cmd_list(args: argparse.Namespace) -> int:
     for folder in sorted(ALL_BEPS_DIR.iterdir()):
         if not folder.is_dir() or not folder.name.startswith("BEP-"):
             continue
-        
+
         meta_path = folder / "meta.json"
         if not meta_path.exists():
             continue
-        
+
         try:
             meta = json.loads(meta_path.read_text(encoding="utf-8"))
             beps.append({
@@ -286,19 +286,19 @@ def cmd_list(args: argparse.Namespace) -> int:
             })
         except Exception:
             continue
-    
+
     # Filter by status if requested
     if args.status:
         status_filter = args.status.lower()
         beps = [b for b in beps if b["status"] == status_filter]
-    
+
     if args.json:
         print(json.dumps(beps, indent=2))
     else:
         if not beps:
             print("No BEPs found. Run './bep pull' first.")
             return 0
-        
+
         print(f"{'ID':<12} {'Status':<12} {'Title'}")
         print("-" * 60)
         for b in beps:
@@ -308,7 +308,7 @@ def cmd_list(args: argparse.Namespace) -> int:
                 print(f"BEP-{num:03d}     {b['status']:<12} {star}{b['title']}")
             else:
                 print(f"BEP-???     {b['status']:<12} {star}{b['title']}")
-    
+
     return 0
 
 
@@ -316,18 +316,18 @@ def cmd_new(args: argparse.Namespace) -> int:
     """Scaffold a new BEP locally."""
     title = args.title
     author = args.author or get_git_author()
-    
+
     # Create with unknown number (BEP-?-slug)
     slug = slugify(title)
     folder_name = f"BEP-?-{slug}"
     folder_path = ALL_BEPS_DIR / folder_name
-    
+
     if folder_path.exists():
         print(f"Error: {folder_path} already exists.", file=sys.stderr)
         return 1
-    
+
     folder_path.mkdir(parents=True)
-    
+
     # Create meta.json (partial, will be filled on push)
     meta = {
         "id": "BEP-???",
@@ -343,7 +343,7 @@ def cmd_new(args: argparse.Namespace) -> int:
         "pages": [],
     }
     (folder_path / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
-    
+
     # Create README.md with template
     readme_content = f"""# {title}
 
@@ -381,38 +381,38 @@ What alternatives were considered? Why this approach?
 
 Unresolved decisions, future work.
 """
-    
+
     (folder_path / "README.md").write_text(readme_content, encoding="utf-8")
-    
+
     # Create empty pages directory
     (folder_path / "pages").mkdir()
-    
+
     print(f"Created {folder_path}")
     print(f"\\nNext steps:")
     print(f"  1. Edit {folder_path}/README.md")
     print(f"  2. Run: ./bep diff {slug}")
     print(f"  3. Run: ./bep push {slug}")
-    
+
     return 0
 
 
 def cmd_diff(args: argparse.Namespace) -> int:
     """Show diff between local and server."""
     import httpx
-    
+
     ref = args.ref
     local_folder = find_local_bep(ref)
-    
+
     if not local_folder:
         print(f"Error: Could not find local BEP matching '{ref}'.", file=sys.stderr)
         print("Available BEPs:")
         cmd_list(argparse.Namespace(status=None, json=False))
         return 1
-    
+
     local_bep = read_local_bep(local_folder)
     meta = local_bep.get("meta") or {}
     bep_number = meta.get("number")
-    
+
     # For new BEPs (BEP-?-*), there's nothing to diff against
     if bep_number is None:
         print(f"New BEP: {local_folder.name}")
@@ -425,17 +425,17 @@ def cmd_diff(args: argparse.Namespace) -> int:
             print("\\n".join(lines))
             if len(local_bep["readme"].split("\\n")) > 20:
                 print(f"... ({len(local_bep['readme'].split(chr(10)))} total lines)")
-        
+
         if local_bep["pages"]:
             print(f"\\nPages: {len(local_bep['pages'])}")
             for page in local_bep["pages"]:
                 print(f"  - {page['slug']}.md")
-        
+
         return 0
-    
+
     # Fetch current server version
     print(f"Fetching {format_bep_number(bep_number)} from server...")
-    
+
     try:
         response = httpx.get(
             PUSH_ENDPOINT,
@@ -447,16 +447,16 @@ def cmd_diff(args: argparse.Namespace) -> int:
     except httpx.HTTPError as e:
         print(f"Error: Failed to fetch from server: {e}", file=sys.stderr)
         return 1
-    
+
     # Extract server content
     server_files = {f["path"]: f["content"] for f in server_data.get("files", [])}
     server_readme = server_files.get("README.md", "")
-    
+
     # Compare
     import difflib
-    
+
     local_readme = local_bep["readme"]
-    
+
     if args.full:
         diff = difflib.unified_diff(
             server_readme.splitlines(keepends=True),
@@ -473,26 +473,26 @@ def cmd_diff(args: argparse.Namespace) -> int:
         # Summary diff
         server_lines = len(server_readme.splitlines())
         local_lines = len(local_readme.splitlines())
-        
+
         if server_readme == local_readme:
             print("README.md: No changes")
         else:
             print(f"README.md: {server_lines} → {local_lines} lines")
-    
+
     # Compare pages
     server_pages = {}
     for f_path, content in server_files.items():
         if f_path.startswith("pages/") and f_path.endswith(".md"):
             slug = f_path[6:-3]  # Remove "pages/" and ".md"
             server_pages[slug] = content
-    
+
     local_pages = {p["slug"]: p["content"] for p in local_bep["pages"]}
-    
+
     all_slugs = set(server_pages.keys()) | set(local_pages.keys())
     for slug in sorted(all_slugs):
         server_content = server_pages.get(slug, "")
         local_content = local_pages.get(slug, "")
-        
+
         if slug not in server_pages:
             print(f"pages/{slug}.md: NEW ({len(local_content.splitlines())} lines)")
         elif slug not in local_pages:
@@ -507,30 +507,30 @@ def cmd_diff(args: argparse.Namespace) -> int:
                     tofile=f"local/pages/{slug}.md",
                 )
                 print("".join(diff))
-    
+
     return 0
 
 
 def cmd_push(args: argparse.Namespace) -> int:
     """Push local BEP to server."""
     import httpx
-    
+
     if not API_TOKEN:
         print("Error: BEP_API_TOKEN environment variable not set.", file=sys.stderr)
         print(f"Get your token from: {API_BASE}/profile", file=sys.stderr)
         return 1
-    
+
     ref = args.ref
     local_folder = find_local_bep(ref)
-    
+
     if not local_folder:
         print(f"Error: Could not find local BEP matching '{ref}'.", file=sys.stderr)
         return 1
-    
+
     local_bep = read_local_bep(local_folder)
     meta = local_bep.get("meta") or {}
     bep_number = meta.get("number")
-    
+
     # Prepare payload
     readme_content = local_bep["readme"]
     pages = []
@@ -543,11 +543,11 @@ def cmd_push(args: argparse.Namespace) -> int:
             "title": title,
             "content": page["content"],
         })
-    
+
     # Show diff first
     print("Changes to push:")
     print("-" * 40)
-    
+
     if bep_number is None:
         # New BEP
         print(f"CREATE new BEP: {meta.get('title', 'Untitled')}")
@@ -561,20 +561,20 @@ def cmd_push(args: argparse.Namespace) -> int:
         print(f"UPDATE {format_bep_number(bep_number)}: {meta.get('title', '')}")
         # Run diff to show changes
         cmd_diff(argparse.Namespace(ref=ref, full=False))
-    
+
     print()
-    
+
     if not args.yes:
         response_input = input("Push these changes? [y/N]: ").strip().lower()
         if response_input not in ("y", "yes"):
             print("Aborted.")
             return 0
-    
+
     headers = {
         "Authorization": f"Bearer {API_TOKEN}",
         "Content-Type": "application/json",
     }
-    
+
     if bep_number is None:
         # Create new BEP
         payload = {
@@ -583,7 +583,7 @@ def cmd_push(args: argparse.Namespace) -> int:
         }
         if pages:
             payload["pages"] = pages
-        
+
         try:
             response = httpx.post(
                 PUSH_ENDPOINT,
@@ -593,10 +593,10 @@ def cmd_push(args: argparse.Namespace) -> int:
             )
             response.raise_for_status()
             result = response.json()
-            
+
             print(f"\\n✓ Created {result.get('formattedId', 'BEP')}")
             print(f"  URL: {result.get('url', '')}")
-            
+
             # Update local meta.json with the new number
             new_number = result.get("number")
             if new_number:
@@ -605,13 +605,13 @@ def cmd_push(args: argparse.Namespace) -> int:
                 (local_folder / "meta.json").write_text(
                     json.dumps(meta, indent=2), encoding="utf-8"
                 )
-                
+
                 # Rename folder
                 new_folder_name = f"BEP-{new_number:03d}-{slugify(meta.get('title', ''))}"
                 new_folder_path = ALL_BEPS_DIR / new_folder_name
                 local_folder.rename(new_folder_path)
                 print(f"  Renamed to: {new_folder_name}")
-            
+
         except httpx.HTTPError as e:
             print(f"Error: Failed to create BEP: {e}", file=sys.stderr)
             if hasattr(e, "response") and e.response is not None:
@@ -629,7 +629,7 @@ def cmd_push(args: argparse.Namespace) -> int:
             "versionMode": "new" if args.new_version else "current",
             "pages": pages,  # Always send pages, even if empty (to allow clearing)
         }
-        
+
         try:
             response = httpx.put(
                 PUSH_ENDPOINT,
@@ -639,7 +639,7 @@ def cmd_push(args: argparse.Namespace) -> int:
             )
             response.raise_for_status()
             result = response.json()
-            
+
             print(f"\\n✓ Updated {format_bep_number(bep_number)}")
             print(f"  Version: {result.get('versionNumber', '?')} ({result.get('versionAction', '')})")
             if result.get("pagesCreated"):
@@ -649,7 +649,7 @@ def cmd_push(args: argparse.Namespace) -> int:
             if result.get("pagesDeleted"):
                 print(f"  Pages deleted: {result['pagesDeleted']}")
             print(f"  URL: {result.get('url', '')}")
-            
+
         except httpx.HTTPError as e:
             print(f"Error: Failed to update BEP: {e}", file=sys.stderr)
             if hasattr(e, "response") and e.response is not None:
@@ -658,14 +658,14 @@ def cmd_push(args: argparse.Namespace) -> int:
                 except Exception:
                     pass
             return 1
-    
+
     return 0
 
 
 def cmd_open(args: argparse.Namespace) -> int:
     """Open a BEP in the browser."""
     num, slug = parse_bep_ref(args.ref)
-    
+
     if num is not None:
         url = f"{API_BASE}/beps/{num}"
     else:
@@ -687,7 +687,7 @@ def cmd_open(args: argparse.Namespace) -> int:
         else:
             print(f"Error: Could not find BEP matching '{args.ref}'.", file=sys.stderr)
             return 1
-    
+
     print(f"Opening {url}")
     webbrowser.open(url)
     return 0
@@ -703,44 +703,58 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
-    
+
     # pull
     pull_parser = subparsers.add_parser("pull", help="Fetch all BEPs from server")
     pull_parser.add_argument("-y", "--yes", action="store_true", help="Skip confirmation")
     pull_parser.add_argument("-f", "--force", action="store_true", help="Force even if no changes")
-    
+
     # list
     list_parser = subparsers.add_parser("list", help="List local BEPs")
     list_parser.add_argument("--status", help="Filter by status (draft, proposed, accepted, etc.)")
     list_parser.add_argument("--json", action="store_true", help="Output as JSON")
-    
+
     # new
     new_parser = subparsers.add_parser("new", help="Scaffold a new BEP")
     new_parser.add_argument("title", help="Title of the proposal")
     new_parser.add_argument("--author", help="Author name")
-    
+
     # diff
     diff_parser = subparsers.add_parser("diff", help="Diff local vs server")
     diff_parser.add_argument("ref", help="BEP number (e.g., 41) or slug (e.g., my-feature)")
     diff_parser.add_argument("--full", action="store_true", help="Show full unified diff")
-    
+
     # push
     push_parser = subparsers.add_parser("push", help="Push local BEP to server")
     push_parser.add_argument("ref", help="BEP number or slug")
     push_parser.add_argument("-y", "--yes", action="store_true", help="Skip confirmation")
     push_parser.add_argument("-n", "--note", help="Edit note for this version")
     push_parser.add_argument("--new-version", action="store_true", help="Create a new version")
-    
+
     # open
     open_parser = subparsers.add_parser("open", help="Open BEP in browser")
     open_parser.add_argument("ref", help="BEP number or slug")
-    
+
+    # comments
+    comments_parser = subparsers.add_parser("comments", help="Fetch comments for a BEP")
+    comments_parser.add_argument("ref", help="BEP number or slug")
+    comments_parser.add_argument("--include-resolved", action="store_true", help="Include resolved comments")
+    comments_parser.add_argument("--format", choices=["json", "markdown"], default=None, help="Output format")
+    comments_parser.add_argument("--json", action="store_true", help="Output as JSON")
+
+    # reply
+    reply_parser = subparsers.add_parser("reply", help="Reply to a comment on a BEP")
+    reply_parser.add_argument("ref", help="BEP number or slug")
+    reply_parser.add_argument("comment_id", help="ID of the comment to reply to")
+    reply_parser.add_argument("content", help="Reply content")
+    reply_parser.add_argument("--type", choices=["discussion", "concern", "question"], default="discussion", help="Comment type")
+
     args = parser.parse_args()
-    
+
     if args.command is None:
         parser.print_help()
         return 0
-    
+
     commands = {
         "pull": cmd_pull,
         "list": cmd_list,
@@ -748,8 +762,10 @@ def main():
         "diff": cmd_diff,
         "push": cmd_push,
         "open": cmd_open,
+        "comments": cmd_comments,
+        "reply": cmd_reply,
     }
-    
+
     return commands[args.command](args)
 
 

@@ -1,6 +1,11 @@
 ---
 source: crates/baml_lsp2_actions/src/describe_tests.rs
+assertion_line: 183
 expression: "project.format_description(&descs[0])"
 ---
-class String  string.baml:1
+class String  string.baml:5
+/// A UTF-8 encoded string.
+///
+/// String literals use double quotes: `"hello"`. Multiline strings use the `#"..."#` syntax.
+/// All methods returning a new string do not mutate `self` unless noted otherwise.
 shape: class String {}

@@ -1,0 +1,7 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+instanceof — BAML uses `is` for type checks.
+
+See: baml describe is

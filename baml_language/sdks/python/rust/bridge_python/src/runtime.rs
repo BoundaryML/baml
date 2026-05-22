@@ -1,9 +1,9 @@
 //! BamlRuntime PyO3 class - wraps `Arc<dyn Bex>`.
 
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use bex_project::Bex;
-use bridge_ctypes::{HANDLE_TABLE, external_to_baml_value, kwargs_to_bex_values};
+use bridge_ctypes::{HANDLE_TABLE, external_to_outbound, kwargs_to_bex_values};
 use prost::Message;
 use pyo3::{
     Py, Python,
@@ -22,39 +22,11 @@ use crate::{
     types::collector::Collector,
 };
 
-/// Process-global `sdk_root` paired with the singleton runtime in
-/// `bridge_cffi::engine`. Written by `BamlRuntime::initialize_runtime`
-/// and read by the module-level `get_runtime()` pyfunction so that every
-/// Python-side `BamlRuntime` view agrees on routing for the outbound
-/// decoder.
-static SDK_ROOT: RwLock<Option<String>> = RwLock::new(None);
-
-fn store_sdk_root(sdk_root: String) -> PyResult<()> {
-    let mut guard = SDK_ROOT
-        .write()
-        .map_err(|_| pyo3::PyErr::new::<BamlError, _>("sdk_root lock poisoned"))?;
-    *guard = Some(sdk_root);
-    Ok(())
-}
-
-fn load_sdk_root() -> PyResult<String> {
-    SDK_ROOT
-        .read()
-        .map_err(|_| pyo3::PyErr::new::<BamlError, _>("sdk_root lock poisoned"))?
-        .clone()
-        .ok_or_else(|| {
-            pyo3::PyErr::new::<BamlError, _>(
-                "BAML runtime has not been initialized — did baml_sdk/__init__.py fail to import?",
-            )
-        })
-}
-
 /// The main BAML runtime, wrapping a `dyn Bex` instance.
 #[gen_stub_pyclass]
 #[pyclass]
 pub struct BamlRuntime {
     bex: Arc<dyn Bex>,
-    sdk_root: String,
 }
 
 #[gen_stub_pymethods]
@@ -69,29 +41,15 @@ impl BamlRuntime {
     /// # Arguments
     /// * `root_path` - Root path for BAML files
     /// * `files` - Map of filename to file content
-    /// * `sdk_root` - Python package path of the generated `baml_sdk`
-    ///   (typically `__name__` from the generated root `__init__.py`).
-    ///   Stored on the returned runtime so the outbound decoder can route
-    ///   class references via `importlib`.
     #[staticmethod]
-    #[pyo3(signature = (root_path, files, *, sdk_root))]
     fn initialize_runtime(
         root_path: String,
         files: std::collections::HashMap<String, String>,
-        sdk_root: String,
     ) -> PyResult<Self> {
         match bridge_cffi::engine::initialize_runtime(&root_path, files) {
-            Ok(bex) => {
-                store_sdk_root(sdk_root.clone())?;
-                Ok(BamlRuntime { bex, sdk_root })
-            }
+            Ok(bex) => Ok(BamlRuntime { bex }),
             Err(e) => Err(bridge_error_to_py(e)),
         }
-    }
-
-    #[getter]
-    fn _sdk_root(&self) -> &str {
-        &self.sdk_root
     }
 }
 
@@ -160,7 +118,7 @@ impl BamlRuntime {
                 .map_err(runtime_error_to_py)?;
 
             let handle_options = bridge_ctypes::CffiHandleTableOptions::for_in_process();
-            let baml_value = external_to_baml_value(&result, &handle_options).map_err(|e| {
+            let baml_value = external_to_outbound(&result, &handle_options).map_err(|e| {
                 pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!(
                     "Failed to encode result: {e}"
                 ))
@@ -217,7 +175,7 @@ impl BamlRuntime {
             .map_err(runtime_error_to_py)?;
 
         let handle_options = bridge_ctypes::CffiHandleTableOptions::for_in_process();
-        let baml_value = external_to_baml_value(&result, &handle_options).map_err(|e| {
+        let baml_value = external_to_outbound(&result, &handle_options).map_err(|e| {
             pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!("Failed to encode result: {e}"))
         })?;
 
@@ -258,6 +216,5 @@ pub fn get_runtime() -> PyResult<BamlRuntime> {
         ),
         other => bridge_error_to_py(other),
     })?;
-    let sdk_root = load_sdk_root()?;
-    Ok(BamlRuntime { bex, sdk_root })
+    Ok(BamlRuntime { bex })
 }
