@@ -16,9 +16,7 @@ function f<K, V>(k: K, v: V) -> V {
 }
 
 function GenericCallInArray(k: int, v: string) -> string[] {
-    [
-        f<int, string>(k, v),
-    ]
+    [f<int, string>(k, v)]
 }
 
 // Generic args can also start with non-Word tokens — string-literal types

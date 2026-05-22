@@ -65,7 +65,7 @@ impl FromCST for Expression {
             SyntaxKind::FLOAT_LITERAL => Expression::Literal(Literal::Float(
                 t::FloatLiteral::new_from_span(elem.text_range()),
             )),
-            SyntaxKind::PATH_EXPR | SyntaxKind::WORD => {
+            SyntaxKind::PATH_EXPR | SyntaxKind::WORD | SyntaxKind::EXPR_WITH_TYPE_ARGS => {
                 PathExpr::from_cst(elem).map(Expression::Path)?
             }
             SyntaxKind::PAREN_EXPR => ParenExpr::from_cst(elem).map(Expression::Paren)?,
@@ -328,24 +328,31 @@ impl FromCST for PathExpr {
                 generic_args: None,
             });
         }
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::PATH_EXPR)?;
 
-        let mut it = SyntaxNodeIter::new(&node);
+        // `EXPR_WITH_TYPE_ARGS` is the uniform wrapper for any expression
+        // followed by `<...>`. For path-shaped bases (`f<T>`, `a.b.c<T>`,
+        // `Foo<T>`) we flatten the wrapper into a single `PathExpr` whose
+        // `generic_args` field carries the trailing `<...>`.  Non-path bases
+        // (e.g. `(lambda)<T>`) are not currently representable as a
+        // `PathExpr`; callers must dispatch them differently before reaching
+        // here.
+        if elem.kind() == SyntaxKind::EXPR_WITH_TYPE_ARGS {
+            let node = StrongAstError::assert_is_node(elem)?;
+            let generic_args_node = node
+                .children()
+                .find(|n| n.kind() == SyntaxKind::GENERIC_ARGS);
+            let inner_path_node = node
+                .children()
+                .find(|n| n.kind() != SyntaxKind::GENERIC_ARGS);
 
-        // First child: either a WORD, or a nested PATH_EXPR (the parser wraps
-        // an existing path expr when it adds GENERIC_ARGS as a postfix).
-        let next = it
-            .next()
-            .ok_or_else(|| StrongAstError::missing(SyntaxKind::WORD, it.parent))?;
-
-        let (first, mut rest) = match next.kind() {
-            SyntaxKind::WORD => (t::Word::from_cst(next)?, Vec::new()),
-            SyntaxKind::PATH_EXPR => {
-                let nested = PathExpr::from_cst(next)?;
+            // Resolve the path tokens.  Inner node form (`PATH_EXPR`) wins
+            // over the bare-token form (single-segment `Foo<T>` where the
+            // WORD sits directly under `EXPR_WITH_TYPE_ARGS`).
+            let (first, rest) = if let Some(inner) = inner_path_node {
+                let nested = PathExpr::from_cst(rowan::NodeOrToken::Node(inner))?;
                 if nested.generic_args.is_some() {
                     return Err(StrongAstError::UnexpectedAdditionalElement {
-                        parent: it.parent,
+                        parent: node.text_range(),
                         at: nested
                             .generic_args
                             .as_ref()
@@ -353,7 +360,49 @@ impl FromCST for PathExpr {
                     });
                 }
                 (nested.first, nested.rest)
-            }
+            } else {
+                let mut words: Vec<t::Word> = node
+                    .children_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .filter(|t| t.kind() == SyntaxKind::WORD)
+                    .map(|t| t::Word::new_from_span(t.text_range()))
+                    .collect();
+                if words.is_empty() {
+                    return Err(StrongAstError::missing(SyntaxKind::WORD, node.text_range()));
+                }
+                let first = words.remove(0);
+                let rest: Vec<(t::Dot, t::Word)> = Vec::new();
+                let _ = words; // additional WORDs would require synthesizing DOTs; the parser
+                // shape for multi-segment paths uses a nested PATH_EXPR so we don't expect
+                // bare-token multi-segment shapes here.
+                (first, rest)
+            };
+
+            let generic_args = match generic_args_node {
+                Some(args) => Some(GenericArgs::from_cst(rowan::NodeOrToken::Node(args))?),
+                None => None,
+            };
+
+            return Ok(PathExpr {
+                first,
+                rest,
+                generic_args,
+            });
+        }
+
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::PATH_EXPR)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+
+        // First child: a WORD token.  PATH_EXPR is now strictly dotted-name
+        // segments; generic args live on the enclosing `EXPR_WITH_TYPE_ARGS`.
+        let next = it
+            .next()
+            .ok_or_else(|| StrongAstError::missing(SyntaxKind::WORD, it.parent))?;
+
+        let (first, mut rest) = match next.kind() {
+            SyntaxKind::WORD => (t::Word::from_cst(next)?, Vec::new()),
             _ => {
                 return Err(StrongAstError::UnexpectedAdditionalElement {
                     parent: it.parent,
@@ -362,25 +411,13 @@ impl FromCST for PathExpr {
             }
         };
 
-        let mut generic_args: Option<GenericArgs> = None;
-
-        // Then: DOT WORD pairs, optionally followed by a single GENERIC_ARGS.
+        // Then: DOT WORD pairs.
         while let Some(elem) = it.next() {
             match elem.kind() {
                 SyntaxKind::DOT => {
                     let dot = t::Dot::from_cst(elem)?;
                     let word = it.expect_parse()?;
                     rest.push((dot, word));
-                }
-                SyntaxKind::GENERIC_ARGS => {
-                    generic_args = Some(GenericArgs::from_cst(elem)?);
-                    if let Some(extra) = it.next() {
-                        return Err(StrongAstError::UnexpectedAdditionalElement {
-                            parent: it.parent,
-                            at: extra.text_range(),
-                        });
-                    }
-                    break;
                 }
                 _ => {
                     return Err(StrongAstError::UnexpectedAdditionalElement {
@@ -394,7 +431,7 @@ impl FromCST for PathExpr {
         Ok(PathExpr {
             first,
             rest,
-            generic_args,
+            generic_args: None,
         })
     }
 }

@@ -9,5 +9,7 @@ class Todo {
 }
 
 function GetTodo() -> Todo {
-    baml.fetch_as<Todo>(baml.HttpRequest { method: baml.HttpMethod.Get, url: "dummyjson.com/todos/1" })
+    baml.fetch_as<Todo>(
+        baml.HttpRequest { method: baml.HttpMethod.Get, url: "dummyjson.com/todos/1" },
+    )
 }

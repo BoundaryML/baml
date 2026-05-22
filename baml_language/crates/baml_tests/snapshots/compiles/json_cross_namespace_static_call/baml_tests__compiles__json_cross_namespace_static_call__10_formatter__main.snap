@@ -21,8 +21,7 @@ source: crates/baml_tests/src/generated_tests.rs
 function decode_root(
     j: baml.json.json,
 ) -> root.pkg.inner.Box<int> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-    root.pkg.inner.Box<int>
-        .from_json(j)
+    root.pkg.inner.Box<int>.from_json(j)
 }
 
 // Auto-derived counterpart: `AutoBox<T>` has no user `from_json`, so this
@@ -31,6 +30,5 @@ function decode_root(
 function decode_auto(
     j: baml.json.json,
 ) -> root.pkg.inner.AutoBox<int> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-    root.pkg.inner.AutoBox<int>
-        .from_json(j)
+    root.pkg.inner.AutoBox<int>.from_json(j)
 }
