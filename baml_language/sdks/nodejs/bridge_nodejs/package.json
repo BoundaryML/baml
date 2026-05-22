@@ -1,0 +1,48 @@
+{
+  "name": "@boundaryml/baml-node",
+  "version": "0.0.0-beta",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "napi": {
+    "binaryName": "baml_node",
+    "targets": [
+      "x86_64-apple-darwin",
+      "aarch64-apple-darwin",
+      "x86_64-unknown-linux-gnu",
+      "x86_64-unknown-linux-musl",
+      "aarch64-unknown-linux-gnu",
+      "aarch64-unknown-linux-musl",
+      "x86_64-pc-windows-msvc",
+      "aarch64-pc-windows-msvc"
+    ]
+  },
+  "scripts": {
+    "build:proto": "node node_modules/protobufjs-cli/bin/pbjs -t static-module -w commonjs -p ../../../crates/bridge_ctypes/types -o typescript_src/proto/baml_cffi.js ../../../crates/bridge_ctypes/types/baml_core/cffi/v1/baml_inbound.proto ../../../crates/bridge_ctypes/types/baml_core/cffi/v1/baml_outbound.proto && node node_modules/protobufjs-cli/bin/pbts -o typescript_src/proto/baml_cffi.d.ts typescript_src/proto/baml_cffi.js",
+    "build:napi-debug": "napi build --js ./native.js --dts ./native.d.ts --platform && cp native.d.ts typescript_src/native.d.ts",
+    "build:napi-release": "napi build --js ./native.js --dts ./native.d.ts --platform --release && cp native.d.ts typescript_src/native.d.ts",
+    "build:ts_build": "tsc -p tsconfig.json",
+    "build:tag-generated-files": "node typescript_src/tag-generated-files.js",
+    "build:debug": "pnpm build:proto && pnpm build:napi-debug && pnpm build:ts_build && pnpm build:tag-generated-files",
+    "build:release": "pnpm build:proto && pnpm build:napi-release && pnpm build:ts_build && pnpm build:tag-generated-files",
+    "test": "jest"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "3.0.4",
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.0.0",
+    "jest": "^29.7.0",
+    "protobufjs-cli": "^1.2.0",
+    "ts-jest": "^29.1.0",
+    "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "protobufjs": "^7.4.0"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/tests/**/*.test.ts"
+    ]
+  }
+}
