@@ -2553,7 +2553,7 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: baml.llm.Exec
     call baml.Array.length
     pop 1
     load_var self
-    load_var self
+    copy 0
     load_field .counter
     load_const 1
     bin_op +
@@ -2729,7 +2729,7 @@ function baml.llm.Client.execute_once_stream(self: null, context: baml.llm.Execu
     call baml.Array.length
     pop 1
     load_var self
-    load_var self
+    copy 0
     load_field .counter
     load_const 1
     bin_op +

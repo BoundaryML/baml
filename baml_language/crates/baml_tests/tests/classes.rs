@@ -707,7 +707,7 @@ async fn field_compound_assignment() {
         init_field .value
         store_var c
         load_var c
-        load_var c
+        copy 0
         load_field .value
         load_const 10
         bin_op +
@@ -791,8 +791,7 @@ async fn nested_field_compound_assignment() {
         store_var o
         load_var o
         load_field .inner
-        load_var o
-        load_field .inner
+        copy 0
         load_field .value
         load_const 10
         bin_op +
@@ -885,7 +884,7 @@ async fn mutable_self_method() {
     insta::assert_snapshot!(output.bytecode, @"
     function Number.add(self: null, other: Number) -> bool {
         load_var self
-        load_var self
+        copy 0
         load_field .value
         load_var other
         load_field .value

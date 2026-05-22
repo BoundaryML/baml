@@ -1397,7 +1397,7 @@ function user.User.from_json(j: baml.json.json) -> User {
 
 function user.User.promote(self: null, bonus: int) -> Report {
     load_var self
-    load_var self
+    copy 0
     load_field .age
     load_const 1
     bin_op +

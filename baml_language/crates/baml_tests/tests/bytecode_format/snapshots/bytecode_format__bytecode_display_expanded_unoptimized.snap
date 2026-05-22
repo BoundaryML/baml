@@ -1399,7 +1399,7 @@ function user.User.from_json(j: baml.json.json) -> User {
 
 function user.User.promote(self: null, bonus: int) -> Report {
   9    0    load_var 1                     (self)
-       1    load_var 1                     (self)
+       1    copy 0                         
        2    load_field 1                   (age)
        3    load_const 0                   (1)
        4    bin_op +                       

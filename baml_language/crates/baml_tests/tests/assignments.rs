@@ -281,7 +281,7 @@ async fn field_assignment_add_assign() {
         init_field .value
         store_var c
         load_var c
-        load_var c
+        copy 0
         load_field .value
         load_const 5
         bin_op +
@@ -317,7 +317,7 @@ async fn field_assignment_sub_assign() {
         init_field .value
         store_var c
         load_var c
-        load_var c
+        copy 0
         load_field .value
         load_const 8
         bin_op -
@@ -353,7 +353,7 @@ async fn field_assignment_mul_assign() {
         init_field .value
         store_var c
         load_var c
-        load_var c
+        copy 0
         load_field .value
         load_const 3
         bin_op *
@@ -389,7 +389,7 @@ async fn field_assignment_div_assign() {
         init_field .value
         store_var c
         load_var c
-        load_var c
+        copy 0
         load_field .value
         load_const 4
         bin_op /
@@ -425,7 +425,7 @@ async fn field_assignment_mod_assign() {
         init_field .value
         store_var c
         load_var c
-        load_var c
+        copy 0
         load_field .value
         load_const 5
         bin_op %
@@ -500,25 +500,25 @@ async fn field_assignment_multiple_ops() {
         init_field .score
         store_var s
         load_var s
-        load_var s
+        copy 0
         load_field .score
         load_const 5
         bin_op +
         store_field .score
         load_var s
-        load_var s
+        copy 0
         load_field .score
         load_const 2
         bin_op *
         store_field .score
         load_var s
-        load_var s
+        copy 0
         load_field .score
         load_const 10
         bin_op -
         store_field .score
         load_var s
-        load_var s
+        copy 0
         load_field .score
         load_const 4
         bin_op /
@@ -602,8 +602,7 @@ async fn nested_field_assignment_compound() {
         store_var o
         load_var o
         load_field .inner
-        load_var o
-        load_field .inner
+        copy 0
         load_field .value
         load_const 32
         bin_op +
@@ -693,9 +692,7 @@ async fn array_element_field_assignment() {
         load_var items
         load_const 1
         load_array_element
-        load_var items
-        load_const 1
-        load_array_element
+        copy 0
         load_field .count
         load_const 5
         bin_op +
@@ -982,7 +979,7 @@ async fn method_call_field_assignment_with_copy() {
         call user.Factory.get_counter
         store_var c
         load_var c
-        load_var c
+        copy 0
         load_field .value
         load_const 5
         bin_op +

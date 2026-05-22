@@ -963,6 +963,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     }
                 }
 
+                if self.emit_copy_aware_field_store(destination, value) {
+                    return;
+                }
+
                 // For field/index stores, push the base object first, then emit the value
                 // This sets up the stack correctly for StoreField/StoreArrayElement
                 if unwrap_infallible(pull_semantics::walk_projection_store(
@@ -1152,6 +1156,39 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// For Real locals, this emits a `LoadVar` instruction.
     fn emit_operand_pull(&mut self, operand: &Operand) {
         unwrap_infallible(pull_semantics::walk_operand_pull(self, operand));
+    }
+
+    /// Emit `base.field = base.field <op> rhs` as:
+    ///
+    /// `base; copy 0; load_field; rhs; op; store_field`
+    ///
+    /// The generic projection-store path evaluates the destination receiver and
+    /// then independently pulls the full rvalue, which re-emits the receiver for
+    /// lowered compound assignments. Keeping the receiver on the stack and
+    /// duplicating it avoids that second receiver evaluation without changing
+    /// the VM's existing `StoreField` stack contract.
+    fn emit_copy_aware_field_store(&mut self, destination: &Place, value: &Rvalue) -> bool {
+        let Place::Field { base, field } = destination else {
+            return false;
+        };
+
+        let Rvalue::BinaryOp { op, left, right } = value else {
+            return false;
+        };
+
+        match left {
+            Operand::Copy(place) | Operand::Move(place) if place == destination => {}
+            _ => return false,
+        }
+
+        let name = self.resolve_field_name(base, *field);
+        unwrap_infallible(pull_semantics::walk_place_pull(self, base));
+        self.emit(Instruction::Copy(0));
+        unwrap_infallible(self.load_field(*field, &name));
+        self.emit_operand_pull(right);
+        self.emit(Self::binop_instruction(*op));
+        unwrap_infallible(self.store_field_value(*field, &name));
+        true
     }
 
     /// Emit an rvalue using the pull model.

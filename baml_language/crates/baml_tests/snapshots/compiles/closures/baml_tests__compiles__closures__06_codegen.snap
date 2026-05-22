@@ -120,7 +120,7 @@ function user.Counter.from_json(j: baml.json.json) -> Counter {
 
 function user.Counter.increment(self: null) -> int {
     load_var self
-    load_var self
+    copy 0
     load_field .value
     load_const 1
     bin_op +
