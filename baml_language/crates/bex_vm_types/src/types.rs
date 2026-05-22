@@ -858,6 +858,11 @@ pub enum Object {
     /// at call time by `CallIndirect`.
     BoundMethod(BoundMethod),
 
+    /// A free function paired with pre-bound generic type arguments.
+    /// Created by `MakeInstantiatedFunction` from a TS-style
+    /// instantiation expression like `let cb = f<string>;`.
+    InstantiatedFunction(InstantiatedFunction),
+
     /// A mutable cell holding a single captured value.
     Cell(Cell),
 
@@ -915,6 +920,7 @@ enum ObjectSerde {
     Variant(Variant),
     Closure(Closure),
     BoundMethod(BoundMethod),
+    InstantiatedFunction(InstantiatedFunction),
     Cell(Cell),
     String(String),
     Uint8Array(Vec<u8>),
@@ -935,6 +941,7 @@ impl Serialize for Object {
             Self::Variant(v) => ObjectSerde::Variant(v.clone()),
             Self::Closure(v) => ObjectSerde::Closure(v.clone()),
             Self::BoundMethod(v) => ObjectSerde::BoundMethod(v.clone()),
+            Self::InstantiatedFunction(v) => ObjectSerde::InstantiatedFunction(v.clone()),
             Self::Cell(v) => ObjectSerde::Cell(v.clone()),
             Self::String(v) => ObjectSerde::String(v.clone()),
             Self::Uint8Array(v) => ObjectSerde::Uint8Array(v.clone()),
@@ -969,6 +976,7 @@ impl<'de> Deserialize<'de> for Object {
             ObjectSerde::Variant(v) => Self::Variant(v),
             ObjectSerde::Closure(v) => Self::Closure(v),
             ObjectSerde::BoundMethod(v) => Self::BoundMethod(v),
+            ObjectSerde::InstantiatedFunction(v) => Self::InstantiatedFunction(v),
             ObjectSerde::Cell(v) => Self::Cell(v),
             ObjectSerde::String(v) => Self::String(v),
             ObjectSerde::Uint8Array(v) => Self::Uint8Array(v),
@@ -1011,6 +1019,21 @@ pub struct BoundMethod {
     pub receiver: Value,
 }
 
+/// A free function paired with pre-bound generic type arguments.
+///
+/// Created by `MakeInstantiatedFunction` from a TS-style instantiation
+/// expression (`let cb = f<string>;`). At call time, the VM seeds
+/// `frame.type_args` from `bound_type_args` just as it would from a
+/// `Closure`'s `captured_type_args`. No receiver, no captures.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct InstantiatedFunction {
+    /// Pointer to the underlying `Object::Function`.
+    pub function: HeapPtr,
+    /// Type arguments pre-bound at instantiation time.  These become the
+    /// initial `frame.type_args` when the function is invoked.
+    pub bound_type_args: Vec<baml_type::Ty>,
+}
+
 /// A mutable cell wrapping a single captured value.
 ///
 /// Variables that are closed over are heap-allocated as `Cell` objects so that
@@ -1033,6 +1056,13 @@ impl std::fmt::Display for Object {
                 write!(f, "<closure captures={captures_len}>")
             }
             Object::BoundMethod(_) => write!(f, "<bound_method>"),
+            Object::InstantiatedFunction(inst) => {
+                write!(
+                    f,
+                    "<instantiated_fn type_args={}>",
+                    inst.bound_type_args.len()
+                )
+            }
             Object::Cell(cell) => write!(f, "<cell {}>", cell.value),
             Object::String(string) => string.fmt(f),
             Object::Uint8Array(bytes) => write!(f, "<uint8array len={}>", bytes.len()),
@@ -1637,6 +1667,7 @@ impl ObjectType {
             Object::Function(func) => Self::Function(FunctionType::from(&func.kind)),
             Object::Closure(_) => Self::Closure,
             Object::BoundMethod(_) => Self::Closure, // Treat as callable like closures
+            Object::InstantiatedFunction(_) => Self::Closure, // Same — callable shape
             Object::Cell(_) => Self::Cell,
             Object::Class(_) => Self::Class,
             Object::Instance(_) => Self::Instance,

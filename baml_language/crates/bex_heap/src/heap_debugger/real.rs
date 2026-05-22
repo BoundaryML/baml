@@ -353,6 +353,9 @@ impl BexHeap {
                 self.debug_assert_valid_index(bm.function);
                 self.debug_assert_valid_value(&bm.receiver);
             }
+            Object::InstantiatedFunction(inst) => {
+                self.debug_assert_valid_index(inst.function);
+            }
             Object::Cell(cell) => {
                 self.debug_assert_valid_value(&cell.value);
             }

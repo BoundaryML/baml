@@ -136,6 +136,10 @@ fn format_value_recursive(
                 Ok(format!("<closure captures={}>", closure.captures.len()))
             }
             Object::BoundMethod(_) => Ok("<bound_method>".to_string()),
+            Object::InstantiatedFunction(inst) => Ok(format!(
+                "<instantiated_fn type_args={}>",
+                inst.bound_type_args.len()
+            )),
             Object::Cell(cell) => Ok(format!("<cell {}>", cell.value)),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Ok("<sentinel>".to_string()),

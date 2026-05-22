@@ -671,6 +671,7 @@ fn owned_inner(
                     .unwrap_or_else(|| BexExternalValue::RustData(data.clone()))),
                 Object::Closure(_) => unconvertible("closure"),
                 Object::BoundMethod(_) => unconvertible("bound_method"),
+                Object::InstantiatedFunction(_) => unconvertible("instantiated_function"),
                 Object::Cell(_) => unconvertible("cell"),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(sentinel_kind) => {

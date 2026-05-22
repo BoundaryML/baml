@@ -348,6 +348,10 @@ impl BexHeap {
                     worklist.push(*ptr);
                 }
             }
+            Object::InstantiatedFunction(inst) => {
+                worklist.push(inst.function);
+                // bound_type_args are owned Ty values, not heap refs.
+            }
             Object::Cell(cell) => {
                 if let Value::Object(ptr) = &cell.value {
                     worklist.push(*ptr);
@@ -474,6 +478,11 @@ impl BexHeap {
                     bm.function = new_ptr;
                 }
                 self.fixup_value(&mut bm.receiver, forwarding);
+            }
+            Object::InstantiatedFunction(inst) => {
+                if let Some(&new_ptr) = forwarding.get(&inst.function) {
+                    inst.function = new_ptr;
+                }
             }
             Object::Cell(cell) => {
                 self.fixup_value(&mut cell.value, forwarding);
@@ -725,6 +734,11 @@ impl BexHeap {
                     && self.generation_of(ptr).is_young()
                 {
                     worklist.push(ptr);
+                }
+            }
+            Object::InstantiatedFunction(inst) => {
+                if self.generation_of(inst.function).is_young() {
+                    worklist.push(inst.function);
                 }
             }
             Object::Cell(cell) => {
