@@ -374,9 +374,7 @@ async fn recursion() {
         load_const 2
         bin_op -
         call user.fib
-        store_var _5
         load_var _3
-        load_var _5
         add_int
         jump L2
 

@@ -1,8 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_compiler2_mir::{
-    Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind, Terminator,
+    BinOp, Constant, Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind, Terminator,
 };
+use baml_type::{Literal, Ty};
 
 use crate::{
     analysis::{LocalClassification, LocalDefUse, StatementRef, UseLocation},
@@ -109,6 +110,15 @@ impl StackCarrySim {
             false
         }
     }
+
+    fn use_carried_at_depth(&mut self, expected_depth: usize) -> bool {
+        if self.depth == Some(expected_depth) && !self.used {
+            self.used = true;
+            true
+        } else {
+            false
+        }
+    }
 }
 
 fn is_stack_carry_use_safe(
@@ -194,6 +204,7 @@ fn is_stack_carry_use_safe(
                             &stmt.kind,
                             &mut sim,
                             local,
+                            body,
                             classifications,
                             def_use,
                         ) {
@@ -208,6 +219,7 @@ fn is_stack_carry_use_safe(
                         &stmt.kind,
                         &mut sim,
                         local,
+                        body,
                         classifications,
                         def_use,
                     ) {
@@ -220,6 +232,7 @@ fn is_stack_carry_use_safe(
                             &stmt.kind,
                             &mut sim,
                             local,
+                            body,
                             classifications,
                             def_use,
                         ) {
@@ -230,7 +243,14 @@ fn is_stack_carry_use_safe(
                     let Some(term) = block.terminator.as_ref() else {
                         return false;
                     };
-                    if !simulate_terminator_stack(term, &mut sim, local, classifications, def_use) {
+                    if !simulate_terminator_stack(
+                        term,
+                        &mut sim,
+                        local,
+                        body,
+                        classifications,
+                        def_use,
+                    ) {
                         return false;
                     }
                 }
@@ -241,7 +261,14 @@ fn is_stack_carry_use_safe(
 
         // Intermediate blocks on the carried path must be straight-line gotos.
         for stmt in &block.statements {
-            if !simulate_statement_stack(&stmt.kind, &mut sim, local, classifications, def_use) {
+            if !simulate_statement_stack(
+                &stmt.kind,
+                &mut sim,
+                local,
+                body,
+                classifications,
+                def_use,
+            ) {
                 return false;
             }
         }
@@ -311,6 +338,7 @@ fn simulate_statement_stack(
     kind: &StatementKind,
     sim: &mut StackCarrySim,
     carried_local: Local,
+    body: &MirFunctionBody,
     classifications: &HashMap<Local, LocalClassification>,
     def_use: &HashMap<Local, LocalDefUse>,
 ) -> bool {
@@ -333,6 +361,7 @@ fn simulate_statement_stack(
                             value,
                             sim,
                             carried_local,
+                            body,
                             classifications,
                             def_use,
                         )
@@ -342,6 +371,7 @@ fn simulate_statement_stack(
                             value,
                             sim,
                             carried_local,
+                            body,
                             classifications,
                             def_use,
                         ) {
@@ -359,8 +389,14 @@ fn simulate_statement_stack(
             }
             Place::Capture(_) => {
                 // StoreCapture: evaluate rvalue (pops 1), no stack-carry interaction.
-                if !simulate_rvalue_pull_stack(value, sim, carried_local, classifications, def_use)
-                {
+                if !simulate_rvalue_pull_stack(
+                    value,
+                    sim,
+                    carried_local,
+                    body,
+                    classifications,
+                    def_use,
+                ) {
                     return false;
                 }
                 sim.pop_n(1)
@@ -408,6 +444,7 @@ fn simulate_terminator_stack(
     term: &Terminator,
     sim: &mut StackCarrySim,
     carried_local: Local,
+    _body: &MirFunctionBody,
     classifications: &HashMap<Local, LocalClassification>,
     def_use: &HashMap<Local, LocalDefUse>,
 ) -> bool {
@@ -637,9 +674,32 @@ fn simulate_rvalue_pull_stack(
     rvalue: &Rvalue,
     sim: &mut StackCarrySim,
     carried_local: Local,
+    body: &MirFunctionBody,
     classifications: &HashMap<Local, LocalClassification>,
     def_use: &HashMap<Local, LocalDefUse>,
 ) -> bool {
+    // The emitter pulls binary operands left-to-right. If the right operand is
+    // a carried call result, pulling a safe commutative left operand first puts
+    // the stack in reversed order (`right, left`). Numeric add/mul tolerate
+    // that order, so the call result can still avoid a slot round-trip.
+    if let Rvalue::BinaryOp { op, left, right } = rvalue
+        && is_operand_local(right, carried_local)
+        && !operand_mentions_local(left, carried_local)
+        && is_safe_reversed_commutative_binary(body, *op, left, right)
+    {
+        if !simulate_operand_pull_stack(left, sim, carried_local, classifications, def_use) {
+            return false;
+        }
+        if !sim.use_carried_at_depth(1) {
+            return false;
+        }
+        if !sim.pop_n(2) {
+            return false;
+        }
+        sim.push();
+        return true;
+    }
+
     // MakeBoundMethod: pops receiver (1 value), pushes bound_method (1 value).
     // Net stack effect: 0 (receiver consumed, bound_method produced).
     if let Rvalue::MakeBoundMethod { receiver, .. } = rvalue {
@@ -666,6 +726,79 @@ fn simulate_rvalue_pull_stack(
         def_use,
     };
     pull_semantics::walk_rvalue_pull(&mut sink, rvalue).is_ok()
+}
+
+fn is_operand_local(operand: &Operand, local: Local) -> bool {
+    matches!(
+        operand,
+        Operand::Copy(Place::Local(l)) | Operand::Move(Place::Local(l)) if *l == local
+    )
+}
+
+fn operand_mentions_local(operand: &Operand, local: Local) -> bool {
+    match operand {
+        Operand::Copy(place) | Operand::Move(place) => place_mentions_local(place, local),
+        Operand::Constant(_) => false,
+    }
+}
+
+fn place_mentions_local(place: &Place, local: Local) -> bool {
+    match place {
+        Place::Local(l) => *l == local,
+        Place::Field { base, .. } => place_mentions_local(base, local),
+        Place::Index { base, index, .. } => *index == local || place_mentions_local(base, local),
+        Place::Capture(_) => false,
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NumericKind {
+    Int,
+    Float,
+}
+
+fn is_safe_reversed_commutative_binary(
+    body: &MirFunctionBody,
+    op: BinOp,
+    left: &Operand,
+    right: &Operand,
+) -> bool {
+    match op {
+        BinOp::Add | BinOp::Mul => {
+            let Some(left_kind) = numeric_operand_kind(body, left) else {
+                return false;
+            };
+            let Some(right_kind) = numeric_operand_kind(body, right) else {
+                return false;
+            };
+            left_kind == right_kind
+        }
+        _ => false,
+    }
+}
+
+fn numeric_operand_kind(body: &MirFunctionBody, operand: &Operand) -> Option<NumericKind> {
+    match operand {
+        Operand::Constant(Constant::Int(_)) => Some(NumericKind::Int),
+        Operand::Constant(Constant::Float(_)) => Some(NumericKind::Float),
+        Operand::Copy(place) | Operand::Move(place) => numeric_place_kind(body, place),
+        Operand::Constant(_) => None,
+    }
+}
+
+fn numeric_place_kind(body: &MirFunctionBody, place: &Place) -> Option<NumericKind> {
+    match place {
+        Place::Local(local) => numeric_ty_kind(&body.local(*local).ty),
+        Place::Field { .. } | Place::Index { .. } | Place::Capture(_) => None,
+    }
+}
+
+fn numeric_ty_kind(ty: &Ty) -> Option<NumericKind> {
+    match ty {
+        Ty::Int { .. } | Ty::Literal(Literal::Int(_), _) => Some(NumericKind::Int),
+        Ty::Float { .. } | Ty::Literal(Literal::Float(_), _) => Some(NumericKind::Float),
+        _ => None,
+    }
 }
 
 struct StackCarryPullSink<'a> {

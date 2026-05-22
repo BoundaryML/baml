@@ -356,9 +356,7 @@ function user.for_let_fn_narrow(items: ((int) -> int throws never)[]) -> int {
     load_var __for_idx
     load_array_element
     call_indirect
-    store_var _9
     load_var total
-    load_var _9
     add_int
     store_var total
     load_var __for_idx
