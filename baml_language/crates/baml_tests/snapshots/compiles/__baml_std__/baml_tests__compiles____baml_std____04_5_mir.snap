@@ -3189,10 +3189,15 @@ fn baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm
     let _46: int
     let _47: (baml.llm.Client[]) -> int throws never
     let _48: baml.errors.DevOther
-    let _49: int
+    let _49: int // idx
     let _50: int
-    let _51: (baml.llm.Client[]) -> int throws never
-    let _52: null
+    let _51: int
+    let _52: (baml.llm.Client[]) -> int throws never
+    let _53: void // result3
+    let _54: baml.llm.Client
+    let _55: baml.llm.Client[]
+    let _56: int
+    let _57: type
 
     bb0: {
         _4 = copy _1.1;
@@ -3215,18 +3220,24 @@ fn baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm
     }
 
     bb4: {
-        _49 = copy _1.4;
-        _51 = copy _1.2;
-        _50 = call const fn baml.Array.length(copy _51) -> [bb5];
+        _50 = copy _1.4;
+        _52 = copy _1.2;
+        _51 = call const fn baml.Array.length(copy _52) -> [bb5];
     }
 
     bb5: {
+        _49 = copy _50 % copy _51;
         _1.4 = copy _1.4 + const 1_i64;
-        _52 = call const fn baml.sys.panic(const "parse error") -> [bb6];
+        _55 = copy _1.2;
+        _56 = copy _49;
+        _54 = copy _55[_56];
+        _57 = load_type(#0);
+        _53 = call const fn baml.llm.Client.execute_oneshot<copy _57>(copy _54, copy _2, copy _3) -> [bb6];
     }
 
     bb6: {
-        unreachable;
+        _0 = copy _53;
+        goto -> bb38;
     }
 
     bb7: {
@@ -3429,10 +3440,16 @@ fn baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: baml.llm.
     let _34: int
     let _35: (baml.llm.Client[]) -> int throws never
     let _36: baml.errors.DevOther
-    let _37: int
+    let _37: int // idx
     let _38: int
-    let _39: (baml.llm.Client[]) -> int throws never
-    let _40: null
+    let _39: int
+    let _40: (baml.llm.Client[]) -> int throws never
+    let _41: baml.llm.Stream<unknown, unknown> // result3
+    let _42: baml.llm.Client
+    let _43: baml.llm.Client[]
+    let _44: int
+    let _45: type
+    let _46: type
 
     bb0: {
         _4 = copy _1.1;
@@ -3455,18 +3472,25 @@ fn baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: baml.llm.
     }
 
     bb4: {
-        _37 = copy _1.4;
-        _39 = copy _1.2;
-        _38 = call const fn baml.Array.length(copy _39) -> [bb5];
+        _38 = copy _1.4;
+        _40 = copy _1.2;
+        _39 = call const fn baml.Array.length(copy _40) -> [bb5];
     }
 
     bb5: {
+        _37 = copy _38 % copy _39;
         _1.4 = copy _1.4 + const 1_i64;
-        _40 = call const fn baml.sys.panic(const "parse error") -> [bb6];
+        _43 = copy _1.2;
+        _44 = copy _37;
+        _42 = copy _43[_44];
+        _45 = load_type(#0);
+        _46 = load_type(#1);
+        _41 = call const fn baml.llm.Client.execute_stream<copy _45, copy _46>(copy _42, copy _2, copy _3) -> [bb6];
     }
 
     bb6: {
-        unreachable;
+        _0 = copy _41;
+        goto -> bb23;
     }
 
     bb7: {

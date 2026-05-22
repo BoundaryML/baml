@@ -477,3 +477,30 @@ async fn instantiation_expression_runs() {
         Ok(BexExternalValue::String("hi".to_string()))
     );
 }
+
+/// Instantiation applied to a parenthesized generic lambda.
+///
+/// The parser produces a uniform `EXPR_WITH_TYPE_ARGS` wrapper around the
+/// `PAREN_EXPR` containing the lambda, so the standalone-value branch of
+/// AST lowering wraps the lambda expression in `Expr::Instantiation`.
+/// MIR currently falls back to lowering the base expression directly
+/// when the base isn't a resolvable free-function `ItemRef` (a lambda
+/// isn't), so the type args are dropped at runtime — but generics in
+/// BAML are largely erased at the value level, so the call still
+/// returns the right result.
+#[tokio::test]
+async fn parenthesized_lambda_instantiation_runs() {
+    let output = baml_test!(
+        "
+        function main() -> string {
+            let cb = (<T>(x: T) -> { x })<string>;
+            cb(\"hi\")
+        }
+    "
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("hi".to_string()))
+    );
+}

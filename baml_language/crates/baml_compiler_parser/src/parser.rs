@@ -4039,9 +4039,21 @@ impl<'a> Parser<'a> {
                 self.parse_catch_expr(expr_start);
                 continue;
             } else if op == TokenKind::Less && self.looks_like_generic_args() {
-                // Parse as generic arguments: foo<T>
+                // Parse as generic arguments: `<expr> <T1, T2, ...>`.
+                //
+                // The wrapping node is `EXPR_WITH_TYPE_ARGS` — a uniform
+                // shape for "any expression carrying explicit type args"
+                // (TS-style `ExpressionWithTypeArguments`).  This handles:
+                //   - `f<T>(args)` (callee uses it)
+                //   - `Foo<T> { ... }` (object-literal receiver uses it)
+                //   - `Box<T>.from_json(x)` (FIELD_ACCESS base uses it)
+                //   - `(<T>(x: T) -> { x })<T>` (parenthesized expr base)
+                //   - `let cb = f<T>;` (TS-style instantiation expression)
+                //
+                // PATH_EXPR is reserved for actual dotted name paths; it no
+                // longer carries `GENERIC_ARGS` as a child.
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
-                self.wrap_events_in_node(lhs_start, SyntaxKind::PATH_EXPR);
+                self.wrap_events_in_node(lhs_start, SyntaxKind::EXPR_WITH_TYPE_ARGS);
                 self.parse_generic_args();
                 self.finish_node();
                 // Continue to potentially parse function call
@@ -4262,11 +4274,16 @@ impl<'a> Parser<'a> {
                 Event::StartNode { kind } => {
                     depth -= 1;
                     if depth == 0 {
-                        // We just closed a complete expression
-                        // Allow PATH_EXPR or FIELD_ACCESS_EXPR for module-qualified types
+                        // We just closed a complete expression.  Accept any
+                        // node that can be the receiver of a constructor:
+                        // a bare path, a qualified module path, or an
+                        // expression carrying explicit type arguments
+                        // (`Foo<T> { ... }`).
                         return matches!(
                             kind,
-                            SyntaxKind::PATH_EXPR | SyntaxKind::FIELD_ACCESS_EXPR
+                            SyntaxKind::PATH_EXPR
+                                | SyntaxKind::FIELD_ACCESS_EXPR
+                                | SyntaxKind::EXPR_WITH_TYPE_ARGS
                         );
                     }
                 }
@@ -7488,13 +7505,11 @@ type Searcher = (query: string, max_results?: int) -> int
         ));
     }
 
-    /// Helper: count `PATH_EXPR` nodes that contain a `GENERIC_ARGS` child.
+    /// Helper: count `EXPR_WITH_TYPE_ARGS` nodes (any expression carrying
+    /// explicit `<T1, T2, ...>` type arguments).
     fn count_instantiated_paths(root: &SyntaxNode) -> usize {
         root.descendants()
-            .filter(|n| {
-                n.kind() == SyntaxKind::PATH_EXPR
-                    && n.children().any(|c| c.kind() == SyntaxKind::GENERIC_ARGS)
-            })
+            .filter(|n| n.kind() == SyntaxKind::EXPR_WITH_TYPE_ARGS)
             .count()
     }
 
@@ -7549,6 +7564,37 @@ function Demo() -> bool {
             count_instantiated_paths(&root),
             0,
             "expected no PATH_EXPR with GENERIC_ARGS for comparison chain"
+        );
+    }
+
+    #[test]
+    fn parenthesized_generic_lambda_instantiation_parses() {
+        // `(<T>(x: T) -> { x })<string>` — instantiation expression applied
+        // to a parenthesized generic lambda.  Confirms the parser accepts
+        // this shape: a LAMBDA_EXPR survives inside the wrapper that the
+        // postfix `<...>` loop builds for any expression carrying type args.
+        // (Whether TIR can actually instantiate a lambda is a separate
+        // question handled in TIR.)
+        let source = r#"
+function Demo() -> int {
+  let cb = (<T>(x: T) -> { x })<string>;
+  1
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let lambdas = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::LAMBDA_EXPR)
+            .count();
+        assert_eq!(lambdas, 1, "expected the generic lambda to be preserved");
+        let generic_args = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::GENERIC_ARGS)
+            .count();
+        assert!(
+            generic_args >= 1,
+            "expected a GENERIC_ARGS node for the trailing `<string>`"
         );
     }
 

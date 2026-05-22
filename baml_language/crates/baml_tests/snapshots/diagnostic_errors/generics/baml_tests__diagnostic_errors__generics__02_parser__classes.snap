@@ -55,7 +55,7 @@ SOURCE_FILE
               WORD "b"
           EQUALS "="
           OBJECT_LITERAL
-            PATH_EXPR
+            EXPR_WITH_TYPE_ARGS
               WORD "Box"
               GENERIC_ARGS
                 LESS "<"
@@ -113,7 +113,7 @@ SOURCE_FILE
         BLOCK_EXPR
           L_BRACE "{"
           OBJECT_LITERAL
-            PATH_EXPR
+            EXPR_WITH_TYPE_ARGS
               WORD "Wrapper"
               GENERIC_ARGS
                 LESS "<"
@@ -147,7 +147,7 @@ SOURCE_FILE
         L_BRACE "{"
         CALL_EXPR
           FIELD_ACCESS_EXPR
-            PATH_EXPR
+            EXPR_WITH_TYPE_ARGS
               WORD "Wrapper"
               GENERIC_ARGS
                 LESS "<"
@@ -246,7 +246,7 @@ SOURCE_FILE
         BLOCK_EXPR
           L_BRACE "{"
           OBJECT_LITERAL
-            PATH_EXPR
+            EXPR_WITH_TYPE_ARGS
               WORD "Pair"
               GENERIC_ARGS
                 LESS "<"
@@ -294,7 +294,7 @@ SOURCE_FILE
               WORD "p"
           EQUALS "="
           OBJECT_LITERAL
-            PATH_EXPR
+            EXPR_WITH_TYPE_ARGS
               WORD "Pair"
               GENERIC_ARGS
                 LESS "<"
@@ -354,7 +354,7 @@ SOURCE_FILE
               WORD "p"
           EQUALS "="
           OBJECT_LITERAL
-            PATH_EXPR
+            EXPR_WITH_TYPE_ARGS
               WORD "Pair"
               GENERIC_ARGS
                 LESS "<"
@@ -423,7 +423,7 @@ SOURCE_FILE
         BLOCK_EXPR
           L_BRACE "{"
           OBJECT_LITERAL
-            PATH_EXPR
+            EXPR_WITH_TYPE_ARGS
               WORD "Maker"
               GENERIC_ARGS
                 LESS "<"
@@ -460,7 +460,7 @@ SOURCE_FILE
         BLOCK_EXPR
           L_BRACE "{"
           OBJECT_LITERAL
-            PATH_EXPR
+            EXPR_WITH_TYPE_ARGS
               WORD "Maker"
               GENERIC_ARGS
                 LESS "<"
@@ -494,7 +494,7 @@ SOURCE_FILE
         L_BRACE "{"
         CALL_EXPR
           FIELD_ACCESS_EXPR
-            PATH_EXPR
+            EXPR_WITH_TYPE_ARGS
               WORD "Maker"
               GENERIC_ARGS
                 LESS "<"
@@ -562,7 +562,7 @@ SOURCE_FILE
               WORD "h"
           EQUALS "="
           OBJECT_LITERAL
-            PATH_EXPR
+            EXPR_WITH_TYPE_ARGS
               WORD "Holder"
               GENERIC_ARGS
                 LESS "<"
@@ -669,7 +669,7 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         OBJECT_LITERAL
-          PATH_EXPR
+          EXPR_WITH_TYPE_ARGS
             WORD "Box"
             GENERIC_ARGS
               LESS "<"
@@ -704,7 +704,7 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         OBJECT_LITERAL
-          PATH_EXPR
+          EXPR_WITH_TYPE_ARGS
             WORD "Pair"
             GENERIC_ARGS
               LESS "<"
@@ -753,7 +753,7 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         OBJECT_LITERAL
-          PATH_EXPR
+          EXPR_WITH_TYPE_ARGS
             WORD "Plain"
             GENERIC_ARGS
               LESS "<"
@@ -833,7 +833,7 @@ SOURCE_FILE
               WORD "c"
           EQUALS "="
           OBJECT_LITERAL
-            PATH_EXPR
+            EXPR_WITH_TYPE_ARGS
               WORD "Container"
               GENERIC_ARGS
                 LESS "<"
@@ -845,7 +845,7 @@ SOURCE_FILE
               WORD "inner"
               COLON ":"
               OBJECT_LITERAL
-                PATH_EXPR
+                EXPR_WITH_TYPE_ARGS
                   WORD "Box"
                   GENERIC_ARGS
                     LESS "<"
@@ -904,7 +904,7 @@ SOURCE_FILE
         BLOCK_EXPR
           L_BRACE "{"
           OBJECT_LITERAL
-            PATH_EXPR
+            EXPR_WITH_TYPE_ARGS
               WORD "Factory"
               GENERIC_ARGS
                 LESS "<"
@@ -958,7 +958,7 @@ SOURCE_FILE
           EQUALS "="
           CALL_EXPR
             FIELD_ACCESS_EXPR
-              PATH_EXPR
+              EXPR_WITH_TYPE_ARGS
                 WORD "Factory"
                 GENERIC_ARGS
                   LESS "<"
@@ -1067,7 +1067,7 @@ SOURCE_FILE
               WORD "b"
           EQUALS "="
           OBJECT_LITERAL
-            PATH_EXPR
+            EXPR_WITH_TYPE_ARGS
               WORD "MaybeBox"
               GENERIC_ARGS
                 LESS "<"
@@ -1149,7 +1149,7 @@ SOURCE_FILE
               WORD "s"
           EQUALS "="
           OBJECT_LITERAL
-            PATH_EXPR
+            EXPR_WITH_TYPE_ARGS
               WORD "Stack"
               GENERIC_ARGS
                 LESS "<"

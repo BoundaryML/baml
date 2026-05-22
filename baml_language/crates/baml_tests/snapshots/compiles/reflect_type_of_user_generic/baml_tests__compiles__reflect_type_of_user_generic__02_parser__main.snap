@@ -30,7 +30,7 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         CALL_EXPR
-          PATH_EXPR
+          EXPR_WITH_TYPE_ARGS
             PATH_EXPR "reflect.type_of"
               WORD "reflect"
               DOT "."
@@ -62,7 +62,7 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         CALL_EXPR
-          PATH_EXPR
+          EXPR_WITH_TYPE_ARGS
             PATH_EXPR "reflect.type_of"
               WORD "reflect"
               DOT "."
@@ -91,7 +91,7 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         CALL_EXPR
-          PATH_EXPR
+          EXPR_WITH_TYPE_ARGS
             WORD "reflect_type"
             GENERIC_ARGS
               LESS "<"
@@ -115,7 +115,7 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         CALL_EXPR
-          PATH_EXPR
+          EXPR_WITH_TYPE_ARGS
             WORD "reflect_array"
             GENERIC_ARGS
               LESS "<"

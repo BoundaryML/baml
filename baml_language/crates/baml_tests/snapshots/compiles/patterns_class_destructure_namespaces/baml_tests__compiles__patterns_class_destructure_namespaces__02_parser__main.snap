@@ -578,7 +578,7 @@ SOURCE_FILE
                       GREATER ">"
           EQUALS "="
           OBJECT_LITERAL
-            PATH_EXPR
+            EXPR_WITH_TYPE_ARGS
               PATH_EXPR "root.llm.openai.Box"
                 WORD "root"
                 DOT "."
@@ -657,7 +657,7 @@ SOURCE_FILE
                       GREATER ">"
           EQUALS "="
           OBJECT_LITERAL
-            PATH_EXPR
+            EXPR_WITH_TYPE_ARGS
               PATH_EXPR "llm.openai.Box"
                 WORD "llm"
                 DOT "."
@@ -760,7 +760,7 @@ SOURCE_FILE
                         GREATER ">"
           EQUALS "="
           OBJECT_LITERAL
-            PATH_EXPR
+            EXPR_WITH_TYPE_ARGS
               PATH_EXPR "root.llm.openai.Box"
                 WORD "root"
                 DOT "."
@@ -873,7 +873,7 @@ SOURCE_FILE
                         GREATER ">"
           EQUALS "="
           OBJECT_LITERAL
-            PATH_EXPR
+            EXPR_WITH_TYPE_ARGS
               PATH_EXPR "llm.openai.Box"
                 WORD "llm"
                 DOT "."
@@ -971,7 +971,7 @@ SOURCE_FILE
                       GREATER ">"
           EQUALS "="
           OBJECT_LITERAL
-            PATH_EXPR
+            EXPR_WITH_TYPE_ARGS
               PATH_EXPR "root.llm.openai.Outer"
                 WORD "root"
                 DOT "."
@@ -990,7 +990,7 @@ SOURCE_FILE
               WORD "inner"
               COLON ":"
               OBJECT_LITERAL
-                PATH_EXPR
+                EXPR_WITH_TYPE_ARGS
                   PATH_EXPR "root.llm.openai.Box"
                     WORD "root"
                     DOT "."
@@ -1089,7 +1089,7 @@ SOURCE_FILE
                       GREATER ">"
           EQUALS "="
           OBJECT_LITERAL
-            PATH_EXPR
+            EXPR_WITH_TYPE_ARGS
               PATH_EXPR "llm.openai.Outer"
                 WORD "llm"
                 DOT "."
@@ -1106,7 +1106,7 @@ SOURCE_FILE
               WORD "inner"
               COLON ":"
               OBJECT_LITERAL
-                PATH_EXPR
+                EXPR_WITH_TYPE_ARGS
                   PATH_EXPR "llm.openai.Box"
                     WORD "llm"
                     DOT "."

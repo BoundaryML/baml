@@ -57,7 +57,7 @@ SOURCE_FILE
         BLOCK_EXPR
           L_BRACE "{"
           OBJECT_LITERAL
-            PATH_EXPR
+            EXPR_WITH_TYPE_ARGS
               WORD "Box"
               GENERIC_ARGS
                 LESS "<"
@@ -69,7 +69,7 @@ SOURCE_FILE
               WORD "value"
               COLON ":"
               CALL_EXPR
-                PATH_EXPR
+                EXPR_WITH_TYPE_ARGS
                   PATH_EXPR "baml.json.from_json"
                     WORD "baml"
                     DOT "."

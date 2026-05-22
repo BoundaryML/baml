@@ -243,6 +243,23 @@ pub enum SyntaxKind {
     /// For field access on complex expressions (like `f().field` or `arr[0].field`),
     /// use `FIELD_ACCESS_EXPR` instead.
     PATH_EXPR,
+    /// An expression carrying explicit generic type arguments (`<T1, T2, ...>`).
+    ///
+    /// Used as the uniform wrapper any time an expression is followed by
+    /// `<...>` — both the TS-style instantiation form (`f<T>`, `(lambda)<T>`)
+    /// and the in-call form (`f<T>(args)` puts `EXPR_WITH_TYPE_ARGS` as the
+    /// `CALL_EXPR` callee).
+    ///
+    /// Structure: `<base_expr> <GENERIC_ARGS>`, where `base_expr` is the
+    /// inner expression (e.g. `PATH_EXPR`, `PAREN_EXPR`, or any other expr)
+    /// and `GENERIC_ARGS` is the `<T1, ...>` list.
+    ///
+    /// Note: type-args on the receiver of a static-method call
+    /// (`Box<T>.from_json(x)`) still appear under the `FIELD_ACCESS_EXPR`
+    /// base in this same shape.  Constructor sites (`Foo<T> { ... }`) keep
+    /// their existing parse shape — they use `PATH_EXPR` with a trailing
+    /// `GENERIC_ARGS` because the receiver is always a type name.
+    EXPR_WITH_TYPE_ARGS,
     /// `env.FIELD` expression (e.g., `env.API_KEY`).
     ///
     /// Structure: `WORD("env") DOT WORD`

@@ -225,7 +225,7 @@ fn user.GenericTypePatternNamespaceQualifiedMatch() -> int {
     let _2: bool
 
     bb0: {
-        _1 =  { const "ready" };
+        _1 = user.llm.openai.Box { const "ready" };
         _2 = is_type(copy _1, llm.openai.Box<int>);
         branch copy _2 -> [bb2, bb1];
     }
@@ -252,7 +252,7 @@ fn user.GenericTypePatternQualifiedMatch() -> int {
     let _2: bool
 
     bb0: {
-        _1 =  { const 50_i64 };
+        _1 = user.llm.openai.Box { const 50_i64 };
         _2 = is_type(copy _1, llm.openai.Box<string>);
         branch copy _2 -> [bb2, bb1];
     }

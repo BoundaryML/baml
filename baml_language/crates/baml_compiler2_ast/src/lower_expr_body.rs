@@ -52,11 +52,13 @@ fn is_ident_token(kind: SyntaxKind) -> bool {
 /// (e.g. `Container<int>.method<U>(args)`) the *method-level* args (direct
 /// child) win, since they're attached to the call itself.
 fn find_callee_generic_args(callee_node: &SyntaxNode) -> Option<SyntaxNode> {
-    if let Some(args) = callee_node
-        .children()
-        .find(|n| n.kind() == SyntaxKind::GENERIC_ARGS)
-    {
-        return Some(args);
+    // The new canonical shape: `EXPR_WITH_TYPE_ARGS { base, GENERIC_ARGS }`.
+    // For a call `f<T>(args)` the callee is the `EXPR_WITH_TYPE_ARGS` node
+    // and its second child is `GENERIC_ARGS`.
+    if callee_node.kind() == SyntaxKind::EXPR_WITH_TYPE_ARGS {
+        return callee_node
+            .children()
+            .find(|n| n.kind() == SyntaxKind::GENERIC_ARGS);
     }
     match callee_node.kind() {
         SyntaxKind::FIELD_ACCESS_EXPR | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR => {
@@ -623,6 +625,7 @@ impl LoweringContext {
                 }
             }
             SyntaxKind::PATH_EXPR => self.lower_path_expr(node),
+            SyntaxKind::EXPR_WITH_TYPE_ARGS => self.lower_expr_with_type_args(node),
             SyntaxKind::FIELD_ACCESS_EXPR => self.lower_field_access_expr(node),
             SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR => self.lower_optional_field_access_expr(node),
             SyntaxKind::ENV_ACCESS_EXPR => self.lower_env_access_expr(node),
@@ -1995,12 +1998,10 @@ impl LoweringContext {
     }
 
     fn lower_path_expr(&mut self, node: &SyntaxNode) -> ExprId {
-        // PATH_EXPR contains WORD (or keyword-as-ident) tokens joined by DOTs.
-        //
-        // When a PATH_EXPR is wrapped in another PATH_EXPR for generic-arg
-        // annotation (e.g. `reflect.type_of<User>` → outer PATH_EXPR wrapping
-        // inner PATH_EXPR + GENERIC_ARGS), the outer node has no direct token
-        // children. In that case, delegate to the inner PATH_EXPR node.
+        // PATH_EXPR carries only the dotted-name segments (WORD/DOT tokens).
+        // Any `GENERIC_ARGS` is attached to the enclosing
+        // `EXPR_WITH_TYPE_ARGS` node by the parser — never as a child of
+        // `PATH_EXPR` itself.
         let mut segments: Vec<(Name, TextRange)> = Vec::new();
 
         for elem in node.children_with_tokens() {
@@ -2011,58 +2012,85 @@ impl LoweringContext {
             }
         }
 
-        let base_id = if segments.is_empty() {
-            // Check for a nested PATH_EXPR child (produced by the parser when
-            // `foo.bar<T>` wraps the `foo.bar` PATH_EXPR in an outer PATH_EXPR).
-            if let Some(inner) = node.children().find(|n| n.kind() == SyntaxKind::PATH_EXPR) {
-                self.lower_path_expr(&inner)
-            } else {
-                return self.alloc_expr(Expr::Missing, node.text_range());
-            }
-        } else {
-            // Check if single segment is a literal keyword
-            if segments.len() == 1 {
-                match segments[0].0.as_str() {
-                    "true" => {
-                        return self
-                            .alloc_expr(Expr::Literal(Literal::Bool(true)), node.text_range());
-                    }
-                    "false" => {
-                        return self
-                            .alloc_expr(Expr::Literal(Literal::Bool(false)), node.text_range());
-                    }
-                    "null" => return self.alloc_expr(Expr::Null, node.text_range()),
-                    _ => {}
+        if segments.is_empty() {
+            return self.alloc_expr(Expr::Missing, node.text_range());
+        }
+
+        if segments.len() == 1 {
+            match segments[0].0.as_str() {
+                "true" => {
+                    return self.alloc_expr(Expr::Literal(Literal::Bool(true)), node.text_range());
                 }
+                "false" => {
+                    return self.alloc_expr(Expr::Literal(Literal::Bool(false)), node.text_range());
+                }
+                "null" => return self.alloc_expr(Expr::Null, node.text_range()),
+                _ => {}
             }
+        }
 
-            // Multi-segment paths stay as Path(["a", "b", "c"]).
-            // Record per-segment spans for diagnostics and LSP.
-            let names: Vec<Name> = segments.iter().map(|(n, _)| n.clone()).collect();
-            let id = self.alloc_expr(Expr::Path(names), node.text_range());
-            if segments.len() > 1 {
-                let spans: Vec<TextRange> = segments.iter().map(|(_, r)| *r).collect();
-                self.source_map.path_segment_spans.insert(id, spans);
-            }
-            id
-        };
-
-        self.try_wrap_instantiation(node, base_id)
+        let names: Vec<Name> = segments.iter().map(|(n, _)| n.clone()).collect();
+        let id = self.alloc_expr(Expr::Path(names), node.text_range());
+        if segments.len() > 1 {
+            let spans: Vec<TextRange> = segments.iter().map(|(_, r)| *r).collect();
+            self.source_map.path_segment_spans.insert(id, spans);
+        }
+        id
     }
 
-    /// If `node` is a `PATH_EXPR` whose generic args belong to a
-    /// standalone value expression (TS-style `f<T>` instantiation, not the
-    /// callee of a call or the receiver of a method call), wrap the base
-    /// expr in `Expr::Instantiation`. Otherwise return `base` unchanged.
-    fn try_wrap_instantiation(&mut self, node: &SyntaxNode, base: ExprId) -> ExprId {
-        if !Self::path_uses_generic_args_as_value(node) {
-            return base;
+    /// Lower an `EXPR_WITH_TYPE_ARGS` node — the uniform wrapper for any
+    /// expression carrying explicit generic type arguments.
+    ///
+    /// In callee / object-literal / field-access-base positions the
+    /// surrounding node already reads the type args via its own channel
+    /// (see `find_callee_generic_args` for calls, `lower_object_literal`
+    /// for `Foo<T> { ... }`), so we return the inner base expression
+    /// unchanged. Anywhere else the inner expression is wrapped in
+    /// `Expr::Instantiation` so TIR / MIR can produce a bound function
+    /// value.
+    fn lower_expr_with_type_args(&mut self, node: &SyntaxNode) -> ExprId {
+        // Base may be a node (`PATH_EXPR`, `PAREN_EXPR`, ...) or — for simple
+        // identifier paths like `f<T>` — bare `WORD`/`DOT` tokens with no
+        // wrapping node. Try the node form first; fall back to building an
+        // `Expr::Path` from the leading ident tokens.
+        let base_node = node
+            .children()
+            .find(|n| n.kind() != SyntaxKind::GENERIC_ARGS);
+        let base_id = match base_node {
+            Some(child) => self.lower_expr_in_chain(&child),
+            None => {
+                let segments: Vec<(Name, TextRange)> = node
+                    .children_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .filter(|t| is_ident_token(t.kind()))
+                    .map(|t| (Name::new(t.text()), t.text_range()))
+                    .collect();
+                if segments.is_empty() {
+                    return self.alloc_expr(Expr::Missing, node.text_range());
+                }
+                let names: Vec<Name> = segments.iter().map(|(n, _)| n.clone()).collect();
+                let span = segments
+                    .first()
+                    .zip(segments.last())
+                    .map(|((_, a), (_, b))| TextRange::new(a.start(), b.end()))
+                    .unwrap_or_else(|| node.text_range());
+                let id = self.alloc_expr(Expr::Path(names), span);
+                if segments.len() > 1 {
+                    let spans: Vec<TextRange> = segments.iter().map(|(_, r)| *r).collect();
+                    self.source_map.path_segment_spans.insert(id, spans);
+                }
+                id
+            }
+        };
+
+        if !Self::should_wrap_in_instantiation(node) {
+            return base_id;
         }
         let Some(generic_args) = node
             .children()
             .find(|n| n.kind() == SyntaxKind::GENERIC_ARGS)
         else {
-            return base;
+            return base_id;
         };
         let type_args: Vec<TypeExpr> = generic_args
             .children()
@@ -2071,29 +2099,33 @@ impl LoweringContext {
             .map(|te| crate::lower_type_expr::lower_type_expr_node(&te))
             .collect();
         if type_args.is_empty() {
-            return base;
+            return base_id;
         }
-        self.alloc_expr(Expr::Instantiation { base, type_args }, node.text_range())
+        self.alloc_expr(
+            Expr::Instantiation {
+                base: base_id,
+                type_args,
+            },
+            node.text_range(),
+        )
     }
 
-    /// Decide whether `node` (a `PATH_EXPR` carrying `GENERIC_ARGS`) is used
-    /// as a standalone value — i.e. not the callee of a call and not the
-    /// receiver position of `Class<T>.method(...)`. Those two cases keep the
-    /// generic args on `Call.type_args` and lower the path as plain `Path`.
-    fn path_uses_generic_args_as_value(node: &SyntaxNode) -> bool {
+    /// Decide whether an `EXPR_WITH_TYPE_ARGS` node should produce an
+    /// `Expr::Instantiation`.  Callee / object-literal / method-receiver
+    /// positions return `false` because the surrounding construct already
+    /// owns the type-arg semantics.
+    fn should_wrap_in_instantiation(node: &SyntaxNode) -> bool {
         let Some(parent) = node.parent() else {
             return true;
         };
-        match parent.kind() {
-            // `f<T>(x)` — generic args belong to the call site.
-            SyntaxKind::CALL_EXPR => false,
-            // `Class<T>.method(...)` — receiver-type's `<T>` is read by the
-            // call site to instantiate the class's generic params.  We defer
-            // the standalone `Class<T>.method` case (method-reference
-            // instantiation) until later.
-            SyntaxKind::FIELD_ACCESS_EXPR => false,
-            _ => true,
-        }
+        !matches!(
+            parent.kind(),
+            SyntaxKind::CALL_EXPR
+                | SyntaxKind::OPTIONAL_CALL_EXPR
+                | SyntaxKind::OBJECT_LITERAL
+                | SyntaxKind::FIELD_ACCESS_EXPR
+                | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR
+        )
     }
 
     fn lower_field_access_expr(&mut self, node: &SyntaxNode) -> ExprId {
@@ -2387,8 +2419,9 @@ impl LoweringContext {
         //   - A simple WORD token: `MyClass { ... }` → `TypePath::bare`.
         //   - A qualified path node: `baml.errors.DevOther { ... }` (parsed as
         //     PATH_EXPR) → `TypePath` of all the WORD segments.
-        //   - A generic path: `Foo<int> { ... }` (parsed as PATH_EXPR with
-        //     GENERIC_ARGS child) → `TypePath::bare("Foo")` + `type_args = [int]`.
+        //   - A generic path: `Foo<int> { ... }` (parsed as
+        //     `EXPR_WITH_TYPE_ARGS { PATH_EXPR(Foo), GENERIC_ARGS<int> }`)
+        //     → `TypePath::bare("Foo")` + `type_args = [int]`.
         'outer: for elem in node.children_with_tokens() {
             match elem {
                 rowan::NodeOrToken::Token(token) => {
@@ -2400,26 +2433,57 @@ impl LoweringContext {
                     }
                 }
                 rowan::NodeOrToken::Node(child_node) => {
-                    let segments: Vec<Name> = child_node
-                        .children_with_tokens()
-                        .filter_map(rowan::NodeOrToken::into_token)
-                        .filter(|t| is_ident_token(t.kind()))
-                        .map(|t| Name::new(t.text()))
-                        .collect();
-                    if !segments.is_empty() {
-                        type_name = Some(TypePath::new(segments));
+                    // Resolve the path-bearing node and the generic-args node.
+                    // The receiver may be `PATH_EXPR` (no type args) or
+                    // `EXPR_WITH_TYPE_ARGS { (PATH_EXPR | bare WORD tokens), GENERIC_ARGS }`.
+                    let (path_segments, generic_args_node) =
+                        if child_node.kind() == SyntaxKind::EXPR_WITH_TYPE_ARGS {
+                            // For multi-segment receivers (e.g. `pkg.Foo<T>`)
+                            // the path lives inside a PATH_EXPR child; for
+                            // single-segment ones (`Foo<T>`) the WORD token is
+                            // a direct child of EXPR_WITH_TYPE_ARGS.
+                            let inner_node = child_node
+                                .children()
+                                .find(|n| n.kind() != SyntaxKind::GENERIC_ARGS);
+                            let segments: Vec<Name> = match inner_node {
+                                Some(node) => node
+                                    .children_with_tokens()
+                                    .filter_map(rowan::NodeOrToken::into_token)
+                                    .filter(|t| is_ident_token(t.kind()))
+                                    .map(|t| Name::new(t.text()))
+                                    .collect(),
+                                None => child_node
+                                    .children_with_tokens()
+                                    .filter_map(rowan::NodeOrToken::into_token)
+                                    .filter(|t| is_ident_token(t.kind()))
+                                    .map(|t| Name::new(t.text()))
+                                    .collect(),
+                            };
+                            let args = child_node
+                                .children()
+                                .find(|n| n.kind() == SyntaxKind::GENERIC_ARGS);
+                            (segments, args)
+                        } else {
+                            let segments: Vec<Name> = child_node
+                                .children_with_tokens()
+                                .filter_map(rowan::NodeOrToken::into_token)
+                                .filter(|t| is_ident_token(t.kind()))
+                                .map(|t| Name::new(t.text()))
+                                .collect();
+                            (segments, None)
+                        };
+
+                    if !path_segments.is_empty() {
+                        type_name = Some(TypePath::new(path_segments));
                     }
-                    // Also extract explicit generic type args from `Foo<int>` syntax:
-                    // PATH_EXPR contains a GENERIC_ARGS child with TYPE_EXPR children.
-                    type_args = child_node
-                        .children()
-                        .find(|n| n.kind() == SyntaxKind::GENERIC_ARGS)
-                        .into_iter()
-                        .flat_map(|args_node| args_node.children())
-                        .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
-                        .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
-                        .map(|te| crate::lower_type_expr::lower_type_expr_node(&te))
-                        .collect();
+                    if let Some(args_node) = generic_args_node {
+                        type_args = args_node
+                            .children()
+                            .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+                            .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
+                            .map(|te| crate::lower_type_expr::lower_type_expr_node(&te))
+                            .collect();
+                    }
                     break 'outer;
                 }
             }

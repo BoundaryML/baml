@@ -51,7 +51,7 @@ SOURCE_FILE
         L_BRACE "{"
         CALL_EXPR
           FIELD_ACCESS_EXPR
-            PATH_EXPR
+            EXPR_WITH_TYPE_ARGS
               PATH_EXPR "root.pkg.inner.Box"
                 WORD "root"
                 DOT "."
@@ -121,7 +121,7 @@ SOURCE_FILE
         L_BRACE "{"
         CALL_EXPR
           FIELD_ACCESS_EXPR
-            PATH_EXPR
+            EXPR_WITH_TYPE_ARGS
               PATH_EXPR "root.pkg.inner.AutoBox"
                 WORD "root"
                 DOT "."

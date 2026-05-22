@@ -40,7 +40,7 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         CALL_EXPR
-          PATH_EXPR
+          EXPR_WITH_TYPE_ARGS
             PATH_EXPR "baml.json.from_string"
               WORD "baml"
               DOT "."
@@ -95,7 +95,7 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         CALL_EXPR
-          PATH_EXPR
+          EXPR_WITH_TYPE_ARGS
             WORD "level1"
             GENERIC_ARGS
               LESS "<"
@@ -145,7 +145,7 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         CALL_EXPR
-          PATH_EXPR
+          EXPR_WITH_TYPE_ARGS
             WORD "level2"
             GENERIC_ARGS
               LESS "<"

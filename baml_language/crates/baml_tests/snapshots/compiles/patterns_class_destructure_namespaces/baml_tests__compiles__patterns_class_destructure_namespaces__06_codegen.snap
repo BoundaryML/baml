@@ -126,9 +126,9 @@ function user.GenericDestructureQualifiedLet() -> int {
 }
 
 function user.GenericTypePatternNamespaceQualifiedMatch() -> int {
-    load_const null /* unknown class:  */
+    alloc_instance user.llm.openai.Box
     load_const "ready"
-    init_field .0
+    init_field .value
     is_type llm.openai.Box<...>
     pop_jump_if_false L0
     jump L1
@@ -145,9 +145,9 @@ function user.GenericTypePatternNamespaceQualifiedMatch() -> int {
 }
 
 function user.GenericTypePatternQualifiedMatch() -> int {
-    load_const null /* unknown class:  */
+    alloc_instance user.llm.openai.Box
     load_const 50
-    init_field .0
+    init_field .value
     is_type llm.openai.Box<...>
     pop_jump_if_false L0
     jump L1

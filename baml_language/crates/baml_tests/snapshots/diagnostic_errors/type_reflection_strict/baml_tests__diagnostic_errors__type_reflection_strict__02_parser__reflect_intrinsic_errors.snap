@@ -36,7 +36,7 @@ SOURCE_FILE
                     WORD "int"
           EQUALS "="
           CALL_EXPR
-            PATH_EXPR
+            EXPR_WITH_TYPE_ARGS
               PATH_EXPR "reflect.type_of"
                 WORD "reflect"
                 DOT "."
@@ -68,7 +68,7 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         CALL_EXPR
-          PATH_EXPR
+          EXPR_WITH_TYPE_ARGS
             PATH_EXPR "reflect.type_of"
               WORD "reflect"
               DOT "."
@@ -95,7 +95,7 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         CALL_EXPR
-          PATH_EXPR
+          EXPR_WITH_TYPE_ARGS
             PATH_EXPR "reflect.type_of"
               WORD "reflect"
               DOT "."
