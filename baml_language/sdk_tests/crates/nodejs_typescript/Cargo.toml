@@ -3,11 +3,19 @@
 # `sdk_tests/fixtures/<fixture>/baml_src/`, codegens into
 # `<fixture>/generated/baml_sdk/`, and emits per-fixture `tsc` /
 # `jest` toolchain tests plus the shared
-# `build_diagnostics::no_build_failures` test. The generated
-# package.json file:-points at `sdks/nodejs/bridge_nodejs`, and
-# sdk_test_harness_setup's run_all runs `pnpm build:debug` there
-# as a prereq before per-fixture `pnpm install` (so the native
-# `.node` addon is present at jest time). The workspace
+# `build_diagnostics::no_build_failures` test.
+#
+# Unlike python_pydantic2, the pnpm side of the setup (the
+# `pnpm build:debug` of bridge_nodejs's native `.node` addon and the
+# per-fixture `pnpm install`) lives in `./setup.sh`, NOT in build.rs.
+# `cargo nextest run` invokes setup.sh automatically via the
+# setup-script binding in `baml_language/.config/nextest.toml`, so
+# the common run flow is just:
+#
+#   cargo nextest run -p sdk_test_nodejs_typescript
+#
+# For plain `cargo test` (without nextest), run setup.sh manually
+# between `cargo test --no-run` and `cargo test`. The workspace
 # `pnpm install` (at repo root) must have been run once first.
 [package]
 name = "sdk_test_nodejs_typescript"

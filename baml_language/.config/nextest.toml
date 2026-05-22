@@ -1,0 +1,23 @@
+# cargo-nextest config. Setup scripts is experimental; minimum 0.9.98.
+# See https://nexte.st/docs/configuration/setup-scripts/.
+
+nextest-version = "0.9.98"
+
+experimental = ["setup-scripts"]
+
+# `pnpm build:debug` of bridge_nodejs's native `.node` addon plus
+# `pnpm install` in every fixture's generated/ tree. Lives in a shell
+# script (not build.rs) so plain `cargo build` doesn't pay for it; the
+# binding below makes `cargo nextest run` invoke it automatically when
+# the run includes any sdk_test_nodejs_typescript tests.
+#
+# Nextest sets the script's cwd to the workspace root (baml_language/),
+# and only runs the script when the binding filter matches at least one
+# selected test — so `cargo nextest run -p sdk_test_python_pydantic2`
+# pays nothing for it.
+[scripts.setup.nodejs_typescript_pnpm]
+command = './sdk_tests/crates/nodejs_typescript/setup.sh'
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_nodejs_typescript)'
+setup = 'nodejs_typescript_pnpm'

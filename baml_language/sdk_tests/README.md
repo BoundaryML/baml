@@ -11,11 +11,14 @@ SDKs no matter the output language.
 Codegen runs in each crate's `build.rs` via the full
 `baml_project::build_symbol_pool` pipeline (parse → HIR → TIR →
 `SymbolPool` → emitter), mirroring the path `baml-cli generate`
-takes end-to-end. Each build script also runs `uv sync` /
-`pnpm install` once per fixture so the toolchain commands fired
-by the `#[test]`s only have to do read-only work against an
-already-populated tree. Build-script failures (missing tool,
-codegen panic, install non-zero exit) are recorded to
+takes end-to-end. python_pydantic2's build.rs also runs `uv sync`
+once per fixture. nodejs_typescript splits that out: the
+per-fixture `pnpm install` and the prereq `pnpm build:debug` of
+bridge_nodejs's native `.node` addon live in
+[`crates/nodejs_typescript/setup.sh`](./crates/nodejs_typescript/setup.sh) —
+run it once after `cargo test --no-run` (or `cargo build`).
+Build-script failures (missing tool, codegen panic, install
+non-zero exit, codegen file write errors) are recorded to
 `$OUT_DIR/build_diagnostics.txt` rather than aborted, and surface
 as a `build_diagnostics::no_build_failures` test (see
 [Soft-fail build.rs](#soft-fail-buildrs) below). Each build also
@@ -54,7 +57,21 @@ Targets in tree:
   panics: every fixture records a `codegen` diagnostic and
   `baml_sdk/` stays empty, so the toolchain commands can't pass.
   Drop the `#[ignore]`s when the emitter lands (`IGNORE_REASON` in
-  `sdk_tests/harness_setup/src/nodejs_typescript.rs`).
+  `sdk_tests/harness_setup/src/nodejs_typescript.rs`). The native
+  `.node` addon build and per-fixture `pnpm install` live in
+  [`crates/nodejs_typescript/setup.sh`](./crates/nodejs_typescript/setup.sh)
+  rather than build.rs. `cargo nextest run` invokes setup.sh
+  automatically (configured as a nextest setup-script binding in
+  [`baml_language/.config/nextest.toml`](../.config/nextest.toml)),
+  so the common run flow is just:
+
+  ```bash
+  cargo nextest run -p sdk_test_nodejs_typescript
+  ```
+
+  For plain `cargo test`, run setup.sh manually between
+  `cargo test --no-run` and `cargo test`. Re-run after bridge_nodejs
+  Rust changes or after adding a new fixture.
 
 ```bash
 # Run every Python+pydantic2 test across all fixtures
@@ -126,6 +143,7 @@ sdk_tests/
         │                                 # [build-dependencies] sdk_test_harness_setup
         │                                 # [dev-dependencies]   sdk_test_harness_runner
         ├── build.rs                      # one-liner → sdk_test_harness_setup::nodejs_typescript::run_all()
+        ├── setup.sh                      # pnpm build:debug (bridge_nodejs) + per-fixture pnpm install
         ├── src/lib.rs                    # invokes sdk_test_harness_runner::nodejs_typescript::test_suite!()
         ├── docstrings_etc/
         │   ├── customizable/             # tracked: *.test.ts — copied into generated/
@@ -180,12 +198,17 @@ sdk_tests/
    - Writes `crates/<generator>/<fixture>/generated/pyproject.toml`
      (or `package.json` + `tsconfig.json` for `nodejs_typescript`)
      with the per-fixture package name.
-   - Runs `uv sync` / `pnpm install` inside the generated dir,
+   - For python_pydantic2: runs `uv sync` inside the generated dir,
      serially per fixture. uv's editable install of `baml_core`
      (declared in `[tool.uv.sources]`) triggers the maturin build
-     of `bridge_python` once per fixture; pnpm populates
-     `node_modules/` from the shared `target/pnpm-store/`. Tests
-     then only do read-only work against the populated tree.
+     of `bridge_python` once per fixture.
+   - For nodejs_typescript: pnpm side is OUT of build.rs. The
+     per-fixture `pnpm install` and the prereq `pnpm build:debug`
+     of bridge_nodejs's native `.node` addon live in
+     `crates/nodejs_typescript/setup.sh`, run separately after
+     `cargo test --no-run`. Populates `node_modules/` from the
+     shared `target/pnpm-store/`. Tests then only do read-only
+     work against the populated tree.
    - Emits `OUT_DIR/<generator>_tests.rs` — a generated source file
      containing a `::sdk_test_harness_runner::build_diagnostics!(...)` macro
      invocation at the top followed by one `mod <fixture> { … }`
@@ -215,11 +238,13 @@ sdk_tests/
 ### Soft-fail build.rs
 
 `uv` / `pnpm` aren't required to *build* the workspace — only to
-*test* the SDK targets. Each generator's `build.rs` records
-env-dependent failures (missing tool, `to_source_code` panic, `uv
-sync` / `pnpm install` non-zero exit, codegen file write errors)
-to `$OUT_DIR/build_diagnostics.txt` and exits 0 instead of
-aborting. The `sdk_test_harness_runner::build_diagnostics!` macro expands
+*test* the SDK targets. python_pydantic2's `build.rs` records
+env-dependent failures (missing `uv`, `to_source_code` panic, `uv
+sync` non-zero exit, codegen file write errors) to
+`$OUT_DIR/build_diagnostics.txt` and exits 0 instead of aborting.
+nodejs_typescript's `build.rs` only does codegen + scaffold emit
+(no pnpm), so the soft-fail set is just codegen/write errors;
+pnpm failures hard-fail in `setup.sh` instead. The `sdk_test_harness_runner::build_diagnostics!` macro expands
 to a `mod build_diagnostics { #[test] fn no_build_failures }` that
 reads the file and fails with the records. `sdk_test_harness_setup`'s
 scaffold emitter stamps one invocation per generator scaffold —

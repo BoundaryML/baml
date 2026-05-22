@@ -309,13 +309,18 @@ jobs:
       - name: "Install uv"
         uses: astral-sh/setup-uv@v5
 
-      # `cargo test --no-run` drives each sdk_test crate's build.rs,
-      # which is where the editable `baml_core` install + per-fixture
-      # `uv sync` / `pnpm install` happens (serially, once). Failures
-      # there are recorded into `$OUT_DIR/build_diagnostics.txt`
-      # instead of aborting the build — they surface via the
-      # `build_diagnostics::no_build_failures` test in the run-step
-      # below. See `sdk_tests/build/src/lib.rs::BuildDiagnostics`.
+      # `cargo test --no-run` drives each sdk_test crate's build.rs.
+      # For python_pydantic2 that's the editable `baml_core` install +
+      # per-fixture `uv sync` (in build.rs). For nodejs_typescript,
+      # build.rs only does codegen + scaffold emit; the per-fixture
+      # `pnpm install` and the prereq `pnpm build:debug` in bridge_nodejs
+      # live in `sdk_tests/crates/nodejs_typescript/setup.sh` and are
+      # invoked by nextest as a setup-script binding configured in
+      # `baml_language/.config/nextest.toml` — no separate CI step.
+      # Soft-fail codegen / write errors are recorded into
+      # `$OUT_DIR/build_diagnostics.txt` and surface via
+      # `build_diagnostics::no_build_failures` in the run step.
+      # See `sdk_tests/harness_setup/src/lib.rs::BuildDiagnostics`.
       - name: "Build tests with --timings"
         run: cargo test --no-run --all-features --timings
         working-directory: baml_language
