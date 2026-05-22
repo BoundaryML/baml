@@ -184,14 +184,37 @@ jobs:
             binary: baml-cli
             pack_host: baml-pack-host
             archive_ext: tar.gz
+          - target: aarch64-unknown-linux-gnu
+            os: blacksmith-4vcpu-ubuntu-2204-arm
+            binary: baml-cli
+            pack_host: baml-pack-host
+            archive_ext: tar.gz
+          - target: x86_64-unknown-linux-musl
+            os: blacksmith-4vcpu-ubuntu-2204
+            binary: baml-cli
+            pack_host: baml-pack-host
+            archive_ext: tar.gz
+            container: rust:alpine@sha256:606fd313a0f49743ee2a7bd49a0914bab7deedb12791f3a846a34a4711db7ed2
+          - target: aarch64-unknown-linux-musl
+            os: blacksmith-4vcpu-ubuntu-2204
+            binary: baml-cli
+            pack_host: baml-pack-host
+            archive_ext: tar.gz
+            cross: true
           - target: x86_64-pc-windows-msvc
             os: blacksmith-4vcpu-windows-2025
             binary: baml-cli.exe
             pack_host: baml-pack-host.exe
             archive_ext: zip
     runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container || '' }}
     timeout-minutes: 45
     steps:
+      - name: Install Alpine build dependencies
+        if: matrix.container
+        shell: sh
+        run: apk add --no-cache bash git cmake clang openssl-dev openssl-libs-static perl make python3
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -199,6 +222,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Rust
+        if: ${{ !matrix.container }}
         uses: ./.github/actions/setup-rust
         with:
           targets: ${{ matrix.target }}
@@ -207,21 +231,28 @@ jobs:
           enable-cross: false
           skip-protoc: true
 
+      - name: Install cross
+        if: matrix.cross
+        run: cargo install cross
+
       - name: Build baml-cli
         env:
           BAML_RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
           TARGET: ${{ matrix.target }}
-        run: cargo build --release --bin baml-cli --target "${TARGET}"
+          CARGO: ${{ matrix.cross && 'cross' || 'cargo' }}
+        run: $CARGO build --release --bin baml-cli --target "${TARGET}"
         working-directory: baml_language
 
       - name: Build baml-pack-host
         env:
           BAML_RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
           TARGET: ${{ matrix.target }}
-        run: cargo build --release -p baml_pack_host --bin baml-pack-host --target "${TARGET}"
+          CARGO: ${{ matrix.cross && 'cross' || 'cargo' }}
+        run: $CARGO build --release -p baml_pack_host --bin baml-pack-host --target "${TARGET}"
         working-directory: baml_language
 
       - name: Smoke test version
+        if: ${{ !matrix.cross && !matrix.cross_arch }}
         env:
           EXPECTED_VERSION: ${{ needs.prepare.outputs.version }}
           TARGET: ${{ matrix.target }}
@@ -290,11 +321,37 @@ jobs:
             !dist/${{ matrix.target }}/staging/**
           if-no-files-found: error
 
+  # ARM musl is cross-compiled from x86, so we can't smoke test it in the build job.
+  # GitHub Actions' JS-based actions (like actions/checkout) don't work in Alpine
+  # containers on ARM runners, so we can't use a container there either.
+  # Instead, we run a separate job on a native ARM runner to verify the binary works.
+  test-arm-musl:
+    name: Test ARM musl binary
+    needs:
+      - prepare
+      - build
+    if: needs.prepare.outputs.should_run == 'true'
+    runs-on: blacksmith-4vcpu-ubuntu-2204-arm
+    timeout-minutes: 5
+    steps:
+      - name: Download ARM musl archive
+        uses: actions/download-artifact@v4
+        with:
+          name: baml-language-archive-aarch64-unknown-linux-musl
+          path: dist
+
+      - name: Extract and test
+        run: |
+          set -euo pipefail
+          tar -xzf dist/*.tar.gz
+          ./baml-cli --version
+
   publish:
     name: Publish Release
     needs:
       - prepare
       - build
+      - test-arm-musl
     if: needs.prepare.outputs.should_run == 'true' && needs.prepare.outputs.publish == 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2204
     timeout-minutes: 15
@@ -354,7 +411,11 @@ jobs:
               "aarch64-apple-darwin",
               "x86_64-apple-darwin",
               "x86_64-unknown-linux-gnu",
+              "aarch64-unknown-linux-gnu",
+              "x86_64-unknown-linux-musl",
+              "aarch64-unknown-linux-musl",
               "x86_64-pc-windows-msvc",
+              "aarch64-pc-windows-msvc",
           }
           missing = expected - target_assets.keys()
           if missing:
@@ -465,3 +526,105 @@ jobs:
           }, indent=2, sort_keys=True) + "\n")
           PY
           gh api --method POST repos/BoundaryML/homebrew-baml/dispatches --input repository-dispatch.json
+
+  # AUR pkgver can't contain hyphens, so we convert 0.11.0-alpha.602 to 0.11.0.alpha.602.
+  # When we exit alpha and use stable semver (e.g. 0.11.0), this conversion becomes a no-op.
+  publish-to-aur:
+    name: Publish to AUR
+    needs:
+      - prepare
+      - publish
+    if: needs.prepare.outputs.should_run == 'true' && needs.prepare.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.checkout_ref }}
+
+      - name: Download release assets
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+
+          curl -fSL -o artifacts/x86_64.tar.gz \
+            "https://github.com/BoundaryML/baml/releases/download/baml-language-${VERSION}/baml-language-${VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          curl -fSL -o artifacts/aarch64.tar.gz \
+            "https://github.com/BoundaryML/baml/releases/download/baml-language-${VERSION}/baml-language-${VERSION}-aarch64-unknown-linux-gnu.tar.gz"
+          curl -fSL -o artifacts/source.tar.gz \
+            "https://github.com/BoundaryML/baml/archive/refs/tags/baml-language-${VERSION}.tar.gz"
+
+          echo "SHA256_X86_64=$(sha256sum artifacts/x86_64.tar.gz | cut -d' ' -f1)" >> "$GITHUB_ENV"
+          echo "SHA256_AARCH64=$(sha256sum artifacts/aarch64.tar.gz | cut -d' ' -f1)" >> "$GITHUB_ENV"
+          echo "SHA256_SOURCE=$(sha256sum artifacts/source.tar.gz | cut -d' ' -f1)" >> "$GITHUB_ENV"
+
+      - name: Install makepkg
+        run: sudo apt-get update && sudo apt-get install -y pacman-package-manager
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.AUR_SSH_PRIVATE_KEY }}" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
+          cat >> ~/.ssh/config << 'EOF'
+          Host aur.archlinux.org
+            IdentityFile ~/.ssh/aur
+            User aur
+          EOF
+
+      - name: Push baml-bin
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          VERSION_AUR="${VERSION//-/.}"  # AUR pkgver can't have hyphens
+
+          git clone ssh://aur@aur.archlinux.org/baml-bin.git aur-bin
+          cd aur-bin
+
+          cp ../packaging/aur/baml-bin/PKGBUILD .
+          sed -i "s/__VERSION__/${VERSION_AUR}/g" PKGBUILD
+          sed -i "s/__VERSION_ORIG__/${VERSION}/g" PKGBUILD
+          sed -i "s/__SHA256_X86_64__/${SHA256_X86_64}/g" PKGBUILD
+          sed -i "s/__SHA256_AARCH64__/${SHA256_AARCH64}/g" PKGBUILD
+
+          makepkg --printsrcinfo > .SRCINFO
+
+          git config user.name "BoundaryML Bot"
+          git config user.email "aur@boundaryml.com"
+          git add PKGBUILD .SRCINFO
+          if ! git diff --cached --quiet; then
+            git commit -m "Update to ${VERSION_AUR}"
+            git push
+          else
+            echo "No changes to commit for baml-bin"
+          fi
+
+      - name: Push baml
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          VERSION_AUR="${VERSION//-/.}"  # AUR pkgver can't have hyphens
+
+          git clone ssh://aur@aur.archlinux.org/baml.git aur-src
+          cd aur-src
+
+          cp ../packaging/aur/baml/PKGBUILD .
+          sed -i "s/__VERSION__/${VERSION_AUR}/g" PKGBUILD
+          sed -i "s/__VERSION_ORIG__/${VERSION}/g" PKGBUILD
+          sed -i "s/__SHA256__/${SHA256_SOURCE}/g" PKGBUILD
+
+          makepkg --printsrcinfo > .SRCINFO
+
+          git config user.name "BoundaryML Bot"
+          git config user.email "aur@boundaryml.com"
+          git add PKGBUILD .SRCINFO
+          if ! git diff --cached --quiet; then
+            git commit -m "Update to ${VERSION_AUR}"
+            git push
+          else
+            echo "No changes to commit for baml"
+          fi

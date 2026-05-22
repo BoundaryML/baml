@@ -621,12 +621,20 @@ fn release_archive_filename(version: &str, target: &str) -> String {
 }
 
 fn release_host_target_triple() -> Result<&'static str> {
-    match (std::env::consts::OS, std::env::consts::ARCH) {
-        ("macos", "aarch64") => Ok("aarch64-apple-darwin"),
-        ("macos", "x86_64") => Ok("x86_64-apple-darwin"),
-        ("linux", "x86_64") => Ok("x86_64-unknown-linux-gnu"),
-        ("windows", "x86_64") => Ok("x86_64-pc-windows-msvc"),
-        (os, arch) => anyhow::bail!(
+    #[cfg(target_env = "musl")]
+    const IS_MUSL: bool = true;
+    #[cfg(not(target_env = "musl"))]
+    const IS_MUSL: bool = false;
+
+    match (std::env::consts::OS, std::env::consts::ARCH, IS_MUSL) {
+        ("macos", "aarch64", _) => Ok("aarch64-apple-darwin"),
+        ("macos", "x86_64", _) => Ok("x86_64-apple-darwin"),
+        ("linux", "aarch64", true) => Ok("aarch64-unknown-linux-musl"),
+        ("linux", "aarch64", false) => Ok("aarch64-unknown-linux-gnu"),
+        ("linux", "x86_64", true) => Ok("x86_64-unknown-linux-musl"),
+        ("linux", "x86_64", false) => Ok("x86_64-unknown-linux-gnu"),
+        ("windows", "x86_64", _) => Ok("x86_64-pc-windows-msvc"),
+        (os, arch, _) => anyhow::bail!(
             "No released `baml-pack-host` artifact is available for {arch}-{os}. \
              Install `baml-pack-host` next to the `baml` binary to use `baml pack` on this platform."
         ),
@@ -634,22 +642,23 @@ fn release_host_target_triple() -> Result<&'static str> {
 }
 
 fn validate_release_target_triple(target: &str) -> Result<&str> {
-    match target {
-        "aarch64-apple-darwin"
-        | "x86_64-apple-darwin"
-        | "x86_64-unknown-linux-gnu"
-        | "x86_64-pc-windows-msvc" => Ok(target),
-        _ => anyhow::bail!(
+    if SUPPORTED_PACK_TARGETS.contains(&target) {
+        Ok(target)
+    } else {
+        anyhow::bail!(
             "Unsupported pack target `{target}`. Supported targets: {}",
             SUPPORTED_PACK_TARGETS.join(", ")
-        ),
+        )
     }
 }
 
 const SUPPORTED_PACK_TARGETS: &[&str] = &[
     "aarch64-apple-darwin",
     "x86_64-apple-darwin",
+    "aarch64-unknown-linux-gnu",
+    "aarch64-unknown-linux-musl",
     "x86_64-unknown-linux-gnu",
+    "x86_64-unknown-linux-musl",
     "x86_64-pc-windows-msvc",
 ];
 

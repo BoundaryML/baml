@@ -56,7 +56,7 @@ toml = { workspace = true }
 zip = { workspace = true }
 
 [features]
-default = [ "native-tls", "aws-crypto" ]
+default = [ "aws-crypto" ]
 aws-crypto = [ "baml_lsp_server/aws-crypto", "bex_engine/aws-crypto", "sys_native/aws-crypto" ]
 ring-crypto = [ "baml_lsp_server/ring-crypto", "bex_engine/ring-crypto", "sys_native/ring-crypto" ]
 native-tls = [ "baml_lsp_server/native-tls" ]
