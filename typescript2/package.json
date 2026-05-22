@@ -23,7 +23,7 @@
   },
   "packageManager": "pnpm@9.12.0",
   "devDependencies": {
-    "turbo": "^2.8.9",
+    "turbo": "^2.9.14",
     "typescript": "^5.7.0",
     "nodemon": "^3.1.9" 
   }
