@@ -4624,9 +4624,74 @@ impl<'a> Parser<'a> {
     }
 
     fn is_generic_args_follow(kind: Option<TokenKind>) -> bool {
+        // TypeScript-style: commit to type-args if the closing `>` is followed
+        // by a token that either continues a postfix chain (`(`, `{`, `.`),
+        // is a binary operator, or otherwise can't start an expression.
+        // Tokens that *can* start an expression (`Word`, literals, `[`, unary
+        // ops) keep `<` as a comparison — `a < b > c` stays a comparison
+        // because `c` (a `Word`) starts an expression.
+        //
+        // EOF (`None`) counts as a valid follow — `f<T>` at the end of a file
+        // or block is an instantiation expression.
+        let Some(kind) = kind else {
+            return true;
+        };
         matches!(
             kind,
-            Some(TokenKind::LParen | TokenKind::LBrace | TokenKind::Dot)
+            // Postfix continuations: call, constructor, member access.
+            TokenKind::LParen
+                | TokenKind::LBrace
+                | TokenKind::Dot
+                | TokenKind::QuestionDot
+                // Terminators / separators that can't start an expression.
+                | TokenKind::Semicolon
+                | TokenKind::Comma
+                | TokenKind::Colon
+                | TokenKind::DoubleColon
+                | TokenKind::Question
+                | TokenKind::RParen
+                | TokenKind::RBracket
+                | TokenKind::RBrace
+                | TokenKind::Arrow
+                | TokenKind::FatArrow
+                | TokenKind::DotDot
+                | TokenKind::DotDotDot
+                // Assignment operators.
+                | TokenKind::Equals
+                | TokenKind::PlusEquals
+                | TokenKind::MinusEquals
+                | TokenKind::StarEquals
+                | TokenKind::SlashEquals
+                | TokenKind::PercentEquals
+                | TokenKind::AndEquals
+                | TokenKind::PipeEquals
+                | TokenKind::CaretEquals
+                | TokenKind::LessLessEquals
+                | TokenKind::GreaterGreaterEquals
+                // Binary comparison / equality (excluding `<` and `>` which
+                // could open another nesting level if we got here wrong).
+                | TokenKind::EqualsEquals
+                | TokenKind::NotEquals
+                | TokenKind::LessEquals
+                | TokenKind::GreaterEquals
+                // Logical / bitwise binary operators.
+                | TokenKind::AndAnd
+                | TokenKind::OrOr
+                | TokenKind::Pipe
+                | TokenKind::And
+                | TokenKind::Caret
+                | TokenKind::LessLess
+                | TokenKind::GreaterGreater
+                // Arithmetic binary operators.
+                | TokenKind::Plus
+                | TokenKind::Minus
+                | TokenKind::Star
+                | TokenKind::Slash
+                | TokenKind::Percent
+                // Keyword binary operators (BAML-specific).
+                | TokenKind::Is
+                | TokenKind::In
+                | TokenKind::Instanceof
         )
     }
 
@@ -7421,5 +7486,87 @@ type Searcher = (query: string, max_results?: int) -> int
         assert!(optional_param.children_with_tokens().any(
             |it| matches!(it, rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::QUESTION)
         ));
+    }
+
+    /// Helper: count `PATH_EXPR` nodes that contain a `GENERIC_ARGS` child.
+    fn count_instantiated_paths(root: &SyntaxNode) -> usize {
+        root.descendants()
+            .filter(|n| {
+                n.kind() == SyntaxKind::PATH_EXPR
+                    && n.children().any(|c| c.kind() == SyntaxKind::GENERIC_ARGS)
+            })
+            .count()
+    }
+
+    #[test]
+    fn instantiation_expression_in_let_binding() {
+        // TS-style: `f<string>` is a value expression when not followed by `(`.
+        let source = r#"
+function Demo() -> int {
+  let cb = f<string>;
+  1
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(
+            count_instantiated_paths(&root),
+            1,
+            "expected one PATH_EXPR with GENERIC_ARGS for `f<string>`"
+        );
+    }
+
+    #[test]
+    fn instantiation_expression_followed_by_binary_op() {
+        // TS-style: `f<int> + 1` is instantiation + add, not a comparison chain.
+        let source = r#"
+function Demo() -> int {
+  let x = f<int> + 1;
+  x
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(
+            count_instantiated_paths(&root),
+            1,
+            "expected `f<int>` to parse as PATH_EXPR with GENERIC_ARGS"
+        );
+    }
+
+    #[test]
+    fn comparison_chain_not_treated_as_instantiation() {
+        // `a < b > c` must stay a comparison; closing `>` is followed by Word.
+        let source = r#"
+function Demo() -> bool {
+  let r = a < b > c;
+  r
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(
+            count_instantiated_paths(&root),
+            0,
+            "expected no PATH_EXPR with GENERIC_ARGS for comparison chain"
+        );
+    }
+
+    #[test]
+    fn generic_call_still_parses() {
+        // Regression: `f<T>(args)` continues to work after widening follow set.
+        let source = r#"
+function Demo() -> int {
+  f<int>(1)
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(count_instantiated_paths(&root), 1);
+        let calls = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::CALL_EXPR)
+            .count();
+        assert!(calls >= 1, "expected at least one CALL_EXPR");
     }
 }
