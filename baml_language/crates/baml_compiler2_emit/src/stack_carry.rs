@@ -883,6 +883,32 @@ impl PullSink for StackCarryPullSink<'_> {
         Ok(())
     }
 
+    fn make_bound_method(
+        &mut self,
+        _item_ref: &baml_compiler2_mir::ItemRef,
+    ) -> Result<(), Self::Error> {
+        // Pops the receiver, pushes the bound-method object. Net zero.
+        if !self.sim.pop_n(1) {
+            return Err(());
+        }
+        self.sim.push();
+        Ok(())
+    }
+
+    fn make_instantiated_function(
+        &mut self,
+        _item_ref: &baml_compiler2_mir::ItemRef,
+        ntypeargs: u16,
+    ) -> Result<(), Self::Error> {
+        // Pops `ntypeargs` type-arg values, pushes the instantiated-function
+        // object. Net `1 - ntypeargs`.
+        if !self.sim.pop_n(ntypeargs.into()) {
+            return Err(());
+        }
+        self.sim.push();
+        Ok(())
+    }
+
     fn load_capture(&mut self, _idx: usize) -> Result<(), Self::Error> {
         // LoadCapture pushes one value onto the stack.
         self.sim.push();

@@ -9,7 +9,7 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_compiler2_mir::{
-    AggregateKind, BinOp, Constant, IndexKind, Local, Operand, Place, Rvalue, UnaryOp,
+    AggregateKind, BinOp, Constant, IndexKind, ItemRef, Local, Operand, Place, Rvalue, UnaryOp,
 };
 use baml_type::TyTemplate;
 
@@ -74,6 +74,21 @@ pub(crate) trait PullSink {
         );
         self.make_closure(lambda_idx, capture_count)
     }
+
+    /// Bind a method to a receiver value.
+    /// Stack: `[receiver]` → `[bound_method]`.  The receiver is left on
+    /// the stack by `walk_operand_pull` immediately before this call.
+    fn make_bound_method(&mut self, item_ref: &ItemRef) -> Result<(), Self::Error>;
+
+    /// Construct an instantiated-function value (`f<T1, ...>` taken as a
+    /// value).  Stack: `[type_arg_1, ..., type_arg_N]` → `[instantiated_fn]`,
+    /// where the type arguments are pushed by `load_type` calls
+    /// immediately before this method.
+    fn make_instantiated_function(
+        &mut self,
+        item_ref: &ItemRef,
+        ntypeargs: u16,
+    ) -> Result<(), Self::Error>;
 
     /// Load a captured variable from the current closure's captures array.
     /// Emits `LoadCapture(idx)` in the bytecode emitter.
@@ -422,15 +437,27 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
             }
             sink.make_closure_with_type_args(*lambda_idx, captures.len(), type_arg_templates.len())
         }
-        Rvalue::MakeBoundMethod { .. } => {
-            // Handled specially in emit_rvalue_pull before this function is called.
-            unreachable!("MakeBoundMethod must be handled in emit_rvalue_pull")
+        Rvalue::MakeBoundMethod { item_ref, receiver } => {
+            // Both `MakeBoundMethod` and `MakeInstantiatedFunction` were
+            // previously routed exclusively through the bytecode emitter's
+            // `emit_rvalue_pull` (which has the global table), but that
+            // left projection-store paths (`obj.field = mb` /
+            // `arr[i] = mb`) crashing on the `unreachable!`s here.  Route
+            // them through dedicated sink methods instead so any sink can
+            // implement them.
+            walk_operand_pull(sink, receiver)?;
+            sink.make_bound_method(item_ref)
         }
-        Rvalue::MakeInstantiatedFunction { .. } => {
-            // Handled specially in emit_rvalue_pull (same reason as
-            // MakeBoundMethod: needs the global-table lookup which only the
-            // bytecode emitter has).
-            unreachable!("MakeInstantiatedFunction must be handled in emit_rvalue_pull")
+        Rvalue::MakeInstantiatedFunction {
+            item_ref,
+            type_arg_templates,
+        } => {
+            for template in type_arg_templates {
+                sink.load_type(template)?;
+            }
+            let ntypeargs = u16::try_from(type_arg_templates.len())
+                .expect("type_arg_templates count fits in u16");
+            sink.make_instantiated_function(item_ref, ntypeargs)
         }
         Rvalue::LoadType(template) => sink.load_type(template),
     }

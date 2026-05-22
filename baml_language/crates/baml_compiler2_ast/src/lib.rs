@@ -391,6 +391,59 @@ function Demo() -> int {
     }
 
     #[test]
+    fn ast_field_access_after_instantiation_keeps_wrapper() {
+        // `f<string>.prop` — `.` follows the instantiation but the
+        // surrounding `FIELD_ACCESS_EXPR` has no `type_args` channel,
+        // so we must keep the `Instantiation` wrapper.
+        let source = r#"
+function f<T>(x: T) -> T { x }
+function Demo() -> int {
+  let v = f<string>.never_called;
+  1
+}
+"#;
+        let function = items_function(parse_and_lower(source), "Demo");
+        let Some(FunctionBodyDef::Expr(body, _)) = &function.body else {
+            panic!("expected expression body");
+        };
+        let instantiations: Vec<&Expr> =
+            find_exprs(body, |e| matches!(e, Expr::Instantiation { .. }));
+        assert_eq!(
+            instantiations.len(),
+            1,
+            "expected `f<string>` to remain wrapped in Instantiation when followed by `.prop`",
+        );
+    }
+
+    #[test]
+    fn ast_static_method_call_drops_instantiation_wrapper() {
+        // `Box<int>.from_json(j)` — the call site picks up the receiver's
+        // `<int>` via `find_callee_generic_args`, so the lowerer must
+        // drop the `Instantiation` wrapper here.  Regression for the
+        // "FIELD_ACCESS_EXPR with CALL_EXPR grandparent" exception.
+        let source = r#"
+class Box<T> {
+  value T
+  function from_json(j: int) -> Box<T> { Box<T> { value: j } }
+}
+function Demo() -> int {
+  let b = Box<int>.from_json(1);
+  1
+}
+"#;
+        let function = items_function(parse_and_lower(source), "Demo");
+        let Some(FunctionBodyDef::Expr(body, _)) = &function.body else {
+            panic!("expected expression body");
+        };
+        let instantiations: Vec<&Expr> =
+            find_exprs(body, |e| matches!(e, Expr::Instantiation { .. }));
+        assert!(
+            instantiations.is_empty(),
+            "expected no Instantiation wrapper: static call uses Call.type_args channel",
+        );
+    }
+
+    #[test]
     fn ast_generic_call_callee_stays_plain_path() {
         // `f<string>(x)` keeps the callee as `Expr::Path`; the call's own
         // `type_args` field captures the type arguments.

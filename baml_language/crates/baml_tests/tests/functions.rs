@@ -612,3 +612,26 @@ async fn instantiated_callback_can_be_invoked_twice() {
 // `instantiation_expression_wrong_arity_errors` in
 // `compiler2_tir::explicit_type_args`. `baml_test!` panics on TIR-level
 // compile errors, so it isn't a great fit for asserting on them.
+
+/// Regression: assigning an instantiation expression into an indexed
+/// slot routes through `walk_projection_store`, which delegates to
+/// `walk_rvalue_pull` for the RHS.  Before the fix, that path
+/// `unreachable!`d on `Rvalue::MakeInstantiatedFunction` instead of
+/// dispatching like the direct emit path.
+#[tokio::test]
+async fn instantiation_assigned_to_array_index_does_not_panic() {
+    let output = baml_test!(
+        "
+        function identity<T>(x: T) -> T { x }
+        function main() -> string {
+            let arr: ((x: string) -> string)[] = [identity<string>];
+            arr[0] = identity<string>;
+            arr[0](\"slot\")
+        }
+    "
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("slot".to_string()))
+    );
+}

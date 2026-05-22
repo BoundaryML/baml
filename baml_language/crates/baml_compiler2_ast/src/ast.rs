@@ -444,6 +444,14 @@ impl ExprBody {
                 )
             }
             Expr::OptionalChain { expr } => self.display_expr_inner(*expr, depth + 1),
+            Expr::Instantiation { base, type_args } => {
+                let tys: Vec<_> = type_args.iter().map(ToString::to_string).collect();
+                format!(
+                    "{}<{}>",
+                    self.display_expr_inner(*base, depth + 1),
+                    tys.join(", "),
+                )
+            }
             Expr::Literal(lit) => lit.to_string(),
             Expr::Null => "null".to_string(),
             _ => "...".to_string(),

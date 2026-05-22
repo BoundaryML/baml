@@ -4700,8 +4700,12 @@ impl<'a> Parser<'a> {
                 | TokenKind::LessLess
                 | TokenKind::GreaterGreater
                 // Arithmetic binary operators.
-                | TokenKind::Plus
-                | TokenKind::Minus
+                // Note: `Plus` and `Minus` are intentionally *not* here.
+                // Both can start a unary expression (`+x`, `-x`), so
+                // `a < b > -1` and `a < b > +1` must stay comparison
+                // chains — matching TS-go, which treats `+`/`-` after
+                // `>` as the start of a relational RHS.  Multiplicative
+                // operators have no unary form so they commit safely.
                 | TokenKind::Star
                 | TokenKind::Slash
                 | TokenKind::Percent
@@ -7533,10 +7537,15 @@ function Demo() -> int {
 
     #[test]
     fn instantiation_expression_followed_by_binary_op() {
-        // TS-style: `f<int> + 1` is instantiation + add, not a comparison chain.
+        // `f<int> * 2` — `*` has no unary form in BAML so it's an
+        // unambiguous binary-op follow that commits to type args.
+        // Note: `+` and `-` are intentionally NOT follow tokens because
+        // they can start unary expressions (`+x`, `-x`); `a < b > -1`
+        // must stay a comparison chain.  See
+        // `comparison_with_negative_rhs_stays_comparison` for that case.
         let source = r#"
 function Demo() -> int {
-  let x = f<int> + 1;
+  let x = f<int> * 2;
   x
 }
 "#;
@@ -7545,7 +7554,7 @@ function Demo() -> int {
         assert_eq!(
             count_instantiated_paths(&root),
             1,
-            "expected `f<int>` to parse as PATH_EXPR with GENERIC_ARGS"
+            "expected `f<int>` to parse as EXPR_WITH_TYPE_ARGS",
         );
     }
 
@@ -7870,6 +7879,26 @@ function Demo() -> int {
             root.descendants()
                 .any(|n| n.kind() == SyntaxKind::PAREN_EXPR),
             "expected a PAREN_EXPR wrapping the instantiation",
+        );
+    }
+
+    #[test]
+    fn comparison_with_negative_rhs_stays_comparison() {
+        // Regression: `a < b > -1` must remain a comparison chain.  The `-`
+        // before `1` is a unary minus that starts a new expression, so the
+        // closing `>` cannot commit to a type-arg interpretation.
+        let source = r#"
+function Demo() -> bool {
+  let r = a < b > -1;
+  r
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(
+            count_instantiated_paths(&root),
+            0,
+            "`a < b > -1` must stay a comparison; `-` starts a unary expression",
         );
     }
 

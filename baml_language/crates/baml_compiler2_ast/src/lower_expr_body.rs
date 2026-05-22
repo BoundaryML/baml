@@ -2118,14 +2118,30 @@ impl LoweringContext {
         let Some(parent) = node.parent() else {
             return true;
         };
-        !matches!(
-            parent.kind(),
-            SyntaxKind::CALL_EXPR
-                | SyntaxKind::OPTIONAL_CALL_EXPR
-                | SyntaxKind::OBJECT_LITERAL
-                | SyntaxKind::FIELD_ACCESS_EXPR
-                | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR
-        )
+        match parent.kind() {
+            // `f<T>(args)` — the call's own `type_args` channel reads
+            // the wrapper's `GENERIC_ARGS` directly via
+            // `find_callee_generic_args`.
+            SyntaxKind::CALL_EXPR => false,
+            // `Foo<T> { ... }` — object-literal handler extracts the
+            // generic args itself; no `Instantiation` wrapping needed.
+            SyntaxKind::OBJECT_LITERAL => false,
+            // `Box<T>.from_json(args)` — the call walks into its
+            // FIELD_ACCESS_EXPR callee and pulls the receiver's
+            // `GENERIC_ARGS` via `find_callee_generic_args`. Drop the
+            // wrapper only in that grandparent-is-a-call shape; for
+            // `f<T>.prop` (field access standalone) keep the wrapper so
+            // type args survive into TIR.
+            SyntaxKind::FIELD_ACCESS_EXPR | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR => !matches!(
+                parent.parent().map(|gp| gp.kind()),
+                Some(SyntaxKind::CALL_EXPR | SyntaxKind::OPTIONAL_CALL_EXPR)
+            ),
+            // `Expr::OptionalCall` carries no `type_args` field, so we
+            // can't drop the wrapper here without losing the args. Keep
+            // it wrapped; downstream lowering picks them up off the
+            // resulting `Expr::Instantiation`.
+            _ => true,
+        }
     }
 
     fn lower_field_access_expr(&mut self, node: &SyntaxNode) -> ExprId {

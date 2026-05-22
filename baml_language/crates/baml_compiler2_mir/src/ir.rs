@@ -691,11 +691,13 @@ pub enum Rvalue {
     ///
     /// `item_ref` identifies the underlying free function.
     /// `type_arg_templates` is one `TyTemplate` per user-declared generic
-    /// parameter of `item_ref`'s function (same ordering as
-    /// `Call.type_args`).  The emitter pushes a `LoadType` for each
-    /// template before `MakeInstantiatedFunction { ntypeargs }` so the VM
-    /// can pop them into `Object::InstantiatedFunction.bound_type_args`.
-    /// At call time those values seed `frame.type_args`.
+    /// parameter of `item_ref`'s function, ordered the same way as the
+    /// leading type-argument entries in `Terminator::Call.args` (counted
+    /// by `Terminator::Call.ntypeargs`).  The emitter pushes a `LoadType`
+    /// for each template before `MakeInstantiatedFunction { ntypeargs }`
+    /// so the VM can pop them into
+    /// `Object::InstantiatedFunction.bound_type_args`. At call time
+    /// those values seed `frame.type_args`.
     MakeInstantiatedFunction {
         item_ref: ItemRef,
         type_arg_templates: Vec<TyTemplate>,

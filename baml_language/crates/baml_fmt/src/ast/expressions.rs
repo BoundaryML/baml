@@ -1,7 +1,24 @@
 //! Reference: [`baml_db::baml_compiler_syntax::ast::Expr`] and [`baml_db::baml_compiler_hir::body`]
 
-use baml_db::baml_compiler_syntax::{SyntaxElement, SyntaxKind};
+use baml_db::baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNode};
 use rowan::TextRange;
+
+/// Returns true when the inner base of an `EXPR_WITH_TYPE_ARGS` node is
+/// path-shaped (a `PATH_EXPR` child, or single-segment WORD tokens with
+/// no non-`GENERIC_ARGS` child node).  Used to decide whether the wrapper
+/// can be flattened into the existing [`PathExpr`] shape.
+fn expr_with_type_args_is_path_shaped(node: &SyntaxNode) -> bool {
+    match node
+        .children()
+        .find(|n| n.kind() != SyntaxKind::GENERIC_ARGS)
+    {
+        Some(inner) => matches!(inner.kind(), SyntaxKind::PATH_EXPR | SyntaxKind::WORD),
+        None => node
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .any(|t| t.kind() == SyntaxKind::WORD),
+    }
+}
 
 use crate::{
     ast::{
@@ -65,8 +82,24 @@ impl FromCST for Expression {
             SyntaxKind::FLOAT_LITERAL => Expression::Literal(Literal::Float(
                 t::FloatLiteral::new_from_span(elem.text_range()),
             )),
-            SyntaxKind::PATH_EXPR | SyntaxKind::WORD | SyntaxKind::EXPR_WITH_TYPE_ARGS => {
+            SyntaxKind::PATH_EXPR | SyntaxKind::WORD => {
                 PathExpr::from_cst(elem).map(Expression::Path)?
+            }
+            SyntaxKind::EXPR_WITH_TYPE_ARGS => {
+                // Route to `PathExpr` only when the inner base is itself a
+                // path-shaped expression (a `PATH_EXPR` node, or bare
+                // `WORD` tokens for a single-segment name).  Non-path
+                // bases like `(<T>(x: T) -> { x })<U>` aren't
+                // representable as a `PathExpr` today — fall through to
+                // `Unknown` so the formatter preserves the source text
+                // verbatim instead of panicking.
+                if let SyntaxElement::Node(ref node) = elem
+                    && expr_with_type_args_is_path_shaped(node)
+                {
+                    PathExpr::from_cst(elem).map(Expression::Path)?
+                } else {
+                    Expression::Unknown(elem.text_range())
+                }
             }
             SyntaxKind::PAREN_EXPR => ParenExpr::from_cst(elem).map(Expression::Paren)?,
             SyntaxKind::BINARY_EXPR => BinaryExpr::from_cst(elem).map(Expression::Binary)?,

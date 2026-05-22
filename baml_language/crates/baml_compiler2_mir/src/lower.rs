@@ -2564,14 +2564,22 @@ impl LoweringContext<'_> {
 
     /// Resolve an instantiation-expression base to its underlying free
     /// function's `ItemRef`, returning `None` for any shape we don't
-    /// currently support (bound methods, locals, unresolved).
+    /// currently support (bound methods, locals, classes, enums,
+    /// unresolved).  Only free-function resolutions flow into
+    /// `Rvalue::MakeInstantiatedFunction`.
     fn resolve_instantiation_base_to_item_ref(&self, base: AstExprId) -> Option<ItemRef> {
+        use baml_compiler2_hir::contributions::Definition;
+        use baml_compiler2_tir::inference::MemberResolution;
+
         let segments = match &self.body.exprs[base] {
             AstExpr::Path(segs) if !segs.is_empty() => segs.clone(),
             _ => return None,
         };
 
-        // Single-segment: name resolution via the binding scope.
+        // Single-segment: name resolution via the binding scope.  Accept
+        // only `Definition::Function` resolutions — classes, enums, etc.
+        // would silently flow through `def_to_item_ref` to a non-callable
+        // `ItemRef` and produce a broken `MakeInstantiatedFunction`.
         if segments.len() == 1 {
             let name = &segments[0];
             if self.locals.contains_key(name) {
@@ -2589,28 +2597,33 @@ impl LoweringContext<'_> {
                 name,
                 self.scope_func_name.as_ref(),
             );
-            return match resolved {
-                ResolvedName::Item(def) | ResolvedName::Builtin(def) => {
-                    Some(def_to_item_ref(self.db, def))
-                }
+            let (ResolvedName::Item(def) | ResolvedName::Builtin(def)) = resolved else {
+                return None;
+            };
+            return match def {
+                Definition::Function(_) => Some(def_to_item_ref(self.db, def)),
                 _ => None,
             };
         }
 
-        // Multi-segment: prefer the flat TIR resolution (set by
-        // `infer_multi_segment_path` for package-rooted paths).
+        // Multi-segment: only `Free { .. }` resolutions are supported.
+        // `BoundMethod` / `UnboundMethod` / `Field` shouldn't flow into
+        // `Rvalue::MakeInstantiatedFunction`.
         if let Some(resolution) = self.resolutions.get(&self.expr_metadata_key(base)) {
-            return resolution_to_item_ref(self.db, resolution);
+            return match resolution {
+                MemberResolution::Free { .. } => resolution_to_item_ref(self.db, resolution),
+                _ => None,
+            };
         }
-        // Then fall back to the per-segment path resolutions captured by
-        // `infer_local_rooted_path` (the last entry corresponds to the
-        // final segment).
         if let Some(member_resolutions) = self
             .path_member_resolutions
             .get(&self.expr_metadata_key(base))
         {
             if let Some(last) = member_resolutions.last() {
-                return resolution_to_item_ref(self.db, last);
+                return match last {
+                    MemberResolution::Free { .. } => resolution_to_item_ref(self.db, last),
+                    _ => None,
+                };
             }
         }
         None

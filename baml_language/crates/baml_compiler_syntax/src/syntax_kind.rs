@@ -255,10 +255,11 @@ pub enum SyntaxKind {
     /// and `GENERIC_ARGS` is the `<T1, ...>` list.
     ///
     /// Note: type-args on the receiver of a static-method call
-    /// (`Box<T>.from_json(x)`) still appear under the `FIELD_ACCESS_EXPR`
-    /// base in this same shape.  Constructor sites (`Foo<T> { ... }`) keep
-    /// their existing parse shape — they use `PATH_EXPR` with a trailing
-    /// `GENERIC_ARGS` because the receiver is always a type name.
+    /// (`Box<T>.from_json(x)`) appear under the `FIELD_ACCESS_EXPR` base
+    /// using this same `EXPR_WITH_TYPE_ARGS` wrapper.  Constructor sites
+    /// (`Foo<T> { ... }`) are parsed as an `EXPR_WITH_TYPE_ARGS` whose
+    /// `GENERIC_ARGS` the object-literal handler consumes — there is no
+    /// separate "`PATH_EXPR` with trailing `GENERIC_ARGS`" shape.
     EXPR_WITH_TYPE_ARGS,
     /// `env.FIELD` expression (e.g., `env.API_KEY`).
     ///

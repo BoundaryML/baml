@@ -11,8 +11,8 @@ use std::{
 
 use baml_base::Span;
 use baml_compiler2_mir::{
-    BasicBlock, BinOp, BlockId, Constant, IndexKind, IntrinsicOp, Local, LogLevel, MirFunctionBody,
-    Operand, Place, Rvalue, StatementKind, Terminator, UnaryOp,
+    BasicBlock, BinOp, BlockId, Constant, IndexKind, IntrinsicOp, ItemRef, Local, LogLevel,
+    MirFunctionBody, Operand, Place, Rvalue, StatementKind, Terminator, UnaryOp,
 };
 use baml_type::{Ty, TyTemplate};
 use bex_vm_types::{
@@ -1191,45 +1191,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 return;
             }
         }
-        if let Rvalue::MakeBoundMethod { item_ref, receiver } = rvalue {
-            // Emit the receiver onto the stack first.
-            self.emit_operand_pull(receiver);
-            // Resolve the item_ref to a GlobalIndex.
-            let func_name = item_ref.to_string();
-            let global_idx = *self
-                .globals
-                .get(&func_name)
-                .unwrap_or_else(|| panic!("MakeBoundMethod: global not found for {func_name}"));
-            let inst = self.emit(Instruction::MakeBoundMethod(GlobalIndex::from_raw(
-                global_idx,
-            )));
-            self.set_operand(inst, OperandMeta::Global(func_name));
-            return;
-        }
-        if let Rvalue::MakeInstantiatedFunction {
-            item_ref,
-            type_arg_templates,
-        } = rvalue
-        {
-            // Push one Object::Type per type-arg template, then emit the
-            // make-instantiated-function instruction so the VM can pop them
-            // into the resulting Object::InstantiatedFunction's bound_type_args.
-            for template in type_arg_templates {
-                unwrap_infallible(self.load_type(template));
-            }
-            let func_name = item_ref.to_string();
-            let global_idx = *self.globals.get(&func_name).unwrap_or_else(|| {
-                panic!("MakeInstantiatedFunction: global not found for {func_name}")
-            });
-            let ntypeargs = u16::try_from(type_arg_templates.len())
-                .expect("type_arg_templates count fits in u16");
-            let inst = self.emit(Instruction::MakeInstantiatedFunction {
-                global_idx: GlobalIndex::from_raw(global_idx),
-                ntypeargs,
-            });
-            self.set_operand(inst, OperandMeta::Global(func_name));
-            return;
-        }
+        // `MakeBoundMethod` and `MakeInstantiatedFunction` used to be
+        // special-cased here because `walk_rvalue_pull` panicked on them.
+        // It now routes them through `PullSink::make_bound_method` /
+        // `PullSink::make_instantiated_function`, which we implement
+        // below, so the fall-through handles both correctly.
         unwrap_infallible(pull_semantics::walk_rvalue_pull(self, rvalue));
     }
 
@@ -2204,19 +2170,17 @@ impl PullSink for StackifyCodegen<'_, '_> {
                     .as_ref()
                     .map(|def| def.rvalue.clone())
                     .unwrap_or_else(|| panic!("virtual local {local} without definition"));
-                // MakeClosure must be handled specially: its captures need to load
-                // cell pointers (LoadVar) not cell values (LoadDeref). We intercept
-                // here so that `emit_rvalue_pull` (which sets loading_for_closure_capture)
-                // is called rather than the generic `walk_rvalue_pull` inlining path.
-                // MakeBoundMethod and MakeInstantiatedFunction also need the
-                // global-table lookup, which `walk_rvalue_pull` doesn't do — route
-                // them through `emit_rvalue_pull`.
-                if matches!(
-                    rvalue,
-                    Rvalue::MakeClosure { .. }
-                        | Rvalue::MakeBoundMethod { .. }
-                        | Rvalue::MakeInstantiatedFunction { .. }
-                ) {
+                // MakeClosure must be handled specially: its captures need
+                // to load cell pointers (LoadVar) not cell values
+                // (LoadDeref). We intercept here so that `emit_rvalue_pull`
+                // (which sets `loading_for_closure_capture`) runs rather
+                // than the generic `walk_rvalue_pull` inlining path.
+                //
+                // `MakeBoundMethod` and `MakeInstantiatedFunction` no
+                // longer need this routing — `walk_rvalue_pull` calls
+                // `PullSink::make_*` and the emitter implements those
+                // directly.
+                if matches!(rvalue, Rvalue::MakeClosure { .. }) {
                     self.emit_rvalue_pull(&rvalue);
                     return Ok(LocalPullAction::Done);
                 }
@@ -2543,6 +2507,41 @@ impl PullSink for StackifyCodegen<'_, '_> {
         ntypeargs: usize,
     ) -> Result<(), Self::Error> {
         self.emit_make_closure_bytecode(lambda_idx, capture_count, ntypeargs);
+        Ok(())
+    }
+
+    fn make_bound_method(&mut self, item_ref: &ItemRef) -> Result<(), Self::Error> {
+        // Receiver is already on the stack from the caller's
+        // `walk_operand_pull`. Resolve the function global and emit.
+        let func_name = item_ref.to_string();
+        let global_idx = *self
+            .globals
+            .get(&func_name)
+            .unwrap_or_else(|| panic!("MakeBoundMethod: global not found for {func_name}"));
+        let inst = self.emit(Instruction::MakeBoundMethod(GlobalIndex::from_raw(
+            global_idx,
+        )));
+        self.set_operand(inst, OperandMeta::Global(func_name));
+        Ok(())
+    }
+
+    fn make_instantiated_function(
+        &mut self,
+        item_ref: &ItemRef,
+        ntypeargs: u16,
+    ) -> Result<(), Self::Error> {
+        // Type args are already on the stack via `load_type` calls in
+        // `walk_rvalue_pull`. Resolve the function global and emit the
+        // make-instantiated-function instruction.
+        let func_name = item_ref.to_string();
+        let global_idx = *self.globals.get(&func_name).unwrap_or_else(|| {
+            panic!("MakeInstantiatedFunction: global not found for {func_name}")
+        });
+        let inst = self.emit(Instruction::MakeInstantiatedFunction {
+            global_idx: GlobalIndex::from_raw(global_idx),
+            ntypeargs,
+        });
+        self.set_operand(inst, OperandMeta::Global(func_name));
         Ok(())
     }
 
