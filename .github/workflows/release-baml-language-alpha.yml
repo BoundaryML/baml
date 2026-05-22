@@ -184,14 +184,44 @@ jobs:
             binary: baml-cli
             pack_host: baml-pack-host
             archive_ext: tar.gz
+          - target: aarch64-unknown-linux-gnu
+            os: blacksmith-4vcpu-ubuntu-2204-arm
+            binary: baml-cli
+            pack_host: baml-pack-host
+            archive_ext: tar.gz
+          - target: x86_64-unknown-linux-musl
+            os: blacksmith-4vcpu-ubuntu-2204
+            binary: baml-cli
+            pack_host: baml-pack-host
+            archive_ext: tar.gz
+            container: rust:alpine@sha256:606fd313a0f49743ee2a7bd49a0914bab7deedb12791f3a846a34a4711db7ed2
+          - target: aarch64-unknown-linux-musl
+            os: blacksmith-4vcpu-ubuntu-2204
+            binary: baml-cli
+            pack_host: baml-pack-host
+            archive_ext: tar.gz
+            cross: true
           - target: x86_64-pc-windows-msvc
             os: blacksmith-4vcpu-windows-2025
             binary: baml-cli.exe
             pack_host: baml-pack-host.exe
             archive_ext: zip
+          - target: aarch64-pc-windows-msvc
+            os: blacksmith-4vcpu-windows-2025
+            binary: baml-cli.exe
+            pack_host: baml-pack-host.exe
+            archive_ext: zip
+            windows_arm: true
+            cross_arch: true
     runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container || '' }}
     timeout-minutes: 45
     steps:
+      - name: Install Alpine build dependencies
+        if: matrix.container
+        shell: sh
+        run: apk add --no-cache bash git cmake clang openssl-dev openssl-libs-static perl make python3
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -199,6 +229,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Rust
+        if: ${{ !matrix.container }}
         uses: ./.github/actions/setup-rust
         with:
           targets: ${{ matrix.target }}
@@ -207,21 +238,38 @@ jobs:
           enable-cross: false
           skip-protoc: true
 
+      - name: Install cross
+        if: matrix.cross
+        run: cargo install cross
+
+      # aws-lc-sys requires clang-cl to assemble ARM64 .S files on Windows
+      # (cl.exe doesn't understand GNU assembler syntax)
+      - name: Setup clang-cl for Windows ARM64
+        if: matrix.windows_arm
+        shell: pwsh
+        run: |
+          echo "C:\Program Files\LLVM\bin" >> $env:GITHUB_PATH
+          echo "CC_aarch64_pc_windows_msvc=clang-cl" >> $env:GITHUB_ENV
+          echo "CXX_aarch64_pc_windows_msvc=clang-cl" >> $env:GITHUB_ENV
+
       - name: Build baml-cli
         env:
           BAML_RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
           TARGET: ${{ matrix.target }}
-        run: cargo build --release --bin baml-cli --target "${TARGET}"
+          CARGO: ${{ matrix.cross && 'cross' || 'cargo' }}
+        run: $CARGO build --release --bin baml-cli --target "${TARGET}"
         working-directory: baml_language
 
       - name: Build baml-pack-host
         env:
           BAML_RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
           TARGET: ${{ matrix.target }}
-        run: cargo build --release -p baml_pack_host --bin baml-pack-host --target "${TARGET}"
+          CARGO: ${{ matrix.cross && 'cross' || 'cargo' }}
+        run: $CARGO build --release -p baml_pack_host --bin baml-pack-host --target "${TARGET}"
         working-directory: baml_language
 
       - name: Smoke test version
+        if: ${{ !matrix.cross && !matrix.cross_arch }}
         env:
           EXPECTED_VERSION: ${{ needs.prepare.outputs.version }}
           TARGET: ${{ matrix.target }}
@@ -290,11 +338,61 @@ jobs:
             !dist/${{ matrix.target }}/staging/**
           if-no-files-found: error
 
+  # ARM musl is cross-compiled from x86, so we can't smoke test it in the build job.
+  # GitHub Actions' JS-based actions (like actions/checkout) don't work in Alpine
+  # containers on ARM runners, so we can't use a container there either.
+  # Instead, we run a separate job on a native ARM runner to verify the binary works.
+  test-arm-musl:
+    name: Test ARM musl binary
+    needs:
+      - prepare
+      - build
+    if: needs.prepare.outputs.should_run == 'true'
+    runs-on: blacksmith-4vcpu-ubuntu-2204-arm
+    timeout-minutes: 5
+    steps:
+      - name: Download ARM musl archive
+        uses: actions/download-artifact@v4
+        with:
+          name: baml-language-archive-aarch64-unknown-linux-musl
+          path: dist
+
+      - name: Extract and test
+        run: |
+          set -euo pipefail
+          tar -xzf dist/*.tar.gz
+          ./baml-cli --version
+
+  # Windows ARM is cross-compiled from x86, so we can't smoke test it in the build job.
+  # Run a separate job on a native Windows ARM runner to verify the binary works.
+  test-windows-arm:
+    name: Test Windows ARM binary
+    needs:
+      - prepare
+      - build
+    if: needs.prepare.outputs.should_run == 'true'
+    runs-on: windows-11-arm
+    timeout-minutes: 5
+    steps:
+      - name: Download Windows ARM archive
+        uses: actions/download-artifact@v4
+        with:
+          name: baml-language-archive-aarch64-pc-windows-msvc
+          path: dist
+
+      - name: Extract and test
+        shell: pwsh
+        run: |
+          Expand-Archive -Path dist\*.zip -DestinationPath .
+          .\baml-cli.exe --version
+
   publish:
     name: Publish Release
     needs:
       - prepare
       - build
+      - test-arm-musl
+      - test-windows-arm
     if: needs.prepare.outputs.should_run == 'true' && needs.prepare.outputs.publish == 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2204
     timeout-minutes: 15
@@ -354,7 +452,11 @@ jobs:
               "aarch64-apple-darwin",
               "x86_64-apple-darwin",
               "x86_64-unknown-linux-gnu",
+              "aarch64-unknown-linux-gnu",
+              "x86_64-unknown-linux-musl",
+              "aarch64-unknown-linux-musl",
               "x86_64-pc-windows-msvc",
+              "aarch64-pc-windows-msvc",
           }
           missing = expected - target_assets.keys()
           if missing:
