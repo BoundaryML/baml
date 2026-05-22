@@ -206,13 +206,6 @@ jobs:
             binary: baml-cli.exe
             pack_host: baml-pack-host.exe
             archive_ext: zip
-          - target: aarch64-pc-windows-msvc
-            os: blacksmith-4vcpu-windows-2025
-            binary: baml-cli.exe
-            pack_host: baml-pack-host.exe
-            archive_ext: zip
-            windows_arm: true
-            cross_arch: true
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container || '' }}
     timeout-minutes: 45
@@ -241,16 +234,6 @@ jobs:
       - name: Install cross
         if: matrix.cross
         run: cargo install cross
-
-      # aws-lc-sys requires clang-cl to assemble ARM64 .S files on Windows
-      # (cl.exe doesn't understand GNU assembler syntax)
-      - name: Setup clang-cl for Windows ARM64
-        if: matrix.windows_arm
-        shell: pwsh
-        run: |
-          echo "C:\Program Files\LLVM\bin" >> $env:GITHUB_PATH
-          echo "CC_aarch64_pc_windows_msvc=clang-cl" >> $env:GITHUB_ENV
-          echo "CXX_aarch64_pc_windows_msvc=clang-cl" >> $env:GITHUB_ENV
 
       - name: Build baml-cli
         env:
@@ -363,36 +346,12 @@ jobs:
           tar -xzf dist/*.tar.gz
           ./baml-cli --version
 
-  # Windows ARM is cross-compiled from x86, so we can't smoke test it in the build job.
-  # Run a separate job on a native Windows ARM runner to verify the binary works.
-  test-windows-arm:
-    name: Test Windows ARM binary
-    needs:
-      - prepare
-      - build
-    if: needs.prepare.outputs.should_run == 'true'
-    runs-on: windows-11-arm
-    timeout-minutes: 5
-    steps:
-      - name: Download Windows ARM archive
-        uses: actions/download-artifact@v4
-        with:
-          name: baml-language-archive-aarch64-pc-windows-msvc
-          path: dist
-
-      - name: Extract and test
-        shell: pwsh
-        run: |
-          Expand-Archive -Path dist\*.zip -DestinationPath .
-          .\baml-cli.exe --version
-
   publish:
     name: Publish Release
     needs:
       - prepare
       - build
       - test-arm-musl
-      - test-windows-arm
     if: needs.prepare.outputs.should_run == 'true' && needs.prepare.outputs.publish == 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2204
     timeout-minutes: 15

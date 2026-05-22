@@ -633,7 +633,6 @@ fn release_host_target_triple() -> Result<&'static str> {
         ("linux", "aarch64", false) => Ok("aarch64-unknown-linux-gnu"),
         ("linux", "x86_64", true) => Ok("x86_64-unknown-linux-musl"),
         ("linux", "x86_64", false) => Ok("x86_64-unknown-linux-gnu"),
-        ("windows", "aarch64", _) => Ok("aarch64-pc-windows-msvc"),
         ("windows", "x86_64", _) => Ok("x86_64-pc-windows-msvc"),
         (os, arch, _) => anyhow::bail!(
             "No released `baml-pack-host` artifact is available for {arch}-{os}. \
@@ -660,7 +659,6 @@ const SUPPORTED_PACK_TARGETS: &[&str] = &[
     "aarch64-unknown-linux-musl",
     "x86_64-unknown-linux-gnu",
     "x86_64-unknown-linux-musl",
-    "aarch64-pc-windows-msvc",
     "x86_64-pc-windows-msvc",
 ];
 
