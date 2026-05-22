@@ -175,7 +175,7 @@ reqwest = { version = "0.13.1", default-features = false, features = [
 rowan = { version = "0.16" }
 rustls = { version = "0.23.37", default-features = false }
 rustc-hash = { version = "2.1" }
-salsa = { git = "https://github.com/salsa-rs/salsa.git", rev = "cdd0b85516a52c18b8a6d17a2279a96ed6c3e198", default-features = false, features = [
+salsa = { version = "0.26", default-features = false, features = [
   "compact_str",
   "macros",
   "salsa_unstable",
