@@ -3186,13 +3186,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 }
             }
-            Expr::Instantiation { .. } => {
-                // Real inference lands in a follow-up commit; this arm keeps
-                // exhaustiveness happy and returns `Unknown` so downstream
-                // type-checking is permissive until the proper substitution
-                // is wired up.
-                Ty::Unknown {
-                    attr: TyAttr::default(),
+            Expr::Instantiation { base, type_args } => {
+                // TS-style instantiation expression (`f<T>` as a value).
+                // Infer the base function type, then substitute the
+                // explicit type arguments into it so callers see the
+                // non-generic instantiated signature.
+                let base_ty = self.infer_expr(*base, body);
+                let bindings = self.resolve_explicit_type_args(*base, type_args, expr_id);
+                match bindings {
+                    Some(bindings) => crate::generics::substitute_ty(&base_ty, &bindings),
+                    None => base_ty,
                 }
             }
             Expr::Missing => Ty::Unknown {

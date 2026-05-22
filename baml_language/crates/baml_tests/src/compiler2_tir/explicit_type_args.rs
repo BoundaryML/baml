@@ -136,6 +136,27 @@ function caller() -> int {
     ");
 }
 
+/// TS-style instantiation expression in a let-binding.
+///
+/// `let cb = identity<string>;` produces a value whose type is the
+/// non-generic substituted function signature. Inferring the lambda body
+/// shows the bound `T = string`.
+#[test]
+fn instantiation_expression_binds_type_arg_into_value() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function identity<T>(x: T) -> T { x }
+function caller() -> string {
+    let cb = identity<string>;
+    "ok"
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file));
+}
+
 /// Multiple type params: explicit binding of two type vars resolves cleanly.
 #[test]
 fn explicit_two_type_args() {
