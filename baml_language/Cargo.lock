@@ -1091,6 +1091,7 @@ dependencies = [
  "bitcode",
  "clap",
  "clap-cargo",
+ "codegen_nodejs",
  "codegen_python",
  "console",
  "ctrlc",
@@ -2386,7 +2387,11 @@ dependencies = [
 name = "codegen_nodejs"
 version = "0.0.0-beta"
 dependencies = [
+ "askama",
+ "baml_base",
  "baml_codegen_types",
+ "indexmap 2.14.0",
+ "pretty_assertions",
 ]
 
 [[package]]

@@ -70,3 +70,9 @@ describe("type_shapes — representative symbols", () => {
     expect(Thing).toBeDefined();
   });
 });
+
+describe("type_shapes — RoundTrip smoke", () => {
+  it("RoundTripInt returns its argument unchanged", () => {
+    expect(primitives.RoundTripInt(42)).toBe(42);
+  });
+});

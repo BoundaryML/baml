@@ -1,7 +1,8 @@
 // test_engine.test.ts — mirrors bridge_python/tests/test_engine.py
 
 import { BamlRuntime, callFunctionSync, callFunction,
-         AbortController, getVersion, flushEvents } from '../index';
+         AbortController, getVersion, flushEvents, getRuntime,
+         BamlError, BamlInvalidArgumentError } from '../index';
 
 const BAML_SOURCE = `
 function ReturnOne() -> int {
@@ -64,6 +65,13 @@ describe('Basics', () => {
     test('flush_events runs without error', () => {
         expect(() => flushEvents()).not.toThrow();
     });
+
+    test('initializeRuntime + getRuntime', () => {
+        BamlRuntime.initializeRuntime('.', { 'main.baml': BAML_SOURCE });
+        const rt = getRuntime();
+        expect(rt).toBeDefined();
+        expect(callFunctionSync(rt, 'ReturnOne', {}).result()).toBe(1);
+    });
 });
 
 describe('callFunctionSync', () => {
@@ -105,6 +113,14 @@ describe('callFunctionSync', () => {
 
     test('function not found', () => {
         expect(() => callFunctionSync(rt, 'NonExistent', {})).toThrow();
+    });
+
+    test('function not found throws BamlInvalidArgumentError', () => {
+        expect(() => callFunctionSync(rt, 'NonExistent', {})).toThrow(BamlInvalidArgumentError);
+    });
+
+    test('function not found throws BamlError', () => {
+        expect(() => callFunctionSync(rt, 'NonExistent', {})).toThrow(BamlError);
     });
 });
 

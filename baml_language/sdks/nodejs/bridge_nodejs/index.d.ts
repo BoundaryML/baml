@@ -6,8 +6,23 @@
  * Build:  cd baml_language/crates/bridge_nodejs && pnpm build:debug
  */
 import { BamlRuntime, AbortController, HostSpanManager, Collector as NativeCollector, FunctionLog as NativeFunctionLog, Timing, Usage, LLMCall } from './native';
-export { BamlRuntime, AbortController, BamlHandle, HostSpanManager, getVersion, flushEvents } from './native';
+export { BamlRuntime, AbortController, BamlHandle, HostSpanManager, getVersion, getRuntime, flushEvents } from './native';
 export { Timing, Usage, LLMCall } from './native';
+export { takeHandleFromTable, putHandleIntoTable, _seedFunctionRefHandle, _seedGenericMediaHandle, } from './native';
+export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native';
+export { BamlStream } from './stream';
+export { BamlTypeMap, setTypeMap, getTypeMap } from './typemap';
+export type { LazyEntry } from './typemap';
+export { defineFunction } from './define_function';
+export type { FunctionMode } from './define_function';
+/**
+ * Sentinel placeholder used by codegen Phase 2 output. Generated
+ * `baml_sdk/<…>/index.ts` files emit `export const Foo = BAML_PLACEHOLDER;`
+ * for every class/enum/alias/function so that imports resolve and
+ * `expect(Foo).toBeDefined()`-style tests pass; Phase 4 replaces the
+ * placeholders with real bindings. Frozen so accidental mutation is loud.
+ */
+export declare const BAML_PLACEHOLDER: any;
 export { encodeCallArgs, decodeCallResult } from './proto';
 export { CtxManager } from './ctx_manager';
 export { BamlError, BamlInvalidArgumentError, BamlClientError, BamlCancelledError, wrapNativeError, } from './errors';

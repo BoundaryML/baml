@@ -3,19 +3,39 @@
 import {
     BamlRuntime,
     AbortController,
-    BamlHandle,
     HostSpanManager,
     Collector as NativeCollector,
     FunctionLog as NativeFunctionLog,
     Timing,
     Usage,
     LLMCall,
-    flushEvents,
 } from './native';
 import { encodeCallArgs, decodeCallResult } from './proto';
 
-export { BamlRuntime, AbortController, BamlHandle, HostSpanManager, getVersion, flushEvents } from './native';
+export { BamlRuntime, AbortController, BamlHandle, HostSpanManager, getVersion, getRuntime, flushEvents } from './native';
 export { Timing, Usage, LLMCall } from './native';
+export {
+    takeHandleFromTable,
+    putHandleIntoTable,
+    _seedFunctionRefHandle,
+    _seedGenericMediaHandle,
+} from './native';
+export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native';
+export { BamlStream } from './stream';
+export { BamlTypeMap, setTypeMap, getTypeMap } from './typemap';
+export type { LazyEntry } from './typemap';
+export { defineFunction } from './define_function';
+export type { FunctionMode } from './define_function';
+
+/**
+ * Sentinel placeholder used by codegen Phase 2 output. Generated
+ * `baml_sdk/<…>/index.ts` files emit `export const Foo = BAML_PLACEHOLDER;`
+ * for every class/enum/alias/function so that imports resolve and
+ * `expect(Foo).toBeDefined()`-style tests pass; Phase 4 replaces the
+ * placeholders with real bindings. Frozen so accidental mutation is loud.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const BAML_PLACEHOLDER: any = Object.freeze({ __bamlPlaceholder: true });
 export { encodeCallArgs, decodeCallResult } from './proto';
 export { CtxManager } from './ctx_manager';
 import { wrapNativeError } from './errors';
@@ -120,7 +140,6 @@ export async function callFunction(
     }
 }
 
-// Register flush on process exit (once to prevent duplicate handlers on module reload)
-process.once('exit', () => {
-    try { flushEvents(); } catch (_) { /* ignore */ }
-});
+// Register flush on process exit — exit_hook.ts dedupes across modules.
+import { installFlushOnExit } from './exit_hook';
+installFlushOnExit();

@@ -1,8 +1,43 @@
 {
   "name": "@boundaryml/baml-node",
   "version": "0.0.0-beta",
+  "description": "Node.js bindings for the BAML runtime (powered by bex_engine).",
+  "license": "Apache-2.0",
+  "homepage": "https://docs.boundaryml.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BoundaryML/baml"
+  },
+  "author": {
+    "name": "Boundary",
+    "email": "contact@boundaryml.com"
+  },
+  "keywords": [
+    "baml",
+    "boundaryml",
+    "boundary",
+    "llm",
+    "ai"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "main": "index.js",
   "types": "index.d.ts",
+  "files": [
+    "*.js",
+    "*.d.ts",
+    "*.js.map",
+    "*.d.ts.map",
+    "proto/**",
+    "*.node",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "napi": {
     "binaryName": "baml_node",
     "targets": [
@@ -24,6 +59,7 @@
     "build:tag-generated-files": "node typescript_src/tag-generated-files.js",
     "build:debug": "pnpm build:proto && pnpm build:napi-debug && pnpm build:ts_build && pnpm build:tag-generated-files",
     "build:release": "pnpm build:proto && pnpm build:napi-release && pnpm build:ts_build && pnpm build:tag-generated-files",
+    "prepublishOnly": "napi prepublish -t npm --skip-gh-release",
     "test": "jest"
   },
   "devDependencies": {

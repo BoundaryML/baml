@@ -401,8 +401,12 @@ if (!nativeBinding) {
 
 module.exports = nativeBinding
 module.exports.AbortController = nativeBinding.AbortController
+module.exports.BamlAudio = nativeBinding.BamlAudio
 module.exports.BamlHandle = nativeBinding.BamlHandle
+module.exports.BamlImage = nativeBinding.BamlImage
+module.exports.BamlPdf = nativeBinding.BamlPdf
 module.exports.BamlRuntime = nativeBinding.BamlRuntime
+module.exports.BamlVideo = nativeBinding.BamlVideo
 module.exports.Collector = nativeBinding.Collector
 module.exports.FunctionLog = nativeBinding.FunctionLog
 module.exports.HostSpanManager = nativeBinding.HostSpanManager
@@ -410,5 +414,10 @@ module.exports.LlmCall = nativeBinding.LlmCall
 module.exports.LLMCall = nativeBinding.LLMCall
 module.exports.Timing = nativeBinding.Timing
 module.exports.Usage = nativeBinding.Usage
+module.exports._seedFunctionRefHandle = nativeBinding._seedFunctionRefHandle
+module.exports._seedGenericMediaHandle = nativeBinding._seedGenericMediaHandle
 module.exports.flushEvents = nativeBinding.flushEvents
+module.exports.getRuntime = nativeBinding.getRuntime
 module.exports.getVersion = nativeBinding.getVersion
+module.exports.putHandleIntoTable = nativeBinding.putHandleIntoTable
+module.exports.takeHandleFromTable = nativeBinding.takeHandleFromTable

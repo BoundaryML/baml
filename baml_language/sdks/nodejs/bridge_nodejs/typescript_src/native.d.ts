@@ -7,6 +7,20 @@ export declare class AbortController {
   get aborted(): boolean
 }
 
+export declare class BamlAudio {
+  static fromUrl(url: string, mimeType?: string | undefined | null): BamlAudio
+  static fromFile(file: string, mimeType?: string | undefined | null): BamlAudio
+  static fromBase64(base64: string, mimeType?: string | undefined | null): BamlAudio
+  url(): string | null
+  file(): string | null
+  base64(): string
+  mimeType(): string | null
+  /** Internal: build from an existing BamlHandle. Used by proto decode. */
+  static _fromHandle(handle: BamlHandle): BamlAudio
+  /** Internal: produce a fresh BamlHandle pointing at the same table row. */
+  _toHandle(): BamlHandle
+}
+
 /**
  * Base class for all opaque BAML handles.
  *
@@ -20,14 +34,65 @@ export declare class BamlHandle {
   clone(): BamlHandle
 }
 
+export declare class BamlImage {
+  static fromUrl(url: string, mimeType?: string | undefined | null): BamlImage
+  static fromFile(file: string, mimeType?: string | undefined | null): BamlImage
+  static fromBase64(base64: string, mimeType?: string | undefined | null): BamlImage
+  url(): string | null
+  file(): string | null
+  base64(): string
+  mimeType(): string | null
+  /** Internal: build from an existing BamlHandle. Used by proto decode. */
+  static _fromHandle(handle: BamlHandle): BamlImage
+  /** Internal: produce a fresh BamlHandle pointing at the same table row. */
+  _toHandle(): BamlHandle
+}
+
+export declare class BamlPdf {
+  static fromUrl(url: string, mimeType?: string | undefined | null): BamlPdf
+  static fromFile(file: string, mimeType?: string | undefined | null): BamlPdf
+  static fromBase64(base64: string, mimeType?: string | undefined | null): BamlPdf
+  url(): string | null
+  file(): string | null
+  base64(): string
+  mimeType(): string | null
+  /** Internal: build from an existing BamlHandle. Used by proto decode. */
+  static _fromHandle(handle: BamlHandle): BamlPdf
+  /** Internal: produce a fresh BamlHandle pointing at the same table row. */
+  _toHandle(): BamlHandle
+}
+
 /** The main BAML runtime, wrapping a `dyn Bex` instance. */
 export declare class BamlRuntime {
   /** Create a runtime from in-memory BAML source files. */
   static fromFiles(rootPath: string, files: Record<string, string>): BamlRuntime
+  /**
+   * Initialize the process-global runtime from in-memory BAML source files.
+   *
+   * Equivalent to `fromFiles` — `bridge_cffi::engine::initialize_runtime` is
+   * a single-slot singleton, so this also makes the result reachable via
+   * `getRuntime()`. Mirrors `bridge_python`'s `BamlRuntime.initialize_runtime`
+   * naming.
+   */
+  static initializeRuntime(rootPath: string, files: Record<string, string>): BamlRuntime
   /** Call a BAML function synchronously (blocking). */
   callFunctionSync(functionName: string, argsProto: Buffer, ctx?: HostSpanManager | undefined | null, collectors?: Array<Collector> | undefined | null, abortController?: AbortController | undefined | null): Buffer
   /** Call a BAML function asynchronously. */
   callFunction(functionName: string, argsProto: Buffer, ctx?: HostSpanManager | undefined | null, collectors?: Array<Collector> | undefined | null, abortController?: AbortController | undefined | null): Promise<Buffer>
+}
+
+export declare class BamlVideo {
+  static fromUrl(url: string, mimeType?: string | undefined | null): BamlVideo
+  static fromFile(file: string, mimeType?: string | undefined | null): BamlVideo
+  static fromBase64(base64: string, mimeType?: string | undefined | null): BamlVideo
+  url(): string | null
+  file(): string | null
+  base64(): string
+  mimeType(): string | null
+  /** Internal: build from an existing BamlHandle. Used by proto decode. */
+  static _fromHandle(handle: BamlHandle): BamlVideo
+  /** Internal: produce a fresh BamlHandle pointing at the same table row. */
+  _toHandle(): BamlHandle
 }
 
 export declare class Collector {
@@ -79,8 +144,19 @@ export declare class Usage {
   get cachedInputTokens(): number | null
 }
 
+export declare function _seedFunctionRefHandle(globalIndex: number): SeedResult
+
+/** Test-only: seed an `Adt(Media(generic))` entry into `HANDLE_TABLE`. */
+export declare function _seedGenericMediaHandle(): SeedResult
+
 /** Flush all buffered trace events to the JSONL file (if BAML_TRACE_FILE is set). */
 export declare function flushEvents(): void
+
+/**
+ * Return the process-global `BamlRuntime`. Errors if `initializeRuntime` has
+ * not been called yet. Mirrors `bridge_python::runtime::get_runtime`.
+ */
+export declare function getRuntime(): BamlRuntime
 
 export declare function getVersion(): string
 
@@ -100,3 +176,33 @@ export interface HandleKey {
   low: number
   high: number
 }
+
+export declare function putHandleIntoTable(handle: BamlHandle): PutHandleResult
+
+/**
+ * Allocate a fresh `HANDLE_TABLE` row sharing the same `Arc` as `handle.key`,
+ * then return the new `(key, handle_type)` pair so callers can stage a wire
+ * `BamlHandle`. The original `BamlHandle` keeps its key and stays usable.
+ * Mirrors `bridge_python::py_handle::put_pyhandle_into_table`.
+ */
+export interface PutHandleResult {
+  key: HandleKey
+  handleType: number
+}
+
+/**
+ * Test-only: seed a `FunctionRef` entry into `HANDLE_TABLE`. Returns the
+ * `(key, handle_type)` so test code can stage a wire `BamlHandle`.
+ */
+export interface SeedResult {
+  key: HandleKey
+  handleType: number
+}
+
+/**
+ * Validate that `key` exists in `HANDLE_TABLE`, then wrap as a `BamlHandle`.
+ * Used by the proto decoder's `_decode_handle` path. Does **not** drain —
+ * the entry stays in the table and is owned by the returned `BamlHandle`.
+ * Mirrors `bridge_python::py_handle::take_pyhandle_from_table`.
+ */
+export declare function takeHandleFromTable(key: HandleKey, handleType: number): BamlHandle

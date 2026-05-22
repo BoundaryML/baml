@@ -1,7 +1,8 @@
 //! Node.js handle lifecycle — released via ObjectFinalize.
 //! Mirrors bridge_python/src/handle.rs.
 
-use bridge_ctypes::HANDLE_TABLE;
+use bex_project::{BexExternalAdt, MediaKind, MediaValue};
+use bridge_ctypes::{CffiHandleTableEntry, HANDLE_TABLE};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
@@ -76,9 +77,95 @@ impl BamlHandle {
     }
 }
 
+impl BamlHandle {
+    #[allow(dead_code)] // Used by media.rs via lib target; lib-test doesn't see media.
+    pub(crate) fn key_u64(&self) -> u64 {
+        self.key
+    }
+
+    #[allow(dead_code)] // Used by media.rs via lib target; lib-test doesn't see media.
+    pub(crate) fn from_parts(key: u64, handle_type: i32) -> Self {
+        Self { key, handle_type }
+    }
+}
+
 impl ObjectFinalize for BamlHandle {
     fn finalize(self, _env: Env) -> napi::Result<()> {
         HANDLE_TABLE.release(self.key);
         Ok(())
+    }
+}
+
+/// Validate that `key` exists in `HANDLE_TABLE`, then wrap as a `BamlHandle`.
+/// Used by the proto decoder's `_decode_handle` path. Does **not** drain —
+/// the entry stays in the table and is owned by the returned `BamlHandle`.
+/// Mirrors `bridge_python::py_handle::take_pyhandle_from_table`.
+#[napi]
+pub fn take_handle_from_table(key: HandleKey, handle_type: i32) -> napi::Result<BamlHandle> {
+    let key_u64 = key.to_u64();
+    if HANDLE_TABLE.resolve(key_u64).is_none() {
+        return Err(napi::Error::new(
+            napi::Status::GenericFailure,
+            format!("BAML handle key {key_u64} is not in HANDLE_TABLE"),
+        ));
+    }
+    Ok(BamlHandle::from_parts(key_u64, handle_type))
+}
+
+/// Allocate a fresh `HANDLE_TABLE` row sharing the same `Arc` as `handle.key`,
+/// then return the new `(key, handle_type)` pair so callers can stage a wire
+/// `BamlHandle`. The original `BamlHandle` keeps its key and stays usable.
+/// Mirrors `bridge_python::py_handle::put_pyhandle_into_table`.
+#[napi(object)]
+pub struct PutHandleResult {
+    pub key: HandleKey,
+    pub handle_type: i32,
+}
+
+#[napi]
+pub fn put_handle_into_table(handle: &BamlHandle) -> napi::Result<PutHandleResult> {
+    let new_key = HANDLE_TABLE.clone_handle(handle.key).ok_or_else(|| {
+        napi::Error::new(
+            napi::Status::GenericFailure,
+            format!("BamlHandle key {} is not in HANDLE_TABLE", handle.key),
+        )
+    })?;
+    Ok(PutHandleResult {
+        key: HandleKey::from_u64(new_key),
+        handle_type: handle.handle_type,
+    })
+}
+
+/// Test-only: seed a `FunctionRef` entry into `HANDLE_TABLE`. Returns the
+/// `(key, handle_type)` so test code can stage a wire `BamlHandle`.
+#[napi(object)]
+pub struct SeedResult {
+    pub key: HandleKey,
+    pub handle_type: i32,
+}
+
+#[napi(js_name = "_seedFunctionRefHandle")]
+pub fn seed_function_ref_handle(global_index: u32) -> SeedResult {
+    let entry = CffiHandleTableEntry::FunctionRef {
+        global_index: global_index as usize,
+    };
+    let ht = entry.handle_type();
+    let key = HANDLE_TABLE.insert(entry);
+    SeedResult {
+        key: HandleKey::from_u64(key),
+        handle_type: ht as i32,
+    }
+}
+
+/// Test-only: seed an `Adt(Media(generic))` entry into `HANDLE_TABLE`.
+#[napi(js_name = "_seedGenericMediaHandle")]
+pub fn seed_generic_media_handle() -> SeedResult {
+    let media = MediaValue::from_url(MediaKind::Generic, "https://example.com/", None);
+    let entry = CffiHandleTableEntry::Adt(BexExternalAdt::Media(media));
+    let ht = entry.handle_type();
+    let key = HANDLE_TABLE.insert(entry);
+    SeedResult {
+        key: HandleKey::from_u64(key),
+        handle_type: ht as i32,
     }
 }

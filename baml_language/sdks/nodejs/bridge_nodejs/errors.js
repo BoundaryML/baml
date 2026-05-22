@@ -40,17 +40,26 @@ class BamlCancelledError extends BamlError {
     }
 }
 exports.BamlCancelledError = BamlCancelledError;
+// Bridge errors arrive prefixed with `BamlError: <Subclass>:` (see
+// bridge_nodejs/src/errors.rs). Match the prefix exactly to avoid
+// over-matching user messages that incidentally mention a class name.
+const PREFIX_MAP = [
+    ['BamlError: BamlCancelledError:', BamlCancelledError],
+    ['BamlError: BamlInvalidArgumentError:', BamlInvalidArgumentError],
+    ['BamlError: BamlClientError:', BamlClientError],
+];
 function wrapNativeError(err) {
-    if (err instanceof Error) {
-        const msg = err.message;
-        if (msg.includes('BamlCancelledError'))
-            return new BamlCancelledError(msg);
-        if (msg.includes('BamlInvalidArgumentError'))
-            return new BamlInvalidArgumentError(msg);
-        if (msg.includes('BamlClientError'))
-            return new BamlClientError(msg);
-        return new BamlError(msg);
+    if (err instanceof BamlError)
+        return err;
+    // napi-rs Errors may not satisfy `instanceof Error` across realm
+    // boundaries; duck-type on `.message` instead.
+    const msg = typeof err === 'object' && err !== null && typeof err.message === 'string'
+        ? err.message
+        : String(err);
+    for (const [prefix, Ctor] of PREFIX_MAP) {
+        if (msg.startsWith(prefix))
+            return new Ctor(msg);
     }
-    return new BamlError(String(err));
+    return new BamlError(msg);
 }
 //# sourceMappingURL=errors.js.map

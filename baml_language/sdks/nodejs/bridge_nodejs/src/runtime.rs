@@ -17,7 +17,7 @@ use crate::{
 /// The main BAML runtime, wrapping a `dyn Bex` instance.
 #[napi]
 pub struct BamlRuntime {
-    bex: Arc<dyn Bex>,
+    pub(crate) bex: Arc<dyn Bex>,
 }
 
 #[napi]
@@ -32,6 +32,20 @@ impl BamlRuntime {
             Ok(bex) => Ok(BamlRuntime { bex }),
             Err(e) => Err(bridge_error_to_napi(e)),
         }
+    }
+
+    /// Initialize the process-global runtime from in-memory BAML source files.
+    ///
+    /// Equivalent to `fromFiles` — `bridge_cffi::engine::initialize_runtime` is
+    /// a single-slot singleton, so this also makes the result reachable via
+    /// `getRuntime()`. Mirrors `bridge_python`'s `BamlRuntime.initialize_runtime`
+    /// naming.
+    #[napi(factory, js_name = "initializeRuntime")]
+    pub fn initialize_runtime(
+        root_path: String,
+        files: std::collections::HashMap<String, String>,
+    ) -> napi::Result<Self> {
+        Self::from_files(root_path, files)
     }
 
     /// Call a BAML function synchronously (blocking).
@@ -130,6 +144,15 @@ impl BamlRuntime {
             Ok(Buffer::from(baml_value.encode_to_vec()))
         })
     }
+}
+
+/// Return the process-global `BamlRuntime`. Errors if `initializeRuntime` has
+/// not been called yet. Mirrors `bridge_python::runtime::get_runtime`.
+#[allow(dead_code)] // Used via napi macros; lib-test target doesn't see it.
+#[napi(js_name = "getRuntime")]
+pub fn get_runtime() -> napi::Result<BamlRuntime> {
+    let bex = bridge_cffi::engine::get_runtime().map_err(bridge_error_to_napi)?;
+    Ok(BamlRuntime { bex })
 }
 
 /// Decode protobuf-encoded function arguments into `BexArgs`.

@@ -3,8 +3,7 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { HostSpanManager, flushEvents } from './native';
-
-let exitHookInstalled = false;
+import { installFlushOnExit } from './exit_hook';
 
 export class CtxManager {
     private rt: unknown;
@@ -19,13 +18,7 @@ export class CtxManager {
         // Leaving as-is: get() and reset() already create fresh managers, and the legacy
         // engine/ had the same eager pattern without reported issues.
         this.ctx.enterWith(new HostSpanManager());
-
-        if (!exitHookInstalled) {
-            exitHookInstalled = true;
-            process.once('exit', () => {
-                try { flushEvents(); } catch {}
-            });
-        }
+        installFlushOnExit();
     }
 
     get(): HostSpanManager {

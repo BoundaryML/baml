@@ -122,7 +122,7 @@ impl GenerateArgs {
                 eprintln!("Add a generator block to your .baml files, e.g.:");
                 eprintln!();
                 eprintln!("  generator my_client {{");
-                eprintln!("    output_type python/pydantic");
+                eprintln!("    output_type python/pydantic    // or nodejs/typescript");
                 eprintln!("    output_dir \"..\"");
                 eprintln!("  }}");
             }
@@ -153,6 +153,11 @@ impl GenerateArgs {
                         generator.naming_convention,
                     )
                 }
+                OutputType::NodejsTypescript => codegen_nodejs::to_source_code(
+                    &pool,
+                    &user_baml_files,
+                    generator.naming_convention,
+                ),
             };
 
             std::fs::create_dir_all(&output_dir).with_context(|| {

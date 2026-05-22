@@ -3,15 +3,12 @@
 //! Mirrors [`crate::python_pydantic2`] but for the
 //! TypeScript/Node.js toolchain (pnpm + tsc + jest).
 //!
-//! Until `codegen_nodejs::to_source_code` lands, the codegen call is
-//! wrapped in [`std::panic::catch_unwind`] so the build script
-//! survives the stub's `unimplemented!()` — `baml_sdk/` is just left
-//! empty for that fixture, and the `tsc` / `jest` tests fail at
-//! runtime (tsc can't resolve imports, jest can't load modules)
-//! with a clear error rather than the entire crate failing to
-//! build. Every emitted `#[test]` (including
-//! `build_diagnostics::no_build_failures`) is `#[ignore]`d on this
-//! crate while the stub stays in place — see [`IGNORE_REASON`].
+//! Phase 2 (24a) wires `codegen_nodejs::to_source_code` end-to-end —
+//! the call no longer panics, so the previous `std::panic::catch_unwind`
+//! wrapper was dropped along with the `IGNORE_REASON` const that
+//! `#[ignore]`d every emitted test. A future codegen panic is now
+//! loud (the build script fails) rather than silently leaving
+//! `baml_sdk/` empty.
 //!
 //! **pnpm steps live in
 //! `sdk_tests/crates/nodejs_typescript/setup.sh`**, NOT in build.rs.
@@ -40,7 +37,7 @@
 //! `sdk_tests/crates/nodejs_typescript/<name>/`.
 
 use std::{
-    env, fs, panic,
+    env, fs,
     path::{Path, PathBuf},
 };
 
@@ -50,15 +47,6 @@ use crate::{
     BuildDiagnostics, copy_customizable, discover_fixtures, fixtures_root_from_manifest,
     load_fixture, watch_dir,
 };
-
-/// Reason string stamped onto every nodejs_typescript test's
-/// `#[ignore]` attr — per-fixture `tsc`/`jest` plus the shared
-/// `build_diagnostics`. While `codegen_nodejs::to_source_code` is a
-/// stub every fixture records a `codegen` failure and produces an
-/// empty `baml_sdk/`, so the toolchain tests can't pass. Remove the
-/// `#[ignore]`s — and the `Some(...)` arg to `build_diagnostics!`
-/// below — once the emitter lands.
-pub const IGNORE_REASON: &str = "codegen_nodejs is a stub; re-enable once the emitter lands";
 
 /// Per-fixture package.json. `__PACKAGE_NAME__` is substituted per
 /// fixture. The dev toolchain (jest + ts-jest + typescript + types)
@@ -101,9 +89,9 @@ const CACHE_SUBDIR: &str = "pnpm-store";
 const CACHE_ENV_VAR: &str = "npm_config_store_dir";
 
 /// Entry point for `crates/nodejs_typescript/build.rs`. Discovers
-/// fixtures, runs codegen for each (best-effort — see module docs),
-/// writes templates, and emits the per-fixture test scaffold. Does
-/// NOT touch pnpm — that's setup.sh's job (see module docs).
+/// fixtures, runs codegen for each, writes per-fixture templates, and
+/// emits the test scaffold. Does NOT touch pnpm — that's setup.sh's
+/// job (see module docs).
 pub fn run_all() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let fixtures_root = fixtures_root_from_manifest(&manifest_dir);
@@ -152,44 +140,33 @@ fn codegen_fixture(
     }
     fs::create_dir_all(&baml_sdk).unwrap();
 
-    // codegen_nodejs is a stub — `to_source_code` currently
-    // panics with `unimplemented!()`. Catch the unwind, record it,
-    // and leave `baml_sdk/` empty; tsc / jest tests then fail at
-    // runtime with a clearer "tsc can't find module" / "jest can't
-    // require" signal than a hard build abort.
-    let pool = loaded.pool;
-    let user_baml_files = loaded.user_baml_files;
-    let codegen_result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-        codegen_nodejs::to_source_code(&pool, &user_baml_files, NamingConvention::PreserveCase)
-    }));
-    match codegen_result {
-        Ok(output) => {
-            for (rel, content) in output {
-                let path = baml_sdk.join(&rel);
-                if let Some(parent) = path.parent() {
-                    if let Err(e) = fs::create_dir_all(parent) {
-                        diagnostics.record(
-                            "codegen_write",
-                            fixture,
-                            format!("create_dir_all {}: {e}", parent.display()),
-                        );
-                        continue;
-                    }
-                }
-                if let Err(e) = fs::write(&path, content) {
-                    diagnostics.record(
-                        "codegen_write",
-                        fixture,
-                        format!("write {}: {e}", path.display()),
-                    );
-                }
+    // codegen_nodejs::to_source_code is no longer a panicking stub
+    // (24a Phase 2) — call it directly so any future codegen panic
+    // is loud rather than soft-recorded. File-write failures stay
+    // routed through `diagnostics` per the soft-fail design (env
+    // issue, not a code bug).
+    let output = codegen_nodejs::to_source_code(
+        &loaded.pool,
+        &loaded.user_baml_files,
+        NamingConvention::PreserveCase,
+    );
+    for (rel, content) in output {
+        let path = baml_sdk.join(&rel);
+        if let Some(parent) = path.parent() {
+            if let Err(e) = fs::create_dir_all(parent) {
+                diagnostics.record(
+                    "codegen_write",
+                    fixture,
+                    format!("create_dir_all {}: {e}", parent.display()),
+                );
+                continue;
             }
         }
-        Err(_) => {
+        if let Err(e) = fs::write(&path, content) {
             diagnostics.record(
-                "codegen",
+                "codegen_write",
                 fixture,
-                "codegen_nodejs::to_source_code panicked (likely the not-yet-implemented stub) — baml_sdk/ left empty",
+                format!("write {}: {e}", path.display()),
             );
         }
     }
@@ -207,7 +184,7 @@ fn codegen_fixture(
         // Copying is cheaper than fighting that, and build.rs's
         // `rerun-if-changed` watch on `customizable/` re-stages on
         // edits.
-        let copy_result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
+        let copy_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             copy_customizable(&custom, &generated);
         }));
         if copy_result.is_err() {
@@ -244,16 +221,12 @@ fn codegen_fixture(
 /// Emit `OUT_DIR/nodejs_typescript_tests.rs` — a sequence of
 /// `::sdk_test_harness_runner::*` invocations. No test bodies authored here;
 /// `build_diagnostics!` and `run_test_cmd` live in `sdk_test_harness_runner`.
-/// Every emitted test is `#[ignore]`d while `codegen_nodejs` is a
-/// stub (see [`IGNORE_REASON`]).
 fn write_fixtures_tests_rs(out_dir: &Path, fixtures: &[String]) {
     let mut buf = String::new();
     buf.push_str(
         "// Generated by sdk_test_harness_setup::nodejs_typescript::run_all — do not edit.\n",
     );
-    buf.push_str(&format!(
-        "::sdk_test_harness_runner::build_diagnostics!(ignore = {IGNORE_REASON:?});\n"
-    ));
+    buf.push_str("::sdk_test_harness_runner::build_diagnostics!();\n");
     for fixture in fixtures {
         buf.push_str(&format!(
             r#"
@@ -268,13 +241,11 @@ mod {fixture} {{
     }}
 
     #[test]
-    #[ignore = {ignore_reason:?}]
     fn tsc() {{
         cmd("node node_modules/typescript/bin/tsc --noEmit");
     }}
 
     #[test]
-    #[ignore = {ignore_reason:?}]
     fn jest() {{
         cmd("node node_modules/jest/bin/jest.js");
     }}
@@ -283,7 +254,6 @@ mod {fixture} {{
             fixture = fixture,
             cache_subdir = CACHE_SUBDIR,
             cache_env_var = CACHE_ENV_VAR,
-            ignore_reason = IGNORE_REASON,
         ));
     }
     let target = out_dir.join("nodejs_typescript_tests.rs");

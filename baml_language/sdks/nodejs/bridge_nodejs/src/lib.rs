@@ -6,6 +6,7 @@
 mod abort_controller;
 mod errors;
 pub mod handle;
+mod media;
 mod runtime;
 mod types;
 

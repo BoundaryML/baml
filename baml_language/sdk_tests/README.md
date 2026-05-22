@@ -50,14 +50,10 @@ Targets in tree:
   `build_diagnostics` test).
 - **`sdk_test_nodejs_typescript`** — TypeScript on Node.js. Two
   checks per fixture: `tsc` (`node node_modules/typescript/bin/tsc
-  --noEmit`) and `jest` (`node node_modules/jest/bin/jest.js`).
-  Every test in this crate — `tsc`, `jest`, and
-  `build_diagnostics` — is `#[ignore]`d while
-  [`codegen_nodejs`](../sdks/nodejs/codegen_nodejs/) is a stub that
-  panics: every fixture records a `codegen` diagnostic and
-  `baml_sdk/` stays empty, so the toolchain commands can't pass.
-  Drop the `#[ignore]`s when the emitter lands (`IGNORE_REASON` in
-  `sdk_tests/harness_setup/src/nodejs_typescript.rs`). The native
+  --noEmit`) and `jest` (`node node_modules/jest/bin/jest.js`),
+  plus the shared `build_diagnostics` test. The generated
+  `package.json` `file:`-points at
+  [`bridge_nodejs`](../sdks/nodejs/bridge_nodejs/); the native
   `.node` addon build and per-fixture `pnpm install` live in
   [`crates/nodejs_typescript/setup.sh`](./crates/nodejs_typescript/setup.sh)
   rather than build.rs. `cargo nextest run` invokes setup.sh
@@ -85,9 +81,6 @@ cargo test -p sdk_test_python_pydantic2 build_diagnostics
 
 # List discovered tests (without running)
 cargo test -p sdk_test_python_pydantic2 -- --list
-
-# Run ignored nodejs_typescript tests too (local debugging of codegen_nodejs)
-cargo test -p sdk_test_nodejs_typescript -- --ignored
 ```
 
 ## Directory Structure
@@ -247,17 +240,15 @@ nodejs_typescript's `build.rs` only does codegen + scaffold emit
 pnpm failures hard-fail in `setup.sh` instead. The `sdk_test_harness_runner::build_diagnostics!` macro expands
 to a `mod build_diagnostics { #[test] fn no_build_failures }` that
 reads the file and fails with the records. `sdk_test_harness_setup`'s
-scaffold emitter stamps one invocation per generator scaffold —
-`::sdk_test_harness_runner::build_diagnostics!()` for python and
-`::sdk_test_harness_runner::build_diagnostics!(ignore = "…")` for
-nodejs_typescript (while `codegen_nodejs` is a stub).
+scaffold emitter stamps `::sdk_test_harness_runner::build_diagnostics!()`
+at the top of every generator's scaffold. (The macro also accepts
+`(ignore = "...")` to stamp `#[ignore]` on the emitted test —
+used historically while `codegen_nodejs` was a stub; no current
+generator passes it.)
 
 Outcome: `cargo doc` / `cargo check` succeed without `uv` / `pnpm`
 installed; `cargo test` surfaces the same failures it would have
-hit before, just routed through a test rather than build.rs. The
-`nodejs_typescript` crate `#[ignore]`s `build_diagnostics` plus
-every per-fixture test until `codegen_nodejs` is real — see
-`IGNORE_REASON` in `sdk_tests/harness_setup/src/nodejs_typescript.rs`.
+hit before, just routed through a test rather than build.rs.
 
 Hard panics are retained for repo/author bugs: missing `fixtures/`
 directory, fixtures with zero `.baml` files, `.baml` files with
