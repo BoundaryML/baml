@@ -1428,6 +1428,66 @@ async fn same_generic_interface_field_links_select_matching_type_args_runtime() 
 }
 
 #[tokio::test]
+async fn generic_interface_field_links_preserve_swapped_type_var_identity_runtime() {
+    let output = baml_test!(
+        r#"
+        interface Slot<T, E> {
+            value: T
+        }
+        class Pair<L, R> {
+            left: L
+            right: R
+            implements Slot<L, R> {
+                value as left
+            }
+            implements Slot<R, L> {
+                value as right
+            }
+        }
+        function main() -> bool {
+            let p: Pair<int, string> = Pair { left: 7, right: "seven" }
+            let lr: Slot<int, string> = p
+            let rl: Slot<string, int> = p
+            return lr.value == 7 && rl.value == "seven"
+        }
+    "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
+}
+
+#[tokio::test]
+async fn generic_interface_method_dispatch_preserves_swapped_type_var_identity_runtime() {
+    let output = baml_test!(
+        r#"
+        interface Reporter<T, E> {
+            function show(self) -> T
+        }
+        class Pair<L, R> {
+            left: L
+            right: R
+            implements Reporter<L, R> {
+                function show(self) -> L {
+                    return self.left
+                }
+            }
+            implements Reporter<R, L> {
+                function show(self) -> R {
+                    return self.right
+                }
+            }
+        }
+        function main() -> bool {
+            let p: Pair<int, string> = Pair { left: 7, right: "seven" }
+            let lr: Reporter<int, string> = p
+            let rl: Reporter<string, int> = p
+            return lr.show() == 7 && rl.show() == "seven"
+        }
+    "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
+}
+
+#[tokio::test]
 async fn interface_field_via_requires_chain_runtime() {
     let output = baml_test!(
         r#"
@@ -4218,6 +4278,37 @@ async fn generic_requires_parent_args_dispatch_on_type_implementor() {
         output.result.unwrap(),
         BexExternalValue::String("parent-int".into())
     );
+}
+
+#[tokio::test]
+async fn requires_closure_preserves_multiple_parent_instantiations_runtime() {
+    let output = baml_test!(
+        r#"
+        interface Parent<T> {
+            function describe(self) -> string
+        }
+        interface NeedsInt requires Parent<int> {}
+        interface NeedsString requires Parent<string> {}
+        interface Both requires NeedsInt, NeedsString {}
+        class Box {
+            implements Parent<int> {
+                function describe(self) -> string { return "int" }
+            }
+            implements Parent<string> {
+                function describe(self) -> string { return "string" }
+            }
+            implements NeedsInt {}
+            implements NeedsString {}
+            implements Both {}
+        }
+        function main() -> bool {
+            let both: Both = Box {}
+            return both.as<Parent<int>>.describe() == "int"
+                && both.as<Parent<string>>.describe() == "string"
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
 }
 
 #[test]

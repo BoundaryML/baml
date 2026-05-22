@@ -406,22 +406,23 @@ pub fn interface_closure_locs_with_args<'db>(
     let mut out: Vec<(baml_compiler2_hir::loc::InterfaceLoc<'db>, Vec<Ty>)> = Vec::new();
     let mut seen: FxHashSet<(baml_compiler2_hir::loc::InterfaceLoc<'db>, Vec<Ty>)> =
         FxHashSet::default();
-    let mut seen_locs: FxHashSet<baml_compiler2_hir::loc::InterfaceLoc<'db>> =
-        FxHashSet::default();
     let mut queue: std::collections::VecDeque<(
         baml_compiler2_hir::loc::InterfaceLoc<'db>,
         Vec<Ty>,
+        FxHashSet<baml_compiler2_hir::loc::InterfaceLoc<'db>>,
     )> = std::collections::VecDeque::new();
-    queue.push_back((root_iface, root_args.to_vec()));
+    queue.push_back((root_iface, root_args.to_vec(), FxHashSet::default()));
 
-    while let Some((loc, args)) = queue.pop_front() {
-        if !seen_locs.insert(loc) {
+    while let Some((loc, args, ancestors)) = queue.pop_front() {
+        if ancestors.contains(&loc) {
             continue;
         }
         if !seen.insert((loc, args.clone())) {
             continue;
         }
         out.push((loc, args.clone()));
+        let mut child_ancestors = ancestors.clone();
+        child_ancestors.insert(loc);
 
         let tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
         let Some(iface) = tree.interfaces.get(&loc.id(db)) else {
@@ -460,9 +461,7 @@ pub fn interface_closure_locs_with_args<'db>(
                 }
                 _ => Vec::new(),
             };
-            if !seen_locs.contains(&parent_loc) {
-                queue.push_back((parent_loc, parent_args));
-            }
+            queue.push_back((parent_loc, parent_args, child_ancestors.clone()));
         }
     }
 

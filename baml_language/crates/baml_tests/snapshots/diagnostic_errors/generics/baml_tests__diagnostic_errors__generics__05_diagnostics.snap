@@ -2,16 +2,6 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: unresolved type: B
-    ╭─[ classes.baml:40:11 ]
-    │
- 40 │     second B
-    │           ─┬  
-    │            ╰── unresolved type: B
-    │ 
-    │ Note: Error code: E0002
-────╯
-
   [type] error: type mismatch: expected T, got string
     ╭─[ classes.baml:75:26 ]
     │
@@ -44,6 +34,16 @@ source: crates/baml_tests/src/generated_tests.rs
      │ ╰─────────── type parameter `T` on method shadows the same parameter on class `Shadow`. Please use a different name for the type parameter.
      │     
      │     Note: Error code: E0001
+─────╯
+
+  [type] error: type mismatch: expected B, got "two"
+     ╭─[ classes.baml:134:35 ]
+     │
+ 134 │     Pair<int> { first: 1, second: "two" }
+     │                                   ──┬──  
+     │                                     ╰──── type mismatch: expected B, got "two"
+     │ 
+     │ Note: Error code: E0001
 ─────╯
 
   [type] error: unreachable arm

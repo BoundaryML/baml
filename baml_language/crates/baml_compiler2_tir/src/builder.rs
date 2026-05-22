@@ -6924,6 +6924,51 @@ impl<'db> TypeInferenceBuilder<'db> {
         false
     }
 
+    fn interface_requires_instantiation(
+        &self,
+        sub_qtn: &crate::ty::QualifiedTypeName,
+        sub_args: &[Ty],
+        sup_qtn: &crate::ty::QualifiedTypeName,
+        sup_args: &[Ty],
+    ) -> bool {
+        let Some(pkg_items) = self.resolve_class_pkg_items(sub_qtn.package()) else {
+            return false;
+        };
+        let Some(Definition::Interface(sub_loc)) =
+            pkg_items.lookup_type(sub_qtn.namespace(), sub_qtn.name())
+        else {
+            return false;
+        };
+        let db = self.context.db();
+        for (iface_loc, iface_args) in crate::interfaces::interface_closure_locs_with_args(
+            db,
+            sub_loc,
+            sub_args,
+            pkg_items,
+            sub_qtn.namespace(),
+        ) {
+            let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+            let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
+                continue;
+            };
+            let iface_qtn = crate::lower_type_expr::qualify_def(
+                db,
+                Definition::Interface(iface_loc),
+                &iface_data.name,
+            );
+            if &iface_qtn == sup_qtn
+                && iface_args.len() == sup_args.len()
+                && iface_args
+                    .iter()
+                    .zip(sup_args.iter())
+                    .all(|(a, b)| self.types_equivalent(a, b))
+            {
+                return true;
+            }
+        }
+        false
+    }
+
     /// Resolve a member access for a specific segment of a multi-segment `Path` expression.
     ///
     /// For simple base types (Class, Enum, Unknown), uses `report_at_segment` so diagnostics
@@ -7469,7 +7514,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let mut bindings = if iface_type_args.is_empty() {
                     rustc_hash::FxHashMap::default()
                 } else {
-	                    crate::generics::bind_type_vars(&iface_data.generic_params, &iface_type_args)
+                    crate::generics::bind_type_vars(&iface_data.generic_params, &iface_type_args)
                 };
                 for generic_param in &iface_data.generic_params {
                     bindings
@@ -9225,6 +9270,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 return true;
             }
             if registry.interface_requires(a_qtn, b_qtn) && b_args.is_empty() {
+                return true;
+            }
+            if self.interface_requires_instantiation(a_qtn, a_args, b_qtn, b_args) {
                 return true;
             }
         }
