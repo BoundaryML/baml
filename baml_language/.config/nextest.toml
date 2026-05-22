@@ -1,0 +1,11 @@
+nextest-version = "0.9.98"
+
+experimental = ["setup-scripts"]
+
+# nodejs tests need `.node` addon. build it, install fixtures. fire only when nodejs test selected.
+[scripts.setup.nodejs_typescript_pnpm]
+command = './sdk_tests/crates/nodejs_typescript/setup.sh'
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_nodejs_typescript)'
+setup = 'nodejs_typescript_pnpm'
