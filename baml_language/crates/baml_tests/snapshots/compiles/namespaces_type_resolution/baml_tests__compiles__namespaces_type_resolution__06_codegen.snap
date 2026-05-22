@@ -30,13 +30,9 @@ function user.Config.to_json(self: null) -> baml.json.json {
     load_var self
     load_field .key
     call baml.String.to_json
-    store_var _2
     load_var self
     load_field .env
     call baml.String.to_json
-    store_var _5
-    load_var _2
-    load_var _5
     load_const "key"
     load_const "env"
     alloc_map 2
@@ -72,13 +68,9 @@ function user.Error.to_json(self: null) -> baml.json.json {
     load_var self
     load_field .code
     call baml.Int.to_json
-    store_var _2
     load_var self
     load_field .message
     call baml.String.to_json
-    store_var _5
-    load_var _2
-    load_var _5
     load_const "code"
     load_const "message"
     alloc_map 2
@@ -250,13 +242,9 @@ function user.RootWithCrossNsAlias.to_json(self: null) -> baml.json.json {
     load_var self
     load_field .llm_alias
     call user.llm.Response.to_json
-    store_var _2
     load_var self
     load_field .own_alias
     call user.Config.to_json
-    store_var _5
-    load_var _2
-    load_var _5
     load_const "llm_alias"
     load_const "own_alias"
     alloc_map 2
@@ -342,40 +330,26 @@ function user.RootWithCrossNsFields.to_json(self: null) -> baml.json.json {
     load_var self
     load_field .own_config
     call user.Config.to_json
-    store_var _2
     load_var self
     load_field .llm_config
     call user.llm.Config.to_json
-    store_var _5
     load_var self
     load_field .auth_config
     call user.auth.Config.to_json
-    store_var _8
     load_var self
     load_field .llm_response
     call user.llm.Response.to_json
-    store_var _11
     load_var self
     load_field .nested_client
     call user.llm.openai.Client.to_json
-    store_var _14
     load_var self
     load_field .own_status
     load_const "to_json"
     load_map_element
     call_indirect
-    store_var _17
     load_var self
     load_field .own_alias
     call user.Config.to_json
-    store_var _22
-    load_var _2
-    load_var _5
-    load_var _8
-    load_var _11
-    load_var _14
-    load_var _17
-    load_var _22
     load_const "own_config"
     load_const "llm_config"
     load_const "auth_config"
@@ -650,13 +624,9 @@ function user.auth.Config.to_json(self: null) -> baml.json.json {
     load_var self
     load_field .provider
     call baml.String.to_json
-    store_var _2
     load_var self
     load_field .secret
     call baml.String.to_json
-    store_var _5
-    load_var _2
-    load_var _5
     load_const "provider"
     load_const "secret"
     alloc_map 2
@@ -692,13 +662,9 @@ function user.auth.Error.to_json(self: null) -> baml.json.json {
     load_var self
     load_field .realm
     call baml.String.to_json
-    store_var _2
     load_var self
     load_field .expired
     call baml.Bool.to_json
-    store_var _5
-    load_var _2
-    load_var _5
     load_const "realm"
     load_const "expired"
     alloc_map 2
@@ -734,15 +700,11 @@ function user.auth.Token.to_json(self: null) -> baml.json.json {
     load_var self
     load_field .value
     call baml.String.to_json
-    store_var _2
     load_var self
     load_field .role
     load_const "to_json"
     load_map_element
     call_indirect
-    store_var _5
-    load_var _2
-    load_var _5
     load_const "value"
     load_const "role"
     alloc_map 2
@@ -778,13 +740,9 @@ function user.llm.Config.to_json(self: null) -> baml.json.json {
     load_var self
     load_field .model
     call baml.String.to_json
-    store_var _2
     load_var self
     load_field .temperature
     call baml.Float.to_json
-    store_var _5
-    load_var _2
-    load_var _5
     load_const "model"
     load_const "temperature"
     alloc_map 2
@@ -820,13 +778,9 @@ function user.llm.Error.to_json(self: null) -> baml.json.json {
     load_var self
     load_field .reason
     call baml.String.to_json
-    store_var _2
     load_var self
     load_field .retryable
     call baml.Bool.to_json
-    store_var _5
-    load_var _2
-    load_var _5
     load_const "reason"
     load_const "retryable"
     alloc_map 2
@@ -1157,50 +1111,32 @@ function user.llm.LlmWithCrossNsFields.to_json(self: null) -> baml.json.json {
     load_var self
     load_field .own_config
     call user.llm.Config.to_json
-    store_var _2
     load_var self
     load_field .own_response
     call user.llm.Response.to_json
-    store_var _5
     load_var self
     load_field .root_config
     call user.Config.to_json
-    store_var _8
     load_var self
     load_field .root_error
     call user.Error.to_json
-    store_var _11
     load_var self
     load_field .auth_config
     call user.auth.Config.to_json
-    store_var _14
     load_var self
     load_field .nested_client
     call user.llm.openai.Client.to_json
-    store_var _17
     load_var self
     load_field .own_status
     load_const "to_json"
     load_map_element
     call_indirect
-    store_var _20
     load_var self
     load_field .own_alias
     call user.llm.Config.to_json
-    store_var _25
     load_var self
     load_field .root_alias
     call user.Config.to_json
-    store_var _28
-    load_var _2
-    load_var _5
-    load_var _8
-    load_var _11
-    load_var _14
-    load_var _17
-    load_var _20
-    load_var _25
-    load_var _28
     load_const "own_config"
     load_const "own_response"
     load_const "root_config"
@@ -1243,13 +1179,9 @@ function user.llm.LlmWithRootAlias.to_json(self: null) -> baml.json.json {
     load_var self
     load_field .root_alias
     call user.Config.to_json
-    store_var _2
     load_var self
     load_field .own_alias
     call user.llm.Response.to_json
-    store_var _5
-    load_var _2
-    load_var _5
     load_const "root_alias"
     load_const "own_alias"
     alloc_map 2
@@ -1285,13 +1217,9 @@ function user.llm.Response.to_json(self: null) -> baml.json.json {
     load_var self
     load_field .text
     call baml.String.to_json
-    store_var _2
     load_var self
     load_field .tokens
     call baml.Int.to_json
-    store_var _5
-    load_var _2
-    load_var _5
     load_const "text"
     load_const "tokens"
     alloc_map 2
@@ -1327,13 +1255,9 @@ function user.llm.openai.Client.to_json(self: null) -> baml.json.json {
     load_var self
     load_field .api_key
     call baml.String.to_json
-    store_var _2
     load_var self
     load_field .org_id
     call baml.String.to_json
-    store_var _5
-    load_var _2
-    load_var _5
     load_const "api_key"
     load_const "org_id"
     alloc_map 2
@@ -1369,13 +1293,9 @@ function user.llm.openai.Error.to_json(self: null) -> baml.json.json {
     load_var self
     load_field .status_code
     call baml.Int.to_json
-    store_var _2
     load_var self
     load_field .body
     call baml.String.to_json
-    store_var _5
-    load_var _2
-    load_var _5
     load_const "status_code"
     load_const "body"
     alloc_map 2

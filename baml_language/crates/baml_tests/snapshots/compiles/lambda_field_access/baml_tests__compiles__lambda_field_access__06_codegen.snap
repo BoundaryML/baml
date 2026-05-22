@@ -54,13 +54,9 @@ function user.Outer.to_json(self: null) -> baml.json.json {
     load_var self
     load_field .inner
     call user.Inner.to_json
-    store_var _2
     load_var self
     load_field .name
     call baml.String.to_json
-    store_var _5
-    load_var _2
-    load_var _5
     load_const "inner"
     load_const "name"
     alloc_map 2

@@ -63,13 +63,9 @@ function user.llm.openai.OpenAIResponse.to_json(self: null) -> baml.json.json {
     load_var self
     load_field .text
     call baml.String.to_json
-    store_var _2
     load_var self
     load_field .model
     call baml.String.to_json
-    store_var _5
-    load_var _2
-    load_var _5
     load_const "text"
     load_const "model"
     alloc_map 2

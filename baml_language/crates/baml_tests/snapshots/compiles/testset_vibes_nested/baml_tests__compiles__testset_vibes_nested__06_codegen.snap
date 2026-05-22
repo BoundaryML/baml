@@ -347,18 +347,12 @@ function user.Sentiment.to_json(self: null) -> baml.json.json {
     load_var self
     load_field .feeling
     call baml.String.to_json
-    store_var _2
     load_var self
     load_field .confidence
     call baml.Float.to_json
-    store_var _5
     load_var self
     load_field .reasoning
     call baml.String.to_json
-    store_var _8
-    load_var _2
-    load_var _5
-    load_var _8
     load_const "feeling"
     load_const "confidence"
     load_const "reasoning"

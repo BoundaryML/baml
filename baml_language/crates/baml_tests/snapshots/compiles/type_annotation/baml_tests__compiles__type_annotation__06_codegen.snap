@@ -54,13 +54,9 @@ function user.RiskFactor.to_json(self: null) -> baml.json.json {
     load_var self
     load_field .type
     call baml.String.to_json
-    store_var _2
     load_var self
     load_field .severity
     call baml.Float.to_json
-    store_var _5
-    load_var _2
-    load_var _5
     load_const "type"
     load_const "severity"
     alloc_map 2

@@ -83,13 +83,9 @@ function user.Point.to_json(self: null) -> baml.json.json {
     load_var self
     load_field .x
     call baml.Int.to_json
-    store_var _2
     load_var self
     load_field .y
     call baml.Int.to_json
-    store_var _5
-    load_var _2
-    load_var _5
     load_const "x"
     load_const "y"
     alloc_map 2

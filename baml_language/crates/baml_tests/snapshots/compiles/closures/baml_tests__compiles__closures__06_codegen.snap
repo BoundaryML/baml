@@ -189,13 +189,9 @@ function user.Employee.to_json(self: null) -> baml.json.json {
     load_var self
     load_field .first
     call baml.String.to_json
-    store_var _2
     load_var self
     load_field .last
     call baml.String.to_json
-    store_var _5
-    load_var _2
-    load_var _5
     load_const "first"
     load_const "last"
     alloc_map 2
@@ -315,13 +311,9 @@ function user.RangeCheck.to_json(self: null) -> baml.json.json {
     load_var self
     load_field .min
     call baml.Int.to_json
-    store_var _2
     load_var self
     load_field .max
     call baml.Int.to_json
-    store_var _5
-    load_var _2
-    load_var _5
     load_const "min"
     load_const "max"
     alloc_map 2

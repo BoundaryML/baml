@@ -18,6 +18,7 @@ pub(super) enum StackCarryKind {
     PhiLike,
     ReturnPhi,
     CallResultImmediate,
+    AggregateOperand,
 }
 
 impl StackCarryKind {
@@ -26,6 +27,7 @@ impl StackCarryKind {
             Self::PhiLike => LocalClassification::PhiLike,
             Self::ReturnPhi => LocalClassification::ReturnPhi,
             Self::CallResultImmediate => LocalClassification::CallResultImmediate,
+            Self::AggregateOperand => LocalClassification::AggregateOperand,
         }
     }
 }
@@ -42,9 +44,9 @@ pub(super) fn refine_stack_carry_classifications(
     classifications: &mut HashMap<Local, LocalClassification>,
 ) {
     let mut locals: Vec<Local> = candidates.keys().copied().collect();
-    // Deterministic greedy order: this is not a fixpoint search.
-    // Some valid candidates may be skipped if they depend on earlier activations.
-    locals.sort_by_key(|l| l.0);
+    // Deterministic greedy order. Aggregate operands are ordered by their use
+    // position so earlier stacked values are activated before later ones.
+    locals.sort_by_key(|l| stack_carry_sort_key(*l, body, def_use, candidates));
 
     for local in locals {
         let kind = candidates[&local];
@@ -55,12 +57,35 @@ pub(super) fn refine_stack_carry_classifications(
     }
 }
 
+fn stack_carry_sort_key(
+    local: Local,
+    body: &MirFunctionBody,
+    def_use: &HashMap<Local, LocalDefUse>,
+    candidates: &HashMap<Local, StackCarryKind>,
+) -> (usize, usize, usize, usize) {
+    if candidates.get(&local) == Some(&StackCarryKind::AggregateOperand)
+        && let Some(use_loc) = def_use.get(&local).and_then(|du| du.uses.first())
+        && let StatementRef::Statement(stmt_idx) = use_loc.statement_ref
+        && let Some(StatementKind::Assign { value, .. }) = body
+            .block(use_loc.block)
+            .statements
+            .get(stmt_idx)
+            .map(|stmt| &stmt.kind)
+        && let Some(operand_idx) = aggregate_value_operand_index(value, local)
+    {
+        return (0, use_loc.block.0, stmt_idx, operand_idx);
+    }
+
+    (1, local.0, 0, 0)
+}
+
 fn is_stack_carried_local(classification: LocalClassification) -> bool {
     matches!(
         classification,
         LocalClassification::PhiLike
             | LocalClassification::ReturnPhi
             | LocalClassification::CallResultImmediate
+            | LocalClassification::AggregateOperand
     )
 }
 
@@ -146,7 +171,7 @@ fn is_stack_carry_use_safe(
     let mut sim = StackCarrySim::new();
     let mut current_block = match kind {
         StackCarryKind::PhiLike => use_loc.block,
-        StackCarryKind::CallResultImmediate => {
+        StackCarryKind::CallResultImmediate | StackCarryKind::AggregateOperand => {
             let Some(def) = &du.def else {
                 return false;
             };
@@ -259,7 +284,9 @@ fn is_stack_carry_use_safe(
             return sim.used;
         }
 
-        // Intermediate blocks on the carried path must be straight-line gotos.
+        // Intermediate blocks on the carried path must be straight-line. Aggregate
+        // operand carry can cross later call-like terminators because their
+        // results may become later aggregate operands stacked above this one.
         for stmt in &block.statements {
             if !simulate_statement_stack(
                 &stmt.kind,
@@ -276,11 +303,22 @@ fn is_stack_carry_use_safe(
         let Some(term) = block.terminator.as_ref() else {
             return false;
         };
-        let Terminator::Goto { target } = term else {
-            return false;
-        };
 
-        current_block = *target;
+        current_block = match term {
+            Terminator::Goto { target } => *target,
+            Terminator::Call { target, .. }
+            | Terminator::SysOp { target, .. }
+            | Terminator::Await { target, .. }
+                if kind == StackCarryKind::AggregateOperand =>
+            {
+                if !simulate_terminator_stack(term, &mut sim, local, body, classifications, def_use)
+                {
+                    return false;
+                }
+                *target
+            }
+            _ => return false,
+        };
     }
 }
 
@@ -678,6 +716,12 @@ fn simulate_rvalue_pull_stack(
     classifications: &HashMap<Local, LocalClassification>,
     def_use: &HashMap<Local, LocalDefUse>,
 ) -> bool {
+    if let Some(result) =
+        simulate_aggregate_operand_pull_stack(rvalue, sim, carried_local, classifications, def_use)
+    {
+        return result;
+    }
+
     // The emitter pulls binary operands left-to-right. If the right operand is
     // a carried call result, pulling a safe commutative left operand first puts
     // the stack in reversed order (`right, left`). Numeric add/mul tolerate
@@ -726,6 +770,146 @@ fn simulate_rvalue_pull_stack(
         def_use,
     };
     pull_semantics::walk_rvalue_pull(&mut sink, rvalue).is_ok()
+}
+
+fn simulate_aggregate_operand_pull_stack(
+    rvalue: &Rvalue,
+    sim: &mut StackCarrySim,
+    carried_local: Local,
+    classifications: &HashMap<Local, LocalClassification>,
+    def_use: &HashMap<Local, LocalDefUse>,
+) -> Option<bool> {
+    match rvalue {
+        Rvalue::Array(elements) => {
+            let values = elements.iter().collect::<Vec<_>>();
+            Some(simulate_stack_consuming_aggregate(
+                &values,
+                &[],
+                elements.len(),
+                sim,
+                carried_local,
+                classifications,
+                def_use,
+            ))
+        }
+        Rvalue::Map(entries) => {
+            let values = entries
+                .iter()
+                .map(|(_key, value)| value)
+                .collect::<Vec<_>>();
+            let keys = entries.iter().map(|(key, _value)| key).collect::<Vec<_>>();
+            Some(simulate_stack_consuming_aggregate(
+                &values,
+                &keys,
+                entries.len() * 2,
+                sim,
+                carried_local,
+                classifications,
+                def_use,
+            ))
+        }
+        Rvalue::Aggregate {
+            kind: baml_compiler2_mir::AggregateKind::Array,
+            fields,
+        } => {
+            let values = fields.iter().collect::<Vec<_>>();
+            Some(simulate_stack_consuming_aggregate(
+                &values,
+                &[],
+                fields.len(),
+                sim,
+                carried_local,
+                classifications,
+                def_use,
+            ))
+        }
+        // Class aggregate field initialization needs the instance below each
+        // field value, so values already on the stack cannot be consumed by the
+        // current `alloc_instance`/`init_field` sequence.
+        Rvalue::Aggregate { .. } => None,
+        _ => None,
+    }
+}
+
+fn simulate_stack_consuming_aggregate(
+    value_operands: &[&Operand],
+    key_operands: &[&Operand],
+    total_pops: usize,
+    sim: &mut StackCarrySim,
+    carried_local: Local,
+    classifications: &HashMap<Local, LocalClassification>,
+    def_use: &HashMap<Local, LocalDefUse>,
+) -> bool {
+    let mut prefix_len = 0;
+    let mut carried_pos = None;
+
+    for operand in value_operands {
+        let Some(local) = operand_as_local(operand) else {
+            break;
+        };
+
+        let classification = classifications
+            .get(&local)
+            .copied()
+            .unwrap_or(LocalClassification::Real);
+        if local != carried_local && !is_stack_carried_local(classification) {
+            break;
+        }
+
+        if local == carried_local {
+            carried_pos = Some(prefix_len);
+        }
+        prefix_len += 1;
+    }
+
+    let Some(carried_pos) = carried_pos else {
+        return false;
+    };
+    let expected_depth = prefix_len - carried_pos - 1;
+    if !sim.use_carried_at_depth(expected_depth) {
+        return false;
+    }
+
+    for operand in value_operands.iter().skip(prefix_len) {
+        if !simulate_operand_pull_stack(operand, sim, carried_local, classifications, def_use) {
+            return false;
+        }
+    }
+    for operand in key_operands {
+        if !simulate_operand_pull_stack(operand, sim, carried_local, classifications, def_use) {
+            return false;
+        }
+    }
+
+    if !sim.pop_n(total_pops) {
+        return false;
+    }
+    sim.push();
+    true
+}
+
+fn aggregate_value_operand_index(rvalue: &Rvalue, local: Local) -> Option<usize> {
+    let operands: Vec<&Operand> = match rvalue {
+        Rvalue::Array(elements) => elements.iter().collect(),
+        Rvalue::Map(entries) => entries.iter().map(|(_key, value)| value).collect(),
+        Rvalue::Aggregate {
+            kind: baml_compiler2_mir::AggregateKind::Array,
+            fields,
+        } => fields.iter().collect(),
+        Rvalue::Aggregate { .. } => return None,
+        _ => return None,
+    };
+
+    operands
+        .iter()
+        .position(|operand| operand_as_local(operand) == Some(local))
+}
+
+fn operand_as_local(operand: &Operand) -> Option<Local> {
+    match operand {
+        Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => Some(*local),
+        _ => None,
+    }
 }
 
 fn is_operand_local(operand: &Operand, local: Local) -> bool {
@@ -841,6 +1025,22 @@ impl PullSink for StackCarryPullSink<'_> {
                     .get(&local)
                     .and_then(|du| du.def.as_ref())
                     .ok_or(())?;
+                if matches!(def.rvalue, Rvalue::MakeBoundMethod { .. }) {
+                    return Err(());
+                }
+                if let Some(ok) = simulate_aggregate_operand_pull_stack(
+                    &def.rvalue,
+                    self.sim,
+                    self.carried_local,
+                    self.classifications,
+                    self.def_use,
+                ) {
+                    return if ok {
+                        Ok(LocalPullAction::Done)
+                    } else {
+                        Err(())
+                    };
+                }
                 Ok(LocalPullAction::Inline(Box::new(def.rvalue.clone())))
             }
             // Another stack-carried local in this context makes single-local

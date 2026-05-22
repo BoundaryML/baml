@@ -73,18 +73,12 @@ function user.IndexUser.to_json(self: null) -> baml.json.json {
     load_var self
     load_field .name
     call baml.String.to_json
-    store_var _2
     load_var self
     load_field .age
     call baml.Int.to_json
-    store_var _5
     load_var self
     load_field .tags
     call baml.Array.to_json
-    store_var _8
-    load_var _2
-    load_var _5
-    load_var _8
     load_const "name"
     load_const "age"
     load_const "tags"
@@ -121,13 +115,9 @@ function user.Profile.to_json(self: null) -> baml.json.json {
     load_var self
     load_field .bio
     call baml.String.to_json
-    store_var _2
     load_var self
     load_field .settings
     call user.Settings.to_json
-    store_var _5
-    load_var _2
-    load_var _5
     load_const "bio"
     load_const "settings"
     alloc_map 2
@@ -213,18 +203,12 @@ function user.User.to_json(self: null) -> baml.json.json {
     load_var self
     load_field .name
     call baml.String.to_json
-    store_var _2
     load_var self
     load_field .profile
     call user.Profile.to_json
-    store_var _5
     load_var self
     load_field .tags
     call baml.Array.to_json
-    store_var _8
-    load_var _2
-    load_var _5
-    load_var _8
     load_const "name"
     load_const "profile"
     load_const "tags"

@@ -721,9 +721,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 | LocalClassification::PhiLike
                 | LocalClassification::ReturnPhi
                 | LocalClassification::CallResultImmediate
+                | LocalClassification::AggregateOperand
                 | LocalClassification::CopyOf
                 | LocalClassification::Dead => {
-                    // Virtual, phi-like, return-phi, call-result-immediate, copy-of, and dead locals don't get slots!
+                    // Virtual, stack-carried, copy-of, and dead locals don't get slots.
                 }
             }
         }
@@ -1210,6 +1211,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 LocalClassification::PhiLike
                     | LocalClassification::ReturnPhi
                     | LocalClassification::CallResultImmediate
+                    | LocalClassification::AggregateOperand
             ),
             Place::Field { base, .. } => self.place_mentions_stack_carried_local(base),
             Place::Index { base, index, .. } => {
@@ -1223,6 +1225,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                         LocalClassification::PhiLike
                             | LocalClassification::ReturnPhi
                             | LocalClassification::CallResultImmediate
+                            | LocalClassification::AggregateOperand
                     )
             }
             Place::Capture(_) => false,
@@ -2395,7 +2398,8 @@ impl PullSink for StackifyCodegen<'_, '_> {
             }
             LocalClassification::PhiLike
             | LocalClassification::ReturnPhi
-            | LocalClassification::CallResultImmediate => LocalPullAction::Done,
+            | LocalClassification::CallResultImmediate
+            | LocalClassification::AggregateOperand => LocalPullAction::Done,
             LocalClassification::CopyOf => {
                 // Copy propagation: load from source slot directly.
                 let source = self.analysis.resolve_copy_source(local);

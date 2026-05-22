@@ -137,7 +137,8 @@ pub(crate) fn local_assign_behavior(class: LocalClassification) -> LocalAssignBe
         }
         LocalClassification::Parameter
         | LocalClassification::Real
-        | LocalClassification::CallResultImmediate => LocalAssignBehavior::EvalAndStore,
+        | LocalClassification::CallResultImmediate
+        | LocalClassification::AggregateOperand => LocalAssignBehavior::EvalAndStore,
     }
 }
 
@@ -147,7 +148,8 @@ pub(crate) fn local_store_behavior(class: LocalClassification) -> LocalStoreBeha
         LocalClassification::Parameter | LocalClassification::Real => LocalStoreBehavior::StoreSlot,
         LocalClassification::PhiLike
         | LocalClassification::ReturnPhi
-        | LocalClassification::CallResultImmediate => LocalStoreBehavior::KeepOnStack,
+        | LocalClassification::CallResultImmediate
+        | LocalClassification::AggregateOperand => LocalStoreBehavior::KeepOnStack,
         LocalClassification::Virtual | LocalClassification::CopyOf | LocalClassification::Dead => {
             LocalStoreBehavior::PopValue
         }

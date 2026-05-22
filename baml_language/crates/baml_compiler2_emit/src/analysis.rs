@@ -84,6 +84,12 @@ pub(crate) enum LocalClassification {
     /// At def site (after Call): don't emit Store (leave on stack).
     /// At use site: don't emit `LoadVar` (value already on stack from Call).
     CallResultImmediate,
+    /// Call/Await/SysOp result carried as part of a map/array aggregate prefix.
+    ///
+    /// At def site: don't store the result; leave it on the stack.
+    /// At aggregate use site: don't emit `LoadVar`; the aggregate consumes the
+    /// already-stacked value in operand order.
+    AggregateOperand,
     /// Copy of another local: `_X = copy _Y` where _Y is a parameter or simple local.
     /// At def site: don't emit anything (skip the copy entirely).
     /// At use sites: load from the source local instead.
@@ -1000,6 +1006,10 @@ fn classify_locals(
             // Stack-carry candidate validated in a later stack simulation pass.
             stack_carry_candidates.insert(local, stack_carry::StackCarryKind::ReturnPhi);
             LocalClassification::Real
+        } else if is_call_result_aggregate_operand(local, du, body, def_use) {
+            // Stack-carry candidate validated in a later stack simulation pass.
+            stack_carry_candidates.insert(local, stack_carry::StackCarryKind::AggregateOperand);
+            LocalClassification::Real
         } else if is_call_result_immediate(local, du, body) {
             // Stack-carry candidate validated in a later stack simulation pass.
             stack_carry_candidates.insert(local, stack_carry::StackCarryKind::CallResultImmediate);
@@ -1625,6 +1635,114 @@ fn is_call_result_immediate(local: Local, du: &LocalDefUse, body: &MirFunctionBo
             matches!(destination, Place::Local(l) if *l == local)
         }
         Some(Terminator::SysOp { destination, .. }) => {
+            matches!(destination, Place::Local(l) if *l == local)
+        }
+        _ => false,
+    }
+}
+
+/// Check if a call-like result is used as part of a stack-consumable aggregate prefix.
+///
+/// Map and array allocation consume values in source order, so a chain like
+/// `v1 = call ...; v2 = call ...; map { "a": v1, "b": v2 }` can keep `v1`
+/// and `v2` on the VM stack until the final `alloc_map`.
+fn is_call_result_aggregate_operand(
+    local: Local,
+    du: &LocalDefUse,
+    body: &MirFunctionBody,
+    def_use: &HashMap<Local, LocalDefUse>,
+) -> bool {
+    if !is_call_like_result_local(local, du, body) {
+        return false;
+    }
+
+    let [use_loc] = du.uses.as_slice() else {
+        return false;
+    };
+    let StatementRef::Statement(stmt_idx) = use_loc.statement_ref else {
+        return false;
+    };
+    let Some(StatementKind::Assign { value, .. }) = body
+        .block(use_loc.block)
+        .statements
+        .get(stmt_idx)
+        .map(|stmt| &stmt.kind)
+    else {
+        return false;
+    };
+    let Some(operands) = aggregate_stack_prefix_operands(value) else {
+        return false;
+    };
+
+    for operand in operands {
+        let Some(operand_local) = operand_local(operand) else {
+            return false;
+        };
+
+        if operand_local == local {
+            return true;
+        }
+
+        let Some(operand_du) = def_use.get(&operand_local) else {
+            return false;
+        };
+        if !is_call_like_result_local(operand_local, operand_du, body) {
+            return false;
+        }
+        let [operand_use] = operand_du.uses.as_slice() else {
+            return false;
+        };
+        if operand_use.block != use_loc.block || operand_use.statement_ref != use_loc.statement_ref
+        {
+            return false;
+        }
+    }
+
+    false
+}
+
+fn aggregate_stack_prefix_operands(rvalue: &Rvalue) -> Option<Vec<&Operand>> {
+    match rvalue {
+        Rvalue::Array(elements) => Some(elements.iter().collect()),
+        Rvalue::Map(entries) => Some(entries.iter().map(|(_key, value)| value).collect()),
+        Rvalue::Aggregate {
+            kind: baml_compiler2_mir::AggregateKind::Array,
+            fields,
+        } => Some(fields.iter().collect()),
+        // Class aggregates allocate the instance before `init_field`, so values
+        // already sitting on the stack are below the instance and cannot be
+        // consumed by the existing `init_field` instruction order.
+        Rvalue::Aggregate { .. } => None,
+        _ => None,
+    }
+}
+
+fn operand_local(operand: &Operand) -> Option<Local> {
+    match operand {
+        Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => Some(*local),
+        _ => None,
+    }
+}
+
+fn is_call_like_result_local(local: Local, du: &LocalDefUse, body: &MirFunctionBody) -> bool {
+    if du.uses.len() != 1 {
+        return false;
+    }
+
+    let Some(def) = &du.def else {
+        return false;
+    };
+    if def.statement_ref != StatementRef::Terminator {
+        return false;
+    }
+
+    let def_block = body.block(def.block);
+    match &def_block.terminator {
+        Some(
+            Terminator::Call { destination, .. }
+            | Terminator::Await { destination, .. }
+            | Terminator::SysOp { destination, .. },
+        ) => {
             matches!(destination, Place::Local(l) if *l == local)
         }
         _ => false,

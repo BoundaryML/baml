@@ -40,18 +40,12 @@ function user.User.to_json(self: null) -> baml.json.json {
     load_var self
     load_field .id
     call baml.Int.to_json
-    store_var _2
     load_var self
     load_field .name
     call baml.String.to_json
-    store_var _5
     load_var self
     load_field .email
     call baml.String.to_json
-    store_var _8
-    load_var _2
-    load_var _5
-    load_var _8
     load_const "id"
     load_const "name"
     load_const "email"

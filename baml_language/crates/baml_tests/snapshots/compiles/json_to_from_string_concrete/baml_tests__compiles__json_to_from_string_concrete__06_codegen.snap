@@ -30,13 +30,9 @@ function user.User.to_json(self: null) -> baml.json.json {
     load_var self
     load_field .name
     call baml.String.to_json
-    store_var _2
     load_var self
     load_field .age
     call baml.Int.to_json
-    store_var _5
-    load_var _2
-    load_var _5
     load_const "name"
     load_const "age"
     alloc_map 2
