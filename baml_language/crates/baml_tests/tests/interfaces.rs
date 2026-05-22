@@ -1400,6 +1400,34 @@ async fn same_field_name_different_interface_types_not_conflicting_runtime() {
 }
 
 #[tokio::test]
+async fn same_generic_interface_field_links_select_matching_type_args_runtime() {
+    let output = baml_test!(
+        r#"
+        interface Slot<T> {
+            value: T
+        }
+        class Pair {
+            int_value: int
+            string_value: string
+            implements Slot<int> {
+                value as int_value
+            }
+            implements Slot<string> {
+                value as string_value
+            }
+        }
+        function main() -> bool {
+            let p = Pair { int_value: 7, string_value: "seven" }
+            let i: Slot<int> = p
+            let s: Slot<string> = p
+            return i.value == 7 && s.value == "seven"
+        }
+    "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
+}
+
+#[tokio::test]
 async fn interface_field_via_requires_chain_runtime() {
     let output = baml_test!(
         r#"

@@ -2066,6 +2066,7 @@ impl LoweringContext {
         let mut base = None;
         let mut field = None;
         let mut field_range = None;
+        let mut seen_accessor = false;
 
         for elem in node.children_with_tokens() {
             match elem {
@@ -2075,9 +2076,18 @@ impl LoweringContext {
                     }
                 }
                 rowan::NodeOrToken::Token(token) => {
-                    if is_ident_token(token.kind()) && base.is_some() {
-                        field = Some(Name::new(token.text()));
-                        field_range = Some(token.text_range());
+                    if matches!(token.kind(), SyntaxKind::DOT | SyntaxKind::DOLLAR) {
+                        seen_accessor = true;
+                    } else if is_ident_token(token.kind()) {
+                        if !seen_accessor && base.is_none() {
+                            // Base is a bare identifier token, e.g.
+                            // `value.implements()` where `implements` lexes as
+                            // a keyword and the parser cannot build a PATH_EXPR.
+                            base = self.try_lower_bare_token(&token);
+                        } else if seen_accessor {
+                            field = Some(Name::new(token.text()));
+                            field_range = Some(token.text_range());
+                        }
                     }
                 }
             }

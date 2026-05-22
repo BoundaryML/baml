@@ -484,6 +484,46 @@ implements ToJson for other.Dog {
     }
 
     #[test]
+    fn ast_does_not_merge_generic_out_of_body_implements_into_local_class() {
+        let source = r#"
+interface ToJson {
+  function to_json(self) -> string
+}
+
+class Dog<T> {
+  value T
+}
+
+implements ToJson for Dog<int> {
+  function to_json(self) -> string {
+    return "dog"
+  }
+}
+"#;
+        let items = parse_and_lower(source);
+        let class = items
+            .iter()
+            .find_map(|item| match item {
+                Item::Class(class) if class.name.as_str() == "Dog" => Some(class),
+                _ => None,
+            })
+            .expect("expected local Dog class");
+        assert!(
+            class.implements.is_empty(),
+            "generic target Dog<int> must not merge into generic class Dog<T>"
+        );
+
+        let imp = items
+            .iter()
+            .find_map(|item| match item {
+                Item::ImplementsFor(imp) => Some(imp),
+                _ => None,
+            })
+            .expect("generic target should remain an ImplementsFor item");
+        assert_eq!(imp.for_target.expr.to_string(), "Dog<int>");
+    }
+
+    #[test]
     fn ast_preserves_interface_generic_param_bounds() {
         let source = r#"
 interface Named {
@@ -504,7 +544,11 @@ interface Box<T extends Named, E> {
             .expect("expected Box interface");
 
         assert_eq!(
-            interface.generic_params.iter().map(|n| n.as_str()).collect::<Vec<_>>(),
+            interface
+                .generic_params
+                .iter()
+                .map(smol_str::SmolStr::as_str)
+                .collect::<Vec<_>>(),
             vec!["T", "E"]
         );
         assert_eq!(interface.generic_param_bounds.len(), 2);
@@ -516,6 +560,51 @@ interface Box<T extends Named, E> {
             Some("Named")
         );
         assert!(interface.generic_param_bounds[1].is_none());
+    }
+
+    #[test]
+    fn ast_preserves_required_interface_method_generic_param_bounds() {
+        let source = r#"
+interface Named {
+  name string
+}
+
+interface Mapper {
+  function map<T extends Named, E>(self, value: T, extra: E) -> T
+}
+"#;
+        let items = parse_and_lower(source);
+        let interface = items
+            .iter()
+            .find_map(|item| match item {
+                Item::Interface(interface) if interface.name.as_str() == "Mapper" => {
+                    Some(interface)
+                }
+                _ => None,
+            })
+            .expect("expected Mapper interface");
+        let method = interface
+            .required_methods
+            .first()
+            .expect("expected required method");
+
+        assert_eq!(
+            method
+                .generic_params
+                .iter()
+                .map(smol_str::SmolStr::as_str)
+                .collect::<Vec<_>>(),
+            vec!["T", "E"]
+        );
+        assert_eq!(method.generic_param_bounds.len(), 2);
+        assert_eq!(
+            method.generic_param_bounds[0]
+                .as_ref()
+                .map(ToString::to_string)
+                .as_deref(),
+            Some("Named")
+        );
+        assert!(method.generic_param_bounds[1].is_none());
     }
 
     #[test]
@@ -651,6 +740,57 @@ class InterfaceTwo {
                 .as_deref(),
             Some("string")
         );
+    }
+
+    #[test]
+    fn ast_lowers_keyword_named_class_method_and_member_call() {
+        let source = r#"
+class TypeValue {
+  function implements(self) -> string {
+    "ok"
+  }
+}
+
+function Foo(t: TypeValue) -> string {
+  t.implements()
+}
+"#;
+        let items = parse_and_lower(source);
+        let class = items
+            .iter()
+            .find_map(|item| match item {
+                Item::Class(class) => Some(class),
+                _ => None,
+            })
+            .expect("expected ClassDef");
+        assert!(
+            !class.methods.is_empty(),
+            "expected keyword-named method, got class {class:#?}"
+        );
+        assert_eq!(class.methods[0].name.as_str(), "implements");
+
+        let function = items
+            .into_iter()
+            .find_map(|item| match item {
+                Item::Function(function) => Some(function),
+                _ => None,
+            })
+            .expect("expected FunctionDef");
+        let Some(FunctionBodyDef::Expr(body, _source_map)) = &function.body else {
+            panic!("expected expression body");
+        };
+        let root = body.root_expr.expect("expected body root expression");
+        let Expr::Block { tail_expr, .. } = &body.exprs[root] else {
+            panic!("expected block root expression");
+        };
+        let tail_expr = tail_expr.expect("expected tail expression");
+        let Expr::Call { callee, .. } = &body.exprs[tail_expr] else {
+            panic!("expected call expression");
+        };
+        let Expr::MemberAccess { member, .. } = &body.exprs[*callee] else {
+            panic!("expected member access callee");
+        };
+        assert_eq!(member.as_str(), "implements");
     }
 
     #[test]

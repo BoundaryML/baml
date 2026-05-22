@@ -400,11 +400,13 @@ pub fn interface_closure_locs_with_args<'db>(
     db: &'db dyn crate::Db,
     root_iface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
     root_args: &[Ty],
-    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
-    current_ns: &[Name],
+    _pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    _current_ns: &[Name],
 ) -> Vec<(baml_compiler2_hir::loc::InterfaceLoc<'db>, Vec<Ty>)> {
     let mut out: Vec<(baml_compiler2_hir::loc::InterfaceLoc<'db>, Vec<Ty>)> = Vec::new();
     let mut seen: FxHashSet<(baml_compiler2_hir::loc::InterfaceLoc<'db>, Vec<Ty>)> =
+        FxHashSet::default();
+    let mut seen_locs: FxHashSet<baml_compiler2_hir::loc::InterfaceLoc<'db>> =
         FxHashSet::default();
     let mut queue: std::collections::VecDeque<(
         baml_compiler2_hir::loc::InterfaceLoc<'db>,
@@ -413,6 +415,9 @@ pub fn interface_closure_locs_with_args<'db>(
     queue.push_back((root_iface, root_args.to_vec()));
 
     while let Some((loc, args)) = queue.pop_front() {
+        if !seen_locs.insert(loc) {
+            continue;
+        }
         if !seen.insert((loc, args.clone())) {
             continue;
         }
@@ -455,11 +460,12 @@ pub fn interface_closure_locs_with_args<'db>(
                 }
                 _ => Vec::new(),
             };
-            queue.push_back((parent_loc, parent_args));
+            if !seen_locs.contains(&parent_loc) {
+                queue.push_back((parent_loc, parent_args));
+            }
         }
     }
 
-    let _ = (pkg_items, current_ns);
     out
 }
 

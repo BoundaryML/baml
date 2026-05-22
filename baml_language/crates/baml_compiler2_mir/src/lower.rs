@@ -5376,7 +5376,8 @@ impl<'db> LoweringContext<'db> {
                     field: idx,
                 })),
             );
-        } else if self
+        } else {
+            let handled_interface_field = self
             .interface_receiver_for_field_access(base, unwrapped_ty)
             .is_some_and(|(iface_tn, iface_type_args)| {
                 self.try_lower_interface_field_access(
@@ -5387,16 +5388,18 @@ impl<'db> LoweringContext<'db> {
                     field,
                     &dest,
                 )
-            })
-        {
-        } else if self.lower_union_class_field_access(
-            expr_id,
-            base_local,
-            unwrapped_ty,
-            field,
-            &dest,
-        ) {
-        } else {
+            });
+            let handled_union_field = handled_interface_field
+                || self.lower_union_class_field_access(
+                    expr_id,
+                    base_local,
+                    unwrapped_ty,
+                    field,
+                    &dest,
+                );
+            if handled_union_field {
+                return;
+            }
             if let Ty::Class(tn, _, _) = unwrapped_ty {
                 self.emit_panic_call(
                     &format!(
@@ -6016,13 +6019,11 @@ impl<'db> LoweringContext<'db> {
                 })
     }
 
-    fn resolve_type_implementor_method(
+    fn interface_closure_type_name_views(
         &self,
-        impl_ty: &Ty,
         iface_tn: &TypeName,
         iface_type_args: &[Tir2Ty],
-        method: &Name,
-    ) -> Option<ItemRef> {
+    ) -> Option<Vec<(TypeName, Vec<Tir2Ty>)>> {
         let iface_pkg_name = iface_tn.module_path.first()?;
         let iface_pkg_items = self.resolve_class_pkg_items_by_name(iface_pkg_name);
         let iface_ns: Vec<Name> = iface_tn.module_path.iter().skip(1).cloned().collect();
@@ -6031,7 +6032,7 @@ impl<'db> LoweringContext<'db> {
         else {
             return None;
         };
-        let requested_views: Vec<(TypeName, Vec<Tir2Ty>)> =
+        Some(
             baml_compiler2_tir::interfaces::interface_closure_locs_with_args(
                 self.db,
                 requested_root_loc,
@@ -6056,7 +6057,18 @@ impl<'db> LoweringContext<'db> {
                     args,
                 ))
             })
-            .collect();
+            .collect(),
+        )
+    }
+
+    fn resolve_type_implementor_method(
+        &self,
+        impl_ty: &Ty,
+        iface_tn: &TypeName,
+        iface_type_args: &[Tir2Ty],
+        method: &Name,
+    ) -> Option<ItemRef> {
+        let requested_views = self.interface_closure_type_name_views(iface_tn, iface_type_args)?;
 
         for file in compiler2_all_files(self.db) {
             let pkg_info = file_package(self.db, file);
@@ -6262,11 +6274,11 @@ impl<'db> LoweringContext<'db> {
             .all(|(a, b)| a == b)
     }
 
-    fn resolve_implements_target_type_name(
+    fn resolve_implements_target_view(
         &self,
         target: &baml_compiler2_ast::SpannedTypeExpr,
         class_loc: baml_compiler2_hir::loc::ClassLoc<'db>,
-    ) -> Option<TypeName> {
+    ) -> Option<(TypeName, Vec<Tir2Ty>)> {
         let class_file = class_loc.file(self.db);
         let class_pkg = baml_compiler2_hir::file_package::file_package(self.db, class_file);
         let class_pkg_id = PackageId::new(self.db, class_pkg.package.clone());
@@ -6284,55 +6296,53 @@ impl<'db> LoweringContext<'db> {
             Definition::Interface(target_loc),
             &target_data.name,
         );
-        Some(qtn_to_type_name(&target_qtn))
-    }
-
-    fn interface_closure_type_names(&self, iface_tn: &TypeName) -> Option<HashSet<TypeName>> {
-        let pkg_name = iface_tn.module_path.first()?;
-        let pkg_items = self.resolve_class_pkg_items_by_name(pkg_name);
-        let ns: Vec<Name> = iface_tn.module_path.iter().skip(1).cloned().collect();
-        let Some(Definition::Interface(iface_loc)) = pkg_items.lookup_type(&ns, &iface_tn.name)
-        else {
-            return None;
+        let item_tree = file_item_tree(self.db, class_file);
+        let class_data = &item_tree[class_loc.id(self.db)];
+        let mut diags = Vec::new();
+        let target_args = match &target.expr {
+            baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => generic_args
+                .iter()
+                .map(|arg| {
+                    baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+                        self.db,
+                        arg,
+                        class_pkg_items,
+                        &class_pkg.namespace_path,
+                        &class_data.generic_params,
+                        &mut diags,
+                    )
+                })
+                .collect(),
+            _ => Vec::new(),
         };
-        let locs = baml_compiler2_tir::interfaces::interface_closure_locs(
-            self.db, iface_loc, pkg_items, &ns,
-        );
-        let mut out = HashSet::new();
-        for loc in locs {
-            let tree = baml_compiler2_hir::file_item_tree(self.db, loc.file(self.db));
-            let Some(data) = tree.interfaces.get(&loc.id(self.db)) else {
-                continue;
-            };
-            let qtn = baml_compiler2_tir::lower_type_expr::qualify_def(
-                self.db,
-                Definition::Interface(loc),
-                &data.name,
-            );
-            out.insert(qtn_to_type_name(&qtn));
-        }
-        Some(out)
+        Some((qtn_to_type_name(&target_qtn), target_args))
     }
 
     fn resolve_implementor_interface_field(
         &self,
         impl_tn: &TypeName,
         iface_tn: &TypeName,
-        _iface_type_args: &[Tir2Ty],
+        iface_type_args: &[Tir2Ty],
         field: &Name,
     ) -> Option<usize> {
         let class_loc = self.resolve_class_loc_by_type_name(impl_tn)?;
         let item_tree = file_item_tree(self.db, class_loc.file(self.db));
         let class_data = &item_tree[class_loc.id(self.db)];
-        let closure = self.interface_closure_type_names(iface_tn)?;
+        let requested_views = self.interface_closure_type_name_views(iface_tn, iface_type_args)?;
 
         for impl_block in &class_data.implements {
-            let Some(target_tn) =
-                self.resolve_implements_target_type_name(&impl_block.target, class_loc)
+            let Some((target_tn, target_args)) =
+                self.resolve_implements_target_view(&impl_block.target, class_loc)
             else {
                 continue;
             };
-            if !closure.contains(&target_tn) {
+            if !requested_views
+                .iter()
+                .any(|(requested_tn, requested_args)| {
+                    target_tn == *requested_tn
+                        && self.interface_tir_type_args_match(&target_args, requested_args)
+                })
+            {
                 continue;
             }
             let class_field = impl_block

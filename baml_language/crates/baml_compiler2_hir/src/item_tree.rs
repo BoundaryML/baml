@@ -194,6 +194,8 @@ pub struct InterfaceMethodSig {
     pub name: Name,
     /// Generic type parameters local to this method.
     pub generic_params: Vec<Name>,
+    /// BEP-044 generic bounds parallel to `generic_params`.
+    pub generic_param_bounds: Vec<Option<ast::TypeExpr>>,
     pub params: Vec<FunctionParam>,
     pub return_type: Option<ast::SpannedTypeExpr>,
     pub throws: Option<ast::SpannedTypeExpr>,
@@ -645,6 +647,7 @@ impl ItemTree {
             .map(|m| InterfaceMethodSig {
                 name: m.name.clone(),
                 generic_params: m.generic_params.clone(),
+                generic_param_bounds: m.generic_param_bounds.clone(),
                 params: m
                     .params
                     .iter()

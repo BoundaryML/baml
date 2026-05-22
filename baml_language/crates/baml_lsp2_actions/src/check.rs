@@ -433,6 +433,7 @@ fn check_interfaces<'db>(
                 items,
                 pkg_items,
                 namespace_path,
+                aliases,
                 &mut diagnostics,
             );
         }
@@ -724,7 +725,63 @@ struct InterfaceMembers {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct InterfaceMemberOrigin {
     name: Name,
+    qualified_name: QualifiedTypeName,
     type_args: Vec<baml_compiler2_ast::TypeExpr>,
+    lowered_type_args: Vec<Ty>,
+}
+
+type InterfaceMemberStackEntry = (
+    baml_compiler2_hir::item_tree::Interface,
+    baml_base::SourceFile,
+    std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr>,
+    Vec<baml_compiler2_ast::TypeExpr>,
+    Vec<Name>,
+);
+
+fn interface_qtn_for_file(db: &dyn Db, file: SourceFile, name: &Name) -> QualifiedTypeName {
+    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+    QualifiedTypeName::new(pkg_info.package.clone(), pkg_info.namespace_path, name.clone())
+}
+
+fn lower_interface_origin_type_args(
+    db: &dyn Db,
+    file: SourceFile,
+    type_args: &[baml_compiler2_ast::TypeExpr],
+    generic_params: &[Name],
+) -> Vec<Ty> {
+    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
+    let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
+    lower_interface_type_args_in_context(
+        db,
+        pkg_items,
+        &pkg_info.namespace_path,
+        type_args,
+        generic_params,
+    )
+}
+
+fn lower_interface_type_args_in_context(
+    db: &dyn Db,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    namespace_path: &[Name],
+    type_args: &[baml_compiler2_ast::TypeExpr],
+    generic_params: &[Name],
+) -> Vec<Ty> {
+    let mut diags = Vec::new();
+    type_args
+        .iter()
+        .map(|arg| {
+            baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+                db,
+                arg,
+                pkg_items,
+                namespace_path,
+                generic_params,
+                &mut diags,
+            )
+        })
+        .collect()
 }
 
 /// Walk `extends` of `iface` (including `iface` itself) and gather all members
@@ -745,6 +802,7 @@ fn collect_interface_members<'db>(
         pkg_items,
         namespace_path,
         &std::collections::HashMap::new(),
+        &[],
     )
 }
 
@@ -759,6 +817,7 @@ fn collect_interface_members_with_subst<'db>(
     pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
     subst: &std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr>,
+    generic_params_in_scope: &[Name],
 ) -> InterfaceMembers {
     use baml_compiler2_ast::TypeExpr;
 
@@ -775,17 +834,36 @@ fn collect_interface_members_with_subst<'db>(
             })
         })
         .collect();
-    let mut stack: Vec<(
-        baml_compiler2_hir::item_tree::Interface,
-        baml_base::SourceFile,
-        std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr>,
-        Vec<baml_compiler2_ast::TypeExpr>,
-    )> = vec![(iface.clone(), iface_file, subst.clone(), root_type_args)];
+    let mut stack: Vec<InterfaceMemberStackEntry> = vec![(
+        iface.clone(),
+        iface_file,
+        subst.clone(),
+        root_type_args,
+        {
+            let mut params = iface.generic_params.clone();
+            params.extend(generic_params_in_scope.iter().cloned());
+            params
+        },
+    )];
     visited.insert(vec![iface.name.clone()]);
 
-    while let Some((current, current_file, current_subst, current_type_args)) = stack.pop() {
+    while let Some((
+        current,
+        current_file,
+        current_subst,
+        current_type_args,
+        generic_params_in_scope,
+    )) = stack.pop()
+    {
         let origin = InterfaceMemberOrigin {
             name: current.name.clone(),
+            qualified_name: interface_qtn_for_file(db, current_file, &current.name),
+            lowered_type_args: lower_interface_origin_type_args(
+                db,
+                current_file,
+                &current_type_args,
+                &generic_params_in_scope,
+            ),
             type_args: current_type_args.clone(),
         };
         for field in &current.fields {
@@ -882,7 +960,15 @@ fn collect_interface_members_with_subst<'db>(
                     .zip(parent_args.iter())
                     .map(|(param, arg)| (param.clone(), arg.clone()))
                     .collect();
-                stack.push((parent, loc.file(db), parent_subst, parent_args));
+                let mut parent_generic_params = generic_params_in_scope.clone();
+                parent_generic_params.extend(parent.generic_params.iter().cloned());
+                stack.push((
+                    parent,
+                    loc.file(db),
+                    parent_subst,
+                    parent_args,
+                    parent_generic_params,
+                ));
             }
         }
     }
@@ -921,11 +1007,11 @@ fn rendered_type_args(args: &[baml_compiler2_ast::TypeExpr]) -> Vec<String> {
     args.iter().map(ToString::to_string).collect()
 }
 
-fn type_args_from_target_expr(target: &baml_compiler2_ast::TypeExpr) -> Vec<String> {
+fn type_args_from_target_expr(
+    target: &baml_compiler2_ast::TypeExpr,
+) -> Vec<baml_compiler2_ast::TypeExpr> {
     match target {
-        baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => {
-            rendered_type_args(generic_args)
-        }
+        baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => generic_args.clone(),
         _ => Vec::new(),
     }
 }
@@ -935,13 +1021,43 @@ fn interface_origin_matches_target_expr<'db>(
     target: &baml_compiler2_ast::TypeExpr,
     pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
+    generic_params: &[Name],
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     origin: &InterfaceMemberOrigin,
 ) -> bool {
-    let Some((_loc, iface)) = resolve_interface_path(db, target, pkg_items, namespace_path) else {
+    let Some((loc, iface)) = resolve_interface_path(db, target, pkg_items, namespace_path) else {
         return false;
     };
-    iface.name == origin.name
-        && type_args_from_target_expr(target) == rendered_type_args(&origin.type_args)
+    if interface_qtn_for_file(db, loc.file(db), &iface.name) != origin.qualified_name {
+        return false;
+    }
+    let target_type_args = type_args_from_target_expr(target);
+    if target_type_args.len() != origin.type_args.len() {
+        return false;
+    }
+    let target_lowered = lower_interface_type_args_in_context(
+        db,
+        pkg_items,
+        namespace_path,
+        &target_type_args,
+        generic_params,
+    );
+    if target_lowered.len() == origin.lowered_type_args.len()
+        && target_lowered
+            .iter()
+            .zip(origin.lowered_type_args.iter())
+            .all(|(target_arg, origin_arg)| {
+                baml_compiler2_tir::normalize::is_same_normalized_type(
+                    target_arg,
+                    origin_arg,
+                    aliases,
+                )
+            })
+    {
+        return true;
+    }
+
+    rendered_type_args(&target_type_args) == rendered_type_args(&origin.type_args)
 }
 
 fn implements_for_targets_match<'db>(
@@ -978,6 +1094,7 @@ fn has_sibling_implements_for_origin<'db>(
     all_items: &[baml_compiler2_ast::Item],
     pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     origin: &InterfaceMemberOrigin,
 ) -> bool {
     all_items.iter().any(|item| {
@@ -998,6 +1115,8 @@ fn has_sibling_implements_for_origin<'db>(
             &candidate.interface_target.expr,
             pkg_items,
             namespace_path,
+            &[],
+            aliases,
             origin,
         )
     })
@@ -1040,6 +1159,7 @@ fn validate_interface_extends_fields<'db>(
             pkg_items,
             namespace_path,
             &std::collections::HashMap::new(),
+            &iface.generic_params,
         );
         for (origin, field_name, field_te) in &members.fields {
             let Some(field_te) = field_te else { continue };
@@ -1079,6 +1199,7 @@ fn validate_interface_extends_fields<'db>(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn validate_implements_for<'db>(
     db: &'db dyn Db,
     file_id: FileId,
@@ -1086,6 +1207,7 @@ fn validate_implements_for<'db>(
     all_items: &[baml_compiler2_ast::Item],
     pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
@@ -1171,6 +1293,7 @@ fn validate_implements_for<'db>(
         pkg_items,
         namespace_path,
         &subst,
+        &[],
     );
 
     let mut provided_method_names: HashSet<Name> = HashSet::new();
@@ -1227,17 +1350,19 @@ fn validate_implements_for<'db>(
         provided_method_names.insert(method.name.clone());
     }
 
+    let iface_qtn = interface_qtn_for_file(db, iface_file, &iface.name);
     for (origin, req_name, _sig) in &members.required_methods {
         if provided_method_names.contains(req_name) {
             continue;
         }
-        if origin.name != iface.name
+        if origin.qualified_name != iface_qtn
             && has_sibling_implements_for_origin(
                 db,
                 imp,
                 all_items,
                 pkg_items,
                 namespace_path,
+                aliases,
                 origin,
             )
         {
@@ -1380,6 +1505,7 @@ fn validate_class_implements<'db>(
             pkg_items,
             namespace_path,
             &subst,
+            &class.generic_params,
         );
 
         // Check that every method declared in `implements I {}` actually
@@ -1432,6 +1558,7 @@ fn validate_class_implements<'db>(
         // Check that every required method has a body — either provided here,
         // by a same-named class method, or by a separate `implements` block
         // that targets the originating interface.
+        let iface_qtn = interface_qtn_for_file(db, iface_file, &iface.name);
         for (origin, req_name, _sig) in &members.required_methods {
             if provided_method_names.contains(req_name) || class_method_names.contains(req_name) {
                 continue;
@@ -1439,13 +1566,15 @@ fn validate_class_implements<'db>(
             // If the method originates from a parent interface that this
             // class explicitly implements in a separate block, skip the
             // check — that block is responsible for providing the method.
-            if origin.name != iface.name
+            if origin.qualified_name != iface_qtn
                 && class.implements.iter().any(|candidate| {
                     interface_origin_matches_target_expr(
                         db,
                         &candidate.target.expr,
                         pkg_items,
                         namespace_path,
+                        &class.generic_params,
+                        aliases,
                         origin,
                     )
                 })
@@ -1657,6 +1786,7 @@ fn validate_class_implements<'db>(
 /// storage type must match the interface field type exactly. The exactness
 /// rule lives in TIR normalization so LSP and compiler diagnostics agree on
 /// semantic equality without permitting assignment subtyping.
+#[allow(clippy::too_many_arguments)]
 fn type_exprs_compatible(
     db: &dyn Db,
     pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,

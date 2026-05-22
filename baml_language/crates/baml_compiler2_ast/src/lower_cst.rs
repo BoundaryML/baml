@@ -171,7 +171,11 @@ pub fn lower_file_with_file_id(
     items.retain(|item| !matches!(item, Item::ImplementsFor(_)));
     for imp in impl_fors {
         let target_name = match &imp.for_target.expr {
-            crate::ast::TypeExpr::Path { segments, .. } if segments.len() == 1 => {
+            crate::ast::TypeExpr::Path {
+                segments,
+                generic_args,
+                ..
+            } if segments.len() == 1 && generic_args.is_empty() => {
                 segments.first().cloned()
             }
             _ => None,
@@ -1226,7 +1230,13 @@ fn lower_method_sig(
     };
     let name = Name::new(name_token.text());
     let name_span = name_token.text_range();
-    let generic_params = extract_generic_params(sig.syntax());
+    let generic_params_with_bounds = extract_generic_params_with_bounds(sig.syntax());
+    let generic_params: Vec<Name> = generic_params_with_bounds
+        .iter()
+        .map(|(n, _)| n.clone())
+        .collect();
+    let generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> =
+        generic_params_with_bounds.into_iter().map(|(_, b)| b).collect();
     let parameter_context = format!("method signature `{}`", name.as_str());
 
     let (params, defaults) = sig
@@ -1263,6 +1273,7 @@ fn lower_method_sig(
     Some(MethodSigDef {
         name,
         generic_params,
+        generic_param_bounds,
         params,
         defaults,
         return_type,

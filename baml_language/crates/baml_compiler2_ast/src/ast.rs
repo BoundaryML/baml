@@ -1278,6 +1278,8 @@ pub struct InterfaceDef {
 pub struct MethodSigDef {
     pub name: Name,
     pub generic_params: Vec<Name>,
+    /// BEP-044 generic bounds parallel to `generic_params`.
+    pub generic_param_bounds: Vec<Option<TypeExpr>>,
     pub params: Vec<Param>,
     pub defaults: FunctionDefaults,
     pub return_type: Option<SpannedTypeExpr>,
