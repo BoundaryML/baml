@@ -69,6 +69,10 @@ jobs:
 
       - uses: actions/checkout@v6
 
+      # NOTE: we deliberately do NOT use ./.github/actions/setup-mise here.
+      # The host Python version pins the abi3 floor of the resulting wheel,
+      # so we want a specific Python (3.10, matching the abi3-py310 target)
+      # rather than whatever mise.toml's `python` is pinned to today.
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
