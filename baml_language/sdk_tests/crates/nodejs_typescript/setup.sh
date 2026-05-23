@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Per-fixture pnpm setup for the sdk_test_nodejs_typescript crate.
+# Per-fixture pnpm setup for the sdk_test_nodejs_typescript crate — Unix.
+# Windows uses the parallel `setup.ps1`; keep the two in sync.
 #
 # Invoked automatically by `cargo nextest run` via the setup-script
 # binding in `baml_language/.config/nextest.toml` — whenever the run
