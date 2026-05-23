@@ -1,0 +1,36 @@
+name: release-pkg-boundaryml-com
+
+# TODO: tie this into the release process so it runs automatically on publish.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: release-pkg-boundaryml-com
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: us-east-1
+      AWS_ROLE_ARN: arn:aws:iam::277707123528:role/pkg-boundaryml-com-github-release
+      BUCKET: pkgboundarymlcomstack-pkgboundarymlcomsitebucket4f-ybhvygkqittp
+      SOURCE: tools/pkg_boundaryml_com/data/index.html
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: pkg-boundaryml-com-release-${{ github.run_id }}
+
+      - name: Upload index.html
+        run: |
+          aws s3 cp "$SOURCE" "s3://$BUCKET/index.html" \
+            --content-type text/html \
+            --cache-control "public, max-age=300"
