@@ -224,6 +224,54 @@ function bar() -> void {
     );
 }
 
+/// Composite TypeVar in expected return: `y: () -> Box<T>`.  The
+/// expected return contains `T` but isn't a bare `Ty::TypeVar`.  Body
+/// inference must still happen in synthesis mode (so `infer_bindings`
+/// sees the concrete `Box<int>` and binds `T = int`), and the surface
+/// return must use the synthesized type rather than the unresolved
+/// composite — otherwise the outer call's bindings never see the
+/// concrete return and `T` stays unbound.
+#[test]
+fn lambda_returning_composite_typevar_infers_concrete() {
+    // Lambda body is an expression (no `return` statement) so the body's
+    // inferred type is the expression's type. With a `return` statement
+    // the block diverges and has type `Never` — a separate, deeper
+    // limitation in BAML's lambda inference that's orthogonal to this
+    // surface_ret_ty fix.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Box<T> {
+  value T
+}
+function f<T>(y: () -> Box<T>) -> Box<T> {
+  return y()
+}
+function bar() -> int {
+  let b = f(() => { Box<int> { value: 1 } });
+  b.value
+}
+"#,
+    );
+    let out = render_tir(&db, file);
+    assert!(
+        !out.contains("type mismatch"),
+        "expected no diagnostic; got:\n{out}",
+    );
+    // `b` must be typed `Box<int>` (not `Box<T>`) and `b.value` `int`
+    // — the let binding's rendering proves the outer call's argument
+    // inference saw the concrete lambda return and bound `T = int`.
+    assert!(
+        out.contains("let b = ") && out.contains(": user.Box<int>"),
+        "expected `b: Box<int>` after lambda-driven inference; got:\n{out}",
+    );
+    assert!(
+        out.contains("b.value : int"),
+        "expected `b.value : int`; got:\n{out}",
+    );
+}
+
 /// Property access after an instantiation expression: `f<int>.method`.
 /// BAML's parser accepts it (`.` is in our follow set) and the
 /// FIELD_ACCESS_EXPR parent of EXPR_WITH_TYPE_ARGS short-circuits the

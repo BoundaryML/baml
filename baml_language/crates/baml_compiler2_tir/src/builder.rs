@@ -3584,21 +3584,22 @@ impl<'db> TypeInferenceBuilder<'db> {
                         // Determine return type: annotation > expected.
                         //
                         // When the expected return contains an unbound TypeVar
-                        // (e.g. checking a lambda against `() -> T` where the
-                        // surrounding call has no context to bind `T`), don't
-                        // thread the TypeVar into the body as a strict expected
-                        // type — the body literal `"hi"` would fail to unify
-                        // with `T`.  Instead, infer the body in synthesis mode
-                        // (`None`) and let the outer call's argument bindings
-                        // (`bind_call_args` → `infer_bindings`) unify `T` with
-                        // the body's actual return type.
+                        // (bare `T`, or composite like `Box<T>`), don't thread
+                        // the unresolved type into the body as a strict
+                        // expected type — the body's actual return would fail
+                        // to unify against it.  Instead, infer the body in
+                        // synthesis mode (`None`) so the outer call's argument
+                        // bindings (`bind_call_args` → `infer_bindings`) see
+                        // the concrete return and can unify the type vars.
                         let return_annotation = func_def.return_type.as_ref().map(|te| {
                             self.lower_lambda_type_expr(&te.expr, &all_generic_params, te.span)
                         });
+                        let expected_ret_has_typevar =
+                            crate::generics::contains_typevar(expected_ret.as_ref());
                         let effective_ret: Option<Ty> = match return_annotation.as_ref() {
                             Some(annot) => Some(annot.clone()),
                             None => {
-                                if crate::generics::contains_typevar(expected_ret.as_ref()) {
+                                if expected_ret_has_typevar {
                                     None
                                 } else {
                                     Some(expected_ret.as_ref().clone())
@@ -3623,10 +3624,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                                 warn_extraneous_throws,
                             );
                         let surface_ret_ty = return_annotation.unwrap_or_else(|| {
-                            if matches!(
-                                expected_ret.as_ref(),
-                                Ty::Unknown { .. } | Ty::TypeVar(_, _)
-                            ) {
+                            if matches!(expected_ret.as_ref(), Ty::Unknown { .. })
+                                || expected_ret_has_typevar
+                            {
+                                // Prefer the synthesized body return so
+                                // composite-typevar expected types (e.g.
+                                // `Box<T>`) get the concrete shape
+                                // (`Box<int>`) recorded on the lambda's
+                                // function type.  Without this, the outer
+                                // call's `infer_bindings` would see the
+                                // still-unresolved expected type and never
+                                // unify the type vars.
                                 ret_ty.clone()
                             } else {
                                 expected_ret.as_ref().clone()
@@ -8344,10 +8352,19 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.declared_return_ty = None;
         }
 
-        // Infer or check the lambda body
+        // Infer or check the lambda body.
+        //
+        // When the expected return contains any unbound type variable
+        // (bare `T` *or* composite like `Box<T>`), fall back to
+        // synthesis — `check_expr` would strict-check the body against
+        // the unresolved expected and produce spurious mismatches.  The
+        // outer call site's `bind_call_args` / `infer_bindings` is what
+        // unifies type vars; here we just need to surface the body's
+        // concrete return type so that unification has something to
+        // bind against.
         let ret_ty = if let Some(expected) = expected_ret {
-            if matches!(expected, Ty::Unknown { .. } | Ty::TypeVar(_, _)) {
-                // Expected return is unknown or a type var — just infer
+            if matches!(expected, Ty::Unknown { .. }) || crate::generics::contains_typevar(expected)
+            {
                 self.infer_expr(root_expr, lambda_body)
             } else {
                 self.check_expr(root_expr, lambda_body, expected)
