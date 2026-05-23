@@ -13,12 +13,24 @@
 //! `build_diagnostics::no_build_failures`) is `#[ignore]`d on this
 //! crate while the stub stays in place — see [`IGNORE_REASON`].
 //!
-//! `pnpm install` runs in `build.rs` (serially, once per fixture)
-//! rather than from each `#[test]`; that's the only way to keep
-//! parallel test processes from racing on each fixture's
-//! `node_modules/.pnpm/` virtual store.
+//! **pnpm steps live in
+//! `sdk_tests/crates/nodejs_typescript/setup.sh`**, NOT in build.rs.
+//! `cargo nextest run` invokes setup.sh automatically via the
+//! setup-script binding in `baml_language/.config/nextest.toml`:
 //!
-//! Same auto-discovery story as `python_pydantic2`: build.rs emits
+//! ```sh
+//! cd baml_language
+//! cargo nextest run -p sdk_test_nodejs_typescript
+//! ```
+//!
+//! For plain `cargo test` (no nextest), run setup.sh manually
+//! between `cargo test --no-run` and `cargo test`. Re-run setup.sh
+//! when bridge_nodejs's Rust source changes (the `.node` addon needs
+//! rebuilding) or when adding a new fixture. build.rs's job is just
+//! codegen + scaffold emit — it writes the per-fixture
+//! `package.json` / `tsconfig.json` that setup.sh consumes.
+//!
+//! Auto-discovery story: build.rs emits
 //! `OUT_DIR/nodejs_typescript_tests.rs` (a sequence of
 //! `::sdk_test_harness_runner::*` invocations), the
 //! `sdk_test_harness_runner::nodejs_typescript::test_suite!()` macro
@@ -28,18 +40,15 @@
 //! `sdk_tests/crates/nodejs_typescript/<name>/`.
 
 use std::{
-    env, fs,
-    io::ErrorKind,
-    panic,
+    env, fs, panic,
     path::{Path, PathBuf},
-    process::Command,
 };
 
 use codegen_nodejs::NamingConvention;
 
 use crate::{
     BuildDiagnostics, copy_customizable, discover_fixtures, fixtures_root_from_manifest,
-    load_fixture, watch_dir, workspace_root_from_manifest,
+    load_fixture, watch_dir,
 };
 
 /// Reason string stamped onto every nodejs_typescript test's
@@ -52,12 +61,13 @@ use crate::{
 pub const IGNORE_REASON: &str = "codegen_nodejs is a stub; re-enable once the emitter lands";
 
 /// Per-fixture package.json. `__PACKAGE_NAME__` is substituted per
-/// fixture. `pnpm install` resolves the dev toolchain (jest +
-/// ts-jest + typescript + types); the BAML runtime dep on
-/// `@boundaryml/baml-node` (which would point at
-/// `sdks/nodejs/bridge_nodejs` via a `file:` source) is deliberately
-/// omitted while codegen_nodejs is a stub — adding it would force a
-/// NAPI build per fixture for no test value.
+/// fixture. The dev toolchain (jest + ts-jest + typescript + types)
+/// plus the BAML runtime dep on `@boundaryml/baml-node` (which
+/// `file:`-points at the bridge_nodejs source tree five levels up:
+/// `crates/nodejs_typescript/<F>/generated/` →
+/// `crates/nodejs_typescript/<F>/` → `crates/nodejs_typescript/` →
+/// `crates/` → `sdk_tests/` → `baml_language/`) is resolved by
+/// `setup.sh`'s per-fixture `pnpm install`.
 ///
 /// `haste.enableSymlinks = true` + `watchman = false` are required:
 /// `customizable/*.test.ts` files are symlinked into the generated
@@ -81,19 +91,19 @@ const PACKAGE_JSON_TEMPLATE: &str = include_str!("templates/package.json");
 /// `<F>/generated/node_modules/`.
 const TSCONFIG_JSON: &str = include_str!("templates/tsconfig.json");
 
-// `pnpm install --ignore-workspace` is required because the repo has
-// a top-level `pnpm-workspace.yaml` (at `/Users/sam/baml3/`); without
-// the flag pnpm walks up to that workspace and skips installing into
-// the fixture dir entirely. `ignore-workspace` is a CLI flag in
-// pnpm — it isn't an .npmrc setting, so it has to live on the
-// command rather than the per-fixture config.
-
+/// Shared pnpm store dir (`<workspace>/target/<CACHE_SUBDIR>`) —
+/// `setup.sh` exports `CACHE_ENV_VAR=<that path>` during install, and
+/// `sdk_test_harness_runner::run_test_cmd` sets the same env var when
+/// invoking tsc/jest. Harmless for tsc/jest (they don't read pnpm
+/// config) but keeps the harness_runner API uniform with python's uv
+/// cache plumbing.
 const CACHE_SUBDIR: &str = "pnpm-store";
 const CACHE_ENV_VAR: &str = "npm_config_store_dir";
 
 /// Entry point for `crates/nodejs_typescript/build.rs`. Discovers
 /// fixtures, runs codegen for each (best-effort — see module docs),
-/// writes templates, and emits the per-fixture test scaffold.
+/// writes templates, and emits the per-fixture test scaffold. Does
+/// NOT touch pnpm — that's setup.sh's job (see module docs).
 pub fn run_all() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let fixtures_root = fixtures_root_from_manifest(&manifest_dir);
@@ -112,23 +122,6 @@ pub fn run_all() {
         codegen_fixture(&fixtures_root, fixture, &manifest_dir, &mut diagnostics);
     }
 
-    // `pnpm install` is done here in build.rs, serially per fixture, so
-    // the parallel `#[test]` processes don't race on each fixture's
-    // `.pnpm` virtual store (pnpm's per-project install isn't safe under
-    // concurrent invocations into the same `node_modules/`). The tests
-    // themselves only run `tsc` / `jest`, which are read-only against
-    // an already-populated tree.
-    let store_dir = workspace_root_from_manifest(&manifest_dir)
-        .join("target")
-        .join(CACHE_SUBDIR);
-    fs::create_dir_all(&store_dir).unwrap();
-    for fixture in &fixtures {
-        let generated_dir = manifest_dir.join(fixture).join("generated");
-        if let Err(msg) = pnpm_install(&generated_dir, &store_dir) {
-            diagnostics.record("pnpm_install", fixture, msg);
-        }
-    }
-
     write_fixtures_tests_rs(&out_dir, &fixtures);
     diagnostics.finalize();
 
@@ -137,38 +130,6 @@ pub fn run_all() {
     for fixture in &fixtures {
         watch_dir(&manifest_dir.join(fixture).join("customizable"));
     }
-}
-
-fn pnpm_install(generated_fixture_dir: &Path, store_dir: &Path) -> Result<(), String> {
-    let spawn = Command::new("pnpm")
-        .args(["install", "--ignore-workspace"])
-        .current_dir(generated_fixture_dir)
-        .env(CACHE_ENV_VAR, store_dir)
-        .output();
-    let output = match spawn {
-        Ok(o) => o,
-        Err(e) if e.kind() == ErrorKind::NotFound => {
-            return Err(format!(
-                "spawn failed: `pnpm` not on PATH ({e})\nhint: install pnpm (https://pnpm.io) or via corepack"
-            ));
-        }
-        Err(e) => {
-            return Err(format!(
-                "failed to spawn `pnpm install` in {}: {e}",
-                generated_fixture_dir.display()
-            ));
-        }
-    };
-    if !output.status.success() {
-        return Err(format!(
-            "pnpm install failed in {} (exit {}):\nstdout: {}\nstderr: {}",
-            generated_fixture_dir.display(),
-            output.status,
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-    Ok(())
 }
 
 fn codegen_fixture(
