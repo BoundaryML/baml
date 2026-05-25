@@ -1208,7 +1208,7 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> testi
         2    store_var 1            
 
   185   3    load_var 1             (body)
-        4    make_closure 930 1     
+        4    make_closure 932 1     
         5    store_var 3            (base_run)
 
   200   6    load_var 2             (runner)

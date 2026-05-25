@@ -1579,6 +1579,35 @@ impl IoSysOpsBuilder {
     pub fn with_sys<T: io::IoNamespaceSys + Default + Send + Sync + 'static>(self) -> Self {
         self.with_sys_instance(Arc::new(T::default()))
     }
+
+    /// Override the `host` namespace (host-callable dispatch) with a pre-built instance.
+    ///
+    /// Used by bridges (Python, Node, Go, WASM) to wire the
+    /// [`io::IoNamespaceHost::call_host_value`] sysop to a bridge-specific
+    /// dispatch implementation that fires the host-language callable. Native
+    /// bridges use the `sys_native::NativeSysOps` path instead (passing it to
+    /// [`SysOps::from_impl`]); the WASM bridge composes via this builder and
+    /// needs to inject its JS dispatch impl explicitly.
+    #[allow(clippy::needless_pass_by_value)]
+    #[must_use]
+    pub fn with_host_instance(
+        mut self,
+        instance: Arc<dyn io::IoNamespaceHost + Send + Sync + 'static>,
+    ) -> Self {
+        self.inner.baml_host_call_host_value = {
+            let t = instance;
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_host_call_host_value(heap, permit, args, ctx, call_id)
+            })
+        };
+        self
+    }
+
+    /// Override the `host` namespace with a default-constructible type.
+    #[must_use]
+    pub fn with_host<T: io::IoNamespaceHost + Default + Send + Sync + 'static>(self) -> Self {
+        self.with_host_instance(Arc::new(T::default()))
+    }
 }
 
 impl Default for IoSysOpsBuilder {

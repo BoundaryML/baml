@@ -14,6 +14,25 @@
 //! These live in `sys_native` (not `bridge_cffi`) so that the sysop
 //! implementation in `sys_native` can use them without introducing a circular
 //! dependency (`bridge_cffi` already depends on `sys_native`).
+//!
+//! ## In-flight lifetime: no wall-clock timeout
+//!
+//! There is **no per-call timeout**. An in-flight entry stays in the table
+//! until one of two things happens:
+//!
+//! 1. The host calls `complete_host_call(call_id, ...)`, which `take`s the
+//!    entry and fires its `CompletionHandle`. Normal completion.
+//! 2. The BAML call that issued the host call is cancelled. The engine drops
+//!    the sysop's async future (the `tokio::select!` cancel arm in
+//!    `bex_engine`), which drops the [`InflightGuard`] moved into that future
+//!    (constructed by the `host_impls` sysop impl); the guard's `Drop` `take`s
+//!    the dangling entry, so cancellation evicts it — no leak.
+//!
+//! A host that *never* completes a call and is *never* cancelled leaves its
+//! entry pending forever. There is currently no engine-side watchdog that
+//! synthesizes a timeout error. Hung host code is the host's responsibility;
+//! cancellation (the only eviction signal besides completion) is driven by the
+//! caller's cancel token, not a clock.
 
 use std::{
     collections::HashMap,
@@ -24,7 +43,7 @@ use std::{
 };
 
 use once_cell::sync::{Lazy, OnceCell};
-use sys_types::{BexExternalValue, CompletionHandle, OpError};
+use sys_types::{BexExternalValue, CompletionHandle, OpError, OpErrorKind, SysOp};
 
 /// C-compatible dispatch callback installed by the host bridge.
 ///
@@ -50,9 +69,15 @@ pub fn set_dispatch_fn(f: HostDispatchFn) {
 pub fn fire_dispatch(host_value_key: u64, call_id: u32, args: &[u8]) -> bool {
     match HOST_DISPATCH_FN.get() {
         Some(f) => {
-            tokio::task::block_in_place(|| {
-                f(host_value_key, call_id, args.as_ptr(), args.len());
-            });
+            // The dispatch fn is fire-and-return: every bridge hands the call
+            // off to the host (spawning a task / goroutine / threadsafe-fn
+            // callback) and returns promptly, then later resolves the in-flight
+            // `CompletionHandle` via `complete_host_call`. It never blocks on
+            // the host's response, so we call it directly. A
+            // `tokio::task::block_in_place` wrapper would only be needed for a
+            // blocking callee, and it would panic on a current-thread runtime —
+            // neither applies here.
+            f(host_value_key, call_id, args.as_ptr(), args.len());
             true
         }
         None => {
@@ -87,13 +112,86 @@ pub fn next_call_id() -> u32 {
 }
 
 /// Register a `CompletionHandle` for an in-flight host call.
+///
+/// `call_id` must be freshly minted by [`next_call_id`] and not already
+/// present in the table. The table is keyed by a *wrapping* `u32` (kept narrow
+/// for the C ABI), so in principle a wrap-around could collide with a still
+/// live entry. With RAII eviction of cancelled calls (see [`InflightGuard`])
+/// entries no longer leak, so the live set stays bounded and a collision is
+/// effectively impossible.
+///
+/// We never silently overwrite an existing entry — doing so would strand the
+/// previous call's `CompletionHandle` (its future would hang forever) and let a
+/// late completion resolve the wrong call. A collision trips a `debug_assert!`
+/// in debug builds; in release builds (where the assert is stripped) it is
+/// caught at runtime by refusing the insert and completing the new call with an
+/// error.
 pub fn insert(call_id: u32, completion: CompletionHandle) {
-    TABLE.write().unwrap().insert(call_id, completion);
+    let mut table = TABLE.write().unwrap();
+    let collision = table.contains_key(&call_id);
+    debug_assert!(
+        !collision,
+        "host-call id {call_id} collided with a live in-flight entry; the u32 \
+         call-id space wrapped while an entry was still pending (this should be \
+         impossible now that cancelled calls are evicted via InflightGuard)"
+    );
+    if collision {
+        // Release builds strip the assert above, so guard at runtime too.
+        drop(table);
+        tracing::error!(
+            "host-call id {call_id} collided with a live in-flight entry; \
+             refusing to overwrite and failing the new call"
+        );
+        completion.complete(Err(OpError::new(
+            SysOp::BamlHostCallHostValue,
+            OpErrorKind::Other(format!(
+                "host-call id {call_id} collided with a live in-flight call"
+            )),
+        )));
+        return;
+    }
+    table.insert(call_id, completion);
 }
 
 /// Remove and return the `CompletionHandle` for the given call id, if any.
+///
+/// Returns `None` if no entry is present — the benign case hit by a stale
+/// completion racing a cancellation, or by [`InflightGuard`]'s drop after the
+/// call already completed normally.
 pub fn take(call_id: u32) -> Option<CompletionHandle> {
     TABLE.write().unwrap().remove(&call_id)
+}
+
+/// RAII guard that evicts an in-flight call's table entry when dropped.
+///
+/// Owned by the sysop's async future (the `host_impls` `call_host_value` impl).
+/// It carries only the `call_id` (a `Copy` `u32`), never the
+/// `CompletionHandle` — that handle lives in the table and is owned by whoever
+/// `take`s it. On drop the guard calls [`take`], which:
+///
+/// * **After normal completion** is a no-op: `complete_host_call` already
+///   `take`-and-fired the handle, so the entry is gone and `take` returns
+///   `None`.
+/// * **On cancellation** removes the still-present entry. Dropping the removed
+///   `CompletionHandle` closes the oneshot sender, so the host's later
+///   `complete_host_call` for that id hits the benign unknown-id path. No leak.
+pub struct InflightGuard {
+    call_id: u32,
+}
+
+impl InflightGuard {
+    /// Create a guard for an already-`insert`ed `call_id`.
+    pub fn new(call_id: u32) -> Self {
+        Self { call_id }
+    }
+}
+
+impl Drop for InflightGuard {
+    fn drop(&mut self) {
+        // Evict the entry if it is still present (cancellation). After normal
+        // completion the entry is already gone, so this is a no-op.
+        let _ = take(self.call_id);
+    }
 }
 
 /// Complete an in-flight call with a successful value.
@@ -111,5 +209,118 @@ pub fn complete_with_error(call_id: u32, err: OpError) {
         c.complete(Err(err));
     } else {
         tracing::warn!("complete_host_call(error) for unknown call id {call_id}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use sys_types::{SysOp, SysOpResult};
+
+    use super::*;
+
+    /// Test-only presence check that does not remove the entry.
+    fn contains(call_id: u32) -> bool {
+        TABLE.read().unwrap().contains_key(&call_id)
+    }
+
+    /// Minted ids are unique, monotonic, and never 0 (reserved sentinel).
+    #[test]
+    fn next_call_id_is_unique_and_nonzero() {
+        let mut seen = HashSet::new();
+        for _ in 0..1000 {
+            let id = next_call_id();
+            assert_ne!(id, 0, "minted call id must never be the reserved 0");
+            assert!(seen.insert(id), "minted call id {id} was handed out twice");
+        }
+    }
+
+    /// Cancellation: the sysop future (carrying the [`InflightGuard`]) is
+    /// dropped before completion → the guard evicts the in-flight entry, so it
+    /// does not leak. Without the guard the entry would linger forever (the
+    /// engine never learns the private `call_id`).
+    #[test]
+    fn guard_drop_evicts_in_flight_entry_on_cancel() {
+        let (result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
+        let call_id = next_call_id();
+        insert(call_id, completion);
+        assert!(contains(call_id), "entry must be present after insert");
+
+        // Model the engine dropping the cancelled sysop future: the future owns
+        // both the awaited oneshot receiver (`result`) and the guard.
+        let guard = InflightGuard::new(call_id);
+        let fut = async move {
+            let _guard = guard;
+            result
+        };
+        drop(fut);
+
+        assert!(
+            !contains(call_id),
+            "guard drop on cancel must evict the in-flight entry (no leak)"
+        );
+    }
+
+    /// Normal completion: `complete_with_value` already `take`s the entry, so a
+    /// later guard drop is a benign no-op (no double-take problem, no panic).
+    #[tokio::test]
+    async fn guard_drop_after_normal_completion_is_noop() {
+        let (result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
+        let call_id = next_call_id();
+        insert(call_id, completion);
+        let guard = InflightGuard::new(call_id);
+
+        // Host completes normally — this takes-and-fires the handle.
+        complete_with_value(call_id, BexExternalValue::Int(7));
+        assert!(
+            !contains(call_id),
+            "completion must remove the in-flight entry"
+        );
+
+        // The awaited value resolves as expected.
+        let value = match result {
+            SysOpResult::Async(fut) => fut.await.expect("expected Ok"),
+            SysOpResult::Ready(Ok(v)) => v,
+            SysOpResult::Ready(Err(e)) => panic!("unexpected error: {e}"),
+        };
+        assert!(matches!(value, BexExternalValue::Int(7)));
+
+        // Guard drop now is a no-op: the entry is already gone.
+        drop(guard);
+        assert!(!contains(call_id));
+    }
+
+    /// Minting + inserting a fresh id never collides with a live entry: a fresh
+    /// id is, by construction, not already present, so `insert`'s
+    /// `debug_assert!` does not fire. (With RAII eviction in place, entries do
+    /// not leak, so the live set stays bounded and a real collision is
+    /// impossible.)
+    #[test]
+    fn fresh_id_insert_does_not_collide_with_live_entry() {
+        // Stand up a batch of live entries.
+        let mut live = Vec::new();
+        for _ in 0..64 {
+            let (_result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
+            let id = next_call_id();
+            insert(id, completion);
+            live.push(id);
+        }
+
+        // A freshly minted id is not among the live set, so inserting it does
+        // not trip the collision assert.
+        let (_result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
+        let fresh = next_call_id();
+        assert!(
+            !live.contains(&fresh),
+            "freshly minted id collided with a live entry"
+        );
+        insert(fresh, completion); // would panic via debug_assert! on collision
+
+        // Clean up so the global table does not retain entries across tests.
+        for id in live {
+            let _ = take(id);
+        }
+        let _ = take(fresh);
     }
 }

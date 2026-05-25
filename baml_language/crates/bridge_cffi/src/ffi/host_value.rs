@@ -86,8 +86,26 @@ pub extern "C" fn complete_host_call(
     content: *const i8,
     length: usize,
 ) {
-    // SAFETY: caller promises ptr is valid for `length` bytes.
-    let bytes: &[u8] = if length == 0 || content.is_null() {
+    // A non-zero length with a null pointer is an ABI violation: the caller
+    // promised `length` bytes but gave us nothing to read. Don't silently treat
+    // it as an empty payload (which would mask the bug as a `Null` return or a
+    // "no payload" error) — fail the call explicitly so the host sees it.
+    if length > 0 && content.is_null() {
+        host_dispatch::complete_with_error(
+            call_id,
+            OpError::new(
+                SysOp::BamlHostCallHostValue,
+                OpErrorKind::Other(format!(
+                    "complete_host_call: null content pointer with length {length}"
+                )),
+            ),
+        );
+        return;
+    }
+
+    // SAFETY: caller promises ptr is valid for `length` bytes; the guard above
+    // ruled out a null pointer whenever `length > 0`.
+    let bytes: &[u8] = if length == 0 {
         &[]
     } else {
         unsafe { std::slice::from_raw_parts(content as *const u8, length) }

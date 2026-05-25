@@ -30,7 +30,8 @@ export namespace baml_core {
                 ADT_PROMPT_AST = 11,
                 ADT_COLLECTOR = 12,
                 ADT_TYPE = 13,
-                ADT_TAGGED_HEAP_HANDLE = 14
+                ADT_TAGGED_HEAP_HANDLE = 14,
+                HOST_VALUE_CALLABLE = 15
             }
 
             /** Properties of a BamlHandle. */
@@ -808,6 +809,135 @@ export namespace baml_core {
 
                 /**
                  * Gets the default type url for InboundEnumValue
+                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns The default type url
+                 */
+                public static getTypeUrl(typeUrlPrefix?: string): string;
+            }
+
+            /** HostCallableErrorCategory enum. */
+            enum HostCallableErrorCategory {
+                HOST_CALLABLE_ERROR_UNSPECIFIED = 0,
+                HOST_CALLABLE_HOST_ERROR = 1,
+                HOST_CALLABLE_INVALID_ARGUMENT = 2,
+                HOST_CALLABLE_CANCELLED = 3
+            }
+
+            /** Properties of a HostCallableError. */
+            interface IHostCallableError {
+
+                /** HostCallableError className */
+                className?: (string|null);
+
+                /** HostCallableError message */
+                message?: (string|null);
+
+                /** HostCallableError traceback */
+                traceback?: (string|null);
+
+                /** HostCallableError language */
+                language?: (string|null);
+
+                /** HostCallableError category */
+                category?: (baml_core.cffi.v1.HostCallableErrorCategory|null);
+            }
+
+            /** Represents a HostCallableError. */
+            class HostCallableError implements IHostCallableError {
+
+                /**
+                 * Constructs a new HostCallableError.
+                 * @param [properties] Properties to set
+                 */
+                constructor(properties?: baml_core.cffi.v1.IHostCallableError);
+
+                /** HostCallableError className. */
+                public className: string;
+
+                /** HostCallableError message. */
+                public message: string;
+
+                /** HostCallableError traceback. */
+                public traceback?: (string|null);
+
+                /** HostCallableError language. */
+                public language?: (string|null);
+
+                /** HostCallableError category. */
+                public category: baml_core.cffi.v1.HostCallableErrorCategory;
+
+                /**
+                 * Creates a new HostCallableError instance using the specified properties.
+                 * @param [properties] Properties to set
+                 * @returns HostCallableError instance
+                 */
+                public static create(properties?: baml_core.cffi.v1.IHostCallableError): baml_core.cffi.v1.HostCallableError;
+
+                /**
+                 * Encodes the specified HostCallableError message. Does not implicitly {@link baml_core.cffi.v1.HostCallableError.verify|verify} messages.
+                 * @param message HostCallableError message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encode(message: baml_core.cffi.v1.IHostCallableError, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Encodes the specified HostCallableError message, length delimited. Does not implicitly {@link baml_core.cffi.v1.HostCallableError.verify|verify} messages.
+                 * @param message HostCallableError message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encodeDelimited(message: baml_core.cffi.v1.IHostCallableError, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Decodes a HostCallableError message from the specified reader or buffer.
+                 * @param reader Reader or buffer to decode from
+                 * @param [length] Message length if known beforehand
+                 * @returns HostCallableError
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml_core.cffi.v1.HostCallableError;
+
+                /**
+                 * Decodes a HostCallableError message from the specified reader or buffer, length delimited.
+                 * @param reader Reader or buffer to decode from
+                 * @returns HostCallableError
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml_core.cffi.v1.HostCallableError;
+
+                /**
+                 * Verifies a HostCallableError message.
+                 * @param message Plain object to verify
+                 * @returns `null` if valid, otherwise the reason why it is not
+                 */
+                public static verify(message: { [k: string]: any }): (string|null);
+
+                /**
+                 * Creates a HostCallableError message from a plain object. Also converts values to their respective internal types.
+                 * @param object Plain object
+                 * @returns HostCallableError
+                 */
+                public static fromObject(object: { [k: string]: any }): baml_core.cffi.v1.HostCallableError;
+
+                /**
+                 * Creates a plain object from a HostCallableError message. Also converts values to other types if specified.
+                 * @param message HostCallableError
+                 * @param [options] Conversion options
+                 * @returns Plain object
+                 */
+                public static toObject(message: baml_core.cffi.v1.HostCallableError, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+                /**
+                 * Converts this HostCallableError to JSON.
+                 * @returns JSON object
+                 */
+                public toJSON(): { [k: string]: any };
+
+                /**
+                 * Gets the default type url for HostCallableError
                  * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
                  * @returns The default type url
                  */

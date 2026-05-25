@@ -56,6 +56,7 @@ class HostPanic {
 }
 
 class HostCallable {
+  message string
   class_name string
   language string
   traceback string?

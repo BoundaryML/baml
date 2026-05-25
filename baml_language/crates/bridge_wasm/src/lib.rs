@@ -45,6 +45,7 @@
 
 mod error;
 mod handle;
+mod host_value;
 mod registry;
 mod send_wrapper;
 mod wasm_env;
@@ -59,6 +60,11 @@ mod wasm_sys;
 
 pub use bridge_ctypes::{HANDLE_TABLE, baml_core, external_to_outbound, kwargs_to_bex_values};
 pub use error::BridgeError;
+// Re-export host-callable wasm-bindgen exports so JS test glue and Rust
+// integration tests can resolve them by their original Rust names. The
+// `#[wasm_bindgen]` attribute already exposes them as `registerHostCallable`
+// and `completeHostCall` in the generated `.d.ts` / module exports.
+pub use host_value::{complete_host_call, register_host_callable};
 use js_sys::Function;
 use prost::Message;
 use wasm_bindgen::prelude::*;
@@ -128,6 +134,24 @@ export type WasmShellCallback = (
   optionsJson: string | undefined,
 ) => Promise<{ stdout: string; stderr: string; exit_code: number;
                stdout_bytes: Uint8Array; stderr_bytes: Uint8Array }>;
+
+/// Dispatch a BAML→host invocation of a host-registered JS callable.
+///
+/// Called when BAML code invokes a value previously registered via
+/// `registerHostCallable`. The wrapper is expected to:
+///
+///   1. Decode `argsBytes` (a protobuf-encoded `BamlOutboundValue` list)
+///      into JS positional arguments.
+///   2. Invoke the user callable (awaiting a returned Promise if any).
+///   3. Encode the result as an `InboundValue` (success) or
+///      `HostCallableError` (failure) protobuf payload.
+///   4. Call `completeHostCall(callId, isError, content)` (the wasm-bindgen
+///      export from this module) to resolve the in-flight call.
+export type WasmHostDispatchCallback = (
+  key: bigint,
+  callId: number,
+  argsBytes: Uint8Array,
+) => void;
 "#;
 
 #[wasm_bindgen]
@@ -144,7 +168,8 @@ extern "C" {
         lsp_send_notification: WasmSendNotificationCallback;
         lsp_send_response: WasmSendResponseCallback;
         lsp_make_request: WasmMakeRequestCallback;
-        playground_send_notification: WasmPlaygroundNotificationCallback
+        playground_send_notification: WasmPlaygroundNotificationCallback;
+        host_dispatch: WasmHostDispatchCallback
 }"#)]
     pub type WasmCallbacks;
 
@@ -174,6 +199,9 @@ extern "C" {
 
     #[wasm_bindgen(method, getter, structural, js_name = "playground_send_notification")]
     fn playground_send_notification(this: &WasmCallbacks) -> Function;
+
+    #[wasm_bindgen(method, getter, structural, js_name = "host_dispatch")]
+    fn host_dispatch(this: &WasmCallbacks) -> Function;
 }
 
 /// A BAML runtime for WASM environments.
@@ -213,6 +241,7 @@ impl BamlWasmRuntime {
         let send_response_fn = callbacks.send_response();
         let make_request_fn = callbacks.make_request();
         let playground_send_notification_fn = callbacks.playground_send_notification();
+        let host_dispatch_fn = callbacks.host_dispatch();
 
         // Wrap wasm_vfs in Arc so it can be shared across the VFS filesystem,
         // the fs IO namespace, and the glob IO namespace without cloning the
@@ -232,6 +261,12 @@ impl BamlWasmRuntime {
             )))
             .with_glob_instance(std::sync::Arc::new(wasm_io_glob::WasmIoGlob::new(
                 std::sync::Arc::clone(&wasm_vfs_arc),
+            )))
+            // One `WasmHost` per runtime, holding *this* runtime's JS
+            // `host_dispatch` callback so a BAML→host call dispatches through
+            // the correct wrapper (review finding F6).
+            .with_host_instance(std::sync::Arc::new(host_value::WasmHost::new(
+                host_dispatch_fn,
             )))
             .build();
         let sys_ops = std::sync::Arc::new(sys_ops);

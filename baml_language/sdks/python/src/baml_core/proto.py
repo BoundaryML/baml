@@ -24,6 +24,8 @@ from .baml_py import (
     BamlPdf,
     BamlPyHandle,
     BamlVideo,
+    register_host_callable,
+    release_host_callable,
 )
 from ._stream import BamlStream
 from .errors import BamlError
@@ -72,12 +74,87 @@ def _base_class_for_fqn(cls: type) -> type:
     return cls
 
 
-def _set_inbound_value(inbound_value: baml_inbound_pb2.InboundValue, value: Any, *, kwarg_name: str) -> None:
+def _derive_baml_fqn(cls: type) -> str:
+    """Reverse 09b §1 routing to produce a BAML FQN for a Python class.
+
+    Informational only — Rust uses it for diagnostics, not correctness
+    (09d §2). Returns the empty string when the class is not routed under
+    `sdk_root` (user-defined models, runtime not initialized, etc.).
+    """
+    sdk_root = _safe_sdk_root()
+    if not sdk_root:
+        return ""
+    module = getattr(cls, "__module__", "") or ""
+    name = getattr(cls, "__name__", "") or ""
+    if not name:
+        return ""
+
+    if module == sdk_root:
+        subpath = name
+    else:
+        prefix = sdk_root + "."
+        if not module.startswith(prefix):
+            return ""
+        subpath = f"{module[len(prefix):]}.{name}"
+
+    return _subpath_to_baml_fqn(subpath)
+
+
+def _subpath_to_baml_fqn(subpath: str) -> str:
+    """Reverse the §1 routing table, recursing on the `stream_types.*`
+    prefix to handle nested stream companions.
+
+    Phase 12a collapsed the BEP-030 `root.*` spec convention into the
+    engine's `user.*` package convention; everything downstream (engine
+    `resolved_class_names`, `lookup_function`, outbound `_resolve_type`)
+    now expects `user.*` end-to-end, so emit it directly here. The
+    project-boundary coercion in `bex_project::bex::coerce_arg_to_declared_type`
+    only rewrites the top-level arg's class name; nested classes,
+    enums, and dict/list element types must arrive with the engine FQN
+    already on them or the engine panics on lookup.
+    """
+    if subpath.startswith("stream_types."):
+        inner = _subpath_to_baml_fqn(subpath[len("stream_types."):])
+        return f"{inner}$stream" if inner else ""
+    if subpath.startswith("vendor."):
+        return subpath[len("vendor."):]
+    if subpath.startswith("baml."):
+        return subpath
+    return f"user.{subpath}"
+
+
+def _safe_sdk_root() -> str:
+    """Fetch `sdk_root` without raising if the runtime is uninitialized.
+
+    FQN derivation is diagnostic, so it must not promote a missing runtime
+    into a hard failure on the inbound path.
+    """
+    try:
+        from . import get_runtime  # local import: avoids circular binding at module load
+        return get_runtime()._sdk_root or ""
+    except Exception:
+        return ""
+
+
+def _set_inbound_value(
+    inbound_value: baml_inbound_pb2.InboundValue,
+    value: Any,
+    *,
+    kwarg_name: str,
+    registered: Optional[List[int]] = None,
+) -> None:
     """Populate an `InboundValue` oneof from a Python value per 09d §2.
 
     `kwarg_name` is threaded through so the `TypeError` raised on
     unsupported inputs names the offending top-level kwarg, not the
     nested field we happen to have descended into.
+
+    `registered`, when supplied, collects the host-value keys minted by the
+    callable branch so the encode path can roll the registrations back if a
+    later kwarg fails to encode. It is `None` on the host-call *result*
+    encode path (called from Rust's `dispatch_in_python`), where rollback is
+    unnecessary — the result goes straight to the engine, which releases any
+    callables it decodes.
     """
     if value is None:
         return  # oneof unset ≡ null
@@ -101,12 +178,16 @@ def _set_inbound_value(inbound_value: baml_inbound_pb2.InboundValue, value: Any,
     if isinstance(value, (list, tuple)):
         list_val = inbound_value.list_value
         for item in value:
-            _set_inbound_value(list_val.values.add(), item, kwarg_name=kwarg_name)
+            _set_inbound_value(
+                list_val.values.add(), item, kwarg_name=kwarg_name, registered=registered
+            )
         return
     if isinstance(value, dict):
         map_val = inbound_value.map_value
         for k, v in value.items():
-            _set_inbound_map_entry(map_val.entries.add(), k, v, kwarg_name=kwarg_name)
+            _set_inbound_map_entry(
+                map_val.entries.add(), k, v, kwarg_name=kwarg_name, registered=registered
+            )
         return
     if isinstance(value, enum.Enum):
         ev = inbound_value.enum_value
@@ -142,7 +223,7 @@ def _set_inbound_value(inbound_value: baml_inbound_pb2.InboundValue, value: Any,
     # engine's `HANDLE_TABLE` row already carries the receiver's `ty`.
     if isinstance(value, BamlStream):
         return _set_inbound_value(
-            inbound_value, value._to_pyhandle(), kwarg_name=kwarg_name
+            inbound_value, value._to_pyhandle(), kwarg_name=kwarg_name, registered=registered
         )
 
     # Media PyO3 types — wrap into an `InboundClassValue` per 15b. The
@@ -155,7 +236,32 @@ def _set_inbound_value(inbound_value: baml_inbound_pb2.InboundValue, value: Any,
         data_entry = cv.fields.add()
         data_entry.string_key = "_data"
         _set_inbound_value(
-            data_entry.value, value._to_pyhandle(), kwarg_name=kwarg_name
+            data_entry.value, value._to_pyhandle(), kwarg_name=kwarg_name, registered=registered
+        )
+        return
+
+    # Python callables → register in the host-value table and emit a
+    # `Handle` with `HOST_VALUE_CALLABLE`. The Rust side decodes this into
+    # `BexExternalValue::HostValue` and binds it to an `Object::HostClosure`
+    # so BAML code can invoke it directly. Must precede the pydantic-model
+    # branch because Pydantic models are sometimes callable (classes); we
+    # only register *non-class* callables (functions, lambdas, methods,
+    # callable instances). The check order is: Pydantic class instances
+    # (which `_is_pydantic_model` returns True for) fall through here,
+    # because `isinstance(value, type)` is False; bare classes would not
+    # reach this branch since `_is_pydantic_model_class` only accepts
+    # already-Pydantic-model classes. For non-class callables, register.
+    if callable(value) and not isinstance(value, type) and not _is_pydantic_model(value):
+        key = register_host_callable(value)
+        # Record the key so the encode path can release it if a later
+        # kwarg fails to encode (the call never reaches the engine, so the
+        # engine would never decode — and never release — this key).
+        if registered is not None:
+            registered.append(key)
+        inbound_value.handle.key = key
+        inbound_value.handle.handle_type = typing.cast(
+            baml_inbound_pb2.BamlHandleType,
+            baml_inbound_pb2.BamlHandleType.HOST_VALUE_CALLABLE,
         )
         return
 
@@ -174,7 +280,9 @@ def _set_inbound_value(inbound_value: baml_inbound_pb2.InboundValue, value: Any,
         # `Box<Box<int>>` round-trip collapses into bare dicts at the
         # second level.
         for k, v in dict(value).items():
-            _set_inbound_map_entry(cv.fields.add(), k, v, kwarg_name=kwarg_name)
+            _set_inbound_map_entry(
+                cv.fields.add(), k, v, kwarg_name=kwarg_name, registered=registered
+            )
         # Private attrs aren't iterated by `dict(value)`. Codegen emits
         # `$rust_type` fields as private attrs (single-underscore names);
         # walk them explicitly so `BamlPyHandle`-backed shells round-trip.
@@ -183,7 +291,9 @@ def _set_inbound_value(inbound_value: baml_inbound_pb2.InboundValue, value: Any,
         private = getattr(value, "__pydantic_private__", None) or {}
         for k, v in private.items():
             if isinstance(v, BamlPyHandle):
-                _set_inbound_map_entry(cv.fields.add(), k, v, kwarg_name=kwarg_name)
+                _set_inbound_map_entry(
+                    cv.fields.add(), k, v, kwarg_name=kwarg_name, registered=registered
+                )
         return
 
     raise TypeError(
@@ -192,9 +302,14 @@ def _set_inbound_value(inbound_value: baml_inbound_pb2.InboundValue, value: Any,
     )
 
 
-def _set_inbound_map_entry(entry, key: Any, value: Any, *, kwarg_name: str) -> None:
+def _set_inbound_map_entry(
+    entry, key: Any, value: Any, *, kwarg_name: str, registered: Optional[List[int]] = None
+) -> None:
     """Populate an `InboundMapEntry` from a (key, value) pair. Key-oneof
-    dispatch follows 09d §2 "Map keys"; `bool` precedes `int` (subclass)."""
+    dispatch follows 09d §2 "Map keys"; `bool` precedes `int` (subclass).
+
+    `registered` is threaded to `_set_inbound_value` for encode-error
+    rollback (see that function)."""
     if isinstance(key, bool):
         entry.bool_key = key
     elif isinstance(key, str):
@@ -207,15 +322,39 @@ def _set_inbound_map_entry(entry, key: Any, value: Any, *, kwarg_name: str) -> N
         ek.value = key.name
     else:
         entry.string_key = str(key)  # best-effort fallback
-    _set_inbound_value(entry.value, value, kwarg_name=kwarg_name)
+    _set_inbound_value(entry.value, value, kwarg_name=kwarg_name, registered=registered)
 
 
 def encode_call_args(kwargs: Dict[str, Any]) -> bytes:
-    """Encode function keyword arguments as `CallFunctionArgs` protobuf."""
-    args = baml_inbound_pb2.CallFunctionArgs()
-    for key, value in kwargs.items():
-        _set_inbound_map_entry(args.kwargs.add(), key, value, kwarg_name=key)
-    return args.SerializeToString()
+    """Encode function keyword arguments as `CallFunctionArgs` protobuf.
+
+    Release tradeoff: a callable that encodes successfully is registered in
+    the per-process host-value table and is normally released only when the
+    engine garbage-collects the `HostClosure` it allocated and fires the C
+    release callback (a GC-timed release, drained by the engine after
+    collection). If a *later* kwarg fails to encode, though, the
+    `CallFunctionArgs` is never sent, so the engine never decodes
+    — and so never releases — the callables we registered for earlier kwargs.
+    To avoid leaking them (and their strong reference to the user's callable)
+    for the life of the process, we track every key registered during this
+    encode and release them all if any kwarg fails.
+    """
+    registered: List[int] = []
+    try:
+        args = baml_inbound_pb2.CallFunctionArgs()
+        for key, value in kwargs.items():
+            _set_inbound_map_entry(
+                args.kwargs.add(), key, value, kwarg_name=key, registered=registered
+            )
+        return args.SerializeToString()
+    except BaseException:
+        # Roll back any host callables registered before the failure.
+        for key in registered:
+            try:
+                release_host_callable(key)
+            except Exception:
+                pass  # best-effort cleanup; never mask the original error
+        raise
 
 
 # ---------------------------------------------------------------------------

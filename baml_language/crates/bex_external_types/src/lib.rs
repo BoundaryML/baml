@@ -23,6 +23,7 @@
 
 mod bex_external_value;
 mod handle;
+mod host_return;
 
 pub use baml_type::MediaKind;
 pub use bex_external_value::{
@@ -33,3 +34,4 @@ pub use bex_resource_types::{
     HostReleaseFn, HostValueArc, HostValueKind, host_release_dispatch, host_value,
 };
 pub use handle::{Handle, HandleInner, WeakHeapRef};
+pub use host_return::{HostReturnTypeError, validate_host_return};

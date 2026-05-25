@@ -33,11 +33,15 @@ func Init(libraryPath string) error {
 		"destroy_baml_runtime": func(p unsafe.Pointer) { C.setDestroyBamlRuntimeFn(p) },
 		"free_buffer":          func(p unsafe.Pointer) { C.setFreeBufferFn(p) },
 		"call_function":        func(p unsafe.Pointer) { C.setCallFunctionFn(p) },
-		"register_callback":   func(p unsafe.Pointer) { C.setRegisterCallbackFn(p) },
+		"register_callback":    func(p unsafe.Pointer) { C.setRegisterCallbackFn(p) },
 		"cancel_function_call": func(p unsafe.Pointer) { C.setCancelFunctionCallFn(p) },
 		"clone_handle":         func(p unsafe.Pointer) { C.setCloneHandleFn(p) },
 		"release_handle":       func(p unsafe.Pointer) { C.setReleaseHandleFn(p) },
 		"flush_events":         func(p unsafe.Pointer) { C.setFlushEventsFn(p) },
+		// Host-value callable C symbols (Phase 3 of external-function-handles).
+		"register_host_dispatch_callback": func(p unsafe.Pointer) { C.setRegisterHostDispatchCallbackFn(p) },
+		"register_host_release_callback":  func(p unsafe.Pointer) { C.setRegisterHostReleaseCallbackFn(p) },
+		"complete_host_call":              func(p unsafe.Pointer) { C.setCompleteHostCallFn(p) },
 	}
 	for name, setter := range symbols {
 		sym, err := resolveSymbol(handle, name)
@@ -78,9 +82,11 @@ func FindLibrary() (string, error) {
 	default:
 		libFile = "libbridge_cffi.so"
 	}
+	// `crateDir` is `sdks/go/bridge_go`; the cargo target dir is at the
+	// workspace root, three levels up (`sdks/go/bridge_go` -> repo root).
 	candidates := []string{
-		filepath.Join(crateDir, "..", "..", "target", "debug", libFile),
-		filepath.Join(crateDir, "..", "..", "target", "release", libFile),
+		filepath.Join(crateDir, "..", "..", "..", "target", "debug", libFile),
+		filepath.Join(crateDir, "..", "..", "..", "target", "release", libFile),
 	}
 	for _, p := range candidates {
 		abs, _ := filepath.Abs(p)
@@ -171,4 +177,36 @@ func ReleaseHandle(key uint64) {
 // FlushEvents flushes the event sink.
 func FlushEvents() {
 	C.wrapFlushEvents()
+}
+
+// RegisterHostDispatchCallback registers a Go callback that Rust calls when
+// BAML invokes a host-value callable. `cb` must be a C-callable function
+// pointer (a //export function cast to unsafe.Pointer).
+//
+// See `bridge.h::HostDispatchFn` for the signature.
+func RegisterHostDispatchCallback(cb unsafe.Pointer) {
+	C.wrapRegisterHostDispatchCallback((C.HostDispatchFn)(cb))
+}
+
+// RegisterHostReleaseCallback registers a Go callback that Rust calls when
+// the last clone of a host-value `Arc` is dropped. `cb` must be a C-callable
+// function pointer (a //export function cast to unsafe.Pointer).
+//
+// See `bridge.h::HostReleaseFn` for the signature.
+func RegisterHostReleaseCallback(cb unsafe.Pointer) {
+	C.wrapRegisterHostReleaseCallback((C.HostReleaseFn)(cb))
+}
+
+// CompleteHostCall forwards a host-callable result back to Rust. `isError == 0`
+// indicates a success payload (InboundValue protobuf), `isError == 1` indicates
+// an error payload (HostCallableError protobuf).
+//
+// The pointer/length pair only needs to be valid for the duration of this
+// call; Rust copies the bytes before returning.
+func CompleteHostCall(callID uint32, isError int32, content []byte) {
+	var cContent *C.int8_t
+	if len(content) > 0 {
+		cContent = (*C.int8_t)(unsafe.Pointer(&content[0]))
+	}
+	C.wrapCompleteHostCall(C.uint32_t(callID), C.int32_t(isError), cContent, C.size_t(len(content)))
 }
