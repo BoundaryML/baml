@@ -2079,15 +2079,23 @@ impl BexEngine {
                     let (return_value, event_result) = if !copy_objects {
                         if let Some(ptr) = value.as_object_ptr() {
                             // SAFETY: the active thread holds the heap permit
-                            // through `thread.proof()`. Heap-boxed floats must
-                            // surface as `BexExternalValue::Float` instead of an
-                            // opaque handle so callers see a primitive — a
-                            // function declared `-> float` should never escape
-                            // wrapped in a `Handle`.
-                            if let Some(unboxed) =
-                                unsafe { crate::conversion::unbox_float_object(ptr) }
-                            {
-                                (unboxed.clone(), unboxed)
+                            // through `thread.proof()`.
+                            //
+                            // Heap-boxed floats can't be handle-wrapped — a
+                            // function declared `-> float` (or
+                            // `-> Union<float, ...>` / `-> float?`) should
+                            // surface as an inline `BexExternalValue::Float`,
+                            // not an opaque `Handle`. Route them through the
+                            // typed converter so declared-type metadata
+                            // (e.g. Union wrapping) is preserved; the bare
+                            // unboxing fast-path stripped that.
+                            if matches!(unsafe { ptr.get() }, Object::Float(_)) {
+                                let external = self.convert_vm_value_to_external_with_type(
+                                    value,
+                                    &return_type,
+                                    thread.proof(),
+                                )?;
+                                (external.clone(), external)
                             } else {
                                 let handle = self.heap.create_handle(ptr);
                                 (
