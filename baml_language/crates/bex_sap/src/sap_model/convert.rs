@@ -316,23 +316,23 @@ impl TypeCtx {
         let ty = match ty {
             baml_type::Ty::Int { attr } => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::Int(IntTy)),
-                convert_ty_attrs(attr)?,
+                convert_ty_attrs(attr),
             ),
             baml_type::Ty::Float { attr } => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::Float(FloatTy)),
-                convert_ty_attrs(attr)?,
+                convert_ty_attrs(attr),
             ),
             baml_type::Ty::String { attr } => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::String(StringTy)),
-                convert_ty_attrs(attr)?,
+                convert_ty_attrs(attr),
             ),
             baml_type::Ty::Bool { attr } => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::Bool(BoolTy)),
-                convert_ty_attrs(attr)?,
+                convert_ty_attrs(attr),
             ),
             baml_type::Ty::Null { attr } => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::Null(NullTy)),
-                convert_ty_attrs(attr)?,
+                convert_ty_attrs(attr),
             ),
             baml_type::Ty::Media(media_kind, ty_attr) => {
                 let media_kind = match media_kind {
@@ -346,12 +346,12 @@ impl TypeCtx {
                 };
                 TyWithMeta::new(
                     sap_model::Ty::Resolved(TyResolved::Media(media_kind)),
-                    convert_ty_attrs(ty_attr)?,
+                    convert_ty_attrs(ty_attr),
                 )
             }
             baml_type::Ty::Literal(baml_type::Literal::Int(i), attr) => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::LiteralInt(IntLiteralTy(*i))),
-                convert_ty_attrs(attr)?,
+                convert_ty_attrs(attr),
             ),
             baml_type::Ty::Literal(baml_type::Literal::Float(..), ..) => {
                 return Err(ConvertError::FloatLiteral);
@@ -360,11 +360,11 @@ impl TypeCtx {
                 sap_model::Ty::Resolved(TyResolved::LiteralString(StringLiteralTy(Cow::Borrowed(
                     s,
                 )))),
-                convert_ty_attrs(attr)?,
+                convert_ty_attrs(attr),
             ),
             baml_type::Ty::Literal(baml_type::Literal::Bool(b), attr) => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::LiteralBool(BoolLiteralTy(*b))),
-                convert_ty_attrs(attr)?,
+                convert_ty_attrs(attr),
             ),
             baml_type::Ty::Class(type_name, _, attr) => {
                 if self.sap_parseable.get(type_name).is_some_and(|v| !v) {
@@ -374,12 +374,12 @@ impl TypeCtx {
                     // currently [`ClassDefinition`] does not have attributes attached to it.
                     // They will probably get lifted earlier in the conversion process, but if not then we would do it here.
                     sap_model::Ty::Unresolved(type_name.clone()),
-                    convert_ty_attrs(attr)?,
+                    convert_ty_attrs(attr),
                 )
             }
             baml_type::Ty::Enum(type_name, attr) => TyWithMeta::new(
                 sap_model::Ty::Unresolved(type_name.clone()),
-                convert_ty_attrs(attr)?,
+                convert_ty_attrs(attr),
             ),
             baml_type::Ty::EnumVariant(type_name, variant, attr) => {
                 let enum_def = self
@@ -406,7 +406,7 @@ impl TypeCtx {
                 };
                 TyWithMeta::new(
                     sap_model::Ty::Resolved(TyResolved::EnumVariant(enum_variant_ty)),
-                    convert_ty_attrs(attr)?,
+                    convert_ty_attrs(attr),
                 )
             }
             baml_type::Ty::Optional(ty, attr) => {
@@ -425,14 +425,14 @@ impl TypeCtx {
                             ty,
                         ],
                     })),
-                    convert_ty_attrs(attr)?,
+                    convert_ty_attrs(attr),
                 )
             }
             baml_type::Ty::List(ty, attr) => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::Array(ArrayTy {
                     ty: Box::new(self.convert_ty(ty)?),
                 })),
-                convert_ty_attrs(attr)?,
+                convert_ty_attrs(attr),
             ),
             baml_type::Ty::Map { key, value, attr } => {
                 let key = self.convert_ty(key)?;
@@ -442,7 +442,7 @@ impl TypeCtx {
                         key: Box::new(key),
                         value: Box::new(value),
                     })),
-                    convert_ty_attrs(attr)?,
+                    convert_ty_attrs(attr),
                 )
             }
             baml_type::Ty::Union(items, ty_attr) => {
@@ -455,7 +455,7 @@ impl TypeCtx {
                     .collect::<Result<Vec<_>, _>>()?;
                 TyWithMeta::new(
                     sap_model::Ty::Resolved(TyResolved::Union(UnionTy { variants: items })),
-                    convert_ty_attrs(ty_attr)?,
+                    convert_ty_attrs(ty_attr),
                 )
             }
             baml_type::Ty::TypeAlias(type_name, attr) => {
@@ -496,7 +496,7 @@ impl TypeCtx {
 
                 TyWithMeta::new(
                     sap_model::Ty::Unresolved(innermost_name.clone()),
-                    convert_ty_attrs(&attr)?,
+                    convert_ty_attrs(&attr),
                 )
             }
             unparsable @ (baml_type::Ty::Uint8Array { .. }
@@ -649,24 +649,17 @@ impl TypeCtx {
     }
 }
 
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "Converting assertions will be done in a future PR."
-)]
-fn convert_ty_attrs(
-    attrs: &baml_type::TyAttr,
-) -> Result<TypeAnnotations<'static, TypeName>, ConvertError> {
+fn convert_ty_attrs(attrs: &baml_type::TyAttr) -> TypeAnnotations<'static, TypeName> {
     let in_progress = match attrs.sap_pending_never {
         TyAttrValue::Set => Some(AttrLiteral::Never),
         TyAttrValue::Unset => None,
     };
     let parse_without_null = attrs.sap_parse_without_null == TyAttrValue::Set;
 
-    Ok(TypeAnnotations {
+    TypeAnnotations {
         in_progress,
         parse_without_null,
-        asserts: Vec::new(), // TODO: assertions
-    })
+    }
 }
 /// Merges two type attributes.
 /// May return one of the inputs if the output would be identical.
@@ -677,12 +670,6 @@ fn merge_ty_attrs(outer: &baml_type::TyAttr, inner: &baml_type::TyAttr) -> baml_
             .sap_parse_without_null
             .or(inner.sap_parse_without_null),
         sap_pending_never: outer.sap_pending_never.or(inner.sap_pending_never),
-        asserts: outer
-            .asserts
-            .iter()
-            .chain(inner.asserts.iter())
-            .cloned()
-            .collect(),
     }
 }
 

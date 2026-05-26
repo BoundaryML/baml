@@ -321,10 +321,6 @@ where
     }
 }
 
-// TODO: Implement validate_asserts once Assertion/Constraint types are fully defined.
-// pub fn validate_asserts(constraints: &[(Constraint, bool)]) -> Result<(), ParsingError> { ... }
-
-// TODO: Implement DefaultValue for AnnotatedTy once Assertion type is fully defined.
+// TODO: Implement DefaultValue for AnnotatedTy.
 // The old implementation matched on AnnotatedTy variants (Enum, List, Class, etc.)
 // and provided default values (empty list, null, empty map) for optional types.
-// It also validated constraints/asserts on the default values.

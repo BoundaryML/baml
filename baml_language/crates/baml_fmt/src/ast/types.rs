@@ -1144,7 +1144,7 @@ impl<T: Printable> PrintMultiLine for ConstrainedType<T> {
     ///
     /// ```baml
     /// map<string, int>
-    ///     @assert(...)
+    ///     @stream.done
     /// ```
     fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let ty_info = printer.print(&*self.ty, shape.clone());

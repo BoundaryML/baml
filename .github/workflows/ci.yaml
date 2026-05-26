@@ -53,7 +53,7 @@ jobs:
       # Flag for proto codegen changes - triggers generated file sync check
       proto: ${{ steps.check_proto.outputs.changed }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -244,14 +244,9 @@ jobs:
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     timeout-minutes: 20
-    env:
-      # Disable Python + pipx tools: mise 2025.12.12 downloads a broken
-      # freethreaded Python build that's missing a lib/ directory.
-      # Prek hooks only need Rust + cargo tools; Python scripts use system Python + uv.
-      MISE_DISABLE_TOOLS: python,pipx:uv,pipx:ruff,pipx:maturin
     steps:
       - name: "Checkout Branch"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -267,25 +262,18 @@ jobs:
           save-if: false
           shared-key: "linux-cargo"
 
-      - name: "Install cargo-binstall"
-        run: |
-          curl -L --proto '=https' --tlsv1.2 -sSf \
-            https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh \
-            | bash
-        working-directory: baml_language
-
-      - name: "Install uv"
-        uses: astral-sh/setup-uv@v5
-
+      # prek hooks invoke cargo (from rustup), mise tasks that shell out
+      # to cargo, and python scripts that begin with `#!/usr/bin/env -S
+      # uv run --script` (e.g. bep:readme, validate-markdown). We don't
+      # need go/ruby/node/etc here, just the prek binary itself + a
+      # python/uv pair for the hook scripts.
       - name: "Install mise"
-        uses: jdx/mise-action@v2
-        # Pinning to old version because newer versions time out on the npm backend,
-        # see https://github.com/jdx/mise/discussions/7630
+        uses: ./.github/actions/setup-mise
         with:
-          version: 2025.12.12
+          install_args: "cargo:prek python uv"
 
       - name: "Cache prek"
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
@@ -309,7 +297,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: "Checkout"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -385,7 +373,7 @@ jobs:
     timeout-minutes: 25
     steps:
       - name: "Checkout"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -405,13 +393,9 @@ jobs:
     needs: determine_changes
     if: needs.determine_changes.outputs.proto == 'true'
     timeout-minutes: 20
-    env:
-      # See the matching comment on `prek` — mise 2025.12.12 ships a broken
-      # freethreaded Python build; this job doesn't need Python or pipx tools.
-      MISE_DISABLE_TOOLS: python,pipx:uv,pipx:ruff,pipx:maturin
     steps:
       - name: "Checkout"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -427,13 +411,14 @@ jobs:
           save-if: false
           shared-key: "linux-cargo"
 
-      # mise provides go, node, pnpm, protoc, and protoc-gen-go per mise.toml.
+      # bridge_ctypes/build.rs needs `protoc`; bridge_go/build.sh needs
+      # `protoc` + `protoc-gen-go`; bridge_nodejs needs node + pnpm.
+      # The `cargo build -p bridge_ctypes` step uses cargo from rustup
+      # (not mise), so we don't need `go` itself here either.
       - name: "Install mise"
-        uses: jdx/mise-action@v2
-        # Pinning to old version because newer versions time out on the npm backend,
-        # see https://github.com/jdx/mise/discussions/7630
+        uses: ./.github/actions/setup-mise
         with:
-          version: 2025.12.12
+          install_args: "node npm:pnpm protoc protoc-gen-go"
 
       # Rust (prost) + Python (protoc) — both driven by bridge_ctypes/build.rs.
       # Writes Python pb2/pyi into baml_language/sdks/python/src/baml_core/cffi/v1/.
@@ -441,29 +426,29 @@ jobs:
         run: cargo build -p bridge_ctypes
         working-directory: baml_language
 
-      # Go (protoc-gen-go) — writes into bridge_go/cffi/proto/baml_core/cffi/v1/.
-      - name: "Generate Go proto bindings (bridge_go)"
+      # Go (protoc-gen-go) — writes into sdks/go/bridge_go/cffi/proto/baml_core/cffi/v1/.
+      - name: "Generate Go proto bindings (sdks/go/bridge_go)"
         run: ./build.sh
-        working-directory: baml_language/crates/bridge_go
+        working-directory: baml_language/sdks/go/bridge_go
 
-      - name: "Install bridge_nodejs dependencies"
+      - name: "Install Node SDK dependencies"
         run: pnpm install --frozen-lockfile
-        working-directory: baml_language/crates/bridge_nodejs
+        working-directory: baml_language/sdks/nodejs/bridge_nodejs
 
-      # Node / TypeScript (protobufjs) — writes into bridge_nodejs/typescript_src/proto/.
+      # Node / TypeScript (protobufjs) — writes into sdks/nodejs/bridge_nodejs/typescript_src/proto/.
       # build:debug also regenerates typescript2/pkg-proto/src/generated/ (ts-proto / buf).
-      - name: "Generate Node/TypeScript proto bindings (bridge_nodejs)"
+      - name: "Generate Node/TypeScript proto bindings (sdks/nodejs/bridge_nodejs)"
         run: pnpm build:debug
-        working-directory: baml_language/crates/bridge_nodejs
+        working-directory: baml_language/sdks/nodejs/bridge_nodejs
 
       - name: "Check generated proto files are in sync"
         run: |
           # Check for both modified tracked files and untracked files across every
           # codegen output documented in baml_language/crates/bridge_ctypes/README.md.
           PATHS=(
-            baml_language/crates/bridge_nodejs
+            baml_language/sdks/nodejs/bridge_nodejs
             baml_language/crates/bridge_ctypes
-            baml_language/crates/bridge_go
+            baml_language/sdks/go/bridge_go
             baml_language/sdks/python/src/baml_core/cffi
             typescript2/pkg-proto
           )
@@ -506,7 +491,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: "Checkout Branch"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 

@@ -1596,13 +1596,8 @@ impl<'db> SemanticIndexBuilder<'db> {
 
     /// Known type-level attribute names (not field attrs, which are handled by
     /// `disambiguate::validate_field_attrs`).
-    const KNOWN_TYPE_ATTRS: &'static [&'static str] = &[
-        "stream.done",
-        "stream.must_exist",
-        "stream.with_state",
-        "check",
-        "assert",
-    ];
+    const KNOWN_TYPE_ATTRS: &'static [&'static str] =
+        &["stream.done", "stream.must_exist", "stream.with_state"];
 
     fn collect_unknown_type_attrs(
         type_expr: &ast::TypeExpr,

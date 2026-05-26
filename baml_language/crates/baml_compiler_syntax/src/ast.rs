@@ -1870,7 +1870,7 @@ impl ConfigItem {
         self.key().is_some_and(|k| k.text() == name)
     }
 
-    /// Get attributes attached to this config item (e.g., `args { ... } @check(...)`).
+    /// Get attributes attached to this config item (e.g., `args { ... } @some_attr(...)`).
     pub fn attributes(&self) -> impl Iterator<Item = Attribute> {
         self.syntax.children().filter_map(Attribute::cast)
     }

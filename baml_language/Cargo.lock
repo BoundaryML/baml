@@ -2376,6 +2376,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f88a43d011fc4a6876cb7344703e297c71dda42494fee094d5f7c76bf13f746"
 
 [[package]]
+name = "codegen_go"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_codegen_types",
+]
+
+[[package]]
+name = "codegen_nodejs"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_codegen_types",
+]
+
+[[package]]
 name = "codegen_python"
 version = "0.0.0-beta"
 dependencies = [
@@ -7101,62 +7115,35 @@ dependencies = [
 ]
 
 [[package]]
-name = "sdk_test_basic_type_shapes"
+name = "sdk_test_harness_runner"
 version = "0.1.0"
-dependencies = [
- "baml_codegen_types",
- "baml_db",
- "baml_project",
- "baml_workspace",
- "codegen_python",
- "sdk_test_build",
-]
 
 [[package]]
-name = "sdk_test_build"
+name = "sdk_test_harness_setup"
 version = "0.1.0"
 dependencies = [
  "baml_codegen_types",
  "baml_db",
  "baml_project",
  "baml_workspace",
+ "codegen_nodejs",
  "codegen_python",
 ]
 
 [[package]]
-name = "sdk_test_docstrings_etc"
+name = "sdk_test_nodejs_typescript"
 version = "0.1.0"
 dependencies = [
- "baml_codegen_types",
- "baml_db",
- "baml_project",
- "baml_workspace",
- "codegen_python",
- "sdk_test_build",
+ "sdk_test_harness_runner",
+ "sdk_test_harness_setup",
 ]
 
 [[package]]
-name = "sdk_test_llm_functions"
+name = "sdk_test_python_pydantic2"
 version = "0.1.0"
 dependencies = [
- "baml_codegen_types",
- "baml_db",
- "baml_project",
- "baml_workspace",
- "codegen_python",
- "sdk_test_build",
-]
-
-[[package]]
-name = "sdk_test_type_shapes"
-version = "0.1.0"
-dependencies = [
- "baml_codegen_types",
- "baml_db",
- "baml_project",
- "baml_workspace",
- "codegen_python",
- "sdk_test_build",
+ "sdk_test_harness_runner",
+ "sdk_test_harness_setup",
 ]
 
 [[package]]

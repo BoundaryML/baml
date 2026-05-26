@@ -1,14 +1,11 @@
 //! Type attributes.
 //!
-//! Contains SAP metadata (controls for the schema-aligned parser) and
-//! type-level assertions (`@assert`).
+//! Contains SAP metadata (controls for the schema-aligned parser).
 //!
 //! These live in `baml_base` b/c they're shared by `baml_compiler_tir::Ty`
 //! (TIR) and `baml_type::Ty` (VIR+).
 
 use serde::{Deserialize, Serialize};
-
-use crate::core_types::Span;
 
 /// Binary present/absent flag for SAP attributes.
 ///
@@ -37,33 +34,6 @@ impl TyAttrValue {
     }
 }
 
-/// A single `@assert` attached to a type expression.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct TyAssert {
-    /// Index into the program's function table — the assertion body
-    /// compiled to a `(value) -> bool` function.
-    pub func_idx: u32,
-    /// Source location of the assertion (for diagnostics).
-    pub span: Span,
-}
-
-// TODO: This Ord impl ignores `span`, which means two TyAsserts with
-// different source locations but the same func_idx compare as equal.
-// This is intentional for now — Span doesn't implement Ord (TextRange
-// from text-size lacks it) and span is diagnostic metadata, not semantic.
-// If ordering correctness matters here, Span will need a manual Ord impl.
-impl PartialOrd for TyAssert {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for TyAssert {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.func_idx.cmp(&other.func_idx)
-    }
-}
-
 /// Attributes intrinsic to a type expression.
 ///
 /// Carried on every `Ty` variant from HIR through runtime.
@@ -85,9 +55,6 @@ pub struct TyAttr {
     /// is in the in-progress state (i.e., the JSON value has started but is
     /// not yet complete).
     pub sap_in_progress_never: TyAttrValue,
-
-    /// Type-level assertions (`@assert`).
-    pub asserts: Vec<TyAssert>,
 }
 
 impl TyAttr {

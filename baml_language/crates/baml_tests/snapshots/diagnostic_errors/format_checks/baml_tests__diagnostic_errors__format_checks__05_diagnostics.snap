@@ -313,9 +313,9 @@ source: crates/baml_tests/src/generated_tests.rs
      │         ───────┬───────  
      │                ╰───────── duplicate enum definition
      │
-     ├─[ type_alias_decls.baml:393:9 ]
+     ├─[ type_alias_decls.baml:389:9 ]
      │
- 393 │ type    ExtraWhitespace    =    int   |   string   |   bool   |   float   |   null
+ 389 │ type    ExtraWhitespace    =    int   |   string   |   bool   |   float   |   null
      │         ───────┬───────  
      │                ╰───────── duplicate type definition
      │ 
@@ -333,11 +333,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: unresolved name: GPT4
-     ╭─[ function_decls.baml:457:2 ]
+     ╭─[ function_decls.baml:450:2 ]
      │
- 457 │ ╭─▶ }
+ 450 │ ╭─▶ }
      ┆ ┆   
- 463 │ ├─▶ }
+ 456 │ ├─▶ }
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
@@ -345,11 +345,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] error: unresolved name: GPT4
-     ╭─[ function_decls.baml:460:42 ]
+     ╭─[ function_decls.baml:453:42 ]
      │
- 460 │ ╭─▶ function LlmBasic(name: string) -> string {
+ 453 │ ╭─▶ function LlmBasic(name: string) -> string {
      ┆ ┆   
- 463 │ ├─▶ }
+ 456 │ ├─▶ }
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
@@ -357,11 +357,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] error: unresolved name: GPT4
-     ╭─[ function_decls.baml:463:2 ]
+     ╭─[ function_decls.baml:456:2 ]
      │
- 463 │ ╭─▶ }
+ 456 │ ╭─▶ }
      ┆ ┆   
- 478 │ ├─▶ }
+ 471 │ ├─▶ }
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
@@ -369,11 +369,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] error: unresolved name: GPT4
-     ╭─[ function_decls.baml:471:46 ]
+     ╭─[ function_decls.baml:464:46 ]
      │
- 471 │ ╭─▶ function LlmMultiLine(text: string) -> string {
+ 464 │ ╭─▶ function LlmMultiLine(text: string) -> string {
      ┆ ┆   
- 478 │ ├─▶ }
+ 471 │ ├─▶ }
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
@@ -381,11 +381,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] error: unresolved name: GPT4
-     ╭─[ function_decls.baml:484:2 ]
+     ╭─[ function_decls.baml:477:2 ]
      │
- 484 │ ╭─▶ }
+ 477 │ ╭─▶ }
      ┆ ┆   
- 490 │ ├─▶ }
+ 483 │ ├─▶ }
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
@@ -393,11 +393,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] error: unresolved name: GPT4
-     ╭─[ function_decls.baml:487:50 ]
+     ╭─[ function_decls.baml:480:50 ]
      │
- 487 │ ╭─▶ function LlmReversedOrder(text: string) -> string {
+ 480 │ ╭─▶ function LlmReversedOrder(text: string) -> string {
      ┆ ┆   
- 490 │ ├─▶ }
+ 483 │ ├─▶ }
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
@@ -405,11 +405,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] error: unresolved name: GPT4
-     ╭─[ function_decls.baml:490:2 ]
+     ╭─[ function_decls.baml:483:2 ]
      │
- 490 │ ╭─▶ }
+ 483 │ ╭─▶ }
      ┆ ┆   
- 501 │ ├─▶ }
+ 494 │ ├─▶ }
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
@@ -417,11 +417,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] error: unresolved name: GPT4
-     ╭─[ function_decls.baml:495:130 ]
+     ╭─[ function_decls.baml:488:130 ]
      │
- 495 │ ╭─▶ function LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string {
+ 488 │ ╭─▶ function LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string {
      ┆ ┆   
- 501 │ ├─▶ }
+ 494 │ ├─▶ }
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
@@ -620,9 +620,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [validation] error: Name `MultiParamTrivia` defined 2 times as: function, template_string
-     ╭─[ function_decls.baml:142:10 ]
+     ╭─[ function_decls.baml:135:10 ]
      │
- 142 │ function MultiParamTrivia(
+ 135 │ function MultiParamTrivia(
      │          ────────┬───────  
      │                  ╰───────── first defined as function here
      │
@@ -636,9 +636,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [validation] error: Name `MultiParamTriviaBlock` defined 2 times as: function, template_string
-     ╭─[ function_decls.baml:159:10 ]
+     ╭─[ function_decls.baml:152:10 ]
      │
- 159 │ function MultiParamTriviaBlock(
+ 152 │ function MultiParamTriviaBlock(
      │          ──────────┬──────────  
      │                    ╰──────────── first defined as function here
      │
@@ -651,22 +651,6 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0011
 ─────╯
 
-  [validation] error: Name `ConstrainedParams` defined 2 times as: function, template_string
-     ╭─[ function_decls.baml:85:10 ]
-     │
-  85 │ function ConstrainedParams(name: string, score: int @check({{ this > 0 }})) -> string {
-     │          ────────┬────────  
-     │                  ╰────────── first defined as function here
-     │
-     ├─[ template_string_decls.baml:151:17 ]
-     │
- 151 │ template_string ConstrainedParams(value: int @check("positive", {{ this > 0 }}), name: string) #"
-     │                 ────────┬────────  
-     │                         ╰────────── duplicate template_string definition
-     │ 
-     │ Note: Error code: E0011
-─────╯
-
   [validation] error: Name `SixLongParams` defined 2 times as: function, template_string
      ╭─[ function_decls.baml:37:10 ]
      │
@@ -674,9 +658,9 @@ source: crates/baml_tests/src/generated_tests.rs
      │          ──────┬──────  
      │                ╰──────── first defined as function here
      │
-     ├─[ template_string_decls.baml:176:17 ]
+     ├─[ template_string_decls.baml:171:17 ]
      │
- 176 │ template_string SixLongParams(first_param: string, second_param: int, third_param: bool, fourth_param: float, fifth_param: string[], sixth_param: map<string, int>) #"
+ 171 │ template_string SixLongParams(first_param: string, second_param: int, third_param: bool, fourth_param: float, fifth_param: string[], sixth_param: map<string, int>) #"
      │                 ──────┬──────  
      │                       ╰──────── duplicate template_string definition
      │ 
@@ -684,15 +668,15 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [validation] error: Name `ExtraWhitespace` defined 2 times as: function, template_string
-     ╭─[ function_decls.baml:504:13 ]
+     ╭─[ function_decls.baml:497:13 ]
      │
- 504 │ function    ExtraWhitespace   (   a   :   int   ,   b   :   int   )   ->   int   {
+ 497 │ function    ExtraWhitespace   (   a   :   int   ,   b   :   int   )   ->   int   {
      │             ───────┬───────  
      │                    ╰───────── first defined as function here
      │
-     ├─[ template_string_decls.baml:369:20 ]
+     ├─[ template_string_decls.baml:364:20 ]
      │
- 369 │ template_string    ExtraWhitespace   (   a   :   string   ,   b   :   int   )   #"
+ 364 │ template_string    ExtraWhitespace   (   a   :   string   ,   b   :   int   )   #"
      │                    ───────┬───────  
      │                           ╰───────── duplicate template_string definition
      │ 

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 29654
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -635,48 +634,6 @@ SOURCE_FILE
               ARROW "->"
               TYPE_EXPR "string"
                 WORD "string"
-      R_PAREN ")"
-    ARROW "->"
-    TYPE_EXPR "string"
-      WORD "string"
-    EXPR_FUNCTION_BODY
-      BLOCK_EXPR
-        L_BRACE "{"
-        STRING_LITERAL "done"
-          QUOTE """
-          WORD "done"
-          QUOTE """
-        R_BRACE "}"
-  FUNCTION_DEF
-    KW_FUNCTION "function"
-    WORD "ConstrainedParams"
-    PARAMETER_LIST
-      L_PAREN "("
-      PARAMETER
-        WORD "name"
-        COLON ":"
-        TYPE_EXPR "string"
-          WORD "string"
-      COMMA ","
-      PARAMETER
-        WORD "score"
-        COLON ":"
-        TYPE_EXPR
-          WORD "int"
-          ATTRIBUTE
-            AT "@"
-            WORD "check"
-            ATTRIBUTE_ARGS
-              L_PAREN "("
-              EXPR "{{ this > 0 }}"
-                L_BRACE "{"
-                L_BRACE "{"
-                WORD "this"
-                GREATER ">"
-                INTEGER_LITERAL "0"
-                R_BRACE "}"
-                R_BRACE "}"
-              R_PAREN ")"
       R_PAREN ")"
     ARROW "->"
     TYPE_EXPR "string"
