@@ -681,15 +681,13 @@ async fn assign_add() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 1
-        store_var x
-        load_var x
+        store_var_load_var x
         load_const 2
         add_int
-        store_var x
-        load_var x
+        store_var_load_var x
         return
     }
     ");
@@ -709,15 +707,13 @@ async fn assign_subtract() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 1
-        store_var x
-        load_var x
+        store_var_load_var x
         load_const 2
         sub_int
-        store_var x
-        load_var x
+        store_var_load_var x
         return
     }
     ");
@@ -737,15 +733,13 @@ async fn assign_multiply() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 1
-        store_var x
-        load_var x
+        store_var_load_var x
         load_const 2
         mul_int
-        store_var x
-        load_var x
+        store_var_load_var x
         return
     }
     ");
@@ -765,15 +759,13 @@ async fn assign_divide() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 10
-        store_var x
-        load_var x
+        store_var_load_var x
         load_const 2
         div_int
-        store_var x
-        load_var x
+        store_var_load_var x
         return
     }
     ");
@@ -793,15 +785,13 @@ async fn assign_modulo() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 10
-        store_var x
-        load_var x
+        store_var_load_var x
         load_const 3
         mod_int
-        store_var x
-        load_var x
+        store_var_load_var x
         return
     }
     ");
@@ -824,12 +814,10 @@ async fn assign_bitwise_and() {
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 10
-        store_var x
-        load_var x
+        store_var_load_var x
         load_const 3
         bin_op &
-        store_var x
-        load_var x
+        store_var_load_var x
         return
     }
     ");
@@ -852,12 +840,10 @@ async fn assign_bitwise_or() {
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 10
-        store_var x
-        load_var x
+        store_var_load_var x
         load_const 3
         bin_op |
-        store_var x
-        load_var x
+        store_var_load_var x
         return
     }
     ");
@@ -880,12 +866,10 @@ async fn assign_bitwise_xor() {
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 10
-        store_var x
-        load_var x
+        store_var_load_var x
         load_const 3
         bin_op ^
-        store_var x
-        load_var x
+        store_var_load_var x
         return
     }
     ");

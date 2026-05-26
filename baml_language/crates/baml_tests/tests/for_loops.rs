@@ -97,7 +97,7 @@ async fn for_loop_with_break() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function for_with_break(xs: int[]) -> int {
         load_const 0
         store_var result
@@ -113,8 +113,7 @@ async fn for_loop_with_break() {
         load_var xs
         load_var __for_idx
         load_array_element
-        store_var x
-        load_var x
+        store_var_load_var x
         load_const 10
         cmp_op >
         pop_jump_if_false L1
@@ -173,7 +172,7 @@ async fn for_loop_with_continue() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function for_with_continue(xs: int[]) -> int {
         load_const 0
         store_var result
@@ -196,8 +195,7 @@ async fn for_loop_with_continue() {
         load_var xs
         load_var __for_idx
         load_array_element
-        store_var x
-        load_var x
+        store_var_load_var x
         load_const 10
         cmp_op >
         pop_jump_if_false L3

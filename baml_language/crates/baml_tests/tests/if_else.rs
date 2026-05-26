@@ -1277,15 +1277,14 @@ async fn nested_block_with_if() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 1
         store_var a
         load_const 2
         load_const 3
         add_int
-        store_var a
-        load_var a
+        store_var_load_var a
         load_const 5
         cmp_op ==
         pop_jump_if_false L0
