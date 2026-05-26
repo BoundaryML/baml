@@ -27,7 +27,7 @@ jobs:
     timeout-minutes: 20
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -52,7 +52,7 @@ jobs:
 
       - name: "Upload size-gate report"
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: size-gate-linux
           path: baml_language/size-gate-linux.json
@@ -60,7 +60,7 @@ jobs:
 
       - name: "Upload cargo timings"
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cargo-timings-size-gate-linux
           path: baml_language/target/cargo-timings/
@@ -72,7 +72,7 @@ jobs:
     timeout-minutes: 20
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -97,7 +97,7 @@ jobs:
 
       - name: "Upload size-gate report"
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: size-gate-macos
           path: baml_language/size-gate-macos.json
@@ -105,7 +105,7 @@ jobs:
 
       - name: "Upload cargo timings"
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cargo-timings-size-gate-macos
           path: baml_language/target/cargo-timings/
@@ -119,7 +119,7 @@ jobs:
     timeout-minutes: 45
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -149,7 +149,7 @@ jobs:
 
       - name: "Upload size-gate report"
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: size-gate-windows
           path: baml_language/size-gate-windows.json
@@ -157,7 +157,7 @@ jobs:
 
       - name: "Upload cargo timings"
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cargo-timings-size-gate-windows
           path: baml_language/target/cargo-timings/
@@ -169,7 +169,7 @@ jobs:
     timeout-minutes: 25
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -196,7 +196,7 @@ jobs:
 
       - name: "Upload size-gate report"
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: size-gate-wasm
           path: baml_language/size-gate-wasm.json
@@ -204,7 +204,7 @@ jobs:
 
       - name: "Upload cargo timings"
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cargo-timings-size-gate-wasm
           path: baml_language/target/cargo-timings/
@@ -219,12 +219,12 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
       - name: "Download size-gate reports"
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: size-gate-*
           merge-multiple: true

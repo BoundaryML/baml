@@ -56,7 +56,7 @@ fn display_global_ref(
 ) -> String {
     // Prefer runtime globals.
     if index.raw() < globals.len() {
-        return format!("({})", display_value(&globals[index.raw()]));
+        return format!("({})", display_value(globals[index.raw()]));
     }
 
     // At compile time, resolve from compile-time globals/object pool.
@@ -135,7 +135,7 @@ pub(crate) fn display_instruction(
         Instruction::LoadConst(index) => {
             // Prefer resolved_constants (runtime), fall back to constants (compile-time)
             if let Some(value) = function.bytecode.resolved_constants.get(*index) {
-                format!("({})", display_value(value))
+                format!("({})", display_value(*value))
             } else if let Some(const_value) = function.bytecode.constants.get(*index) {
                 format!("({})", display_const_value(const_value, objects))
             } else {
@@ -250,10 +250,10 @@ pub(crate) fn display_instruction(
 /// The default display for objects is just a reference number. If we want
 /// all the information, we have to dereference the object and call it's
 /// `to_string` implementation.
-pub(crate) fn display_value(value: &Value) -> String {
-    match value {
-        Value::Object(ptr) => display_object_ptr(*ptr),
-        other => other.to_string(),
+pub(crate) fn display_value(value: Value) -> String {
+    match value.as_object_ptr() {
+        Some(ptr) => display_object_ptr(ptr),
+        None => value.to_string(),
     }
 }
 

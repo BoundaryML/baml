@@ -37,7 +37,8 @@ async fn int_abs_zero() {
 
 #[tokio::test]
 async fn int_abs_min_value_throws() {
-    // i64::MIN is -9223372036854775808; its absolute value (2^63) does not fit.
+    // BAML int is i63; min_value() is -2^62. Its absolute value (2^62) is
+    // ONE PAST int.max_value() (which is 2^62 - 1) and does not fit.
     let output = baml_test!(
         r#"
         function main() -> int { int.min_value().abs() }
@@ -50,15 +51,15 @@ async fn int_abs_min_value_throws() {
 
 #[tokio::test]
 async fn int_abs_near_min_value_succeeds() {
-    // i64::MIN + 1 is representable in absolute form.
+    // int.min_value() + 1 is representable in absolute form (= int.max_value()).
     let output = baml_test!(
         r#"
-        function main() -> int { (-9223372036854775807).abs() }
+        function main() -> int { (-4611686018427387903).abs() }
     "#
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::Int(9_223_372_036_854_775_807))
+        Ok(BexExternalValue::Int(4_611_686_018_427_387_903))
     );
 }
 
@@ -189,7 +190,8 @@ async fn int_clamp_at_max_boundary() {
 // ─── max_value / min_value ────────────────────────────────────────────────────
 
 #[tokio::test]
-async fn int_max_value_returns_i64_max() {
+async fn int_max_value_returns_i63_max() {
+    // BAML int is i63 (2^62 - 1).
     let output = baml_test!(
         r#"
         function main() -> int { int.max_value() }
@@ -197,12 +199,13 @@ async fn int_max_value_returns_i64_max() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::Int(9_223_372_036_854_775_807))
+        Ok(BexExternalValue::Int(4_611_686_018_427_387_903))
     );
 }
 
 #[tokio::test]
-async fn int_min_value_returns_i64_min() {
+async fn int_min_value_returns_i63_min() {
+    // BAML int is i63 (-2^62).
     let output = baml_test!(
         r#"
         function main() -> int { int.min_value() }
@@ -210,7 +213,7 @@ async fn int_min_value_returns_i64_min() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::Int(-9_223_372_036_854_775_808))
+        Ok(BexExternalValue::Int(-4_611_686_018_427_387_904))
     );
 }
 
@@ -274,12 +277,12 @@ async fn int_parse_explicit_plus_sign() {
 async fn int_parse_max_value() {
     let output = baml_test!(
         r#"
-        function main() -> int { int.parse("9223372036854775807") }
+        function main() -> int { int.parse("4611686018427387903") }
     "#
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::Int(9_223_372_036_854_775_807))
+        Ok(BexExternalValue::Int(4_611_686_018_427_387_903))
     );
 }
 
@@ -287,12 +290,12 @@ async fn int_parse_max_value() {
 async fn int_parse_min_value() {
     let output = baml_test!(
         r#"
-        function main() -> int { int.parse("-9223372036854775808") }
+        function main() -> int { int.parse("-4611686018427387904") }
     "#
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::Int(-9_223_372_036_854_775_808))
+        Ok(BexExternalValue::Int(-4_611_686_018_427_387_904))
     );
 }
 
@@ -640,13 +643,13 @@ async fn int_isqrt_large() {
 
 #[tokio::test]
 async fn int_isqrt_max_value() {
-    // floor(sqrt(i64::MAX)) = 3037000499.
+    // floor(sqrt(2^62 - 1)) = 2^31 - 1 = 2147483647.
     let output = baml_test!(
         r#"
         function main() -> int { int.max_value().isqrt() }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::Int(3_037_000_499)));
+    assert_eq!(output.result, Ok(BexExternalValue::Int(2_147_483_647)));
 }
 
 #[tokio::test]
@@ -795,13 +798,13 @@ async fn int_pow_overflow_positive_saturates() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::Int(9_223_372_036_854_775_807))
+        Ok(BexExternalValue::Int(4_611_686_018_427_387_903))
     );
 }
 
 #[tokio::test]
 async fn int_pow_overflow_negative_odd_saturates_to_min() {
-    // (-10)^99 mathematically a huge negative number → saturate to i64::MIN.
+    // (-10)^99 mathematically a huge negative number → saturate to int.min_value().
     let output = baml_test!(
         r#"
         function main() -> int { (-10).pow(99) }
@@ -809,13 +812,13 @@ async fn int_pow_overflow_negative_odd_saturates_to_min() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::Int(-9_223_372_036_854_775_808))
+        Ok(BexExternalValue::Int(-4_611_686_018_427_387_904))
     );
 }
 
 #[tokio::test]
 async fn int_pow_overflow_negative_even_saturates_to_max() {
-    // (-10)^100 is a huge positive number → saturate to i64::MAX.
+    // (-10)^100 is a huge positive number → saturate to int.max_value().
     let output = baml_test!(
         r#"
         function main() -> int { (-10).pow(100) }
@@ -823,7 +826,7 @@ async fn int_pow_overflow_negative_even_saturates_to_max() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::Int(9_223_372_036_854_775_807))
+        Ok(BexExternalValue::Int(4_611_686_018_427_387_903))
     );
 }
 

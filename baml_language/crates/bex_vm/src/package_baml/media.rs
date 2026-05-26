@@ -17,7 +17,7 @@ use crate::{
 /// `Value`, releasing the immutable `vm` borrow before the caller needs to
 /// mutably borrow `vm` for allocation.
 ///
-/// Layout: `media_val → Object::Instance { fields: [Value::Object(data_ptr)] }`
+/// Layout: `media_val → Object::Instance { fields: [Value::object(data_ptr)] }`
 ///          where `data_ptr → Object::RustData(Arc<MediaValue>)`.
 fn clone_media_value(
     vm: &BexVm,
@@ -31,7 +31,7 @@ fn clone_media_value(
     };
 
     // Step 2: get the RustData Arc and clone it (still immutable borrow).
-    let Value::Object(ptr) = data_field else {
+    let Some(ptr) = data_field.as_object_ptr() else {
         return Err(VmInternalError::MissingNativeFunction {
             name: "media._data: expected Value::Object".to_string(),
         }
@@ -77,7 +77,7 @@ fn media_value_to_json(
 
     let mime_val = match media.mime_type() {
         Some(m) => vm.alloc_string(m),
-        None => Value::Null,
+        None => Value::NULL,
     };
 
     let mut map = IndexMap::new();

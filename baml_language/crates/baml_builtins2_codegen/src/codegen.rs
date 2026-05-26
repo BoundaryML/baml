@@ -255,31 +255,40 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 writeln!(out, "{inner}pub fn {field_name}(&self) -> i64 {{").unwrap();
                 writeln!(
                     out,
-                    "{inner2}match self.instance.fields[{}] {{",
+                    "{inner2}self.instance.fields[{}].as_int()",
                     field.index
                 )
                 .unwrap();
-                writeln!(out, "{inner2}    Value::Int(i) => i,").unwrap();
                 writeln!(
                     out,
-                    "{inner2}    _ => panic!(\"{class_name}.{field_name}: expected Int\"),"
+                    "{inner2}    .unwrap_or_else(|| panic!(\"{class_name}.{field_name}: expected Int\"))"
                 )
                 .unwrap();
-                writeln!(out, "{inner2}}}").unwrap();
                 writeln!(out, "{inner}}}\n").unwrap();
             }
             BamlType::Float => {
                 writeln!(out, "{inner}pub fn {field_name}(&self) -> f64 {{").unwrap();
                 writeln!(
                     out,
-                    "{inner2}match self.instance.fields[{}] {{",
+                    "{inner2}match self.instance.fields[{}].as_object_ptr() {{",
                     field.index
                 )
                 .unwrap();
-                writeln!(out, "{inner2}    Value::Float(f) => f,").unwrap();
                 writeln!(
                     out,
-                    "{inner2}    _ => panic!(\"{class_name}.{field_name}: expected Float\"),"
+                    "{inner2}    Some(ptr) => match unsafe {{ ptr.get() }} {{"
+                )
+                .unwrap();
+                writeln!(out, "{inner2}        bex_vm_types::Object::Float(f) => *f,").unwrap();
+                writeln!(
+                    out,
+                    "{inner2}        _ => panic!(\"{class_name}.{field_name}: expected Float\"),"
+                )
+                .unwrap();
+                writeln!(out, "{inner2}    }},").unwrap();
+                writeln!(
+                    out,
+                    "{inner2}    None => panic!(\"{class_name}.{field_name}: expected Float\"),"
                 )
                 .unwrap();
                 writeln!(out, "{inner2}}}").unwrap();
@@ -289,17 +298,15 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 writeln!(out, "{inner}pub fn {field_name}(&self) -> bool {{").unwrap();
                 writeln!(
                     out,
-                    "{inner2}match self.instance.fields[{}] {{",
+                    "{inner2}self.instance.fields[{}].as_bool()",
                     field.index
                 )
                 .unwrap();
-                writeln!(out, "{inner2}    Value::Bool(b) => b,").unwrap();
                 writeln!(
                     out,
-                    "{inner2}    _ => panic!(\"{class_name}.{field_name}: expected Bool\"),"
+                    "{inner2}    .unwrap_or_else(|| panic!(\"{class_name}.{field_name}: expected Bool\"))"
                 )
                 .unwrap();
-                writeln!(out, "{inner2}}}").unwrap();
                 writeln!(out, "{inner}}}\n").unwrap();
             }
             BamlType::String => {
@@ -369,12 +376,13 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}match self.instance.fields[{}] {{",
+                    "{inner2}if self.instance.fields[{}].is_null() {{",
                     field.index
                 )
                 .unwrap();
-                writeln!(out, "{inner2}    Value::Null => None,").unwrap();
-                writeln!(out, "{inner2}    _ => Some({some_expr}),").unwrap();
+                writeln!(out, "{inner2}    None").unwrap();
+                writeln!(out, "{inner2}}} else {{").unwrap();
+                writeln!(out, "{inner2}    Some({some_expr})").unwrap();
                 writeln!(out, "{inner2}}}").unwrap();
                 writeln!(out, "{inner}}}\n").unwrap();
             }
@@ -401,19 +409,25 @@ fn view_optional_type_and_expr(
         BamlType::Int => (
             "Option<i64>".to_string(),
             format!(
-                "match self.instance.fields[{field_index}] {{ Value::Int(i) => i, _ => panic!(\"{class_name}.{field_name}: expected Int\") }}"
+                "self.instance.fields[{field_index}].as_int().unwrap_or_else(|| panic!(\"{class_name}.{field_name}: expected Int\"))"
             ),
         ),
         BamlType::Float => (
             "Option<f64>".to_string(),
             format!(
-                "match self.instance.fields[{field_index}] {{ Value::Float(f) => f, _ => panic!(\"{class_name}.{field_name}: expected Float\") }}"
+                "{{ \
+                    let Some(ptr) = self.instance.fields[{field_index}].as_object_ptr() \
+                        else {{ panic!(\"{class_name}.{field_name}: expected Float\") }}; \
+                    let bex_vm_types::Object::Float(f) = (unsafe {{ ptr.get() }}) \
+                        else {{ panic!(\"{class_name}.{field_name}: expected Float\") }}; \
+                    *f \
+                }}"
             ),
         ),
         BamlType::Bool => (
             "Option<bool>".to_string(),
             format!(
-                "match self.instance.fields[{field_index}] {{ Value::Bool(b) => b, _ => panic!(\"{class_name}.{field_name}: expected Bool\") }}"
+                "self.instance.fields[{field_index}].as_bool().unwrap_or_else(|| panic!(\"{class_name}.{field_name}: expected Bool\"))"
             ),
         ),
         BamlType::String => (
@@ -527,10 +541,19 @@ fn copy_field_type(ty: &BamlType) -> String {
 fn copy_field_to_value(field_name: &str, ty: &BamlType) -> String {
     match ty {
         BamlType::RustType => format!("vm.alloc_rust_data(self.{field_name})"),
-        BamlType::Int => format!("Value::Int(self.{field_name})"),
-        BamlType::Float => format!("Value::Float(self.{field_name})"),
-        BamlType::Bool => format!("Value::Bool(self.{field_name})"),
-        BamlType::Null => "Value::Null".to_string(),
+        // `to_value` has no error channel (`fn to_value(self, vm) -> Value`),
+        // so an out-of-i63 native i64 reaches this path only when caller-side
+        // Rust constructed a struct field that violates the i63 BAML
+        // contract. Fail loudly in *both* debug and release rather than
+        // truncating silently via `Value::int`'s `debug_assert`.
+        BamlType::Int => format!(
+            "Value::try_int(self.{field_name}).unwrap_or_else(|| panic!(\
+                \"`{field_name}: int` is outside BAML int range [{{}}, {{}}], got {{}}\", \
+                Value::INT_MIN, Value::INT_MAX, self.{field_name}))"
+        ),
+        BamlType::Float => format!("vm.alloc_float(self.{field_name})"),
+        BamlType::Bool => format!("Value::bool(self.{field_name})"),
+        BamlType::Null => "Value::NULL".to_string(),
         // String, List, Map, Optional, Generic, Named, Media — already a Value
         _ => format!("self.{field_name}"),
     }
@@ -1181,12 +1204,26 @@ fn receiver_immut_extraction_expr(val: &str, recv: &Receiver, needs_owned: bool)
         }
         // Primitive value receivers: extract the underlying scalar. `int` is
         // backed by `i64`, `float` by `f64` — both `Copy`, so `needs_owned` is
-        // irrelevant.
+        // irrelevant. The local `__v: &Value` binding lets `.as_int()` /
+        // `.as_object_ptr()` (which take `&self`) resolve without the explicit
+        // borrow that would trip `clippy::needless_borrow`.
         "Int" => format!(
-            "match {val} {{ Value::Int(i) => *i, other => return Err(VmInternalError::TypeError {{ expected: Type::Int, got: vm.type_of(other) }}.into()) }}"
+            "{{ \
+                let __v = {val}; \
+                let Some(i) = __v.as_int() \
+                    else {{ return Err(VmInternalError::TypeError {{ expected: Type::Int, got: vm.type_of(__v) }}.into()); }}; \
+                i \
+            }}"
         ),
         "Float" => format!(
-            "match {val} {{ Value::Float(f) => *f, other => return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of(other) }}.into()) }}"
+            "{{ \
+                let __v = {val}; \
+                let Some(ptr) = __v.as_object_ptr() \
+                    else {{ return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of(__v) }}.into()); }}; \
+                let bex_vm_types::Object::Float(f) = (unsafe {{ ptr.get() }}) \
+                    else {{ return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of(__v) }}.into()); }}; \
+                *f \
+            }}"
         ),
         name if is_media_class(name) => {
             let kind = media_kind_expr(&recv.class_name);
@@ -1217,14 +1254,34 @@ fn extraction_expr(val: &str, ty: &BamlType, is_mut: bool, needs_owned: bool) ->
                 format!("vm.as_string({val})?")
             }
         }
+        // The local `__v: &Value` binding lets the `Value::as_*` methods
+        // (which take `&self`) resolve without an explicit borrow that
+        // would trip `clippy::needless_borrow`.
         BamlType::Int => format!(
-            "match {val} {{ Value::Int(i) => *i, other => return Err(VmInternalError::TypeError {{ expected: Type::Int, got: vm.type_of(other) }}.into()) }}"
+            "{{ \
+                let __v = {val}; \
+                let Some(i) = __v.as_int() \
+                    else {{ return Err(VmInternalError::TypeError {{ expected: Type::Int, got: vm.type_of(__v) }}.into()); }}; \
+                i \
+            }}"
         ),
         BamlType::Float => format!(
-            "match {val} {{ Value::Float(f) => *f, other => return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of(other) }}.into()) }}"
+            "{{ \
+                let __v = {val}; \
+                let Some(ptr) = __v.as_object_ptr() \
+                    else {{ return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of(__v) }}.into()); }}; \
+                let bex_vm_types::Object::Float(f) = (unsafe {{ ptr.get() }}) \
+                    else {{ return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of(__v) }}.into()); }}; \
+                *f \
+            }}"
         ),
         BamlType::Bool => format!(
-            "match {val} {{ Value::Bool(b) => *b, other => return Err(VmInternalError::TypeError {{ expected: Type::Bool, got: vm.type_of(other) }}.into()) }}"
+            "{{ \
+                let __v = {val}; \
+                let Some(b) = __v.as_bool() \
+                    else {{ return Err(VmInternalError::TypeError {{ expected: Type::Bool, got: vm.type_of(__v) }}.into()); }}; \
+                b \
+            }}"
         ),
         BamlType::List(_) => {
             if is_mut {
@@ -1246,7 +1303,11 @@ fn extraction_expr(val: &str, ty: &BamlType, is_mut: bool, needs_owned: bool) ->
         }
         BamlType::Optional(inner) => {
             let inner_expr = extraction_expr("other", inner, false, needs_owned);
-            format!("match {val} {{ Value::Null => None, other => Some({inner_expr}) }}")
+            // Bind `__v` so `.is_null()` (Value method) resolves through
+            // the `&Value` without triggering `clippy::needless_borrow`.
+            format!(
+                "{{ let other = {val}; if other.is_null() {{ None }} else {{ Some({inner_expr}) }} }}"
+            )
         }
         BamlType::Uint8Array => {
             if is_mut {
@@ -1388,15 +1449,23 @@ fn result_conversion_expr(name: &str, ty: &BamlType) -> String {
     match ty {
         BamlType::String => format!("vm.alloc_string({name})"),
         BamlType::Uint8Array => format!("vm.alloc_uint8array({name})"),
-        BamlType::Int => format!("Value::Int({name})"),
-        BamlType::Float => format!("Value::Float({name})"),
-        BamlType::Bool => format!("Value::Bool({name})"),
-        BamlType::Null => "Value::Null".to_string(),
+        // Surface out-of-i63 native returns as a normal VM error instead
+        // of silently truncating via the bare `Value::int` constructor's
+        // `debug_assert` (which is a no-op in release).
+        BamlType::Int => format!(
+            "Value::try_int({name}).ok_or_else(|| VmBamlError::InvalidArgument {{ \
+                message: format!(\"native int return value {{}} is outside the BAML int range [{{}}, {{}}]\", \
+                    {name}, Value::INT_MIN, Value::INT_MAX) \
+            }})?"
+        ),
+        BamlType::Float => format!("vm.alloc_float({name})"),
+        BamlType::Bool => format!("Value::bool({name})"),
+        BamlType::Null => "Value::NULL".to_string(),
         BamlType::List(_) => format!("vm.alloc_array({name})"),
         BamlType::Map(_, _) => format!("vm.alloc_map({name})"),
         BamlType::Optional(inner) => {
             let inner_conversion = result_conversion_expr("v", inner);
-            format!("match {name} {{ Some(v) => {inner_conversion}, None => Value::Null }}")
+            format!("match {name} {{ Some(v) => {inner_conversion}, None => Value::NULL }}")
         }
         BamlType::Generic(_) | BamlType::Named(_) | BamlType::Media(_) | BamlType::RustType => {
             name.to_string()

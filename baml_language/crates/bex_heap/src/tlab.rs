@@ -67,7 +67,7 @@ impl TlabChunk {
 ///
 /// // Fast allocation - just bumps pointer
 /// let ptr1 = tlab.alloc_string("hello".to_string());
-/// let ptr2 = tlab.alloc_array(vec![Value::Int(1), Value::Int(2)]);
+/// let ptr2 = tlab.alloc_array(vec![Value::int(1), Value::int(2)]);
 ///
 /// // When chunk exhausted, refill gets a new region
 /// for _ in 0..2000 {
@@ -444,14 +444,14 @@ mod tests {
         let heap = BexHeap::with_tlab_size(vec![], 100);
         let mut tlab = Tlab::new(heap);
 
-        let values = vec![Value::Int(1), Value::Int(2), Value::Int(3)];
+        let values = vec![Value::int(1), Value::int(2), Value::int(3)];
         let ptr = tlab.alloc_array(values);
 
         unsafe {
             match ptr.get() {
                 Object::Array(arr) => {
                     assert_eq!(arr.len(), 3);
-                    assert_eq!(arr[0], Value::Int(1));
+                    assert_eq!(arr[0], Value::int(1));
                 }
                 _ => panic!("Expected Array"),
             }
@@ -464,13 +464,13 @@ mod tests {
         let mut tlab = Tlab::new(heap);
 
         let mut map = IndexMap::new();
-        map.insert("key".to_string(), Value::Int(42));
+        map.insert("key".to_string(), Value::int(42));
         let ptr = tlab.alloc_map(map);
 
         unsafe {
             match ptr.get() {
                 Object::Map(m) => {
-                    assert_eq!(m.get("key"), Some(&Value::Int(42)));
+                    assert_eq!(m.get("key"), Some(&Value::int(42)));
                 }
                 _ => panic!("Expected Map"),
             }
@@ -521,7 +521,7 @@ mod tests {
         })));
 
         // Allocate an instance of that class
-        let fields = vec![Value::Int(10), Value::Int(20)];
+        let fields = vec![Value::int(10), Value::int(20)];
         let instance_ptr = tlab.alloc_instance(class_ptr, fields);
 
         unsafe {
@@ -529,7 +529,7 @@ mod tests {
                 Object::Instance(inst) => {
                     assert_eq!(inst.class, class_ptr);
                     assert_eq!(inst.fields.len(), 2);
-                    assert_eq!(inst.fields[0], Value::Int(10));
+                    assert_eq!(inst.fields[0], Value::int(10));
                 }
                 _ => panic!("Expected Instance"),
             }

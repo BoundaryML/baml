@@ -20,6 +20,7 @@ namespace baml.env:
 namespace baml.errors:
   class AccessError { methods: [to_json, from_json] }
   class DevOther { methods: [to_json, from_json] }
+  class HostCallable { methods: [to_json, from_json] }
   class HostPanic { methods: [to_json, from_json] }
   class InvalidArgument { methods: [to_json, from_json] }
   class Io { methods: [to_json, from_json] }
@@ -53,6 +54,9 @@ namespace baml.glob:
   class Glob { methods: [scan, matches, to_json, from_json] }
   class ScanOptions { methods: [to_json, from_json] }
   function new
+namespace baml.host:
+  class HostValue { methods: [to_json, from_json] }
+  function call_host_value<T>
 namespace baml.http:
   class Request { methods: [to_json, from_json] }
   class Response { methods: [text, bytes, ok, to_json, from_json] }

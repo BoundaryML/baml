@@ -1,0 +1,37 @@
+[project]
+name = "__PYPROJECT_NAME__"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "baml_core",
+    "pydantic>=2",
+    "typing-extensions",
+    "pytest>=7",
+    "pytest-asyncio>=0.23",
+    "ruff",
+    "pyright>=1.1",
+]
+
+[dependency-groups]
+dev = []
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+baml_core = { path = "../../../../../sdks/python", editable = true }
+
+[tool.pytest.ini_options]
+testpaths = ["."]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v"
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 120
+extend-exclude = ["*.pyi"]
+
+[tool.ruff.lint]
+ignore = ["F401", "F821", "E402"]

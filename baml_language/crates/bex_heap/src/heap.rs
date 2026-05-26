@@ -329,11 +329,11 @@ impl BexHeap {
                     .constants
                     .iter()
                     .map(|cv| match cv {
-                        bex_vm_types::ConstValue::Type(_) => bex_vm_types::Value::Null,
+                        bex_vm_types::ConstValue::Type(_) => bex_vm_types::Value::NULL,
                         // ClassWithTypeArgs is NOT pre-resolved: `IsType` reads it
                         // directly from `constants` at execution time.
                         bex_vm_types::ConstValue::ClassWithTypeArgs { .. } => {
-                            bex_vm_types::Value::Null
+                            bex_vm_types::Value::NULL
                         }
                         other => other.to_value(resolve_idx),
                     })
@@ -497,7 +497,7 @@ impl BexHeap {
     /// is in Gen0 (no card table for Gen0).
     #[inline]
     pub fn write_barrier(&self, container_ptr: HeapPtr, written_value: Value) {
-        if let Value::Object(ref_ptr) = written_value {
+        if let Some(ref_ptr) = written_value.as_object_ptr() {
             let container_gen = self.generation_of(container_ptr);
             let ref_gen = self.generation_of(ref_ptr);
             if container_gen > ref_gen {

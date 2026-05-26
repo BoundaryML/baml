@@ -1,0 +1,31 @@
+# Test-side runtime + macros for the `sdk_tests/crates/<generator>/`
+# crates. Used as `[dev-dependencies]` by each generator crate, while
+# the sibling `sdk_test_harness_setup` crate is used as
+# `[build-dependencies]`.
+#
+# Holds:
+#   - `run_test_cmd` / `run_test_cmd_with_env` — runtime helpers
+#     called from every per-fixture `#[test]` body.
+#   - `build_diagnostics!` — macro that expands to the shared
+#     `mod build_diagnostics { #[test] fn no_build_failures }` block
+#     that reads `$OUT_DIR/build_diagnostics.txt` written by
+#     `sdk_test_harness_setup`'s `BuildDiagnostics::finalize`.
+#   - `python_pydantic2::test_suite!` / `nodejs_typescript::test_suite!`
+#     — one per generator; each just `include!`s the OUT_DIR scaffold
+#     emitted by `sdk_test_harness_setup::<generator>::run_all`.
+#
+# Std-only deps so it can ride along in `[dev-dependencies]` without
+# dragging codegen_python / codegen_nodejs / baml_project onto the
+# test-binary compile path.
+#
+# Package named `sdk_test_*` so cargo-stow's
+# `ignore_crates = ["sdk_test_*"]` rule (see baml_language/stow.toml)
+# covers it; the folder name stays short.
+[package]
+name = "sdk_test_harness_runner"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[package.metadata.ci]
+wasm_support = false

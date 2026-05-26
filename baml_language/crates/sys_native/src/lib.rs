@@ -12,6 +12,8 @@
 //! let engine = BexEngine::new(program, SysOps::native())?;
 //! ```
 
+pub mod host_dispatch;
+mod host_impls;
 mod io_impls;
 pub mod registry;
 pub mod shell;
