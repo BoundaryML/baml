@@ -21,14 +21,15 @@ pub use trivia_classifier::{EmittableTrivia, TriviaInfo};
 pub fn format(source: &str, options: &FormatOptions) -> Result<String, FormatterError> {
     let mut db = ProjectDatabase::new();
     let source_file = db.add_file("file.baml", source);
-    format_salsa(&db, source_file, options)
+    format_salsa(&db, source_file, *options)
 }
 
 #[salsa::tracked]
+#[allow(clippy::drop_non_drop)] // salsa macro expands to drop() of the args tuple
 pub fn format_salsa(
     db: &dyn salsa::Database,
     file: baml_db::SourceFile,
-    options: &'_ FormatOptions,
+    options: FormatOptions,
 ) -> Result<String, FormatterError> {
     let tokens = baml_compiler_lexer::lex_file(db, file);
     let (parsed, errors) = baml_compiler_parser::parse_file(&tokens);
@@ -40,7 +41,7 @@ pub fn format_salsa(
     let trivia = TriviaInfo::classify_trivia(&cst);
     let strong_ast = ast::SourceFile::from_cst(SyntaxElement::Node(cst))?;
 
-    let mut printer = Printer::new_empty(file.text(db), options, &trivia);
+    let mut printer = Printer::new_empty(file.text(db), &options, &trivia);
     printer.print(
         &strong_ast,
         Shape {
@@ -52,7 +53,7 @@ pub fn format_salsa(
     Ok(printer.output)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct FormatOptions {
     /// Maximum line width before wrapping kicks in. Default: `100`
     pub line_width: usize,

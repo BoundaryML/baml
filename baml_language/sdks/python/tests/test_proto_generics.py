@@ -30,6 +30,7 @@ from baml_core.proto import (  # noqa: E402
     _parameterize,
     _set_inbound_value,
 )
+from baml_core.typemap import BamlTypeMap
 from baml_core.cffi.v1 import baml_inbound_pb2, baml_outbound_pb2
 
 
@@ -55,6 +56,26 @@ class Crate(pydantic.BaseModel, Generic[T]):
 
 class Plain(pydantic.BaseModel):
     a: int
+
+
+_FQN_BY_NAME = {
+    "Box": "user.lorem.Box",
+    "Crate": "user.lorem.Crate",
+    "Plain": "user.lorem.Plain",
+}
+
+
+def _fresh_typemap_with(*classes: type) -> BamlTypeMap:
+    """25b2: build a `BamlTypeMap` from lazy entries pointing at the
+    test-local class definitions."""
+    return BamlTypeMap.from_lazy_entries(
+        classes={
+            _FQN_BY_NAME[cls.__name__]: (cls.__module__, cls.__name__)
+            for cls in classes
+        },
+        enums={},
+        type_aliases={},
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -103,19 +124,19 @@ def test_inbound_class_value_carries_base_fqn():
 def test_baml_ty_int_returns_int():
     ty = baml_outbound_pb2.BamlTy()
     ty.int_type.SetInParent()
-    assert _baml_ty_to_python_type(ty) is int
+    assert _baml_ty_to_python_type(ty, BamlTypeMap()) is int
 
 
 def test_baml_ty_string_returns_str():
     ty = baml_outbound_pb2.BamlTy()
     ty.string_type.SetInParent()
-    assert _baml_ty_to_python_type(ty) is str
+    assert _baml_ty_to_python_type(ty, BamlTypeMap()) is str
 
 
 def test_baml_ty_list_int_returns_typing_list_int():
     ty = baml_outbound_pb2.BamlTy()
     ty.list_type.item_type.int_type.SetInParent()
-    result = _baml_ty_to_python_type(ty)
+    result = _baml_ty_to_python_type(ty, BamlTypeMap())
     # `List[int]` typing-form; `typing.get_args` extracts the parameter.
     assert typing.get_args(result) == (int,)
 
@@ -123,7 +144,7 @@ def test_baml_ty_list_int_returns_typing_list_int():
 def test_baml_ty_optional_string_returns_optional_str():
     ty = baml_outbound_pb2.BamlTy()
     ty.optional_type.value.string_type.SetInParent()
-    result = _baml_ty_to_python_type(ty)
+    result = _baml_ty_to_python_type(ty, BamlTypeMap())
     # Optional[X] is Union[X, None].
     args = set(typing.get_args(result))
     assert str in args
@@ -133,7 +154,7 @@ def test_baml_ty_optional_string_returns_optional_str():
 def test_baml_ty_any_returns_typing_any():
     ty = baml_outbound_pb2.BamlTy()
     ty.any_type.SetInParent()
-    assert _baml_ty_to_python_type(ty) is typing.Any
+    assert _baml_ty_to_python_type(ty, BamlTypeMap()) is typing.Any
 
 
 # ---------------------------------------------------------------------------
@@ -150,12 +171,12 @@ def _generic_arg(name: str, ty_setter):
 
 
 def test_parameterize_no_args_returns_base():
-    assert _parameterize(Box, []) is Box
+    assert _parameterize(Box, [], BamlTypeMap()) is Box
 
 
 def test_parameterize_single_arg_int():
     args = [_generic_arg("T", lambda ty: ty.int_type.SetInParent())]
-    result = _parameterize(Box, args)
+    result = _parameterize(Box, args, BamlTypeMap())
     # Pydantic v2 caches `cls[args]`, so two calls produce the same class.
     assert result is Box[int]
 
@@ -163,7 +184,7 @@ def test_parameterize_single_arg_int():
 def test_parameterize_falls_back_for_non_generic_class():
     args = [_generic_arg("T", lambda ty: ty.int_type.SetInParent())]
     # Plain has no TypeVars; parameterization is a no-op.
-    assert _parameterize(Plain, args) is Plain
+    assert _parameterize(Plain, args, BamlTypeMap()) is Plain
 
 
 def test_parameterize_applies_to_generic_type_alias():
@@ -172,7 +193,7 @@ def test_parameterize_applies_to_generic_type_alias():
     not a class, but it's still subscriptable."""
     StringList = List[T]  # type: ignore[reportGeneralTypeIssues]  # TypeVar in function body — valid at runtime
     args = [_generic_arg("T", lambda ty: ty.int_type.SetInParent())]
-    assert _parameterize(StringList, args) == List[int]
+    assert _parameterize(StringList, args, BamlTypeMap()) == List[int]
 
 
 def test_parameterize_falls_back_for_fully_bound_alias():
@@ -180,7 +201,7 @@ def test_parameterize_falls_back_for_fully_bound_alias():
     # catches the TypeError and returns the alias unchanged.
     Concrete = List[int]
     args = [_generic_arg("T", lambda ty: ty.string_type.SetInParent())]
-    assert _parameterize(Concrete, args) is Concrete
+    assert _parameterize(Concrete, args, BamlTypeMap()) is Concrete
 
 
 # ---------------------------------------------------------------------------
@@ -208,21 +229,16 @@ def _build_class_value(fqn: str, fields: list, generic_args: list):
     return cv
 
 
-def test_decode_class_parameterizes_with_generic_args(monkeypatch):
+def test_decode_class_parameterizes_with_generic_args():
     """13b §3.1, §3.4 — a generic class with `generic_args = [int]` decodes
     to a `Box[int]` instance, not bare `Box`."""
     from baml_core import proto as proto_mod
 
-    # Patch `_resolve_type` so we don't need a runtime — return our local
-    # `Box` regardless of FQN.
-    def fake_resolve(fqn: str) -> type:
-        return Box
-
-    monkeypatch.setattr("baml_core._resolve_type", fake_resolve)
+    tm = _fresh_typemap_with(Box)
 
     args = [_generic_arg("T", lambda ty: ty.int_type.SetInParent())]
     cv = _build_class_value("user.lorem.Box", [("item", 5)], args)
-    result = proto_mod._decode_class(cv)
+    result = proto_mod._decode_class(cv, tm)
 
     # Parameterized instance: isinstance against the base still holds.
     assert isinstance(result, Box)
@@ -234,24 +250,21 @@ def test_decode_class_parameterizes_with_generic_args(monkeypatch):
     assert meta["args"] == (int,)
 
 
-def test_decode_class_graceful_degradation_when_args_empty(monkeypatch):
+def test_decode_class_graceful_degradation_when_args_empty():
     """13b §3.5 — when the Rust producer hasn't been updated yet,
     `generic_args` is empty. Decode still produces a usable instance —
     just unparameterized."""
     from baml_core import proto as proto_mod
 
-    def fake_resolve(fqn: str) -> type:
-        return Box
-
-    monkeypatch.setattr("baml_core._resolve_type", fake_resolve)
+    tm = _fresh_typemap_with(Box)
 
     cv = _build_class_value("user.lorem.Box", [("item", 5)], [])
-    result = proto_mod._decode_class(cv)
+    result = proto_mod._decode_class(cv, tm)
     assert isinstance(result, Box)
     assert result.item == 5
 
 
-def test_decode_class_nested_generic(monkeypatch):
+def test_decode_class_nested_generic():
     """13b §4 — a generic class containing generic instances decodes
     layer-by-layer; the inner `Box[int]` is parameterized before the
     outer `Crate.model_validate` runs, and isinstance holds at each
@@ -262,14 +275,7 @@ def test_decode_class_nested_generic(monkeypatch):
     """
     from baml_core import proto as proto_mod
 
-    def fake_resolve(fqn: str) -> type:
-        if fqn.endswith("Box"):
-            return Box
-        if fqn.endswith("Crate"):
-            return Crate
-        raise ValueError(f"unexpected fqn: {fqn}")
-
-    monkeypatch.setattr("baml_core._resolve_type", fake_resolve)
+    tm = _fresh_typemap_with(Box, Crate)
 
     box_args = [_generic_arg("T", lambda ty: ty.int_type.SetInParent())]
     box_a = _build_class_value("user.lorem.Box", [("item", 5)], box_args)
@@ -293,7 +299,7 @@ def test_decode_class_nested_generic(monkeypatch):
     for box_cv in (box_a, box_b):
         contents_field.value.list_value.items.add().class_value.CopyFrom(box_cv)
 
-    result = proto_mod._decode_class(crate_cv)
+    result = proto_mod._decode_class(crate_cv, tm)
     assert isinstance(result, Crate)
     assert len(result.contents) == 2
     for item in result.contents:

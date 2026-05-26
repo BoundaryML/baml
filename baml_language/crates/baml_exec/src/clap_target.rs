@@ -21,11 +21,14 @@ use std::collections::HashMap;
 use anyhow::Result;
 use bex_engine::{BexExternalValue, Ty, UserFunctionInfo};
 use clap::{
-    Arg, Command,
+    Arg, ArgMatches, Command,
     builder::{PossibleValuesParser, styling},
 };
 
-use crate::auto_cli::{is_auto_cli_primitive, parse_cli_value};
+use crate::{
+    auto_cli::{is_auto_cli_primitive, parse_cli_value},
+    envelope::TargetEntry,
+};
 
 /// Coerce a runtime [`String`] into a `&'static str` clap can consume.
 ///
@@ -107,6 +110,87 @@ pub fn parse_target_argv(
         .collect();
     let matches = cmd.try_get_matches_from(argv)?;
 
+    let cli_values = extract_cli_values(func_info, &matches).map_err(|(name, err)| {
+        clap::Error::raw(
+            clap::error::ErrorKind::ValueValidation,
+            format!("invalid value for `--{name}`: {err}\n"),
+        )
+        .with_cmd(&build_target_command(bin_name, function_name, func_info))
+    })?;
+    let json_source = matches.get_one::<String>("json-args").cloned();
+
+    Ok(ParsedTargetArgs {
+        cli_values,
+        json_source,
+    })
+}
+
+/// Multi-subcommand variant: `bin_name <subcommand> [OPTIONS]`. Each entry
+/// in `targets` becomes one subcommand; the chosen subcommand's typed
+/// args are decoded into a [`ParsedTargetArgs`].
+///
+/// `lookups` maps `qualified_name` → [`UserFunctionInfo`] for every entry
+/// in `targets`. Caller is responsible for keeping the two in sync.
+///
+/// Returns `(chosen_qualified_name, ParsedTargetArgs)`. Help requests
+/// (top-level or per-subcommand), unknown subcommands, unknown flags, and
+/// missing required values all come back as `clap::Error`.
+pub fn parse_multi_target_argv(
+    bin_name: &str,
+    targets: &[TargetEntry],
+    lookups: &HashMap<String, UserFunctionInfo>,
+    tokens: &[String],
+) -> Result<(String, ParsedTargetArgs), clap::Error> {
+    let cmd = build_multi_target_command(bin_name, targets, lookups);
+
+    let argv: Vec<String> = std::iter::once(bin_name.to_string())
+        .chain(tokens.iter().cloned())
+        .collect();
+    let matches = cmd.try_get_matches_from(argv)?;
+
+    // `subcommand_required(true)` ensures clap rejects empty invocations
+    // with `MissingSubcommand` before we reach here, so the `None` arm is
+    // a defensive bail rather than a real reachable state.
+    let (sub_name, sub_matches) = matches.subcommand().ok_or_else(|| {
+        clap::Error::raw(
+            clap::error::ErrorKind::MissingSubcommand,
+            "no subcommand specified\n",
+        )
+    })?;
+
+    let entry = targets
+        .iter()
+        .find(|t| t.subcommand_name == sub_name)
+        .expect("clap matched a subcommand that wasn't registered");
+    let info = lookups
+        .get(&entry.qualified_name)
+        .expect("lookups missing entry for registered subcommand");
+
+    let cli_values = extract_cli_values(info, sub_matches).map_err(|(name, err)| {
+        clap::Error::raw(
+            clap::error::ErrorKind::ValueValidation,
+            format!("invalid value for `--{name}`: {err}\n"),
+        )
+        .with_cmd(&build_multi_target_command(bin_name, targets, lookups))
+    })?;
+    let json_source = sub_matches.get_one::<String>("json-args").cloned();
+
+    Ok((
+        entry.qualified_name.clone(),
+        ParsedTargetArgs {
+            cli_values,
+            json_source,
+        },
+    ))
+}
+
+/// Pull typed primitive values out of `matches` for a single target.
+/// Returns `Err((param_name, message))` on conversion failure so the
+/// caller can attach the proper `clap::Command` for nice rendering.
+fn extract_cli_values(
+    func_info: &UserFunctionInfo,
+    matches: &ArgMatches,
+) -> Result<HashMap<String, BexExternalValue>, (String, String)> {
     let mut cli_values = HashMap::new();
     for (name, ty) in func_info
         .param_names
@@ -124,22 +208,10 @@ pub fn parse_target_argv(
         // unknown flags, repeated flags) — semantic conversion of
         // primitives still lives here so enum/null/optional handling
         // doesn't get duplicated.
-        let value = parse_cli_value(raw, ty).map_err(|e| {
-            clap::Error::raw(
-                clap::error::ErrorKind::ValueValidation,
-                format!("invalid value for `--{name}`: {e}\n"),
-            )
-            .with_cmd(&build_target_command(bin_name, function_name, func_info))
-        })?;
+        let value = parse_cli_value(raw, ty).map_err(|e| (name.clone(), format!("{e}")))?;
         cli_values.insert(name.clone(), value);
     }
-
-    let json_source = matches.get_one::<String>("json-args").cloned();
-
-    Ok(ParsedTargetArgs {
-        cli_values,
-        json_source,
-    })
+    Ok(cli_values)
 }
 
 /// Build the clap [`Command`] that backs a typed target's CLI.
@@ -155,7 +227,20 @@ fn build_target_command(
     func_info: &UserFunctionInfo,
 ) -> Command {
     let display = function_name.strip_prefix("user.").unwrap_or(function_name);
-    let about = function_signature(display, func_info);
+    build_target_command_with_name(bin_name, display, func_info).styles(CLAP_STYLING)
+}
+
+/// Per-target [`Command`] builder, parameterized on the command name so
+/// it can be reused as both the top-level single-target command and a
+/// subcommand of a multi-target parser. Styling is the caller's job —
+/// the top-level command applies [`CLAP_STYLING`] once, which clap
+/// propagates to every subcommand it owns.
+fn build_target_command_with_name(
+    cmd_name: &str,
+    display_name: &str,
+    func_info: &UserFunctionInfo,
+) -> Command {
+    let about = function_signature(display_name, func_info);
 
     // Clap's `Id` and `Str` types are constructible from `&'static str`,
     // not `String`. For runtime-built commands the standard escape hatch
@@ -163,9 +248,8 @@ fn build_target_command(
     // string bytes that survive the process. That's the same memory
     // pattern as a compile-time clap derive (one-time string allocation
     // per binary), just deferred to the first call.
-    let mut cmd = Command::new(leak(bin_name.to_string()))
+    let mut cmd = Command::new(leak(cmd_name.to_string()))
         .about(about)
-        .styles(CLAP_STYLING)
         // Clap's default `help` subcommand makes no sense for a typed
         // target — entry points don't have subcommands.
         .disable_help_subcommand(true)
@@ -198,14 +282,19 @@ fn build_target_command(
             .get(idx)
             .copied()
             .unwrap_or(false);
-        let required = !has_default;
         let name_static: &'static str = leak(name.clone());
         let value_name: &'static str = leak(ty.to_string());
         let mut arg = Arg::new(name_static)
             .long(name_static)
-            .value_name(value_name)
-            .required(required);
-        if has_default {
+            .value_name(value_name);
+        // `--json-args` is an alternative delivery channel — a primitive
+        // param is satisfied by `--json-args` even without its `--name`
+        // flag, so require the flag only when neither `--json-args` nor
+        // a default is in play. `dispatch` does the final "every param
+        // bound?" check with a typed error if anything is missing.
+        if !has_default {
+            arg = arg.required_unless_present("json-args");
+        } else {
             arg = arg.help("[optional]");
         }
         // Validate finite-domain types at parse time so clap can offer
@@ -246,6 +335,38 @@ fn build_target_command(
     }
 
     cmd
+}
+
+/// Build a multi-subcommand clap [`Command`]: `bin_name <SUB>` with one
+/// subcommand per [`TargetEntry`]. Each subcommand owns the same
+/// per-parameter args as [`build_target_command_with_name`] would
+/// produce, plus a per-subcommand `--json-args`.
+fn build_multi_target_command(
+    bin_name: &str,
+    targets: &[TargetEntry],
+    lookups: &HashMap<String, UserFunctionInfo>,
+) -> Command {
+    let mut root = Command::new(leak(bin_name.to_string()))
+        .styles(CLAP_STYLING)
+        // Every target is a subcommand; clap's auto-generated `help`
+        // subcommand is fine here (unlike the single-target case) and
+        // is the convention multi-subcommand CLIs follow.
+        .disable_version_flag(true)
+        // Empty invocations should print the top-level help and exit
+        // non-zero, mirroring `git`/`cargo`. clap's combination of
+        // `subcommand_required(true) + arg_required_else_help(true)`
+        // does both.
+        .subcommand_required(true)
+        .arg_required_else_help(true);
+
+    for entry in targets {
+        let info = lookups
+            .get(&entry.qualified_name)
+            .expect("lookups must include every registered target");
+        let sub = build_target_command_with_name(&entry.subcommand_name, &entry.display_name, info);
+        root = root.subcommand(sub);
+    }
+    root
 }
 
 /// `function llm.Summarize(text: string, max_words: int [optional]) -> string`
@@ -489,5 +610,434 @@ mod tests {
         let info = func_info(&["text"], vec![ty_string()], vec![false], ty_string());
         let err = parse_target_argv("./Test", "user.Test", &info, &["--help".into()]).unwrap_err();
         assert_eq!(err.kind(), clap::error::ErrorKind::DisplayHelp);
+    }
+
+    // ── Defaulted parameters ──────────────────────────────────────────
+
+    /// A primitive param with `has_default = true` is omittable on the
+    /// CLI — clap doesn't mark it required, and the parser succeeds even
+    /// with no value supplied. The dispatch layer handles the omission
+    /// downstream via `OmittedDefault`.
+    #[test]
+    fn parse_target_argv_defaulted_primitive_can_be_omitted() {
+        let info = func_info(
+            &["text", "count"],
+            vec![ty_string(), ty_int()],
+            vec![false, true], // count has a default
+            ty_string(),
+        );
+        let parsed = parse_target_argv(
+            "./Test",
+            "user.Test",
+            &info,
+            &["--text".into(), "hi".into()],
+        )
+        .expect("missing defaulted `--count` should NOT error");
+        // `count` is absent from cli_values — caller's dispatch will
+        // turn that into `OmittedDefault` so the BAML default runs.
+        assert!(parsed.cli_values.contains_key("text"));
+        assert!(
+            !parsed.cli_values.contains_key("count"),
+            "defaulted-and-omitted params don't appear in cli_values"
+        );
+    }
+
+    /// Defaulted param *passed explicitly* binds like any other primitive.
+    #[test]
+    fn parse_target_argv_defaulted_primitive_can_be_overridden() {
+        let info = func_info(&["count"], vec![ty_int()], vec![true], ty_string());
+        let parsed = parse_target_argv(
+            "./Test",
+            "user.Test",
+            &info,
+            &["--count".into(), "42".into()],
+        )
+        .unwrap();
+        assert_eq!(parsed.cli_values.len(), 1);
+    }
+
+    /// The missing-required error names only the *non-defaulted* missing
+    /// params; a defaulted param being absent isn't an error and isn't
+    /// surfaced.
+    #[test]
+    fn parse_target_argv_missing_required_skips_defaulted() {
+        let info = func_info(
+            &["text", "count"],
+            vec![ty_string(), ty_int()],
+            vec![false, true],
+            ty_string(),
+        );
+        let err = parse_target_argv("./Test", "user.Test", &info, &[]).unwrap_err();
+        assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
+        let rendered = format!("{err}");
+        assert!(
+            rendered.contains("--text"),
+            "should name `--text`; got: {rendered}"
+        );
+        assert!(
+            !rendered.contains("--count"),
+            "must NOT cite defaulted `--count` as missing; got: {rendered}"
+        );
+    }
+
+    /// Bool with default → CLI surfaces `[optional]` annotation in help
+    /// and stays omittable. Behavioral check via successful parse with
+    /// no `--flag` token.
+    #[test]
+    fn parse_target_argv_defaulted_bool_omittable() {
+        let info = func_info(&["flag"], vec![ty_bool()], vec![true], ty_string());
+        let parsed =
+            parse_target_argv("./Test", "user.Test", &info, &[]).expect("optional bool ok");
+        assert!(parsed.cli_values.is_empty());
+    }
+
+    /// Defaulted param + `--json-args` providing a value → `--json-args`
+    /// carries the value to dispatch. The clap layer doesn't see it (we
+    /// stash `json_source` for dispatch to merge), but the parse must
+    /// succeed without `--name` being supplied either.
+    #[test]
+    fn parse_target_argv_defaulted_satisfied_by_json_args() {
+        let info = func_info(&["count"], vec![ty_int()], vec![true], ty_string());
+        let parsed = parse_target_argv(
+            "./Test",
+            "user.Test",
+            &info,
+            &["--json-args".into(), r#"{"count": 42}"#.into()],
+        )
+        .unwrap();
+        assert!(parsed.cli_values.is_empty());
+        assert_eq!(
+            parsed.json_source.as_deref(),
+            Some(r#"{"count": 42}"#),
+            "json_source should carry through verbatim"
+        );
+    }
+
+    // ── Defaulted params on the multi-subcommand parser ─────────────
+
+    /// Subcommand variant of `defaulted_primitive_can_be_omitted` — a
+    /// defaulted param under a subcommand can be left off, and the
+    /// chosen subcommand's other required params are still validated.
+    #[test]
+    fn parse_multi_target_argv_defaulted_param_under_subcommand_omittable() {
+        let mut info = func_info(
+            &["text", "count"],
+            vec![ty_string(), ty_int()],
+            vec![false, true],
+            ty_string(),
+        );
+        info.qualified_name = "user.summarize".into();
+        info.display_name = "summarize".into();
+        let entry = TargetEntry {
+            qualified_name: "user.summarize".into(),
+            display_name: "summarize".into(),
+            subcommand_name: "summarize".into(),
+        };
+        let mut lookups = HashMap::new();
+        lookups.insert("user.summarize".to_string(), info);
+
+        let (chosen, parsed) = parse_multi_target_argv(
+            "./cli",
+            &[entry],
+            &lookups,
+            &["summarize".into(), "--text".into(), "hi".into()],
+        )
+        .expect("defaulted `count` should be omittable");
+        assert_eq!(chosen, "user.summarize");
+        assert!(parsed.cli_values.contains_key("text"));
+        assert!(!parsed.cli_values.contains_key("count"));
+    }
+
+    /// Subcommand with a required param missing while a defaulted param
+    /// is also absent → error names only the required one.
+    #[test]
+    fn parse_multi_target_argv_missing_required_under_subcommand_names_only_required() {
+        let mut info = func_info(
+            &["text", "count"],
+            vec![ty_string(), ty_int()],
+            vec![false, true],
+            ty_string(),
+        );
+        info.qualified_name = "user.summarize".into();
+        info.display_name = "summarize".into();
+        let entry = TargetEntry {
+            qualified_name: "user.summarize".into(),
+            display_name: "summarize".into(),
+            subcommand_name: "summarize".into(),
+        };
+        let mut lookups = HashMap::new();
+        lookups.insert("user.summarize".to_string(), info);
+
+        let err = parse_multi_target_argv("./cli", &[entry], &lookups, &["summarize".into()])
+            .unwrap_err();
+        assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
+        let rendered = format!("{err}");
+        assert!(rendered.contains("--text"), "got: {rendered}");
+        assert!(
+            !rendered.contains("--count"),
+            "defaulted param must not appear in the missing-required list; got: {rendered}"
+        );
+    }
+
+    /// `--json-args` alone satisfies a primitive parameter — the
+    /// `required_unless_present` flag wiring means we don't get a
+    /// false-positive `MissingRequiredArgument`. Regression test for the
+    /// bug where `./cli describe --json-args='{"ty":"x"}'` was rejected.
+    #[test]
+    fn parse_target_argv_primitive_satisfied_by_json_args() {
+        let info = func_info(&["ty"], vec![ty_string()], vec![false], ty_string());
+        let parsed = parse_target_argv(
+            "./Test",
+            "user.Test",
+            &info,
+            &["--json-args".into(), r#"{"ty":"x"}"#.into()],
+        )
+        .expect("--json-args alone should satisfy primitive param");
+        // Primitive isn't on the CLI side; the value flows in through
+        // json_source and `dispatch` decodes it later.
+        assert!(parsed.cli_values.is_empty());
+        assert_eq!(parsed.json_source.as_deref(), Some(r#"{"ty":"x"}"#));
+    }
+
+    // ── parse_multi_target_argv ───────────────────────────────────────
+
+    /// Helper: build a `TargetEntry` + matching `func_info` pair for one
+    /// function. Subcommand name defaults to the display name's last
+    /// `.`-segment, matching `pack_command`'s `resolve_one`.
+    fn target_entry(
+        qualified: &str,
+        info_param_names: &[&str],
+        info_param_types: Vec<Ty>,
+        info_param_defaults: Vec<bool>,
+    ) -> (TargetEntry, UserFunctionInfo) {
+        let display = qualified.strip_prefix("user.").unwrap_or(qualified);
+        let sub = display.rsplit('.').next().unwrap_or(display);
+        let mut info = func_info(
+            info_param_names,
+            info_param_types,
+            info_param_defaults,
+            ty_string(),
+        );
+        info.qualified_name = qualified.to_string();
+        info.display_name = display.to_string();
+        let entry = TargetEntry {
+            qualified_name: qualified.to_string(),
+            display_name: display.to_string(),
+            subcommand_name: sub.to_string(),
+        };
+        (entry, info)
+    }
+
+    /// Take ownership of the target pairs and split into the two shapes
+    /// `parse_multi_target_argv` wants: an ordered `entries` slice and a
+    /// `lookups` map keyed on qualified name. Returning by value avoids
+    /// the `.clone()`-per-pair pattern at call sites.
+    fn split_targets(
+        pairs: Vec<(TargetEntry, UserFunctionInfo)>,
+    ) -> (Vec<TargetEntry>, HashMap<String, UserFunctionInfo>) {
+        let mut entries = Vec::with_capacity(pairs.len());
+        let mut lookups = HashMap::with_capacity(pairs.len());
+        for (entry, info) in pairs {
+            lookups.insert(info.qualified_name.clone(), info);
+            entries.push(entry);
+        }
+        (entries, lookups)
+    }
+
+    /// Happy path: two subcommands, user picks one, typed value comes
+    /// back bound to that subcommand's signature.
+    #[test]
+    fn parse_multi_target_argv_dispatches_to_subcommand() {
+        let (entries, lookups) = split_targets(vec![
+            target_entry("user.describe", &["ty"], vec![ty_string()], vec![false]),
+            target_entry(
+                "user.greet",
+                &["name", "excited"],
+                vec![ty_string(), ty_bool()],
+                vec![false, false],
+            ),
+        ]);
+
+        let (chosen, parsed) = parse_multi_target_argv(
+            "./cli",
+            &entries,
+            &lookups,
+            &[
+                "greet".into(),
+                "--name".into(),
+                "Avery".into(),
+                "--excited".into(),
+                "true".into(),
+            ],
+        )
+        .expect("greet subcommand should parse");
+        assert_eq!(chosen, "user.greet");
+        assert_eq!(parsed.cli_values.len(), 2);
+        assert!(parsed.json_source.is_none());
+    }
+
+    /// No subcommand → `arg_required_else_help(true)` fires as
+    /// `DisplayHelpOnMissingArgumentOrSubcommand`, NOT `DisplayHelp`.
+    /// The host classifies this as exit-non-zero (vs. user-asked `-h`
+    /// which is exit-0).
+    #[test]
+    fn parse_multi_target_argv_empty_invocation_is_not_help_request() {
+        let (entries, lookups) = split_targets(vec![target_entry(
+            "user.describe",
+            &["ty"],
+            vec![ty_string()],
+            vec![false],
+        )]);
+        let err = parse_multi_target_argv("./cli", &entries, &lookups, &[]).unwrap_err();
+        assert!(
+            !matches!(err.kind(), clap::error::ErrorKind::DisplayHelp),
+            "empty must not classify as a help request (would route to exit 0); got: {err}"
+        );
+    }
+
+    /// User typed `-h` after the subcommand → that subcommand's help
+    /// renders (`DisplayHelp`), distinct from the no-subcommand case.
+    #[test]
+    fn parse_multi_target_argv_subcommand_help_is_display_help() {
+        let (entries, lookups) = split_targets(vec![target_entry(
+            "user.describe",
+            &["ty"],
+            vec![ty_string()],
+            vec![false],
+        )]);
+        let err = parse_multi_target_argv(
+            "./cli",
+            &entries,
+            &lookups,
+            &["describe".into(), "--help".into()],
+        )
+        .unwrap_err();
+        assert_eq!(err.kind(), clap::error::ErrorKind::DisplayHelp);
+    }
+
+    /// Unknown subcommand → clap's `InvalidSubcommand` (with did-you-mean).
+    #[test]
+    fn parse_multi_target_argv_unknown_subcommand_errors() {
+        let (entries, lookups) = split_targets(vec![target_entry(
+            "user.describe",
+            &["ty"],
+            vec![ty_string()],
+            vec![false],
+        )]);
+        let err =
+            parse_multi_target_argv("./cli", &entries, &lookups, &["greet".into()]).unwrap_err();
+        assert!(
+            matches!(
+                err.kind(),
+                clap::error::ErrorKind::InvalidSubcommand | clap::error::ErrorKind::UnknownArgument
+            ),
+            "got: {err}"
+        );
+    }
+
+    /// `--json-args` after the subcommand alone satisfies primitive
+    /// params. Same `required_unless_present` regression coverage as the
+    /// single-target variant, but on the multi-target parser.
+    #[test]
+    fn parse_multi_target_argv_json_args_satisfies_primitive() {
+        let (entries, lookups) = split_targets(vec![target_entry(
+            "user.describe",
+            &["ty"],
+            vec![ty_string()],
+            vec![false],
+        )]);
+        let (chosen, parsed) = parse_multi_target_argv(
+            "./cli",
+            &entries,
+            &lookups,
+            &[
+                "describe".into(),
+                "--json-args".into(),
+                r#"{"ty":"x"}"#.into(),
+            ],
+        )
+        .expect("--json-args alone should satisfy `ty`");
+        assert_eq!(chosen, "user.describe");
+        assert!(parsed.cli_values.is_empty());
+        assert_eq!(parsed.json_source.as_deref(), Some(r#"{"ty":"x"}"#));
+    }
+
+    /// Missing required *under* the subcommand (no `--json-args`, no
+    /// `--ty`) → `MissingRequiredArgument`. Confirms the per-subcommand
+    /// required check still fires when `--json-args` isn't filling in.
+    #[test]
+    fn parse_multi_target_argv_missing_required_under_subcommand() {
+        let (entries, lookups) = split_targets(vec![target_entry(
+            "user.describe",
+            &["ty"],
+            vec![ty_string()],
+            vec![false],
+        )]);
+        let err =
+            parse_multi_target_argv("./cli", &entries, &lookups, &["describe".into()]).unwrap_err();
+        assert_eq!(
+            err.kind(),
+            clap::error::ErrorKind::MissingRequiredArgument,
+            "got: {err}"
+        );
+    }
+
+    /// Each subcommand owns its own `--name` namespace — passing
+    /// subcommand A's flag inside subcommand B is an unknown-flag error,
+    /// not a silent accept.
+    #[test]
+    fn parse_multi_target_argv_subcommand_flags_are_isolated() {
+        let (entries, lookups) = split_targets(vec![
+            target_entry("user.describe", &["ty"], vec![ty_string()], vec![false]),
+            target_entry(
+                "user.greet",
+                &["name", "excited"],
+                vec![ty_string(), ty_bool()],
+                vec![false, false],
+            ),
+        ]);
+        let err = parse_multi_target_argv(
+            "./cli",
+            &entries,
+            &lookups,
+            &["describe".into(), "--name".into(), "Avery".into()],
+        )
+        .unwrap_err();
+        assert!(
+            matches!(
+                err.kind(),
+                clap::error::ErrorKind::UnknownArgument | clap::error::ErrorKind::InvalidSubcommand
+            ),
+            "describe shouldn't accept greet's `--name`; got: {err}"
+        );
+    }
+
+    /// Verb-level (pre-subcommand) `--json-args` is NOT accepted — the
+    /// spec puts json args inside the chosen subcommand, not at root.
+    /// This test pins the design so a future "global args" rework
+    /// doesn't quietly add it.
+    #[test]
+    fn parse_multi_target_argv_does_not_accept_root_json_args() {
+        let (entries, lookups) = split_targets(vec![target_entry(
+            "user.describe",
+            &["ty"],
+            vec![ty_string()],
+            vec![false],
+        )]);
+        let err = parse_multi_target_argv(
+            "./cli",
+            &entries,
+            &lookups,
+            &[
+                "--json-args".into(),
+                r#"{"ty":"x"}"#.into(),
+                "describe".into(),
+            ],
+        )
+        .unwrap_err();
+        assert!(
+            !matches!(err.kind(), clap::error::ErrorKind::DisplayHelp),
+            "root `--json-args` should be a parse error, not help; got: {err}"
+        );
     }
 }

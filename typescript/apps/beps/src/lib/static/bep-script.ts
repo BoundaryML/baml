@@ -735,6 +735,20 @@ def main():
     open_parser = subparsers.add_parser("open", help="Open BEP in browser")
     open_parser.add_argument("ref", help="BEP number or slug")
     
+    # comments
+    comments_parser = subparsers.add_parser("comments", help="Fetch comments for a BEP")
+    comments_parser.add_argument("ref", help="BEP number or slug")
+    comments_parser.add_argument("--include-resolved", action="store_true", help="Include resolved comments")
+    comments_parser.add_argument("--format", choices=["json", "markdown"], default=None, help="Output format")
+    comments_parser.add_argument("--json", action="store_true", help="Output as JSON")
+    
+    # reply
+    reply_parser = subparsers.add_parser("reply", help="Reply to a comment on a BEP")
+    reply_parser.add_argument("ref", help="BEP number or slug")
+    reply_parser.add_argument("comment_id", help="ID of the comment to reply to")
+    reply_parser.add_argument("content", help="Reply content")
+    reply_parser.add_argument("--type", choices=["discussion", "concern", "question"], default="discussion", help="Comment type")
+    
     args = parser.parse_args()
     
     if args.command is None:
@@ -748,6 +762,8 @@ def main():
         "diff": cmd_diff,
         "push": cmd_push,
         "open": cmd_open,
+        "comments": cmd_comments,
+        "reply": cmd_reply,
     }
     
     return commands[args.command](args)

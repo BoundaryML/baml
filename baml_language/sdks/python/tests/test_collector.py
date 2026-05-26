@@ -119,7 +119,7 @@ function OuterPipeline(input: string) -> string {{
 def rt():
     """Fresh BamlRuntime with expression functions for each test."""
     return BamlRuntime.initialize_runtime(
-        ".", {"main.baml": BAML_SOURCE}, sdk_root="__bridge_python_tests__"
+        ".", {"main.baml": BAML_SOURCE}
     )
 
 
@@ -151,7 +151,7 @@ def llm_rt(mock_server):
     """BamlRuntime with a single LLM function (TestLLM) pointing to mock server."""
     source = SINGLE_LLM_TEMPLATE.format(mock_url=mock_server)
     return BamlRuntime.initialize_runtime(
-        ".", {"main.baml": source}, sdk_root="__bridge_python_tests__"
+        ".", {"main.baml": source}
     )
 
 
@@ -169,7 +169,7 @@ def pipeline_rt(mock_server):
     """BamlRuntime with pipeline LLM functions pointing to mock server."""
     source = PIPELINE_LLM_TEMPLATE.format(mock_url=mock_server)
     return BamlRuntime.initialize_runtime(
-        ".", {"main.baml": source}, sdk_root="__bridge_python_tests__"
+        ".", {"main.baml": source}
     )
 
 

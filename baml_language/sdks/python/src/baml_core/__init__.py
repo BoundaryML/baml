@@ -5,7 +5,6 @@
 # encoder/decoder, the three factory entry points, and `get_runtime()`.
 
 import atexit
-import importlib
 from typing import Any, Callable, Dict, List, Literal, Optional, Sequence
 
 from .baml_py import (
@@ -32,6 +31,11 @@ from .baml_py import (
 from ._stream import BamlStream
 from .ctx_manager import CtxManager as BamlCtxManager
 from .proto import decode_call_result, encode_call_args
+from .typemap import (
+    BamlTypeMap,
+    set_type_map,
+    get_type_map,
+)
 
 
 # Flush buffered trace events on process exit so nothing is lost.
@@ -114,7 +118,7 @@ class Collector(_RustCollector):
 
 
 # ---------------------------------------------------------------------------
-# Runtime accessor + sdk_root routing (consumed by the outbound decoder)
+# Runtime accessor
 # ---------------------------------------------------------------------------
 
 
@@ -122,57 +126,6 @@ def get_runtime() -> BamlRuntime:
     """Return the process-global `BamlRuntime` singleton, or raise
     `BamlError` if `BamlRuntime.initialize_runtime(...)` has not run yet."""
     return _rust_get_runtime()
-
-
-def _routed_python_path(baml_fqn: str) -> str:
-    """Map a BAML FQN (e.g. ``user.lorem.Resume``) to a Python subpath
-    under ``baml_sdk`` per 09b §1. Pure function; memoized below.
-
-    Emit always fully qualifies, so the FQN's first segment is the
-    literal package name: `user.*` → user-package leaves, `baml.*` →
-    stdlib, anything else → `vendor/<pkg>/...`. See
-    `12a-namespace-rules.md §5`.
-    """
-    pkg, _, tail = baml_fqn.partition(".")
-    if not tail:
-        raise ValueError(f"Unrecognised BAML FQN: {baml_fqn!r}")
-    if pkg == "user":
-        return tail
-    if pkg == "baml":
-        return f"baml.{tail}"
-    return f"vendor.{baml_fqn}"
-
-
-_RESOLVE_TYPE_CACHE: Dict[str, type] = {}
-
-
-def _resolve_type(baml_type_expr: str) -> type:
-    """Resolve a BAML type expression (FQN, optionally `$stream`-suffixed)
-    to the Python class under `sdk_root`. Phase-4 extends this; phase 3
-    only wires up the memoization + import path so the decoder has a
-    seam to drop into.
-    """
-    cached = _RESOLVE_TYPE_CACHE.get(baml_type_expr)
-    if cached is not None:
-        return cached
-
-    expr = baml_type_expr
-    is_stream = False
-    if expr.endswith("$stream"):
-        expr = expr[: -len("$stream")]
-        is_stream = True
-
-    subpath = _routed_python_path(expr)
-    if is_stream:
-        subpath = f"stream_types.{subpath}"
-
-    sdk_root = get_runtime()._sdk_root
-    full = f"{sdk_root}.{subpath}"
-    module_path, _, type_name = full.rpartition(".")
-    module = importlib.import_module(module_path)
-    resolved = getattr(module, type_name)
-    _RESOLVE_TYPE_CACHE[baml_type_expr] = resolved
-    return resolved
 
 
 # ---------------------------------------------------------------------------
@@ -243,12 +196,23 @@ def _build_kwargs(
     return built
 
 
-def _make_call(
+def define_function(
     baml_fqn: str,
     mode: Mode,
     param_names: List[str],
     required_positional_count: Optional[int] = None,
 ) -> Callable[..., Any]:
+    """Factory for a BAML callable (free function, static method, or
+    instance method). Captures the call contract by closure; returns a
+    callable that zips positional args against `param_names`, encodes
+    them, and hands the result to `decode_call_result`.
+
+    For instance methods, `param_names[0]` is `"self"` — Python's
+    descriptor protocol supplies the receiver as positional arg 0 when
+    the returned callable is installed as a class attribute. Static
+    methods are wrapped in `staticmethod(...)` by codegen to suppress
+    that injection.
+    """
     # Codegen always emits fully-qualified `<pkg>.<ns…>.<name>` FQNs and
     # the engine stores user functions under the same form (see
     # `12a-namespace-rules.md §5`); no translation step needed.
@@ -260,9 +224,6 @@ def _make_call(
             args_proto = encode_call_args(merged)
             result_bytes = rt.call_function_sync(baml_fqn, args_proto, None, None, None)
             return decode_call_result(result_bytes)
-
-        _sync.__name__ = baml_fqn.rsplit(".", 1)[-1] or baml_fqn
-        _sync.__qualname__ = _sync.__name__
         return _sync
     elif mode == "async":
         async def _async(*args: Any, **kwargs: Any) -> Any:
@@ -271,49 +232,9 @@ def _make_call(
             args_proto = encode_call_args(merged)
             result_bytes = await rt.call_function(baml_fqn, args_proto, None, None, None)
             return decode_call_result(result_bytes)
-
-        _async.__name__ = baml_fqn.rsplit(".", 1)[-1] or baml_fqn
-        _async.__qualname__ = _async.__name__
         return _async
     else:
         raise ValueError(f"mode must be 'sync' or 'async', got {mode!r}")
-
-
-def define_function(
-    baml_fqn: str,
-    mode: Mode,
-    param_names: List[str],
-    required_positional_count: Optional[int] = None,
-) -> Callable[..., Any]:
-    """Factory for a free BAML function. Captures the call contract by
-    closure; returns a callable that zips positional args against
-    `param_names`, encodes them, and hands the result to `decode_call_result`."""
-    return _make_call(baml_fqn, mode, param_names, required_positional_count)
-
-
-def define_static_method(
-    baml_fqn: str,
-    mode: Mode,
-    param_names: List[str],
-    required_positional_count: Optional[int] = None,
-) -> Callable[..., Any]:
-    """Factory for a BAML static method. Same contract as `define_function`
-    today; a distinct name lets codegen route stdlib-shaped call sites
-    without branching on string shape."""
-    return _make_call(baml_fqn, mode, param_names, required_positional_count)
-
-
-def define_instance_method(
-    baml_fqn: str,
-    mode: Mode,
-    param_names: List[str],
-    required_positional_count: Optional[int] = None,
-) -> Callable[..., Any]:
-    """Factory for a BAML instance method. `param_names[0]` is expected
-    to be ``"self"``; Python's descriptor protocol supplies the receiver
-    as positional arg 0 when the returned callable is installed as a
-    class attribute."""
-    return _make_call(baml_fqn, mode, param_names, required_positional_count)
 
 
 __all__ = [
@@ -342,6 +263,7 @@ __all__ = [
     "call_function",
     "call_function_sync",
     "define_function",
-    "define_static_method",
-    "define_instance_method",
+    "BamlTypeMap",
+    "set_type_map",
+    "get_type_map",
 ]

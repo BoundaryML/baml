@@ -1,8 +1,9 @@
 //! Python SDK emitter. Produces a structurally correct `baml_sdk/`
 //! tree from a `SymbolPool`: one `__init__.py` (and `.pyi` companion)
-//! per directory, plus `baml/_inlinedbaml.py` and the PEP 561
-//! `py.typed` marker. Each leaf that routes at least one symbol
-//! carries stub Python definitions and an `__all__` trailer.
+//! per directory, plus `_inlinedbaml.py`, `_typemap.py`, and the PEP 561
+//! `py.typed` marker — all at the SDK root. Each leaf that routes at
+//! least one symbol carries stub Python definitions and an `__all__`
+//! trailer.
 
 mod emit;
 mod leaf;
@@ -20,7 +21,7 @@ use baml_codegen_types::{Name, Symbol, SymbolPool};
 pub use baml_codegen_types::{NamingConvention, OutputType};
 
 use crate::{
-    emit::build_emitted,
+    emit::{build_emitted, typemap_file::render_typemap_module},
     leaf::{LeafBody, group_and_sort, render_leaf_body, render_leaf_body_pyi},
     routing::{LeafPath, route},
 };
@@ -110,9 +111,11 @@ pub fn to_source_code(
         leaves.insert(route(key, symbol));
     }
 
-    // `baml/` always exists (hosts `_inlinedbaml.py`), even if no
-    // stdlib symbols routed there — the root init imports `_inlinedbaml`
-    // from it. The root leaf itself is always emitted as well.
+    // `baml/` always exists — even if no stdlib symbols route there,
+    // leaves that reference `baml.media.*` / `baml.llm.*` need the
+    // subpackage to import from. The root leaf itself is always emitted
+    // as well. (25b2 Phase 2 relocated `_inlinedbaml.py` to the SDK
+    // root; `baml/` is no longer load-bearing for the root init.)
     leaves.insert(LeafPath {
         segments: vec!["baml".to_string()],
     });
@@ -171,15 +174,40 @@ pub fn to_source_code(
         content.push_str(&render_leaf_body(body));
         out.insert(init_py_path(dir), content);
 
-        // `.pyi` sibling — same re-export shape, different body family,
-        let mut pyi_content = render_package_init(&kids);
+        // `.pyi` sibling — pyright wants the classical
+        // `from . import <child>` cascade for dotted access, so we
+        // emit re-exports here instead of the runtime PEP 562
+        // `__getattr__` hook. The root `.pyi` drops all the
+        // `BamlRuntime`/`set_type_map` runtime wiring too.
+        let mut pyi_content = if dir.is_empty() {
+            render_root_init_pyi(&kids)
+        } else {
+            render_package_init_pyi(&kids)
+        };
         pyi_content.push_str(&render_leaf_body_pyi(body));
         out.insert(init_pyi_path(dir), pyi_content);
     }
 
+    // `_inlinedbaml.py` lives at the SDK root so the root init can
+    // `from . import _inlinedbaml` without loading the `baml/` subpackage
+    // (25b2 Phase 2). After Phase 4 drops the eager leaf cascade, the
+    // root init's only relative imports are `_inlinedbaml` and `_typemap`
+    // — both root-level data modules.
     out.insert(
-        PathBuf::from("baml/_inlinedbaml.py"),
+        PathBuf::from("_inlinedbaml.py"),
         render_inlinedbaml(user_baml_files),
+    );
+
+    // Codegen-emitted typemap (25b2 Phase 2 / 25a2 §4.1): three literal
+    // dicts of `FQN → (module_path, attr_name)` lazy entries plus the
+    // `BamlTypeMap.from_lazy_entries(...)` call. The root init imports
+    // this module and calls `set_type_map(_TYPE_MAP)` before any leaf
+    // import so the per-leaf `_register_class(...)` trailers (still
+    // emitted in Phase 2) mutate the same typemap the lazy entries
+    // pre-populated.
+    out.insert(
+        PathBuf::from("_typemap.py"),
+        render_typemap_module(&bodies, "baml_sdk"),
     );
 
     // Emit PEP 561 marker. Stays empty — type checkers only check for
@@ -218,78 +246,111 @@ fn init_pyi_path(dir: &[String]) -> PathBuf {
     path
 }
 
-#[derive(askama::Template)]
-#[template(
-    source = r#"from __future__ import annotations
-{%- if has_children %}
-
-from . import {{ children_csv }}
-{%- endif %}"#,
-    ext = "py.j2",
-    escape = "none"
-)]
-struct PackageInit {
-    has_children: bool,
-    children_csv: String,
-}
-
-/// Render a non-root package `__init__.py` / `__init__.pyi`. Contains
-/// the uniform `from __future__ …` header and, if the directory has
-/// subdirectory children, a single re-export line. The `.py` and
-/// `.pyi` shapes converge here: no `BamlRuntime` init in the `.pyi`,
-/// no factory imports anywhere in the file. Symbol content is
-/// appended separately by the caller via `render_leaf_body[_pyi]`.
+/// Render a non-root package `__init__.py`.
+///
+/// Submodule re-exports are lazy via PEP 562: a `__getattr__` hook
+/// resolves any known child name through `importlib.import_module` on
+/// first access, and Python caches the result as a normal attribute
+/// for subsequent lookups. Two properties matter:
+///
+/// 1. **No eager descent.** `import baml_sdk.baml` no longer triggers
+///    every `baml/<child>` to load — only the children the consumer
+///    actually touches.
+/// 2. **Partial-init resilience.** Python only binds a submodule as
+///    an attribute of its parent AFTER the submodule's `__init__.py`
+///    completes; that's why the eager-cascade design needed a manual
+///    self-pin. With PEP 562, the lookup `parent.child` from inside a
+///    grand-child triggers `parent.__getattr__('child')`, which calls
+///    `importlib.import_module` — and `importlib` returns the (possibly
+///    partial) `sys.modules` entry synchronously. The dotted walk
+///    proceeds through each `__getattr__` until it reaches a fully
+///    loaded leaf, so pydantic's eager eval of private-attribute
+///    annotations like `_sse: stream_types.baml.http.SseStream`
+///    resolves without manual setattr boilerplate.
+///
+/// The `.pyi` counterpart (`render_package_init_pyi`) emits the
+/// classical `from . import <child>` cascade — pyright doesn't execute
+/// `__getattr__`, and the explicit re-export is what lets it accept
+/// dotted submodule access.
 fn render_package_init(children: &BTreeSet<String>) -> String {
-    use askama::Template;
-    let mut out = PackageInit {
-        has_children: !children.is_empty(),
-        children_csv: children
-            .iter()
-            .map(String::as_str)
-            .collect::<Vec<_>>()
-            .join(", "),
+    let mut out = String::from("from __future__ import annotations\n");
+    if !children.is_empty() {
+        append_lazy_children_block(&mut out, children);
     }
-    .render()
-    .expect("package_init template should always render");
-    out.push('\n');
     out
 }
 
-#[derive(askama::Template)]
-#[template(
-    source = r#"from __future__ import annotations
-
-from baml_core import BamlRuntime
-from .baml import _inlinedbaml
-
-BamlRuntime.initialize_runtime(
-    "baml_src", _inlinedbaml.FILES, sdk_root=__name__
-)
-{%- if has_children %}
-
-from . import {{ children_csv }}
-{%- endif %}
-"#,
-    ext = "py.j2",
-    escape = "none"
-)]
-struct RootInit {
-    has_children: bool,
-    children_csv: String,
+/// `.pyi` counterpart of `render_package_init`. Stubs aren't executed,
+/// so the PEP 562 `__getattr__` hook serves no purpose; pyright wants
+/// the explicit `from . import <child>` cascade instead.
+fn render_package_init_pyi(children: &BTreeSet<String>) -> String {
+    let mut out = String::from("from __future__ import annotations\n");
+    if !children.is_empty() {
+        out.push('\n');
+        for child in children {
+            let _ = writeln!(out, "from . import {child}");
+        }
+    }
+    out
 }
 
-fn render_root_init(top_children: &BTreeSet<String>) -> String {
-    use askama::Template;
-    RootInit {
-        has_children: !top_children.is_empty(),
-        children_csv: top_children
-            .iter()
-            .map(String::as_str)
-            .collect::<Vec<_>>()
-            .join(", "),
+/// Emit a `_LAZY_CHILDREN` set and a PEP 562 `__getattr__` that
+/// resolves any name in the set via `importlib.import_module`. Python
+/// caches the loaded module as a real attribute after the first hit,
+/// so the cost is one importlib call per child per process. Shared by
+/// both root and non-root package init renderers.
+fn append_lazy_children_block(out: &mut String, children: &BTreeSet<String>) {
+    out.push('\n');
+    out.push_str("_LAZY_CHILDREN = frozenset({\n");
+    for child in children {
+        let _ = writeln!(out, "    \"{child}\",");
     }
-    .render()
-    .expect("root_init template should always render")
+    out.push_str("})\n\n");
+    out.push_str("def __getattr__(name):\n");
+    out.push_str("    if name in _LAZY_CHILDREN:\n");
+    out.push_str("        import importlib\n");
+    out.push_str("        return importlib.import_module(f\".{name}\", __name__)\n");
+    out.push_str("    raise AttributeError(f\"module {__name__!r} has no attribute {name!r}\")\n");
+}
+
+/// Render the SDK root `__init__.py`. Eagerly imports the two
+/// data-only modules (`_inlinedbaml`, `_typemap`) and wires up the
+/// runtime + typemap. Top-level child packages (`baml`, `lorem`,
+/// `vendor`, `stream_types`, …) are exposed lazily through a PEP 562
+/// `__getattr__` — `import baml_sdk` no longer transitively loads any
+/// leaf, restoring the 25b2 lazy-import goal. The chain of attribute
+/// accesses in `<top>.<intermediate>.<bare>` annotations still works
+/// because every intermediate package has its own `__getattr__` that
+/// resolves children via `importlib`.
+fn render_root_init(top_children: &BTreeSet<String>) -> String {
+    let mut out = String::new();
+    out.push_str("from __future__ import annotations\n\n");
+    out.push_str("from baml_core import BamlRuntime, set_type_map\n");
+    out.push_str("from . import _inlinedbaml\n");
+    out.push_str("from ._typemap import _TYPE_MAP\n\n");
+    out.push_str("BamlRuntime.initialize_runtime(\n");
+    out.push_str("    \"baml_src\", _inlinedbaml.FILES\n");
+    out.push_str(")\n\n");
+    out.push_str("set_type_map(_TYPE_MAP)\n");
+    if !top_children.is_empty() {
+        append_lazy_children_block(&mut out, top_children);
+    }
+    out
+}
+
+/// `.pyi` counterpart of `render_root_init`. Stubs aren't executed —
+/// pyright needs `from . import <child>` re-exports for dotted access
+/// to type-check, and there's no runtime init machinery (no
+/// `BamlRuntime`, no `set_type_map`).
+fn render_root_init_pyi(top_children: &BTreeSet<String>) -> String {
+    let mut out = String::from("from __future__ import annotations\n");
+    if !top_children.is_empty() {
+        out.push('\n');
+        for child in top_children {
+            let _ = writeln!(out, "from . import {child}");
+        }
+    }
+    out
 }
 
 #[derive(askama::Template)]
@@ -493,18 +554,43 @@ mod tests {
 
         assert!(out.contains_key(&PathBuf::from("__init__.py")));
         assert!(out.contains_key(&PathBuf::from("baml/__init__.py")));
-        assert!(out.contains_key(&PathBuf::from("baml/_inlinedbaml.py")));
+        // 25b2 Phase 2: `_inlinedbaml.py` and `_typemap.py` live at the
+        // SDK root so the root init doesn't load the `baml/` subpackage.
+        assert!(out.contains_key(&PathBuf::from("_inlinedbaml.py")));
+        assert!(out.contains_key(&PathBuf::from("_typemap.py")));
+        assert!(!out.contains_key(&PathBuf::from("baml/_inlinedbaml.py")));
         assert!(out.contains_key(&PathBuf::from("py.typed")));
 
         let root = &out[&PathBuf::from("__init__.py")];
-        assert!(root.contains("from baml_core import BamlRuntime"));
-        assert!(root.contains("from . import baml"));
+        assert!(root.contains("from baml_core import BamlRuntime, set_type_map"));
+        assert!(root.contains("from . import _inlinedbaml"));
+        assert!(root.contains("from ._typemap import _TYPE_MAP"));
+        assert!(root.contains("set_type_map(_TYPE_MAP)"));
+        // PEP 562 lazy re-export: root lists `baml` in `_LAZY_CHILDREN`
+        // and exposes it through `__getattr__`. `to_source_code` always
+        // synthesizes the `baml` leaf even when no stdlib symbols route
+        // there, so the lazy children set always lists it.
+        assert!(root.contains("_LAZY_CHILDREN = frozenset({\n"));
+        assert!(root.contains("    \"baml\",\n"));
+        assert!(root.contains("def __getattr__(name):\n"));
+        assert!(!root.contains("from . import baml\n"));
         // No symbols → no __all__ emitted (preserves G1 byte shape).
         assert!(!root.contains("__all__"));
 
-        // `baml/__init__.py` must NOT re-export `_inlinedbaml`.
+        // The `.pyi` sibling drops the runtime wiring but keeps the
+        // explicit `from . import <child>` cascade so pyright can
+        // resolve dotted submodule access structurally.
+        let root_pyi = &out[&PathBuf::from("__init__.pyi")];
+        assert!(root_pyi.contains("from . import baml\n"));
+        assert!(!root_pyi.contains("__getattr__"));
+        assert!(!root_pyi.contains("BamlRuntime"));
+
+        // `baml/__init__.py` has no children in the empty-pool fixture,
+        // so neither the lazy `__getattr__` block nor any cascade lines
+        // appear — just the bare `from __future__` header.
         let baml_init = &out[&PathBuf::from("baml/__init__.py")];
         assert!(!baml_init.contains("_inlinedbaml"));
+        assert!(!baml_init.contains("__getattr__"));
         assert_eq!(baml_init, HEADER);
 
         assert_eq!(out[&PathBuf::from("py.typed")], "");
@@ -523,9 +609,10 @@ mod tests {
         assert!(leaf.contains("import typing\n"));
         assert!(leaf.contains("import pydantic\n"));
         assert!(leaf.contains("class Resume(pydantic.BaseModel):\n"));
-        assert!(
-            leaf.contains("    model_config = pydantic.ConfigDict(extra=\"forbid\")\n    a: int\n")
-        );
+        assert!(leaf.contains(
+            "    model_config = pydantic.ConfigDict(extra=\"forbid\")\n    \
+             a: int\n"
+        ));
         assert!(leaf.contains("__all__ = [\n    \"Resume\",\n]\n"));
         assert!(!leaf.contains("import enum"));
     }
@@ -1018,7 +1105,11 @@ mod tests {
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let leaf = &out[&PathBuf::from("stream_types/lorem/__init__.py")];
         assert!(leaf.contains("class Resume(pydantic.BaseModel):\n"));
-        assert!(!leaf.contains("Resume$stream"));
+        // The Python identifier strips `$stream`; the engine FQN keeps
+        // it (stored on the `_baml_type_name` ClassVar) so the engine
+        // and the typemap key agree on the wire name.
+        assert!(!leaf.contains("class Resume$stream"));
+        assert!(!leaf.contains("Resume$stream =")); // no register-as-suffix
 
         // The non-stream `lorem/` dir isn't emitted — no non-stream
         // user.lorem symbols routed here.
@@ -1085,9 +1176,25 @@ mod tests {
         assert!(out.contains_key(&PathBuf::from("vendor/aws/__init__.py")));
         assert!(out.contains_key(&PathBuf::from("vendor/aws/s3/__init__.py")));
 
-        // Pure interior dirs: header + single re-export line.
+        // Each intermediate package exposes its immediate child via the
+        // PEP 562 `__getattr__` hook (rather than an eager
+        // `from . import <child>` cascade); dotted refs like
+        // `vendor.aws.s3.Bucket` resolve on first access.
         let vendor_init = &out[&PathBuf::from("vendor/__init__.py")];
-        assert_eq!(vendor_init, &format!("{HEADER}\nfrom . import aws\n"));
+        assert!(vendor_init.contains("    \"aws\",\n"));
+        assert!(vendor_init.contains("def __getattr__(name):\n"));
+        assert!(!vendor_init.contains("from . import aws\n"));
+        let aws_init = &out[&PathBuf::from("vendor/aws/__init__.py")];
+        assert!(aws_init.contains("    \"s3\",\n"));
+        assert!(aws_init.contains("def __getattr__(name):\n"));
+        assert!(!aws_init.contains("from . import s3\n"));
+
+        // The `.pyi` siblings keep the classical cascade so pyright
+        // resolves dotted access structurally.
+        let vendor_pyi = &out[&PathBuf::from("vendor/__init__.pyi")];
+        assert!(vendor_pyi.contains("from . import aws\n"));
+        let aws_pyi = &out[&PathBuf::from("vendor/aws/__init__.pyi")];
+        assert!(aws_pyi.contains("from . import s3\n"));
 
         // Leaf carries the symbol.
         let s3_leaf = &out[&PathBuf::from("vendor/aws/s3/__init__.py")];
@@ -1110,9 +1217,13 @@ mod tests {
 
     #[test]
     fn factory_import_present_only_in_leaves_with_functions() {
-        // G5 emits `from baml_core import define_function as
-        // _define_function` exactly once per leaf that carries any
-        // function/companion binding, and never in leaves that don't.
+        // G5 emits `define_function as _define_function` exactly once
+        // per leaf that carries any function/companion binding, and
+        // never in leaves that don't. 25b Phase 2: every leaf with a
+        // class/enum/alias also pulls `register_class`/`register_enum`/
+        // `register_type_alias`, so the surrounding `from baml_core ...`
+        // block is no longer factory-exclusive — we assert on the
+        // factory name itself.
         let mut pool: SymbolPool = HashMap::new();
         // lorem leaf: class + function → factory import expected.
         let c = cg_name("user", &["lorem"], "Resume");
@@ -1127,35 +1238,29 @@ mod tests {
 
         let lorem = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(
-            lorem.contains("from baml_core import define_function as _define_function\n"),
+            lorem.contains("define_function as _define_function"),
             "lorem missing factory import:\n{lorem}"
         );
         assert_eq!(
-            lorem
-                .matches("from baml_core import define_function as _define_function")
-                .count(),
+            lorem.matches("define_function as _define_function").count(),
             1,
             "factory import should appear exactly once"
         );
 
         let ipsum = &out[&PathBuf::from("ipsum/__init__.py")];
         assert!(
-            !ipsum.contains("baml_core"),
-            "ipsum leaf has no functions and must not import factories:\n{ipsum}"
-        );
-        assert!(
             !ipsum.contains("_define_function"),
             "ipsum leaf must not reference _define_function:\n{ipsum}"
         );
 
         // Stream-types leaves carry only stream-companion classes — no
-        // factories — so they must not import baml_core.
+        // factories — so they must not pull a function-factory helper.
         for (path, content) in &out {
             let s = path.to_string_lossy();
             if s.starts_with("stream_types/") && s.ends_with("__init__.py") {
                 assert!(
-                    !content.contains("baml_core"),
-                    "stream_types leaf {} must not import baml_core:\n{}",
+                    !content.contains("_define_function"),
+                    "stream_types leaf {} must not import factory:\n{}",
                     path.display(),
                     content
                 );
@@ -1174,26 +1279,10 @@ mod tests {
         assert!(out.contains_key(&PathBuf::from("stream_types/__init__.py")));
         assert!(out.contains_key(&PathBuf::from("stream_types/lorem/__init__.py")));
 
-        let root = &out[&PathBuf::from("__init__.py")];
-        assert!(root.contains("stream_types"));
-    }
-
-    #[test]
-    fn dir_that_is_both_leaf_and_interior_reexports_children() {
-        let mut pool: SymbolPool = HashMap::new();
-        let no_ns = cg_name("user", &[], "Foo$stream");
-        let with_ns = cg_name("user", &["lorem"], "Resume$stream");
-        pool.insert(no_ns.clone(), class(no_ns));
-        pool.insert(with_ns.clone(), class(with_ns));
-
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
-
-        let stream_root = &out[&PathBuf::from("stream_types/__init__.py")];
-        assert!(stream_root.starts_with(HEADER));
-        assert!(stream_root.contains("from . import lorem"));
-        // And the Foo$stream body at the top-level stream leaf.
-        assert!(stream_root.contains("class Foo(pydantic.BaseModel):\n"));
-        assert!(stream_root.contains("__all__ = [\n    \"Foo\",\n]"));
+        // 25b2 Phase 4: subpackage cascade is gone — root no longer pulls
+        // in stream_types. The leaf still carries the routed companion.
+        let stream_leaf = &out[&PathBuf::from("stream_types/lorem/__init__.py")];
+        assert!(stream_leaf.contains("class Resume(pydantic.BaseModel):"));
     }
 
     #[test]
@@ -1211,7 +1300,7 @@ mod tests {
         ];
         let out = to_source_code(&pool, &files, NamingConvention::PreserveCase);
 
-        let inl = &out[&PathBuf::from("baml/_inlinedbaml.py")];
+        let inl = &out[&PathBuf::from("_inlinedbaml.py")];
         assert!(inl.starts_with(HEADER));
         assert!(inl.contains("FILES: dict[str, str] = {"));
         // On Windows the path renders `lorem\bar.baml`, which `py_string`
@@ -1491,10 +1580,16 @@ mod tests {
             stream_leaf.contains(expected),
             "stream leaf missing body:\n{stream_leaf}"
         );
-        // 12f: depth-2 stream leaf needs three dots to anchor at root.
+        // 25b2 Phase 4: cross-leaf Pydantic field-edge import lifted out
+        // of TYPE_CHECKING. Different first segments so root-anchored
+        // (three dots from depth-2 stream leaf).
         assert!(
-            stream_leaf.contains("if typing.TYPE_CHECKING:\n    from ... import lorem\n"),
-            "stream leaf missing three-dot lorem import:\n{stream_leaf}"
+            stream_leaf.contains("\nfrom ... import lorem\n"),
+            "stream leaf missing unconditional three-dot lorem import:\n{stream_leaf}"
+        );
+        assert!(
+            !stream_leaf.contains("if typing.TYPE_CHECKING:\n    from ... import lorem"),
+            "lorem import should not be under TYPE_CHECKING:\n{stream_leaf}"
         );
     }
 
@@ -1529,10 +1624,15 @@ mod tests {
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let lorem_leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(lorem_leaf.contains("    sentiment: ipsum.Sentiment\n"));
-        // 12f: cross-leaf type triggers a guarded relative import block.
+        // 25b2 Phase 4: cross-leaf Pydantic field-edge import is now
+        // unconditional (not under TYPE_CHECKING).
         assert!(
-            lorem_leaf.contains("if typing.TYPE_CHECKING:\n    from .. import ipsum\n"),
-            "lorem missing guarded ipsum import:\n{lorem_leaf}"
+            lorem_leaf.contains("\nfrom .. import ipsum\n"),
+            "lorem missing unconditional ipsum import:\n{lorem_leaf}"
+        );
+        assert!(
+            !lorem_leaf.contains("if typing.TYPE_CHECKING:\n    from .. import ipsum"),
+            "ipsum import should not be under TYPE_CHECKING:\n{lorem_leaf}"
         );
     }
 
@@ -1971,18 +2071,18 @@ mod tests {
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(
-            leaf.contains("from baml_core import define_static_method as _define_static_method\n"),
-            "missing static-method factory import:\n{leaf}"
+            leaf.contains("define_function as _define_function"),
+            "missing factory import:\n{leaf}"
         );
         assert!(
             leaf.contains(
-                "    zero       = staticmethod(_define_static_method(\"user.lorem.Counter.zero\", \"sync\",  []))\n"
+                "    zero       = staticmethod(_define_function(\"user.lorem.Counter.zero\", \"sync\",  []))\n"
             ),
             "missing static method sync line in:\n{leaf}"
         );
         assert!(
             leaf.contains(
-                "    zero_async = staticmethod(_define_static_method(\"user.lorem.Counter.zero\", \"async\", []))\n"
+                "    zero_async = staticmethod(_define_function(\"user.lorem.Counter.zero\", \"async\", []))\n"
             ),
             "missing static method async line in:\n{leaf}"
         );
@@ -2010,33 +2110,31 @@ mod tests {
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(
-            leaf.contains(
-                "from baml_core import define_instance_method as _define_instance_method\n"
-            ),
-            "missing instance-method factory import:\n{leaf}"
+            leaf.contains("define_function as _define_function"),
+            "missing factory import:\n{leaf}"
         );
         assert!(
             leaf.contains(
-                "    bump       = _define_instance_method(\"user.lorem.Counter.bump\", \"sync\",  [\"self\", \"by\"])\n"
+                "    bump       = _define_function(\"user.lorem.Counter.bump\", \"sync\",  [\"self\", \"by\"])\n"
             ),
             "missing instance method sync line in:\n{leaf}"
         );
         assert!(
             leaf.contains(
-                "    bump_async = _define_instance_method(\"user.lorem.Counter.bump\", \"async\", [\"self\", \"by\"])\n"
+                "    bump_async = _define_function(\"user.lorem.Counter.bump\", \"async\", [\"self\", \"by\"])\n"
             ),
             "missing instance method async line in:\n{leaf}"
         );
         // Critical: instance methods must NOT be wrapped in
         // `staticmethod(...)` — that breaks descriptor-protocol binding.
         assert!(
-            !leaf.contains("staticmethod(_define_instance_method"),
+            !leaf.contains("staticmethod("),
             "instance method must not be wrapped:\n{leaf}"
         );
     }
 
     #[test]
-    fn class_with_both_method_kinds_emits_combined_import() {
+    fn class_with_both_method_kinds_emits_single_factory_import() {
         let mut pool: SymbolPool = HashMap::new();
         let n = cg_name("user", &["lorem"], "Mixed");
         pool.insert(
@@ -2052,15 +2150,12 @@ mod tests {
 
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
-        // Multiple factories → parenthesized form, alphabetized by
-        // original name (`define_instance_method` < `define_static_method`).
-        let expected_block = "from baml_core import (\n\
-                              \x20   define_instance_method as _define_instance_method,\n\
-                              \x20   define_static_method as _define_static_method,\n\
-                              )\n";
+        // Both static and instance methods route through the same
+        // `define_function` factory, so the import collapses to one
+        // line — no parenthesized form needed.
         assert!(
-            leaf.contains(expected_block),
-            "missing combined factory import:\n{leaf}"
+            leaf.contains("from baml_core import define_function as _define_function\n"),
+            "missing single-line factory import:\n{leaf}"
         );
     }
 
@@ -2075,12 +2170,8 @@ mod tests {
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(
-            !leaf.contains("define_static_method"),
-            "property-only class must not import define_static_method:\n{leaf}"
-        );
-        assert!(
-            !leaf.contains("define_instance_method"),
-            "property-only class must not import define_instance_method:\n{leaf}"
+            !leaf.contains("_define_function"),
+            "property-only class must not import _define_function:\n{leaf}"
         );
         assert!(
             !leaf.contains("staticmethod("),
@@ -2098,7 +2189,8 @@ mod tests {
             assert!(!s.starts_with("baml_stream_types/"));
             assert!(!s.starts_with("baml_sync/"));
             assert!(!s.starts_with("baml_async/"));
-            assert!(!s.contains("inlinedbaml.py") || s == "baml/_inlinedbaml.py");
+            // 25b2 Phase 2: `_inlinedbaml.py` lives at the SDK root.
+            assert!(!s.contains("inlinedbaml.py") || s == "_inlinedbaml.py");
             assert_ne!(s, "runtime.py");
             assert_ne!(s, "config.py");
             assert_ne!(s, "globals.py");
@@ -2111,8 +2203,9 @@ mod tests {
     #[test]
     fn pyi_emitted_for_every_init_py() {
         // Every emitted `__init__.py` (and only those) gets a sibling
-        // `__init__.pyi`. `baml/_inlinedbaml.py` is the documented
-        // exception (12d §6).
+        // `__init__.pyi`. `_inlinedbaml.py` and `_typemap.py` (data
+        // modules at the SDK root) are the documented exceptions
+        // (12d §6, 25b2 Phase 2).
         let mut pool: SymbolPool = HashMap::new();
         let resume = cg_name("user", &["lorem"], "Resume");
         pool.insert(resume.clone(), class(resume));
@@ -2133,22 +2226,8 @@ mod tests {
                 );
             }
         }
-        assert!(!out.contains_key(&PathBuf::from("baml/_inlinedbaml.pyi")));
-    }
-
-    #[test]
-    fn pyi_root_init_omits_runtime_init_and_factory_imports() {
-        let pool: SymbolPool = HashMap::new();
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
-
-        let root = &out[&PathBuf::from("__init__.pyi")];
-        assert!(root.contains("from __future__ import annotations"));
-        assert!(root.contains("from . import baml"));
-        // 12d §3.6: runtime init / factory imports / BamlRuntime
-        // must not appear in `.pyi`.
-        assert!(!root.contains("BamlRuntime"));
-        assert!(!root.contains("initialize_runtime"));
-        assert!(!root.contains("baml_core"));
+        assert!(!out.contains_key(&PathBuf::from("_inlinedbaml.pyi")));
+        assert!(!out.contains_key(&PathBuf::from("_typemap.pyi")));
     }
 
     #[test]
@@ -2533,14 +2612,20 @@ mod tests {
 
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let py = &out[&PathBuf::from("lorem/__init__.py")];
+        // 25b2 Phase 4: cross-leaf Pydantic field-edge import is now
+        // unconditional in `.py` (the typemap installs sentinel-resolved
+        // classes lazily; field annotations need the name at runtime).
         assert!(
-            py.contains("if typing.TYPE_CHECKING:\n    from .. import ipsum\n"),
-            "py missing guarded ipsum import:\n{py}"
+            py.contains("\nfrom .. import ipsum\n"),
+            "py missing unconditional ipsum import:\n{py}"
         );
-        // The pyi mirrors the `.py` import block: a class field whose
-        // type lives in another leaf now triggers the same guarded
-        // relative import on the stub side, since fields are typed
-        // there too.
+        assert!(
+            !py.contains("if typing.TYPE_CHECKING:\n    from .. import ipsum"),
+            "py ipsum import should not be under TYPE_CHECKING:\n{py}"
+        );
+        // The `.pyi` still wraps cross-leaf imports under TYPE_CHECKING
+        // — stubs never run, so the guard is harmless and matches the
+        // legacy stub shape.
         let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
         assert!(
             pyi.contains("if typing.TYPE_CHECKING:\n    from .. import ipsum\n"),
@@ -2572,9 +2657,14 @@ mod tests {
         );
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let py = &out[&PathBuf::from("lorem/__init__.py")];
+        // 25b2 Phase 4: lifted out of TYPE_CHECKING in `.py`.
         assert!(
-            py.contains("if typing.TYPE_CHECKING:\n    from .. import Foo\n"),
-            "py missing guarded root Foo import:\n{py}"
+            py.contains("\nfrom .. import Foo\n"),
+            "py missing unconditional root Foo import:\n{py}"
+        );
+        assert!(
+            !py.contains("if typing.TYPE_CHECKING:\n    from .. import Foo"),
+            "py Foo import should not be under TYPE_CHECKING:\n{py}"
         );
         let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
         assert!(
@@ -2613,9 +2703,8 @@ mod tests {
     fn cross_leaf_user_baml() {
         // lorem leaf references baml.http.Response — needs a runtime
         // `from .. import baml` so the `baml.http.Response` annotation
-        // resolves at Pydantic-validation time. `baml/*` is stdlib and
-        // can't cycle back into user leaves, so it lifts out of the
-        // TYPE_CHECKING guard.
+        // resolves at Pydantic-validation time. The per-package cascade
+        // in `baml/__init__.py` binds `http` as an attribute of `baml`.
         let mut pool: SymbolPool = HashMap::new();
         let response = cg_name("baml", &["http"], "Response");
         let envelope = cg_name("user", &["lorem"], "Envelope");
@@ -2631,11 +2720,12 @@ mod tests {
         );
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let py = &out[&PathBuf::from("lorem/__init__.py")];
+        // Import the top-level segment (`baml`) from the SDK root; the
+        // annotation uses the fully-qualified `baml.http.Response`.
         assert!(
             py.contains("\nfrom .. import baml\n"),
-            "py missing runtime baml import:\n{py}"
+            "py missing runtime .. import baml:\n{py}"
         );
-        // Not under TYPE_CHECKING — must be at runtime.
         assert!(
             !py.contains("if typing.TYPE_CHECKING:\n    from .. import baml"),
             "baml import should not be under TYPE_CHECKING:\n{py}"
@@ -2646,7 +2736,8 @@ mod tests {
     #[test]
     fn cross_leaf_user_vendor() {
         // lorem leaf references aws.s3.Bucket — routes to vendor/aws/s3,
-        // first segment is `vendor`.
+        // first segment is `vendor`. Cascades in `vendor/__init__.py`
+        // and `vendor/aws/__init__.py` bind the deeper segments.
         let mut pool: SymbolPool = HashMap::new();
         let bucket = cg_name("aws", &["s3"], "Bucket");
         let envelope = cg_name("user", &["lorem"], "Envelope");
@@ -2662,9 +2753,15 @@ mod tests {
         );
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let py = &out[&PathBuf::from("lorem/__init__.py")];
+        // Import the top-level segment `vendor` from the SDK root;
+        // annotation uses `vendor.aws.s3.Bucket`.
         assert!(
-            py.contains("if typing.TYPE_CHECKING:\n    from .. import vendor\n"),
-            "py missing guarded vendor import:\n{py}"
+            py.contains("\nfrom .. import vendor\n"),
+            "py missing unconditional .. import vendor:\n{py}"
+        );
+        assert!(
+            !py.contains("if typing.TYPE_CHECKING:\n    from .. import vendor"),
+            "py vendor import should not be under TYPE_CHECKING:\n{py}"
         );
         assert!(py.contains("    b: vendor.aws.s3.Bucket\n"));
     }
@@ -2691,17 +2788,25 @@ mod tests {
         );
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let py = &out[&PathBuf::from("stream_types/lorem/__init__.py")];
+        // 25b2 Phase 4: lifted out of TYPE_CHECKING in `.py`. Different
+        // first segments (stream_types vs lorem) so import stays root-
+        // anchored — three dots from depth-2 stream leaf.
         assert!(
-            py.contains("if typing.TYPE_CHECKING:\n    from ... import lorem\n"),
-            "py missing guarded lorem import from stream leaf:\n{py}"
+            py.contains("\nfrom ... import lorem\n"),
+            "py missing unconditional lorem import from stream leaf:\n{py}"
+        );
+        assert!(
+            !py.contains("if typing.TYPE_CHECKING:\n    from ... import lorem"),
+            "py lorem import should not be under TYPE_CHECKING:\n{py}"
         );
     }
 
     #[test]
     fn cross_leaf_deep_stream_vendor() {
         // stream_types/vendor/aws/s3 leaf (depth 4) referencing
-        // baml.http.Response. `baml` lifts out of TYPE_CHECKING; the
-        // five-dot prefix anchors at the `baml_sdk/` root.
+        // baml.http.Response. Always anchor at the SDK root and import
+        // the top-level segment `baml` — five dots escape the depth-4
+        // leaf to the SDK root.
         let mut pool: SymbolPool = HashMap::new();
         let response = cg_name("baml", &["http"], "Response");
         let stream_bucket = cg_name("aws", &["s3"], "Bucket$stream");
@@ -2719,19 +2824,20 @@ mod tests {
         let py = &out[&PathBuf::from("stream_types/vendor/aws/s3/__init__.py")];
         assert!(
             py.contains("\nfrom ..... import baml\n"),
-            "py missing five-dot baml import:\n{py}"
+            "py missing five-dot import of baml:\n{py}"
         );
         assert!(
             !py.contains("if typing.TYPE_CHECKING:\n    from ..... import baml"),
             "baml should not be under TYPE_CHECKING:\n{py}"
         );
+        assert!(py.contains("    resp: baml.http.Response\n"));
     }
 
     #[test]
     fn import_block_one_line_per_segment() {
         // A leaf with multiple cross-leaf first-segments emits one
-        // `from <dots> import <name>` line per segment, never the
-        // comma-joined form.
+        // `from <dots> import <name>` line per top-level segment,
+        // never the comma-joined form.
         let mut pool: SymbolPool = HashMap::new();
         let resume = cg_name("user", &["lorem"], "Resume");
         let sentiment = cg_name("user", &["ipsum"], "Sentiment");
@@ -2767,18 +2873,24 @@ mod tests {
         );
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let py = &out[&PathBuf::from("lorem/__init__.py")];
-        // `baml` lifts to a runtime import; siblings stay under
-        // TYPE_CHECKING. Each segment renders on its own line.
+        // Every cross-leaf field-edge import lifts to a runtime
+        // `from <root_dots> import <top_seg>` line — no TYPE_CHECKING
+        // wrapping. Each top-level segment renders on its own line.
         assert!(
             py.contains("\nfrom .. import baml\n"),
-            "py missing runtime baml import:\n{py}"
+            "py missing runtime .. import baml:\n{py}"
         );
-        let expected_block = "if typing.TYPE_CHECKING:\n\
-                              \x20   from .. import ipsum\n\
-                              \x20   from .. import vendor\n";
         assert!(
-            py.contains(expected_block),
-            "py missing one-per-line TYPE_CHECKING block:\n{py}"
+            py.contains("\nfrom .. import ipsum\n"),
+            "py missing runtime .. import ipsum:\n{py}"
+        );
+        assert!(
+            py.contains("\nfrom .. import vendor\n"),
+            "py missing runtime .. import vendor:\n{py}"
+        );
+        assert!(
+            !py.contains("if typing.TYPE_CHECKING:"),
+            "py field-edge imports should not be under TYPE_CHECKING:\n{py}"
         );
         // Never comma-joined.
         assert!(!py.contains("from .. import baml,"));
@@ -2787,8 +2899,10 @@ mod tests {
 
     #[test]
     fn import_block_dedups_within_segment() {
-        // Two cross-leaf references whose routed paths share a first
-        // segment (`vendor`) produce exactly one `from .. import vendor`.
+        // Two refs whose routed leaves share the top-level segment
+        // `vendor` collapse to a single `from .. import vendor` line.
+        // The dotted form `vendor.aws.s3.Bucket` / `vendor.gcp.gcs.Object`
+        // distinguishes them in the annotation.
         let mut pool: SymbolPool = HashMap::new();
         let s3_bucket = cg_name("aws", &["s3"], "Bucket");
         let gcs_object = cg_name("gcp", &["gcs"], "Object");
@@ -2814,6 +2928,8 @@ mod tests {
             1,
             "expected exactly one `from .. import vendor`:\n{py}"
         );
+        assert!(py.contains("    a: vendor.aws.s3.Bucket\n"));
+        assert!(py.contains("    b: vendor.gcp.gcs.Object\n"));
     }
 
     #[test]
@@ -2834,26 +2950,6 @@ mod tests {
         assert!(!py.contains("from .."));
         let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
         assert!(!pyi.contains("if typing.TYPE_CHECKING:"));
-    }
-
-    #[test]
-    fn children_reexport_stays_unguarded() {
-        // The leaf's `from . import <children>` line must not be wrapped
-        // in TYPE_CHECKING — it's load-bearing at runtime.
-        let mut pool: SymbolPool = HashMap::new();
-        // Force two children on root: lorem (user) + vendor (via aws).
-        let resume = cg_name("user", &["lorem"], "Resume");
-        let bucket = cg_name("aws", &["s3"], "Bucket");
-        pool.insert(resume.clone(), class(resume));
-        pool.insert(bucket.clone(), class(bucket));
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
-        let root_py = &out[&PathBuf::from("__init__.py")];
-        // The children re-export line exists and is NOT under a guard.
-        assert!(root_py.contains("from . import baml, lorem, vendor\n"));
-        let line_idx = root_py.find("from . import baml, lorem, vendor").unwrap();
-        let prefix = &root_py[..line_idx];
-        // No TYPE_CHECKING block precedes the children re-export line.
-        assert!(!prefix.contains("if typing.TYPE_CHECKING:"));
     }
 
     #[test]
@@ -3080,6 +3176,28 @@ mod tests {
         assert!(
             pyi.contains("async def echo_async(value: T) -> T: ..."),
             "pyi missing async echo signature:\n{pyi}",
+        );
+    }
+
+    // ── 25b Phase 2: ClassVar + _register_* trailer emission ──────────────
+
+    #[test]
+    fn root_init_no_longer_passes_sdk_root() {
+        // sdk_root is deleted in Phase 5; codegen drops the kwarg now (no
+        // runtime consumer, no diagnostic value worth a separate argument).
+        let pool: SymbolPool = HashMap::new();
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let root = &out[&PathBuf::from("__init__.py")];
+        assert!(
+            root.contains(
+                "BamlRuntime.initialize_runtime(\n    \
+                 \"baml_src\", _inlinedbaml.FILES\n)"
+            ),
+            "root was:\n{root}"
+        );
+        assert!(
+            !root.contains("sdk_root="),
+            "root still passes sdk_root: {root}"
         );
     }
 }

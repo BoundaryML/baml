@@ -14,7 +14,6 @@ caller's declared Python return type plays no runtime role.
 from __future__ import annotations
 
 import enum
-import importlib
 import typing
 from typing import Any, Dict, List, Optional
 
@@ -28,6 +27,7 @@ from .baml_py import (
 )
 from ._stream import BamlStream
 from .errors import BamlError
+from .typemap import BamlTypeMap, get_type_map
 
 def _is_pydantic_model(value: Any) -> bool:
     try:
@@ -45,16 +45,12 @@ def _is_pydantic_model_class(cls: type) -> bool:
     return issubclass(cls, BaseModel)
 
 
-# Media PyO3 types live behind their Rust class names; the inbound encoder
-# wraps each in an `InboundClassValue` whose `name` field carries the BAML
-# stdlib FQN (15b §line 21).
-_MEDIA_CLASS_TO_FQN: Dict[type, str] = {
-    BamlImage: "baml.media.Image",
-    BamlAudio: "baml.media.Audio",
-    BamlVideo: "baml.media.Video",
-    BamlPdf: "baml.media.Pdf",
-}
-_MEDIA_PYO3_TYPES = tuple(_MEDIA_CLASS_TO_FQN.keys())
+# Media PyO3 types — kept as a tuple for `isinstance` dispatch in the
+# encoder and `_decode_class` unwrap (15b §line 21). The engine FQN
+# for each class is looked up via `get_type_map().py_type_to_baml_type(...)`
+# at encode time; the typemap seeds the PyO3 identity → `baml.media.*`
+# overrides at construction (25b2 §"reverse map overrides").
+_MEDIA_PYO3_TYPES = (BamlImage, BamlAudio, BamlVideo, BamlPdf)
 
 
 # ---------------------------------------------------------------------------
@@ -74,68 +70,6 @@ def _base_class_for_fqn(cls: type) -> type:
     if meta and meta.get("origin"):
         return meta["origin"]
     return cls
-
-
-def _derive_baml_fqn(cls: type) -> str:
-    """Reverse 09b §1 routing to produce a BAML FQN for a Python class.
-
-    Informational only — Rust uses it for diagnostics, not correctness
-    (09d §2). Returns the empty string when the class is not routed under
-    `sdk_root` (user-defined models, runtime not initialized, etc.).
-    """
-    sdk_root = _safe_sdk_root()
-    if not sdk_root:
-        return ""
-    module = getattr(cls, "__module__", "") or ""
-    name = getattr(cls, "__name__", "") or ""
-    if not name:
-        return ""
-
-    if module == sdk_root:
-        subpath = name
-    else:
-        prefix = sdk_root + "."
-        if not module.startswith(prefix):
-            return ""
-        subpath = f"{module[len(prefix):]}.{name}"
-
-    return _subpath_to_baml_fqn(subpath)
-
-
-def _subpath_to_baml_fqn(subpath: str) -> str:
-    """Reverse the §1 routing table, recursing on the `stream_types.*`
-    prefix to handle nested stream companions.
-
-    Phase 12a collapsed the BEP-030 `root.*` spec convention into the
-    engine's `user.*` package convention; everything downstream (engine
-    `resolved_class_names`, `lookup_function`, outbound `_resolve_type`)
-    now expects `user.*` end-to-end, so emit it directly here. The
-    project-boundary coercion in `bex_project::bex::coerce_arg_to_declared_type`
-    only rewrites the top-level arg's class name; nested classes,
-    enums, and dict/list element types must arrive with the engine FQN
-    already on them or the engine panics on lookup.
-    """
-    if subpath.startswith("stream_types."):
-        inner = _subpath_to_baml_fqn(subpath[len("stream_types."):])
-        return f"{inner}$stream" if inner else ""
-    if subpath.startswith("vendor."):
-        return subpath[len("vendor."):]
-    if subpath.startswith("baml."):
-        return subpath
-    return f"user.{subpath}"
-
-
-def _safe_sdk_root() -> str:
-    """Fetch `sdk_root` without raising if the runtime is uninitialized.
-
-    FQN derivation is diagnostic, so it must not promote a missing runtime
-    into a hard failure on the inbound path.
-    """
-    try:
-        from . import get_runtime  # local import: avoids circular binding at module load
-        return get_runtime()._sdk_root or ""
-    except Exception:
-        return ""
 
 
 def _set_inbound_value(inbound_value: baml_inbound_pb2.InboundValue, value: Any, *, kwarg_name: str) -> None:
@@ -176,7 +110,7 @@ def _set_inbound_value(inbound_value: baml_inbound_pb2.InboundValue, value: Any,
         return
     if isinstance(value, enum.Enum):
         ev = inbound_value.enum_value
-        ev.name = _derive_baml_fqn(_base_class_for_fqn(type(value)))
+        ev.name = get_type_map().py_type_to_baml_type(_base_class_for_fqn(type(value)))
         ev.value = value.name
         return
 
@@ -213,10 +147,11 @@ def _set_inbound_value(inbound_value: baml_inbound_pb2.InboundValue, value: Any,
 
     # Media PyO3 types — wrap into an `InboundClassValue` per 15b. The
     # only field is `_data`, recursively encoded; the recursion lands on
-    # the `BamlPyHandle` branch above.
+    # the `BamlPyHandle` branch above. The engine FQN comes from the
+    # typemap's reverse-map seeded overrides (25b2 §"reverse map").
     if isinstance(value, _MEDIA_PYO3_TYPES):
         cv = inbound_value.class_value
-        cv.name = _MEDIA_CLASS_TO_FQN[type(value)]
+        cv.name = get_type_map().py_type_to_baml_type(type(value))
         data_entry = cv.fields.add()
         data_entry.string_key = "_data"
         _set_inbound_value(
@@ -230,7 +165,7 @@ def _set_inbound_value(inbound_value: baml_inbound_pb2.InboundValue, value: Any,
         # the base, but we still want the *base* `Box`'s FQN on the wire —
         # `13b` §2.1. The Rust-side type checker already knows the
         # declared parameter type from the function signature.
-        cv.name = _derive_baml_fqn(_base_class_for_fqn(type(value)))
+        cv.name = get_type_map().py_type_to_baml_type(_base_class_for_fqn(type(value)))
         # Walk fields by attribute access (Pydantic v2's `__iter__`
         # yields `(name, value)` without recursive serialization).
         # `model_dump()` would flatten nested Pydantic instances into
@@ -268,7 +203,7 @@ def _set_inbound_map_entry(entry, key: Any, value: Any, *, kwarg_name: str) -> N
         entry.int_key = key
     elif isinstance(key, enum.Enum):
         ek = entry.enum_key
-        ek.name = _derive_baml_fqn(type(key))
+        ek.name = get_type_map().py_type_to_baml_type(type(key))
         ek.value = key.name
     else:
         entry.string_key = str(key)  # best-effort fallback
@@ -296,7 +231,7 @@ _MEDIA_KIND_SUBPATHS = {
 }
 
 
-def _baml_ty_to_python_type(baml_ty: baml_outbound_pb2.BamlTy) -> Any:
+def _baml_ty_to_python_type(baml_ty: baml_outbound_pb2.BamlTy, type_map: BamlTypeMap) -> Any:
     """Walk a `BamlTy` proto and return the corresponding Python type.
 
     Runtime mirror of codegen-time `translate_ty` (`13a` §3): same BAML→
@@ -326,39 +261,37 @@ def _baml_ty_to_python_type(baml_ty: baml_outbound_pb2.BamlTy) -> Any:
         inner = _decode_literal(baml_ty.literal_type)
         return typing.Literal[inner]  # type: ignore[valid-type]
     if which == "media_type":
-        subpath = _MEDIA_KIND_SUBPATHS.get(baml_ty.media_type.media)
-        if subpath is None:
+        fqn = _MEDIA_KIND_SUBPATHS.get(baml_ty.media_type.media)
+        if fqn is None:
             return typing.Any
-        cls = _resolve_under_sdk_root(subpath)
-        return cls if cls is not None else typing.Any
+        try:
+            return type_map.get_class(fqn)
+        except BamlError:
+            return typing.Any
     if which == "class_type":
-        from . import _resolve_type
-        cls = _resolve_type(baml_ty.class_type.name.name)
-        return _parameterize(cls, baml_ty.class_type.name.generic_args)
+        cls = type_map.get_class(baml_ty.class_type.name.name)
+        return _parameterize(cls, baml_ty.class_type.name.generic_args, type_map)
     if which == "enum_type":
-        from . import _resolve_type
-        return _resolve_type(baml_ty.enum_type.name)
+        return type_map.get_enum(baml_ty.enum_type.name)
     if which == "type_alias_type":
-        from . import _resolve_type
-        cls = _resolve_type(baml_ty.type_alias_type.name.name)
-        return _parameterize(cls, baml_ty.type_alias_type.name.generic_args)
+        alias = type_map.get_type_alias(baml_ty.type_alias_type.name.name)
+        return _parameterize(alias, baml_ty.type_alias_type.name.generic_args, type_map)
     if which == "list_type":
-        return List[_baml_ty_to_python_type(baml_ty.list_type.item_type)]  # type: ignore[valid-type]
+        return List[_baml_ty_to_python_type(baml_ty.list_type.item_type, type_map)]  # type: ignore[valid-type]
     if which == "map_type":
         return Dict[  # type: ignore[valid-type]
-            _baml_ty_to_python_type(baml_ty.map_type.key_type),
-            _baml_ty_to_python_type(baml_ty.map_type.value_type),
+            _baml_ty_to_python_type(baml_ty.map_type.key_type, type_map),
+            _baml_ty_to_python_type(baml_ty.map_type.value_type, type_map),
         ]
     if which == "optional_type":
-        return Optional[_baml_ty_to_python_type(baml_ty.optional_type.value)]  # type: ignore[valid-type]
+        return Optional[_baml_ty_to_python_type(baml_ty.optional_type.value, type_map)]  # type: ignore[valid-type]
     if which == "union_variant_type":
-        from . import _resolve_type
-        cls = _resolve_type(baml_ty.union_variant_type.name.name)
-        return _parameterize(cls, baml_ty.union_variant_type.name.generic_args)
+        cls = type_map.get_class(baml_ty.union_variant_type.name.name)
+        return _parameterize(cls, baml_ty.union_variant_type.name.generic_args, type_map)
     raise BamlError(f"Unsupported BamlTy variant {which!r} in generic arg")
 
 
-def _parameterize(cls, generic_args):
+def _parameterize(cls, generic_args, type_map: BamlTypeMap):
     """Apply BAML generic args to a symbol via `cls[arg_types…]`.
 
     Works for any subscriptable symbol — Pydantic generics, generic
@@ -372,7 +305,7 @@ def _parameterize(cls, generic_args):
     """
     if not generic_args:
         return cls
-    py_args = tuple(_baml_ty_to_python_type(g.ty) for g in generic_args)
+    py_args = tuple(_baml_ty_to_python_type(g.ty, type_map) for g in generic_args)
     try:
         if len(py_args) == 1:
             return cls[py_args[0]]
@@ -387,7 +320,7 @@ def _parameterize(cls, generic_args):
 _HANDLE_FIELD_NAMES = ("_handle", "_data", "_body")
 
 
-def _decode_class(class_value) -> Any:
+def _decode_class(class_value, type_map: BamlTypeMap) -> Any:
     """Resolve a `BamlValueClass` to a typed Pydantic model instance.
 
     Children are decoded first, so `model_validate` receives an
@@ -397,14 +330,12 @@ def _decode_class(class_value) -> Any:
     `13b` §3.4.
     """
     field_dict = {
-        entry.key: _decode_value_holder(entry.value)
+        entry.key: decode_value(entry.value, type_map)
         for entry in class_value.fields
     }
     # Emit always fully qualifies, so the engine FQN already matches
-    # what `_resolve_type` consumes (`12a-namespace-rules.md §5`).
-    from . import _resolve_type
-    fqn = class_value.name.name
-    cls = _resolve_type(fqn)
+    # what the typemap consumes (`12a-namespace-rules.md §5`).
+    cls = type_map.get_class(class_value.name.name)
 
     # Media stdlib classes (`baml.media.*`) are PyO3 types wrapping a
     # `BamlPyHandle`. The engine emits them as
@@ -415,7 +346,7 @@ def _decode_class(class_value) -> Any:
     if cls in _MEDIA_PYO3_TYPES and "_data" in field_dict:
         return field_dict["_data"]
 
-    parameterized = _parameterize(cls, class_value.name.generic_args)
+    parameterized = _parameterize(cls, class_value.name.generic_args, type_map)
     if not _is_pydantic_model_class(cls):
         # Not a BaseModel — shouldn't happen for a well-formed SDK; fall
         # back to a plain dict so callers aren't silently lied to.
@@ -436,12 +367,11 @@ def _decode_class(class_value) -> Any:
     return instance
 
 
-def _decode_enum(enum_value) -> Any:
+def _decode_enum(enum_value, type_map: BamlTypeMap) -> Any:
     """Resolve a `BamlValueEnum` to a member of the generated enum class."""
     variant = enum_value.value
-    from . import _resolve_type
     fqn = enum_value.name.name
-    cls = _resolve_type(fqn)
+    cls = type_map.get_enum(fqn)
     try:
         return cls(variant)
     except ValueError as exc:
@@ -451,7 +381,7 @@ def _decode_enum(enum_value) -> Any:
         ) from exc
 
 
-def _decode_handle(handle) -> Any:
+def _decode_handle(handle, type_map: BamlTypeMap) -> Any:
     """Wrap `HANDLE_TABLE[handle.key]` in a `BamlPyHandle` and dispatch
     on the wire `handle.handle_type` field. The `BamlPyHandle` itself
     holds the `handle_type` tag (set at construction from the wire) so
@@ -479,15 +409,13 @@ def _decode_handle(handle) -> Any:
     if ht == HT.ADT_MEDIA_PDF:
         return BamlPdf._from_pyhandle(pyhandle)
     if ht == HT.ADT_TAGGED_HEAP_HANDLE:
-        # Dispatch on `handle.name.name` to pick the typed wrapper.
-        # Future tagged-handle classes register an arm here.
+        # Dispatch via the typemap: every tagged-handle class self-
+        # registers under its engine FQN (25b §2), so any future class
+        # is reachable without touching this arm.
         name = getattr(handle, "name", None)
         class_fqn = name.name if name is not None else ""
-        if class_fqn == "baml.llm.Stream":
-            return BamlStream._from_pyhandle(pyhandle)
-        raise BamlError(
-            f"Unknown tagged heap handle class: {class_fqn!r}"
-        )
+        cls = type_map.get_class(class_fqn)
+        return cls._from_pyhandle(pyhandle)
     if ht == HT.HANDLE_UNSPECIFIED:
         raise BamlError("BEX emitted HANDLE_UNSPECIFIED (Rust-side bug)")
 
@@ -496,22 +424,6 @@ def _decode_handle(handle) -> Any:
     # BamlPyHandle. The outer codegen class (if any) wraps it via
     # `_decode_class` → private-attr injection.
     return pyhandle
-
-
-def _resolve_under_sdk_root(subpath: str) -> Optional[type]:
-    """Import `<sdk_root>.<subpath>` and return the trailing attr, or None
-    if any step fails. Still used by `_baml_ty_to_python_type` for media
-    type resolution."""
-    sdk_root = _safe_sdk_root()
-    if not sdk_root:
-        return None
-    full = f"{sdk_root}.{subpath}"
-    module_path, _, type_name = full.rpartition(".")
-    try:
-        module = importlib.import_module(module_path)
-    except ImportError:
-        return None
-    return getattr(module, type_name, None)
 
 
 def _decode_literal(literal) -> Any:
@@ -525,8 +437,14 @@ def _decode_literal(literal) -> Any:
     return None
 
 
-def _decode_value_holder(holder) -> Any:
-    """Convert a `BamlOutboundValue` message to a typed Python value."""
+def decode_value(holder, type_map: BamlTypeMap) -> Any:
+    """Convert a `BamlOutboundValue` message to a typed Python value.
+
+    Every recursive call threads the same `BamlTypeMap` — the only seam
+    where the dispatcher consults the process-global registry is the
+    outer `decode_call_result` callsite, which passes `get_type_map()`.
+    Tests build a fresh `BamlTypeMap` and call this directly.
+    """
     which = holder.WhichOneof("value")
     if which is None or which == "null_value":
         return None
@@ -543,22 +461,22 @@ def _decode_value_holder(holder) -> Any:
     if which == "literal_value":
         return _decode_literal(holder.literal_value)
     if which == "list_value":
-        return [_decode_value_holder(item) for item in holder.list_value.items]
+        return [decode_value(item, type_map) for item in holder.list_value.items]
     if which == "map_value":
         return {
-            entry.key: _decode_value_holder(entry.value)
+            entry.key: decode_value(entry.value, type_map)
             for entry in holder.map_value.entries
         }
     if which == "class_value":
-        return _decode_class(holder.class_value)
+        return _decode_class(holder.class_value, type_map)
     if which == "enum_value":
-        return _decode_enum(holder.enum_value)
+        return _decode_enum(holder.enum_value, type_map)
     if which == "union_variant_value":
         # Union metadata is discarded — Python is duck-typed. The inner
         # value self-describes (09e §3).
-        return _decode_value_holder(holder.union_variant_value.value)
+        return decode_value(holder.union_variant_value.value, type_map)
     if which == "handle_value":
-        return _decode_handle(holder.handle_value)
+        return _decode_handle(holder.handle_value, type_map)
     if which in ("media_value", "prompt_ast_value"):
         raise BamlError(
             f"BEX emitted {which!r} on the FFI path — media/prompt AST "
@@ -571,4 +489,4 @@ def decode_call_result(data: bytes) -> Any:
     """Decode a `BamlOutboundValue` protobuf to a Python value."""
     holder = baml_outbound_pb2.BamlOutboundValue()
     holder.ParseFromString(data)
-    return _decode_value_holder(holder)
+    return decode_value(holder, get_type_map())

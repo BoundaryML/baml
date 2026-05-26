@@ -1074,6 +1074,7 @@ name = "baml_cli"
 version = "0.0.0-beta"
 dependencies = [
  "anyhow",
+ "baml_builtins2",
  "baml_db",
  "baml_exec",
  "baml_fmt",
@@ -1100,7 +1101,9 @@ dependencies = [
  "libsui",
  "regex",
  "reqwest",
+ "serde",
  "serde_json",
+ "serde_yaml",
  "sha2 0.10.9",
  "strsim",
  "sys_native",
@@ -2371,6 +2374,20 @@ name = "cmov"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f88a43d011fc4a6876cb7344703e297c71dda42494fee094d5f7c76bf13f746"
+
+[[package]]
+name = "codegen_go"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_codegen_types",
+]
+
+[[package]]
+name = "codegen_nodejs"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_codegen_types",
+]
 
 [[package]]
 name = "codegen_python"
@@ -3983,6 +4000,11 @@ name = "hashbrown"
 version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
+dependencies = [
+ "allocator-api2",
+ "equivalent",
+ "foldhash 0.2.0",
+]
 
 [[package]]
 name = "hashlink"
@@ -6981,14 +7003,15 @@ checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
 name = "salsa"
-version = "0.24.0"
-source = "git+https://github.com/salsa-rs/salsa.git?rev=cdd0b85516a52c18b8a6d17a2279a96ed6c3e198#cdd0b85516a52c18b8a6d17a2279a96ed6c3e198"
+version = "0.26.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4612ff789805e65c87e9b38cb749a293212a615af065bed8a2001086801498c3"
 dependencies = [
  "boxcar",
  "compact_str 0.9.0",
  "crossbeam-queue",
  "crossbeam-utils",
- "hashbrown 0.15.5",
+ "hashbrown 0.17.1",
  "hashlink",
  "indexmap 2.14.0",
  "intrusive-collections",
@@ -7001,17 +7024,20 @@ dependencies = [
  "smallvec",
  "thin-vec",
  "tracing",
+ "typeid",
 ]
 
 [[package]]
 name = "salsa-macro-rules"
-version = "0.24.0"
-source = "git+https://github.com/salsa-rs/salsa.git?rev=cdd0b85516a52c18b8a6d17a2279a96ed6c3e198#cdd0b85516a52c18b8a6d17a2279a96ed6c3e198"
+version = "0.26.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58e354cbac6939b9b09cd9c11fb419a53e64b4a0f755d929f56a09f4cc752e41"
 
 [[package]]
 name = "salsa-macros"
-version = "0.24.0"
-source = "git+https://github.com/salsa-rs/salsa.git?rev=cdd0b85516a52c18b8a6d17a2279a96ed6c3e198#cdd0b85516a52c18b8a6d17a2279a96ed6c3e198"
+version = "0.26.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3067861075c2b80608f84ad49fb88f2c7610b94cdf8b4201e79ddee87f8980c8"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -7087,62 +7113,35 @@ dependencies = [
 ]
 
 [[package]]
-name = "sdk_test_basic_type_shapes"
+name = "sdk_test_harness_runner"
 version = "0.1.0"
-dependencies = [
- "baml_codegen_types",
- "baml_db",
- "baml_project",
- "baml_workspace",
- "codegen_python",
- "sdk_test_build",
-]
 
 [[package]]
-name = "sdk_test_build"
+name = "sdk_test_harness_setup"
 version = "0.1.0"
 dependencies = [
  "baml_codegen_types",
  "baml_db",
  "baml_project",
  "baml_workspace",
+ "codegen_nodejs",
  "codegen_python",
 ]
 
 [[package]]
-name = "sdk_test_docstrings_etc"
+name = "sdk_test_nodejs_typescript"
 version = "0.1.0"
 dependencies = [
- "baml_codegen_types",
- "baml_db",
- "baml_project",
- "baml_workspace",
- "codegen_python",
- "sdk_test_build",
+ "sdk_test_harness_runner",
+ "sdk_test_harness_setup",
 ]
 
 [[package]]
-name = "sdk_test_llm_functions"
+name = "sdk_test_python_pydantic2"
 version = "0.1.0"
 dependencies = [
- "baml_codegen_types",
- "baml_db",
- "baml_project",
- "baml_workspace",
- "codegen_python",
- "sdk_test_build",
-]
-
-[[package]]
-name = "sdk_test_type_shapes"
-version = "0.1.0"
-dependencies = [
- "baml_codegen_types",
- "baml_db",
- "baml_project",
- "baml_workspace",
- "codegen_python",
- "sdk_test_build",
+ "sdk_test_harness_runner",
+ "sdk_test_harness_setup",
 ]
 
 [[package]]
@@ -7332,6 +7331,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "serde_yaml"
+version = "0.9.34+deprecated"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a8b1a1a2ebf674015cc02edccce75287f1a0130d394307b36743c2f5d504b47"
+dependencies = [
+ "indexmap 2.14.0",
+ "itoa",
+ "ryu",
+ "serde",
+ "unsafe-libyaml",
 ]
 
 [[package]]
@@ -8483,6 +8495,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "typeid"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc7d623258602320d5c55d1bc22793b57daff0ec7efc270ea7d55ce1d5f5471c"
+
+[[package]]
 name = "typenum"
 version = "1.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8640,6 +8658,12 @@ name = "unit-prefix"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81e544489bf3d8ef66c953931f56617f423cd4b5494be343d9b9d3dda037b9a3"
+
+[[package]]
+name = "unsafe-libyaml"
+version = "0.2.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "673aac59facbab8a9007c7f6108d11f63b603f7cabff99fabf650fea5c32b861"
 
 [[package]]
 name = "untrusted"

@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use super::{ParsingContext, ParsingError};
 use crate::{
-    baml_value::{BamlBool, BamlInt, BamlString, BamlValue},
+    baml_value::{BamlBool, BamlInt, BamlString},
     deserializer::{
         coercer::{TypeCoercer, match_string::match_string},
         deserialize_flags::{DeserializerConditions, Flag},
@@ -73,12 +73,12 @@ where
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
         value: &'v jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, Self::Value, N>>, ParsingError> {
-        let ret = match value {
+        match value {
             jsonish::Value::Null => Err(ctx.error_unexpected_null(target.ty)),
             jsonish::Value::Object(_, CompletionState::Incomplete) => {
                 // The object could be more than one key
                 match &target.meta.in_progress {
-                    Some(AttrLiteral::Never) => return Ok(None),
+                    Some(AttrLiteral::Never) => Ok(None),
                     Some(lit) => {
                         let ret = target.ty.from_literal(lit, ctx).map(|ret| {
                             ValueWithFlags::new(
@@ -130,17 +130,6 @@ where
                     Err(e) => Err(e),
                 }
             }
-        };
-
-        match ret {
-            Ok(Some(ret)) => {
-                target
-                    .meta
-                    .expect_asserts(&BamlValue::Int(ret.value), ctx)?;
-                Ok(Some(ret))
-            }
-            Ok(None) => Ok(None),
-            Err(e) => Err(e),
         }
     }
 }
@@ -178,11 +167,11 @@ where
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
         value: &'v jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, Self::Value, N>>, ParsingError> {
-        let ret = match value {
+        match value {
             jsonish::Value::Null => Err(ctx.error_unexpected_null(target.ty)),
             jsonish::Value::Object(_, CompletionState::Incomplete) => {
                 match &target.meta.in_progress {
-                    Some(AttrLiteral::Never) => return Ok(None),
+                    Some(AttrLiteral::Never) => Ok(None),
                     Some(lit) => {
                         let ret = target.ty.from_literal(lit, ctx).map(|ret| {
                             ValueWithFlags::new(
@@ -233,17 +222,6 @@ where
                     Err(e) => Err(e),
                 }
             }
-        };
-
-        match ret {
-            Ok(Some(ret)) => {
-                target
-                    .meta
-                    .expect_asserts(&BamlValue::Bool(ret.value), ctx)?;
-                Ok(Some(ret))
-            }
-            Ok(None) => Ok(None),
-            Err(e) => Err(e),
         }
     }
 }
@@ -306,11 +284,11 @@ where
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
         value: &'v jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, Self::Value, N>>, ParsingError> {
-        let ret = match value {
+        match value {
             jsonish::Value::Null => Err(ctx.error_unexpected_null(target.ty)),
             jsonish::Value::Object(_, CompletionState::Incomplete) => {
                 match &target.meta.in_progress {
-                    Some(AttrLiteral::Never) => return Ok(None),
+                    Some(AttrLiteral::Never) => Ok(None),
                     Some(lit) => {
                         let ret = target.ty.from_literal(lit, ctx).map(|ret| {
                             ValueWithFlags::new(
@@ -367,17 +345,6 @@ where
                     literal_match.map_value(|s| BamlString { value: s.into() }),
                 ))
             }
-        };
-
-        match ret {
-            Ok(Some(ret)) => {
-                target
-                    .meta
-                    .expect_asserts(&BamlValue::String(ret.value.clone()), ctx)?;
-                Ok(Some(ret))
-            }
-            Ok(None) => Ok(None),
-            Err(e) => Err(e),
         }
     }
 }

@@ -13,8 +13,8 @@ fn user.DeepGenericDestructureNamespaceQualifiedLet() -> int {
     let _6: string // value
 
     bb0: {
-        _2 = user.llm.openai.Box<Concrete(String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } })> { const "done" };
-        _1 = user.llm.openai.Outer<Concrete(String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } })> { copy _2 };
+        _2 = user.llm.openai.Box<Concrete(String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } })> { const "done" };
+        _1 = user.llm.openai.Outer<Concrete(String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } })> { copy _2 };
         _3 = copy _1;
         _4 = copy _3.0;
         _5 = copy _4.0;
@@ -38,8 +38,8 @@ fn user.DeepGenericDestructureQualifiedLet() -> int {
     let _6: int // value
 
     bb0: {
-        _2 = user.llm.openai.Box<Concrete(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } })> { const 52_i64 };
-        _1 = user.llm.openai.Outer<Concrete(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } })> { copy _2 };
+        _2 = user.llm.openai.Box<Concrete(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } })> { const 52_i64 };
+        _1 = user.llm.openai.Outer<Concrete(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } })> { copy _2 };
         _3 = copy _1;
         _4 = copy _3.0;
         _5 = copy _4.0;
@@ -184,7 +184,7 @@ fn user.GenericDestructureNamespaceQualifiedLet() -> int {
     let _4: string // value
 
     bb0: {
-        _1 = user.llm.openai.Box<Concrete(String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } })> { const "ok" };
+        _1 = user.llm.openai.Box<Concrete(String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } })> { const "ok" };
         _2 = copy _1;
         _3 = copy _2.0;
         _4 = copy _3;
@@ -205,7 +205,7 @@ fn user.GenericDestructureQualifiedLet() -> int {
     let _4: int // value
 
     bb0: {
-        _1 = user.llm.openai.Box<Concrete(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } })> { const 49_i64 };
+        _1 = user.llm.openai.Box<Concrete(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } })> { const 49_i64 };
         _2 = copy _1;
         _3 = copy _2.0;
         _4 = copy _3;

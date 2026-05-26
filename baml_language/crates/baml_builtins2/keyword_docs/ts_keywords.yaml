@@ -1,0 +1,114 @@
+interface:
+  message: "BAML uses `class` for structured types."
+  see: "class"
+
+const:
+  message: "BAML uses `let` for variable bindings."
+  see: "let"
+
+var:
+  message: "BAML uses `let` for variable bindings."
+  see: "let"
+
+switch:
+  message: "BAML uses `match` for pattern matching."
+  see: "match"
+
+instanceof:
+  message: "BAML uses `is` for type checks."
+  see: "is"
+
+typeof:
+  message: "BAML uses `is` for type checks."
+  see: "is"
+
+async:
+  message: "BAML uses `spawn` / `await` for concurrency."
+  see: "spawn"
+
+new:
+  message: "BAML constructors are regular functions (e.g. `ClassName.new()`)."
+  see: "function"
+
+this:
+  message: "BAML uses `self` as the receiver in class methods."
+
+import:
+  message: "BAML auto-discovers all `.baml` files in your project — no imports needed."
+
+export:
+  message: "BAML auto-discovers all `.baml` files in your project — no imports needed."
+
+require:
+  message: "BAML auto-discovers all `.baml` files in your project — no imports needed."
+
+extends:
+  message: "BAML does not have inheritance. Use composition with nested classes."
+
+implements:
+  message: "BAML does not have inheritance. Use composition with nested classes."
+
+try:
+  message: "BAML uses postfix `catch` / `catch_all` on expressions."
+  see: "catch"
+
+finally:
+  message: "BAML uses postfix `catch` / `catch_all` on expressions."
+  see: "catch"
+
+abstract:
+  message: "BAML does not have access modifiers or abstract types."
+
+private:
+  message: "BAML does not have access modifiers or abstract types."
+
+public:
+  message: "BAML does not have access modifiers or abstract types."
+
+protected:
+  message: "BAML does not have access modifiers or abstract types."
+
+static:
+  message: "BAML does not have access modifiers or abstract types."
+
+readonly:
+  message: "BAML does not have access modifiers or abstract types."
+
+do:
+  message: "BAML uses `while` for loops."
+  see: "while"
+
+void:
+  message: "BAML functions always have a return type. Use `-> null` for side-effect-only functions."
+
+"null":
+  message: "BAML has a `null` type."
+  see: "baml.Null"
+
+"undefined":
+  message: "BAML has a `null` type."
+  see: "baml.Null"
+
+yield:
+  message: "BAML does not have generators. Use `spawn` for concurrency."
+  see: "spawn"
+
+struct:
+  message: "BAML uses `class` for structured types."
+  see: "class"
+
+def:
+  message: "BAML uses `function` to declare callables."
+  see: "function"
+
+fn:
+  message: "BAML uses `function` to declare callables."
+  see: "function"
+
+func:
+  message: "BAML uses `function` to declare callables."
+  see: "function"
+
+lambda:
+  message: "BAML uses anonymous functions with `(params) -> ReturnType { body }` syntax."
+  see: "function"

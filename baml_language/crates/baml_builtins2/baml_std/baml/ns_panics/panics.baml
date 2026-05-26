@@ -1,24 +1,30 @@
+/// Raised when an integer is divided by zero.
 class DivisionByZero {
   dividend int
 }
 
+/// Raised when an array or string is accessed with an out-of-bounds index.
 class IndexOutOfBounds {
   index int
   length int
 }
 
+/// Raised when a map is accessed with a key that does not exist.
 class MapKeyNotFound {
   key string
 }
 
+/// Raised when the call stack depth limit is exceeded.
 class StackOverflow {
   message string
 }
 
+/// Raised when an `assert` statement fails.
 class AssertionFailed {
   message string
 }
 
+/// Raised when execution reaches a branch that should be impossible.
 class Unreachable {
   message string
 }

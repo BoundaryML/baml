@@ -32,6 +32,8 @@ pub enum ResolvedTarget<'db> {
         parent: Definition<'db>,
         member_name: Name,
     },
+    /// A BAML or crosswalk keyword (e.g. `"class"`, `"interface"`).
+    Keyword(String),
 }
 
 impl std::fmt::Debug for ResolvedTarget<'_> {
@@ -45,6 +47,7 @@ impl std::fmt::Debug for ResolvedTarget<'_> {
             ResolvedTarget::Member { member_name, .. } => {
                 write!(f, "Member({member_name:?})")
             }
+            ResolvedTarget::Keyword(kw) => write!(f, "Keyword({kw:?})"),
         }
     }
 }

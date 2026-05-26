@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use super::ParsingContext;
 use crate::{
-    baml_value::{BamlEnum, BamlValue},
+    baml_value::BamlEnum,
     deserializer::{
         coercer::{ParsingError, TypeCoercer, match_string::match_string},
         deserialize_flags::{DeserializerConditions, Flag},
@@ -88,12 +88,6 @@ where
                     name: &enum_ty.name,
                     value: name,
                 };
-                if !meta
-                    .check_asserts(&BamlValue::Enum(value.clone()), ctx)
-                    .ok()?
-                {
-                    return None;
-                }
                 return Some(ValueWithFlags::new(
                     value,
                     DeserializerMeta {
@@ -170,12 +164,6 @@ impl<'s, 'v, 't, N: TypeIdent> EnumTy<'t, N> {
             })
             .with_flags(add_flags)
         })
-        .and_then(|v| {
-            target
-                .meta
-                .expect_asserts(&BamlValue::Enum(v.value.clone()), ctx)?;
-            Ok(v)
-        })
         .map(Some)
     }
 }
@@ -244,12 +232,6 @@ where
                 name: &ev_ty.name,
                 value: name,
             };
-            if !meta
-                .check_asserts(&BamlValue::Enum(value.clone()), ctx)
-                .ok()?
-            {
-                return None;
-            }
             return Some(ValueWithFlags::new(
                 value,
                 DeserializerMeta {
@@ -325,12 +307,6 @@ impl<'s, 'v, 't, N: TypeIdent> EnumVariantTy<'t, N> {
                 value: val,
             })
             .with_flags(add_flags)
-        })
-        .and_then(|v| {
-            target
-                .meta
-                .expect_asserts(&BamlValue::Enum(v.value.clone()), ctx)?;
-            Ok(v)
         })
         .map(Some)
     }

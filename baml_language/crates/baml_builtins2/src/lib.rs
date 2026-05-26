@@ -60,6 +60,12 @@ pub const PACKAGE_ASSERT: &str = "assert";
 /// generated code or committed artifacts).
 pub const BAML_STD_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/baml_std");
 
+/// YAML documentation for BAML keywords, embedded at compile time.
+pub const BAML_KEYWORDS_YAML: &str = include_str!("../keyword_docs/baml_keywords.yaml");
+
+/// YAML crosswalk documentation for TypeScript/JS keywords, embedded at compile time.
+pub const TS_KEYWORDS_YAML: &str = include_str!("../keyword_docs/ts_keywords.yaml");
+
 /// Builtin registration macro: package, relative virtual path, filesystem include path.
 macro_rules! builtin {
     ($pkg:literal, $fs_path:literal) => {

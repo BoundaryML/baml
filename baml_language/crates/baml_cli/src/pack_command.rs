@@ -1,10 +1,20 @@
-// `baml pack` — compile any `baml run` target (except expression mode)
-// into a single self-contained executable.
+// `baml pack` — compile one or more BAML functions into a single
+// self-contained executable.
 //
 // Target resolution mirrors `baml run`'s shape minus two things:
 //   - `-e` is not packageable (no persistent target to bake in).
 //   - `[scripts]` are not packageable — scripts are a dev-time dispatch
 //     mechanism, not an entry-point concept.
+//
+// Targets are picked via repeatable `-f/--function` flags. With multiple
+// `-f` the packed binary becomes a multi-subcommand CLI (`./cli foo …`,
+// `./cli bar …`); with a single `-f` it's the same shape with one
+// subcommand. A bare positional `<TARGET>` runs a single function as the
+// binary's only entry point (no subcommand layer).
+//
+// Standalone single-file sources are loaded via `--file <PATH>`, which
+// is mutually exclusive with `--from <DIR>`. Without either, the project
+// at the current directory is loaded.
 //
 // The output is the host binary (baml-pack-host) with a `PackEnvelope`
 // (bitcode-serialized) appended in an OS-native section. At runtime the
@@ -34,21 +44,29 @@ use crate::{
     commands::release_version, project_load::load_project_from_reporting, reporter::Reporter,
 };
 
-/// `baml pack` — compile a target into a standalone executable.
+/// `baml pack` — compile one or more targets into a standalone executable.
 #[derive(Args, Clone, Debug)]
 pub struct PackArgs {
-    /// Target: namespace name to pack its `main`, or a path to a `.baml`
-    /// file for hermetic packaging. If omitted, packs the root `main`.
+    /// Positional target: a function name to pack as the binary's only
+    /// entry point. Mutually exclusive with `-f/--function`.
     #[arg(value_name = "TARGET")]
     pub target: Option<String>,
 
-    /// Pack a specific function as the entry point (e.g. `llm.Summarize`).
-    /// Replaces the positional target.
-    #[arg(long)]
-    pub function: Option<String>,
+    /// Pack a specific function as a subcommand of the produced binary.
+    /// Repeatable: each `-f` adds another subcommand. With one `-f` the
+    /// binary still has a subcommand layer (vs. a bare positional, which
+    /// produces a single-entry binary with no subcommand).
+    #[arg(short = 'f', long = "function", value_name = "NAME")]
+    pub functions: Vec<String>,
 
-    /// Output path for the packaged executable.
-    /// Defaults to `./<target-name>`.
+    /// Standalone single-file source. Loads only this file (no project
+    /// discovery). Mutually exclusive with `--from`.
+    #[arg(long, value_name = "PATH")]
+    pub file: Option<PathBuf>,
+
+    /// Output path for the packaged executable. Defaults to the
+    /// `[package].name` from `baml.toml`; for a single target with no
+    /// `[package].name`, falls back to the function name.
     #[arg(short, long)]
     pub output: Option<PathBuf>,
 
@@ -65,25 +83,26 @@ pub struct PackArgs {
     #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
     pub output_format: OutputFormat,
 
-    /// Project root directory. Ignored for hermetic `.baml` targets.
+    /// Project root directory. Ignored when `--file` is set.
     #[arg(long, default_value = ".")]
     pub from: PathBuf,
 
     /// `-e/--expression` is recognized only so we can reject it with a
-    /// targeted message — `baml pack` doesn't support expression mode
-    /// (BEP-027 §"Expression mode is not packageable"). Without this
-    /// flag declared, `baml pack -e '...'` falls through to clap's
-    /// positional handling and surfaces a confusing parse error.
+    /// targeted message — `baml pack` doesn't support expression mode.
+    /// Without this flag declared, `baml pack -e '...'` falls through to
+    /// clap's positional handling and surfaces a confusing parse error.
     #[arg(short = 'e', long = "expression", value_name = "EXPR")]
     pub expression: Option<String>,
 }
 
-/// Resolved entry point: everything needed to build a `PackEnvelope`.
-#[derive(Debug)]
+/// One resolved entry point baked into a packed binary.
+#[derive(Debug, Clone)]
 struct ResolvedPackTarget {
     qualified_name: String,
-    identifier: String,
-    default_basename: String,
+    /// Display name (qualified, `user.` prefix stripped).
+    display_name: String,
+    /// CLI subcommand name (last `.`-segment of `display_name`).
+    subcommand_name: String,
 }
 
 impl PackArgs {
@@ -93,14 +112,8 @@ impl PackArgs {
     }
 
     fn run_with_reporter(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
-        if self.expression.is_some() {
-            return Err(anyhow!(
-                "expression mode (`-e` / `--expression`) is not packageable; \
-                 `baml pack` requires a function or `.baml` file target. \
-                 Pass `--function <name>` or a positional target instead.\n\
-                 See BEP-027 §\"Expression mode is not packageable\"."
-            ));
-        }
+        self.validate_flags()?;
+
         let (db, program, needs_format_hint) = self.load_and_compile(reporter)?;
         let _ = db;
         // Mirror `baml run`'s format advisory: if any source file
@@ -121,19 +134,24 @@ impl PackArgs {
         )
         .map_err(|e| anyhow!("Failed to initialize engine for resolution: {e:?}"))?;
 
-        let resolved = self.resolve_target(&engine)?;
-        validate_help_param(&engine, &resolved.qualified_name)?;
-        let display_name = resolved
-            .qualified_name
-            .strip_prefix("user.")
-            .unwrap_or(&resolved.qualified_name)
-            .to_string();
-        reporter.spin("Packaging", &display_name);
+        let (mode, targets) = self.resolve_targets(&engine)?;
+        for t in &targets {
+            validate_help_param(&engine, &t.qualified_name)?;
+        }
+        let label = label_for(&targets);
+        reporter.spin("Packaging", &label);
 
         let envelope = PackEnvelope {
             program,
-            target_name: resolved.qualified_name.clone(),
-            target_identifier: resolved.identifier.clone(),
+            mode: mode.clone(),
+            targets: targets
+                .iter()
+                .map(|t| baml_exec::TargetEntry {
+                    qualified_name: t.qualified_name.clone(),
+                    display_name: t.display_name.clone(),
+                    subcommand_name: t.subcommand_name.clone(),
+                })
+                .collect(),
             output_format: self.output_format,
         };
         let serialized = bitcode::serialize(&envelope)
@@ -141,10 +159,11 @@ impl PackArgs {
 
         let target_triple = self.resolved_target_triple()?;
         let host_bytes = read_host_binary(target_triple, reporter)?;
+        let basename = self.resolve_output_basename()?;
         let output_path = self
             .output
             .clone()
-            .unwrap_or_else(|| default_output_path(&resolved.default_basename, target_triple));
+            .unwrap_or_else(|| default_output_path(&basename, target_triple));
 
         let mut output_file = std::fs::File::create(&output_path)
             .with_context(|| format!("Failed to create {}", output_path.display()))?;
@@ -166,14 +185,55 @@ impl PackArgs {
         // without parsing an ambiguous arrow.
         reporter.finish(
             "Finished",
-            format!(
-                "{} [{}, {}]",
-                output_path.display(),
-                display_name,
-                target_triple,
-            ),
+            format!("{} [{label}, {}]", output_path.display(), target_triple),
         );
         Ok(crate::ExitCode::Success)
+    }
+
+    /// Validate flag combinations the clap-side `Args` derive can't catch.
+    fn validate_flags(&self) -> Result<()> {
+        if self.expression.is_some() {
+            anyhow::bail!(
+                "expression mode (`-e` / `--expression`) is not packageable; \
+                 pass a positional `<TARGET>` or `-f <NAME>` instead."
+            );
+        }
+        // `--file` and `--from` both name a source location. Reject the
+        // combination up front instead of silently preferring one. Same
+        // rule as `baml run`. The check is gated on `--from != "."`
+        // because clap can't tell "user passed `.`" from "user passed
+        // nothing"; `--file` alongside the default `--from` is fine.
+        if self.file.is_some() && self.from != Path::new(".") {
+            anyhow::bail!(
+                "`--file` and `--from` are mutually exclusive — `--file` already names \
+                 the single source to load."
+            );
+        }
+        if let Some(target) = self.target.as_deref() {
+            if looks_like_path(target) {
+                anyhow::bail!(
+                    "positional `<TARGET>` is a function name, not a file path. \
+                     For a single-file source, use `--file {target}` and pass the \
+                     function via `-f <NAME>`. For example:\n\
+                     \n    baml pack --file {target} -f <NAME>\n",
+                );
+            }
+            if !self.functions.is_empty() {
+                anyhow::bail!(
+                    "positional `<TARGET>` and `-f/--function` are mutually exclusive — \
+                     use one or the other (positional packs a single-entry binary; \
+                     `-f` produces a subcommand binary)."
+                );
+            }
+        }
+        if self.target.is_none() && self.functions.is_empty() {
+            anyhow::bail!(
+                "no target specified. Pass a positional `<TARGET>` to pack one \
+                 function as the binary's only entry point, or one or more \
+                 `-f <NAME>` flags to pack a subcommand binary."
+            );
+        }
+        Ok(())
     }
 
     fn resolved_target_triple(&self) -> Result<&str> {
@@ -187,12 +247,12 @@ impl PackArgs {
         // Per-file `Loading <path>` lines come from
         // `load_project_from_reporting` (cargo-shaped per-unit
         // progress) — no aggregate `Loading <project>` needed.
-        let (db, needs_format_hint) = match self.target.as_deref() {
-            Some(t) if t.ends_with(".baml") => {
-                reporter.spin("Loading", t);
-                self.load_standalone(t)?
-            }
-            _ => self.load_project(reporter)?,
+        let (db, needs_format_hint) = if let Some(file) = self.file.as_deref() {
+            let display = file.display().to_string();
+            reporter.spin("Loading", &display);
+            self.load_standalone(file)?
+        } else {
+            self.load_project(reporter)?
         };
 
         // File count is the meaningful unit here — `self.from` is
@@ -232,9 +292,9 @@ impl PackArgs {
         Ok((db, needs_format_hint))
     }
 
-    fn load_standalone(&self, file_path: &str) -> Result<(ProjectDatabase, bool)> {
-        let canonical = std::fs::canonicalize(Path::new(file_path))
-            .with_context(|| format!("File not found: {file_path}"))?;
+    fn load_standalone(&self, file_path: &Path) -> Result<(ProjectDatabase, bool)> {
+        let canonical = std::fs::canonicalize(file_path)
+            .with_context(|| format!("File not found: {}", file_path.display()))?;
         let content = std::fs::read_to_string(&canonical)
             .with_context(|| format!("Failed to read {}", canonical.display()))?;
         let needs_format_hint = crate::run_command::source_needs_format_hint(&content);
@@ -245,100 +305,109 @@ impl PackArgs {
         Ok((db, needs_format_hint))
     }
 
-    /// Resolve the pack target to `(qualified_name, identifier, default_basename)`.
-    fn resolve_target(&self, engine: &BexEngine) -> Result<ResolvedPackTarget> {
-        if self.function.is_some() && self.target.is_some() {
-            anyhow::bail!("`--function` and a positional target are mutually exclusive.");
+    /// Resolve into `(mode, targets)`. Positional `<TARGET>` →
+    /// [`PackMode::Single`] with one entry; one-or-more `-f` →
+    /// [`PackMode::Subcommand`] (a single `-f` still gets the subcommand
+    /// layer per the spec).
+    fn resolve_targets(
+        &self,
+        engine: &BexEngine,
+    ) -> Result<(baml_exec::PackMode, Vec<ResolvedPackTarget>)> {
+        if let Some(target) = self.target.as_deref() {
+            let resolved = resolve_one(engine, target)?;
+            return Ok((baml_exec::PackMode::Single, vec![resolved]));
         }
 
-        if let Some(func) = &self.function {
-            if !engine.function_exists(func) {
-                let suggestions = function_suggestions(engine, func);
-                if suggestions.is_empty() {
-                    anyhow::bail!(
-                        "Function `{func}` not found. Use `baml run --list` to see \
-                         available targets."
-                    );
-                } else {
-                    anyhow::bail!(
-                        "Function `{func}` not found. Did you mean one of:\n{}",
-                        suggestions
-                            .iter()
-                            .map(|s| format!("  - {s}"))
-                            .collect::<Vec<_>>()
-                            .join("\n")
-                    );
-                }
-            }
-            // BEP-027 §"`baml.argv` in packaged binaries": `argv[1]` is
-            // the *qualified function name* — i.e. the display form, with
-            // the engine's `user.` prefix stripped. Use the canonical
-            // form so `--function user.llm.X` and `--function llm.X` both
-            // produce `argv[1] = "llm.X"`.
-            let qualified_name = canonicalize_function_name(engine, func);
-            let display = qualified_name
-                .strip_prefix("user.")
-                .unwrap_or(&qualified_name)
-                .to_string();
-            let basename = display.rsplit('.').next().unwrap_or(&display).to_string();
-            return Ok(ResolvedPackTarget {
-                qualified_name,
-                identifier: display,
-                default_basename: basename,
-            });
+        // Subcommand mode. Resolve each `-f` and reject duplicate subcommand names.
+        let mut resolved: Vec<ResolvedPackTarget> = Vec::with_capacity(self.functions.len());
+        for func in &self.functions {
+            resolved.push(resolve_one(engine, func)?);
         }
+        let mut seen: HashMap<&str, &str> = HashMap::new();
+        for r in &resolved {
+            if let Some(prev) = seen.insert(r.subcommand_name.as_str(), r.display_name.as_str()) {
+                anyhow::bail!(
+                    "two targets share subcommand name `{}` (`{}` and `{}`). \
+                     Subcommand names come from the last `.`-segment of the function name; \
+                     rename one of them so the binary's subcommands stay unambiguous.",
+                    r.subcommand_name,
+                    prev,
+                    r.display_name,
+                );
+            }
+        }
+        Ok((baml_exec::PackMode::Subcommand, resolved))
+    }
 
-        match self.target.as_deref() {
-            None => {
-                if !engine.function_exists("main") {
-                    anyhow::bail!(
-                        "No `main` function found in the root namespace. \
-                         Use `--function <name>` to pack a specific function."
-                    );
-                }
-                Ok(ResolvedPackTarget {
-                    qualified_name: canonicalize_function_name(engine, "main"),
-                    identifier: "main".to_string(),
-                    default_basename: "main".to_string(),
-                })
+    /// Pick the default output basename. With `[package].name` mandatory
+    /// in `baml.toml` (validated up front by `project_load`), project-mode
+    /// output naming has exactly one source of truth.
+    ///
+    /// - `--file <PATH>` single-file mode: file stem (e.g. `foo.baml` →
+    ///   `foo`). `baml.toml` isn't consulted — single-file packs are
+    ///   intentionally hermetic.
+    /// - Project mode: `[package].name` from `<from>/baml.toml`. Guaranteed
+    ///   present (manifest validation happened at load time).
+    fn resolve_output_basename(&self) -> Result<String> {
+        if let Some(file) = self.file.as_deref() {
+            if let Some(stem) = file.file_stem().and_then(|s| s.to_str()) {
+                return Ok(stem.to_string());
             }
-            Some(target) if target.ends_with(".baml") => {
-                if !engine.function_exists("main") {
-                    anyhow::bail!(
-                        "Standalone file `{target}` has no `main` function. \
-                         Use `--function <name>` to pack a specific function."
-                    );
-                }
-                let basename = Path::new(target)
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| target.to_string());
-                let stem = Path::new(target)
-                    .file_stem()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| basename.clone());
-                Ok(ResolvedPackTarget {
-                    qualified_name: canonicalize_function_name(engine, "main"),
-                    identifier: basename,
-                    default_basename: stem,
-                })
-            }
-            Some(target) => {
-                let ns_main = format!("{target}.main");
-                if !engine.function_exists(&ns_main) {
-                    anyhow::bail!(
-                        "No namespace `{target}` with a `main` function. \
-                         `baml pack` does not support `[scripts]`; use the \
-                         resolved `--function` form directly."
-                    );
-                }
-                Ok(ResolvedPackTarget {
-                    qualified_name: canonicalize_function_name(engine, &ns_main),
-                    identifier: target.to_string(),
-                    default_basename: target.to_string(),
-                })
-            }
+            // Pathologically nameless file (e.g. `.baml`); fall through to
+            // the manifest lookup. In `--file` mode that may still fail
+            // (no project to consult); the user can always pass `-o`.
         }
+        crate::project_load::read_package_name(&self.from)
+    }
+}
+
+/// Resolve a single function-name string against the engine; returns
+/// canonical qualified/display/subcommand-name triple.
+fn resolve_one(engine: &BexEngine, func: &str) -> Result<ResolvedPackTarget> {
+    if !engine.function_exists(func) {
+        let suggestions = function_suggestions(engine, func);
+        if suggestions.is_empty() {
+            anyhow::bail!(
+                "Function `{func}` not found. Use `baml run --list` to see \
+                 available targets."
+            );
+        }
+        anyhow::bail!(
+            "Function `{func}` not found. Did you mean one of:\n{}",
+            suggestions
+                .iter()
+                .map(|s| format!("  - {s}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+    }
+    let qualified_name = canonicalize_function_name(engine, func);
+    let display_name = qualified_name
+        .strip_prefix("user.")
+        .unwrap_or(&qualified_name)
+        .to_string();
+    let subcommand_name = display_name
+        .rsplit('.')
+        .next()
+        .unwrap_or(&display_name)
+        .to_string();
+    Ok(ResolvedPackTarget {
+        qualified_name,
+        display_name,
+        subcommand_name,
+    })
+}
+
+/// Label for status output: `display_name` for single targets,
+/// `a,b,c` for subcommand packs.
+fn label_for(targets: &[ResolvedPackTarget]) -> String {
+    match targets {
+        [single] => single.display_name.clone(),
+        _ => targets
+            .iter()
+            .map(|t| t.subcommand_name.as_str())
+            .collect::<Vec<_>>()
+            .join(","),
     }
 }
 
@@ -552,12 +621,20 @@ fn release_archive_filename(version: &str, target: &str) -> String {
 }
 
 fn release_host_target_triple() -> Result<&'static str> {
-    match (std::env::consts::OS, std::env::consts::ARCH) {
-        ("macos", "aarch64") => Ok("aarch64-apple-darwin"),
-        ("macos", "x86_64") => Ok("x86_64-apple-darwin"),
-        ("linux", "x86_64") => Ok("x86_64-unknown-linux-gnu"),
-        ("windows", "x86_64") => Ok("x86_64-pc-windows-msvc"),
-        (os, arch) => anyhow::bail!(
+    #[cfg(target_env = "musl")]
+    const IS_MUSL: bool = true;
+    #[cfg(not(target_env = "musl"))]
+    const IS_MUSL: bool = false;
+
+    match (std::env::consts::OS, std::env::consts::ARCH, IS_MUSL) {
+        ("macos", "aarch64", _) => Ok("aarch64-apple-darwin"),
+        ("macos", "x86_64", _) => Ok("x86_64-apple-darwin"),
+        ("linux", "aarch64", true) => Ok("aarch64-unknown-linux-musl"),
+        ("linux", "aarch64", false) => Ok("aarch64-unknown-linux-gnu"),
+        ("linux", "x86_64", true) => Ok("x86_64-unknown-linux-musl"),
+        ("linux", "x86_64", false) => Ok("x86_64-unknown-linux-gnu"),
+        ("windows", "x86_64", _) => Ok("x86_64-pc-windows-msvc"),
+        (os, arch, _) => anyhow::bail!(
             "No released `baml-pack-host` artifact is available for {arch}-{os}. \
              Install `baml-pack-host` next to the `baml` binary to use `baml pack` on this platform."
         ),
@@ -565,24 +642,35 @@ fn release_host_target_triple() -> Result<&'static str> {
 }
 
 fn validate_release_target_triple(target: &str) -> Result<&str> {
-    match target {
-        "aarch64-apple-darwin"
-        | "x86_64-apple-darwin"
-        | "x86_64-unknown-linux-gnu"
-        | "x86_64-pc-windows-msvc" => Ok(target),
-        _ => anyhow::bail!(
+    if SUPPORTED_PACK_TARGETS.contains(&target) {
+        Ok(target)
+    } else {
+        anyhow::bail!(
             "Unsupported pack target `{target}`. Supported targets: {}",
             SUPPORTED_PACK_TARGETS.join(", ")
-        ),
+        )
     }
 }
 
 const SUPPORTED_PACK_TARGETS: &[&str] = &[
     "aarch64-apple-darwin",
     "x86_64-apple-darwin",
+    "aarch64-unknown-linux-gnu",
+    "aarch64-unknown-linux-musl",
     "x86_64-unknown-linux-gnu",
+    "x86_64-unknown-linux-musl",
     "x86_64-pc-windows-msvc",
 ];
+
+/// Heuristic: does this positional `<TARGET>` look like a filesystem
+/// path rather than a function name? Triggers when the user typed
+/// something like `baml_src/main.baml` and we want to redirect them to
+/// `--file`. Function names can't contain `/` or `\`, and the `.baml`
+/// suffix is the strong signal — namespaced functions like `llm.Foo`
+/// use `.` but never end in `.baml`.
+fn looks_like_path(target: &str) -> bool {
+    target.contains('/') || target.contains('\\') || target.ends_with(".baml")
+}
 
 fn default_output_path(default_basename: &str, target_triple: &str) -> PathBuf {
     let mut path = PathBuf::from(default_basename);
@@ -692,10 +780,25 @@ mod tests {
         .expect("BexEngine::new should succeed")
     }
 
+    /// Build an engine from a multi-file project so we can exercise
+    /// namespaced functions (`ns_<name>/foo.baml` → `<name>.foo`). Single
+    /// `engine_from_source` can't express folder-based namespaces.
+    fn engine_from_files(files: &[(&str, &str)]) -> BexEngine {
+        let snapshot = baml_project::testing::compile_multi_file(files);
+        BexEngine::new(
+            snapshot,
+            Arc::new(sys_native::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("BexEngine::new should succeed")
+    }
+
     fn pack_args() -> PackArgs {
         PackArgs {
             target: None,
-            function: None,
+            functions: Vec::new(),
+            file: None,
             output: None,
             target_triple: None,
             output_format: OutputFormat::Json,
@@ -704,26 +807,37 @@ mod tests {
         }
     }
 
-    // ── Target resolution — BEP-027 §"What `baml pack` inherits" ───
+    // ── Target resolution ─────────────────────────────────────────────
 
-    /// No target + root `main` exists → packs the root main with
-    /// `argv[1] == "main"` and the default basename `"main"`.
+    /// Positional `<TARGET>` → single-target pack with the function
+    /// name as both display and subcommand.
     #[test]
-    fn test_pack_resolve_no_target_packs_root_main() {
+    fn test_pack_positional_single_target() {
         let engine = engine_from_source("function main() -> int { 42 }");
-        let resolved = pack_args().resolve_target(&engine).unwrap();
-        assert_eq!(resolved.qualified_name, "user.main");
-        assert_eq!(resolved.identifier, "main");
-        assert_eq!(resolved.default_basename, "main");
+        let mut args = pack_args();
+        args.target = Some("main".to_string());
+        let (mode, targets) = args.resolve_targets(&engine).unwrap();
+        assert!(matches!(mode, baml_exec::PackMode::Single));
+        assert_eq!(targets.len(), 1);
+        assert_eq!(targets[0].qualified_name, "user.main");
+        assert_eq!(targets[0].display_name, "main");
+        assert_eq!(targets[0].subcommand_name, "main");
     }
 
-    /// `baml pack -e '<expr>'` must surface a clean "expression mode is
-    /// not packageable" message (BEP-027 §"Expression mode is not
-    /// packageable") rather than a confusing clap parse error. The
-    /// `-e/--expression` flag exists on `PackArgs` solely so we can
-    /// intercept it and reject; otherwise the token falls through to
-    /// the positional `<TARGET>` slot and surfaces a misleading
-    /// "unexpected argument" error.
+    /// `--file` + `--from` rejected (both name a source).
+    #[test]
+    fn test_pack_rejects_file_plus_explicit_from() {
+        let mut args = pack_args();
+        args.functions = vec!["main".into()];
+        args.file = Some(PathBuf::from("a.baml"));
+        args.from = PathBuf::from("./project");
+        let err = args.validate_flags().unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("mutually exclusive"), "got: {msg}");
+        assert!(msg.contains("--file"), "got: {msg}");
+    }
+
+    /// `-e` is rejected before any other validation runs.
     #[test]
     fn test_pack_rejects_expression_mode() {
         let mut args = pack_args();
@@ -738,26 +852,72 @@ mod tests {
             msg.contains("-e") || msg.contains("--expression"),
             "error should name the rejected flag; got: {msg}"
         );
+    }
+
+    /// No positional and no `-f` → user gets a clean "no target" error.
+    #[test]
+    fn test_pack_no_target_errors() {
+        let args = pack_args();
+        let err = args.validate_flags().unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("no target"), "got: {msg}");
+        assert!(msg.contains("-f"), "got: {msg}");
+    }
+
+    /// Positional + `-f` is rejected.
+    #[test]
+    fn test_pack_positional_plus_function_errors() {
+        let mut args = pack_args();
+        args.target = Some("main".to_string());
+        args.functions = vec!["Summarize".to_string()];
+        let err = args.validate_flags().unwrap_err();
+        assert!(format!("{err}").contains("mutually exclusive"));
+    }
+
+    /// Path-shaped positional → redirect to `--file`, not the generic
+    /// "mutually exclusive" message. Covers the common confusion of
+    /// `baml pack baml_src/main.baml -f main`.
+    #[test]
+    fn test_pack_path_positional_suggests_file_flag() {
+        let mut args = pack_args();
+        args.target = Some("baml_src/main.baml".to_string());
+        args.functions = vec!["main".to_string()];
+        let err = args.validate_flags().unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("--file"), "expected --file hint; got: {msg}");
         assert!(
-            msg.contains("--function") || msg.contains(".baml"),
-            "error should point at the supported alternatives; got: {msg}"
+            msg.contains("baml_src/main.baml"),
+            "expected the path echoed back; got: {msg}",
         );
     }
 
-    /// No target + no root `main` → error pointing at `--function`.
+    /// Same redirect when the path-shaped positional appears alone (no `-f`).
+    /// The hint should win over the generic "no target specified" path.
     #[test]
-    fn test_pack_resolve_no_target_no_main_errors() {
-        let engine = engine_from_source("function Other() -> int { 1 }");
-        let err = pack_args().resolve_target(&engine).unwrap_err();
+    fn test_pack_bare_path_positional_suggests_file_flag() {
+        let mut args = pack_args();
+        args.target = Some("./hello.baml".to_string());
+        let err = args.validate_flags().unwrap_err();
         let msg = format!("{err}");
-        assert!(msg.contains("No `main`"), "got: {msg}");
-        assert!(msg.contains("--function"), "got: {msg}");
+        assert!(msg.contains("--file"), "got: {msg}");
     }
 
-    /// `--function <name>` → direct function target. BEP: "`argv[1]` is
-    /// the fully qualified function name for `--function` packages".
     #[test]
-    fn test_pack_resolve_function_flag() {
+    fn test_looks_like_path_signal() {
+        assert!(looks_like_path("baml_src/main.baml"));
+        assert!(looks_like_path("hello.baml"));
+        assert!(looks_like_path("./x"));
+        assert!(looks_like_path(r"C:\foo"));
+        // Function names don't look like paths.
+        assert!(!looks_like_path("main"));
+        assert!(!looks_like_path("llm.Summarize"));
+        assert!(!looks_like_path("user.llm.Summarize"));
+    }
+
+    /// Single `-f` → subcommand mode with one entry (subcommand layer
+    /// retained, per the spec).
+    #[test]
+    fn test_pack_single_function_uses_subcommand_mode() {
         let engine = engine_from_source(
             r#"
                 function main() -> int { 1 }
@@ -765,95 +925,145 @@ mod tests {
             "#,
         );
         let mut args = pack_args();
-        args.function = Some("Summarize".to_string());
-        let resolved = args.resolve_target(&engine).unwrap();
-        assert_eq!(resolved.identifier, "Summarize");
-        assert_eq!(resolved.default_basename, "Summarize");
-        // Qualified name canonicalizes to whatever form the engine stores.
-        assert!(
-            resolved.qualified_name == "Summarize" || resolved.qualified_name == "user.Summarize"
-        );
+        args.functions = vec!["Summarize".to_string()];
+        let (mode, targets) = args.resolve_targets(&engine).unwrap();
+        assert!(matches!(mode, baml_exec::PackMode::Subcommand));
+        assert_eq!(targets.len(), 1);
+        assert_eq!(targets[0].subcommand_name, "Summarize");
     }
 
-    /// BEP-027 §"`baml.argv` in packaged binaries": `argv[1]` is the
-    /// *qualified* function name — `user.` prefix stripped — regardless
-    /// of how the user spelled the `--function` argument.
+    /// Multiple `-f` → subcommand mode, one entry per `-f`.
     #[test]
-    fn test_pack_resolve_function_flag_canonicalizes_user_prefix() {
+    fn test_pack_multi_function_subcommand_mode() {
+        let engine = engine_from_source(
+            r#"
+                function Summarize(text: string) -> string { text }
+                function Categorize(text: string) -> string { text }
+            "#,
+        );
+        let mut args = pack_args();
+        args.functions = vec!["Summarize".to_string(), "Categorize".to_string()];
+        let (mode, targets) = args.resolve_targets(&engine).unwrap();
+        assert!(matches!(mode, baml_exec::PackMode::Subcommand));
+        assert_eq!(targets.len(), 2);
+        assert_eq!(targets[0].subcommand_name, "Summarize");
+        assert_eq!(targets[1].subcommand_name, "Categorize");
+    }
+
+    /// Subcommand name canonicalizes to the last `.`-segment of the
+    /// display name regardless of how the user spelled the `-f` flag.
+    #[test]
+    fn test_pack_function_flag_strips_user_prefix() {
         let engine = engine_from_source("function Summarize(text: string) -> string { text }");
         let mut args = pack_args();
-        args.function = Some("user.Summarize".to_string());
-        let resolved = args.resolve_target(&engine).unwrap();
-        // identifier (becomes argv[1]) must drop the `user.` prefix.
-        assert_eq!(resolved.identifier, "Summarize");
-        // Default output basename uses the last `.`-segment of the
-        // display name, not the user's raw input.
-        assert_eq!(resolved.default_basename, "Summarize");
+        args.functions = vec!["user.Summarize".to_string()];
+        let (_mode, targets) = args.resolve_targets(&engine).unwrap();
+        assert_eq!(targets[0].display_name, "Summarize");
+        assert_eq!(targets[0].subcommand_name, "Summarize");
     }
 
-    /// `--function` with an unknown name → error.
+    /// Unknown function → error.
     #[test]
-    fn test_pack_resolve_function_flag_unknown_errors() {
+    fn test_pack_function_unknown_errors() {
         let engine = engine_from_source("function main() -> int { 1 }");
         let mut args = pack_args();
-        args.function = Some("DoesNotExist".to_string());
-        let err = args.resolve_target(&engine).unwrap_err();
+        args.functions = vec!["DoesNotExist".to_string()];
+        let err = args.resolve_targets(&engine).unwrap_err();
         assert!(format!("{err}").contains("not found"));
     }
 
-    /// `--function` + positional target → error. Dispatch modes are
-    /// mutually exclusive.
+    // ── Namespaced targets (folder-based, `ns_<name>/`) ──────────────
+
+    /// Positional `<TARGET>` resolves a namespaced function by display
+    /// name. The packed binary's `argv[1]` (identifier / subcommand
+    /// name) is the *last* `.`-segment — `llm.Summarize` → `Summarize`.
     #[test]
-    fn test_pack_resolve_function_and_positional_errors() {
-        let engine = engine_from_source("function main() -> int { 1 }");
+    fn test_pack_namespaced_positional() {
+        let engine = engine_from_files(&[(
+            "ns_llm/summarize.baml",
+            "function Summarize(text: string) -> string { text }",
+        )]);
         let mut args = pack_args();
-        args.function = Some("main".to_string());
-        args.target = Some("some_namespace".to_string());
-        let err = args.resolve_target(&engine).unwrap_err();
-        assert!(format!("{err}").contains("mutually exclusive"));
+        args.target = Some("llm.Summarize".to_string());
+        let (mode, targets) = args.resolve_targets(&engine).unwrap();
+        assert!(matches!(mode, baml_exec::PackMode::Single));
+        assert_eq!(targets.len(), 1);
+        assert_eq!(targets[0].qualified_name, "user.llm.Summarize");
+        assert_eq!(targets[0].display_name, "llm.Summarize");
+        assert_eq!(targets[0].subcommand_name, "Summarize");
     }
 
-    /// `.baml` positional → hermetic mode; `argv[1]` is the file basename,
-    /// default output uses the file stem.
+    /// `-f` with namespaced names produces subcommand-mode targets keyed
+    /// on each function's last `.`-segment.
     #[test]
-    fn test_pack_resolve_baml_file_target() {
-        let engine = engine_from_source("function main() -> int { 1 }");
+    fn test_pack_namespaced_multi_function() {
+        let engine = engine_from_files(&[
+            (
+                "ns_llm/summarize.baml",
+                "function Summarize(text: string) -> string { text }",
+            ),
+            (
+                "ns_util/greet.baml",
+                "function Greet(name: string) -> string { name }",
+            ),
+        ]);
         let mut args = pack_args();
-        args.target = Some("scripts/hello.baml".to_string());
-        let resolved = args.resolve_target(&engine).unwrap();
-        assert_eq!(resolved.identifier, "hello.baml");
-        assert_eq!(resolved.default_basename, "hello");
+        args.functions = vec!["llm.Summarize".into(), "util.Greet".into()];
+        let (mode, targets) = args.resolve_targets(&engine).unwrap();
+        assert!(matches!(mode, baml_exec::PackMode::Subcommand));
+        assert_eq!(targets.len(), 2);
+        assert_eq!(targets[0].display_name, "llm.Summarize");
+        assert_eq!(targets[0].subcommand_name, "Summarize");
+        assert_eq!(targets[1].display_name, "util.Greet");
+        assert_eq!(targets[1].subcommand_name, "Greet");
     }
 
-    /// `.baml` positional when the file has no `main` → error.
+    /// Two namespaces exporting the same leaf name → subcommand-name
+    /// collision is rejected with a clear message that names both
+    /// fully-qualified targets so the user can rename one.
     #[test]
-    fn test_pack_resolve_baml_file_without_main_errors() {
-        let engine = engine_from_source("function Other() -> int { 1 }");
+    fn test_pack_namespaced_subcommand_name_collision_errors() {
+        let engine = engine_from_files(&[
+            ("ns_llm/foo.baml", "function Foo() -> int { 1 }"),
+            ("ns_util/foo.baml", "function Foo() -> int { 2 }"),
+        ]);
         let mut args = pack_args();
-        args.target = Some("hello.baml".to_string());
-        let err = args.resolve_target(&engine).unwrap_err();
-        assert!(format!("{err}").contains("no `main`"));
-    }
-
-    // NOTE on namespace resolution: BAML namespaces are folder-based
-    // (`ns_eval/*.baml` or `ns_eval.baml`), not an inline syntax, so
-    // `compile_source` can't construct a multi-namespace engine in-process.
-    // The namespace branch of `resolve_target` is exercised end-to-end in
-    // the packaging smoke test in the `baml_pack_host` crate (TODO once a
-    // cargo-build harness exists); the only logic it contains beyond the
-    // "function exists?" check is string formatting (`{target}.main`).
-
-    /// Unknown positional → error that explicitly points out scripts
-    /// aren't packable.
-    #[test]
-    fn test_pack_resolve_unknown_target_errors() {
-        let engine = engine_from_source("function main() -> int { 1 }");
-        let mut args = pack_args();
-        args.target = Some("nonexistent".to_string());
-        let err = args.resolve_target(&engine).unwrap_err();
+        args.functions = vec!["llm.Foo".into(), "util.Foo".into()];
+        let err = args.resolve_targets(&engine).unwrap_err();
         let msg = format!("{err}");
-        assert!(msg.contains("nonexistent"), "got: {msg}");
-        assert!(msg.contains("[scripts]"), "got: {msg}");
+        assert!(msg.contains("share subcommand name `Foo`"), "got: {msg}");
+        assert!(msg.contains("llm.Foo"), "got: {msg}");
+        assert!(msg.contains("util.Foo"), "got: {msg}");
+    }
+
+    /// Bare-name lookup also resolves namespaced targets via the
+    /// shared resolver's suffix scan — `Summarize` finds `llm.Summarize`
+    /// when it's the unique match.
+    #[test]
+    fn test_pack_namespaced_resolves_via_bare_name() {
+        let engine = engine_from_files(&[(
+            "ns_llm/summarize.baml",
+            "function Summarize(text: string) -> string { text }",
+        )]);
+        let mut args = pack_args();
+        args.functions = vec!["Summarize".into()];
+        let (_, targets) = args.resolve_targets(&engine).unwrap();
+        assert_eq!(targets[0].qualified_name, "user.llm.Summarize");
+        assert_eq!(targets[0].subcommand_name, "Summarize");
+    }
+
+    /// Two `-f`s with the same trailing segment → error.
+    #[test]
+    fn test_pack_duplicate_subcommand_names_error() {
+        // Without namespaces in `compile_source` we can only exercise the
+        // duplicate path by repeating the same function. Engine accepts
+        // duplicates in the input list — `resolve_targets` is what rejects.
+        let engine = engine_from_source("function Foo() -> int { 1 }");
+        let mut args = pack_args();
+        args.functions = vec!["Foo".to_string(), "Foo".to_string()];
+        let err = args.resolve_targets(&engine).unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("share subcommand name"), "got: {msg}");
     }
 
     // ── Reserved `help` parameter — BEP-027 §"Auto-CLI conventions" ───
@@ -914,6 +1124,84 @@ mod tests {
             parsed.args.target_triple.as_deref(),
             Some("x86_64-pc-windows-msvc")
         );
+    }
+
+    /// `-f` / `--function` are repeatable through the clap derive — same
+    /// regression coverage as `RunArgs`.
+    #[test]
+    fn test_pack_dash_f_is_repeatable() {
+        use clap::Parser;
+        #[derive(Parser)]
+        struct Wrapper {
+            #[command(flatten)]
+            args: PackArgs,
+        }
+        let parsed =
+            Wrapper::try_parse_from(["baml-pack", "-f", "a", "-f", "b", "--function", "c"])
+                .unwrap();
+        assert_eq!(parsed.args.functions, vec!["a", "b", "c"]);
+        assert!(parsed.args.target.is_none());
+    }
+
+    /// `--file` binds to the PathBuf field on `PackArgs`.
+    #[test]
+    fn test_pack_file_flag_parses() {
+        use clap::Parser;
+        #[derive(Parser)]
+        struct Wrapper {
+            #[command(flatten)]
+            args: PackArgs,
+        }
+        let parsed =
+            Wrapper::try_parse_from(["baml-pack", "-f", "foo", "--file", "x.baml"]).unwrap();
+        assert_eq!(parsed.args.functions, vec!["foo"]);
+        assert_eq!(parsed.args.file.as_deref(), Some(Path::new("x.baml")));
+    }
+
+    // ── Output basename resolution ────────────────────────────────────
+
+    /// Project mode (`baml.toml` with `[package].name`) → use that name
+    /// directly. No fallback to function name; manifest validation up
+    /// front guarantees the field is there.
+    #[test]
+    fn test_pack_resolve_basename_uses_package_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(
+            tmp.path().join("baml.toml"),
+            "[package]\nname = \"my-app\"\n",
+        )
+        .unwrap();
+        let mut args = pack_args();
+        args.from = tmp.path().to_path_buf();
+        assert_eq!(args.resolve_output_basename().unwrap(), "my-app");
+    }
+
+    /// `--file foo.baml` → file stem.
+    #[test]
+    fn test_pack_file_mode_defaults_to_file_stem() {
+        let mut args = pack_args();
+        args.file = Some(PathBuf::from("scripts/foo.baml"));
+        assert_eq!(args.resolve_output_basename().unwrap(), "foo");
+    }
+
+    /// `--file` ignores adjacent `baml.toml` — single-file packs are
+    /// hermetic by intent.
+    #[test]
+    fn test_pack_file_mode_ignores_adjacent_baml_toml() {
+        let tmp = tempfile::tempdir().unwrap();
+        let baml_file = tmp.path().join("hello.baml");
+        std::fs::write(&baml_file, "function describe() -> int { 1 }").unwrap();
+        std::fs::write(
+            tmp.path().join("baml.toml"),
+            "[package]\nname = \"unrelated\"\n",
+        )
+        .unwrap();
+
+        let mut args = pack_args();
+        args.file = Some(baml_file);
+        // `--from` defaults to `.`, but file mode short-circuits before
+        // touching it. Stem wins.
+        assert_eq!(args.resolve_output_basename().unwrap(), "hello");
     }
 
     // ── GitHub release fallback ───────────────────────────────────────
@@ -1065,14 +1353,20 @@ mod tests {
         let snapshot = baml_tests::engine::compile_source("function main() -> int { 1 }");
         let envelope = PackEnvelope {
             program: snapshot,
-            target_name: "user.main".to_string(),
-            target_identifier: "main".to_string(),
+            mode: baml_exec::PackMode::Single,
+            targets: vec![baml_exec::TargetEntry {
+                qualified_name: "user.main".to_string(),
+                display_name: "main".to_string(),
+                subcommand_name: "main".to_string(),
+            }],
             output_format: OutputFormat::Json,
         };
         let bytes = bitcode::serialize(&envelope).unwrap();
         let decoded: PackEnvelope = bitcode::deserialize(&bytes).unwrap();
-        assert_eq!(decoded.target_name, "user.main");
-        assert_eq!(decoded.target_identifier, "main");
+        assert!(matches!(decoded.mode, baml_exec::PackMode::Single));
+        assert_eq!(decoded.targets.len(), 1);
+        assert_eq!(decoded.targets[0].qualified_name, "user.main");
+        assert_eq!(decoded.targets[0].subcommand_name, "main");
         assert!(matches!(decoded.output_format, OutputFormat::Json));
     }
 
@@ -1108,9 +1402,13 @@ mod tests {
     #[test]
     fn test_load_project_empty_dir_errors() {
         let tmp = tempfile::tempdir().unwrap();
-        // Write a `baml.toml` so the project root is recognized, but
+        // Write a valid manifest so the project root is recognized, but
         // no `.baml` files in `baml_src/`.
-        std::fs::write(tmp.path().join("baml.toml"), "").unwrap();
+        std::fs::write(
+            tmp.path().join("baml.toml"),
+            "[package]\nname = \"empty\"\n",
+        )
+        .unwrap();
         std::fs::create_dir(tmp.path().join("baml_src")).unwrap();
 
         let mut args = pack_args();
@@ -1129,7 +1427,7 @@ mod tests {
     fn test_load_standalone_missing_file_errors() {
         let args = pack_args();
         let err = args
-            .load_standalone("/nonexistent/ghost/path.baml")
+            .load_standalone(Path::new("/nonexistent/ghost/path.baml"))
             .unwrap_err();
         let msg = format!("{err:?}"); // use debug to capture the full context chain
         assert!(
@@ -1150,8 +1448,8 @@ mod tests {
             "#,
         );
         let mut args = pack_args();
-        args.function = Some("Summarise".to_string()); // British spelling
-        let err = args.resolve_target(&engine).unwrap_err();
+        args.functions = vec!["Summarise".to_string()]; // British spelling
+        let err = args.resolve_targets(&engine).unwrap_err();
         let msg = format!("{err}");
         assert!(
             msg.contains("Did you mean"),
@@ -1169,8 +1467,8 @@ mod tests {
     fn test_pack_resolve_function_flag_unknown_with_no_suggestions() {
         let engine = engine_from_source("function Greet() -> int { 1 }");
         let mut args = pack_args();
-        args.function = Some("totally_unrelated_xyz".to_string());
-        let err = args.resolve_target(&engine).unwrap_err();
+        args.functions = vec!["totally_unrelated_xyz".to_string()];
+        let err = args.resolve_targets(&engine).unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("not found"), "got: {msg}");
         assert!(

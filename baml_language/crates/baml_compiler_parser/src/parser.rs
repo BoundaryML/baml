@@ -1864,7 +1864,7 @@ impl<'a> Parser<'a> {
         // Attribute argument can be:
         // - String: @alias("user_name")
         // - Raw string: @description(#"Multi-line\ndescription"#)
-        // - Expression: @check({{ this > 0 }})
+        // - Expression: @some_attr({{ this > 0 }})
         // - Unquoted string: @alias(my_alias) - one WORD token
 
         if self.parse_any_string() {
@@ -5192,7 +5192,7 @@ impl<'a> Parser<'a> {
                     break;
                 }
 
-                // Block attributes like @@check(...) inside config blocks
+                // Block attributes (e.g. `@@some_attr(...)`) inside config blocks
                 if p.at(TokenKind::AtAt) {
                     p.parse_atat_attribute();
                 } else {
@@ -5266,7 +5266,7 @@ impl<'a> Parser<'a> {
                 p.parse_config_value();
             }
 
-            // Optional field attributes after config value (e.g., args { ... } @check(...))
+            // Optional field attributes after config value (e.g., args { ... } @some_attr(...))
             while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
                 p.parse_at_attribute();
             }

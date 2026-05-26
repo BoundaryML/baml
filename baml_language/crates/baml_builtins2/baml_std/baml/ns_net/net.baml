@@ -1,6 +1,8 @@
+/// A TCP socket connection. Created by `baml.net.connect`.
 class Socket {
   _handle $rust_type
 
+  /// Reads available data from the socket and returns it as a UTF-8 string. Blocks until data arrives.
   function read(self) -> string throws root.errors.Io | root.errors.Timeout {
     $rust_io_function
   }
@@ -10,6 +12,7 @@ class Socket {
     $rust_io_function
   }
 
+  /// Closes the socket connection.
   function close(self) -> null throws root.errors.Io {
     $rust_io_function
   }
@@ -31,6 +34,7 @@ class TcpListener {
   }
 }
 
+/// Opens a TCP connection to `addr` (e.g. `"127.0.0.1:8080"`) and returns a `Socket`.
 function connect(addr: string) -> Socket throws root.errors.Io | root.errors.Timeout {
   $rust_io_function
 }

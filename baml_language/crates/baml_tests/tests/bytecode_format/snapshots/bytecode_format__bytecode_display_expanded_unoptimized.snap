@@ -2,65 +2,65 @@
 source: crates/baml_tests/tests/bytecode_format/main.rs
 ---
 function assert.contains(haystack: string, needle: string) -> null {
-  28   0    load_var 1             (haystack)
+  32   0    load_var 1             (haystack)
        1    load_var 2             (needle)
        2    call 156 ntypeargs=0   (baml.String.includes)
        3    unary_op !             
        4    pop_jump_if_false +2   (to 6)
        5    jump +3                (to 8)
 
-  31   6    load_const 0           (null)
+  35   6    load_const 0           (null)
 
-  28   7    jump +3                (to 10)
+  32   7    jump +3                (to 10)
 
-  29   8    load_const 1           ("assertion failed: string does not contain expected substring")
+  33   8    load_const 1           ("assertion failed: string does not contain expected substring")
        9    call 257 ntypeargs=0   (baml.sys.panic)
        10   return                 
 }
 
 function assert.equal(actual: unknown, expected: unknown) -> null {
-  20   0   load_var 1             (actual)
+  23   0   load_var 1             (actual)
        1   load_var 2             (expected)
        2   cmp_op !=              
        3   pop_jump_if_false +2   (to 5)
        4   jump +3                (to 7)
 
-  23   5   load_const 0           (null)
+  26   5   load_const 0           (null)
 
-  20   6   jump +3                (to 9)
+  23   6   jump +3                (to 9)
 
-  21   7   load_const 1           ("assertion failed: expected equal values")
+  24   7   load_const 1           ("assertion failed: expected equal values")
        8   call 257 ntypeargs=0   (baml.sys.panic)
        9   return                 
 }
 
 function assert.is_true(condition: bool) -> null {
-  4   0   load_var 1             (condition)
+  5   0   load_var 1             (condition)
       1   unary_op !             
       2   pop_jump_if_false +2   (to 4)
       3   jump +3                (to 6)
 
-  7   4   load_const 0           (null)
+  8   4   load_const 0           (null)
 
-  4   5   jump +3                (to 8)
+  5   5   jump +3                (to 8)
 
-  5   6   load_const 1           ("assertion failed: expected true")
+  6   6   load_const 1           ("assertion failed: expected true")
       7   call 257 ntypeargs=0   (baml.sys.panic)
       8   return                 
 }
 
 function assert.not_null(value: unknown?) -> null {
-  12   0   load_var 1             (value)
+  14   0   load_var 1             (value)
        1   load_const 0           (null)
        2   cmp_op ==              
        3   pop_jump_if_false +2   (to 5)
        4   jump +3                (to 7)
 
-  15   5   load_const 0           (null)
+  17   5   load_const 0           (null)
 
-  12   6   jump +3                (to 9)
+  14   6   jump +3                (to 9)
 
-  13   7   load_const 1           ("assertion failed: expected non-null value")
+  15   7   load_const 1           ("assertion failed: expected non-null value")
        8   call 257 ntypeargs=0   (baml.sys.panic)
        9   return                 
 }
@@ -73,7 +73,7 @@ function testing.$invoke_collector(collector: (testing.TestCollector) -> void th
 }
 
 function testing.RunReport.from_json(j: baml.json.json) -> testing.RunReport {
-  5   0    load_var 1                       (j)
+  7   0    load_var 1                       (j)
       1    load_const 0                     ("outcome")
       2    call 351 ntypeargs=0             (baml.json.field)
       3    store_var 4                      (_3)
@@ -100,7 +100,7 @@ function testing.RunReport.from_json(j: baml.json.json) -> testing.RunReport {
 }
 
 function testing.RunReport.to_json(self: null) -> baml.json.json {
-  5   0    load_var 1            (self)
+  7   0    load_var 1            (self)
       1    load_field 0          (outcome)
       2    load_const 0          ("to_json")
       3    load_map_element      
@@ -1014,7 +1014,7 @@ function testing.TestRegistry.to_json(self: null) -> baml.json.json {
 }
 
 function testing.TestReport.from_json(j: baml.json.json) -> testing.TestReport {
-  15   0    load_var 1                       (j)
+  18   0    load_var 1                       (j)
        1    load_const 0                     ("outcome")
        2    call 351 ntypeargs=0             (baml.json.field)
        3    store_var 4                      (_3)
@@ -1041,7 +1041,7 @@ function testing.TestReport.from_json(j: baml.json.json) -> testing.TestReport {
 }
 
 function testing.TestReport.to_json(self: null) -> baml.json.json {
-  15   0    load_var 1            (self)
+  18   0    load_var 1            (self)
        1    load_field 0          (outcome)
        2    load_const 0          ("to_json")
        3    load_map_element      
@@ -1107,7 +1107,7 @@ function testing.TestSetRegistration.to_json(self: null) -> baml.json.json {
 }
 
 function testing.TestSetReport.from_json(j: baml.json.json) -> testing.TestSetReport {
-  21   0    load_var 1                       (j)
+  25   0    load_var 1                       (j)
        1    load_const 0                     ("outcome")
        2    call 351 ntypeargs=0             (baml.json.field)
        3    store_var 4                      (_3)
@@ -1164,7 +1164,7 @@ function testing.TestSetReport.from_json(j: baml.json.json) -> testing.TestSetRe
 }
 
 function testing.TestSetReport.to_json(self: null) -> baml.json.json {
-  21   0    load_var 1            (self)
+  25   0    load_var 1            (self)
        1    load_field 0          (outcome)
        2    load_const 0          ("to_json")
        3    load_map_element      

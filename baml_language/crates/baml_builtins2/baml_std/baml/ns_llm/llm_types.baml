@@ -2,12 +2,14 @@ class PromptAst {
   _data $rust_type
 }
 
+/// The routing strategy of an LLM client.
 enum ClientType {
   Primitive
   Fallback
   RoundRobin
 }
 
+/// Configures automatic retry behavior for an LLM client.
 class RetryPolicy {
   max_retries int
   initial_delay_ms int
@@ -383,6 +385,7 @@ class PrimitiveClientOptions {
 }
 
 // @providers: azure-openai
+/// Provider-specific options for `azure-openai` clients.
 class AzureOpenAiOptions {
   resource_name string | null
   deployment_id string | null
@@ -391,11 +394,13 @@ class AzureOpenAiOptions {
 }
 
 // @providers: anthropic
+/// Provider-specific options for `anthropic` clients.
 class AnthropicOptions {
   max_tokens int | null
 }
 
 // @providers: vertex-ai
+/// Provider-specific options for `vertex-ai` clients.
 class VertexAiOptions {
   credentials string | null
   credentials_content string | null
@@ -404,6 +409,7 @@ class VertexAiOptions {
 }
 
 // @providers: aws-bedrock
+/// Provider-specific options for `aws-bedrock` clients.
 class BedrockOptions {
   region string | null
   endpoint_url string | null

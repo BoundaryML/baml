@@ -96,8 +96,6 @@ where
     // X -> Object conversions.
     NoFields(Option<Cow<'v, crate::jsonish::Value<'s>>>),
 
-    // /// Constraint results (only contains checks)
-    // ConstraintResults(Vec<(String, JinjaExpression, bool)>),
     /// Completion state for the top-level node of the value is Incomplete.
     Incomplete,
     Pending,
@@ -165,29 +163,7 @@ impl<N: TypeIdent> DeserializerConditions<'_, '_, '_, N> {
             })
             .collect::<Vec<_>>()
     }
-
-    // pub fn constraint_results(&self) -> Vec<(String, JinjaExpression, bool)> {
-    //     self.flags
-    //         .iter()
-    //         .filter_map(|flag| match flag {
-    //             Flag::ConstraintResults(cs) => Some(cs.clone()),
-    //             _ => None,
-    //         })
-    //         .flatten()
-    //         .collect()
-    // }
 }
-
-// pub fn constraint_results(flags: &[Flag]) -> Vec<(String, JinjaExpression, bool)> {
-//     flags
-//         .iter()
-//         .filter_map(|flag| match flag {
-//             Flag::ConstraintResults(cs) => Some(cs.clone()),
-//             _ => None,
-//         })
-//         .flatten()
-//         .collect()
-// }
 
 impl<N: TypeIdent> std::fmt::Debug for DeserializerConditions<'_, '_, '_, N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -335,16 +311,6 @@ impl<N: TypeIdent> std::fmt::Display for Flag<'_, '_, '_, N> {
                     writeln!(f, "<empty>")?;
                 }
             }
-            // Flag::ConstraintResults(cs) => {
-            //     for (label, _, succeeded) in cs.iter() {
-            //         let f_result = if *succeeded { "Succeeded" } else { "Failed" };
-            //         writeln!(
-            //             f,
-            //             "{level:?} {label} {f_result}",
-            //             level = ConstraintLevel::Check
-            //         )?;
-            //     }
-            // }
             Flag::Incomplete => {
                 write!(f, "Value is incompletely streamed")?;
             }

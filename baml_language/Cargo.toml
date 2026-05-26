@@ -1,12 +1,24 @@
 [workspace]
 members = [
   "crates/*",
+  "sdks/go/codegen_go",
+  "sdks/nodejs/bridge_nodejs",
+  "sdks/nodejs/codegen_nodejs",
   "sdks/python/rust/*",
-  "sdk_tests/build",
-  "sdk_tests/crates/*",
+  "sdk_tests/harness_setup",
+  "sdk_tests/harness_runner",
+  "sdk_tests/crates/python_pydantic2",
+  # `sdk_tests/crates/nodejs_typescript`'s build.rs runs codegen +
+  # `pnpm install` but soft-fails into `$OUT_DIR/build_diagnostics.txt`
+  # if pnpm is missing or install fails (see
+  # `sdk_tests/harness_setup/src/lib.rs::BuildDiagnostics` —
+  # package name `sdk_test_harness_setup`), so a workspace
+  # `cargo build` / `cargo doc` succeeds without pnpm installed.
+  # The failures surface via `cargo test`'s
+  # `build_diagnostics::no_build_failures` test.
+  "sdk_tests/crates/nodejs_typescript",
 ]
 exclude = [
-  "crates/bridge_go",
   # Generated Python rig-test outputs do not contain Cargo manifests, but the
   # workspace member glob above would otherwise make cargo metadata fail.
   "rig_tests/crates/python_empty",
@@ -40,6 +52,8 @@ baml_builtins_codegen = { path = "crates/baml_builtins_codegen" }
 baml_builtins2 = { path = "crates/baml_builtins2" }
 baml_builtins2_codegen = { path = "crates/baml_builtins2_codegen" }
 baml_builtins_macros = { path = "crates/baml_builtins_macros" }
+codegen_go = { path = "sdks/go/codegen_go" }
+codegen_nodejs = { path = "sdks/nodejs/codegen_nodejs" }
 codegen_python = { path = "sdks/python/rust/codegen_python" }
 baml_codegen_types = { path = "crates/baml_codegen_types" }
 baml_compiler2_ast = { path = "crates/baml_compiler2_ast" }
@@ -175,7 +189,7 @@ reqwest = { version = "0.13.1", default-features = false, features = [
 rowan = { version = "0.16" }
 rustls = { version = "0.23.37", default-features = false }
 rustc-hash = { version = "2.1" }
-salsa = { git = "https://github.com/salsa-rs/salsa.git", rev = "cdd0b85516a52c18b8a6d17a2279a96ed6c3e198", default-features = false, features = [
+salsa = { version = "0.26", default-features = false, features = [
   "compact_str",
   "macros",
   "salsa_unstable",
@@ -184,6 +198,7 @@ salsa = { git = "https://github.com/salsa-rs/salsa.git", rev = "cdd0b85516a52c18
 serde = { version = "1.0.197", features = [ "derive" ] }
 serde-wasm-bindgen = "0.6"
 serde_json = { version = "1.0.113", features = [ "preserve_order" ] }
+serde_yaml = "0.9"
 similar = { version = "2.4.0", features = [ "inline" ] }
 smol_str = { version = "0.3", features = [ "serde" ] }
 strsim = { version = "0.11.1" }

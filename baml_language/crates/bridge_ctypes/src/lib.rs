@@ -26,4 +26,4 @@ pub use handle_table::{
 };
 pub use utils::DecodeFromBuffer;
 pub use value_decode::{inbound_to_external, kwargs_to_bex_values};
-pub use value_encode::external_to_baml_value;
+pub use value_encode::external_to_outbound;

@@ -57,7 +57,7 @@ mod wasm_lsp;
 mod wasm_playground;
 mod wasm_sys;
 
-pub use bridge_ctypes::{HANDLE_TABLE, baml_core, external_to_baml_value, kwargs_to_bex_values};
+pub use bridge_ctypes::{HANDLE_TABLE, baml_core, external_to_outbound, kwargs_to_bex_values};
 pub use error::BridgeError;
 use js_sys::Function;
 use prost::Message;
@@ -310,7 +310,7 @@ impl BamlWasmRuntime {
         })?;
 
         let handle_options = bridge_ctypes::CffiHandleTableOptions::for_wire();
-        let baml_value = external_to_baml_value(&result, &handle_options)
+        let baml_value = external_to_outbound(&result, &handle_options)
             .map_err(|e| JsError::new(&format!("Failed to encode result: {e}")))?;
 
         Ok(baml_value.encode_to_vec())
@@ -427,7 +427,7 @@ impl BamlWasmRuntime {
         match result {
             Ok(result) => {
                 let handle_options = bridge_ctypes::CffiHandleTableOptions::for_wire();
-                let baml_value = external_to_baml_value(&result, &handle_options)
+                let baml_value = external_to_outbound(&result, &handle_options)
                     .map_err(|e| JsError::new(&format!("Failed to encode result: {e}")))?;
                 Ok(baml_value.encode_to_vec())
             }

@@ -1,4 +1,6 @@
+/// A 64-bit IEEE 754 floating-point number (f64).
 class Float {
+  /// Serializes this float to a JSON number. NaN and Infinity are serialized as null.
   // mut_vm: Float values are heap-boxed (Object::Float); construction needs a TLAB.
   //baml:mut_vm
   function to_json(self) -> baml.json.json {

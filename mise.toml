@@ -24,12 +24,15 @@ uv = "0.11.3"
 "protoc-gen-go" = "1.34.1"
 "go:golang.org/x/tools/cmd/goimports" = "0.36.0"
 
+# Protobuf compiler — needed by sdks/go/bridge_go/build.sh (bridge_ctypes uses vendored protoc).
+protoc = "27.1"
+
 # Python tools
 "pipx:ruff" = "latest"
 "pipx:maturin" = "latest"
 
 # Node tools
-"npm:pnpm" = "10.14.0"
+"npm:pnpm" = "11.1.3"
 "npm:@infisical/cli" = "latest"
 
 [tasks]
