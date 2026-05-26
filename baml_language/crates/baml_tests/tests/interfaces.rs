@@ -1262,6 +1262,72 @@ fn simple_interface_field_view_construction_is_compile_error() {
     );
 }
 
+#[tokio::test]
+async fn aliased_interface_fields_do_not_create_concrete_runtime_slots() {
+    let output = baml_test!(
+        r#"
+        interface Named {
+            name: string
+        }
+        class Person {
+            title: string
+            implements Named {
+                name as title
+            }
+        }
+        function main() -> Person {
+            return Person { title: "Ada" }
+        }
+        "#
+    );
+
+    let Ok(BexExternalValue::Instance { class_name, fields }) = output.result else {
+        panic!("expected instance, got: {:?}", output.result);
+    };
+    assert_eq!(class_name, "user.Person");
+    assert_eq!(
+        fields.get("title"),
+        Some(&BexExternalValue::String("Ada".into()))
+    );
+    assert!(
+        fields.get("name").is_none(),
+        "interface field `name` must remain a view, not a concrete runtime slot"
+    );
+}
+
+#[tokio::test]
+async fn interface_return_uses_concrete_implementor_field_shape() {
+    let output = baml_test!(
+        r#"
+        interface Named {
+            name: string
+        }
+        class Person {
+            title: string
+            implements Named {
+                name as title
+            }
+        }
+        function main() -> Named {
+            return Person { title: "Ada" }
+        }
+        "#
+    );
+
+    let Ok(BexExternalValue::Instance { class_name, fields }) = output.result else {
+        panic!("expected instance, got: {:?}", output.result);
+    };
+    assert_eq!(class_name, "user.Person");
+    assert_eq!(
+        fields.get("title"),
+        Some(&BexExternalValue::String("Ada".into()))
+    );
+    assert!(
+        fields.get("name").is_none(),
+        "interface return should serialize the concrete implementor shape"
+    );
+}
+
 #[test]
 fn interface_field_type_must_match_invariantly() {
     assert_compile_error_code(

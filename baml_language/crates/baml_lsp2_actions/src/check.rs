@@ -134,6 +134,11 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     let res_ctx = baml_compiler2_tir::package_interface::package_resolution_context(db, pkg_id);
     let pkg_items = &res_ctx.own_items;
     let aliases = collect_type_aliases_for_resolution_context(db, res_ctx);
+    let ast_items = {
+        let tree = baml_compiler_parser::syntax_tree(db, file);
+        let (items, _, _) = baml_compiler2_ast::lower_file_with_file_id(&tree, file_id);
+        items
+    };
 
     // ── 5. Jinja prompt/template diagnostics ────────────────────────────────
     //

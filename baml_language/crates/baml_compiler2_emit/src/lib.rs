@@ -183,8 +183,7 @@ fn extract_schema_attrs(
 
 pub use bex_vm_types::Program as ProgramAlias;
 
-/// One entry in the merged field list for a class. Owned so it can outlive
-/// transient `Arc<ItemTree>` borrows for interface-contributed fields.
+/// One entry in the emitted runtime field list for a class.
 type MergedFieldEntry = (
     String,
     Option<baml_compiler2_ast::SpannedTypeExpr>,
@@ -431,10 +430,9 @@ pub fn generate_project_bytecode_with_opt(
             class_object_indices
                 .entry(short_name.clone())
                 .or_insert(class_obj_idx);
-            // The display- and short-name maps must agree with the merged
-            // field indices (which include interface-injected fields) used
-            // by the Class object above. Use a closure that rebuilds the
-            // same merged ordering.
+            // The display- and short-name maps must agree with the emitted
+            // runtime field indices used by the Class object above. Use a
+            // closure that rebuilds the same ordering.
             let rebuild_indices = || {
                 let merged = collect_class_fields_with_implements(
                     db,
