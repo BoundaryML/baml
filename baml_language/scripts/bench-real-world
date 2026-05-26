@@ -16,7 +16,37 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from statistics import median
+from statistics import median, stdev
+
+# ── Pre-assembled string fixtures for string benchmarks ──────────────────────
+# Build these once in Python so the timed code is pure operation, no assembly.
+
+# Short string: 26 bytes, splits into 6 tiny (~5 byte) segments.
+# Exercises BexStr Inline path (≤ 54 bytes both source and segments).
+_SHORT_SRC = "hello world foo bar baz qux"
+_SHORT_DELIM = " "
+
+# Medium string: ~600 bytes, splits into 8 medium (~75 byte) segments.
+# Each segment exceeds 54-byte inline threshold → uses BexStr::Slice (zero-copy view).
+_MED_CHUNK = "the quick brown fox jumps over the lazy dog and runs through the meadow"
+_MED_SRC = "|".join([_MED_CHUNK] * 8)
+_MED_DELIM = "|"
+
+# Long string: ~5KB, splits into 10 long (~500 byte) segments.
+# Heavy zero-copy Slice path — segments far exceed inline threshold.
+_LONG_CHUNK = (
+    "the quick brown fox jumps over the lazy dog and runs through the meadow "
+    "while the sun sets behind the distant mountains casting long shadows "
+    "across the rolling hills and the gentle breeze carries the scent of "
+    "wildflowers and freshly cut grass through the warm summer air as birds "
+    "sing in the trees and the world feels at peace with itself in this "
+    "perfect moment of stillness and beauty that seems to stretch on forever "
+    "without end or care for the troubles of yesterday or tomorrow only the "
+    "present moment matters now"
+)
+_LONG_SRC = "###".join([_LONG_CHUNK] * 10)
+_LONG_DELIM = "###"
+
 
 # ── Workload definitions ──────────────────────────────────────────────────────
 
@@ -208,28 +238,68 @@ const a=[];for(let i=0;i<100000;i++)a.push(i);
 let s=0;for(const x of a)s+=x;console.log(s)
 """,
     },
-    "string split 100k": {
-        "baml": """
-function main() -> int {
+    # ── String split: 26B source → 6×5B segs (BexStr Inline path) ────────────
+    "split short (26B src, 5B segs) x100k": {
+        "baml": f"""
+function main() -> int {{
+  let s = "{_SHORT_SRC}";
   let count = 0;
-  for (let i = 0; i < 100000; i += 1) {
-    let s = "hello world foo bar baz qux";
-    let parts = s.split(" ");
+  for (let i = 0; i < 100000; i += 1) {{
+    let parts = s.split("{_SHORT_DELIM}");
     count += parts.length();
-  };
+  }};
   return count;
-}
+}}
 """,
-        "python": """
+        "python": f"""
+s = "{_SHORT_SRC}"
 c = 0
-for i in range(100000):
-    s = "hello world foo bar baz qux"
-    c += len(s.split(" "))
+for i in range(100000): c += len(s.split("{_SHORT_DELIM}"))
 print(c)
 """,
-        "js": """
-let c=0;for(let i=0;i<100000;i++){c+="hello world foo bar baz qux".split(" ").length}console.log(c)
+        "js": f'const s="{_SHORT_SRC}";let c=0;for(let i=0;i<100000;i++)c+=s.split("{_SHORT_DELIM}").length;console.log(c)',
+    },
+    # ── String split: 600B source → 8×75B segs (BexStr Slice zero-copy) ──────
+    "split medium (600B src, 75B segs) x20k": {
+        "baml": f"""
+function main() -> int {{
+  let s = "{_MED_SRC}";
+  let total = 0;
+  for (let i = 0; i < 20000; i += 1) {{
+    let parts = s.split("{_MED_DELIM}");
+    total += parts.length();
+  }};
+  return total;
+}}
 """,
+        "python": f"""
+s = "{_MED_SRC}"
+t = 0
+for i in range(20000): t += len(s.split("{_MED_DELIM}"))
+print(t)
+""",
+        "js": f'const s="{_MED_SRC}";let t=0;for(let i=0;i<20000;i++)t+=s.split("{_MED_DELIM}").length;console.log(t)',
+    },
+    # ── String split: 5KB source → 10×500B segs (heavy Slice zero-copy) ──────
+    "split long (5KB src, 500B segs) x5k": {
+        "baml": f"""
+function main() -> int {{
+  let s = "{_LONG_SRC}";
+  let total = 0;
+  for (let i = 0; i < 5000; i += 1) {{
+    let parts = s.split("{_LONG_DELIM}");
+    total += parts.length();
+  }};
+  return total;
+}}
+""",
+        "python": f"""
+s = "{_LONG_SRC}"
+t = 0
+for i in range(5000): t += len(s.split("{_LONG_DELIM}"))
+print(t)
+""",
+        "js": f'const s="{_LONG_SRC}";let t=0;for(let i=0;i<5000;i++)t+=s.split("{_LONG_DELIM}").length;console.log(t)',
     },
     "call chain 100x10k": {
         "baml": "GENERATE_CHAIN",
@@ -428,6 +498,411 @@ function md(a,b){return b===0?0:Math.trunc(a/b)}
 let s=0;for(let i=0;i<1000000;i++)s+=md(i,i+1);console.log(s)
 """,
     },
+    # ── String-heavy workloads (BexStr optimization targets) ────────────────
+    # ── String concat in loop: classic O(n²) → O(n) test ─────────────────────
+    "concat += in loop x5k": {
+        "baml": """
+function main() -> int {
+  let s = "";
+  for (let i = 0; i < 5000; i += 1) {
+    s = s + "hello";
+  };
+  return s.length();
+}
+""",
+        "python": """
+s = ""
+for i in range(5000):
+    s = s + "hello"
+print(len(s))
+""",
+        "js": 'let s="";for(let i=0;i<5000;i++)s+="hello";console.log(s.length)',
+    },
+    "concat += in loop x20k": {
+        "baml": """
+function main() -> int {
+  let s = "";
+  for (let i = 0; i < 20000; i += 1) {
+    s = s + "x";
+  };
+  return s.length();
+}
+""",
+        "python": """
+s = ""
+for i in range(20000):
+    s = s + "x"
+print(len(s))
+""",
+        "js": 'let s="";for(let i=0;i<20000;i++)s+="x";console.log(s.length)',
+    },
+    # ── String equality (same Arc): ptr_eq shortcut path ─────────────────────
+    "equality same-string x500k": {
+        "baml": """
+function main() -> int {
+  let a = "the quick brown fox jumps over the lazy dog";
+  let b = a;
+  let count = 0;
+  for (let i = 0; i < 500000; i += 1) {
+    if a == b { count += 1; };
+  };
+  return count;
+}
+""",
+        "python": """
+a = "the quick brown fox jumps over the lazy dog"
+b = a
+count = 0
+for i in range(500000):
+    if a == b: count += 1
+print(count)
+""",
+        "js": """
+const a="the quick brown fox jumps over the lazy dog";const b=a;
+let c=0;for(let i=0;i<500000;i++)if(a===b)c++;console.log(c)
+""",
+    },
+    # ── String pass through function: BexStr O(1) clone path ─────────────────
+    "pass long string through fn x100k": {
+        "baml": """
+function pass(s: string) -> string { s }
+function main() -> int {
+  let s = "this string gets cloned through function calls over and over again and again";
+  for (let i = 0; i < 100000; i += 1) {
+    s = pass(s);
+  };
+  return s.length();
+}
+""",
+        "python": """
+def p(s): return s
+s = "this string gets cloned through function calls over and over again and again"
+for i in range(100000):
+    s = p(s)
+print(len(s))
+""",
+        "js": """
+function p(s){return s}
+let s="this string gets cloned through function calls over and over again and again";
+for(let i=0;i<100000;i++)s=p(s);console.log(s.length)
+""",
+    },
+    # ── Build short greeting "Hello, X!": eager-inline concat path ───────────
+    "build short greeting x100k": {
+        "baml": """
+function make_greeting(name: string) -> string {
+  "Hello, " + name + "!"
+}
+function main() -> int {
+  let s = 0;
+  for (let i = 0; i < 100000; i += 1) {
+    let g = make_greeting("world");
+    s += g.length();
+  };
+  return s;
+}
+""",
+        "python": """
+def make_greeting(name):
+    return "Hello, " + name + "!"
+s = 0
+for i in range(100000):
+    g = make_greeting("world")
+    s += len(g)
+print(s)
+""",
+        "js": """
+function mg(n){return "Hello, "+n+"!"}
+let s=0;for(let i=0;i<100000;i++)s+=mg("world").length;console.log(s)
+""",
+    },
+    # ── Map / hash workloads ─────────────────────────────────────────────────
+    "map set+get rotate 200k": {
+        # 20 unique short keys rotated; tests hot-path map ops (BexStr key extraction)
+        "baml": """
+function main() -> int {
+  let keys = ["alpha","beta","gamma","delta","epsilon","zeta","eta","theta","iota","kappa","lambda","mu","nu","xi","omicron","pi","rho","sigma","tau","upsilon"];
+  let m: map<string, int> = {};
+  for (let i = 0; i < 200000; i += 1) {
+    let k = keys[i % 20];
+    let prev = m.get(k);
+    if (prev != null) {
+      m.set(k, prev + 1);
+    } else {
+      m.set(k, 1);
+    };
+  };
+  let total = 0;
+  for (let k in keys) {
+    let v = m.get(k);
+    if (v != null) { total += v; };
+  };
+  return total;
+}
+""",
+        "python": """
+keys = ["alpha","beta","gamma","delta","epsilon","zeta","eta","theta","iota","kappa","lambda","mu","nu","xi","omicron","pi","rho","sigma","tau","upsilon"]
+m = {}
+for i in range(200000):
+    k = keys[i % 20]
+    m[k] = m.get(k, 0) + 1
+total = sum(m[k] for k in keys)
+print(total)
+""",
+        "js": """
+const keys=["alpha","beta","gamma","delta","epsilon","zeta","eta","theta","iota","kappa","lambda","mu","nu","xi","omicron","pi","rho","sigma","tau","upsilon"];
+const m=new Map();
+for(let i=0;i<200000;i++){const k=keys[i%20];m.set(k,(m.get(k)||0)+1)}
+let total=0;for(const k of keys)total+=m.get(k);console.log(total)
+""",
+    },
+    # ── Map with dynamic keys: exercises int→string + concat into BexStr keys ─
+    "map dynamic keys 20k": {
+        "baml": """
+function main() -> int {
+  let m: map<string, int> = {};
+  for (let i = 0; i < 20000; i += 1) {
+    let k = "user_" + baml.unstable.string(i);
+    m.set(k, i);
+  };
+  let s = 0;
+  for (let i = 0; i < 20000; i += 1) {
+    let k = "user_" + baml.unstable.string(i);
+    let v = m.get(k);
+    if (v != null) { s += v; };
+  };
+  return s;
+}
+""",
+        "python": """
+m = {}
+for i in range(20000):
+    m["user_" + str(i)] = i
+s = 0
+for i in range(20000):
+    s += m["user_" + str(i)]
+print(s)
+""",
+        "js": """
+const m=new Map();for(let i=0;i<20000;i++)m.set("user_"+i,i);
+let s=0;for(let i=0;i<20000;i++)s+=m.get("user_"+i);console.log(s)
+""",
+    },
+    # ── Word count: real-world string+map+hash workload ──────────────────────
+    "word count 10k words": {
+        "baml": """
+function main() -> int {
+  let text = "the quick brown fox jumps over the lazy dog and the fox runs and the dog watches and the cat meows and the bird sings and the sun shines and the wind blows and life is good and the world keeps spinning and time keeps moving forward without ever stopping for anyone to catch a breath of fresh air on a cold winter morning in the middle of nowhere ";
+  let counts: map<string, int> = {};
+  for (let i = 0; i < 200; i += 1) {
+    let words = text.split(" ");
+    for (let w in words) {
+      let prev = counts.get(w);
+      if (prev != null) {
+        counts.set(w, prev + 1);
+      } else {
+        counts.set(w, 1);
+      };
+    };
+  };
+  return counts.keys().length();
+}
+""",
+        "python": """
+text = "the quick brown fox jumps over the lazy dog and the fox runs and the dog watches and the cat meows and the bird sings and the sun shines and the wind blows and life is good and the world keeps spinning and time keeps moving forward without ever stopping for anyone to catch a breath of fresh air on a cold winter morning in the middle of nowhere "
+counts = {}
+for i in range(200):
+    for w in text.split(" "):
+        counts[w] = counts.get(w, 0) + 1
+print(len(counts))
+""",
+        "js": """
+const text="the quick brown fox jumps over the lazy dog and the fox runs and the dog watches and the cat meows and the bird sings and the sun shines and the wind blows and life is good and the world keeps spinning and time keeps moving forward without ever stopping for anyone to catch a breath of fresh air on a cold winter morning in the middle of nowhere ";
+const counts=new Map();
+for(let i=0;i<200;i++)for(const w of text.split(" "))counts.set(w,(counts.get(w)||0)+1);
+console.log(counts.size)
+""",
+    },
+    # ── Recursive sort: quicksort exercises recursion + array allocation ─────
+    "quicksort 5k": {
+        "baml": """
+function partition(arr: int[], lo: int, hi: int) -> int {
+  let pivot = arr[hi];
+  let i = lo - 1;
+  for (let j = lo; j < hi; j += 1) {
+    if (arr[j] <= pivot) {
+      i += 1;
+      let tmp = arr[i];
+      arr[i] = arr[j];
+      arr[j] = tmp;
+    };
+  };
+  let tmp2 = arr[i + 1];
+  arr[i + 1] = arr[hi];
+  arr[hi] = tmp2;
+  return i + 1;
+}
+function qsort(arr: int[], lo: int, hi: int) -> int {
+  if (lo < hi) {
+    let p = partition(arr, lo, hi);
+    qsort(arr, lo, p - 1);
+    qsort(arr, p + 1, hi);
+  };
+  return 0;
+}
+function main() -> int {
+  let arr: int[] = [];
+  for (let i = 0; i < 5000; i += 1) {
+    arr.push((i * 2654435761) % 5000);
+  };
+  qsort(arr, 0, arr.length() - 1);
+  return arr[0] + arr[4999];
+}
+""",
+        "python": """
+import sys
+sys.setrecursionlimit(20000)
+def partition(arr, lo, hi):
+    pivot = arr[hi]
+    i = lo - 1
+    for j in range(lo, hi):
+        if arr[j] <= pivot:
+            i += 1
+            arr[i], arr[j] = arr[j], arr[i]
+    arr[i+1], arr[hi] = arr[hi], arr[i+1]
+    return i + 1
+def qsort(arr, lo, hi):
+    if lo < hi:
+        p = partition(arr, lo, hi)
+        qsort(arr, lo, p - 1)
+        qsort(arr, p + 1, hi)
+arr = [(i * 2654435761) % 5000 for i in range(5000)]
+qsort(arr, 0, len(arr) - 1)
+print(arr[0] + arr[4999])
+""",
+        "js": """
+function partition(a,lo,hi){const p=a[hi];let i=lo-1;for(let j=lo;j<hi;j++)if(a[j]<=p){i++;const t=a[i];a[i]=a[j];a[j]=t}const t=a[i+1];a[i+1]=a[hi];a[hi]=t;return i+1}
+function qsort(a,lo,hi){if(lo<hi){const p=partition(a,lo,hi);qsort(a,lo,p-1);qsort(a,p+1,hi)}}
+const arr=[];for(let i=0;i<5000;i++)arr.push((i*2654435761)%5000);
+qsort(arr,0,arr.length-1);console.log(arr[0]+arr[4999])
+""",
+    },
+    # ── String reverse via char_at + concat: stresses substring path ─────────
+    "string reverse 280 chars x100": {
+        "baml": """
+function reverse(s: string) -> string {
+  let result = "";
+  let i = s.length() - 1;
+  while (i >= 0) {
+    result = result + s.char_at(i);
+    i -= 1;
+  };
+  return result;
+}
+function main() -> int {
+  let s = "the quick brown fox jumps over the lazy dog and the fox runs and the dog watches and the cat meows and the bird sings and the sun shines and the wind blows and life is good and the world keeps spinning and time keeps moving forward without ever stopping";
+  let total = 0;
+  for (let i = 0; i < 100; i += 1) {
+    let r = reverse(s);
+    total += r.length();
+  };
+  return total;
+}
+""",
+        "python": """
+def reverse(s):
+    result = ""
+    i = len(s) - 1
+    while i >= 0:
+        result = result + s[i]
+        i -= 1
+    return result
+s = "the quick brown fox jumps over the lazy dog and the fox runs and the dog watches and the cat meows and the bird sings and the sun shines and the wind blows and life is good and the world keeps spinning and time keeps moving forward without ever stopping"
+total = 0
+for i in range(100):
+    r = reverse(s)
+    total += len(r)
+print(total)
+""",
+        "js": """
+function reverse(s){let r="";for(let i=s.length-1;i>=0;i--)r+=s[i];return r}
+const s="the quick brown fox jumps over the lazy dog and the fox runs and the dog watches and the cat meows and the bird sings and the sun shines and the wind blows and life is good and the world keeps spinning and time keeps moving forward without ever stopping";
+let t=0;for(let i=0;i<100;i++){const r=reverse(s);t+=r.length}console.log(t)
+""",
+    },
+    # ── Array sum-of-squares: tight numeric loop with array reads ────────────
+    "array sum of squares 1M": {
+        "baml": """
+function main() -> int {
+  let arr: int[] = [];
+  for (let i = 0; i < 1000; i += 1) { arr.push(i); };
+  let total = 0;
+  for (let k = 0; k < 1000; k += 1) {
+    for (let x in arr) {
+      total += x * x;
+    };
+  };
+  return total;
+}
+""",
+        "python": """
+arr = list(range(1000))
+total = 0
+for k in range(1000):
+    for x in arr:
+        total += x * x
+print(total)
+""",
+        "js": """
+const arr=[];for(let i=0;i<1000;i++)arr.push(i);
+let t=0;for(let k=0;k<1000;k++)for(const x of arr)t+=x*x;console.log(t)
+""",
+    },
+    # ── Linked list ops: pointer chasing + object allocation ─────────────────
+    "linked list build+sum 50k": {
+        "baml": """
+class Node {
+  value: int
+  next: Node?
+}
+function main() -> int {
+  let head: Node? = null;
+  for (let i = 0; i < 50000; i += 1) {
+    head = Node { value: i, next: head };
+  };
+  let s = 0;
+  let cur = head;
+  while (cur != null) {
+    s += cur.value;
+    cur = cur.next;
+  };
+  return s;
+}
+""",
+        "python": """
+import sys
+sys.setrecursionlimit(60000)
+class Node:
+    __slots__ = ('value', 'next')
+    def __init__(self, value, nxt):
+        self.value = value
+        self.next = nxt
+head = None
+for i in range(50000):
+    head = Node(i, head)
+s = 0
+cur = head
+while cur is not None:
+    s += cur.value
+    cur = cur.next
+print(s)
+""",
+        "js": """
+class Node{constructor(v,n){this.value=v;this.next=n}}
+let head=null;for(let i=0;i<50000;i++)head=new Node(i,head);
+let s=0,cur=head;while(cur!==null){s+=cur.value;cur=cur.next}console.log(s)
+""",
+    },
 }
 
 
@@ -490,17 +965,22 @@ def time_command(cmd, runs=10):
     return times
 
 
-def fmt_ms(seconds):
-    """Format seconds as ms string."""
+def fmt_ms(seconds, cov=None):
+    """Format seconds as ms string. If cov (coefficient of variation 0-1) given, append (±X%)."""
+    if seconds is None:
+        return "—"
     ms = seconds * 1000
     if ms >= 1000:
-        return f"{ms:.0f}ms"
+        base = f"{ms:.0f}ms"
     elif ms >= 100:
-        return f"{ms:.0f}ms"
+        base = f"{ms:.0f}ms"
     elif ms >= 10:
-        return f"{ms:.1f}ms"
+        base = f"{ms:.1f}ms"
     else:
-        return f"{ms:.2f}ms"
+        base = f"{ms:.2f}ms"
+    if cov is not None:
+        base += f" ±{cov*100:.0f}%"
+    return base
 
 
 def fmt_ratio(a, b):
@@ -522,6 +1002,12 @@ def main():
     parser.add_argument("--runs", type=int, default=10, help="Number of runs per benchmark (default: 10)")
     parser.add_argument("--baml", default=None, help="Path to baml-cli (default: target/release/baml-cli)")
     parser.add_argument("--only-baml", action="store_true", help="Only run baml benchmarks, skip python/node/bun comparisons")
+    parser.add_argument("--only", action="append", default=[], help="Run only workloads whose name contains this substring (case-insensitive, repeatable). e.g. --only concat --only split")
+    parser.add_argument("--list", action="store_true", help="List all workload names and exit")
+    parser.add_argument("--profile", action="store_true", help="Capture samply profiles of BAML execution (current + baseline if --baseline given). Writes one .json profile per workload to --profile-dir. Requires samply on PATH and profiling-mode binaries.")
+    parser.add_argument("--profile-dir", default="./bench-profiles", help="Directory (in pwd) to write profile .json files. Default: ./bench-profiles")
+    parser.add_argument("--profile-baml", default=None, help="Path to baml-cli built with --profile profiling (LTO + debug symbols). Default: derive from --baml path by replacing /release/ → /profiling/")
+    parser.add_argument("--profile-baseline", default=None, help="Path to baseline baml-cli built with --profile profiling. Default: derive from --baseline path the same way")
     args = parser.parse_args()
 
     # Find binaries
@@ -544,12 +1030,68 @@ def main():
 
     runs = args.runs
 
+    # Handle --list: just print workload names and exit
+    if args.list:
+        for n in WORKLOADS:
+            print(n)
+        sys.exit(0)
+
+    # Filter workloads by --only substring matches (case-insensitive)
+    if args.only:
+        filters = [f.lower() for f in args.only]
+        filtered = {n: w for n, w in WORKLOADS.items() if any(f in n.lower() for f in filters)}
+        if not filtered:
+            print(f"ERROR: no workloads match --only filters: {args.only}", file=sys.stderr)
+            print(f"Available workloads (use --list to see all):", file=sys.stderr)
+            for n in WORKLOADS:
+                print(f"  - {n}", file=sys.stderr)
+            sys.exit(1)
+        workloads_to_run = filtered
+        print(f"# Running {len(filtered)} of {len(WORKLOADS)} workloads matching {args.only}", file=sys.stderr)
+    else:
+        workloads_to_run = WORKLOADS
+
+    # ── Set up profiling (--profile) ─────────────────────────────────────────
+    profile_dir = None
+    profile_baml_bin = None
+    profile_base_bin = None
+    if args.profile:
+        # Verify samply is installed
+        if subprocess.run(["which", "samply"], capture_output=True).returncode != 0:
+            print("ERROR: --profile requires `samply` on PATH. Install with: cargo install samply", file=sys.stderr)
+            sys.exit(1)
+
+        # Resolve profiling-mode binaries
+        def derive_profiling_path(release_path):
+            # Replace /release/ → /profiling/ in any segment of the path
+            return release_path.replace("/release/", "/profiling/")
+
+        profile_baml_bin = args.profile_baml or derive_profiling_path(baml_cli)
+        if not os.path.isfile(profile_baml_bin):
+            print(f"ERROR: --profile baml binary not found at {profile_baml_bin}", file=sys.stderr)
+            print("Build with: cargo build --profile profiling --bin baml-cli", file=sys.stderr)
+            sys.exit(1)
+
+        if has_baseline:
+            profile_base_bin = args.profile_baseline or derive_profiling_path(args.baseline)
+            if not os.path.isfile(profile_base_bin):
+                print(f"WARNING: --profile baseline binary not found at {profile_base_bin} — skipping baseline profile", file=sys.stderr)
+                profile_base_bin = None
+
+        # Create profile output directory in pwd
+        profile_dir = os.path.abspath(args.profile_dir)
+        os.makedirs(profile_dir, exist_ok=True)
+        print(f"# Profiles will be written to: {profile_dir}", file=sys.stderr)
+        print(f"#   current baml-cli (profiling): {profile_baml_bin}", file=sys.stderr)
+        if profile_base_bin:
+            print(f"#   baseline baml-cli (profiling): {profile_base_bin}", file=sys.stderr)
+
     # Create temp files
     tmpdir = tempfile.mkdtemp(prefix="baml_bench_")
 
     results = {}
 
-    for name, workload in WORKLOADS.items():
+    for name, workload in workloads_to_run.items():
         baml_src = workload["baml"]
         py_src = workload["python"]
         js_src = workload["js"]
@@ -573,8 +1115,8 @@ def main():
             f.write(js_src)
 
         row = {"name": name}
-        total = len(WORKLOADS)
-        idx = list(WORKLOADS.keys()).index(name) + 1
+        total = len(workloads_to_run)
+        idx = list(workloads_to_run.keys()).index(name) + 1
         is_tty = sys.stderr.isatty()
 
         if is_tty:
@@ -588,7 +1130,7 @@ def main():
                 return None
             return r.stdout.strip().split("\n")[-1].strip()
 
-        expected = get_output([baml_cli, "run", baml_file])
+        expected = get_output([baml_cli, "run", "--file", baml_file, "-f", "main", "--", "main"])
         if expected is None:
             if is_tty:
                 sys.stderr.write(f"       SKIP (baml failed to run)\n")
@@ -597,7 +1139,7 @@ def main():
         mismatches = []
         checks = []
         if has_baseline:
-            checks.append(("baseline", [args.baseline, "run", baml_file]))
+            checks.append(("baseline", [args.baseline, "run", "--file", baml_file, "-f", "main", "--", "main"]))
         if has_python:
             checks.append(("python3", ["python3", "-S", py_file]))
         if has_node:
@@ -626,18 +1168,46 @@ def main():
             t = time_command(cmd, runs=runs)
             if t:
                 med = median(t)
+                # Trimmed stdev — drop top 20% (outliers from GC, system jitter, etc.)
+                # This gives a more honest noise-floor estimate for benchmarks.
+                t_sorted = sorted(t)
+                keep = max(2, int(len(t_sorted) * 0.8))
+                trimmed = t_sorted[:keep]
+                sd = stdev(trimmed) if len(trimmed) > 1 else 0.0
+                cov = sd / med if med > 0 else 0.0
                 if is_tty:
-                    sys.stderr.write(f"{fmt_ms(med):>8s}  (min={fmt_ms(min(t))}, max={fmt_ms(max(t))})\n")
-                return med
+                    sys.stderr.write(f"{fmt_ms(med):>8s} ±{cov*100:.1f}% (min={fmt_ms(min(t))}, max={fmt_ms(max(t))})\n")
+                return (med, cov)
             else:
                 if is_tty:
                     sys.stderr.write("FAIL\n")
                 return None
 
-        row["baml"] = run_one("baml", [baml_cli, "run", baml_file])
+        row["baml"] = run_one("baml", [baml_cli, "run", "--file", baml_file, "-f", "main", "--", "main"])
+
+        # Pack the workload into a standalone binary and time that (pure-exec).
+        # `baml pack` is the production deployment path — no compile cost per run.
+        packed_bin = os.path.join(tmpdir, f"{name.replace(' ', '_').replace('(', '').replace(')', '').replace(',', '').replace(':', '')}.bin")
+        pack_result = subprocess.run(
+            [baml_cli, "pack", "--file", baml_file, "-o", packed_bin, "main"],
+            capture_output=True, text=True,
+        )
+        if pack_result.returncode == 0 and os.path.isfile(packed_bin):
+            row["baml_pack"] = run_one("pack", [packed_bin])
+        else:
+            if is_tty:
+                sys.stderr.write(f"       pack: FAILED to build packed binary\n")
 
         if has_baseline:
-            row["baseline"] = run_one("baseline", [args.baseline, "run", baml_file])
+            row["baseline"] = run_one("baseline", [args.baseline, "run", "--file", baml_file, "-f", "main", "--", "main"])
+            # Also pack with baseline if pack-host is available next to it
+            packed_base = packed_bin + ".baseline"
+            pack_base = subprocess.run(
+                [args.baseline, "pack", "--file", baml_file, "-o", packed_base, "main"],
+                capture_output=True, text=True,
+            )
+            if pack_base.returncode == 0 and os.path.isfile(packed_base):
+                row["baseline_pack"] = run_one("base_pack", [packed_base])
 
         if has_python:
             row["python"] = run_one("python3", ["python3", "-S", py_file])
@@ -648,6 +1218,45 @@ def main():
         if has_bun:
             row["bun"] = run_one("bun", ["bun", js_file])
 
+        # ── Capture samply profiles (if --profile) ───────────────────────────
+        if args.profile and profile_baml_bin:
+            slug = name.replace(" ", "_").replace("(", "").replace(")", "").replace(",", "").replace(":", "").replace("+", "plus").replace("/", "_")
+
+            curr_profile = os.path.join(profile_dir, f"{slug}.current.json")
+            if is_tty:
+                sys.stderr.write(f"       profile-curr: ")
+                sys.stderr.flush()
+            r = subprocess.run(
+                ["samply", "record", "--save-only", "-o", curr_profile,
+                 profile_baml_bin, "run", "--file", baml_file, "-f", "main", "--", "main"],
+                capture_output=True, text=True,
+            )
+            if r.returncode == 0 and os.path.isfile(curr_profile):
+                row["profile_current"] = curr_profile
+                if is_tty:
+                    sys.stderr.write(f"{os.path.relpath(curr_profile)}\n")
+            else:
+                if is_tty:
+                    sys.stderr.write("FAIL\n")
+
+            if profile_base_bin:
+                base_profile = os.path.join(profile_dir, f"{slug}.baseline.json")
+                if is_tty:
+                    sys.stderr.write(f"       profile-base: ")
+                    sys.stderr.flush()
+                r = subprocess.run(
+                    ["samply", "record", "--save-only", "-o", base_profile,
+                     profile_base_bin, "run", "--file", baml_file, "-f", "main", "--", "main"],
+                    capture_output=True, text=True,
+                )
+                if r.returncode == 0 and os.path.isfile(base_profile):
+                    row["profile_baseline"] = base_profile
+                    if is_tty:
+                        sys.stderr.write(f"{os.path.relpath(base_profile)}\n")
+                else:
+                    if is_tty:
+                        sys.stderr.write("FAIL\n")
+
         results[name] = row
 
     # ── Print results ─────────────────────────────────────────────────────────
@@ -655,25 +1264,42 @@ def main():
     print()
 
     # Build header
-    cols = ["Benchmark", "baml"]
+    cols = ["Benchmark", "baml", "baml_pack"]
     if has_baseline:
         cols.append("baseline")
-        cols.append("speedup")
+        cols.append("base_pack")
+        cols.append("pack speedup")
     if has_python:
         cols.append("python3")
-        cols.append("baml/py")
+        cols.append("pack/py")
     if has_node:
         cols.append("node")
-        cols.append("baml/node")
+        cols.append("pack/node")
     if has_bun:
         cols.append("bun")
-        cols.append("baml/bun")
+        cols.append("pack/bun")
 
     # Header
     print("| " + " | ".join(f"{c:>20s}" for c in cols) + " |")
     print("| " + " | ".join("-" * 20 for _ in cols) + " |")
 
-    for name in WORKLOADS:
+    # Helper to unpack (median, cov) tuple safely
+    def unpack(v):
+        if v is None: return (None, None)
+        return v if isinstance(v, tuple) else (v, None)
+
+    # Significance helper: difference is significant if outside combined noise band
+    def sig_marker(curr_med, curr_cov, base_med, base_cov):
+        """Return ' *' if pack speedup is outside the ±2σ combined-noise band, else ''."""
+        if not (curr_med and base_med and curr_cov is not None and base_cov is not None):
+            return ""
+        ratio = base_med / curr_med
+        # Combined 2σ noise band ≈ 2 * sqrt(cov_curr^2 + cov_base^2)
+        noise = 2.0 * ((curr_cov ** 2 + base_cov ** 2) ** 0.5)
+        deviation = abs(ratio - 1.0)
+        return " *" if deviation > noise else ""
+
+    for name in workloads_to_run:
         row = results.get(name)
         if not row:
             continue
@@ -681,44 +1307,72 @@ def main():
         flag = " (!)" if row.get("mismatch") else ""
         cells = [f"{name + flag:>20s}"]
 
-        baml_ms = row.get("baml")
-        cells.append(f"{fmt_ms(baml_ms):>20s}" if baml_ms else f"{'FAIL':>20s}")
+        baml_ms, baml_cov = unpack(row.get("baml"))
+        cells.append(f"{fmt_ms(baml_ms, baml_cov):>22s}" if baml_ms else f"{'FAIL':>22s}")
+
+        pack_ms, pack_cov = unpack(row.get("baml_pack"))
+        cells.append(f"{fmt_ms(pack_ms, pack_cov):>22s}" if pack_ms else f"{'—':>22s}")
 
         if has_baseline:
-            base_ms = row.get("baseline")
-            cells.append(f"{fmt_ms(base_ms):>20s}" if base_ms else f"{'FAIL':>20s}")
-            if baml_ms and base_ms:
-                cells.append(f"{fmt_ratio(base_ms, baml_ms):>20s}")
+            base_ms, base_cov = unpack(row.get("baseline"))
+            cells.append(f"{fmt_ms(base_ms, base_cov):>22s}" if base_ms else f"{'FAIL':>22s}")
+            base_pack_ms, base_pack_cov = unpack(row.get("baseline_pack"))
+            cells.append(f"{fmt_ms(base_pack_ms, base_pack_cov):>22s}" if base_pack_ms else f"{'—':>22s}")
+            # Pack-vs-pack speedup — mark ' *' if significant beyond noise
+            if pack_ms and base_pack_ms:
+                marker = sig_marker(pack_ms, pack_cov, base_pack_ms, base_pack_cov)
+                cells.append(f"{fmt_ratio(base_pack_ms, pack_ms) + marker:>14s}")
             else:
-                cells.append(f"{'—':>20s}")
+                cells.append(f"{'—':>14s}")
 
         if has_python:
-            py_ms = row.get("python")
-            cells.append(f"{fmt_ms(py_ms):>20s}" if py_ms else f"{'—':>20s}")
-            if baml_ms and py_ms:
-                cells.append(f"{fmt_ratio(baml_ms, py_ms):>20s}")
+            py_ms, _ = unpack(row.get("python"))
+            cells.append(f"{fmt_ms(py_ms):>14s}" if py_ms else f"{'—':>14s}")
+            if pack_ms and py_ms:
+                cells.append(f"{fmt_ratio(pack_ms, py_ms):>12s}")
             else:
-                cells.append(f"{'—':>20s}")
+                cells.append(f"{'—':>12s}")
 
         if has_node:
-            node_ms = row.get("node")
-            cells.append(f"{fmt_ms(node_ms):>20s}" if node_ms else f"{'—':>20s}")
-            if baml_ms and node_ms:
-                cells.append(f"{fmt_ratio(baml_ms, node_ms):>20s}")
+            node_ms, _ = unpack(row.get("node"))
+            cells.append(f"{fmt_ms(node_ms):>14s}" if node_ms else f"{'—':>14s}")
+            if pack_ms and node_ms:
+                cells.append(f"{fmt_ratio(pack_ms, node_ms):>12s}")
             else:
-                cells.append(f"{'—':>20s}")
+                cells.append(f"{'—':>12s}")
 
         if has_bun:
-            bun_ms = row.get("bun")
-            cells.append(f"{fmt_ms(bun_ms):>20s}" if bun_ms else f"{'—':>20s}")
-            if baml_ms and bun_ms:
-                cells.append(f"{fmt_ratio(baml_ms, bun_ms):>20s}")
+            bun_ms, _ = unpack(row.get("bun"))
+            cells.append(f"{fmt_ms(bun_ms):>14s}" if bun_ms else f"{'—':>14s}")
+            if pack_ms and bun_ms:
+                cells.append(f"{fmt_ratio(pack_ms, bun_ms):>12s}")
             else:
-                cells.append(f"{'—':>20s}")
+                cells.append(f"{'—':>12s}")
 
         print("| " + " | ".join(cells) + " |")
 
     print()
+
+    # ── Profile summary (if --profile was given) ─────────────────────────────
+    if args.profile and profile_dir:
+        print()
+        print(f"Profiles written to {profile_dir}/")
+        any_profiles = False
+        for name in workloads_to_run:
+            row = results.get(name, {})
+            cp = row.get("profile_current")
+            bp = row.get("profile_baseline")
+            if cp or bp:
+                any_profiles = True
+                print(f"  [{name}]")
+                if cp:
+                    print(f"      current:  {os.path.relpath(cp)}")
+                if bp:
+                    print(f"      baseline: {os.path.relpath(bp)}")
+        if any_profiles:
+            print()
+            print("To inspect a profile in the Firefox profiler UI:")
+            print(f"  samply load {profile_dir}/<name>.current.json")
 
     # Cleanup
     import shutil
