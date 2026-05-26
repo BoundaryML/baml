@@ -41,8 +41,9 @@ use ::core::any::TypeId;
 use ::core::sync::atomic::AtomicBool;
 use bex_heap::{BexHeap, Tlab};
 use bex_vm_types::{
-    BinOp, CmpOp, FunctionKind, FutureRead, HeapPtr, Instruction, Object, ObjectIndex, ObjectPool,
-    ObjectType, PanicClass, PermitProof, StackIndex, UnaryOp, Value, Variant, VmGlobals,
+    BexStr, BinOp, CmpOp, FunctionKind, FutureRead, HeapPtr, Instruction, Object, ObjectIndex,
+    ObjectPool, ObjectType, PanicClass, PermitProof, StackIndex, UnaryOp, Value, Variant,
+    VmGlobals,
     bytecode::{self, BlockNotification},
     types::{
         BoundMethod, Cell, Closure, ConstValue, Function, FunctionType, FutureType, Instance, Type,
@@ -831,7 +832,7 @@ impl BexVm {
     }
 
     /// Get string from a Value.
-    pub fn as_string(&self, value: &Value) -> Result<&String, VmInternalError> {
+    pub fn as_string(&self, value: &Value) -> Result<&BexStr, VmInternalError> {
         let ptr = self.as_object_ptr(value, ObjectType::String)?;
         self.get_object(ptr).as_string()
     }
@@ -864,12 +865,6 @@ impl BexVm {
     /// Get type of a value.
     pub fn type_of(&self, value: &Value) -> Type {
         Type::of(value, |ptr| ObjectType::of(self.get_object(ptr)))
-    }
-
-    /// Get mutable string from a Value.
-    pub fn as_string_mut(&mut self, value: &Value) -> Result<&mut String, VmInternalError> {
-        let ptr = self.as_object_ptr(value, ObjectType::String)?;
-        self.get_object_mut(ptr).as_string_mut()
     }
 
     /// Get array from a Value.
@@ -1128,8 +1123,8 @@ impl BexVm {
         Value::Object(self.tlab.alloc(Object::Map(values)))
     }
 
-    pub fn alloc_string(&mut self, s: String) -> Value {
-        Value::Object(self.tlab.alloc(Object::String(s)))
+    pub fn alloc_string(&mut self, s: impl Into<BexStr>) -> Value {
+        Value::Object(self.tlab.alloc(Object::String(s.into())))
     }
 
     pub fn alloc_uint8array(&mut self, data: Vec<u8>) -> Value {
@@ -2911,13 +2906,10 @@ impl BexVm {
                     }
 
                     (Value::Object(_), Value::Object(_)) if op == BinOp::Add => {
-                        let left = self.as_string(&left)?;
-                        let right = self.as_string(&right)?;
+                        let left_s = self.as_string(&left)?.clone();
+                        let right_s = self.as_string(&right)?.clone();
 
-                        let mut concat = left.clone();
-                        concat.push_str(right);
-
-                        self.alloc_string(concat)
+                        self.alloc_string(BexStr::concat(left_s, right_s))
                     }
 
                     _ => {
@@ -3388,7 +3380,7 @@ impl BexVm {
                 let key = self.get_object(key_index).as_string()?;
 
                 // Look up the value in the map
-                let value = map.get(key).copied().ok_or(VmError::Thrown(
+                let value = map.get(key.as_str()).copied().ok_or(VmError::Thrown(
                     self.panic_to_exception_value(VmPanic::MapKeyNotFound),
                 ))?;
 
@@ -3526,7 +3518,7 @@ impl BexVm {
 
                 // Get the string key from the objects pool.
                 let key_index = self.as_object_ptr(&key_value, ObjectType::String)?;
-                let key = self.get_object(key_index).as_string()?.clone();
+                let key: String = self.get_object(key_index).as_string()?.to_string();
 
                 let map_index = self.as_object_ptr(&map_value, ObjectType::Map)?;
 
@@ -3840,7 +3832,7 @@ impl BexVm {
 
                 // Consume channel.
                 let channel_value = self.stack.ensure_pop();
-                let channel = self.as_string(&channel_value)?.to_owned();
+                let channel = self.as_string(&channel_value)?.to_string();
 
                 let bf = unsafe {
                     match self.frames.get_unchecked(*frame_idx) {
@@ -4235,7 +4227,9 @@ impl BexVm {
                     let keys = self.stack[idx_of_last_key..].iter().map(|k| {
                         let obj_index = self.as_object_ptr(k, ObjectType::String)?;
 
-                        self.get_object(obj_index).as_string().cloned()
+                        self.get_object(obj_index)
+                            .as_string()
+                            .map(std::string::ToString::to_string)
                     });
 
                     let pairs = values
@@ -4693,7 +4687,7 @@ impl BexVm {
                 let name_value = self.stack.ensure_pop();
 
                 // Extract the event name string from the heap.
-                let event_name = self.as_string(&name_value)?.clone();
+                let event_name = self.as_string(&name_value)?.to_string();
 
                 // Capture source location from the current frame's line table.
                 let source_location = if let Frame::Bytecode(bf) = &self.frames[*frame_idx] {
@@ -4998,11 +4992,9 @@ impl BexVm {
             }
 
             (Value::Object(_), Value::Object(_)) if op == BinOp::Add => {
-                let ls = self.as_string(&left)?;
-                let rs = self.as_string(&right)?;
-                let mut concat = ls.clone();
-                concat.push_str(rs);
-                self.alloc_string(concat)
+                let ls = self.as_string(&left)?.clone();
+                let rs = self.as_string(&right)?.clone();
+                self.alloc_string(BexStr::concat(ls, rs))
             }
 
             _ => {
@@ -5471,7 +5463,9 @@ impl BexVm {
                         let values = self.stack[end_of_values..end_of_keys].iter().copied();
                         let keys = self.stack[idx_of_last_key..].iter().map(|k| {
                             let obj_index = self.as_object_ptr(k, ObjectType::String)?;
-                            self.get_object(obj_index).as_string().cloned()
+                            self.get_object(obj_index)
+                                .as_string()
+                                .map(std::string::ToString::to_string)
                         });
                         let pairs = values
                             .zip(keys)
@@ -5645,7 +5639,7 @@ impl BexVm {
                         _ => return Err(VmInternalError::InvalidFilter.into()),
                     };
                     let channel_value = self.stack.ensure_pop();
-                    let channel = self.as_string(&channel_value)?.to_owned();
+                    let channel = self.as_string(&channel_value)?.to_string();
                     let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
                         unreachable!()
                     };
@@ -6529,7 +6523,7 @@ impl BexVm {
                     };
                     let key_index = self.as_object_ptr(&key_value, ObjectType::String)?;
                     let key = self.get_object(key_index).as_string()?;
-                    let value = map.get(key).copied().ok_or(VmError::Thrown(
+                    let value = map.get(key.as_str()).copied().ok_or(VmError::Thrown(
                         self.panic_to_exception_value(VmPanic::MapKeyNotFound),
                     ))?;
                     self.stack.push(value);
@@ -6641,7 +6635,7 @@ impl BexVm {
                     let key_value = self.stack.ensure_pop();
                     let map_value = self.stack.ensure_pop();
                     let key_index = self.as_object_ptr(&key_value, ObjectType::String)?;
-                    let key = self.get_object(key_index).as_string()?.clone();
+                    let key: String = self.get_object(key_index).as_string()?.to_string();
                     let map_index = self.as_object_ptr(&map_value, ObjectType::Map)?;
                     let old_value = match self.get_object(map_index) {
                         Object::Map(map) => map.get(&key).copied().unwrap_or(Value::Null),
@@ -6948,7 +6942,7 @@ impl BexVm {
                 OpCode::SendEvent => {
                     let data = self.stack.ensure_pop();
                     let name_value = self.stack.ensure_pop();
-                    let event_name = self.as_string(&name_value)?.clone();
+                    let event_name = self.as_string(&name_value)?.to_string();
                     let source_location = if let Frame::Bytecode(bf) = &self.frames[*frame_idx] {
                         let pc = bf.faulting_pc;
                         let func_obj = self.get_object(bf.function).as_callable().ok();

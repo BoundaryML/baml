@@ -23,7 +23,7 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 pub use tokio_util::sync::CancellationToken;
 
-use crate::{bytecode::Bytecode, heap_ptr::HeapPtr, indexable::ObjectPool};
+use crate::{BexStr, bytecode::Bytecode, heap_ptr::HeapPtr, indexable::ObjectPool};
 
 // ============================================================================
 // Type Tags for Jump Table Dispatch
@@ -863,14 +863,10 @@ pub enum Object {
 
     /// Heap allocated string.
     ///
-    /// TODO: Add a `Vm::strings` interner to avoid allocating duplicates.
-    /// In Rust it's not easy to implement because `Vm::objects`
-    /// owns the strings allocated on heap, but the interner would be something
-    /// like `HashSet`<&str> and it would store pointers to the strings. That
-    /// reference will cause some lifetime issues because the VM would have
-    /// pointers to itself, so we'd have to figure how to implement it
-    /// otherwise.
-    String(String),
+    /// Stored as a `BexStr` — a V8-inspired tagged union that supports inline
+    /// storage (zero heap allocation for strings <= ~54 bytes), Arc-backed heap
+    /// strings (O(1) clone), zero-copy slices, and lazy concatenation.
+    String(BexStr),
 
     /// Byte array (uint8array).
     Uint8Array(Vec<u8>),
@@ -936,7 +932,7 @@ impl Serialize for Object {
             Self::Closure(v) => ObjectSerde::Closure(v.clone()),
             Self::BoundMethod(v) => ObjectSerde::BoundMethod(v.clone()),
             Self::Cell(v) => ObjectSerde::Cell(v.clone()),
-            Self::String(v) => ObjectSerde::String(v.clone()),
+            Self::String(v) => ObjectSerde::String(v.to_string()),
             Self::Uint8Array(v) => ObjectSerde::Uint8Array(v.clone()),
             Self::Array(v) => ObjectSerde::Array(v.clone()),
             Self::Map(v) => ObjectSerde::Map(v.clone()),
@@ -970,7 +966,7 @@ impl<'de> Deserialize<'de> for Object {
             ObjectSerde::Closure(v) => Self::Closure(v),
             ObjectSerde::BoundMethod(v) => Self::BoundMethod(v),
             ObjectSerde::Cell(v) => Self::Cell(v),
-            ObjectSerde::String(v) => Self::String(v),
+            ObjectSerde::String(v) => Self::String(BexStr::from(v)),
             ObjectSerde::Uint8Array(v) => Self::Uint8Array(v),
             ObjectSerde::Array(v) => Self::Array(v),
             ObjectSerde::Map(v) => Self::Map(v),

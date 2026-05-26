@@ -1,4 +1,7 @@
-use bex_vm_types::types::{Object, Value};
+use bex_vm_types::{
+    BexStr,
+    types::{Object, Value},
+};
 
 use super::{BamlClassTypeValue, PackageBamlImpl};
 use crate::BexVm;
@@ -12,13 +15,13 @@ impl BamlClassTypeValue for PackageBamlImpl {
     /// This identity guarantee makes the result usable as a stable key in
     /// `map<string, V>` until generic-K interfaces enable a real
     /// `map<type, V>`.
-    fn to_string(vm: &BexVm, self_value: &Value) -> String {
+    fn to_string(vm: &BexVm, self_value: &Value) -> BexStr {
         let Value::Object(ptr) = self_value else {
-            return "<type: ?>".to_string();
+            return BexStr::from("<type: ?>");
         };
         match vm.get_object(*ptr) {
-            Object::Type(ty) => ty.to_string(),
-            _ => "<type: ?>".to_string(),
+            Object::Type(ty) => BexStr::from(ty.to_string()),
+            _ => BexStr::from("<type: ?>"),
         }
     }
 }

@@ -37,7 +37,7 @@ mod unstable;
 use std::collections::HashMap;
 
 use bex_vm_types::{
-    HeapPtr,
+    BexStr, HeapPtr,
     types::{Instance, Object, Type, Value},
 };
 use indexmap::IndexMap;

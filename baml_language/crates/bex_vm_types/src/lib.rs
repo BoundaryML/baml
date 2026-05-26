@@ -10,12 +10,14 @@
 //!
 //! The instructions that the VM runs are defined in [`Instruction`] enum.
 
+pub mod bex_str;
 pub mod bytecode;
 pub mod heap_ptr;
 pub mod indexable;
 mod roots;
 pub mod types;
 
+pub use bex_str::{BexStr, ConcatNode, FlatStr};
 pub use bytecode::{
     BinOp, Bytecode, CmpOp, Instruction, JumpTableData, UnaryOp, VizExecDelta, VizExecEvent,
     VizNodeMeta, VizNodeType,

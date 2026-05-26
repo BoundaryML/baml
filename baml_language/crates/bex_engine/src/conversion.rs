@@ -65,7 +65,7 @@ impl BexEngine {
         let obj = unsafe { ptr.get() };
 
         match obj {
-            Object::String(s) => Ok(BexExternalValue::String(s.clone())),
+            Object::String(s) => Ok(BexExternalValue::String(s.to_string())),
 
             Object::Array(arr) => {
                 // Get element type from declared type, falling back to Null when
@@ -752,7 +752,7 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: &Value) -> BexExternalValue 
         Value::Object(idx) => {
             let obj = vm.get_object(*idx);
             match obj {
-                Object::String(s) => BexExternalValue::String(s.clone()),
+                Object::String(s) => BexExternalValue::String(s.to_string()),
                 Object::Array(arr) => {
                     let items: Vec<BexExternalValue> =
                         arr.iter().map(|v| vm_arg_to_external(vm, v)).collect();

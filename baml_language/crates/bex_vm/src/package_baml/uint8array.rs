@@ -1,4 +1,4 @@
-use bex_vm_types::Value;
+use bex_vm_types::{BexStr, Value};
 
 use super::{BamlClassUint8Array, PackageBamlImpl, json::raise_serialize_no_path};
 use crate::{
@@ -107,7 +107,7 @@ impl BamlClassUint8Array for PackageBamlImpl {
             .collect()
     }
 
-    fn from_hex(hex: &str) -> Result<Vec<u8>, VmRustFnError> {
+    fn from_hex(hex: &BexStr) -> Result<Vec<u8>, VmRustFnError> {
         #[inline]
         const fn parse_hex_digit(c: u8) -> Option<u8> {
             match c {
@@ -143,7 +143,7 @@ impl BamlClassUint8Array for PackageBamlImpl {
             .collect()
     }
 
-    fn to_hex(uint8array: &[u8]) -> String {
+    fn to_hex(uint8array: &[u8]) -> BexStr {
         use std::fmt::Write;
         let mut s = String::with_capacity(uint8array.len() * 2);
         for &b in uint8array {
@@ -151,26 +151,26 @@ impl BamlClassUint8Array for PackageBamlImpl {
                 unreachable!("write!() to `String` should never fail");
             };
         }
-        s
+        BexStr::from(s)
     }
 
-    fn from_base64(base64_str: &str) -> Result<Vec<u8>, VmRustFnError> {
+    fn from_base64(base64_str: &BexStr) -> Result<Vec<u8>, VmRustFnError> {
         use base64::Engine;
         base64::engine::general_purpose::STANDARD
-            .decode(base64_str)
+            .decode(base64_str.as_bytes())
             .map_err(|e| VmBamlError::InvalidArgument {
                 message: format!("failed to decode base64: {e}"),
             })
             .map_err(VmRustFnError::BamlError)
     }
 
-    fn to_base64(uint8array: &[u8]) -> String {
+    fn to_base64(uint8array: &[u8]) -> BexStr {
         use base64::Engine;
-        base64::engine::general_purpose::STANDARD.encode(uint8array)
+        BexStr::from(base64::engine::general_purpose::STANDARD.encode(uint8array))
     }
 
-    fn to_string(uint8array: &[u8]) -> String {
-        String::from_utf8_lossy(uint8array).into_owned()
+    fn to_string(uint8array: &[u8]) -> BexStr {
+        BexStr::from(String::from_utf8_lossy(uint8array).into_owned())
     }
 
     #[allow(clippy::unused_unit)]

@@ -1,4 +1,4 @@
-use bex_vm_types::Value;
+use bex_vm_types::{BexStr, Value};
 
 use super::{BamlClassFloat, PackageBamlImpl};
 use crate::errors::{VmBamlError, VmPanic, VmRustFnError};
@@ -186,7 +186,7 @@ impl BamlClassFloat for PackageBamlImpl {
 
     // ── Parsing / randomness ──────────────────────────────────────────────────
 
-    fn parse(text: &str) -> Result<f64, VmRustFnError> {
+    fn parse(text: &BexStr) -> Result<f64, VmRustFnError> {
         text.parse::<f64>().map_err(|e| {
             VmBamlError::ParseError {
                 message: format!("float.parse: cannot parse {text:?} as float: {e}"),

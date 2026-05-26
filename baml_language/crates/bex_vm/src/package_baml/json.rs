@@ -66,7 +66,7 @@ fn class_lookup_key(qtn: &TypeName) -> String {
 use std::collections::HashMap;
 
 use bex_vm_types::{
-    HeapPtr,
+    BexStr, HeapPtr,
     types::{Instance, Object, Value},
 };
 use indexmap::IndexMap;
@@ -105,21 +105,21 @@ const JSON_SERIALIZATION_ERROR_FQN: &str = "baml.json.JsonSerializationError";
 // ─── Trait implementation ─────────────────────────────────────────────────────
 
 impl BamlNamespaceJson for PackageBamlImpl {
-    fn parse(vm: &mut BexVm, s: &str) -> Result<Value, VmRustFnError> {
-        json_parse(vm, s)
+    fn parse(vm: &mut BexVm, s: &BexStr) -> Result<Value, VmRustFnError> {
+        json_parse(vm, s.as_str())
     }
 
-    fn stringify(vm: &mut BexVm, j: &Value) -> String {
+    fn stringify(vm: &mut BexVm, j: &Value) -> BexStr {
         let json_val = value_to_serde(vm, *j);
-        serde_json::to_string(&json_val).unwrap_or_else(|_| "null".to_string())
+        BexStr::from(serde_json::to_string(&json_val).unwrap_or_else(|_| "null".to_string()))
     }
 
-    fn stringify_pretty(vm: &mut BexVm, j: &Value) -> String {
+    fn stringify_pretty(vm: &mut BexVm, j: &Value) -> BexStr {
         let json_val = value_to_serde(vm, *j);
-        serde_json::to_string_pretty(&json_val).unwrap_or_else(|_| "null".to_string())
+        BexStr::from(serde_json::to_string_pretty(&json_val).unwrap_or_else(|_| "null".to_string()))
     }
 
-    fn to_string(vm: &mut BexVm, v: &Value) -> Result<String, VmRustFnError> {
+    fn to_string(vm: &mut BexVm, v: &Value) -> Result<BexStr, VmRustFnError> {
         let ty = vm
             .current_call_type_args()
             .first()
@@ -129,10 +129,10 @@ impl BamlNamespaceJson for PackageBamlImpl {
                     name: "baml.json.to_string: missing type argument".to_string(),
                 })
             })?;
-        json_to_string_typed(vm, *v, &ty)
+        json_to_string_typed(vm, *v, &ty).map(BexStr::from)
     }
 
-    fn from_string(vm: &mut BexVm, s: &str) -> Result<Value, VmRustFnError> {
+    fn from_string(vm: &mut BexVm, s: &BexStr) -> Result<Value, VmRustFnError> {
         let ty = vm
             .current_call_type_args()
             .first()
@@ -142,7 +142,7 @@ impl BamlNamespaceJson for PackageBamlImpl {
                     name: "baml.json.from_string: missing type argument".to_string(),
                 })
             })?;
-        json_from_string_typed(vm, s, &ty)
+        json_from_string_typed(vm, s.as_str(), &ty)
     }
 
     fn to_json(vm: &mut BexVm, v: &Value) -> NativeCallResult {
@@ -172,10 +172,10 @@ impl BamlNamespaceJson for PackageBamlImpl {
         json_from_json_dispatch(vm, *j, &ty)
     }
 
-    fn field(vm: &mut BexVm, j: &Value, key: &str) -> Value {
+    fn field(vm: &mut BexVm, j: &Value, key: &BexStr) -> Value {
         match j {
             Value::Object(ptr) => match vm.get_object(*ptr) {
-                Object::Map(m) => m.get(key).copied().unwrap_or(Value::Null),
+                Object::Map(m) => m.get(key.as_str()).copied().unwrap_or(Value::Null),
                 _ => Value::Null,
             },
             _ => Value::Null,
@@ -336,7 +336,7 @@ pub fn value_to_serde(vm: &BexVm, v: Value) -> serde_json::Value {
             .unwrap_or(serde_json::Value::Null),
         Value::OmittedArg => serde_json::Value::Null,
         Value::Object(ptr) => match vm.get_object(ptr) {
-            Object::String(s) => serde_json::Value::String(s.clone()),
+            Object::String(s) => serde_json::Value::String(s.to_string()),
             Object::Array(arr) => {
                 let arr = arr.clone();
                 serde_json::Value::Array(arr.iter().map(|el| value_to_serde(vm, *el)).collect())

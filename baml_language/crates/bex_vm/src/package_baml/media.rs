@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use baml_type::MediaKind;
-use bex_vm_types::types::{Object, Value};
+use bex_vm_types::{
+    BexStr,
+    types::{Object, Value},
+};
 use indexmap::IndexMap;
 
 use super::{
@@ -108,37 +111,55 @@ impl BamlClassMediaPdf for PackageBamlImpl {
         Ok(media_value_to_json(vm, &media, MediaKind::Pdf))
     }
 
-    fn url(vm: &BexVm, pdf: &view::media::Pdf<'_>) -> Option<String> {
-        pdf._data::<baml_builtins2::MediaValue>(vm).url()
+    fn url(vm: &BexVm, pdf: &view::media::Pdf<'_>) -> Option<BexStr> {
+        pdf._data::<baml_builtins2::MediaValue>(vm)
+            .url()
+            .map(BexStr::from)
     }
 
-    fn file(vm: &BexVm, pdf: &view::media::Pdf<'_>) -> Option<String> {
-        pdf._data::<baml_builtins2::MediaValue>(vm).file()
+    fn file(vm: &BexVm, pdf: &view::media::Pdf<'_>) -> Option<BexStr> {
+        pdf._data::<baml_builtins2::MediaValue>(vm)
+            .file()
+            .map(BexStr::from)
     }
 
-    fn base64(vm: &BexVm, pdf: &view::media::Pdf<'_>) -> String {
-        pdf._data::<baml_builtins2::MediaValue>(vm).base64()
+    fn base64(vm: &BexVm, pdf: &view::media::Pdf<'_>) -> BexStr {
+        BexStr::from(pdf._data::<baml_builtins2::MediaValue>(vm).base64())
     }
 
-    fn mime_type(vm: &BexVm, pdf: &view::media::Pdf<'_>) -> Option<String> {
-        pdf._data::<baml_builtins2::MediaValue>(vm).mime_type()
+    fn mime_type(vm: &BexVm, pdf: &view::media::Pdf<'_>) -> Option<BexStr> {
+        pdf._data::<baml_builtins2::MediaValue>(vm)
+            .mime_type()
+            .map(BexStr::from)
     }
 
-    fn from_url(url: &str, mime_type: Option<&str>) -> copy::media::Pdf {
+    fn from_url(url: &BexStr, mime_type: Option<&BexStr>) -> copy::media::Pdf {
         copy::media::Pdf {
-            _data: baml_builtins2::MediaValue::from_url(MediaKind::Pdf, url, mime_type),
+            _data: baml_builtins2::MediaValue::from_url(
+                MediaKind::Pdf,
+                url.as_str(),
+                mime_type.map(BexStr::as_str),
+            ),
         }
     }
 
-    fn from_file(file: &str, mime_type: Option<&str>) -> copy::media::Pdf {
+    fn from_file(file: &BexStr, mime_type: Option<&BexStr>) -> copy::media::Pdf {
         copy::media::Pdf {
-            _data: baml_builtins2::MediaValue::from_file(MediaKind::Pdf, file, mime_type),
+            _data: baml_builtins2::MediaValue::from_file(
+                MediaKind::Pdf,
+                file.as_str(),
+                mime_type.map(BexStr::as_str),
+            ),
         }
     }
 
-    fn from_base64(base64: &str, mime_type: Option<&str>) -> copy::media::Pdf {
+    fn from_base64(base64: &BexStr, mime_type: Option<&BexStr>) -> copy::media::Pdf {
         copy::media::Pdf {
-            _data: baml_builtins2::MediaValue::from_base64(MediaKind::Pdf, base64, mime_type),
+            _data: baml_builtins2::MediaValue::from_base64(
+                MediaKind::Pdf,
+                base64.as_str(),
+                mime_type.map(BexStr::as_str),
+            ),
         }
     }
 }
@@ -154,37 +175,58 @@ impl BamlClassMediaAudio for PackageBamlImpl {
         Ok(media_value_to_json(vm, &media, MediaKind::Audio))
     }
 
-    fn url(vm: &BexVm, audio: &view::media::Audio<'_>) -> Option<String> {
-        audio._data::<baml_builtins2::MediaValue>(vm).url()
+    fn url(vm: &BexVm, audio: &view::media::Audio<'_>) -> Option<BexStr> {
+        audio
+            ._data::<baml_builtins2::MediaValue>(vm)
+            .url()
+            .map(BexStr::from)
     }
 
-    fn file(vm: &BexVm, audio: &view::media::Audio<'_>) -> Option<String> {
-        audio._data::<baml_builtins2::MediaValue>(vm).file()
+    fn file(vm: &BexVm, audio: &view::media::Audio<'_>) -> Option<BexStr> {
+        audio
+            ._data::<baml_builtins2::MediaValue>(vm)
+            .file()
+            .map(BexStr::from)
     }
 
-    fn base64(vm: &BexVm, audio: &view::media::Audio<'_>) -> String {
-        audio._data::<baml_builtins2::MediaValue>(vm).base64()
+    fn base64(vm: &BexVm, audio: &view::media::Audio<'_>) -> BexStr {
+        BexStr::from(audio._data::<baml_builtins2::MediaValue>(vm).base64())
     }
 
-    fn mime_type(vm: &BexVm, audio: &view::media::Audio<'_>) -> Option<String> {
-        audio._data::<baml_builtins2::MediaValue>(vm).mime_type()
+    fn mime_type(vm: &BexVm, audio: &view::media::Audio<'_>) -> Option<BexStr> {
+        audio
+            ._data::<baml_builtins2::MediaValue>(vm)
+            .mime_type()
+            .map(BexStr::from)
     }
 
-    fn from_url(url: &str, mime_type: Option<&str>) -> copy::media::Audio {
+    fn from_url(url: &BexStr, mime_type: Option<&BexStr>) -> copy::media::Audio {
         copy::media::Audio {
-            _data: baml_builtins2::MediaValue::from_url(MediaKind::Audio, url, mime_type),
+            _data: baml_builtins2::MediaValue::from_url(
+                MediaKind::Audio,
+                url.as_str(),
+                mime_type.map(BexStr::as_str),
+            ),
         }
     }
 
-    fn from_file(file: &str, mime_type: Option<&str>) -> copy::media::Audio {
+    fn from_file(file: &BexStr, mime_type: Option<&BexStr>) -> copy::media::Audio {
         copy::media::Audio {
-            _data: baml_builtins2::MediaValue::from_file(MediaKind::Audio, file, mime_type),
+            _data: baml_builtins2::MediaValue::from_file(
+                MediaKind::Audio,
+                file.as_str(),
+                mime_type.map(BexStr::as_str),
+            ),
         }
     }
 
-    fn from_base64(base64: &str, mime_type: Option<&str>) -> copy::media::Audio {
+    fn from_base64(base64: &BexStr, mime_type: Option<&BexStr>) -> copy::media::Audio {
         copy::media::Audio {
-            _data: baml_builtins2::MediaValue::from_base64(MediaKind::Audio, base64, mime_type),
+            _data: baml_builtins2::MediaValue::from_base64(
+                MediaKind::Audio,
+                base64.as_str(),
+                mime_type.map(BexStr::as_str),
+            ),
         }
     }
 }
@@ -200,37 +242,58 @@ impl BamlClassMediaVideo for PackageBamlImpl {
         Ok(media_value_to_json(vm, &media, MediaKind::Video))
     }
 
-    fn url(vm: &BexVm, video: &view::media::Video<'_>) -> Option<String> {
-        video._data::<baml_builtins2::MediaValue>(vm).url()
+    fn url(vm: &BexVm, video: &view::media::Video<'_>) -> Option<BexStr> {
+        video
+            ._data::<baml_builtins2::MediaValue>(vm)
+            .url()
+            .map(BexStr::from)
     }
 
-    fn file(vm: &BexVm, video: &view::media::Video<'_>) -> Option<String> {
-        video._data::<baml_builtins2::MediaValue>(vm).file()
+    fn file(vm: &BexVm, video: &view::media::Video<'_>) -> Option<BexStr> {
+        video
+            ._data::<baml_builtins2::MediaValue>(vm)
+            .file()
+            .map(BexStr::from)
     }
 
-    fn base64(vm: &BexVm, video: &view::media::Video<'_>) -> String {
-        video._data::<baml_builtins2::MediaValue>(vm).base64()
+    fn base64(vm: &BexVm, video: &view::media::Video<'_>) -> BexStr {
+        BexStr::from(video._data::<baml_builtins2::MediaValue>(vm).base64())
     }
 
-    fn mime_type(vm: &BexVm, video: &view::media::Video<'_>) -> Option<String> {
-        video._data::<baml_builtins2::MediaValue>(vm).mime_type()
+    fn mime_type(vm: &BexVm, video: &view::media::Video<'_>) -> Option<BexStr> {
+        video
+            ._data::<baml_builtins2::MediaValue>(vm)
+            .mime_type()
+            .map(BexStr::from)
     }
 
-    fn from_url(url: &str, mime_type: Option<&str>) -> copy::media::Video {
+    fn from_url(url: &BexStr, mime_type: Option<&BexStr>) -> copy::media::Video {
         copy::media::Video {
-            _data: baml_builtins2::MediaValue::from_url(MediaKind::Video, url, mime_type),
+            _data: baml_builtins2::MediaValue::from_url(
+                MediaKind::Video,
+                url.as_str(),
+                mime_type.map(BexStr::as_str),
+            ),
         }
     }
 
-    fn from_file(file: &str, mime_type: Option<&str>) -> copy::media::Video {
+    fn from_file(file: &BexStr, mime_type: Option<&BexStr>) -> copy::media::Video {
         copy::media::Video {
-            _data: baml_builtins2::MediaValue::from_file(MediaKind::Video, file, mime_type),
+            _data: baml_builtins2::MediaValue::from_file(
+                MediaKind::Video,
+                file.as_str(),
+                mime_type.map(BexStr::as_str),
+            ),
         }
     }
 
-    fn from_base64(base64: &str, mime_type: Option<&str>) -> copy::media::Video {
+    fn from_base64(base64: &BexStr, mime_type: Option<&BexStr>) -> copy::media::Video {
         copy::media::Video {
-            _data: baml_builtins2::MediaValue::from_base64(MediaKind::Video, base64, mime_type),
+            _data: baml_builtins2::MediaValue::from_base64(
+                MediaKind::Video,
+                base64.as_str(),
+                mime_type.map(BexStr::as_str),
+            ),
         }
     }
 }
@@ -246,37 +309,58 @@ impl BamlClassMediaImage for PackageBamlImpl {
         Ok(media_value_to_json(vm, &media, MediaKind::Image))
     }
 
-    fn url(vm: &BexVm, image: &view::media::Image<'_>) -> Option<String> {
-        image._data::<baml_builtins2::MediaValue>(vm).url()
+    fn url(vm: &BexVm, image: &view::media::Image<'_>) -> Option<BexStr> {
+        image
+            ._data::<baml_builtins2::MediaValue>(vm)
+            .url()
+            .map(BexStr::from)
     }
 
-    fn file(vm: &BexVm, image: &view::media::Image<'_>) -> Option<String> {
-        image._data::<baml_builtins2::MediaValue>(vm).file()
+    fn file(vm: &BexVm, image: &view::media::Image<'_>) -> Option<BexStr> {
+        image
+            ._data::<baml_builtins2::MediaValue>(vm)
+            .file()
+            .map(BexStr::from)
     }
 
-    fn base64(vm: &BexVm, image: &view::media::Image<'_>) -> String {
-        image._data::<baml_builtins2::MediaValue>(vm).base64()
+    fn base64(vm: &BexVm, image: &view::media::Image<'_>) -> BexStr {
+        BexStr::from(image._data::<baml_builtins2::MediaValue>(vm).base64())
     }
 
-    fn mime_type(vm: &BexVm, image: &view::media::Image<'_>) -> Option<String> {
-        image._data::<baml_builtins2::MediaValue>(vm).mime_type()
+    fn mime_type(vm: &BexVm, image: &view::media::Image<'_>) -> Option<BexStr> {
+        image
+            ._data::<baml_builtins2::MediaValue>(vm)
+            .mime_type()
+            .map(BexStr::from)
     }
 
-    fn from_url(url: &str, mime_type: Option<&str>) -> copy::media::Image {
+    fn from_url(url: &BexStr, mime_type: Option<&BexStr>) -> copy::media::Image {
         copy::media::Image {
-            _data: baml_builtins2::MediaValue::from_url(MediaKind::Image, url, mime_type),
+            _data: baml_builtins2::MediaValue::from_url(
+                MediaKind::Image,
+                url.as_str(),
+                mime_type.map(BexStr::as_str),
+            ),
         }
     }
 
-    fn from_file(file: &str, mime_type: Option<&str>) -> copy::media::Image {
+    fn from_file(file: &BexStr, mime_type: Option<&BexStr>) -> copy::media::Image {
         copy::media::Image {
-            _data: baml_builtins2::MediaValue::from_file(MediaKind::Image, file, mime_type),
+            _data: baml_builtins2::MediaValue::from_file(
+                MediaKind::Image,
+                file.as_str(),
+                mime_type.map(BexStr::as_str),
+            ),
         }
     }
 
-    fn from_base64(base64: &str, mime_type: Option<&str>) -> copy::media::Image {
+    fn from_base64(base64: &BexStr, mime_type: Option<&BexStr>) -> copy::media::Image {
         copy::media::Image {
-            _data: baml_builtins2::MediaValue::from_base64(MediaKind::Image, base64, mime_type),
+            _data: baml_builtins2::MediaValue::from_base64(
+                MediaKind::Image,
+                base64.as_str(),
+                mime_type.map(BexStr::as_str),
+            ),
         }
     }
 }

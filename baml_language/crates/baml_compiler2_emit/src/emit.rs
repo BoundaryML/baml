@@ -16,7 +16,7 @@ use baml_compiler2_mir::{
 };
 use baml_type::{Ty, TyTemplate};
 use bex_vm_types::{
-    BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionKind, FunctionOrigin,
+    BexStr, BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionKind, FunctionOrigin,
     GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp,
     bytecode::{
         BlockNotification, BlockNotificationType, DebugLocalScope, InstructionMeta, JumpTableData,
@@ -1075,7 +1075,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
                         // 1. Push event name "$baml_log"
                         let log_str_idx = self.objects.len();
-                        self.objects.push(Object::String("$baml_log".to_string()));
+                        self.objects.push(Object::String(BexStr::from("$baml_log")));
                         let log_const_idx = self
                             .add_constant(ConstValue::Object(ObjectIndex::from_raw(log_str_idx)));
                         let inst = self.emit(Instruction::LoadConst(log_const_idx));
@@ -1092,7 +1092,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                             LogLevel::Error => "error",
                         };
                         let level_val_idx = self.objects.len();
-                        self.objects.push(Object::String(level_str.to_string()));
+                        self.objects.push(Object::String(BexStr::from(level_str)));
                         let level_val_const_idx = self
                             .add_constant(ConstValue::Object(ObjectIndex::from_raw(level_val_idx)));
                         let inst = self.emit(Instruction::LoadConst(level_val_const_idx));
@@ -1106,7 +1106,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
                         // 4. Push key "level"
                         let level_key_idx = self.objects.len();
-                        self.objects.push(Object::String("level".to_string()));
+                        self.objects.push(Object::String(BexStr::from("level")));
                         let level_key_const_idx = self
                             .add_constant(ConstValue::Object(ObjectIndex::from_raw(level_key_idx)));
                         let inst = self.emit(Instruction::LoadConst(level_key_const_idx));
@@ -1117,7 +1117,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
                         // 5. Push key "data"
                         let data_key_idx = self.objects.len();
-                        self.objects.push(Object::String("data".to_string()));
+                        self.objects.push(Object::String(BexStr::from("data")));
                         let data_key_const_idx = self
                             .add_constant(ConstValue::Object(ObjectIndex::from_raw(data_key_idx)));
                         let inst = self.emit(Instruction::LoadConst(data_key_const_idx));
@@ -1225,7 +1225,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Constant::String(s) => {
                 let display = Self::display_string_operand(s);
                 let obj_idx = self.objects.len();
-                self.objects.push(Object::String(s.clone()));
+                self.objects.push(Object::String(BexStr::from(s.as_str())));
                 let idx = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(obj_idx)));
                 let inst = self.emit(Instruction::LoadConst(idx));
                 self.set_operand(inst, OperandMeta::Const(display));
@@ -2582,7 +2582,8 @@ impl StackEffectSink for StackifyCodegen<'_, '_> {
             .unwrap_or_else(|| panic!("watched local {local} must have a user-visible name"))
             .to_string();
         let channel_obj_idx = self.objects.len();
-        self.objects.push(Object::String(channel.clone()));
+        self.objects
+            .push(Object::String(BexStr::from(channel.as_str())));
         let channel_const_idx =
             self.add_constant(ConstValue::Object(ObjectIndex::from_raw(channel_obj_idx)));
         let inst = self.emit(Instruction::LoadConst(channel_const_idx));

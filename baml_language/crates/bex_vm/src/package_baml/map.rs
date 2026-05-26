@@ -118,7 +118,7 @@ impl BamlClassMap for PackageBamlImpl {
 
     fn __glue_set(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
         let result: NativeFunctionResult = (|| {
-            let key_as_string = vm.as_string(&args[1])?.clone();
+            let key_as_string: String = vm.as_string(&args[1])?.to_string();
             let value = args[2];
             let map = vm.as_map_mut(&args[0])?;
             // `IndexMap::insert` returns `Some(prev)` if the key already
@@ -177,7 +177,7 @@ impl BamlClassMap for PackageBamlImpl {
 
     fn __glue_delete(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
         let result: NativeFunctionResult = (|| {
-            let key_as_string = vm.as_string(&args[1])?.clone();
+            let key_as_string: String = vm.as_string(&args[1])?.to_string();
             let map = vm.as_map_mut(&args[0])?;
             // `shift_remove` preserves the order of remaining entries (matching
             // insertion order) — important since `keys()` / `values()` return
@@ -201,7 +201,7 @@ impl BamlClassMap for PackageBamlImpl {
 
     fn __glue_get_or_insert(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
         let result: NativeFunctionResult = (|| {
-            let key_as_string = vm.as_string(&args[1])?.clone();
+            let key_as_string: String = vm.as_string(&args[1])?.to_string();
             let default = args[2];
             let map = vm.as_map_mut(&args[0])?;
             Ok(*map.entry(key_as_string).or_insert(default))

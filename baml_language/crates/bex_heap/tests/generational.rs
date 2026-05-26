@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use bex_external_types::WeakHeapRef;
 use bex_heap::{BexHeap, CollectionLevel, Generation, Tlab};
-use bex_vm_types::Object;
+use bex_vm_types::{BexStr, Object};
 
 // ============================================================================
 // Generation Classification & Promotion Tests
@@ -245,7 +245,7 @@ fn test_stats_minor_partial_survival() {
 
 #[test]
 fn test_stats_compile_time_not_counted() {
-    let compile_time = vec![Object::String("builtin".to_string())];
+    let compile_time = vec![Object::String(BexStr::from("builtin"))];
     let heap = BexHeap::new(compile_time);
     let ct_ptr = heap.compile_time_ptr(0);
 

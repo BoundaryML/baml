@@ -1050,6 +1050,8 @@ const _: () = {
 
 #[cfg(test)]
 mod tests {
+    use bex_vm_types::BexStr;
+
     use super::*;
 
     #[test]
@@ -1062,8 +1064,8 @@ mod tests {
     #[test]
     fn test_new_heap_with_objects() {
         let objects: Vec<Object> = vec![
-            Object::String("hello".to_string()),
-            Object::String("world".to_string()),
+            Object::String(BexStr::from("hello")),
+            Object::String(BexStr::from("world")),
         ];
         let heap = BexHeap::new(objects);
         assert_eq!(heap.len(), 2);
@@ -1090,8 +1092,8 @@ mod tests {
     #[test]
     fn test_alloc_tlab_chunk_with_compile_time() {
         let compile_time: Vec<Object> = vec![
-            Object::String("ct1".to_string()),
-            Object::String("ct2".to_string()),
+            Object::String(BexStr::from("ct1")),
+            Object::String(BexStr::from("ct2")),
         ];
         let heap = BexHeap::with_tlab_size(compile_time, 100);
 
@@ -1107,7 +1109,7 @@ mod tests {
 
     #[test]
     fn test_heap_stats() {
-        let compile_time: Vec<Object> = vec![Object::String("builtin".to_string())];
+        let compile_time: Vec<Object> = vec![Object::String(BexStr::from("builtin"))];
         let heap = BexHeap::with_tlab_size(compile_time, 50);
 
         let stats = heap.stats();

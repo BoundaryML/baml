@@ -1,4 +1,4 @@
-use bex_vm_types::{HeapPtr, Object, ObjectIndex};
+use bex_vm_types::{BexStr, HeapPtr, Object, ObjectIndex};
 
 use crate::BexHeap;
 
@@ -95,11 +95,11 @@ impl BexHeap {
     }
 
     pub(crate) fn placeholder_object(&self) -> Object {
-        Object::String(String::new())
+        Object::String(BexStr::empty())
     }
 
     pub(crate) fn tlab_canary_object(&self, _chunk_start: usize, _chunk_end: usize) -> Object {
-        Object::String(String::new())
+        Object::String(BexStr::empty())
     }
 
     pub(crate) fn finalize_inactive_space(&self) {

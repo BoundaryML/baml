@@ -221,9 +221,9 @@ impl<'a> BexValue<'a> {
         self,
         heap: &BexHeap,
         permit: PermitProof<'a>,
-    ) -> Result<&'a String, AccessError> {
+    ) -> Result<&'a str, AccessError> {
         match self {
-            BexValue::ExternalValue(BexExternalValue::String(s)) => Ok(s),
+            BexValue::ExternalValue(BexExternalValue::String(s)) => Ok(s.as_str()),
             other => other.as_object("string", heap, permit, |ptr| {
                 let obj = unsafe { ptr.get() };
                 let Object::String(s) = obj else {
@@ -232,7 +232,7 @@ impl<'a> BexValue<'a> {
                         actual: obj.to_string(),
                     });
                 };
-                Ok(s)
+                Ok(s.as_str())
             }),
         }
     }
@@ -594,7 +594,7 @@ fn owned_inner(
                 Object::Future(..) => unconvertible("future"),
                 Object::UnscheduledFuture(..) => unconvertible("unscheduled_future"),
 
-                Object::String(s) => Ok(BexExternalValue::String(s.clone())),
+                Object::String(s) => Ok(BexExternalValue::String(s.to_string())),
                 // Deep-copy path for trace payloads: no declared type is available here,
                 // so placeholder types with default attr are used.
                 Object::Array(array) => Ok(BexExternalValue::Array {

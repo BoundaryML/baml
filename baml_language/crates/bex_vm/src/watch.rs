@@ -729,7 +729,9 @@ mod tests {
 
     /// Allocates a leaf object (string) on the heap.
     fn leaf() -> HeapPtr {
-        heap_alloc(Object::String(String::from("test leaf object")))
+        heap_alloc(Object::String(bex_vm_types::BexStr::from(
+            "test leaf object",
+        )))
     }
 
     /// Allocates an instance whose fields point to the given objects.

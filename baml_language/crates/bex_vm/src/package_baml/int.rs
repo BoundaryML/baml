@@ -1,4 +1,4 @@
-use bex_vm_types::Value;
+use bex_vm_types::{BexStr, Value};
 
 use super::{BamlClassInt, PackageBamlImpl};
 use crate::errors::{VmBamlError, VmPanic, VmRustFnError};
@@ -76,7 +76,7 @@ impl BamlClassInt for PackageBamlImpl {
         int.checked_pow(exp_u32).unwrap_or(saturated)
     }
 
-    fn parse(text: &str) -> Result<i64, VmRustFnError> {
+    fn parse(text: &BexStr) -> Result<i64, VmRustFnError> {
         text.parse::<i64>().map_err(|e| {
             VmBamlError::ParseError {
                 message: format!("int.parse: cannot parse {text:?} as int: {e}"),

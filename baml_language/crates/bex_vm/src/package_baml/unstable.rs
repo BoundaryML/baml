@@ -1,6 +1,9 @@
 use std::fmt::Write;
 
-use bex_vm_types::types::{Object, Value, format_float};
+use bex_vm_types::{
+    BexStr,
+    types::{Object, Value, format_float},
+};
 
 use super::{BamlNamespaceUnstable, PackageBamlImpl};
 use crate::{
@@ -9,8 +12,8 @@ use crate::{
 };
 
 impl BamlNamespaceUnstable for PackageBamlImpl {
-    fn string(vm: &BexVm, value: &Value) -> Result<String, VmRustFnError> {
-        format_value_recursive(vm, value, 0)
+    fn string(vm: &BexVm, value: &Value) -> Result<BexStr, VmRustFnError> {
+        format_value_recursive(vm, value, 0).map(BexStr::from)
     }
 }
 

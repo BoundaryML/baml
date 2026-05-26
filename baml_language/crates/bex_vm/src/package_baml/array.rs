@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use bex_vm_types::{HeapPtr, Object, types::Value};
+use bex_vm_types::{BexStr, HeapPtr, Object, types::Value};
 
 use super::{BamlClassArray, Continuation, NativeCallResult, PackageBamlImpl, make_to_json_callee};
 use crate::{
@@ -445,12 +445,17 @@ impl BamlClassArray for PackageBamlImpl {
         array[start..end].to_vec()
     }
 
-    fn join(vm: &BexVm, array: &[Value], separator: &str) -> String {
-        array
+    fn join(vm: &BexVm, array: &[Value], separator: &BexStr) -> BexStr {
+        let joined: String = array
             .iter()
-            .map(|v| vm.as_string(v).cloned().unwrap_or_default())
-            .collect::<Vec<_>>()
-            .join(separator)
+            .map(|v| {
+                vm.as_string(v)
+                    .map(bex_vm_types::BexStr::as_str)
+                    .unwrap_or_default()
+            })
+            .collect::<Vec<&str>>()
+            .join(separator.as_str());
+        BexStr::from(joined)
     }
 
     #[allow(clippy::unused_unit)]

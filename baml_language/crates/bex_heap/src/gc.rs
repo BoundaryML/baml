@@ -27,7 +27,7 @@
 
 use std::{cell::UnsafeCell, collections::HashMap};
 
-use bex_vm_types::{HeapPtr, Object, Value};
+use bex_vm_types::{BexStr, HeapPtr, Object, Value};
 
 use crate::{
     BexHeap,
@@ -298,7 +298,7 @@ impl BexHeap {
         let new_ptr = unsafe {
             let inactive = self.inactive_mut();
             let new_runtime_idx = inactive.len();
-            inactive.push_with(obj, || Object::String(String::new()));
+            inactive.push_with(obj, || Object::String(BexStr::empty()));
             let raw_ptr = inactive.get_ptr(new_runtime_idx);
             self.make_heap_ptr(raw_ptr)
         };
@@ -597,7 +597,7 @@ impl BexHeap {
         let new_ptr = unsafe {
             let vec = &mut *space.get();
             let new_idx = vec.len();
-            vec.push_with(obj, || Object::String(String::new()));
+            vec.push_with(obj, || Object::String(BexStr::empty()));
             let raw_ptr = vec.get_ptr(new_idx);
             self.make_heap_ptr(raw_ptr)
         };
@@ -991,8 +991,8 @@ mod tests {
     #[test]
     fn test_gc_preserves_compile_time_objects() {
         let compile_time: Vec<Object> = vec![
-            Object::String("builtin1".to_string()),
-            Object::String("builtin2".to_string()),
+            Object::String(BexStr::from("builtin1")),
+            Object::String(BexStr::from("builtin2")),
         ];
         let heap = BexHeap::new(compile_time);
 
@@ -1265,8 +1265,8 @@ mod tests {
     #[test]
     fn test_compile_time_objects_never_collected() {
         let compile_time: Vec<Object> = vec![
-            Object::String("builtin1".to_string()),
-            Object::String("builtin2".to_string()),
+            Object::String(BexStr::from("builtin1")),
+            Object::String(BexStr::from("builtin2")),
         ];
         let heap = BexHeap::new(compile_time);
         let mut tlab = Tlab::new(Arc::clone(&heap));
@@ -1688,7 +1688,7 @@ mod tests {
     fn test_generation_of_compile_time() {
         use crate::heap::Generation;
 
-        let heap = BexHeap::new(vec![Object::String("builtin".to_string())]);
+        let heap = BexHeap::new(vec![Object::String(BexStr::from("builtin"))]);
         let ct_ptr = heap.compile_time_ptr(0);
         assert_eq!(heap.generation_of(ct_ptr), Generation::CompileTime);
     }

@@ -2215,7 +2215,7 @@ impl BexEngine {
                     };
                     let spawn_name: Option<String> =
                         name_ptr.and_then(|ptr| match unsafe { ptr.get() } {
-                            Object::String(s) => Some(s.clone()),
+                            Object::String(s) => Some(s.to_string()),
                             _ => None,
                         });
                     let parent_errors_arc = thread.vm_thread_pending_errors_arc();
