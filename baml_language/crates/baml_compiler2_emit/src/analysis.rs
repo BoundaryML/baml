@@ -1674,13 +1674,15 @@ fn is_call_result_aggregate_operand(
         return false;
     };
 
+    let mut found_local = false;
     for operand in operands {
         let Some(operand_local) = operand_local(operand) else {
             return false;
         };
 
         if operand_local == local {
-            return true;
+            found_local = true;
+            continue;
         }
 
         let Some(operand_du) = def_use.get(&operand_local) else {
@@ -1698,12 +1700,15 @@ fn is_call_result_aggregate_operand(
         }
     }
 
-    false
+    found_local
 }
 
 fn aggregate_stack_prefix_operands(rvalue: &Rvalue) -> Option<Vec<&Operand>> {
     match rvalue {
         Rvalue::Array(elements) => Some(elements.iter().collect()),
+        // Map lowering emits all values first, then all keys, because the VM
+        // consumes maps as `[v1, v2, ..., k1, k2, ...]`. A carried key would sit
+        // below the emitted values, so only value positions are stack-carryable.
         Rvalue::Map(entries) => Some(entries.iter().map(|(_key, value)| value).collect()),
         Rvalue::Aggregate {
             kind: baml_compiler2_mir::AggregateKind::Array,
@@ -1825,6 +1830,8 @@ fn get_copy_source(
 
 #[cfg(test)]
 mod tests {
+    use baml_compiler2_mir::{BasicBlock, Constant, Operand, Place, Statement, Terminator};
+
     use super::*;
 
     #[test]
@@ -1851,5 +1858,65 @@ mod tests {
 
         // bb2 doesn't dominate bb1
         assert!(!doms.dominates(BlockId(2), BlockId(1)));
+    }
+
+    #[test]
+    fn aggregate_operand_requires_all_prefix_operands_to_be_stack_carried() {
+        let target = Local(1);
+        let body = MirFunctionBody {
+            blocks: vec![
+                BasicBlock {
+                    id: BlockId(0),
+                    statements: vec![],
+                    terminator: Some(Terminator::Call {
+                        callee: Operand::Constant(Constant::Null),
+                        args: vec![],
+                        ntypeargs: 0,
+                        destination: Place::Local(target),
+                        target: BlockId(1),
+                        unwind: None,
+                    }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(1),
+                    statements: vec![Statement {
+                        kind: StatementKind::Assign {
+                            destination: Place::Local(Local(0)),
+                            value: Rvalue::Array(vec![
+                                Operand::copy_local(target),
+                                Operand::Constant(Constant::Int(1)),
+                            ]),
+                        },
+                        span: None,
+                    }],
+                    terminator: Some(Terminator::Return),
+                    span: None,
+                    terminator_span: None,
+                },
+            ],
+            entry: BlockId(0),
+            locals: vec![],
+            catch_regions: vec![],
+            viz_nodes: vec![],
+        };
+        let du = LocalDefUse {
+            def: Some(DefLocation {
+                block: BlockId(0),
+                statement_ref: StatementRef::Terminator,
+                rvalue: Rvalue::Use(Operand::Constant(Constant::Null)),
+            }),
+            uses: vec![UseLocation {
+                block: BlockId(1),
+                statement_ref: StatementRef::Statement(0),
+            }],
+            all_defs: vec![(BlockId(0), StatementRef::Terminator)],
+        };
+        let def_use = HashMap::from([(target, du.clone())]);
+
+        assert!(!is_call_result_aggregate_operand(
+            target, &du, &body, &def_use,
+        ));
     }
 }

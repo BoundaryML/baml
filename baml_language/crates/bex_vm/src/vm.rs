@@ -133,9 +133,86 @@ impl Frame {
 
 #[cfg(test)]
 mod tests {
-    use bex_vm_types::{Value, types::type_tags};
+    #[cfg(not(target_arch = "wasm32"))]
+    use std::sync::atomic::AtomicBool;
+    use std::{collections::HashMap, sync::Arc};
 
-    use super::value_type_tag;
+    use baml_type::{Name, Ty, TyAttr, TyTemplate, TypeName};
+    use bex_heap::{BexHeap, Tlab};
+    use bex_vm_types::{
+        EarlyYieldCheck, GlobalPool, Object, ObjectIndex, Value, VmGlobals,
+        bytecode::{FieldCopy, FieldCopySet},
+        types::{Class, ClassField, Instance, type_tags},
+    };
+
+    use super::{BexVm, VmExecState, WatchNotification, value_type_tag};
+    use crate::{
+        indexable::EvalStack,
+        watch::{NodeId, RootState, Watch, WatchFilter},
+    };
+
+    fn int_ty() -> Ty {
+        Ty::Int {
+            attr: TyAttr::default(),
+        }
+    }
+
+    fn test_field(name: &str) -> ClassField {
+        ClassField {
+            name: name.to_string(),
+            field_type: int_ty(),
+            field_template: TyTemplate::Concrete(int_ty()),
+            description: None,
+            alias: None,
+            skip: false,
+        }
+    }
+
+    fn test_class(field_count: usize) -> Object {
+        Object::Class(Box::new(Class {
+            name: TypeName::local(Name::new("TestClass")),
+            fields: (0..field_count)
+                .map(|idx| test_field(&format!("field{idx}")))
+                .collect(),
+            description: None,
+            alias: None,
+            type_tag: 100,
+            ty_attr: TyAttr::default(),
+        }))
+    }
+
+    fn early_yield_for_test() -> EarlyYieldCheck {
+        #[cfg(target_arch = "wasm32")]
+        {
+            EarlyYieldCheck::new()
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            EarlyYieldCheck::new(Arc::new(AtomicBool::new(false)))
+        }
+    }
+
+    fn test_vm(compile_time_objects: Vec<Object>) -> BexVm {
+        let heap = BexHeap::new(compile_time_objects);
+        BexVm {
+            frames: Vec::new(),
+            stack: EvalStack::new(),
+            heap: Arc::clone(&heap),
+            early_yield: early_yield_for_test(),
+            tlab: Tlab::new(heap),
+            globals: VmGlobals::Owned(GlobalPool::new()),
+            resolved_class_names: HashMap::new(),
+            error_class_ptrs: Vec::new(),
+            panic_class_ptrs: Vec::new(),
+            watch: Watch::new(),
+            watched_vars: HashMap::new(),
+            interrupt_frame: None,
+            traced_frames: Vec::new(),
+            current_span_context: None,
+            argv: Arc::from([]),
+            pending_call_type_args: Vec::new(),
+        }
+    }
 
     #[test]
     fn omitted_arg_uses_unknown_type_tag() {
@@ -150,6 +227,56 @@ mod tests {
             Value::Int(type_tags::INT),
             Value::Int(tag) if value_type_tag(&value) == tag
         ));
+    }
+
+    #[test]
+    fn init_spread_preserves_pre_spread_watch_baseline() {
+        let mut vm = test_vm(vec![test_class(2)]);
+        let class_ptr = vm.idx_to_ptr(ObjectIndex::from_raw(0));
+        let source_ptr = vm.tlab.alloc(Object::Instance(Instance {
+            class: class_ptr,
+            class_type_args: Vec::new(),
+            fields: vec![Value::Int(10), Value::Int(2)],
+        }));
+        let dest_ptr = vm.tlab.alloc(Object::Instance(Instance {
+            class: class_ptr,
+            class_type_args: Vec::new(),
+            fields: vec![Value::Int(1), Value::Int(2)],
+        }));
+        let root = NodeId::HeapObject(dest_ptr);
+        vm.watch.register_root(
+            root,
+            RootState {
+                value: Value::Object(dest_ptr),
+                last_assigned: None,
+                last_notified: None,
+                channel: "test".to_string(),
+                filter: WatchFilter::Default,
+            },
+        );
+
+        let result = vm
+            .init_spread(
+                Value::Object(dest_ptr),
+                Value::Object(source_ptr),
+                &FieldCopySet {
+                    fields: vec![
+                        FieldCopy { source: 0, dest: 0 },
+                        FieldCopy { source: 1, dest: 1 },
+                    ],
+                },
+            )
+            .expect("spread should succeed");
+
+        let Some(VmExecState::Notify(WatchNotification::Variables(notifications))) = result else {
+            panic!("expected watched spread notification");
+        };
+        assert_eq!(notifications, vec![root]);
+
+        let Object::Instance(dest) = vm.get_object(dest_ptr) else {
+            panic!("destination should remain an instance");
+        };
+        assert_eq!(dest.fields, vec![Value::Int(10), Value::Int(2)]);
     }
 }
 
@@ -2195,8 +2322,16 @@ impl BexVm {
         };
 
         let watched_node = NodeId::HeapObject(dest_ptr);
+        let roots = self.watch.copy_roots_reaching(watched_node);
+        let mut old_roots_copies = Vec::with_capacity(roots.len());
+        for &root in &roots {
+            if let Some(val) = self.watch.root_state(root).map(|s| s.value) {
+                old_roots_copies.push(crate::package_baml::PackageBamlImpl::deep_copy(self, &val));
+            }
+        }
+
         for (dest_field, old_value, new_value) in copied_fields {
-            self.update_watched_node(
+            self.update_watched_node_dependencies(
                 watched_node,
                 watch::Path::InstanceField(dest_field),
                 old_value,
@@ -2207,6 +2342,12 @@ impl BexVm {
                 unreachable!("destination instance already type-checked above");
             };
             dest.fields[dest_field] = new_value;
+        }
+
+        for (&root, old_value) in roots.iter().zip(old_roots_copies) {
+            if let Some(state) = self.watch.root_state_mut(root) {
+                state.last_assigned = Some(old_value);
+            }
         }
 
         let notifications = self.process_notifications(watched_node)?;
@@ -2234,7 +2375,6 @@ impl BexVm {
                 .into());
             }
         };
-
         let field_value_count = plan.fields.len();
         let ntypeargs = plan.ntypeargs as usize;
         let total_inputs = field_value_count + ntypeargs;
@@ -2302,15 +2442,6 @@ impl BexVm {
         old_value: Value,
         new_value: Value,
     ) {
-        if let Value::Object(old) = old_value {
-            self.watch
-                .unlink_edge(watched_node, path.clone(), NodeId::HeapObject(old));
-        }
-
-        if let Value::Object(new) = new_value {
-            watch::track_watch_dependencies(&mut self.watch, watched_node, path, new);
-        }
-
         // Deep-copy previous root values so the notification filter can diff
         // old vs new. Two-pass because `baml_deep_copy` needs `&mut self`,
         // which conflicts with borrowing `self.watch` for root_state.
@@ -2324,10 +2455,29 @@ impl BexVm {
             }
         }
 
+        self.update_watched_node_dependencies(watched_node, path, old_value, new_value);
+
         for (&root, old_value) in roots.iter().zip(old_roots_copies) {
             if let Some(state) = self.watch.root_state_mut(root) {
                 state.last_assigned = Some(old_value);
             }
+        }
+    }
+
+    fn update_watched_node_dependencies(
+        &mut self,
+        watched_node: NodeId,
+        path: watch::Path,
+        old_value: Value,
+        new_value: Value,
+    ) {
+        if let Value::Object(old) = old_value {
+            self.watch
+                .unlink_edge(watched_node, path.clone(), NodeId::HeapObject(old));
+        }
+
+        if let Value::Object(new) = new_value {
+            watch::track_watch_dependencies(&mut self.watch, watched_node, path, new);
         }
     }
 

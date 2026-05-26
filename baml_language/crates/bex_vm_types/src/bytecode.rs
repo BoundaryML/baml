@@ -2274,6 +2274,23 @@ mod compact_tests {
     }
 
     #[test]
+    fn encode_init_instance_operand() {
+        let bc = make_bytecode(vec![Instruction::InitInstance(7)], vec![]);
+        let compact = bc.lower_to_compact();
+        assert_eq!(compact.code.len(), 5);
+        assert_eq!(compact.code[0], OpCode::InitInstance as u8);
+        let plan_idx = u32::from_le_bytes([
+            compact.code[1],
+            compact.code[2],
+            compact.code[3],
+            compact.code[4],
+        ]);
+        assert_eq!(plan_idx, 7);
+        assert_eq!(Instruction::InitInstance(7).to_string(), "INIT_INSTANCE 7");
+        assert_eq!(OpCode::try_from(compact.code[0]), Ok(OpCode::InitInstance));
+    }
+
+    #[test]
     fn encode_jump_forward() {
         // Jump(+2) from instruction 0 should skip instruction 1 and land on instruction 2.
         // Layout: [Jump(+2), Return, Return, Return]

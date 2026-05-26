@@ -796,6 +796,9 @@ fn simulate_aggregate_operand_pull_stack(
             ))
         }
         Rvalue::Map(entries) => {
+            // Map keys are trailing operands in VM order. A call result carried
+            // from the block entry would be below emitted values, so keys are
+            // simulated only as normal operands after the value prefix.
             let values = entries
                 .iter()
                 .map(|(_key, value)| value)
@@ -929,6 +932,8 @@ fn simulate_stack_consuming_aggregate(
 fn aggregate_value_operand_index(rvalue: &Rvalue, local: Local) -> Option<usize> {
     let operands: Vec<&Operand> = match rvalue {
         Rvalue::Array(elements) => elements.iter().collect(),
+        // See `simulate_aggregate_operand_pull_stack`: only map values are
+        // valid stack-carry prefix operands for the current VM stack layout.
         Rvalue::Map(entries) => entries.iter().map(|(_key, value)| value).collect(),
         Rvalue::Aggregate {
             kind: baml_compiler2_mir::AggregateKind::Array,
@@ -1324,5 +1329,295 @@ impl StackEffectSink for StackCarryPullSink<'_> {
             return Err(());
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use baml_compiler2_mir::{AggregateKind, BasicBlock, LocalDecl, Statement};
+    use baml_type::{TyAttr, TyTemplate};
+
+    use super::*;
+
+    fn int_ty() -> Ty {
+        Ty::Int {
+            attr: TyAttr::default(),
+        }
+    }
+
+    fn float_ty() -> Ty {
+        Ty::Float {
+            attr: TyAttr::default(),
+        }
+    }
+
+    fn local_decl(ty: Ty) -> LocalDecl {
+        LocalDecl {
+            name: None,
+            ty,
+            span: None,
+            scope_span: None,
+            is_watched: false,
+            is_captured: false,
+        }
+    }
+
+    fn body_with_locals(local_tys: Vec<Ty>) -> MirFunctionBody {
+        MirFunctionBody {
+            blocks: vec![BasicBlock {
+                id: baml_compiler2_mir::BlockId(0),
+                statements: Vec::<Statement>::new(),
+                terminator: Some(Terminator::Return),
+                span: None,
+                terminator_span: None,
+            }],
+            entry: baml_compiler2_mir::BlockId(0),
+            locals: local_tys.into_iter().map(local_decl).collect(),
+            catch_regions: vec![],
+            viz_nodes: vec![],
+        }
+    }
+
+    fn stack_carried_classifications(
+        locals: impl IntoIterator<Item = Local>,
+    ) -> HashMap<Local, LocalClassification> {
+        locals
+            .into_iter()
+            .map(|local| (local, LocalClassification::CallResultImmediate))
+            .collect()
+    }
+
+    #[test]
+    fn aggregate_stack_carry_accepts_array_value_prefix() {
+        let carried = Local(1);
+        let sibling = Local(2);
+        let classifications = stack_carried_classifications([sibling]);
+        let mut sim = StackCarrySim {
+            depth: Some(1),
+            used: false,
+        };
+
+        let ok = simulate_aggregate_operand_pull_stack(
+            &Rvalue::Array(vec![
+                Operand::copy_local(carried),
+                Operand::copy_local(sibling),
+                Operand::Constant(Constant::Int(1)),
+            ]),
+            &mut sim,
+            carried,
+            &classifications,
+            &HashMap::new(),
+        );
+
+        assert_eq!(ok, Some(true));
+        assert!(sim.used);
+    }
+
+    #[test]
+    fn aggregate_stack_carry_accepts_mir_array_aggregate_prefix() {
+        let carried = Local(2);
+        let sibling = Local(1);
+        let classifications = stack_carried_classifications([sibling]);
+        let mut sim = StackCarrySim {
+            depth: Some(0),
+            used: false,
+        };
+
+        let ok = simulate_aggregate_operand_pull_stack(
+            &Rvalue::Aggregate {
+                kind: AggregateKind::Array,
+                fields: vec![Operand::copy_local(sibling), Operand::copy_local(carried)],
+            },
+            &mut sim,
+            carried,
+            &classifications,
+            &HashMap::new(),
+        );
+
+        assert_eq!(ok, Some(true));
+        assert!(sim.used);
+    }
+
+    #[test]
+    fn aggregate_stack_carry_simulates_map_values_and_trailing_keys() {
+        let carried = Local(1);
+        let sibling = Local(2);
+        let classifications = stack_carried_classifications([sibling]);
+        let mut sim = StackCarrySim {
+            depth: Some(1),
+            used: false,
+        };
+
+        let ok = simulate_aggregate_operand_pull_stack(
+            &Rvalue::Map(vec![
+                (
+                    Operand::Constant(Constant::String("a".to_string())),
+                    Operand::copy_local(carried),
+                ),
+                (
+                    Operand::Constant(Constant::String("b".to_string())),
+                    Operand::copy_local(sibling),
+                ),
+            ]),
+            &mut sim,
+            carried,
+            &classifications,
+            &HashMap::new(),
+        );
+
+        assert_eq!(ok, Some(true));
+        assert!(sim.used);
+    }
+
+    #[test]
+    fn map_key_is_not_an_aggregate_value_operand() {
+        let key = Local(1);
+        let value = Local(2);
+        let rvalue = Rvalue::Map(vec![(Operand::copy_local(key), Operand::copy_local(value))]);
+
+        assert_eq!(aggregate_value_operand_index(&rvalue, value), Some(0));
+        assert_eq!(aggregate_value_operand_index(&rvalue, key), None);
+    }
+
+    #[test]
+    fn aggregate_stack_carry_rejects_non_stack_carried_prefix() {
+        let carried = Local(2);
+        let real_prefix = Local(1);
+        let mut sim = StackCarrySim {
+            depth: Some(0),
+            used: false,
+        };
+
+        let ok = simulate_aggregate_operand_pull_stack(
+            &Rvalue::Array(vec![
+                Operand::copy_local(real_prefix),
+                Operand::copy_local(carried),
+            ]),
+            &mut sim,
+            carried,
+            &HashMap::new(),
+            &HashMap::new(),
+        );
+
+        assert_eq!(ok, Some(false));
+        assert!(!sim.used);
+    }
+
+    #[test]
+    fn class_aggregate_stack_carry_accounts_for_type_args() {
+        let carried = Local(2);
+        let sibling = Local(1);
+        let classifications = stack_carried_classifications([sibling]);
+        let mut sim = StackCarrySim {
+            depth: Some(0),
+            used: false,
+        };
+
+        let ok = simulate_aggregate_operand_pull_stack(
+            &Rvalue::Aggregate {
+                kind: AggregateKind::Class {
+                    name: "Box".to_string(),
+                    type_arg_templates: vec![TyTemplate::Concrete(int_ty())],
+                },
+                fields: vec![Operand::copy_local(sibling), Operand::copy_local(carried)],
+            },
+            &mut sim,
+            carried,
+            &classifications,
+            &HashMap::new(),
+        );
+
+        assert_eq!(ok, Some(true));
+        assert!(sim.used);
+    }
+
+    #[test]
+    fn class_aggregate_with_field_copy_is_not_modeled_as_init_plan() {
+        let carried = Local(1);
+        let rvalue = Rvalue::Aggregate {
+            kind: AggregateKind::Class {
+                name: "Box".to_string(),
+                type_arg_templates: vec![],
+            },
+            fields: vec![Operand::Copy(Place::Field {
+                base: Box::new(Place::Local(carried)),
+                field: 0,
+            })],
+        };
+        let mut sim = StackCarrySim::new();
+
+        assert_eq!(
+            simulate_aggregate_operand_pull_stack(
+                &rvalue,
+                &mut sim,
+                carried,
+                &HashMap::new(),
+                &HashMap::new(),
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn reversed_commutative_binary_requires_matching_numeric_kinds() {
+        let int_body = body_with_locals(vec![int_ty(), int_ty()]);
+        assert!(is_safe_reversed_commutative_binary(
+            &int_body,
+            BinOp::Add,
+            &Operand::Constant(Constant::Int(1)),
+            &Operand::copy_local(Local(1)),
+        ));
+
+        let mixed_body = body_with_locals(vec![int_ty(), float_ty()]);
+        assert!(!is_safe_reversed_commutative_binary(
+            &mixed_body,
+            BinOp::Add,
+            &Operand::Constant(Constant::Int(1)),
+            &Operand::copy_local(Local(1)),
+        ));
+    }
+
+    #[test]
+    fn rvalue_stack_simulation_accepts_reversed_commutative_call_result() {
+        let body = body_with_locals(vec![int_ty(), int_ty()]);
+        let carried = Local(1);
+        let mut sim = StackCarrySim::new();
+
+        let ok = simulate_rvalue_pull_stack(
+            &Rvalue::BinaryOp {
+                op: BinOp::Add,
+                left: Operand::Constant(Constant::Int(1)),
+                right: Operand::copy_local(carried),
+            },
+            &mut sim,
+            carried,
+            &body,
+            &HashMap::new(),
+            &HashMap::new(),
+        );
+
+        assert!(ok);
+        assert!(sim.used);
+    }
+
+    #[test]
+    fn init_class_instance_stack_effect_pops_fields_and_type_args() {
+        let carried = Local(1);
+        let mut sim = StackCarrySim {
+            depth: Some(4),
+            used: false,
+        };
+        let classifications = HashMap::new();
+        let def_use = HashMap::new();
+        let mut sink = StackCarryPullSink {
+            sim: &mut sim,
+            carried_local: carried,
+            classifications: &classifications,
+            def_use: &def_use,
+        };
+
+        sink.init_class_instance("Box", 1, 2).unwrap();
+
+        assert_eq!(sim.depth, Some(2));
     }
 }

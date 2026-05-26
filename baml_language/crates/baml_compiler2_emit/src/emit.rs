@@ -843,6 +843,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             let last_idx = self.bytecode.instructions.len() - 1;
             if last_idx >= self.current_block_start {
                 self.bytecode.instructions[last_idx] = Instruction::StoreVarLoadVar(slot);
+                self.set_var_operand(last_idx, slot);
                 return;
             }
         }
@@ -1431,6 +1432,18 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             fields,
         } = rvalue
         {
+            if !self.class_object_indices.contains_key(name) {
+                for field in fields {
+                    self.emit_operand_pull(field);
+                }
+                let ntypeargs = u16::try_from(type_arg_templates.len())
+                    .expect("type_arg_templates count fits in u16");
+                for template in type_arg_templates {
+                    unwrap_infallible(self.load_type(template));
+                }
+                self.emit_init_instance(name, ntypeargs, fields.len());
+                return;
+            }
             if self.try_emit_class_aggregate_init_instance(name, type_arg_templates, fields) {
                 return;
             }
