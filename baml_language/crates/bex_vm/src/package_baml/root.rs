@@ -57,8 +57,11 @@ fn deep_copy_value_recursive(
                     let placeholder_ptr = vm.tlab.alloc(Object::Array(Vec::new().into()));
                     copied_objects.insert(ptr, placeholder_ptr);
 
-                    let mut new_values = Vec::with_capacity(values.len());
-                    for value in values.data {
+                    // Snapshot under the source's lock; the recursive call
+                    // re-enters the VM and may take other container locks.
+                    let snapshot = values.to_vec();
+                    let mut new_values = Vec::with_capacity(snapshot.len());
+                    for value in snapshot {
                         new_values.push(deep_copy_value_recursive(vm, value, copied_objects));
                     }
 
@@ -72,8 +75,9 @@ fn deep_copy_value_recursive(
                         vm.tlab.alloc(Object::Map(Box::new(IndexMap::new().into())));
                     copied_objects.insert(ptr, placeholder_ptr);
 
+                    let snapshot = map.to_index_map();
                     let mut new_map = IndexMap::new();
-                    for (key, value) in map.iter() {
+                    for (key, value) in &snapshot {
                         let new_value = deep_copy_value_recursive(vm, *value, copied_objects);
                         new_map.insert(key.clone(), new_value);
                     }
@@ -173,17 +177,24 @@ fn deep_equals_recursive(
                 (Object::Uint8Array(a), Object::Uint8Array(b)) => a == b,
 
                 (Object::Array(a_values), Object::Array(b_values)) => {
-                    a_values.len() == b_values.len()
-                        && a_values
+                    // Snapshot under each lock before recursing; deep_equals
+                    // is mutator code so we cannot hold the lock across
+                    // recursive lookups that may also lock containers.
+                    let a_snap = a_values.to_vec();
+                    let b_snap = b_values.to_vec();
+                    a_snap.len() == b_snap.len()
+                        && a_snap
                             .iter()
-                            .zip(b_values.iter())
+                            .zip(b_snap.iter())
                             .all(|(a, b)| deep_equals_recursive(vm, *a, *b, visited))
                 }
 
                 (Object::Map(a_map), Object::Map(b_map)) => {
-                    a_map.len() == b_map.len()
-                        && a_map.iter().all(|(key, a_val)| {
-                            b_map.get(key).is_some_and(|b_val| {
+                    let a_snap = a_map.to_index_map();
+                    let b_snap = b_map.to_index_map();
+                    a_snap.len() == b_snap.len()
+                        && a_snap.iter().all(|(key, a_val)| {
+                            b_snap.get(key).is_some_and(|b_val| {
                                 deep_equals_recursive(vm, *a_val, *b_val, visited)
                             })
                         })

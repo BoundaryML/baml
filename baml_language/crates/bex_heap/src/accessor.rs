@@ -277,7 +277,10 @@ impl<'a> BexValue<'a> {
                         actual: obj.to_string(),
                     });
                 };
-                Ok(array.iter().map(BexValue::Value).collect())
+                // SAFETY: host accessor invoked under a serialized FFI
+                // callback; no `spawn`ed mutator is concurrently active.
+                let data = unsafe { array.data_unchecked() };
+                Ok(data.iter().map(BexValue::Value).collect())
             }),
         }
     }
@@ -300,7 +303,9 @@ impl<'a> BexValue<'a> {
                         actual: obj.to_string(),
                     });
                 };
-                Ok(map
+                // SAFETY: see `as_array` above.
+                let data = unsafe { map.data_unchecked() };
+                Ok(data
                     .iter()
                     .map(|(k, v)| (k.clone(), BexValue::Value(v)))
                     .collect())
@@ -682,7 +687,9 @@ fn convert_object(
             element_type: Ty::BuiltinUnknown {
                 attr: baml_type::TyAttr::default(),
             },
-            items: array
+            // SAFETY: host accessor invoked under a serialized FFI
+            // callback; no `spawn`ed mutator is concurrently active.
+            items: unsafe { array.data_unchecked() }
                 .iter()
                 .map(|item| owned_inner(BexValue::Value(item), heap, lossy))
                 .collect::<Result<_, _>>()?,
@@ -694,7 +701,8 @@ fn convert_object(
             value_type: Ty::BuiltinUnknown {
                 attr: baml_type::TyAttr::default(),
             },
-            entries: map
+            // SAFETY: see `Object::Array` arm above.
+            entries: unsafe { map.data_unchecked() }
                 .iter()
                 .map(|(k, v)| Ok((k.clone(), owned_inner(BexValue::Value(v), heap, lossy)?)))
                 .collect::<Result<_, _>>()?,

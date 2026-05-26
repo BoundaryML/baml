@@ -15,6 +15,10 @@ const TOTAL_WORK: i64 = 1_000_000;
 const RUNS: usize = 10;
 
 async fn time_fn(engine: &Arc<BexEngine>, fn_name: &str) -> std::time::Duration {
+    // Every config sums the same range [0..TOTAL_WORK); validate the answer
+    // each time so a silently-broken scheduler or container path doesn't
+    // produce convincing-but-wrong timing numbers.
+    let expected = (TOTAL_WORK - 1) * TOTAL_WORK / 2;
     let start = Instant::now();
     let result = engine
         .call_function_bound_args(
@@ -25,11 +29,18 @@ async fn time_fn(engine: &Arc<BexEngine>, fn_name: &str) -> std::time::Duration 
         )
         .await;
     let elapsed = start.elapsed();
-    assert!(matches!(result, Ok(BexExternalValue::Int(_))));
+    match result {
+        Ok(BexExternalValue::Int(v)) => {
+            assert_eq!(v, expected, "{fn_name} returned wrong sum");
+        }
+        other => panic!("{fn_name} expected Int({expected}), got {other:?}"),
+    }
     elapsed
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+#[ignore = "benchmark-style scaling measurement, not a pass/fail correctness test; \
+            run manually with `cargo test --test parallel_scaling -- --ignored --nocapture`"]
 async fn parallel_sum_scaling() {
     let program = compile_source_with_opt(
         r#"

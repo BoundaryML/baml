@@ -273,11 +273,14 @@ async fn racing_map_set_delete_does_not_crash() {
         )
         .await;
 
+    // Only two distinct keys ("a" and "b") are ever inserted, so the final
+    // size is bounded by the key cardinality regardless of how the
+    // racing inserts/deletes interleave.
     match result {
         Ok(BexExternalValue::Int(len)) => {
             assert!(
-                (0..=200).contains(&len),
-                "expected map length in 0..=200, got {len}"
+                (0..=2).contains(&len),
+                "expected map length in 0..=2, got {len}"
             );
         }
         other => panic!("expected Int result, got {other:?}"),

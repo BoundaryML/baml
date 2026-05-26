@@ -451,7 +451,7 @@ mod tests {
             match ptr.get() {
                 Object::Array(arr) => {
                     assert_eq!(arr.len(), 3);
-                    assert_eq!(arr[0], Value::int(1));
+                    assert_eq!(arr.get(0), Some(Value::int(1)));
                 }
                 _ => panic!("Expected Array"),
             }
@@ -470,7 +470,7 @@ mod tests {
         unsafe {
             match ptr.get() {
                 Object::Map(m) => {
-                    assert_eq!(m.get("key"), Some(&Value::int(42)));
+                    assert_eq!(m.get("key"), Some(Value::int(42)));
                 }
                 _ => panic!("Expected Map"),
             }

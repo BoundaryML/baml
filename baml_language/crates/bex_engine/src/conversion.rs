@@ -78,7 +78,10 @@ impl BexEngine {
                     },
                 };
 
-                let items: Result<Vec<_>, _> = arr
+                // Snapshot under the source's lock; the recursive
+                // convert call may lock other containers.
+                let snapshot = arr.to_vec();
+                let items: Result<Vec<_>, _> = snapshot
                     .iter()
                     .map(|v| self.convert_vm_value_to_external_with_type(*v, element_type, permit))
                     .collect();
@@ -104,8 +107,10 @@ impl BexEngine {
                     ),
                 };
 
+                let snapshot = map.to_index_map();
                 let entries: Result<indexmap::IndexMap<String, BexExternalValue>, EngineError> =
-                    map.iter()
+                    snapshot
+                        .iter()
                         .map(|(k, v)| {
                             Ok((
                                 k.clone(),
@@ -1067,10 +1072,10 @@ fn find_matching_union_member(value: Value, members: &[Ty]) -> Option<&Ty> {
                 }
                 Object::Array(elements) => {
                     // For arrays, check first element to determine which List type
-                    if let Some(first) = elements.first() {
+                    if let Some(first) = elements.get(0) {
                         members.iter().find(|m| {
                             if let Ty::List(elem_ty, _) = m {
-                                find_matching_union_member(*first, &[elem_ty.as_ref().clone()])
+                                find_matching_union_member(first, &[elem_ty.as_ref().clone()])
                                     .is_some()
                             } else {
                                 false
@@ -1123,8 +1128,9 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
                 Object::Float(f) => BexExternalValue::Float(*f),
                 Object::String(s) => BexExternalValue::String(s.clone()),
                 Object::Array(arr) => {
+                    let snap = arr.to_vec();
                     let items: Vec<BexExternalValue> =
-                        arr.iter().map(|v| vm_arg_to_external(vm, *v)).collect();
+                        snap.iter().map(|v| vm_arg_to_external(vm, *v)).collect();
                     BexExternalValue::Array {
                         element_type: bex_external_types::Ty::Null {
                             attr: baml_type::TyAttr::default(),
@@ -1133,7 +1139,8 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
                     }
                 }
                 Object::Map(map) => {
-                    let entries: indexmap::IndexMap<String, BexExternalValue> = map
+                    let snap = map.to_index_map();
+                    let entries: indexmap::IndexMap<String, BexExternalValue> = snap
                         .iter()
                         .map(|(k, v)| (k.clone(), vm_arg_to_external(vm, *v)))
                         .collect();
