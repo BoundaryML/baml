@@ -60,18 +60,20 @@ Targets in tree:
   `sdk_tests/harness_setup/src/nodejs_typescript.rs`). The native
   `.node` addon build and per-fixture `pnpm install` live in
   [`crates/nodejs_typescript/setup.sh`](./crates/nodejs_typescript/setup.sh)
-  rather than build.rs. `cargo nextest run` invokes setup.sh
-  automatically (configured as a nextest setup-script binding in
-  [`baml_language/.config/nextest.toml`](../.config/nextest.toml)),
+  (Unix) and the parallel
+  [`setup.ps1`](./crates/nodejs_typescript/setup.ps1) (Windows),
+  rather than build.rs. `cargo nextest run` invokes the right one
+  automatically via two platform-filtered setup-script bindings in
+  [`baml_language/.config/nextest.toml`](../.config/nextest.toml),
   so the common run flow is just:
 
   ```bash
   cargo nextest run -p sdk_test_nodejs_typescript
   ```
 
-  For plain `cargo test`, run setup.sh manually between
-  `cargo test --no-run` and `cargo test`. Re-run after bridge_nodejs
-  Rust changes or after adding a new fixture.
+  For plain `cargo test`, run setup.sh (or setup.ps1 on Windows)
+  manually between `cargo test --no-run` and `cargo test`. Re-run
+  after bridge_nodejs Rust changes or after adding a new fixture.
 
 ```bash
 # Run every Python+pydantic2 test across all fixtures
@@ -143,7 +145,8 @@ sdk_tests/
         │                                 # [build-dependencies] sdk_test_harness_setup
         │                                 # [dev-dependencies]   sdk_test_harness_runner
         ├── build.rs                      # one-liner → sdk_test_harness_setup::nodejs_typescript::run_all()
-        ├── setup.sh                      # pnpm build:debug (bridge_nodejs) + per-fixture pnpm install
+        ├── setup.sh                      # pnpm build:debug (bridge_nodejs) + per-fixture pnpm install (Unix)
+        ├── setup.ps1                     # parallel script for Windows; nextest picks one by host cfg
         ├── src/lib.rs                    # invokes sdk_test_harness_runner::nodejs_typescript::test_suite!()
         ├── docstrings_etc/
         │   ├── customizable/             # tracked: *.test.ts — copied into generated/
@@ -205,10 +208,10 @@ sdk_tests/
    - For nodejs_typescript: pnpm side is OUT of build.rs. The
      per-fixture `pnpm install` and the prereq `pnpm build:debug`
      of bridge_nodejs's native `.node` addon live in
-     `crates/nodejs_typescript/setup.sh`, run separately after
-     `cargo test --no-run`. Populates `node_modules/` from the
-     shared `target/pnpm-store/`. Tests then only do read-only
-     work against the populated tree.
+     `crates/nodejs_typescript/setup.sh` (Unix) or `setup.ps1`
+     (Windows), run separately after `cargo test --no-run`.
+     Populates `node_modules/` from the shared `target/pnpm-store/`.
+     Tests then only do read-only work against the populated tree.
    - Emits `OUT_DIR/<generator>_tests.rs` — a generated source file
      containing a `::sdk_test_harness_runner::build_diagnostics!(...)` macro
      invocation at the top followed by one `mod <fixture> { … }`
