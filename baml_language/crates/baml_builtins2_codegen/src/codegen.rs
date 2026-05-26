@@ -332,7 +332,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
             BamlType::List(_) => {
                 writeln!(
                     out,
-                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> &'v [Value] {{"
+                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> ArrayReadGuard<'v> {{"
                 )
                 .unwrap();
                 writeln!(
@@ -349,9 +349,11 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 writeln!(out, "{inner}}}\n").unwrap();
             }
             BamlType::Map(_, _) => {
-                writeln!(out,
-                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> &'v IndexMap<String, Value> {{"
-                ).unwrap();
+                writeln!(
+                    out,
+                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> MapReadGuard<'v> {{"
+                )
+                .unwrap();
                 writeln!(
                     out,
                     "{inner2}vm.as_map(&self.instance.fields[{}])",
@@ -917,6 +919,15 @@ fn emit_glue_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
         .as_ref()
         .is_some_and(|r| r.receiver_type.is_mut());
     let needs_owned = matches!(b.vm_usage, VmUsage::MutRef) || b.may_yield || receiver_is_mut_self;
+    // Array/Map extractions return read/write guards that borrow `vm`. If
+    // the glue function's result conversion needs `&mut vm` (alloc_string /
+    // alloc_array / alloc_map / alloc_uint8array), the guard's borrow would
+    // conflict — so clone the Array/Map up front in those cases. This is a
+    // separate flag from `needs_owned` because it must NOT propagate to
+    // other extraction paths (the media-class path uses `needs_owned` for
+    // its own reasons and switching it on here would break the receiver
+    // shape).
+    let arraymap_needs_owned = needs_owned || return_type_needs_alloc(&b.return_type);
 
     writeln!(
         out,
@@ -930,8 +941,8 @@ fn emit_glue_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
         // operators in arg extractions work (VmInternalError -> VmRustFnError via From),
         // then flatten the result.
         out.push_str("        let __result: Result<NativeCallResult, VmRustFnError> = (|| {\n");
-        emit_arg_extractions_indented(out, b, "            ", needs_owned);
-        let call_args = call_arg_list(b, needs_owned);
+        emit_arg_extractions_indented(out, b, "            ", needs_owned, arraymap_needs_owned);
+        let call_args = call_arg_list(b, needs_owned, arraymap_needs_owned);
         writeln!(out, "            Ok(Self::{method_name}(vm, {call_args}))").unwrap();
         out.push_str("        })();\n");
         out.push_str("        match __result {\n");
@@ -947,9 +958,9 @@ fn emit_glue_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
     // Use a closure returning NativeFunctionResult so `?` operators work inside.
     out.push_str("        let __result: NativeFunctionResult = (|| {\n");
 
-    emit_arg_extractions_indented(out, b, "            ", needs_owned);
+    emit_arg_extractions_indented(out, b, "            ", needs_owned, arraymap_needs_owned);
 
-    let call_args = call_arg_list(b, needs_owned);
+    let call_args = call_arg_list(b, needs_owned, arraymap_needs_owned);
     let returns_null = matches!(b.return_type, BamlType::Null);
 
     let binding = if returns_null {
@@ -1075,8 +1086,15 @@ fn emit_single_extraction_indented(
     ty: &BamlType,
     indent: &str,
     needs_owned: bool,
+    arraymap_needs_owned: bool,
 ) {
-    let rhs = extraction_expr(&format!("&args[{idx}]"), ty, false, needs_owned);
+    let rhs = extraction_expr(
+        &format!("&args[{idx}]"),
+        ty,
+        false,
+        needs_owned,
+        arraymap_needs_owned,
+    );
     writeln!(out, "{indent}let {name} = {rhs};").unwrap();
 }
 
@@ -1087,6 +1105,7 @@ fn emit_immut_receiver_extraction_indented(
     recv: &Receiver,
     indent: &str,
     needs_owned: bool,
+    arraymap_needs_owned: bool,
 ) {
     match recv.class_name.as_str() {
         cls if is_media_class(cls) => {
@@ -1110,7 +1129,12 @@ fn emit_immut_receiver_extraction_indented(
             }
         }
         _ => {
-            let rhs = receiver_immut_extraction_expr(&format!("&args[{idx}]"), recv, needs_owned);
+            let rhs = receiver_immut_extraction_expr(
+                &format!("&args[{idx}]"),
+                recv,
+                needs_owned,
+                arraymap_needs_owned,
+            );
             writeln!(out, "{indent}let {name} = {rhs};").unwrap();
         }
     }
@@ -1129,7 +1153,14 @@ fn emit_mut_receiver_extraction_indented(
         "Uint8Array" => "vm.as_uint8array_mut(&args[0])?".to_string(),
         _ => "vm.as_value_mut(&args[0])?".to_string(),
     };
-    writeln!(out, "{indent}let {name} = {expr};").unwrap();
+    // Array/Map now return a guard rather than `&mut Vec/IndexMap`. Bind
+    // mutably so the call site can take `&mut name` and let the
+    // DerefMut impl coerce to the underlying container.
+    let mut_kw = match recv.class_name.as_str() {
+        "Array" | "Map" => "mut ",
+        _ => "",
+    };
+    writeln!(out, "{indent}let {mut_kw}{name} = {expr};").unwrap();
 }
 
 /// Like `emit_arg_extractions` but uses `indent` for each line.
@@ -1138,32 +1169,73 @@ fn emit_arg_extractions_indented(
     b: &NativeBuiltin,
     indent: &str,
     needs_owned: bool,
+    arraymap_needs_owned: bool,
 ) {
     if let Some(recv) = &b.receiver {
         if recv.receiver_type.is_static() {
             // Static methods: no receiver
             for (i, p) in b.params.iter().enumerate() {
                 let arg_idx = i;
-                emit_single_extraction_indented(out, &p.name, arg_idx, &p.ty, indent, needs_owned);
+                emit_single_extraction_indented(
+                    out,
+                    &p.name,
+                    arg_idx,
+                    &p.ty,
+                    indent,
+                    needs_owned,
+                    arraymap_needs_owned,
+                );
             }
         } else if recv.receiver_type.is_mut() {
             for (i, p) in b.params.iter().enumerate() {
                 let arg_idx = i + 1;
-                emit_single_extraction_indented(out, &p.name, arg_idx, &p.ty, indent, needs_owned);
+                emit_single_extraction_indented(
+                    out,
+                    &p.name,
+                    arg_idx,
+                    &p.ty,
+                    indent,
+                    needs_owned,
+                    arraymap_needs_owned,
+                );
             }
             let recv_name = receiver_param_name(recv);
             emit_mut_receiver_extraction_indented(out, &recv_name, recv, indent);
         } else {
             let recv_name = receiver_param_name(recv);
-            emit_immut_receiver_extraction_indented(out, &recv_name, 0, recv, indent, needs_owned);
+            emit_immut_receiver_extraction_indented(
+                out,
+                &recv_name,
+                0,
+                recv,
+                indent,
+                needs_owned,
+                arraymap_needs_owned,
+            );
             for (i, p) in b.params.iter().enumerate() {
                 let arg_idx = i + 1;
-                emit_single_extraction_indented(out, &p.name, arg_idx, &p.ty, indent, needs_owned);
+                emit_single_extraction_indented(
+                    out,
+                    &p.name,
+                    arg_idx,
+                    &p.ty,
+                    indent,
+                    needs_owned,
+                    arraymap_needs_owned,
+                );
             }
         }
     } else {
         for (i, p) in b.params.iter().enumerate() {
-            emit_single_extraction_indented(out, &p.name, i, &p.ty, indent, needs_owned);
+            emit_single_extraction_indented(
+                out,
+                &p.name,
+                i,
+                &p.ty,
+                indent,
+                needs_owned,
+                arraymap_needs_owned,
+            );
         }
     }
 }
@@ -1172,17 +1244,26 @@ fn emit_arg_extractions_indented(
 // Extraction expressions
 // ============================================================================
 
-fn receiver_immut_extraction_expr(val: &str, recv: &Receiver, needs_owned: bool) -> String {
+fn receiver_immut_extraction_expr(
+    val: &str,
+    recv: &Receiver,
+    needs_owned: bool,
+    arraymap_needs_owned: bool,
+) -> String {
     match recv.class_name.as_str() {
+        // Clone for Array/Map read receivers when the glue function would
+        // later need `&mut vm` after extraction (per `arraymap_needs_owned`).
+        // Otherwise `vm.as_array(...)?` returns a guard whose lock is
+        // released on drop — the cheap path.
         "Array" => {
-            if needs_owned {
+            if arraymap_needs_owned {
                 format!("vm.as_array({val})?.to_vec()")
             } else {
                 format!("vm.as_array({val})?")
             }
         }
         "Map" => {
-            if needs_owned {
+            if arraymap_needs_owned {
                 format!("vm.as_map({val})?.clone()")
             } else {
                 format!("vm.as_map({val})?")
@@ -1243,7 +1324,13 @@ fn receiver_immut_extraction_expr(val: &str, recv: &Receiver, needs_owned: bool)
     }
 }
 
-fn extraction_expr(val: &str, ty: &BamlType, is_mut: bool, needs_owned: bool) -> String {
+fn extraction_expr(
+    val: &str,
+    ty: &BamlType,
+    is_mut: bool,
+    needs_owned: bool,
+    arraymap_needs_owned: bool,
+) -> String {
     match ty {
         BamlType::String => {
             if is_mut {
@@ -1286,24 +1373,34 @@ fn extraction_expr(val: &str, ty: &BamlType, is_mut: bool, needs_owned: bool) ->
         BamlType::List(_) => {
             if is_mut {
                 format!("vm.as_array_mut({val})?")
-            } else if needs_owned {
+            } else if arraymap_needs_owned {
+                // `as_array` returns an `ArrayReadGuard` that holds a borrow
+                // on `vm` via the container's lazy biased mutex. When the
+                // glue function later needs `&mut vm` (e.g. for
+                // `vm.alloc_array(result)`), the guard's lifetime would
+                // conflict. `arraymap_needs_owned` flags those cases; we
+                // then clone into an owned `Vec<Value>` and let the guard
+                // drop immediately.
                 format!("vm.as_array({val})?.to_vec()")
             } else {
+                // No `&mut vm` access after extraction — keep the guard
+                // alive (cheap fetch_add/fetch_sub pair, no allocation).
                 format!("vm.as_array({val})?")
             }
         }
         BamlType::Map(_, _) => {
             if is_mut {
                 format!("vm.as_map_mut({val})?")
-            } else if needs_owned {
+            } else if arraymap_needs_owned {
                 format!("vm.as_map({val})?.clone()")
             } else {
                 format!("vm.as_map({val})?")
             }
         }
         BamlType::Optional(inner) => {
-            let inner_expr = extraction_expr("other", inner, false, needs_owned);
-            // Bind `__v` so `.is_null()` (Value method) resolves through
+            let inner_expr =
+                extraction_expr("other", inner, false, needs_owned, arraymap_needs_owned);
+            // Bind `other` so `.is_null()` (Value method) resolves through
             // the `&Value` without triggering `clippy::needless_borrow`.
             format!(
                 "{{ let other = {val}; if other.is_null() {{ None }} else {{ Some({inner_expr}) }} }}"
@@ -1331,27 +1428,49 @@ fn extraction_expr(val: &str, ty: &BamlType, is_mut: bool, needs_owned: bool) ->
     }
 }
 
-fn call_arg_list(b: &NativeBuiltin, needs_owned: bool) -> String {
+fn call_arg_list(b: &NativeBuiltin, needs_owned: bool, arraymap_needs_owned: bool) -> String {
     let mut args: Vec<String> = Vec::new();
+    // For Array/Map we use the dedicated flag — these may be owned (cloned
+    // Vec/IndexMap) even when other types are passed by reference, because
+    // the guard's vm borrow forced an early clone.
     let is_ref = !needs_owned;
+    let arraymap_is_ref = !arraymap_needs_owned;
 
     if let Some(recv) = &b.receiver {
         if !recv.receiver_type.is_static() {
             let name = receiver_param_name(recv);
             if recv.receiver_type.is_mut() {
-                args.push(name);
+                // Array/Map mut receivers are now guards; take &mut name so
+                // DerefMut coerces to &mut Vec<Value> / &mut IndexMap.
+                let arg = match recv.class_name.as_str() {
+                    "Array" | "Map" => format!("&mut {name}"),
+                    _ => name,
+                };
+                args.push(arg);
             } else if needs_owned && is_media_class(recv.class_name.as_str()) {
                 // For `//baml:mut_vm` media methods the extraction emits
                 // `let pdf = &args[0];` (a `&Value` copy).  Pass `name` directly —
                 // it is already the `&Value` the trait method expects.
                 args.push(name);
             } else {
-                args.push(call_arg_for_type(&name, &receiver_baml_type(recv), is_ref));
+                let recv_is_ref = match recv.class_name.as_str() {
+                    "Array" | "Map" => arraymap_is_ref,
+                    _ => is_ref,
+                };
+                args.push(call_arg_for_type(
+                    &name,
+                    &receiver_baml_type(recv),
+                    recv_is_ref,
+                ));
             }
         }
     }
     for p in &b.params {
-        args.push(call_arg_for_type(&p.name, &p.ty, is_ref));
+        let p_is_ref = match &p.ty {
+            BamlType::List(_) | BamlType::Map(_, _) => arraymap_is_ref,
+            _ => is_ref,
+        };
+        args.push(call_arg_for_type(&p.name, &p.ty, p_is_ref));
     }
 
     args.join(", ")
@@ -1359,11 +1478,18 @@ fn call_arg_list(b: &NativeBuiltin, needs_owned: bool) -> String {
 
 fn call_arg_for_type(name: &str, ty: &BamlType, is_ref: bool) -> String {
     match ty {
-        BamlType::String
-        | BamlType::Uint8Array
-        | BamlType::List(_)
-        | BamlType::Map(_, _)
-        | BamlType::Media(_) => {
+        BamlType::List(_) | BamlType::Map(_, _) => {
+            if is_ref {
+                // Extraction returns an `Array/MapReadGuard`; take `&name` so
+                // its `Deref` impl coerces through `Vec<Value>` /
+                // `IndexMap<..>` to the slice / map reference the trait
+                // method signature expects.
+                format!("&{name}")
+            } else {
+                format!("&{name}")
+            }
+        }
+        BamlType::String | BamlType::Uint8Array | BamlType::Media(_) => {
             if is_ref {
                 // Extraction already returned a reference — don't double-ref
                 name.to_string()
@@ -1443,6 +1569,26 @@ fn emit_result_conversion_ok(out: &mut String, b: &NativeBuiltin, indent: &str) 
     }
     let conversion = result_conversion_expr("result", &b.return_type);
     writeln!(out, "{indent}Ok({conversion})").unwrap();
+}
+
+/// Returns `true` if `result_conversion_expr` for this return type emits
+/// a `vm.alloc_*` call (which requires `&mut vm`). Used by the glue
+/// emitter to decide whether Array/Map parameter extractions must be
+/// cloned to release the read-guard's borrow before the result
+/// conversion runs.
+fn return_type_needs_alloc(ty: &BamlType) -> bool {
+    match ty {
+        BamlType::String | BamlType::Uint8Array | BamlType::List(_) | BamlType::Map(_, _) => true,
+        BamlType::Optional(inner) => return_type_needs_alloc(inner),
+        BamlType::Int
+        | BamlType::Float
+        | BamlType::Bool
+        | BamlType::Null
+        | BamlType::Generic(_)
+        | BamlType::Named(_)
+        | BamlType::Media(_)
+        | BamlType::RustType => false,
+    }
 }
 
 fn result_conversion_expr(name: &str, ty: &BamlType) -> String {

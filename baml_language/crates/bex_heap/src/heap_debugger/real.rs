@@ -290,13 +290,18 @@ impl BexHeap {
 
     fn verify_object_invariants(&self, idx: HeapPtr, obj: &Object, _ct_len: usize) {
         match obj {
+            // SAFETY: heap-debugger verification runs under STW (it's
+            // called from the GC verifier path); no mutator is concurrently
+            // active.
             Object::Array(values) => {
-                for value in values {
+                let data = unsafe { values.data_unchecked() };
+                for value in data.iter() {
                     self.debug_assert_valid_value(value);
                 }
             }
             Object::Map(values) => {
-                for value in values.values() {
+                let data = unsafe { values.data_unchecked() };
+                for value in data.values() {
                     self.debug_assert_valid_value(value);
                 }
             }

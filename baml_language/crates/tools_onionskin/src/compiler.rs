@@ -5048,11 +5048,13 @@ fn format_vm_value(value: &bex_vm_types::Value, vm: &bex_vm::BexVm) -> String {
                 Object::Float(f) => bex_vm_types::format_float(*f),
                 Object::String(s) => format!("\"{}\"", s),
                 Object::Array(arr) => {
-                    let items: Vec<String> = arr.iter().map(|v| format_vm_value(v, vm)).collect();
+                    let snap = arr.to_vec();
+                    let items: Vec<String> = snap.iter().map(|v| format_vm_value(v, vm)).collect();
                     format!("[{}]", items.join(", "))
                 }
                 Object::Map(map) => {
-                    let items: Vec<String> = map
+                    let snap = map.to_index_map();
+                    let items: Vec<String> = snap
                         .iter()
                         .map(|(k, v)| format!("\"{}\": {}", k, format_vm_value(v, vm)))
                         .collect();

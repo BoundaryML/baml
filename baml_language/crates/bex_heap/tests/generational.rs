@@ -456,7 +456,7 @@ fn test_dirty_card_roots_keep_gen0_alive_during_minor_gc() {
     unsafe {
         let obj = gen2_arr.get_mut();
         if let Object::Array(arr_data) = obj {
-            arr_data[0] = bex_vm_types::Value::object(young);
+            arr_data.data_unchecked_mut()[0] = bex_vm_types::Value::object(young);
         }
     }
     // Fire write barrier (Gen2 container, Gen0 ref)
@@ -477,7 +477,7 @@ fn test_dirty_card_roots_keep_gen0_alive_during_minor_gc() {
     let Object::Array(arr_data) = (unsafe { gen2_arr_after.get() }) else {
         panic!("Expected array")
     };
-    let Some(ref_ptr) = arr_data[0].as_object_ptr() else {
+    let Some(ref_ptr) = arr_data.get(0).and_then(|__v| __v.as_object_ptr()) else {
         panic!("Expected Object reference in slot 0")
     };
     assert_eq!(
@@ -601,7 +601,7 @@ fn test_critical_gen2_stale_pointer_after_minor_gc() {
     unsafe {
         let obj = gen2_container.get_mut();
         if let Object::Array(arr_data) = obj {
-            arr_data[0] = bex_vm_types::Value::object(young);
+            arr_data.data_unchecked_mut()[0] = bex_vm_types::Value::object(young);
         }
     }
     heap.mark_card_for_ptr(gen2_container);
@@ -620,7 +620,7 @@ fn test_critical_gen2_stale_pointer_after_minor_gc() {
     let Object::Array(arr_data) = (unsafe { gen2_after.get() }) else {
         panic!("Expected Array in Gen2 container")
     };
-    let Some(ref_ptr) = arr_data[0].as_object_ptr() else {
+    let Some(ref_ptr) = arr_data.get(0).and_then(|__v| __v.as_object_ptr()) else {
         panic!("Expected Object reference in slot 0")
     };
     assert_eq!(
@@ -663,7 +663,7 @@ fn test_critical_gen2_chain_through_gen0_after_minor_gc() {
     unsafe {
         let obj = gen2_container.get_mut();
         if let Object::Array(arr_data) = obj {
-            arr_data[0] = bex_vm_types::Value::object(wrapper);
+            arr_data.data_unchecked_mut()[0] = bex_vm_types::Value::object(wrapper);
         }
     }
     heap.mark_card_for_ptr(gen2_container);
@@ -681,7 +681,7 @@ fn test_critical_gen2_chain_through_gen0_after_minor_gc() {
     let Object::Array(arr_data) = (unsafe { gen2_after.get() }) else {
         panic!("Expected Array in Gen2 container")
     };
-    let Some(wrapper_ptr) = arr_data[0].as_object_ptr() else {
+    let Some(wrapper_ptr) = arr_data.get(0).and_then(|__v| __v.as_object_ptr()) else {
         panic!("Expected Object in slot 0 of Gen2 container")
     };
     assert_eq!(
@@ -694,7 +694,7 @@ fn test_critical_gen2_chain_through_gen0_after_minor_gc() {
     let Object::Array(wrapper_arr) = (unsafe { wrapper_ptr.get() }) else {
         panic!("Expected Array for wrapper")
     };
-    let Some(leaf_ptr) = wrapper_arr[0].as_object_ptr() else {
+    let Some(leaf_ptr) = wrapper_arr.get(0).and_then(|__v| __v.as_object_ptr()) else {
         panic!("Expected Object in slot 0 of wrapper")
     };
     assert_eq!(
@@ -841,7 +841,7 @@ fn test_gen1_container_acquires_young_ref_survives_minor_gc_chain() {
         let Object::Array(arr) = obj else {
             panic!("expected Array")
         };
-        arr[0] = bex_vm_types::Value::object(b_g0);
+        arr.data_unchecked_mut()[0] = bex_vm_types::Value::object(b_g0);
     }
 
     // GC2 Minor: only A is a root. B reached via A's references.
@@ -869,7 +869,7 @@ fn test_gen1_container_acquires_young_ref_survives_minor_gc_chain() {
     let Object::Array(arr_after) = (unsafe { a_after.get() }) else {
         panic!("expected Array in A after GC3")
     };
-    let Some(b_after) = arr_after[0].as_object_ptr() else {
+    let Some(b_after) = arr_after.get(0).and_then(|__v| __v.as_object_ptr()) else {
         panic!("expected Object reference in A.field after GC3")
     };
     let Object::String(s) = (unsafe { b_after.get() }) else {
