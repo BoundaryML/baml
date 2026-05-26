@@ -471,27 +471,18 @@ pub fn track_watch_dependencies(watch: &mut Watch, parent: NodeId, path: Path, c
                 .fields
                 .iter()
                 .enumerate()
-                .filter_map(|(idx, v)| match v {
-                    Value::Object(p) => Some((Path::InstanceField(idx), *p)),
-                    _ => None,
-                })
+                .filter_map(|(idx, v)| v.as_object_ptr().map(|p| (Path::InstanceField(idx), p)))
                 .collect(),
 
             Object::Array(array) => array
                 .iter()
                 .enumerate()
-                .filter_map(|(idx, v)| match v {
-                    Value::Object(p) => Some((Path::ArrayIndex(idx), *p)),
-                    _ => None,
-                })
+                .filter_map(|(idx, v)| v.as_object_ptr().map(|p| (Path::ArrayIndex(idx), p)))
                 .collect(),
 
             Object::Map(map) => map
                 .iter()
-                .filter_map(|(key, v)| match v {
-                    Value::Object(p) => Some((Path::MapKey(key.clone()), *p)),
-                    _ => None,
-                })
+                .filter_map(|(key, v)| v.as_object_ptr().map(|p| (Path::MapKey(key.clone()), p)))
                 .collect(),
 
             _ => vec![],
@@ -513,11 +504,11 @@ pub fn track_watch_dependencies(watch: &mut Watch, parent: NodeId, path: Path, c
 
 // --- Garbage Collection ---
 
-/// Forward a `Value::Object` pointer if present in the forwarding map.
+/// Forward an object-tagged `Value`'s heap pointer if present in the forwarding map.
 fn forward_value(value: &mut Value, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-    if let Value::Object(ptr) = value {
-        if let Some(&new_ptr) = forwarding.get(ptr) {
-            *ptr = new_ptr;
+    if let Some(ptr) = value.as_object_ptr() {
+        if let Some(&new_ptr) = forwarding.get(&ptr) {
+            *value = Value::object(new_ptr);
         }
     }
 }
@@ -561,8 +552,8 @@ impl RootHaver for Watch {
     ///
     /// Specifically:
     /// - `state.value`, `state.last_assigned`, `state.last_notified`:
-    ///   `Value::Object` payloads must be rooted because `forward_roots`
-    ///   patches them in place.
+    ///   object-tagged `Value`s must be rooted because `forward_roots`
+    ///   patches their heap pointers in place.
     /// - `state.filter` if `WatchFilter::Function(ptr)`: the function
     ///   pointer is a heap reference (closure object) and is patched in
     ///   place by `forward_roots`, so it must be a root.
@@ -575,14 +566,18 @@ impl RootHaver for Watch {
     fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
         // RootState values.
         for state in self.roots.values() {
-            if let Value::Object(ptr) = state.value {
+            if let Some(ptr) = state.value.as_object_ptr() {
                 roots.push(ptr);
             }
-            if let Some(Value::Object(ptr)) = state.last_assigned {
-                roots.push(ptr);
+            if let Some(val) = state.last_assigned {
+                if let Some(ptr) = val.as_object_ptr() {
+                    roots.push(ptr);
+                }
             }
-            if let Some(Value::Object(ptr)) = state.last_notified {
-                roots.push(ptr);
+            if let Some(val) = state.last_notified {
+                if let Some(ptr) = val.as_object_ptr() {
+                    roots.push(ptr);
+                }
             }
             if let WatchFilter::Function(ptr) = state.filter {
                 roots.push(ptr);
@@ -705,7 +700,7 @@ mod tests {
 
     fn test_root_state() -> RootState {
         RootState {
-            value: Value::Int(0),
+            value: Value::int(0),
             last_assigned: None,
             last_notified: None,
             channel: "Test".to_string(),
@@ -786,12 +781,12 @@ mod tests {
         let class_ptr = leaf();
 
         // Build cycle: A -> B -> A
-        let a = instance(class_ptr, vec![Value::Null]); // placeholder
-        let b = instance(class_ptr, vec![Value::Object(a)]);
+        let a = instance(class_ptr, vec![Value::NULL]); // placeholder
+        let b = instance(class_ptr, vec![Value::object(a)]);
         // Close the cycle: mutate A's field to point to B.
         unsafe {
             if let Object::Instance(inst) = a.get_mut() {
-                inst.fields[0] = Value::Object(b);
+                inst.fields[0] = Value::object(b);
             }
         }
 
@@ -819,8 +814,8 @@ mod tests {
         // Class ptr is a dummy leaf — Instance only needs it for display.
         let class_ptr = leaf();
         let obj3 = leaf();
-        let obj2 = instance(class_ptr, vec![Value::Object(obj3)]);
-        let obj1 = instance(class_ptr, vec![Value::Object(obj2)]);
+        let obj2 = instance(class_ptr, vec![Value::object(obj3)]);
+        let obj1 = instance(class_ptr, vec![Value::object(obj2)]);
 
         watch.register_root(var, test_root_state());
         track_watch_dependencies(&mut watch, var, Path::Binding, obj1);
@@ -905,9 +900,9 @@ mod tests {
         watch.register_root(
             parent_node,
             RootState {
-                value: Value::Object(value_ptr),
-                last_assigned: Some(Value::Object(assigned_ptr)),
-                last_notified: Some(Value::Object(notified_ptr)),
+                value: Value::object(value_ptr),
+                last_assigned: Some(Value::object(assigned_ptr)),
+                last_notified: Some(Value::object(notified_ptr)),
                 channel: "Test".to_string(),
                 filter: WatchFilter::Function(filter_fn_ptr),
             },

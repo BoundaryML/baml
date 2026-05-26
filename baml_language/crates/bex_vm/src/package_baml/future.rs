@@ -22,9 +22,7 @@ use crate::BexVm;
 /// isn't actually an `Object::Future` (defensive — the compiler enforces
 /// the receiver type, so a non-Future would be a VM bug).
 fn as_future(value: &Value) -> Option<&bex_vm_types::Future> {
-    let Value::Object(ptr) = *value else {
-        return None;
-    };
+    let ptr = value.as_object_ptr()?;
     // SAFETY: native functions run inline on the VM thread while the heap
     // permit is held; the heap object pointed to is not concurrently moved
     // by GC. The compiler guarantees the receiver has type `Future<T,E>`,
@@ -82,7 +80,7 @@ impl BamlClassFutureFuture for PackageBamlImpl {
 
     fn state(vm: &mut BexVm, future: &Value) -> Value {
         let Some(fut) = as_future(future) else {
-            return Value::Null;
+            return Value::NULL;
         };
         let variant_name = match fut.read() {
             FutureRead::Pending(_) => "Pending",
@@ -96,7 +94,7 @@ impl BamlClassFutureFuture for PackageBamlImpl {
             .get("baml.future.FutureState")
             .copied()
         else {
-            return Value::Null;
+            return Value::NULL;
         };
         // SAFETY: enm_ptr came from resolved_class_names which holds
         // compile-time-registered HeapPtrs valid for the program's lifetime.
@@ -106,7 +104,7 @@ impl BamlClassFutureFuture for PackageBamlImpl {
         };
         match idx {
             Some(i) => vm.alloc_variant(enm_ptr, i),
-            None => Value::Null,
+            None => Value::NULL,
         }
     }
 }

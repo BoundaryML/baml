@@ -137,11 +137,11 @@ function baml.leading_ones(self: ?) -> int  [builtin]
 function baml.leading_zeros(self: ?) -> int  [builtin]
 function baml.max(self: ?, other: int) -> int  [builtin]
 function baml.max_value() -> int  [expr] {
-  {  } 9223372036854775807
+  {  } 4611686018427387903
 }
 function baml.min(self: ?, other: int) -> int  [builtin]
 function baml.min_value() -> int  [expr] {
-  {  } Neg 9223372036854775807 Sub 1
+  {  } Neg 4611686018427387903 Sub 1
 }
 function baml.parse(text: string) -> int  [builtin]
 function baml.pow(self: ?, exp: int) -> int  [builtin]

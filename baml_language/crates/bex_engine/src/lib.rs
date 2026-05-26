@@ -470,7 +470,7 @@ pub struct BexEngine {
     /// `StoreGlobal` against this view as a `VmInternalError`.
     ///
     /// Stored as a [`SharedGlobals`] (rather than a plain `Arc<[Value]>`)
-    /// so the GC can trace + forward `Value::Object(HeapPtr)` entries: the
+    /// so the GC can trace + forward `Value::object(HeapPtr)` entries: the
     /// engine registers a clone of this `SharedGlobals` as a [`RootHaver`]
     /// permit holder during `BexEngine::new`. Without that registration any
     /// runtime heap object stored in a top-level `let` global was invisible
@@ -551,9 +551,7 @@ const HOST_CALLABLE_INVALID_ARGUMENT: i32 = 2;
 /// `Type` object — in which case the engine skips schema validation and falls
 /// back to the bridge's shape-level guard.
 fn host_call_return_ty(ret_ty_arg: Option<Value>) -> Option<baml_type::Ty> {
-    let Some(Value::Object(ptr)) = ret_ty_arg else {
-        return None;
-    };
+    let ptr = ret_ty_arg?.as_object_ptr()?;
     // SAFETY: the pointer was just allocated by the VM for this sys-op call.
     // This MUST be read while the heap permit is held (i.e. *before* the sys-op
     // await releases it): the engine-local `args` Vec is not a GC root, so after
@@ -653,7 +651,16 @@ impl BexEngine {
         let test_cases = bytecode.test_cases;
 
         // Extract compile-time objects for the heap
-        let compile_time_objects: Vec<Object> = bytecode.objects.into_iter().collect();
+        let mut compile_time_objects: Vec<Object> = bytecode.objects.into_iter().collect();
+
+        // Box every reachable `ConstValue::Float` into a compile-time
+        // `Object::Float` (floats can no longer live inline in `Value`).
+        // `bytecode.globals` are rewritten further down, during the
+        // `ConstValue` → `Value` conversion, using the returned index map.
+        let float_indices = bex_vm_types::types::box_compile_time_floats(
+            &mut compile_time_objects,
+            &bytecode.globals,
+        );
 
         // Encode compact bytecode for all functions before the heap freezes them.
         // This must happen before BexHeap::new() because objects become immutable
@@ -723,10 +730,18 @@ impl BexEngine {
 
         // Convert compile-time globals (ConstValue) to runtime globals (Value).
         // Object references are converted from ObjectIndex to HeapPtr.
+        // Float globals were redirected to compile-time Object::Float entries
+        // by the boxing pre-pass above.
         let globals_vec: Vec<Value> = bytecode
             .globals
             .into_iter()
-            .map(|cv| cv.to_value(|idx| heap.compile_time_ptr(idx.into_raw())))
+            .map(|cv| match cv {
+                bex_vm_types::ConstValue::Float(f) => {
+                    let idx = float_indices[&f.to_bits()];
+                    Value::object(heap.compile_time_ptr(idx))
+                }
+                other => other.to_value(|idx| heap.compile_time_ptr(idx.into_raw())),
+            })
             .collect();
         // Mutable during `$init` so `StoreGlobal` can populate top-level let
         // bindings; frozen into `Arc<[Value]>` once `$init` finishes (see below).
@@ -778,7 +793,7 @@ impl BexEngine {
                             // Handle events during $init: push null and continue.
                             // No span context exists during init, so the event is dropped,
                             // but we must push a return value to keep the stack balanced.
-                            vm.stack.push(Value::Null);
+                            vm.stack.push(Value::NULL);
                             continue;
                         }
                         Ok(other) => {
@@ -797,7 +812,7 @@ impl BexEngine {
         }
 
         // Freeze the now-populated globals into a `SharedGlobals` so the GC
-        // can trace + forward `Value::Object(HeapPtr)` entries. Every
+        // can trace + forward `Value::object(HeapPtr)` entries. Every
         // post-`$init` VM cloned into a `call_function` invocation reads
         // from this shared instance via `VmGlobals::Shared(globals.clone())`.
         // `StoreGlobal` against the shared view is rejected by the VM as
@@ -828,7 +843,7 @@ impl BexEngine {
         );
 
         // Register the frozen globals pool as its own permit holder so the
-        // GC traces and forwards `Value::Object(HeapPtr)` entries (e.g.
+        // GC traces and forwards `Value::object(HeapPtr)` entries (e.g.
         // top-level `let g = [1, 2, 3]` populated during `$init`). The
         // permit is never `acquire()`d — its sole job is to participate in
         // `HeapGuard::collect_roots` / `forward_roots` walks. The
@@ -1315,7 +1330,7 @@ impl BexEngine {
                     *arg,
                     param_types.get(idx),
                 ),
-                BexCallArg::OmittedDefault => Ok(Value::OmittedArg),
+                BexCallArg::OmittedDefault => Ok(Value::OMITTED_ARG),
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -1865,8 +1880,8 @@ impl BexEngine {
     /// True if `value` is an `Object::Instance` whose class is
     /// `baml.panics.Cancelled`. Used to differentiate cancellation panics
     /// from regular errors when settling a spawned thread that unwound.
-    fn is_cancelled_panic(&self, value: &Value) -> bool {
-        let Value::Object(ptr) = value else {
+    fn is_cancelled_panic(&self, value: Value) -> bool {
+        let Some(ptr) = value.as_object_ptr() else {
             return false;
         };
         let Some(&cancelled_class_ptr) = self.resolved_class_names.get(CANCELLED_PANIC_CLASS)
@@ -2106,7 +2121,7 @@ impl BexEngine {
                     // of an error.
                     if let Some(future_id) = thread.vm_thread_settles_future() {
                         let is_cancel_panic = thread.vm_thread_cancel().is_cancelled()
-                            && self.is_cancelled_panic(&value);
+                            && self.is_cancelled_panic(value);
                         if is_cancel_panic {
                             self.settle_child_cancelled(&mut thread, future_id).await?;
                         } else {
@@ -2120,9 +2135,9 @@ impl BexEngine {
                         return Ok(ThreadOutcome::SettledChild);
                     }
                     let external = if let Some(ref ty) = throws_type {
-                        self.convert_vm_value_to_external_with_type(&value, ty, thread.proof())?
+                        self.convert_vm_value_to_external_with_type(value, ty, thread.proof())?
                     } else {
-                        self.vm_value_to_owned(thread.proof(), &value)
+                        self.vm_value_to_owned(thread.proof(), value)
                     };
                     // `baml.panics.Exit { code }` escaping all handlers is
                     // the clean-termination path — surface it as an Exit
@@ -2150,7 +2165,7 @@ impl BexEngine {
                     //     process exit code.
                     if let Some(future_id) = thread.vm_thread_settles_future() {
                         let is_cancel_panic = thread.vm_thread_cancel().is_cancelled()
-                            && self.is_cancelled_panic(&value);
+                            && self.is_cancelled_panic(value);
                         if is_cancel_panic {
                             self.settle_child_cancelled(&mut thread, future_id).await?;
                         } else {
@@ -2159,7 +2174,7 @@ impl BexEngine {
                         }
                         return Ok(ThreadOutcome::SettledChild);
                     }
-                    let external = self.vm_value_to_owned(thread.proof(), &value);
+                    let external = self.vm_value_to_owned(thread.proof(), value);
                     if let Some(code) = extract_exit_code(&external) {
                         return Err(EngineError::Exit { code });
                     }
@@ -2212,15 +2227,35 @@ impl BexEngine {
                     let cancelled = cancel.is_cancelled();
 
                     let (return_value, event_result) = if !copy_objects {
-                        if let Value::Object(ptr) = value {
-                            let handle = self.heap.create_handle(ptr);
-                            (
-                                BexExternalValue::Handle(handle),
-                                self.vm_value_to_owned(thread.proof(), &value),
-                            )
+                        if let Some(ptr) = value.as_object_ptr() {
+                            // SAFETY: the active thread holds the heap permit
+                            // through `thread.proof()`.
+                            //
+                            // Heap-boxed floats can't be handle-wrapped — a
+                            // function declared `-> float` (or
+                            // `-> Union<float, ...>` / `-> float?`) should
+                            // surface as an inline `BexExternalValue::Float`,
+                            // not an opaque `Handle`. Route them through the
+                            // typed converter so declared-type metadata
+                            // (e.g. Union wrapping) is preserved; the bare
+                            // unboxing fast-path stripped that.
+                            if matches!(unsafe { ptr.get() }, Object::Float(_)) {
+                                let external = self.convert_vm_value_to_external_with_type(
+                                    value,
+                                    &return_type,
+                                    thread.proof(),
+                                )?;
+                                (external.clone(), external)
+                            } else {
+                                let handle = self.heap.create_handle(ptr);
+                                (
+                                    BexExternalValue::Handle(handle),
+                                    self.vm_value_to_owned(thread.proof(), value),
+                                )
+                            }
                         } else {
                             let external = self.convert_vm_value_to_external_with_type(
-                                &value,
+                                value,
                                 &return_type,
                                 thread.proof(),
                             )?;
@@ -2228,7 +2263,7 @@ impl BexEngine {
                         }
                     } else {
                         let external = self.convert_vm_value_to_external_with_type(
-                            &value,
+                            value,
                             &return_type,
                             thread.proof(),
                         )?;
@@ -2287,7 +2322,7 @@ impl BexEngine {
                     }
 
                     let bex_args: Vec<BexExternalValue> =
-                        args.iter().map(|v| self.vm_arg_to_bex_value(v)).collect();
+                        args.iter().map(|v| self.vm_arg_to_bex_value(*v)).collect();
 
                     // Capture the host-call return type as an OWNED `Ty` now,
                     // while the heap permit is still held and `args[2]` (the
@@ -2438,7 +2473,7 @@ impl BexEngine {
                             call_id,
                         )
                         .await?;
-                    thread.vm.stack.push(Value::Object(future_ptr));
+                    thread.vm.stack.push(Value::object(future_ptr));
                 }
 
                 VmExecState::Await(future_id) => {
@@ -2471,7 +2506,7 @@ impl BexEngine {
                                 .await?;
                             return Ok(ThreadOutcome::SettledChild);
                         }
-                        let external = self.vm_value_to_owned(thread.proof(), &value);
+                        let external = self.vm_value_to_owned(thread.proof(), value);
                         return Err(EngineError::UnhandledThrow {
                             value: Box::new(external),
                             trace: Vec::new(),
@@ -2560,7 +2595,7 @@ impl BexEngine {
                                 .await?;
                             return Ok(ThreadOutcome::SettledChild);
                         }
-                        let external = self.vm_value_to_owned(thread.proof(), &value);
+                        let external = self.vm_value_to_owned(thread.proof(), value);
                         return Err(EngineError::UnhandledThrow {
                             value: Box::new(external),
                             trace: Vec::new(),
@@ -2579,7 +2614,7 @@ impl BexEngine {
                         let mut call_stack = state.host_call_stack.clone();
                         call_stack.extend(state.stack.iter().map(|s| s.span_id.clone()));
 
-                        let external_data = self.vm_value_to_owned(thread.proof(), &data);
+                        let external_data = self.vm_value_to_owned(thread.proof(), data);
 
                         // Convert source location tuple to SourceLocation struct.
                         let source = source_location.map(
@@ -2644,7 +2679,7 @@ impl BexEngine {
                     // pops its two arguments but does not push a return value, so we
                     // push null here before the VM resumes at the next instruction
                     // (which will store or discard the return value).
-                    thread.vm.stack.push(Value::Null);
+                    thread.vm.stack.push(Value::NULL);
                 }
 
                 VmExecState::Notify(_notification) => {
@@ -2670,7 +2705,7 @@ impl BexEngine {
                                 // Convert VM args to fully owned values for the event
                                 let external_args: Vec<BexExternalValue> = args
                                     .iter()
-                                    .map(|v| self.vm_value_to_owned(thread.proof(), v))
+                                    .map(|v| self.vm_value_to_owned(thread.proof(), *v))
                                     .collect();
 
                                 let enter_event = RuntimeEvent {
@@ -2705,7 +2740,7 @@ impl BexEngine {
                             } => {
                                 if let Some(span) = state.stack.pop() {
                                     let external_result =
-                                        self.vm_value_to_owned(thread.proof(), &result);
+                                        self.vm_value_to_owned(thread.proof(), result);
                                     // call_stack: host prefix + remaining engine spans + exiting span
                                     let mut call_stack = state.host_call_stack.clone();
                                     call_stack

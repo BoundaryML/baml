@@ -5,7 +5,7 @@
 //! representation (`BexValue`, `BexExternalValue`).
 
 use ::bex_heap::{BexValue, HeapPermit, PermitProof, TlabHolder};
-use ::bex_vm_types::{HeapPtr, Object, ObjectType, RootHaver, Value};
+use ::bex_vm_types::{HeapPtr, Object, ObjectType, RootHaver, Value, ValueKind};
 use baml_type::Literal;
 use bex_external_types::{BexExternalAdt, BexExternalValue, Ty, UnionMetadata};
 use bex_vm::BexVm;
@@ -22,25 +22,24 @@ impl BexEngine {
     /// If the declared type is a union, the value is wrapped in `Union { value, metadata }`.
     pub(crate) fn convert_vm_value_to_external_with_type(
         &self,
-        value: &Value,
+        value: Value,
         declared_type: &Ty,
         permit: PermitProof<'_>,
     ) -> Result<BexExternalValue, EngineError> {
         // If declared type is a union, find which member matches the actual value
         let effective_type = resolve_effective_type(value, declared_type);
 
-        let external = match value {
-            Value::OmittedArg => {
+        let external = match value.kind() {
+            ValueKind::OmittedArg => {
                 return Err(EngineError::TypeMismatch {
                     message: "internal omitted argument escaped to external conversion".to_string(),
                 });
             }
-            Value::Null => BexExternalValue::Null,
-            Value::Int(i) => BexExternalValue::Int(*i),
-            Value::Float(f) => BexExternalValue::Float(*f),
-            Value::Bool(b) => BexExternalValue::Bool(*b),
-            Value::Object(idx) => {
-                self.convert_heap_ptr_to_external_with_type(*idx, effective_type, permit)?
+            ValueKind::Null => BexExternalValue::Null,
+            ValueKind::Int(i) => BexExternalValue::Int(i),
+            ValueKind::Bool(b) => BexExternalValue::Bool(b),
+            ValueKind::Object(idx) => {
+                self.convert_heap_ptr_to_external_with_type(idx, effective_type, permit)?
             }
         };
 
@@ -65,6 +64,7 @@ impl BexEngine {
         let obj = unsafe { ptr.get() };
 
         match obj {
+            Object::Float(f) => Ok(BexExternalValue::Float(*f)),
             Object::String(s) => Ok(BexExternalValue::String(s.clone())),
 
             Object::Array(arr) => {
@@ -80,7 +80,7 @@ impl BexEngine {
 
                 let items: Result<Vec<_>, _> = arr
                     .iter()
-                    .map(|v| self.convert_vm_value_to_external_with_type(v, element_type, permit))
+                    .map(|v| self.convert_vm_value_to_external_with_type(*v, element_type, permit))
                     .collect();
                 Ok(BexExternalValue::Array {
                     element_type: element_type.clone(),
@@ -109,7 +109,9 @@ impl BexEngine {
                         .map(|(k, v)| {
                             Ok((
                                 k.clone(),
-                                self.convert_vm_value_to_external_with_type(v, value_type, permit)?,
+                                self.convert_vm_value_to_external_with_type(
+                                    *v, value_type, permit,
+                                )?,
                             ))
                         })
                         .collect();
@@ -169,7 +171,7 @@ impl BexEngine {
                             Ok((
                                 class_field.name.clone(),
                                 self.convert_vm_value_to_external_with_type(
-                                    value,
+                                    *value,
                                     &class_field.field_type,
                                     permit,
                                 )?,
@@ -291,36 +293,38 @@ impl BexEngine {
         expected_ty: Option<&Ty>,
     ) -> Result<Value, EngineError> {
         Ok(match external {
-            BexExternalValue::Handle(handle) => Value::Object(
+            BexExternalValue::Handle(handle) => Value::object(
                 self.resolve_handle(holder.proof(), &handle)
                     .expect("Handle should be valid - object was returned to external code"),
             ),
-            BexExternalValue::Null => Value::Null,
-            BexExternalValue::Int(i) => Value::Int(i),
-            BexExternalValue::Float(f) => Value::Float(f),
-            BexExternalValue::Bool(b) => Value::Bool(b),
+            BexExternalValue::Null => Value::NULL,
+            BexExternalValue::Int(i) => Value::int(i),
+            BexExternalValue::Float(f) => {
+                Value::object(holder.holder_mut().tlab_mut().alloc(Object::Float(f)))
+            }
+            BexExternalValue::Bool(b) => Value::bool(b),
             BexExternalValue::String(s) => {
-                Value::Object(holder.holder_mut().tlab_mut().alloc_string(s))
+                Value::object(holder.holder_mut().tlab_mut().alloc_string(s))
             }
             BexExternalValue::Array { items, .. } => {
                 let values = items
                     .into_iter()
                     .map(|v| self.convert_external_to_vm_value(holder, v))
                     .collect::<Result<Vec<_>, _>>()?;
-                Value::Object(holder.holder_mut().tlab_mut().alloc_array(values))
+                Value::object(holder.holder_mut().tlab_mut().alloc_array(values))
             }
             BexExternalValue::Map { entries, .. } => {
                 let values = entries
                     .into_iter()
                     .map(|(k, v)| self.convert_external_to_vm_value(holder, v).map(|v| (k, v)))
                     .collect::<Result<indexmap::IndexMap<String, Value>, _>>()?;
-                Value::Object(holder.holder_mut().tlab_mut().alloc_map(values))
+                Value::object(holder.holder_mut().tlab_mut().alloc_map(values))
             }
             BexExternalValue::Uint8Array(bytes) => {
-                Value::Object(holder.holder_mut().tlab_mut().alloc_uint8array(bytes))
+                Value::object(holder.holder_mut().tlab_mut().alloc_uint8array(bytes))
             }
             BexExternalValue::RustData(data) => {
-                Value::Object(holder.holder_mut().tlab_mut().alloc_rust_data(data))
+                Value::object(holder.holder_mut().tlab_mut().alloc_rust_data(data))
             }
             // Allocate instance by looking up class and converting fields
             BexExternalValue::Instance { class_name, fields } => {
@@ -357,7 +361,7 @@ impl BexEngine {
                     })?;
                     values.push(self.convert_external_to_vm_value(holder, ext.clone())?);
                 }
-                Value::Object(
+                Value::object(
                     holder
                         .holder_mut()
                         .tlab_mut()
@@ -388,7 +392,7 @@ impl BexEngine {
                     .ok_or_else(|| EngineError::TypeMismatch {
                         message: format!("Unknown variant `{variant_name}` in enum `{enum_name}`"),
                     })?;
-                Value::Object(
+                Value::object(
                     holder
                         .holder_mut()
                         .tlab_mut()
@@ -399,10 +403,10 @@ impl BexEngine {
                 return self.convert_external_to_vm_value_with_ty(holder, *value, expected_ty);
             }
             BexExternalValue::Adt(BexExternalAdt::Collector(c)) => {
-                Value::Object(holder.holder_mut().tlab_mut().alloc_collector(c))
+                Value::object(holder.holder_mut().tlab_mut().alloc_collector(c))
             }
             BexExternalValue::Adt(BexExternalAdt::Type(ty)) => {
-                Value::Object(holder.holder_mut().tlab_mut().alloc_type(ty))
+                Value::object(holder.holder_mut().tlab_mut().alloc_type(ty))
             }
             BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => {
                 return Err(EngineError::CannotConvert {
@@ -410,10 +414,10 @@ impl BexEngine {
                 });
             }
             BexExternalValue::Adt(BexExternalAdt::Media(arc)) => {
-                Value::Object(holder.holder_mut().tlab_mut().alloc_rust_data(arc))
+                Value::object(holder.holder_mut().tlab_mut().alloc_rust_data(arc))
             }
             BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { heap_handle, .. }) => {
-                Value::Object(self.resolve_handle(holder.proof(), &heap_handle).expect(
+                Value::object(self.resolve_handle(holder.proof(), &heap_handle).expect(
                     "TaggedHeapHandle should be valid - object was returned to external code",
                 ))
             }
@@ -491,7 +495,7 @@ impl BexEngine {
                     ret_ty: Box::new(ret),
                     arity: params.len(),
                 };
-                Value::Object(
+                Value::object(
                     holder
                         .holder_mut()
                         .tlab_mut()
@@ -506,18 +510,36 @@ impl BexEngine {
 // SysOp Argument Conversion
 // ============================================================================
 
+/// If `ptr` references an `Object::Float`, return its `BexExternalValue::Float`
+/// projection so callers can surface a primitive instead of an opaque handle.
+///
+/// # Safety
+///
+/// Caller must hold a GC permit (the `HeapPtr` deref invariant). Mirrors the
+/// surrounding accessors that take `PermitProof` and dereference `HeapPtr`.
+unsafe fn unbox_float_object(ptr: HeapPtr) -> Option<BexExternalValue> {
+    if let Object::Float(f) = unsafe { ptr.get() } {
+        Some(BexExternalValue::Float(*f))
+    } else {
+        None
+    }
+}
+
 impl BexEngine {
-    pub(crate) fn vm_arg_to_bex_value(&self, value: &Value) -> BexExternalValue {
-        match value {
-            Value::OmittedArg => {
+    pub(crate) fn vm_arg_to_bex_value(&self, value: Value) -> BexExternalValue {
+        match value.kind() {
+            ValueKind::OmittedArg => {
                 panic!("Cannot convert omitted argument sentinel to BexExternalValue")
             }
-            Value::Null => BexExternalValue::Null,
-            Value::Int(i) => BexExternalValue::Int(*i),
-            Value::Float(f) => BexExternalValue::Float(*f),
-            Value::Bool(b) => BexExternalValue::Bool(*b),
-            Value::Object(ptr) => {
-                let handle = self.heap.create_handle(*ptr);
+            ValueKind::Null => BexExternalValue::Null,
+            ValueKind::Int(i) => BexExternalValue::Int(i),
+            ValueKind::Bool(b) => BexExternalValue::Bool(b),
+            ValueKind::Object(ptr) => {
+                // SAFETY: caller holds the engine permit (heap is borrowed).
+                if let Some(v) = unsafe { unbox_float_object(ptr) } {
+                    return v;
+                }
+                let handle = self.heap.create_handle(ptr);
                 BexExternalValue::Handle(handle)
             }
         }
@@ -531,29 +553,34 @@ impl BexEngine {
     pub(crate) fn vm_value_to_owned(
         &self,
         permit: PermitProof<'_>,
-        value: &Value,
+        value: Value,
     ) -> BexExternalValue {
-        match value {
-            Value::OmittedArg => {
+        match value.kind() {
+            ValueKind::OmittedArg => {
                 panic!("Cannot convert omitted argument sentinel to BexExternalValue")
             }
-            Value::Null => BexExternalValue::Null,
-            Value::Int(i) => BexExternalValue::Int(*i),
-            Value::Float(f) => BexExternalValue::Float(*f),
-            Value::Bool(b) => BexExternalValue::Bool(*b),
-            Value::Object(ptr) => BexValue::HeapPtr(ptr)
-                .as_owned_for_trace(&self.heap, permit)
-                .unwrap_or_else(|e| {
-                    // Remaining errors here (InvalidHandle, TypeMismatch,
-                    // FieldNotFound) indicate engine-level invariant
-                    // violations — they shouldn't happen in normal operation.
-                    // Surface via structured tracing rather than stderr so
-                    // they're visible in logs without polluting CLI output,
-                    // and embed the error in the trace payload so it shows
-                    // up wherever traces are consumed.
-                    tracing::error!(error = %e, "trace payload deep-copy failed");
-                    BexExternalValue::String(format!("<trace-error: {e}>"))
-                }),
+            ValueKind::Null => BexExternalValue::Null,
+            ValueKind::Int(i) => BexExternalValue::Int(i),
+            ValueKind::Bool(b) => BexExternalValue::Bool(b),
+            ValueKind::Object(ptr) => {
+                // SAFETY: `permit` witnesses GC liveness for the deref.
+                if let Some(v) = unsafe { unbox_float_object(ptr) } {
+                    return v;
+                }
+                BexValue::HeapPtr(&ptr)
+                    .as_owned_for_trace(&self.heap, permit)
+                    .unwrap_or_else(|e| {
+                        // Remaining errors here (InvalidHandle, TypeMismatch,
+                        // FieldNotFound) indicate engine-level invariant
+                        // violations — they shouldn't happen in normal operation.
+                        // Surface via structured tracing rather than stderr so
+                        // they're visible in logs without polluting CLI output,
+                        // and embed the error in the trace payload so it shows
+                        // up wherever traces are consumed.
+                        tracing::error!(error = %e, "trace payload deep-copy failed");
+                        BexExternalValue::String(format!("<trace-error: {e}>"))
+                    })
+            }
         }
     }
 
@@ -563,7 +590,7 @@ impl BexEngine {
     /// primitives, strings, arrays, maps, and resources - not instances/variants.
     #[allow(unused)]
     pub(crate) fn vm_args_to_external(vm: &BexVm, args: &[Value]) -> Vec<BexExternalValue> {
-        args.iter().map(|v| vm_arg_to_external(vm, v)).collect()
+        args.iter().map(|v| vm_arg_to_external(vm, *v)).collect()
     }
 }
 
@@ -973,12 +1000,12 @@ impl BexEngine {
 /// For union types, find which member matches the actual runtime value.
 ///
 /// If the declared type is not a union, returns it unchanged.
-fn resolve_effective_type<'a>(value: &Value, declared_type: &'a Ty) -> &'a Ty {
+fn resolve_effective_type(value: Value, declared_type: &Ty) -> &Ty {
     match declared_type {
         Ty::Union(members, _) => find_matching_union_member(value, members)
             .unwrap_or_else(|| members.first().unwrap_or(declared_type)),
         Ty::Optional(inner, _) => {
-            if matches!(value, Value::Null) {
+            if value.is_null() {
                 declared_type
             } else {
                 resolve_effective_type(value, inner)
@@ -989,22 +1016,22 @@ fn resolve_effective_type<'a>(value: &Value, declared_type: &'a Ty) -> &'a Ty {
 }
 
 /// Find the union member that matches the runtime value's type.
-fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'a Ty> {
-    match value {
-        Value::OmittedArg => None,
-        Value::Null => members.iter().find(|m| matches!(m, Ty::Null { .. })),
-        Value::Int(_) => members
+fn find_matching_union_member(value: Value, members: &[Ty]) -> Option<&Ty> {
+    match value.kind() {
+        ValueKind::OmittedArg => None,
+        ValueKind::Null => members.iter().find(|m| matches!(m, Ty::Null { .. })),
+        ValueKind::Int(_) => members
             .iter()
             .find(|m| matches!(m, Ty::Int { .. } | Ty::Literal(Literal::Int(_), _))),
-        Value::Float(_) => members
-            .iter()
-            .find(|m| matches!(m, Ty::Float { .. } | Ty::Literal(Literal::Float(_), _))),
-        Value::Bool(_) => members
+        ValueKind::Bool(_) => members
             .iter()
             .find(|m| matches!(m, Ty::Bool { .. } | Ty::Literal(Literal::Bool(_), _))),
-        Value::Object(ptr) => {
+        ValueKind::Object(ptr) => {
             let obj = unsafe { ptr.get() };
             match obj {
+                Object::Float(_) => members
+                    .iter()
+                    .find(|m| matches!(m, Ty::Float { .. } | Ty::Literal(Literal::Float(_), _))),
                 Object::String(_) => members
                     .iter()
                     .find(|m| matches!(m, Ty::String { .. } | Ty::Literal(Literal::String(_), _))),
@@ -1043,7 +1070,7 @@ fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'
                     if let Some(first) = elements.first() {
                         members.iter().find(|m| {
                             if let Ty::List(elem_ty, _) = m {
-                                find_matching_union_member(first, &[elem_ty.as_ref().clone()])
+                                find_matching_union_member(*first, &[elem_ty.as_ref().clone()])
                                     .is_some()
                             } else {
                                 false
@@ -1082,22 +1109,22 @@ fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'
 ///
 /// This is simpler than `vm_value_to_external` because sys ops only receive
 /// primitives, strings, arrays, maps, and resources - not instances/variants.
-pub(crate) fn vm_arg_to_external(vm: &BexVm, value: &Value) -> BexExternalValue {
-    match value {
-        Value::OmittedArg => {
+pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
+    match value.kind() {
+        ValueKind::OmittedArg => {
             panic!("Cannot convert omitted argument sentinel to BexExternalValue")
         }
-        Value::Null => BexExternalValue::Null,
-        Value::Int(i) => BexExternalValue::Int(*i),
-        Value::Float(f) => BexExternalValue::Float(*f),
-        Value::Bool(b) => BexExternalValue::Bool(*b),
-        Value::Object(idx) => {
-            let obj = vm.get_object(*idx);
+        ValueKind::Null => BexExternalValue::Null,
+        ValueKind::Int(i) => BexExternalValue::Int(i),
+        ValueKind::Bool(b) => BexExternalValue::Bool(b),
+        ValueKind::Object(idx) => {
+            let obj = vm.get_object(idx);
             match obj {
+                Object::Float(f) => BexExternalValue::Float(*f),
                 Object::String(s) => BexExternalValue::String(s.clone()),
                 Object::Array(arr) => {
                     let items: Vec<BexExternalValue> =
-                        arr.iter().map(|v| vm_arg_to_external(vm, v)).collect();
+                        arr.iter().map(|v| vm_arg_to_external(vm, *v)).collect();
                     BexExternalValue::Array {
                         element_type: bex_external_types::Ty::Null {
                             attr: baml_type::TyAttr::default(),
@@ -1108,7 +1135,7 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: &Value) -> BexExternalValue 
                 Object::Map(map) => {
                     let entries: indexmap::IndexMap<String, BexExternalValue> = map
                         .iter()
-                        .map(|(k, v)| (k.clone(), vm_arg_to_external(vm, v)))
+                        .map(|(k, v)| (k.clone(), vm_arg_to_external(vm, *v)))
                         .collect();
                     BexExternalValue::Map {
                         key_type: bex_external_types::Ty::String {
@@ -1138,7 +1165,7 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: &Value) -> BexExternalValue 
                         .iter()
                         .zip(instance.fields.iter())
                         .map(|(class_field, value)| {
-                            (class_field.name.clone(), vm_arg_to_external(vm, value))
+                            (class_field.name.clone(), vm_arg_to_external(vm, *value))
                         })
                         .collect();
 

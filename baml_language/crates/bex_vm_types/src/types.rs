@@ -609,58 +609,460 @@ pub enum SentinelKind {
     },
 }
 
-/// Runtime values.
+/// Runtime values — a single tagged 64-bit word.
 ///
-/// This struct should not contain allocated objects and should be [`Copy`].
-/// Read the documentation of `Vm::objects` (in `bex_vm` crate) to understand how allocated
-/// objects work in the virtual machine.
+/// This is a packed tagged-pointer representation. The low bit (or low
+/// 3 bits, depending on the category) carries a type tag; the upper
+/// bits carry the payload. Hardware-atomic on aligned 8-byte stores
+/// across all supported targets (x86-64, ARM64, `ARMv7`, RISC-V).
 ///
-/// # On `Hash`
-/// `Value` does not yet implement `Hash`, and should not implement `Eq`. Besides floating point which can be addressed,
-/// strings do not yet have referential equality, i.e "hello" can be represented with two different
-/// object indices. This makes comparisons nontrivial since they have to fetch the string. Same
-/// would happen with any other object type that we don't want to have referential equality for.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-pub enum Value {
-    /// Internal sentinel for an omitted defaulted argument.
-    ///
-    /// This value is only valid between call binding and a callee-entry default
-    /// prologue. It must not be serialized or exposed to host code.
-    OmittedArg,
-    Null,
-    Int(i64),
-    Float(f64),
-    Bool(bool),
+/// # Encoding (low 3 bits = tag category)
+///
+/// | Bit pattern                            | Meaning                                          |
+/// | -------------------------------------- | ------------------------------------------------ |
+/// | `0x0000_0000_0000_0000`                | `Null` — the only zero pointer                   |
+/// | `0x0000_0000_0000_0002`                | `Bool(false)` sentinel                           |
+/// | `0x0000_0000_0000_0004`                | `Bool(true)` sentinel                            |
+/// | `0x0000_0000_0000_0006`                | `OmittedArg` sentinel                            |
+/// | `xxxxx...xxx1` (low bit set)           | `Int(i63)` — sign-extend via `(v as i64) >> 1`   |
+/// | `0xxxxx...xxx0` (low 3 bits zero, ≠0)  | `Object(HeapPtr)` — heap pointer (8-byte align)  |
+///
+/// # On `Float`
+///
+/// `Float(f64)` does NOT have an inline encoding. Floats are heap-boxed
+/// as `Object::Float(f64)` and referenced via the pointer arm. This
+/// trades float-arithmetic cost (one heap alloc per result) for a
+/// uniform 8-byte `Value` representation, which is what makes every
+/// read/write hardware-atomic and gives ~50% cache footprint
+/// reduction. BAML programs are integer-and-object-heavy so the
+/// trade-off favors us.
+///
+/// # On range loss
+///
+/// Integers shrink from i64 to i63 (max ~4.6e18). Holds nanosecond
+/// timestamps until year ~2200 with margin. For larger integers,
+/// callers must allocate a heap-boxed integer (not yet implemented).
+///
+/// # `PartialEq` / `Hash`
+///
+/// Derived on the underlying u64. This gives bit-equality, which is
+/// reference equality for heap-allocated objects (including boxed
+/// floats — two `Value::float(3.14, ...)` calls produce different
+/// pointers and compare unequal). Content equality for strings,
+/// arrays, etc. is handled at the user-visible `==` operator in the
+/// VM dispatch, not here.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(transparent)]
+pub struct Value(u64);
 
-    /// Pointer to a heap-allocated object.
-    ///
-    /// This is a raw pointer (`HeapPtr`) that points directly into the heap.
-    /// Strings are also objects, don't add `Value::String`.
+/// Categorical view of a `Value` for pattern matching.
+///
+/// Returned by [`Value::kind`]. The optimizer typically inlines the
+/// match and folds the discrimination into a tight switch table.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ValueKind {
+    Null,
+    OmittedArg,
+    Int(i64),
+    Bool(bool),
     Object(HeapPtr),
 }
 
+// The tagged-pointer encoding *is* a hot path: every Value access
+// goes through `as_int`/`as_object_ptr`/`kind`, and the encoding round-trips
+// between `u64` and signed `i64` by design (shift-left/right with sign
+// extension is what gives us i63 ints in a u64). The explicit `bits & 0b111`
+// checks for "low 3 bits clear" are more idiomatic for tagged pointers than
+// the suggested `.trailing_zeros() >= 3`.
+#[allow(
+    clippy::inline_always,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::verbose_bit_mask
+)]
 impl Value {
-    /// Returns the [`HeapPtr`] if this is an [`Object`].
-    pub const fn as_object_ptr(&self) -> Option<HeapPtr> {
-        match self {
-            Value::OmittedArg => None,
-            Value::Object(ptr) => Some(*ptr),
+    // ── Singletons ────────────────────────────────────────────────────────
+    pub const NULL: Value = Value(0);
+    pub const FALSE: Value = Value(2);
+    pub const TRUE: Value = Value(4);
+    pub const OMITTED_ARG: Value = Value(6);
+
+    /// Largest representable BAML integer (`2^62 - 1 = 4_611_686_018_427_387_903`).
+    ///
+    /// Integers in BAML are i63 (low bit reserved for the tag). Values
+    /// outside `[INT_MIN, INT_MAX]` cannot round-trip through `Value::int`.
+    pub const INT_MAX: i64 = (i64::MAX >> 1);
+
+    /// Smallest representable BAML integer (`-2^62 = -4_611_686_018_427_387_904`).
+    pub const INT_MIN: i64 = !Self::INT_MAX;
+
+    // ── Tagged-int fast-path arithmetic ───────────────────────────────────
+    //
+    // Both operands' bit patterns are `(real << 1) | 1` (low bit = tag).
+    // We can do arithmetic directly on the tagged bits without the
+    // shift-right / shift-left / or sequence that goes through `as_int`
+    // and `Value::int`. The tag bit is preserved by these tricks.
+    //
+    // Add: (ra<<1|1) + (rb<<1|1) - 1 = ((ra+rb)<<1) | 1
+    // Sub: (ra<<1|1) - (rb<<1|1) + 1 = ((ra-rb)<<1) | 1
+    //
+    // Wrapping is correct: i63 ranges produce results that fit in i63
+    // (modulo wrap, same as the previous `l + r` on i64s).
+    //
+    // For comparison, `(ra<<1)|1` < `(rb<<1)|1` iff `ra < rb` (shift-left
+    // preserves signed ordering; the tag bit is the same in both so it
+    // doesn't affect the comparison). Bits interpreted as i64 yield the
+    // signed ordering of the underlying i63 values.
+
+    /// Sum of two `Int`-tagged Values, computed without untagging.
+    ///
+    /// # Safety contract
+    ///
+    /// Caller must guarantee both inputs are `Int`-tagged (caller has
+    /// already type-checked, e.g. via the `OpCode::AddInt` specialization).
+    /// Mis-tagged inputs produce nonsense results; the type system does
+    /// not enforce this — it's a perf shortcut for the hot path.
+    #[inline(always)]
+    pub const fn tagged_int_add(a: Value, b: Value) -> Value {
+        debug_assert!(
+            a.is_int() && b.is_int(),
+            "tagged_int_add: both inputs must be Int"
+        );
+        Value(a.0.wrapping_add(b.0).wrapping_sub(1))
+    }
+
+    /// Difference of two `Int`-tagged Values, computed without untagging.
+    ///
+    /// See [`Value::tagged_int_add`] for the safety contract.
+    #[inline(always)]
+    pub const fn tagged_int_sub(a: Value, b: Value) -> Value {
+        debug_assert!(
+            a.is_int() && b.is_int(),
+            "tagged_int_sub: both inputs must be Int"
+        );
+        Value(a.0.wrapping_sub(b.0).wrapping_add(1))
+    }
+
+    // The OpCode::CmpInt* path does signed comparison directly on the
+    // tagged bits (`(l.bits() as i64) < (r.bits() as i64)`); we don't
+    // need a separate `tagged_int_cmp` helper.
+
+    // ── Constructors ──────────────────────────────────────────────────────
+
+    /// Build a `Value` carrying an `i63` integer.
+    ///
+    /// Debug-asserts that `i` is in `[INT_MIN, INT_MAX]`. Values outside
+    /// that range are truncated by the encoding shift, so passing one
+    /// here is a caller bug. Code that ingests integers from outside the
+    /// VM (deserializers, JSON decoders, etc.) should range-check first
+    /// or use [`Value::try_int`].
+    #[inline(always)]
+    pub const fn int(i: i64) -> Self {
+        debug_assert!(
+            i >= Self::INT_MIN && i <= Self::INT_MAX,
+            "Value::int called with i64 outside the i63 range; use Value::try_int at boundaries"
+        );
+        // Cast is well-defined: `(i as u64) << 1` may technically
+        // overflow at the i64 boundary but the result is still a valid
+        // u64 bit pattern that decodes back via `as_int`'s arithmetic
+        // shift right.
+        Value(((i as u64) << 1) | 1)
+    }
+
+    /// Build a `Value` carrying an `i63` integer, or `None` if `i` is
+    /// outside the i63 range. Use this at boundaries that accept
+    /// arbitrary `i64`s (JSON decoders, `Deserialize`, FFI).
+    #[inline(always)]
+    pub const fn try_int(i: i64) -> Option<Self> {
+        if i >= Self::INT_MIN && i <= Self::INT_MAX {
+            Some(Value(((i as u64) << 1) | 1))
+        } else {
+            None
+        }
+    }
+
+    /// Build a `Value` carrying a boolean.
+    #[inline(always)]
+    pub const fn bool(b: bool) -> Self {
+        if b { Self::TRUE } else { Self::FALSE }
+    }
+
+    /// Build a `Value` from a non-null heap pointer.
+    ///
+    /// Debug-asserts that the pointer is 8-byte aligned (heap allocator
+    /// invariant) and non-null (call sites that legitimately have a
+    /// nullable pointer should use [`Value::NULL`] explicitly).
+    #[inline(always)]
+    pub fn object(ptr: HeapPtr) -> Self {
+        let bits = ptr.as_ptr() as u64;
+        debug_assert!(
+            bits != 0,
+            "Value::object called with null heap ptr; use Value::NULL"
+        );
+        debug_assert!(
+            bits & 0b111 == 0,
+            "Value::object called with mis-aligned heap ptr 0x{bits:x}"
+        );
+        Value(bits)
+    }
+
+    // ── Tag predicates (cheap fast-path discriminators) ───────────────────
+
+    #[inline(always)]
+    pub const fn is_null(self) -> bool {
+        self.0 == 0
+    }
+
+    #[inline(always)]
+    pub const fn is_int(self) -> bool {
+        self.0 & 1 != 0
+    }
+
+    #[inline(always)]
+    pub const fn is_bool(self) -> bool {
+        self.0 == Self::FALSE.0 || self.0 == Self::TRUE.0
+    }
+
+    /// True iff `self` is a non-null heap object pointer.
+    #[inline(always)]
+    pub const fn is_object(self) -> bool {
+        self.0 & 0b111 == 0 && self.0 != 0
+    }
+
+    // ── Typed accessors (return None on tag mismatch) ─────────────────────
+
+    /// Extract an `i64` if this is an `Int`. Sign-extends from the i63
+    /// stored encoding.
+    #[inline(always)]
+    pub const fn as_int(&self) -> Option<i64> {
+        if self.is_int() {
+            // Arithmetic shift right preserves sign.
+            Some((self.0 as i64) >> 1)
+        } else {
+            None
+        }
+    }
+
+    /// Extract a `bool` if this is a `Bool`.
+    #[inline(always)]
+    pub const fn as_bool(&self) -> Option<bool> {
+        match self.0 {
+            x if x == Self::FALSE.0 => Some(false),
+            x if x == Self::TRUE.0 => Some(true),
             _ => None,
+        }
+    }
+
+    /// Extract the `HeapPtr` if this is a non-null `Object`. Returns
+    /// `None` for `Null` (since the BAML Null is a "null pointer"
+    /// encoded as `Value(0)`).
+    ///
+    /// Takes `&self` so it can be used as a `fn(&Value) -> _` callback
+    /// in iterator combinators (`.filter_map(Value::as_object_ptr)`).
+    #[inline(always)]
+    pub fn as_object_ptr(&self) -> Option<HeapPtr> {
+        if self.is_object() {
+            // SAFETY: bit pattern was constructed from a valid HeapPtr
+            // via [`Value::object`] (which debug-asserts alignment +
+            // non-null). The pointer's GC liveness is the caller's
+            // concern (same as for the old enum variant). Under
+            // `heap_debug` we lose the original epoch (Value is a
+            // packed u64 with no room) and pass 0, matching the
+            // `resolve_function_constants` reconstruction path.
+            let ptr = self.0 as *mut Object;
+            #[cfg(feature = "heap_debug")]
+            let hp = unsafe { HeapPtr::from_ptr(ptr, 0) };
+            #[cfg(not(feature = "heap_debug"))]
+            let hp = unsafe { HeapPtr::from_ptr(ptr) };
+            Some(hp)
+        } else {
+            None
+        }
+    }
+
+    // ── Match on categorical view ─────────────────────────────────────────
+
+    /// Decode into the categorical `ValueKind` for pattern matching.
+    /// Use this when you need to branch on the type; use the typed
+    /// accessors (`as_int`, `as_bool`, etc.) on the hot path when you
+    /// only care about one variant.
+    #[inline]
+    pub fn kind(&self) -> ValueKind {
+        if self.is_int() {
+            return ValueKind::Int((self.0 as i64) >> 1);
+        }
+        match self.0 {
+            x if x == Self::NULL.0 => ValueKind::Null,
+            x if x == Self::FALSE.0 => ValueKind::Bool(false),
+            x if x == Self::TRUE.0 => ValueKind::Bool(true),
+            x if x == Self::OMITTED_ARG.0 => ValueKind::OmittedArg,
+            _ => {
+                // Must be a pointer — low 3 bits zero, non-zero, not a
+                // sentinel pattern.
+                debug_assert_eq!(self.0 & 0b111, 0, "malformed Value bits 0x{:x}", self.0);
+                // SAFETY: see [`Value::as_object_ptr`].
+                let ptr = self.0 as *mut Object;
+                #[cfg(feature = "heap_debug")]
+                let hp = unsafe { HeapPtr::from_ptr(ptr, 0) };
+                #[cfg(not(feature = "heap_debug"))]
+                let hp = unsafe { HeapPtr::from_ptr(ptr) };
+                ValueKind::Object(hp)
+            }
+        }
+    }
+
+    // ── Raw bit access for debugging / advanced use ──────────────────────
+
+    /// The raw `u64` bit pattern. Exposed for diagnostics, formatting,
+    /// and concurrency machinery (e.g. `AtomicU64` stores of `Value`).
+    /// Prefer the typed accessors for normal use.
+    #[inline(always)]
+    pub const fn bits(self) -> u64 {
+        self.0
+    }
+
+    // `from_bits` has no callers yet; the originally-planned atomic-load
+    // path will add one when it lands. Re-introduce as `pub(crate) const
+    // unsafe fn from_bits(bits: u64) -> Self` at that point so the
+    // invariant (bits came from `Value::bits` or a safe constructor) is
+    // upheld by callers via `unsafe`.
+}
+
+impl Default for Value {
+    #[inline(always)]
+    #[allow(clippy::inline_always)]
+    fn default() -> Self {
+        Self::NULL
+    }
+}
+
+impl std::fmt::Debug for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.kind() {
+            ValueKind::Null => write!(f, "Null"),
+            ValueKind::OmittedArg => write!(f, "OmittedArg"),
+            ValueKind::Int(i) => f.debug_tuple("Int").field(&i).finish(),
+            ValueKind::Bool(b) => f.debug_tuple("Bool").field(&b).finish(),
+            ValueKind::Object(p) => f.debug_tuple("Object").field(&p).finish(),
         }
     }
 }
 
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Value::OmittedArg => write!(f, "<omitted>"),
-            Value::Null => write!(f, "null"),
-            Value::Int(int) => write!(f, "{int}"),
-            Value::Float(float) => write!(f, "{}", format_float(*float)),
-            Value::Bool(bool) => write!(f, "{bool}"),
-            Value::Object(ptr) => write!(f, "{ptr}"),
+        match self.kind() {
+            ValueKind::OmittedArg => write!(f, "<omitted>"),
+            ValueKind::Null => write!(f, "null"),
+            ValueKind::Int(int) => write!(f, "{int}"),
+            ValueKind::Bool(bool) => write!(f, "{bool}"),
+            ValueKind::Object(ptr) => write!(f, "{ptr}"),
         }
     }
+}
+
+/// Serde proxy for `Value`. Mirrors the categorical shape of the old
+/// `enum Value { Null, Int, Bool, Object, OmittedArg }` so on-disk
+/// program payloads are wire-compatible with the pre-tagged-ptr
+/// encoding. `Object` round-trip will fail because `HeapPtr` itself
+/// refuses to serialize — that matches the prior behavior (heap
+/// pointers are runtime-only).
+#[derive(Serialize, Deserialize)]
+enum ValueSerde {
+    OmittedArg,
+    Null,
+    Int(i64),
+    Bool(bool),
+    Object(HeapPtr),
+}
+
+impl Serialize for Value {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let proxy = match self.kind() {
+            ValueKind::Null => ValueSerde::Null,
+            ValueKind::OmittedArg => ValueSerde::OmittedArg,
+            ValueKind::Int(i) => ValueSerde::Int(i),
+            ValueKind::Bool(b) => ValueSerde::Bool(b),
+            ValueKind::Object(ptr) => ValueSerde::Object(ptr),
+        };
+        proxy.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Value {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        use serde::de::Error;
+        let proxy = ValueSerde::deserialize(deserializer)?;
+        Ok(match proxy {
+            ValueSerde::Null => Value::NULL,
+            ValueSerde::OmittedArg => Value::OMITTED_ARG,
+            ValueSerde::Int(i) => Value::try_int(i).ok_or_else(|| {
+                D::Error::custom(format!(
+                    "Value::Int payload {i} is outside the i63 range [{}, {}]; \
+                     pre-tagged-pointer payloads with |value| >= 2^62 cannot be \
+                     loaded",
+                    Value::INT_MIN,
+                    Value::INT_MAX,
+                ))
+            })?,
+            ValueSerde::Bool(b) => Value::bool(b),
+            ValueSerde::Object(ptr) => Value::object(ptr),
+        })
+    }
+}
+
+/// Box every unique `ConstValue::Float` reachable from `compile_time_objects`
+/// (in `Object::Function` constants) and `globals` into a fresh
+/// `Object::Float` entry appended to `compile_time_objects`, and rewrite the
+/// function `ConstValue::Float` entries to `ConstValue::Object(idx)`. Returns
+/// the bit-pattern → object-index map so callers can rewrite their globals.
+///
+/// Required because the tagged-pointer `Value` encoding can no longer hold a
+/// float inline.
+///
+/// Globals are *not* rewritten in place — callers typically need to consume
+/// them by value (to convert `ConstValue` → `Value`) and rewrite during that
+/// pass.
+pub fn box_compile_time_floats(
+    compile_time_objects: &mut Vec<Object>,
+    globals: &[crate::ConstValue],
+) -> HashMap<u64, usize> {
+    let mut float_indices: HashMap<u64, usize> = HashMap::new();
+    // Pre-scan to discover unique floats.
+    for obj in &*compile_time_objects {
+        if let Object::Function(func) = obj {
+            for cv in &func.bytecode.constants {
+                if let ConstValue::Float(f) = cv {
+                    let next_idx = compile_time_objects.len() + float_indices.len();
+                    float_indices.entry(f.to_bits()).or_insert(next_idx);
+                }
+            }
+        }
+    }
+    for cv in globals {
+        if let ConstValue::Float(f) = cv {
+            let next_idx = compile_time_objects.len() + float_indices.len();
+            float_indices.entry(f.to_bits()).or_insert(next_idx);
+        }
+    }
+    // Append boxes in index order.
+    let mut float_entries: Vec<(u64, usize)> =
+        float_indices.iter().map(|(k, v)| (*k, *v)).collect();
+    float_entries.sort_by_key(|(_, idx)| *idx);
+    for (bits, _) in float_entries {
+        compile_time_objects.push(Object::Float(f64::from_bits(bits)));
+    }
+    // Rewrite each function-constant ConstValue::Float -> ConstValue::Object(idx).
+    for obj in compile_time_objects.iter_mut() {
+        if let Object::Function(func) = obj {
+            for cv in &mut func.bytecode.constants {
+                if let ConstValue::Float(f) = cv {
+                    let idx = float_indices[&f.to_bits()];
+                    *cv = ConstValue::Object(crate::indexable::ObjectIndex::from_raw(idx));
+                }
+            }
+        }
+    }
+    float_indices
 }
 
 /// Format an f64 to string, following JS/TS conventions for special values
@@ -784,12 +1186,15 @@ impl ConstValue {
         F: Fn(crate::ObjectIndex) -> HeapPtr,
     {
         match self {
-            ConstValue::OmittedArg => Value::OmittedArg,
-            ConstValue::Null => Value::Null,
-            ConstValue::Int(v) => Value::Int(*v),
-            ConstValue::Float(v) => Value::Float(*v),
-            ConstValue::Bool(v) => Value::Bool(*v),
-            ConstValue::Object(idx) => Value::Object(resolve(*idx)),
+            ConstValue::OmittedArg => Value::OMITTED_ARG,
+            ConstValue::Null => Value::NULL,
+            ConstValue::Int(v) => Value::int(*v),
+            ConstValue::Float(_) => panic!(
+                "ConstValue::Float must be heap-boxed at engine load time — \
+                 use the float-allocating conversion path, not to_value"
+            ),
+            ConstValue::Bool(v) => Value::bool(*v),
+            ConstValue::Object(idx) => Value::object(resolve(*idx)),
             ConstValue::Type(_) => {
                 panic!(
                     "ConstValue::Type must not be pre-resolved via to_value — \
@@ -892,6 +1297,12 @@ pub enum Object {
     /// Map of values.
     Map(IndexMap<String, Value>),
 
+    /// Boxed 64-bit float. Floats are heap-allocated because `Value`
+    /// itself is a single tagged 64-bit word with no inline encoding
+    /// for full-precision f64. Allocation rate is low in practice —
+    /// BAML programs are integer-and-object-heavy.
+    Float(f64),
+
     Future(Future),
     /// Only used for requesting scheduling of a future, passed from VM to engine.
     UnscheduledFuture(UnscheduledFuture),
@@ -931,6 +1342,7 @@ enum ObjectSerde {
     Uint8Array(Vec<u8>),
     Array(Vec<Value>),
     Map(IndexMap<String, Value>),
+    Float(f64),
     Future(Future),
     UnscheduledFuture(UnscheduledFuture),
     Type(Box<baml_type::Ty>),
@@ -951,6 +1363,7 @@ impl Serialize for Object {
             Self::Uint8Array(v) => ObjectSerde::Uint8Array(v.clone()),
             Self::Array(v) => ObjectSerde::Array(v.clone()),
             Self::Map(v) => ObjectSerde::Map(v.clone()),
+            Self::Float(v) => ObjectSerde::Float(*v),
             Self::Future(v) => ObjectSerde::Future(v.clone()),
             Self::UnscheduledFuture(v) => ObjectSerde::UnscheduledFuture(v.clone()),
             Self::Type(v) => ObjectSerde::Type(v.clone()),
@@ -990,6 +1403,7 @@ impl<'de> Deserialize<'de> for Object {
             ObjectSerde::Uint8Array(v) => Self::Uint8Array(v),
             ObjectSerde::Array(v) => Self::Array(v),
             ObjectSerde::Map(v) => Self::Map(v),
+            ObjectSerde::Float(v) => Self::Float(v),
             ObjectSerde::Future(v) => Self::Future(v),
             ObjectSerde::UnscheduledFuture(v) => Self::UnscheduledFuture(v),
             ObjectSerde::Type(v) => Self::Type(v),
@@ -1097,6 +1511,7 @@ impl std::fmt::Display for Object {
                 }
             },
             Object::UnscheduledFuture(_) => write!(f, "<unscheduled: spawn>"),
+            Object::Float(v) => write!(f, "{v}"),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(kind) => write!(f, "<sentinel {kind:?}>"),
             // Object::BamlType(type_ir) => write!(f, "<baml type: {type_ir}>"),
@@ -1356,8 +1771,8 @@ impl Future {
     /// Fires the generational write barrier on `heap` for `self_ptr`
     /// before the value write. This is required because a `Future` can
     /// survive across GCs (rooted by `FutureManagerInner::active_futures`)
-    /// and may end up in Gen2; if `value` is a `Value::Object` referring
-    /// to a younger-generation heap object, the next Minor GC's
+    /// and may end up in Gen2; if `value` carries a heap-object pointer
+    /// (`value.is_object()`) to a younger-generation object, the next Minor GC's
     /// dirty-card scan must find this reference. Without the barrier the
     /// young object would be reclaimed and the `Future`'s `value` left
     /// dangling.
@@ -1638,15 +2053,22 @@ impl<O: Into<ObjectType>> From<O> for Type {
 
 impl Type {
     /// Get the type of a value.
+    ///
+    /// Heap-boxed floats are normalised back to the top-level `Type::Float`
+    /// so callers comparing `expected` against `got` see the same variant
+    /// regardless of which side originated as an inline label vs. a
+    /// runtime heap deref.
     pub fn of(value: &Value, when_object: impl FnOnce(HeapPtr) -> ObjectType) -> Self {
-        match value {
-            Value::OmittedArg => Type::OmittedArg,
-            Value::Int(_) => Type::Int,
-            Value::Float(_) => Type::Float,
-            Value::Bool(_) => Type::Bool,
-            Value::Object(ptr) => Type::Object(when_object(*ptr)),
+        match value.kind() {
+            ValueKind::OmittedArg => Type::OmittedArg,
+            ValueKind::Int(_) => Type::Int,
+            ValueKind::Bool(_) => Type::Bool,
+            ValueKind::Object(ptr) => match when_object(ptr) {
+                ObjectType::Float => Type::Float,
+                other => Type::Object(other),
+            },
             // TODO: Actually?
-            Value::Null => Type::Object(ObjectType::Any),
+            ValueKind::Null => Type::Object(ObjectType::Any),
         }
     }
 }
@@ -1673,6 +2095,7 @@ pub enum ObjectType {
     Collector,
     Type,
     RustData,
+    Float,
 }
 
 impl ObjectType {
@@ -1697,6 +2120,7 @@ impl ObjectType {
             Object::Type(_) => Self::Type,
             Object::Future(fut) => Self::Future(fut.into()),
             Object::UnscheduledFuture(_) => Self::UnscheduledFuture,
+            Object::Float(_) => Self::Float,
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Self::Any,
             // Object::BamlType(_) => Self::Any, // TODO
@@ -1736,6 +2160,7 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Collector => write!(f, "collector"),
             ObjectType::Type => write!(f, "type"),
             ObjectType::RustData => write!(f, "rust_data"),
+            ObjectType::Float => write!(f, "float"),
         }
     }
 }
@@ -1838,7 +2263,7 @@ mod tests {
     fn omitted_arg_roundtrip_stays_in_sync() {
         let value = ConstValue::OmittedArg.to_value(|_| unreachable!("no object expected"));
 
-        assert_eq!(value, Value::OmittedArg);
+        assert_eq!(value, Value::OMITTED_ARG);
         assert_eq!(
             Type::of(&value, |_| unreachable!("omitted arg is not an object")),
             Type::OmittedArg

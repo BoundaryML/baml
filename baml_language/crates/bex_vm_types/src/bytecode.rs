@@ -487,8 +487,8 @@ pub enum Instruction {
 
     /// Check if the value on top of the stack matches the type identified by
     /// the constant at index `i`. The constant is either:
-    /// - `Value::Object(class_ptr)` — class identity check (`inst.class == class_ptr`)
-    /// - `Value::Int(tag)` — type tag check (`value_type_tag(value) == tag`)
+    /// - `Value::object(class_ptr)` — class identity check (`inst.class == class_ptr`)
+    /// - `Value::int(tag)` — type tag check (`value_type_tag(value) == tag`)
     ///
     /// Pops the value, pushes `Bool` result.
     IsType(usize),
@@ -496,7 +496,7 @@ pub enum Instruction {
     /// Materialise a `Ty` from a constant-pool `TyTemplate`, substituting
     /// any `TypeArgRef(n)` leaves with `frame.type_args[n]`.
     ///
-    /// Pushes `Value::Object(Object::Type(ty))`.
+    /// Pushes `Value::object(Object::Type(ty))`.
     ///
     /// For fully-concrete templates (no `TypeArgRef`), no substitution walk
     /// is performed — the concrete `Ty` is cloned directly.
@@ -1644,11 +1644,11 @@ impl Bytecode {
             .map(|cv| match cv {
                 // TyTemplate constants are NOT pre-resolved: `LoadType` reads
                 // them directly from `constants` at execution time.
-                ConstValue::Type(_) => crate::Value::Null,
+                ConstValue::Type(_) => crate::Value::NULL,
                 // ClassWithTypeArgs constants are NOT pre-resolved: `IsType`
                 // reads them directly from `constants` at execution time and
                 // resolves `class_obj` to a `HeapPtr` via `idx_to_ptr`.
-                ConstValue::ClassWithTypeArgs { .. } => crate::Value::Null,
+                ConstValue::ClassWithTypeArgs { .. } => crate::Value::NULL,
                 other => other.to_value(&resolve),
             })
             .collect();

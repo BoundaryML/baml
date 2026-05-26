@@ -317,7 +317,7 @@ After `RETURN`, the frame is popped and result replaces the call site on stack.
    │  fn rust_native_len(vm: &mut BexVm, args: &[Value]) -> Value {  │
    │      let ptr = &args[0];                                        │
    │      let Object::Array(arr) = vm.get_object(ptr);               │
-   │      Value::Int(arr.len())  // returns 3                        │
+   │      Value::int(arr.len() as i64)  // returns 3                 │
    │  }                                                              │
    └─────────────────────────────────────────────────────────────────┘
 ```

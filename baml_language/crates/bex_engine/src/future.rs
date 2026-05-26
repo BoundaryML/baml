@@ -502,7 +502,7 @@ mod tests {
         let mut guard = mgr.acquire(temp.proof()).await;
         let (id, _ptr) = guard.new_future(CancellationToken::new());
         assert_eq!(guard.active_future_count(), 1);
-        guard.fulfill_future(id, Value::Int(42)).unwrap();
+        guard.fulfill_future(id, Value::int(42)).unwrap();
         assert_eq!(guard.active_future_count(), 0);
     }
 
@@ -531,7 +531,7 @@ mod tests {
         let (id_a, _) = guard.new_future(CancellationToken::new());
         let (id_b, _) = guard.new_future(CancellationToken::new());
         assert_eq!(guard.active_future_count(), 2);
-        guard.err_future(id_a, Value::Int(7)).unwrap();
+        guard.err_future(id_a, Value::int(7)).unwrap();
         guard
             .internal_error_future(
                 id_b,
@@ -598,7 +598,7 @@ mod tests {
         // Release-build behavior: `fulfill_future` rejects the call (the
         // pre-check observes a non-Pending heap state) and leaves the
         // leaked entry untouched.
-        let result = guard.fulfill_future(id, Value::Int(0));
+        let result = guard.fulfill_future(id, Value::int(0));
         assert!(
             matches!(result, Err(EngineError::TypeMismatch { .. })),
             "fulfill_future after internal_error should reject in release; got {result:?}"
@@ -631,8 +631,8 @@ mod tests {
         let temp = temp_permit(&pm).await;
         let mut guard = mgr.acquire(temp.proof()).await;
         let (id, _) = guard.new_future(CancellationToken::new());
-        guard.fulfill_future(id, Value::Int(1)).unwrap();
-        let again = guard.fulfill_future(id, Value::Int(2));
+        guard.fulfill_future(id, Value::int(1)).unwrap();
+        let again = guard.fulfill_future(id, Value::int(2));
         assert!(again.is_ok(), "second fulfill should be idempotent no-op");
     }
 
@@ -642,7 +642,7 @@ mod tests {
         let temp = temp_permit(&pm).await;
         let mut guard = mgr.acquire(temp.proof()).await;
         let (id, _) = guard.new_future(CancellationToken::new());
-        guard.fulfill_future(id, Value::Int(1)).unwrap();
+        guard.fulfill_future(id, Value::int(1)).unwrap();
         // Entry is gone; future_ready should treat it as already-resolved.
         let waiter = guard.future_ready(id).expect("expected immediate Ok");
         drop(guard);
@@ -678,7 +678,7 @@ mod tests {
 
         let temp2 = temp_permit(&pm).await;
         let mut guard = mgr.acquire(temp2.proof()).await;
-        guard.fulfill_future(id, Value::Int(123)).unwrap();
+        guard.fulfill_future(id, Value::int(123)).unwrap();
         drop(guard);
         drop(temp2);
 
