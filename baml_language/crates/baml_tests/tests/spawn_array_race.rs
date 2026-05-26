@@ -148,6 +148,77 @@ async fn racing_array_push_pop_does_not_crash() {
     }
 }
 
+/// Racing direct index access (`arr[i]`) against grow-triggering pushes.
+/// Exercises the `LoadArrayElement` opcode path (not the codegen'd
+/// `Array.at(i)` builtin) — that opcode acquires the container lock so a
+/// racing grow can't tear the `(ptr, len, cap)` triple under the reader.
+#[tokio::test]
+async fn racing_array_index_read_vs_grow_does_not_crash() {
+    let program = compile_source_with_opt(
+        r#"
+        function grow_n(arr: int[], n: int) -> int {
+            let i = 0;
+            while i < n {
+                arr.push(i);
+                i = i + 1;
+            };
+            0
+        }
+
+        function read_n(arr: int[], n: int) -> int {
+            let i = 0;
+            let acc = 0;
+            while i < n {
+                let len = arr.length();
+                if len > 0 {
+                    acc = acc + arr[0];
+                };
+                i = i + 1;
+            };
+            acc
+        }
+
+        function main() -> int {
+            let arr = [1];
+            let g = spawn { grow_n(arr, 1000) };
+            let r1 = spawn { read_n(arr, 500) };
+            let r2 = spawn { read_n(arr, 500) };
+            (await g) + (await r1) + (await r2);
+            arr.length()
+        }
+        "#,
+        OptLevel::One,
+    );
+    let engine = Arc::new(
+        BexEngine::new(
+            program,
+            Arc::new(sys_ops::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("engine"),
+    );
+
+    let result = engine
+        .call_function_bound_args(
+            "user.main",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    match result {
+        Ok(BexExternalValue::Int(len)) => {
+            assert!(
+                (1..=1001).contains(&len),
+                "expected array length in 1..=1001, got {len}"
+            );
+        }
+        other => panic!("expected Int result, got {other:?}"),
+    }
+}
+
 /// Racing `map.set` and `map.delete`. The map's internal hash chains
 /// should not form cycles or torn pointers under the lazy biased mutex.
 #[tokio::test]

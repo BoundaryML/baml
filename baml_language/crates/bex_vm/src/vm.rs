@@ -4024,68 +4024,55 @@ impl BexVm {
                     let index_value = self.stack.ensure_pop();
                     let array_value = self.stack.ensure_pop();
                     let array_obj_index = self.as_object_ptr(array_value, ObjectType::Array)?;
-                    let array_len = match self.get_object(array_obj_index) {
-                        Object::Array(arr) => arr.len(),
-                        Object::Uint8Array(bytes) => bytes.len(),
-                        other => {
-                            return Err(VmInternalError::TypeError {
-                                expected: ObjectType::Array.into(),
-                                got: ObjectType::of(other).into(),
-                            }
-                            .into());
-                        }
-                    };
                     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-                    let index = match index_value.as_int() {
-                        Some(i) => {
-                            if i < 0 || i as usize >= array_len {
-                                return Err(VmError::Thrown(self.panic_to_exception_value(
-                                    VmPanic::IndexOutOfBounds {
-                                        index: i,
-                                        length: array_len,
-                                    },
-                                )));
-                            }
-                            i as usize
+                    let Some(i) = index_value.as_int() else {
+                        return Err(VmInternalError::TypeError {
+                            expected: bex_vm_types::types::Type::Int,
+                            got: self.type_of(&index_value),
                         }
-                        None => {
-                            return Err(VmInternalError::TypeError {
-                                expected: bex_vm_types::types::Type::Int,
-                                got: self.type_of(&index_value),
+                        .into());
+                    };
+                    // Acquire the array's read lock for the duration of the
+                    // bounds-check + element load so it stays atomic against
+                    // a racing `push`/grow. Guard drops at the end of the
+                    // inner scope before any `&mut self` call.
+                    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                    let load_result: Result<Value, (i64, usize)> = {
+                        match self.get_object(array_obj_index) {
+                            Object::Array(arr) => {
+                                let guard = arr.lock();
+                                let len = guard.len();
+                                if i < 0 || (i as usize) >= len {
+                                    Err((i, len))
+                                } else {
+                                    Ok(guard[i as usize])
+                                }
                             }
-                            .into());
+                            Object::Uint8Array(bytes) => {
+                                if i < 0 || (i as usize) >= bytes.len() {
+                                    Err((i, bytes.len()))
+                                } else {
+                                    Ok(Value::int(i64::from(bytes[i as usize])))
+                                }
+                            }
+                            other => {
+                                return Err(VmInternalError::TypeError {
+                                    expected: ObjectType::Array.into(),
+                                    got: ObjectType::of(other).into(),
+                                }
+                                .into());
+                            }
                         }
                     };
-                    #[allow(clippy::cast_possible_wrap)]
-                    let element = match self.get_object(array_obj_index) {
-                        Object::Array(array) => {
-                            if index >= array.len() {
-                                return Err(VmError::Thrown(self.panic_to_exception_value(
-                                    VmPanic::IndexOutOfBounds {
-                                        index: index as i64,
-                                        length: array.len(),
-                                    },
-                                )));
-                            }
-                            array[index]
-                        }
-                        Object::Uint8Array(bytes) => {
-                            if index >= bytes.len() {
-                                return Err(VmError::Thrown(self.panic_to_exception_value(
-                                    VmPanic::IndexOutOfBounds {
-                                        index: index as i64,
-                                        length: bytes.len(),
-                                    },
-                                )));
-                            }
-                            Value::int(i64::from(bytes[index]))
-                        }
-                        _ => {
-                            return Err(VmInternalError::TypeError {
-                                expected: ObjectType::Array.into(),
-                                got: ObjectType::of(self.get_object(array_obj_index)).into(),
-                            }
-                            .into());
+                    let element = match load_result {
+                        Ok(v) => v,
+                        Err((idx, len)) => {
+                            return Err(VmError::Thrown(self.panic_to_exception_value(
+                                VmPanic::IndexOutOfBounds {
+                                    index: idx,
+                                    length: len,
+                                },
+                            )));
                         }
                     };
                     self.stack.push(element);
@@ -4095,18 +4082,33 @@ impl BexVm {
                     let key_value = self.stack.ensure_pop();
                     let map_value = self.stack.ensure_pop();
                     let map_index = self.as_object_ptr(map_value, ObjectType::Map)?;
-                    let Object::Map(map) = self.get_object(map_index) else {
-                        return Err(VmInternalError::TypeError {
-                            expected: ObjectType::Map.into(),
-                            got: ObjectType::of(self.get_object(map_index)).into(),
-                        }
-                        .into());
-                    };
                     let key_index = self.as_object_ptr(key_value, ObjectType::String)?;
-                    let key = self.get_object(key_index).as_string()?;
-                    let value = map.get(key).copied().ok_or(VmError::Thrown(
-                        self.panic_to_exception_value(VmPanic::MapKeyNotFound),
-                    ))?;
+                    let key = self.get_object(key_index).as_string()?.clone();
+                    // Take the map's read lock and copy out the value so the
+                    // guard releases before any `&mut self` call.
+                    let lookup_result: Result<Option<Value>, ObjectType> =
+                        match self.get_object(map_index) {
+                            Object::Map(map) => {
+                                let guard = map.lock();
+                                Ok(guard.get(&key).copied())
+                            }
+                            other => Err(ObjectType::of(other)),
+                        };
+                    let value = match lookup_result {
+                        Ok(Some(v)) => v,
+                        Ok(None) => {
+                            return Err(VmError::Thrown(
+                                self.panic_to_exception_value(VmPanic::MapKeyNotFound),
+                            ));
+                        }
+                        Err(got) => {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Map.into(),
+                                got: got.into(),
+                            }
+                            .into());
+                        }
+                    };
                     self.stack.push(value);
                 }
 
@@ -4115,70 +4117,71 @@ impl BexVm {
                     let index_value = self.stack.ensure_pop();
                     let array_value = self.stack.ensure_pop();
                     let array_object_index = self.as_object_ptr(array_value, ObjectType::Array)?;
-                    let array_len = match self.get_object(array_object_index) {
-                        Object::Array(arr) => arr.len(),
-                        Object::Uint8Array(bytes) => bytes.len(),
-                        other => {
-                            return Err(VmInternalError::TypeError {
-                                expected: ObjectType::Array.into(),
-                                got: ObjectType::of(other).into(),
+                    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                    let Some(i) = index_value.as_int() else {
+                        return Err(VmInternalError::TypeError {
+                            expected: bex_vm_types::types::Type::Int,
+                            got: self.type_of(&index_value),
+                        }
+                        .into());
+                    };
+                    let new_value_u8: Option<u8> =
+                        new_value.as_int().map(|v| (v.cast_unsigned() & 0xFF) as u8);
+                    // Acquire the array's write lock for bounds-check + old
+                    // read + new write atomically. Guard drops at end of
+                    // inner scope before any `&mut self` ops.
+                    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                    let store_result: Result<Value, (i64, usize)> = {
+                        match self.get_object_mut(array_object_index) {
+                            Object::Array(arr) => {
+                                let mut guard = arr.lock_mut();
+                                let len = guard.len();
+                                if i < 0 || (i as usize) >= len {
+                                    Err((i, len))
+                                } else {
+                                    let old = guard[i as usize];
+                                    guard[i as usize] = new_value;
+                                    Ok(old)
+                                }
                             }
-                            .into());
+                            Object::Uint8Array(bytes) => {
+                                let Some(byte_v) = new_value_u8 else {
+                                    return Err(VmInternalError::TypeError {
+                                        expected: bex_vm_types::types::Type::Int,
+                                        got: self.type_of(&new_value),
+                                    }
+                                    .into());
+                                };
+                                if i < 0 || (i as usize) >= bytes.len() {
+                                    Err((i, bytes.len()))
+                                } else {
+                                    let old = Value::int(i64::from(bytes[i as usize]));
+                                    bytes[i as usize] = byte_v;
+                                    Ok(old)
+                                }
+                            }
+                            other => {
+                                return Err(VmInternalError::TypeError {
+                                    expected: ObjectType::Array.into(),
+                                    got: ObjectType::of(other).into(),
+                                }
+                                .into());
+                            }
+                        }
+                    };
+                    let old_value = match store_result {
+                        Ok(v) => v,
+                        Err((idx, len)) => {
+                            return Err(VmError::Thrown(self.panic_to_exception_value(
+                                VmPanic::IndexOutOfBounds {
+                                    index: idx,
+                                    length: len,
+                                },
+                            )));
                         }
                     };
                     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-                    let index = match index_value.as_int() {
-                        Some(i) => {
-                            if i < 0 || i as usize >= array_len {
-                                return Err(VmError::Thrown(self.panic_to_exception_value(
-                                    VmPanic::IndexOutOfBounds {
-                                        index: i,
-                                        length: array_len,
-                                    },
-                                )));
-                            }
-                            i as usize
-                        }
-                        None => {
-                            return Err(VmInternalError::TypeError {
-                                expected: bex_vm_types::types::Type::Int,
-                                got: self.type_of(&index_value),
-                            }
-                            .into());
-                        }
-                    };
-                    #[allow(clippy::cast_possible_wrap)]
-                    let old_value = match self.get_object(array_object_index) {
-                        Object::Array(array) => {
-                            if index >= array.len() {
-                                return Err(VmError::Thrown(self.panic_to_exception_value(
-                                    VmPanic::IndexOutOfBounds {
-                                        index: index as i64,
-                                        length: array.len(),
-                                    },
-                                )));
-                            }
-                            array[index]
-                        }
-                        Object::Uint8Array(bytes) => {
-                            if index >= bytes.len() {
-                                return Err(VmError::Thrown(self.panic_to_exception_value(
-                                    VmPanic::IndexOutOfBounds {
-                                        index: index as i64,
-                                        length: bytes.len(),
-                                    },
-                                )));
-                            }
-                            Value::int(i64::from(bytes[index]))
-                        }
-                        other => {
-                            return Err(VmInternalError::TypeError {
-                                expected: ObjectType::Array.into(),
-                                got: ObjectType::of(other).into(),
-                            }
-                            .into());
-                        }
-                    };
+                    let index = i as usize;
                     let watched_node = NodeId::HeapObject(array_object_index);
                     self.update_watched_node(
                         watched_node,
@@ -4187,22 +4190,6 @@ impl BexVm {
                         new_value,
                     );
                     self.heap.write_barrier(array_object_index, new_value);
-                    match self.get_object_mut(array_object_index) {
-                        Object::Array(array) => {
-                            array[index] = new_value;
-                        }
-                        Object::Uint8Array(bytes) => {
-                            let Some(i) = new_value.as_int() else {
-                                return Err(VmInternalError::TypeError {
-                                    expected: bex_vm_types::types::Type::Int,
-                                    got: self.type_of(&new_value),
-                                }
-                                .into());
-                            };
-                            bytes[index] = (i.cast_unsigned() & 0xFF) as u8;
-                        }
-                        _ => unreachable!("already typechecked"),
-                    }
                     let notifications = self.process_notifications(watched_node)?;
                     if !notifications.is_empty() {
                         return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
@@ -4218,12 +4205,25 @@ impl BexVm {
                     let key_index = self.as_object_ptr(key_value, ObjectType::String)?;
                     let key = self.get_object(key_index).as_string()?.clone();
                     let map_index = self.as_object_ptr(map_value, ObjectType::Map)?;
-                    let old_value = match self.get_object(map_index) {
-                        Object::Map(map) => map.get(&key).copied().unwrap_or(Value::NULL),
-                        other => {
+                    // Take the map's write lock for capture-old + insert-new
+                    // atomically. Guard drops before any `&mut self` ops.
+                    let store_result: Result<Value, ObjectType> = {
+                        match self.get_object_mut(map_index) {
+                            Object::Map(map) => {
+                                let mut guard = map.lock_mut();
+                                let old = guard.get(&key).copied().unwrap_or(Value::NULL);
+                                guard.insert(key.clone(), new_value);
+                                Ok(old)
+                            }
+                            other => Err(ObjectType::of(other)),
+                        }
+                    };
+                    let old_value = match store_result {
+                        Ok(v) => v,
+                        Err(got) => {
                             return Err(VmInternalError::TypeError {
                                 expected: ObjectType::Map.into(),
-                                got: ObjectType::of(other).into(),
+                                got: got.into(),
                             }
                             .into());
                         }
@@ -4231,14 +4231,11 @@ impl BexVm {
                     let watched_node = NodeId::HeapObject(map_index);
                     self.update_watched_node(
                         watched_node,
-                        watch::Path::MapKey(key.clone()),
+                        watch::Path::MapKey(key),
                         old_value,
                         new_value,
                     );
                     self.heap.write_barrier(map_index, new_value);
-                    if let Object::Map(map) = self.get_object_mut(map_index) {
-                        map.insert(key, new_value);
-                    }
                     let notifications = self.process_notifications(watched_node)?;
                     if !notifications.is_empty() {
                         return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
