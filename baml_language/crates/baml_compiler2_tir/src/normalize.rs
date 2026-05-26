@@ -285,7 +285,17 @@ impl StructuralTy {
             // EnumVariant(E, V) <: Enum(E)
             (StructuralTy::EnumVariant(e, _), StructuralTy::Enum(sup_e)) => e == sup_e,
 
-            // Function subtyping: contravariant params, covariant return
+            // Function subtyping: contravariant params, covariant return —
+            // checked *coercion-free* in every position. A function value
+            // offers no boundary at which to insert a representation-changing
+            // coercion (`int → bigint`) on its arguments or result: an indirect
+            // call through the supertype hands raw values straight to the
+            // callee and back, with no widening site. So `fn() -> int` is not
+            // usable as `fn() -> bigint`, nor `fn(bigint)` as `fn(int)`, even
+            // though `int <: bigint` as a scalar. (To widen, wrap the call in a
+            // lambda whose own return/arg moves insert the coercion.) The
+            // `coercion_free` flag is forced to `true` here regardless of the
+            // surrounding context.
             (
                 StructuralTy::Function {
                     params: params1,
@@ -298,13 +308,13 @@ impl StructuralTy {
                     throws: throws2,
                 },
             ) => {
-                if !ret1.is_subtype_of(ret2, assumptions, coercion_free) {
+                if !ret1.is_subtype_of(ret2, assumptions, true) {
                     return false;
                 }
-                if !throws1.is_subtype_of(throws2, assumptions, coercion_free) {
+                if !throws1.is_subtype_of(throws2, assumptions, true) {
                     return false;
                 }
-                function_params_subtype(params1, params2, assumptions, coercion_free)
+                function_params_subtype(params1, params2, assumptions)
             }
 
             // TypeVar (generic parameter) is opaque — only subtypes itself
@@ -321,11 +331,13 @@ impl StructuralTy {
     }
 }
 
+/// Subtype check for function parameter lists (contravariant). Always
+/// coercion-free: see the `Function` arm of [`StructuralTy::is_subtype_of`]
+/// for why a function boundary admits no `int → bigint` widening.
 fn function_params_subtype(
     sub_params: &[StructuralFunctionParam],
     sup_params: &[StructuralFunctionParam],
     assumptions: &mut HashSet<(StructuralTy, StructuralTy, bool)>,
-    coercion_free: bool,
 ) -> bool {
     let sub_required: Vec<_> = sub_params
         .iter()
@@ -341,7 +353,7 @@ fn function_params_subtype(
     }
 
     for (sub, sup) in sub_required.iter().zip(sup_required.iter()) {
-        if !sup.ty.is_subtype_of(&sub.ty, assumptions, coercion_free) {
+        if !sup.ty.is_subtype_of(&sub.ty, assumptions, true) {
             return false;
         }
     }
@@ -358,7 +370,7 @@ fn function_params_subtype(
         }) else {
             return false;
         };
-        if !sup.ty.is_subtype_of(&sub.ty, assumptions, coercion_free) {
+        if !sup.ty.is_subtype_of(&sub.ty, assumptions, true) {
             return false;
         }
     }
@@ -1341,43 +1353,89 @@ mod tests {
 
     #[test]
     fn test_function_covariant_return() {
-        // Demonstrates covariance using `Int <: Bigint` (the surviving scalar
-        // widening). `Int <: Float` was removed entirely so the original pair
-        // would no longer exercise the covariance rule.
+        // Function return is covariant, but checked *coercion-free*: a function
+        // value has no boundary at which to widen its result, so the covariance
+        // uses coercion-free relations (`EnumVariant <: Enum`). The coercive
+        // `int → bigint` pair is rejected in both directions.
         let aliases = HashMap::new();
-        let f1 = Ty::Function {
-            params: vec![required_param(Ty::Primitive(
-                PrimitiveType::Int,
+        let returns_variant = Ty::Function {
+            params: vec![],
+            ret: Box::new(Ty::EnumVariant(
+                qn("Color"),
+                Name::new("Red"),
                 TyAttr::default(),
-            ))],
+            )),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        };
+        let returns_enum = Ty::Function {
+            params: vec![],
+            ret: Box::new(Ty::Enum(qn("Color"), TyAttr::default())),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        };
+        assert!(is_subtype_of(&returns_variant, &returns_enum, &aliases));
+        assert!(!is_subtype_of(&returns_enum, &returns_variant, &aliases));
+
+        // `fn() -> int` is NOT usable as `fn() -> bigint`: there is no site to
+        // insert the `int → bigint` coercion on the returned value.
+        let returns_int = Ty::Function {
+            params: vec![],
             ret: Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
             throws: Box::new(Ty::Never {
                 attr: TyAttr::default(),
             }),
             attr: TyAttr::default(),
         };
-        let f2 = Ty::Function {
-            params: vec![required_param(Ty::Primitive(
-                PrimitiveType::Int,
-                TyAttr::default(),
-            ))],
+        let returns_bigint = Ty::Function {
+            params: vec![],
             ret: Box::new(Ty::Primitive(PrimitiveType::Bigint, TyAttr::default())),
             throws: Box::new(Ty::Never {
                 attr: TyAttr::default(),
             }),
             attr: TyAttr::default(),
         };
-        assert!(is_subtype_of(&f1, &f2, &aliases));
-        assert!(!is_subtype_of(&f2, &f1, &aliases));
+        assert!(!is_subtype_of(&returns_int, &returns_bigint, &aliases));
+        assert!(!is_subtype_of(&returns_bigint, &returns_int, &aliases));
     }
 
     #[test]
     fn test_function_contravariant_params() {
-        // Demonstrates contravariance using `Int <: Bigint`. (A function that
-        // accepts `bigint` can be used where a function accepting `int` is
-        // expected — the caller's `int` argument widens to bigint.)
+        // Function params are contravariant, and — like the return position —
+        // checked coercion-free. A function accepting the wider `Enum` stands
+        // in for one accepting an `EnumVariant`. The coercive `int`/`bigint`
+        // pair is rejected in both directions.
         let aliases = HashMap::new();
-        let f1 = Ty::Function {
+        let accepts_enum = Ty::Function {
+            params: vec![required_param(Ty::Enum(qn("Color"), TyAttr::default()))],
+            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        };
+        let accepts_variant = Ty::Function {
+            params: vec![required_param(Ty::EnumVariant(
+                qn("Color"),
+                Name::new("Red"),
+                TyAttr::default(),
+            ))],
+            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        };
+        assert!(is_subtype_of(&accepts_enum, &accepts_variant, &aliases));
+        assert!(!is_subtype_of(&accepts_variant, &accepts_enum, &aliases));
+
+        // `fn(bigint)` is NOT usable as `fn(int)`: the caller's `int` argument
+        // has no site at which to widen before reaching the `bigint` callee.
+        let accepts_bigint = Ty::Function {
             params: vec![required_param(Ty::Primitive(
                 PrimitiveType::Bigint,
                 TyAttr::default(),
@@ -1388,7 +1446,7 @@ mod tests {
             }),
             attr: TyAttr::default(),
         };
-        let f2 = Ty::Function {
+        let accepts_int = Ty::Function {
             params: vec![required_param(Ty::Primitive(
                 PrimitiveType::Int,
                 TyAttr::default(),
@@ -1399,8 +1457,8 @@ mod tests {
             }),
             attr: TyAttr::default(),
         };
-        assert!(is_subtype_of(&f1, &f2, &aliases));
-        assert!(!is_subtype_of(&f2, &f1, &aliases));
+        assert!(!is_subtype_of(&accepts_bigint, &accepts_int, &aliases));
+        assert!(!is_subtype_of(&accepts_int, &accepts_bigint, &aliases));
     }
 
     #[test]

@@ -187,6 +187,87 @@ async fn test_int_to_bigint_assign_op_nonliteral_rhs() {
 }
 
 #[tokio::test]
+async fn test_int_to_bigint_union_let_move() {
+    // Gap (collision audit): a value statically typed `int | bigint` moved
+    // into a `bigint` slot. The source union is a coercive subtype of bigint,
+    // so the move widens — `IntToBigint` promotes the `int` arm at runtime.
+    let output = baml_test!(
+        baml: r#"
+        function Pick() -> int | bigint { 1 }
+        function main() -> bigint {
+            let y: bigint = Pick();
+            y
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(1))));
+}
+
+#[tokio::test]
+async fn test_int_to_bigint_union_let_move_bigint_arm() {
+    // The same `int | bigint -> bigint` move, but the value is already a
+    // `bigint`. `IntToBigint` must pass it through unchanged (not re-wrap or
+    // fault).
+    let output = baml_test!(
+        baml: r#"
+        function Pick() -> int | bigint { 2n }
+        function main() -> bigint {
+            let y: bigint = Pick();
+            y
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(2))));
+}
+
+#[tokio::test]
+async fn test_int_to_bigint_union_return() {
+    // Gap (collision audit): a function declared `-> bigint` whose body is
+    // statically `int | bigint`. The return path widens the `int` arm.
+    let output = baml_test!(
+        baml: r#"
+        function Pick() -> int | bigint { 1 }
+        function GetBig() -> bigint { Pick() }
+    "#,
+        entry: "GetBig",
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(1))));
+}
+
+#[tokio::test]
+async fn test_int_to_bigint_optional_union_null_passthrough() {
+    // `int? -> bigint?`: the widening fires because the source may be an int,
+    // but at runtime the value is `null`. `IntToBigint` leaves non-int values
+    // (here, `null`) untouched.
+    let output = baml_test!(
+        baml: r#"
+        function PickOpt() -> int? { null }
+        function main() -> bigint? {
+            let y: bigint? = PickOpt();
+            y
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Null));
+}
+
+#[tokio::test]
+async fn test_int_to_bigint_optional_union_int_arm() {
+    // The same `int? -> bigint?` move, but the value is a concrete int —
+    // it is promoted to bigint.
+    let output = baml_test!(
+        baml: r#"
+        function PickOpt() -> int? { 5 }
+        function main() -> bigint? {
+            let y: bigint? = PickOpt();
+            y
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(5))));
+}
+
+#[tokio::test]
 async fn test_int_to_bigint_generic_fn_explicit_type_arg() {
     // `f<bigint>(1)`: the param `x: T` is instantiated as bigint at the call
     // site, so the int literal `1` must widen.

@@ -100,6 +100,12 @@ function user.IntFieldIntoBigintClass() -> user.BigintHolder throws never {
   }
   !! 2791..2792: type mismatch: expected bigint, got 1
 }
+function user.BigintParamDefaultInt(x: bigint = 0) -> bigint throws never {
+  { : bigint
+    x : bigint
+  }
+  !! 3094..3095: type mismatch: expected bigint, got 0
+}
 class user.BigintHolder$stream {
   count: null | bigint
 }

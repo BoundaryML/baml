@@ -5,6 +5,9 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.BigintHolder {
   count: bigint
 }
+function user.BigintParamDefaultInt(x: bigint = 0) -> bigint  [expr] {
+  {  } x
+}
 function user.IntArrayToBigintArray() -> bigint[]  [expr] {
   { let a = [1, 2] } a
 }

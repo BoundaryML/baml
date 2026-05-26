@@ -1665,16 +1665,33 @@ impl<'db> TypeInferenceBuilder<'db> {
                         attr: TyAttr::default(),
                     });
             let got_ty = self.infer_expr(default_expr, &defaults.exprs);
-            if !matches!(expected_ty, Ty::Unknown { .. } | Ty::Error { .. })
-                && !self.argument_matches_expected(&got_ty, &expected_ty)
-            {
-                self.report_at_span(
-                    TirTypeError::TypeMismatch {
-                        expected: expected_ty,
-                        got: got_ty,
-                    },
-                    default_span,
-                );
+            if !matches!(expected_ty, Ty::Unknown { .. } | Ty::Error { .. }) {
+                if !self.argument_matches_expected(&got_ty, &expected_ty) {
+                    self.report_at_span(
+                        TirTypeError::TypeMismatch {
+                            expected: expected_ty,
+                            got: got_ty,
+                        },
+                        default_span,
+                    );
+                } else if self.is_subtype(&got_ty, &expected_ty)
+                    && !self.is_coercion_free_subtype(&got_ty, &expected_ty)
+                {
+                    // The default value lands directly in the parameter slot —
+                    // the default-parameter prologue performs no `int → bigint`
+                    // widening (unlike call-site arguments) — so a
+                    // representation-changing coercion is unsound here. Require
+                    // the default to already carry the parameter's type
+                    // (e.g. `0n` for a `bigint` parameter), mirroring the
+                    // container-element invariance check.
+                    self.report_at_span(
+                        TirTypeError::TypeMismatch {
+                            expected: expected_ty,
+                            got: got_ty,
+                        },
+                        default_span,
+                    );
+                }
             }
 
             let later_params: FxHashSet<Name> = params

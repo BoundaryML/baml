@@ -3659,17 +3659,19 @@ impl BexVm {
 
             // ── Int-to-Bigint widening ───────────────────────────────
             Instruction::IntToBigint => {
-                let v = self.stack.ensure_pop();
-                let Value::Int(n) = v else {
-                    return Err(VmInternalError::TypeError {
-                        expected: Type::Int,
-                        got: self.type_of(&v),
+                match self.stack.ensure_pop() {
+                    Value::Int(n) => {
+                        let bi = num_bigint::BigInt::from(n);
+                        let result = self.alloc_bigint(std::sync::Arc::new(bi))?;
+                        self.stack.push(result);
                     }
-                    .into());
-                };
-                let bi = num_bigint::BigInt::from(n);
-                let result = self.alloc_bigint(std::sync::Arc::new(bi))?;
-                self.stack.push(result);
+                    // `IntToBigint` promotes only the `int` arm of an
+                    // `int → bigint` move. The source may be a union/optional
+                    // (`int | bigint`, `int?`), so a value that is already a
+                    // `bigint` — or any other non-`int` member valid in the
+                    // destination, such as `null` — passes through unchanged.
+                    other => self.stack.push(other),
+                }
             }
 
             // ── Specialized float comparison ─────────────────────────
@@ -7525,17 +7527,17 @@ impl BexVm {
 
                 // ── Int-to-Bigint widening ────────────────────────────────────
                 OpCode::IntToBigint => {
-                    let v = self.stack.ensure_pop();
-                    let Value::Int(n) = v else {
-                        return Err(VmInternalError::TypeError {
-                            expected: Type::Int,
-                            got: self.type_of(&v),
+                    match self.stack.ensure_pop() {
+                        Value::Int(n) => {
+                            let bi = num_bigint::BigInt::from(n);
+                            let result = self.alloc_bigint(std::sync::Arc::new(bi))?;
+                            self.stack.push(result);
                         }
-                        .into());
-                    };
-                    let bi = num_bigint::BigInt::from(n);
-                    let result = self.alloc_bigint(std::sync::Arc::new(bi))?;
-                    self.stack.push(result);
+                        // See `Instruction::IntToBigint`: promote the `int` arm,
+                        // pass every other (already-`bigint`/`null`/…) value
+                        // through unchanged.
+                        other => self.stack.push(other),
+                    }
                 }
 
                 // ── Expanded unary ────────────────────────────────────────────

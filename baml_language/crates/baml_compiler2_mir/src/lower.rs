@@ -4465,15 +4465,29 @@ impl LoweringContext<'_> {
         }
     }
 
+    /// Whether a source type *may* produce an `int` value that needs promotion
+    /// to `bigint`. True for a plain `int` / int-literal, and for any `Optional`
+    /// or `Union` that contains such a member — e.g. `int | bigint` (union
+    /// move/return) or `int?` widening into `bigint?`.
+    ///
+    /// The non-`int` members of such a source (an already-`bigint`, a `null`,
+    /// or any other union member valid in the destination) are left untouched:
+    /// `IntToBigint` promotes only the `int` arm and passes everything else
+    /// through unchanged.
+    fn src_may_be_int(ty: &Ty) -> bool {
+        match ty {
+            Ty::Int { .. } | Ty::Literal(baml_type::Literal::Int(_), _) => true,
+            Ty::Optional(inner, _) => Self::src_may_be_int(inner),
+            Ty::Union(members, _) => members.iter().any(Self::src_may_be_int),
+            _ => false,
+        }
+    }
+
     fn needs_int_to_bigint_widen(&self, dest_ty: &Ty, src_expr_id: AstExprId) -> bool {
         if !Self::dest_widens_int_to_bigint(dest_ty) {
             return false;
         }
-        let src_ty = self.expr_ty(src_expr_id);
-        matches!(
-            src_ty,
-            Ty::Int { .. } | Ty::Literal(baml_type::Literal::Int(_), _)
-        )
+        Self::src_may_be_int(&self.expr_ty(src_expr_id))
     }
 
     /// Lower `expr_id` into `dest`, inserting an `int → bigint` widening
@@ -4497,17 +4511,15 @@ impl LoweringContext<'_> {
     }
 
     /// Like `lower_to_operand`, but if `param_is_bigint` is `true` and the
-    /// source expression produces an `int`, inserts an `IntToBigint` coercion.
+    /// source expression may produce an `int` (see [`Self::src_may_be_int`]),
+    /// inserts an `IntToBigint` coercion.
     ///
     /// Used in `lower_call_arg_operands` to handle implicit widening at call
     /// sites where an `int` argument is passed to a `bigint` parameter.
     fn lower_to_operand_widening(&mut self, expr_id: AstExprId, param_is_bigint: bool) -> Operand {
         if param_is_bigint {
             let src_ty = self.expr_ty(expr_id);
-            if matches!(
-                src_ty,
-                Ty::Int { .. } | Ty::Literal(baml_type::Literal::Int(_), _)
-            ) {
+            if Self::src_may_be_int(&src_ty) {
                 // Lower into an int temp, then wrap with IntToBigint.
                 let int_temp = self.builder.temp(src_ty);
                 self.lower_expr(expr_id, Place::local(int_temp));

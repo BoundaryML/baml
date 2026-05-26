@@ -161,3 +161,13 @@ source: crates/baml_tests/src/generated_tests.rs
     │ 
     │ Note: Error code: E0001
 ────╯
+
+  [type] error: type mismatch: expected bigint, got 0
+    ╭─[ numeric_invariance.baml:94:44 ]
+    │
+ 94 │ function BigintParamDefaultInt(x: bigint = 0) -> bigint {
+    │                                            ┬  
+    │                                            ╰── type mismatch: expected bigint, got 0
+    │ 
+    │ Note: Error code: E0001
+────╯

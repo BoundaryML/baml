@@ -91,3 +91,11 @@ class BigintHolder {
 function IntFieldIntoBigintClass() -> BigintHolder {
     BigintHolder { count: 1 }
 }
+
+// A parameter default lands directly in the parameter slot — the
+// default-parameter prologue performs no `int -> bigint` widening (unlike
+// call-site arguments), so an `int` default for a `bigint` parameter must be
+// a compile error; write `0n`.
+function BigintParamDefaultInt(x: bigint = 0) -> bigint {
+    x
+}
