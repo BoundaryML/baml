@@ -1709,12 +1709,24 @@ fn aggregate_stack_prefix_operands(rvalue: &Rvalue) -> Option<Vec<&Operand>> {
             kind: baml_compiler2_mir::AggregateKind::Array,
             fields,
         } => Some(fields.iter().collect()),
-        // Class aggregates allocate the instance before `init_field`, so values
-        // already sitting on the stack are below the instance and cannot be
-        // consumed by the existing `init_field` instruction order.
+        Rvalue::Aggregate {
+            kind: baml_compiler2_mir::AggregateKind::Class { .. },
+            fields,
+        } if !fields.iter().any(is_class_field_copy_operand) => Some(fields.iter().collect()),
+        // Class aggregates with field-copy operands use the `init_spread` path
+        // instead of the field-value init plan, so stack-carried values would
+        // not be consumed in the order modeled here.
         Rvalue::Aggregate { .. } => None,
         _ => None,
     }
+}
+
+fn is_class_field_copy_operand(operand: &Operand) -> bool {
+    let place = match operand {
+        Operand::Copy(place) | Operand::Move(place) => place,
+        Operand::Constant(_) => return false,
+    };
+    matches!(place, Place::Field { .. })
 }
 
 fn operand_local(operand: &Operand) -> Option<Local> {

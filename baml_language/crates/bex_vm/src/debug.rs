@@ -160,7 +160,8 @@ pub(crate) fn display_instruction(
         Instruction::LoadField(_)
         | Instruction::StoreField(_)
         | Instruction::InitField(_)
-        | Instruction::InitSpread(_) => operand_meta
+        | Instruction::InitSpread(_)
+        | Instruction::InitInstance(_) => operand_meta
             .map(|m| format!("({})", m.as_str()))
             .unwrap_or_default(),
         Instruction::Jump(offset)
@@ -380,6 +381,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
         }
         Instruction::AllocMap(_)
         | Instruction::AllocInstance { .. }
+        | Instruction::InitInstance(_)
         | Instruction::AllocVariant(_)
         | Instruction::AllocArray(_) => Color::Cyan,
         Instruction::SysOp(_) | Instruction::Spawn | Instruction::Await => Color::BrightGreen,
@@ -809,6 +811,19 @@ fn display_instruction_textual(
                 format!("alloc_instance {name}")
             }
         }
+        Instruction::InitInstance(plan_idx) => {
+            let name = meta_str(&"");
+            let ntypeargs = function
+                .bytecode
+                .class_init_plans
+                .get(*plan_idx)
+                .map_or(0, |plan| plan.ntypeargs);
+            if ntypeargs > 0 {
+                format!("init_instance<{ntypeargs}> {name}")
+            } else {
+                format!("init_instance {name}")
+            }
+        }
         Instruction::AllocVariant(_) => format!("alloc_variant {}", meta_str(&"")),
 
         // --- Array/Map element access ---
@@ -1070,6 +1085,7 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         | Instruction::Call { .. }
         | Instruction::SysOp(_)
         | Instruction::AllocInstance { .. }
+        | Instruction::InitInstance(_)
         | Instruction::AllocVariant(_)
         | Instruction::Watch(_)
         | Instruction::Unwatch(_)
@@ -1251,6 +1267,7 @@ pub fn display_compact_bytecode(
             | OpCode::Copy
             | OpCode::AllocArray
             | OpCode::AllocMap
+            | OpCode::InitInstance
             | OpCode::AllocVariant
             | OpCode::SysOp
             | OpCode::Watch

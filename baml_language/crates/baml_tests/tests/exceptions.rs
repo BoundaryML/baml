@@ -660,9 +660,8 @@ async fn catch_user_class_single_arm() {
     );
     insta::assert_snapshot!(output.bytecode, @r#"
     function fails() -> int {
-        alloc_instance user.NetworkError
         load_const "http://example.com"
-        init_field .url
+        init_instance user.NetworkError .url
         throw
     }
 
@@ -717,15 +716,13 @@ async fn catch_two_user_classes_dispatch_first() {
         jump L1
 
       L0:
-        alloc_instance user.ParseError
         load_const "bad json"
-        init_field .message
+        init_instance user.ParseError .message
         throw
 
       L1:
-        alloc_instance user.NetworkError
         load_const "http://x"
-        init_field .url
+        init_instance user.NetworkError .url
         throw
     }
 
@@ -818,9 +815,8 @@ async fn catch_user_class_plus_wildcard() {
         throw
 
       L1:
-        alloc_instance user.NetworkError
         load_const "http://x"
-        init_field .url
+        init_instance user.NetworkError .url
         throw
     }
 
@@ -901,21 +897,18 @@ async fn catch_three_user_classes_plus_wildcard() {
         throw
 
       L3:
-        alloc_instance user.RateLimit
         load_const 30
-        init_field .retryAfter
+        init_instance user.RateLimit .retryAfter
         throw
 
       L4:
-        alloc_instance user.NotFound
         load_const "/users"
-        init_field .path
+        init_instance user.NotFound .path
         throw
 
       L5:
-        alloc_instance user.AuthError
         load_const "expired"
-        init_field .reason
+        init_instance user.AuthError .reason
         throw
     }
 
@@ -987,9 +980,8 @@ async fn named_class_binding_access_field() {
     );
     insta::assert_snapshot!(output.bytecode, @r#"
     function fails() -> string {
-        alloc_instance user.NetworkError
         load_const "http://example.com"
-        init_field .url
+        init_instance user.NetworkError .url
         throw
     }
 
@@ -1048,15 +1040,13 @@ async fn named_class_binding_dispatch_access_fields() {
         jump L1
 
       L0:
-        alloc_instance user.ParseError
         load_const "bad json"
-        init_field .message
+        init_instance user.ParseError .message
         throw
 
       L1:
-        alloc_instance user.NetworkError
         load_const "http://x"
-        init_field .url
+        init_instance user.NetworkError .url
         throw
     }
 
@@ -1121,9 +1111,8 @@ async fn bare_class_single_arm() {
     );
     insta::assert_snapshot!(output.bytecode, @r#"
     function fails() -> int {
-        alloc_instance user.NetworkError
         load_const "http://example.com"
-        init_field .url
+        init_instance user.NetworkError .url
         throw
     }
 
@@ -1178,15 +1167,13 @@ async fn bare_class_dispatch_first() {
         jump L1
 
       L0:
-        alloc_instance user.ParseError
         load_const "bad"
-        init_field .message
+        init_instance user.ParseError .message
         throw
 
       L1:
-        alloc_instance user.NetworkError
         load_const "http://x"
-        init_field .url
+        init_instance user.NetworkError .url
         throw
     }
 
@@ -1279,9 +1266,8 @@ async fn bare_class_plus_wildcard() {
         throw
 
       L1:
-        alloc_instance user.NetworkError
         load_const "http://x"
-        init_field .url
+        init_instance user.NetworkError .url
         throw
     }
 
@@ -2085,9 +2071,8 @@ async fn user_class_plus_panic_plus_wildcard_class_fires() {
         throw
 
       L2:
-        alloc_instance user.AppError
         load_const 500
-        init_field .code
+        init_instance user.AppError .code
         throw
     }
     "#);
@@ -2180,9 +2165,8 @@ async fn user_class_plus_panic_plus_wildcard_panic_fires() {
         return
 
       L3:
-        alloc_instance user.AppError
         load_const 500
-        init_field .code
+        init_instance user.AppError .code
         throw
     }
     "#);
@@ -2644,9 +2628,8 @@ async fn four_arms_division_by_zero_fires() {
         throw
 
       L3:
-        alloc_instance user.AppError
         load_const 404
-        init_field .code
+        init_instance user.AppError .code
         throw
 
       L4:
@@ -2871,9 +2854,8 @@ async fn four_arms_no_error() {
         throw
 
       L5:
-        alloc_instance user.AppError
         load_const 404
-        init_field .code
+        init_instance user.AppError .code
         throw
 
       L6:
@@ -3510,27 +3492,23 @@ async fn catch_four_typed_arms_jump_table() {
         jump L3
 
       L2:
-        alloc_instance user.ErrD
         load_const 4
-        init_field .x
+        init_instance user.ErrD .x
         throw
 
       L3:
-        alloc_instance user.ErrC
         load_const 3
-        init_field .x
+        init_instance user.ErrC .x
         throw
 
       L4:
-        alloc_instance user.ErrB
         load_const 2
-        init_field .x
+        init_instance user.ErrB .x
         throw
 
       L5:
-        alloc_instance user.ErrA
         load_const 1
-        init_field .x
+        init_instance user.ErrA .x
         throw
     }
     ");
@@ -3634,27 +3612,23 @@ async fn catch_four_typed_arms_plus_wildcard_jump_table() {
         throw
 
       L4:
-        alloc_instance user.ErrD
         load_const 4
-        init_field .x
+        init_instance user.ErrD .x
         throw
 
       L5:
-        alloc_instance user.ErrC
         load_const 3
-        init_field .x
+        init_instance user.ErrC .x
         throw
 
       L6:
-        alloc_instance user.ErrB
         load_const 2
-        init_field .x
+        init_instance user.ErrB .x
         throw
 
       L7:
-        alloc_instance user.ErrA
         load_const 1
-        init_field .x
+        init_instance user.ErrA .x
         throw
     }
     "#);
@@ -3692,15 +3666,13 @@ async fn catch_two_typed_arms_sequential_chain() {
         jump L1
 
       L0:
-        alloc_instance user.ParseError
         load_const "bad"
-        init_field .msg
+        init_instance user.ParseError .msg
         throw
 
       L1:
-        alloc_instance user.NetworkError
         load_const "http://x"
-        init_field .url
+        init_instance user.NetworkError .url
         throw
     }
 
@@ -3768,9 +3740,8 @@ async fn catch_mixed_literal_and_typed_no_switch() {
         jump L1
 
       L0:
-        alloc_instance user.AppError
         load_const 404
-        init_field .code
+        init_instance user.AppError .code
         throw
 
       L1:
@@ -4132,27 +4103,23 @@ async fn catch_four_user_classes_instanceof_chain() {
         throw
 
       L4:
-        alloc_instance user.Timeout
         load_const 5000
-        init_field .ms
+        init_instance user.Timeout .ms
         throw
 
       L5:
-        alloc_instance user.RateLimit
         load_const 30
-        init_field .retryAfter
+        init_instance user.RateLimit .retryAfter
         throw
 
       L6:
-        alloc_instance user.NotFound
         load_const "/users"
-        init_field .path
+        init_instance user.NotFound .path
         throw
 
       L7:
-        alloc_instance user.AuthError
         load_const "expired"
-        init_field .reason
+        init_instance user.AuthError .reason
         throw
     }
 
@@ -4343,9 +4310,8 @@ async fn catch_mixed_named_and_anonymous_bindings() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function fails() -> string {
-        alloc_instance user.NetworkError
         load_const "http://example.com"
-        init_field .url
+        init_instance user.NetworkError .url
         throw
     }
 

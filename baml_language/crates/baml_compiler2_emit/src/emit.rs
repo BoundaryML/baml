@@ -19,9 +19,9 @@ use bex_vm_types::{
     BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionKind, FunctionOrigin,
     GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp,
     bytecode::{
-        BlockNotification, BlockNotificationType, DebugLocalScope, FieldCopy, FieldCopySet,
-        InstructionMeta, JumpTableData, LineTableEntry, MatchHashEntry, MatchHashTable,
-        OperandMeta,
+        BlockNotification, BlockNotificationType, ClassInitPlan, DebugLocalScope, FieldCopy,
+        FieldCopySet, InstructionMeta, JumpTableData, LineTableEntry, MatchHashEntry,
+        MatchHashTable, OperandMeta,
     },
 };
 
@@ -1189,6 +1189,38 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         self.set_operand(inst, OperandMeta::Field(display_fields.join(", ")));
     }
 
+    fn emit_init_instance(&mut self, class_name: &str, ntypeargs: u16, field_count: usize) {
+        if let Some(&class_obj_idx) = self.class_object_indices.get(class_name) {
+            let fields = (0..field_count).collect::<Vec<_>>();
+            let display_fields = fields
+                .iter()
+                .map(|field_idx| format!(".{}", self.class_field_name(class_name, *field_idx)))
+                .collect::<Vec<_>>();
+            let plan_idx = self.bytecode.class_init_plans.len();
+            self.bytecode.class_init_plans.push(ClassInitPlan {
+                class_obj: ObjectIndex::from_raw(class_obj_idx),
+                ntypeargs,
+                fields,
+            });
+            let inst = self.emit(Instruction::InitInstance(plan_idx));
+            self.set_operand(
+                inst,
+                OperandMeta::Object(format!("{class_name} {}", display_fields.join(", "))),
+            );
+        } else {
+            let total_inputs = field_count + usize::from(ntypeargs);
+            if total_inputs > 0 {
+                self.emit(Instruction::Pop(total_inputs));
+            }
+            let null_idx = self.add_constant(bex_vm_types::ConstValue::Null);
+            let inst = self.emit(bex_vm_types::Instruction::LoadConst(null_idx));
+            self.set_operand(
+                inst,
+                OperandMeta::Const(format!("null /* unknown class: {class_name} */")),
+            );
+        }
+    }
+
     fn field_copy_operand(operand: &Operand) -> Option<(&Place, usize)> {
         let place = match operand {
             Operand::Copy(place) | Operand::Move(place) => place,
@@ -1198,6 +1230,33 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             return None;
         };
         Some((base, *field))
+    }
+
+    fn try_emit_class_aggregate_init_instance(
+        &mut self,
+        class_name: &str,
+        type_arg_templates: &[TyTemplate],
+        fields: &[Operand],
+    ) -> bool {
+        if fields.is_empty()
+            || fields
+                .iter()
+                .any(|field| Self::field_copy_operand(field).is_some())
+        {
+            return false;
+        }
+
+        for field in fields {
+            self.emit_operand_pull(field);
+        }
+
+        let ntypeargs =
+            u16::try_from(type_arg_templates.len()).expect("type_arg_templates count fits in u16");
+        for template in type_arg_templates {
+            unwrap_infallible(self.load_type(template));
+        }
+        self.emit_init_instance(class_name, ntypeargs, fields.len());
+        true
     }
 
     fn place_mentions_stack_carried_local(&self, place: &Place) -> bool {
@@ -1372,6 +1431,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             fields,
         } = rvalue
         {
+            if self.try_emit_class_aggregate_init_instance(name, type_arg_templates, fields) {
+                return;
+            }
             if self.try_emit_class_aggregate_field_copy_sets(name, type_arg_templates, fields) {
                 return;
             }
@@ -2517,6 +2579,16 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 OperandMeta::Const(format!("null /* unknown class: {class_name} */")),
             );
         }
+        Ok(())
+    }
+
+    fn init_class_instance(
+        &mut self,
+        class_name: &str,
+        ntypeargs: u16,
+        field_count: usize,
+    ) -> Result<(), Self::Error> {
+        self.emit_init_instance(class_name, ntypeargs, field_count);
         Ok(())
     }
 

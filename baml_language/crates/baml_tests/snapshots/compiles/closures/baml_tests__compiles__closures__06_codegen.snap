@@ -9,11 +9,8 @@ function user.Box.from_json(j: baml.json.json) -> Box<void> {
     load_type #0
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_type #0
-    alloc_instance<1> user.Box
-    load_var _2
-    init_field .value
+    init_instance<1> user.Box .value
     return
 }
 
@@ -63,10 +60,7 @@ function user.Calculator.from_json(j: baml.json.json) -> Calculator {
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance user.Calculator
-    load_var _2
-    init_field .op
+    init_instance user.Calculator .op
     return
 }
 
@@ -87,10 +81,7 @@ function user.Config.from_json(j: baml.json.json) -> Config {
     load_type Encoder
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance user.Config
-    load_var _2
-    init_field .encoder
+    init_instance user.Config .encoder
     return
 }
 
@@ -111,10 +102,7 @@ function user.Counter.from_json(j: baml.json.json) -> Counter {
     load_type int
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance user.Counter
-    load_var _2
-    init_field .value
+    init_instance user.Counter .value
     return
 }
 
@@ -147,7 +135,6 @@ function user.Employee.from_json(j: baml.json.json) -> Employee {
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_var j
     load_const "last"
     call baml.json.field
@@ -155,12 +142,7 @@ function user.Employee.from_json(j: baml.json.json) -> Employee {
     load_type string
     load_var _6
     call baml.json.from_json
-    store_var _5
-    alloc_instance user.Employee
-    load_var _2
-    init_field .first
-    load_var _5
-    init_field .last
+    init_instance user.Employee .first, .last
     return
 }
 
@@ -218,10 +200,7 @@ function user.Encoder.from_json(j: baml.json.json) -> Encoder {
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance user.Encoder
-    load_var _2
-    init_field .charset
+    init_instance user.Encoder .charset
     return
 }
 
@@ -250,10 +229,7 @@ function user.Formatter.from_json(j: baml.json.json) -> Formatter {
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance user.Formatter
-    load_var _2
-    init_field .prefix
+    init_instance user.Formatter .prefix
     return
 }
 
@@ -274,7 +250,6 @@ function user.RangeCheck.from_json(j: baml.json.json) -> RangeCheck {
     load_type int
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_var j
     load_const "max"
     call baml.json.field
@@ -282,12 +257,7 @@ function user.RangeCheck.from_json(j: baml.json.json) -> RangeCheck {
     load_type int
     load_var _6
     call baml.json.from_json
-    store_var _5
-    alloc_instance user.RangeCheck
-    load_var _2
-    init_field .min
-    load_var _5
-    init_field .max
+    init_instance user.RangeCheck .min, .max
     return
 }
 
@@ -339,11 +309,9 @@ function user.test_bound_in_lambda() -> string {
     load_var ?1
     make_cell
     store_var ?1
-    alloc_instance user.Employee
     load_const "Alice"
-    init_field .first
     load_const "Smith"
-    init_field .last
+    init_instance user.Employee .first, .last
     store_deref ?1
     load_var emp
     make_closure .<lambda(test_bound_in_lambda, 0)>, 1
@@ -359,9 +327,8 @@ function user.test_bound_mapper() -> string[] {
     load_const "hello"
     load_const "world"
     alloc_array 2
-    alloc_instance user.Formatter
     load_const ">> "
-    init_field .prefix
+    init_instance user.Formatter .prefix
     make_bound_method user.Formatter.format
     call baml.Array.map
     return
@@ -373,11 +340,9 @@ function user.test_bound_validator() -> bool[] {
     load_const 25
     load_const 75
     alloc_array 4
-    alloc_instance user.RangeCheck
     load_const 10
-    init_field .min
     load_const 50
-    init_field .max
+    init_instance user.RangeCheck .min, .max
     make_bound_method user.RangeCheck.is_valid
     call baml.Array.map
     return
@@ -393,18 +358,16 @@ function user.test_field_chain_bind(cfg: Config) -> string {
 }
 
 function user.test_generic_bind() -> int {
-    alloc_instance user.Box
     load_const 42
-    init_field .value
+    init_instance user.Box .value
     make_bound_method user.Box.unwrap
     call_indirect
     return
 }
 
 function user.test_mutation_after_bind() -> int {
-    alloc_instance user.Counter
     load_const 0
-    init_field .value
+    init_instance user.Counter .value
     store_var_load_var c
     make_bound_method user.Counter.increment
     store_var inc
@@ -417,9 +380,8 @@ function user.test_mutation_after_bind() -> int {
 }
 
 function user.test_repeated_bound_calls() -> int {
-    alloc_instance user.Counter
     load_const 0
-    init_field .value
+    init_instance user.Counter .value
     make_bound_method user.Counter.increment
     store_var_load_var inc
     call_indirect
@@ -433,17 +395,15 @@ function user.test_repeated_bound_calls() -> int {
 }
 
 function user.test_strategy() -> int[] {
-    alloc_instance user.Calculator
     load_const "add"
-    init_field .op
+    init_instance user.Calculator .op
     make_bound_method user.Calculator.compute
     load_const 3
     load_const 4
     call user.apply
     store_var _5
-    alloc_instance user.Calculator
     load_const "mul"
-    init_field .op
+    init_instance user.Calculator .op
     make_bound_method user.Calculator.compute
     load_const 3
     load_const 4
@@ -456,11 +416,9 @@ function user.test_strategy() -> int[] {
 }
 
 function user.test_unbound_higher_order() -> string[] {
-    alloc_instance user.Employee
     load_const "Alice"
-    init_field .first
     load_const "Smith"
-    init_field .last
+    init_instance user.Employee .first, .last
     alloc_array 1
     load_global user.Employee.full_name
     call user.apply_to_each
@@ -468,16 +426,12 @@ function user.test_unbound_higher_order() -> string[] {
 }
 
 function user.test_unbound_in_map() -> string[] {
-    alloc_instance user.Employee
     load_const "Alice"
-    init_field .first
     load_const "Smith"
-    init_field .last
-    alloc_instance user.Employee
+    init_instance user.Employee .first, .last
     load_const "Bob"
-    init_field .first
     load_const "Jones"
-    init_field .last
+    init_instance user.Employee .first, .last
     alloc_array 2
     load_global user.Employee.full_name
     call baml.Array.map

@@ -25,10 +25,7 @@ function user.Baz.from_json(j: baml.json.json) -> Baz {
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance user.Baz
-    load_var _2
-    init_field .name
+    init_instance user.Baz .name
     return
 }
 
@@ -49,9 +46,8 @@ function user.Foo(x: int) -> int {
 }
 
 function user.GreetBaz(n: string) -> string {
-    alloc_instance user.Baz
     load_var n
-    init_field .name
+    init_instance user.Baz .name
     call user.Baz.Greeting
     return
 }

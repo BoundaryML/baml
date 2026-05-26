@@ -28,10 +28,7 @@ function user.Foo.from_json(j: baml.json.json) -> Foo {
     load_type int
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance user.Foo
-    load_var _2
-    init_field .x
+    init_instance user.Foo .x
     return
 }
 
@@ -52,10 +49,7 @@ function user.HasWith.from_json(j: baml.json.json) -> HasWith {
     load_type int
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance user.HasWith
-    load_var _2
-    init_field .with
+    init_instance user.HasWith .with
     return
 }
 
@@ -69,9 +63,8 @@ function user.HasWith.to_json(self: null) -> baml.json.json {
 }
 
 function user.make_foo() -> Foo {
-    alloc_instance user.Foo
     load_const 1
-    init_field .x
+    init_instance user.Foo .x
     return
 }
 

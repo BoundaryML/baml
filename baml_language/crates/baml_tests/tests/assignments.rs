@@ -44,8 +44,7 @@ async fn mutable_var_in_function() {
         load_const 3
         store_var y
         load_const 5
-        store_var y
-        load_var y
+        store_var_load_var y
         return
     }
     ");
@@ -72,8 +71,7 @@ async fn mutable_param() {
     insta::assert_snapshot!(output.bytecode, @"
     function MutableInArg(x: int) -> int {
         load_const 3
-        store_var x
-        load_var x
+        store_var_load_var x
         return
     }
 
@@ -107,7 +105,7 @@ async fn virtual_cross_block_soundness() {
         entry: "entry"
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function entry() -> int {
         load_const true
         call user.main
@@ -116,8 +114,7 @@ async fn virtual_cross_block_soundness() {
 
     function main(c: bool) -> int {
         load_const 1
-        store_var a
-        load_var a
+        store_var_load_var a
         store_var b
         load_var c
         pop_jump_if_false L0
@@ -276,11 +273,9 @@ async fn field_assignment_add_assign() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        alloc_instance user.Counter
         load_const 10
-        init_field .value
-        store_var c
-        load_var c
+        init_instance user.Counter .value
+        store_var_load_var c
         copy 0
         load_field .value
         load_const 5
@@ -312,11 +307,9 @@ async fn field_assignment_sub_assign() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        alloc_instance user.Counter
         load_const 20
-        init_field .value
-        store_var c
-        load_var c
+        init_instance user.Counter .value
+        store_var_load_var c
         copy 0
         load_field .value
         load_const 8
@@ -348,11 +341,9 @@ async fn field_assignment_mul_assign() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        alloc_instance user.Counter
         load_const 7
-        init_field .value
-        store_var c
-        load_var c
+        init_instance user.Counter .value
+        store_var_load_var c
         copy 0
         load_field .value
         load_const 3
@@ -384,11 +375,9 @@ async fn field_assignment_div_assign() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        alloc_instance user.Counter
         load_const 24
-        init_field .value
-        store_var c
-        load_var c
+        init_instance user.Counter .value
+        store_var_load_var c
         copy 0
         load_field .value
         load_const 4
@@ -420,11 +409,9 @@ async fn field_assignment_mod_assign() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        alloc_instance user.Counter
         load_const 17
-        init_field .value
-        store_var c
-        load_var c
+        init_instance user.Counter .value
+        store_var_load_var c
         copy 0
         load_field .value
         load_const 5
@@ -457,13 +444,10 @@ async fn field_assignment_simple() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        alloc_instance user.Data
         load_const 100
-        init_field .value
         load_const true
-        init_field .active
-        store_var d
-        load_var d
+        init_instance user.Data .value, .active
+        store_var_load_var d
         load_const 42
         store_field .value
         load_var d
@@ -495,11 +479,9 @@ async fn field_assignment_multiple_ops() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        alloc_instance user.Stats
         load_const 10
-        init_field .score
-        store_var s
-        load_var s
+        init_instance user.Stats .score
+        store_var_load_var s
         copy 0
         load_field .score
         load_const 5
@@ -553,13 +535,10 @@ async fn nested_field_assignment_simple() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        alloc_instance user.Outer
-        alloc_instance user.Inner
         load_const 10
-        init_field .value
-        init_field .inner
-        store_var o
-        load_var o
+        init_instance user.Inner .value
+        init_instance user.Outer .inner
+        store_var_load_var o
         load_field .inner
         load_const 42
         store_field .value
@@ -594,13 +573,10 @@ async fn nested_field_assignment_compound() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        alloc_instance user.Outer
-        alloc_instance user.Inner
         load_const 10
-        init_field .value
-        init_field .inner
-        store_var o
-        load_var o
+        init_instance user.Inner .value
+        init_instance user.Outer .inner
+        store_var_load_var o
         load_field .inner
         copy 0
         load_field .value
@@ -637,14 +613,11 @@ async fn field_assignment_object_field() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
-        alloc_instance user.Outer
-        alloc_instance user.Inner
         load_const 10
-        init_field .value
-        init_field .inner
-        alloc_instance user.Inner
+        init_instance user.Inner .value
+        init_instance user.Outer .inner
         load_const 20
-        init_field .value
+        init_instance user.Inner .value
         store_field .inner
         load_const true
         return
@@ -678,18 +651,14 @@ async fn array_element_field_assignment() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        alloc_instance user.Item
         load_const 10
-        init_field .count
-        alloc_instance user.Item
+        init_instance user.Item .count
         load_const 20
-        init_field .count
-        alloc_instance user.Item
+        init_instance user.Item .count
         load_const 30
-        init_field .count
+        init_instance user.Item .count
         alloc_array 3
-        store_var items
-        load_var items
+        store_var_load_var items
         load_const 1
         load_array_element
         copy 0
@@ -762,37 +731,27 @@ async fn array_element_method_field_assignment() {
     }
 
     function main() -> int {
-        alloc_instance Container
-        alloc_instance Data
         load_const 10
-        init_field .value
-        init_field .data
-        alloc_instance Container
-        alloc_instance Data
+        init_instance user.Data .value
+        init_instance user.Container .data
         load_const 20
-        init_field .value
-        init_field .data
-        alloc_instance Container
-        alloc_instance Data
+        init_instance user.Data .value
+        init_instance user.Container .data
         load_const 30
-        init_field .value
-        init_field .data
+        init_instance user.Data .value
+        init_instance user.Container .data
         alloc_array 3
-        store_var containers
-        load_var containers
+        store_var_load_var containers
         load_const 1
         load_array_element
         load_field .data
-        load_var containers
-        load_const 1
-        load_array_element
-        load_field .data
+        copy 0
         load_field .value
         load_const 5
         bin_op +
         store_field .value
         load_var _13
-        load_var _13
+        copy 0
         load_field .value
         load_const 10
         bin_op +
@@ -846,25 +805,19 @@ async fn method_call_then_array_access_assignment() {
         load_var _10
         load_const 1
         load_array_element
-        load_var _10
-        load_const 1
-        load_array_element
+        copy 0
         load_field .value
         load_const 5
         bin_op +
         store_field .value
-        alloc_instance Container
-        alloc_instance Item
         load_const 10
-        init_field .value
-        alloc_instance Item
+        init_instance user.Item .value
         load_const 20
-        init_field .value
-        alloc_instance Item
+        init_instance user.Item .value
         load_const 30
-        init_field .value
+        init_instance user.Item .value
         alloc_array 3
-        init_field .data
+        init_instance user.Container .data
         load_field .data
         load_const 1
         load_array_element
@@ -914,16 +867,14 @@ async fn method_call_field_assignment() {
 
     function main() -> int {
         load_var _3
-        load_var _3
+        copy 0
         load_field .value
         load_const 5
         bin_op +
         store_field .value
-        alloc_instance Factory
-        alloc_instance Counter
         load_const 10
-        init_field .value
-        init_field .counter
+        init_instance user.Counter .value
+        init_instance user.Factory .counter
         call user.Factory.get_counter
         load_field .value
         return
@@ -971,11 +922,9 @@ async fn method_call_field_assignment_with_copy() {
     }
 
     function main() -> int {
-        alloc_instance user.Factory
-        alloc_instance user.Counter
         load_const 10
-        init_field .value
-        init_field .counter
+        init_instance user.Counter .value
+        init_instance user.Factory .counter
         call user.Factory.get_counter
         store_var c
         load_var c
@@ -1042,8 +991,7 @@ async fn virtual_multiple_defs_preserve_side_effects() {
         call user.fail
         store_var x
         load_const 2
-        store_var x
-        load_var x
+        store_var_load_var x
         return
     }
     "#);

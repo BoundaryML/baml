@@ -38,10 +38,7 @@ function user.EdgeFoo.from_json(j: baml.json.json) -> EdgeFoo {
     load_type int
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance user.EdgeFoo
-    load_var _2
-    init_field .x
+    init_instance user.EdgeFoo .x
     return
 }
 
@@ -62,7 +59,6 @@ function user.Point.from_json(j: baml.json.json) -> Point {
     load_type int
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_var j
     load_const "y"
     call baml.json.field
@@ -70,12 +66,7 @@ function user.Point.from_json(j: baml.json.json) -> Point {
     load_type int
     load_var _6
     call baml.json.from_json
-    store_var _5
-    alloc_instance user.Point
-    load_var _2
-    init_field .x
-    load_var _5
-    init_field .y
+    init_instance user.Point .x, .y
     return
 }
 
@@ -265,9 +256,8 @@ function user.edge_semicolon_forces_boundary(bar: () -> int[] throws never) -> i
 }
 
 function user.edge_type_then_object() -> int {
-    alloc_instance user.EdgeFoo
     load_const 1
-    init_field .x
+    init_instance user.EdgeFoo .x
     load_field .x
     return
 }
@@ -328,11 +318,9 @@ function user.let_no_semicolons() -> int {
 }
 
 function user.let_statements() -> int {
-    alloc_instance user.Point
     load_const 1
-    init_field .x
     load_const 2
-    init_field .y
+    init_instance user.Point .x, .y
     store_var point
     load_var point
     load_field .x

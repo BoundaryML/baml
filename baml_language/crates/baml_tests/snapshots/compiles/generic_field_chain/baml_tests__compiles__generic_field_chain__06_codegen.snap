@@ -9,11 +9,8 @@ function user.Box.from_json(j: baml.json.json) -> Box<void> {
     load_type #0
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_type #0
-    alloc_instance<1> user.Box
-    load_var _2
-    init_field .value
+    init_instance<1> user.Box .value
     return
 }
 
@@ -34,7 +31,6 @@ function user.User.from_json(j: baml.json.json) -> User {
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_var j
     load_const "age"
     call baml.json.field
@@ -42,12 +38,7 @@ function user.User.from_json(j: baml.json.json) -> User {
     load_type int
     load_var _6
     call baml.json.from_json
-    store_var _5
-    alloc_instance user.User
-    load_var _2
-    init_field .name
-    load_var _5
-    init_field .age
+    init_instance user.User .name, .age
     return
 }
 

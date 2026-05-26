@@ -783,9 +783,12 @@ fn simulate_aggregate_operand_pull_stack(
         Rvalue::Array(elements) => {
             let values = elements.iter().collect::<Vec<_>>();
             Some(simulate_stack_consuming_aggregate(
-                &values,
-                &[],
-                elements.len(),
+                AggregateStackShape {
+                    value_operands: &values,
+                    trailing_operands: &[],
+                    total_pops: elements.len(),
+                    extra_pushes_before_alloc: 0,
+                },
                 sim,
                 carried_local,
                 classifications,
@@ -799,9 +802,12 @@ fn simulate_aggregate_operand_pull_stack(
                 .collect::<Vec<_>>();
             let keys = entries.iter().map(|(key, _value)| key).collect::<Vec<_>>();
             Some(simulate_stack_consuming_aggregate(
-                &values,
-                &keys,
-                entries.len() * 2,
+                AggregateStackShape {
+                    value_operands: &values,
+                    trailing_operands: &keys,
+                    total_pops: entries.len() * 2,
+                    extra_pushes_before_alloc: 0,
+                },
                 sim,
                 carried_local,
                 classifications,
@@ -814,27 +820,56 @@ fn simulate_aggregate_operand_pull_stack(
         } => {
             let values = fields.iter().collect::<Vec<_>>();
             Some(simulate_stack_consuming_aggregate(
-                &values,
-                &[],
-                fields.len(),
+                AggregateStackShape {
+                    value_operands: &values,
+                    trailing_operands: &[],
+                    total_pops: fields.len(),
+                    extra_pushes_before_alloc: 0,
+                },
                 sim,
                 carried_local,
                 classifications,
                 def_use,
             ))
         }
-        // Class aggregate field initialization needs the instance below each
-        // field value, so values already on the stack cannot be consumed by the
-        // current `alloc_instance`/`init_field` sequence.
+        Rvalue::Aggregate {
+            kind:
+                baml_compiler2_mir::AggregateKind::Class {
+                    type_arg_templates, ..
+                },
+            fields,
+        } if !fields.iter().any(is_class_field_copy_operand) => {
+            let values = fields.iter().collect::<Vec<_>>();
+            Some(simulate_stack_consuming_aggregate(
+                AggregateStackShape {
+                    value_operands: &values,
+                    trailing_operands: &[],
+                    total_pops: fields.len() + type_arg_templates.len(),
+                    extra_pushes_before_alloc: type_arg_templates.len(),
+                },
+                sim,
+                carried_local,
+                classifications,
+                def_use,
+            ))
+        }
+        // Class aggregates with field-copy operands use the `init_spread`
+        // emitter path, not the field-value init plan.
         Rvalue::Aggregate { .. } => None,
         _ => None,
     }
 }
 
-fn simulate_stack_consuming_aggregate(
-    value_operands: &[&Operand],
-    key_operands: &[&Operand],
+#[derive(Clone, Copy)]
+struct AggregateStackShape<'a> {
+    value_operands: &'a [&'a Operand],
+    trailing_operands: &'a [&'a Operand],
     total_pops: usize,
+    extra_pushes_before_alloc: usize,
+}
+
+fn simulate_stack_consuming_aggregate(
+    shape: AggregateStackShape<'_>,
     sim: &mut StackCarrySim,
     carried_local: Local,
     classifications: &HashMap<Local, LocalClassification>,
@@ -843,7 +878,7 @@ fn simulate_stack_consuming_aggregate(
     let mut prefix_len = 0;
     let mut carried_pos = None;
 
-    for operand in value_operands {
+    for operand in shape.value_operands {
         let Some(local) = operand_as_local(operand) else {
             break;
         };
@@ -870,18 +905,21 @@ fn simulate_stack_consuming_aggregate(
         return false;
     }
 
-    for operand in value_operands.iter().skip(prefix_len) {
+    for operand in shape.value_operands.iter().skip(prefix_len) {
         if !simulate_operand_pull_stack(operand, sim, carried_local, classifications, def_use) {
             return false;
         }
     }
-    for operand in key_operands {
+    for operand in shape.trailing_operands {
         if !simulate_operand_pull_stack(operand, sim, carried_local, classifications, def_use) {
             return false;
         }
+    }
+    for _ in 0..shape.extra_pushes_before_alloc {
+        sim.push();
     }
 
-    if !sim.pop_n(total_pops) {
+    if !sim.pop_n(shape.total_pops) {
         return false;
     }
     sim.push();
@@ -896,6 +934,10 @@ fn aggregate_value_operand_index(rvalue: &Rvalue, local: Local) -> Option<usize>
             kind: baml_compiler2_mir::AggregateKind::Array,
             fields,
         } => fields.iter().collect(),
+        Rvalue::Aggregate {
+            kind: baml_compiler2_mir::AggregateKind::Class { .. },
+            fields,
+        } if !fields.iter().any(is_class_field_copy_operand) => fields.iter().collect(),
         Rvalue::Aggregate { .. } => return None,
         _ => return None,
     };
@@ -910,6 +952,14 @@ fn operand_as_local(operand: &Operand) -> Option<Local> {
         Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => Some(*local),
         _ => None,
     }
+}
+
+fn is_class_field_copy_operand(operand: &Operand) -> bool {
+    let place = match operand {
+        Operand::Copy(place) | Operand::Move(place) => place,
+        Operand::Constant(_) => return false,
+    };
+    matches!(place, Place::Field { .. })
 }
 
 fn is_operand_local(operand: &Operand, local: Local) -> bool {
@@ -1118,6 +1168,19 @@ impl PullSink for StackCarryPullSink<'_> {
             if !self.sim.pop_n(ntypeargs as usize) {
                 return Err(());
             }
+        }
+        self.sim.push();
+        Ok(())
+    }
+
+    fn init_class_instance(
+        &mut self,
+        _class_name: &str,
+        ntypeargs: u16,
+        field_count: usize,
+    ) -> Result<(), Self::Error> {
+        if !self.sim.pop_n(field_count + usize::from(ntypeargs)) {
+            return Err(());
         }
         self.sim.push();
         Ok(())

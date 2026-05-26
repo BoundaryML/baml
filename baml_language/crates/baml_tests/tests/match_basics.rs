@@ -2226,9 +2226,8 @@ async fn match_mixed_instanceof_and_literal() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        alloc_instance user.Result
         load_const 200
-        init_field .code
+        init_instance user.Result .code
         load_field .code
         return
     }

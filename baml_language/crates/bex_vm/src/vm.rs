@@ -2219,6 +2219,60 @@ impl BexVm {
         Ok(None)
     }
 
+    fn alloc_initialized_instance(
+        &mut self,
+        plan: &bytecode::ClassInitPlan,
+    ) -> Result<Value, VmError> {
+        let class_ptr = self.idx_to_ptr(plan.class_obj);
+        let class_field_count = match self.get_object(class_ptr) {
+            Object::Class(class) => class.fields.len(),
+            other => {
+                return Err(VmInternalError::TypeError {
+                    expected: ObjectType::Class.into(),
+                    got: ObjectType::of(other).into(),
+                }
+                .into());
+            }
+        };
+
+        let field_value_count = plan.fields.len();
+        let ntypeargs = plan.ntypeargs as usize;
+        let total_inputs = field_value_count + ntypeargs;
+        let base = self
+            .stack
+            .len()
+            .checked_sub(total_inputs)
+            .ok_or(VmInternalError::NotEnoughItemsOnStack(total_inputs))?;
+
+        let field_values = (0..field_value_count)
+            .map(|offset| self.stack[StackIndex::from_raw(base + offset)])
+            .collect::<Vec<_>>();
+
+        let mut class_type_args = Vec::with_capacity(ntypeargs);
+        for offset in 0..ntypeargs {
+            let slot = base + field_value_count + offset;
+            let value = self.stack[StackIndex::from_raw(slot)];
+            let ptr = self.as_object_ptr(&value, ObjectType::Type)?;
+            let Object::Type(ty) = self.get_object(ptr) else {
+                unreachable!("as_object_ptr guarantees Type variant");
+            };
+            class_type_args.push(*ty.clone());
+        }
+
+        self.stack.drain(StackIndex::from_raw(base)..);
+
+        let mut fields = vec![Value::Null; class_field_count];
+        for (field_idx, value) in plan.fields.iter().copied().zip(field_values) {
+            fields[field_idx] = value;
+        }
+
+        Ok(Value::Object(self.tlab.alloc(Object::Instance(Instance {
+            class: class_ptr,
+            class_type_args,
+            fields,
+        }))))
+    }
+
     /// When a watched node changes, we need to update the graph topology
     /// and copy the previous values of the affected roots.
     fn update_watched_node(
@@ -3735,6 +3789,12 @@ impl BexVm {
 
                 // Push the instance object on top of the stack.
                 self.stack.push(Value::Object(instance_ptr));
+            }
+
+            Instruction::InitInstance(plan_idx) => {
+                let instance =
+                    self.alloc_initialized_instance(&function.bytecode.class_init_plans[plan_idx])?;
+                self.stack.push(instance);
             }
 
             // TODO: Contains a lot of typechecking, we know at compile time
@@ -5650,6 +5710,14 @@ impl BexVm {
                                 fields,
                             }));
                     self.stack.push(Value::Object(instance_ptr));
+                }
+
+                OpCode::InitInstance => {
+                    let plan_idx = { read_u32_unchecked(code, pc) as usize };
+                    let instance = self.alloc_initialized_instance(
+                        &function.bytecode.class_init_plans[plan_idx],
+                    )?;
+                    self.stack.push(instance);
                 }
 
                 OpCode::AllocVariant => {

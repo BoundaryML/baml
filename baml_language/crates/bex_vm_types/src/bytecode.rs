@@ -142,6 +142,17 @@ pub struct FieldCopySet {
     pub fields: Vec<FieldCopy>,
 }
 
+/// A compact class initialization program used by `Instruction::InitInstance`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClassInitPlan {
+    /// Class object allocated by the instruction.
+    pub class_obj: ObjectIndex,
+    /// Number of class-level type args stacked after the field values.
+    pub ntypeargs: u16,
+    /// Destination field indices initialized from stacked values, in value order.
+    pub fields: Vec<usize>,
+}
+
 /// Individual bytecode instruction.
 ///
 /// For faster iteration we'll start with an in-memory data structure that
@@ -374,6 +385,14 @@ pub enum Instruction {
         class_obj: ObjectIndex,
         ntypeargs: u16,
     },
+
+    /// Builds an initialized class instance from pre-stacked field values.
+    ///
+    /// Format: `INIT_INSTANCE plan_idx`, where `plan_idx` indexes
+    /// [`Bytecode::class_init_plans`]. The stack contains field values in plan
+    /// order, followed by any class-level type args. The instruction consumes
+    /// those values and pushes the initialized instance.
+    InitInstance(usize),
 
     /// Builds a variant of an enum and allocates it on the heap.
     ///
@@ -763,6 +782,7 @@ pub enum OpCode {
     AllocArray,
     AllocMap,
     AllocInstance,
+    InitInstance,
     AllocVariant,
     SysOp,
     Spawn,
@@ -874,6 +894,7 @@ impl OpCode {
             | Self::Copy
             | Self::AllocArray
             | Self::AllocMap
+            | Self::InitInstance
             | Self::AllocVariant
             | Self::SysOp
             | Self::Watch
@@ -984,6 +1005,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::AllocArray as u8 => Ok(Self::AllocArray),
             x if x == Self::AllocMap as u8 => Ok(Self::AllocMap),
             x if x == Self::AllocInstance as u8 => Ok(Self::AllocInstance),
+            x if x == Self::InitInstance as u8 => Ok(Self::InitInstance),
             x if x == Self::AllocVariant as u8 => Ok(Self::AllocVariant),
             x if x == Self::SysOp as u8 => Ok(Self::SysOp),
             x if x == Self::Spawn as u8 => Ok(Self::Spawn),
@@ -1088,6 +1110,7 @@ impl std::fmt::Display for OpCode {
             Self::AllocArray => "ALLOC_ARRAY",
             Self::AllocMap => "ALLOC_MAP",
             Self::AllocInstance => "ALLOC_INSTANCE",
+            Self::InitInstance => "INIT_INSTANCE",
             Self::AllocVariant => "ALLOC_VARIANT",
             Self::SysOp => "SYS_OP",
             Self::Spawn => "SPAWN",
@@ -1342,6 +1365,7 @@ impl std::fmt::Display for Instruction {
             } => {
                 write!(f, "ALLOC_INSTANCE {class_obj} ntypeargs={ntypeargs}")
             }
+            Instruction::InitInstance(i) => write!(f, "INIT_INSTANCE {i}"),
             Instruction::AllocVariant(i) => write!(f, "ALLOC_VARIANT {i}"),
             Instruction::SysOp(callee) => write!(f, "SYS_OP {callee}"),
             Instruction::Spawn => write!(f, "SPAWN"),
@@ -1603,6 +1627,10 @@ pub struct Bytecode {
     /// Field-copy programs used by `InitSpread`.
     pub field_copy_sets: Vec<FieldCopySet>,
 
+    /// Class initialization programs used by `InitInstance`.
+    #[serde(default)]
+    pub class_init_plans: Vec<ClassInitPlan>,
+
     /// Perfect hash tables for sparse `TypeTag` switch dispatch.
     /// Indexed by `DenseTag` instruction operand.
     pub match_hash_tables: Vec<MatchHashTable>,
@@ -1643,6 +1671,7 @@ impl Bytecode {
             resolved_constants: Vec::new(),
             jump_tables: Vec::new(),
             field_copy_sets: Vec::new(),
+            class_init_plans: Vec::new(),
             match_hash_tables: Vec::new(),
             line_table: Vec::new(),
             meta: Vec::new(),
@@ -1808,6 +1837,7 @@ impl Bytecode {
                 | Instruction::StoreField(v)
                 | Instruction::InitField(v)
                 | Instruction::InitSpread(v)
+                | Instruction::InitInstance(v)
                 | Instruction::Pop(v)
                 | Instruction::Copy(v)
                 | Instruction::AllocArray(v)
@@ -2088,6 +2118,7 @@ impl Bytecode {
             Instruction::AllocArray(_) => OpCode::AllocArray,
             Instruction::AllocMap(_) => OpCode::AllocMap,
             Instruction::AllocInstance { .. } => OpCode::AllocInstance,
+            Instruction::InitInstance(_) => OpCode::InitInstance,
             Instruction::AllocVariant(_) => OpCode::AllocVariant,
             Instruction::SysOp(_) => OpCode::SysOp,
             Instruction::Spawn => OpCode::Spawn,
@@ -2171,6 +2202,7 @@ mod compact_tests {
             resolved_constants: Vec::new(),
             jump_tables: Vec::new(),
             field_copy_sets: Vec::new(),
+            class_init_plans: Vec::new(),
             match_hash_tables: Vec::new(),
             line_table: Vec::new(),
             meta,
@@ -2306,6 +2338,7 @@ mod compact_tests {
             resolved_constants: Vec::new(),
             jump_tables: Vec::new(),
             field_copy_sets: Vec::new(),
+            class_init_plans: Vec::new(),
             match_hash_tables: Vec::new(),
             line_table: vec![
                 LineTableEntry {
@@ -2344,6 +2377,7 @@ mod compact_tests {
             resolved_constants: Vec::new(),
             jump_tables: Vec::new(),
             field_copy_sets: Vec::new(),
+            class_init_plans: Vec::new(),
             match_hash_tables: Vec::new(),
             line_table: Vec::new(),
             meta: vec![InstructionMeta { operand: None }; 3],

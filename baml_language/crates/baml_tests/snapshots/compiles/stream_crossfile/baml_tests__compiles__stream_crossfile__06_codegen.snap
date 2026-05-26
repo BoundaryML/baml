@@ -9,7 +9,6 @@ function user.Education.from_json(j: baml.json.json) -> Education {
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_var j
     load_const "degree"
     call baml.json.field
@@ -17,7 +16,6 @@ function user.Education.from_json(j: baml.json.json) -> Education {
     load_type Degree
     load_var _6
     call baml.json.from_json
-    store_var _5
     load_var j
     load_const "year"
     call baml.json.field
@@ -25,14 +23,7 @@ function user.Education.from_json(j: baml.json.json) -> Education {
     load_type int
     load_var _9
     call baml.json.from_json
-    store_var _8
-    alloc_instance user.Education
-    load_var _2
-    init_field .school
-    load_var _5
-    init_field .degree
-    load_var _8
-    init_field .year
+    init_instance user.Education .school, .degree, .year
     return
 }
 
@@ -63,7 +54,6 @@ function user.Resume.from_json(j: baml.json.json) -> Resume {
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_var j
     load_const "education"
     call baml.json.field
@@ -71,7 +61,6 @@ function user.Resume.from_json(j: baml.json.json) -> Resume {
     load_type Education[]
     load_var _6
     call baml.json.from_json
-    store_var _5
     load_var j
     load_const "highest_degree"
     call baml.json.field
@@ -79,7 +68,6 @@ function user.Resume.from_json(j: baml.json.json) -> Resume {
     load_type Degree
     load_var _9
     call baml.json.from_json
-    store_var _8
     load_var j
     load_const "aliases"
     call baml.json.field
@@ -87,16 +75,7 @@ function user.Resume.from_json(j: baml.json.json) -> Resume {
     load_type Education[]
     load_var _12
     call baml.json.from_json
-    store_var _11
-    alloc_instance user.Resume
-    load_var _2
-    init_field .name
-    load_var _5
-    init_field .education
-    load_var _8
-    init_field .highest_degree
-    load_var _11
-    init_field .aliases
+    init_instance user.Resume .name, .education, .highest_degree, .aliases
     return
 }
 
