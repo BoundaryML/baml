@@ -3,7 +3,7 @@
 // `sdks/python/tests/test_host_callable.py`.
 //
 // Exercises the Go host-callable bridge end-to-end: encoder auto-registration
-// in `pkg.proto.goToInboundValue` (reflective `reflect.Func` fallback), the C
+// in `pkg.proto.goToInboundValueTracking` (reflective `reflect.Func` fallback), the C
 // ABI round-trip via `bridge_cffi::complete_host_call`, the Go-side dispatch
 // goroutine launched by `bamlHostDispatch`, and the result/error encode path.
 //

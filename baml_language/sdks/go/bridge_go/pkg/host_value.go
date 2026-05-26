@@ -309,27 +309,39 @@ func runHostCallable(fn reflect.Value, callID uint32, argsBytes []byte) {
 	case 0:
 		resultValue = nil
 	case 1:
-		resultValue = out[0].Interface()
+		// A lone `error` return is the callable's status, not a value: a
+		// non-nil error surfaces as a `HostCallable` error, nil as a null/void
+		// result. Without this a returned error would reach
+		// `goToInboundValueTracking` and fail to encode, losing the error text.
+		if fnType.Out(0).Implements(errorInterface) {
+			if !isNilValue(out[0]) {
+				if err, ok := out[0].Interface().(error); ok {
+					surfaceCallableError(callID, err)
+					return
+				}
+			}
+			resultValue = nil
+		} else {
+			resultValue = out[0].Interface()
+		}
 	case 2:
 		// The only 2-value host-callable shape we accept is `(value, error)`.
 		// If the second return type does not implement `error` (e.g.
 		// `func() (int, int)`), reject the signature rather than silently
 		// dropping the second value.
-		errType := reflect.TypeOf((*error)(nil)).Elem()
-		if !fnType.Out(1).Implements(errType) {
+		if !fnType.Out(1).Implements(errorInterface) {
 			sendHostCallableError(callID, "TypeError",
 				fmt.Sprintf("host callable's second return type %s does not implement error; expected (value, error)", fnType.Out(1)),
 				pb.HostCallableErrorCategory_HOST_CALLABLE_INVALID_ARGUMENT)
 			return
 		}
-		if errVal := out[1].Interface(); errVal != nil {
-			if err, ok := errVal.(error); ok && err != nil {
-				// The error text becomes the BAML `HostCallable` `message`; we
-				// also mirror it into `traceback` since a plain returned error
-				// carries no stack of its own.
-				sendHostCallableError(callID, errorClassName(err), err.Error(),
-					pb.HostCallableErrorCategory_HOST_CALLABLE_HOST_ERROR,
-					withTraceback(err.Error()))
+		// Surface a non-nil error. A typed-nil pointer error (e.g. a
+		// `(T, *MyErr)` returning `(v, nil)`) is a non-nil interface wrapping a
+		// nil pointer; `isNilValue` detects it so we neither call `.Error()` on
+		// a nil receiver (a panic) nor turn a successful return into an error.
+		if !isNilValue(out[1]) {
+			if err, ok := out[1].Interface().(error); ok {
+				surfaceCallableError(callID, err)
 				return
 			}
 		}
@@ -342,9 +354,16 @@ func runHostCallable(fn reflect.Value, callID uint32, argsBytes []byte) {
 	}
 
 	// Encode the result as an `InboundValue` (host->engine direction; no
-	// type metadata — engine re-validates).
-	iv, err := goToInboundValue(resultValue)
+	// type metadata — engine re-validates). Track any host callables the
+	// encoder registers for values nested in the result: if encoding or
+	// marshaling then fails, the bytes never reach the engine, so it never
+	// decodes — and never releases — them. Roll those registrations back so
+	// the user's callables don't leak (mirrors the argument-path rollback in
+	// `encodeCallArgs`).
+	var registered []uint64
+	iv, err := goToInboundValueTracking(resultValue, &registered)
 	if err != nil {
+		rollbackRegisteredHostValues(registered)
 		sendHostCallableError(callID, "EncodeError",
 			fmt.Sprintf("failed to encode host-call result: %v", err),
 			pb.HostCallableErrorCategory_HOST_CALLABLE_HOST_ERROR)
@@ -352,6 +371,7 @@ func runHostCallable(fn reflect.Value, callID uint32, argsBytes []byte) {
 	}
 	resultBytes, err := proto.Marshal(iv)
 	if err != nil {
+		rollbackRegisteredHostValues(registered)
 		sendHostCallableError(callID, "EncodeError",
 			fmt.Sprintf("failed to marshal host-call result: %v", err),
 			pb.HostCallableErrorCategory_HOST_CALLABLE_HOST_ERROR)
@@ -364,7 +384,7 @@ func runHostCallable(fn reflect.Value, callID uint32, argsBytes []byte) {
 // param type. Returns the converted `reflect.Value` and `true` on success;
 // `false` if no idiomatic conversion exists.
 //
-// Coverage matches the inverse of `goToInboundValue` plus the proto decoder's
+// Coverage matches the inverse of `goToInboundValueTracking` plus the proto decoder's
 // natural Go types: string / int64 / float64 / bool / []byte / []any /
 // map[string]any. We also widen `int64 -> int*` and `float64 -> float32` so
 // users can write the natural Go signature `func(x int) string` even though
@@ -415,6 +435,12 @@ func coerceToType(v any, target reflect.Type) (reflect.Value, bool) {
 			// precision loss above 2^53 is accepted (matches Go's own
 			// implicit int64→float64 in arithmetic).
 			return rv.Convert(target), true
+		case reflect.String:
+			// Go converts int64 → string as a Unicode rune (65 → "A"), not a
+			// decimal string — almost never the intent. Reject rather than
+			// fall through to the convertible path and produce a surprising
+			// one-rune string.
+			return reflect.Value{}, false
 		}
 	}
 	if rv.Kind() == reflect.Float64 {
@@ -427,6 +453,13 @@ func coerceToType(v any, target reflect.Type) (reflect.Value, bool) {
 			return rv.Convert(target), true
 		case reflect.Float64:
 			return rv.Convert(target), true
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+			reflect.Uintptr:
+			// A float argument cannot become an integer parameter without
+			// truncation / precision loss (300.0 → int8 44, 3.9 → 3, NaN → 0,
+			// +Inf → MaxInt64). Reject rather than silently corrupt.
+			return reflect.Value{}, false
 		}
 	}
 	// Convertible (e.g. string aliases). Numeric kinds are handled above
@@ -493,6 +526,34 @@ func float64FitsFloat32(v float64) bool {
 	return !math.IsInf(float64(float32(v)), 0)
 }
 
+// errorInterface is the reflect type of the built-in `error` interface, used
+// to detect error-typed return values.
+var errorInterface = reflect.TypeOf((*error)(nil)).Elem()
+
+// isNilValue reports whether `v` is nil, including a typed-nil pointer boxed in
+// an interface — where the interface itself is non-nil but the boxed pointer is
+// nil (the classic Go typed-nil-error trap, where calling a method on the nil
+// pointer panics).
+func isNilValue(v reflect.Value) bool {
+	switch v.Kind() {
+	case reflect.Ptr, reflect.Slice, reflect.Map, reflect.Func, reflect.Chan:
+		return v.IsNil()
+	case reflect.Interface:
+		return v.IsNil() || isNilValue(v.Elem())
+	default:
+		return false
+	}
+}
+
+// surfaceCallableError completes the call with a `HostCallable` error built
+// from `err`. The error text becomes the BAML `HostCallable` `message`; it is
+// also mirrored into `traceback`, since a plain returned error carries no stack.
+func surfaceCallableError(callID uint32, err error) {
+	sendHostCallableError(callID, errorClassName(err), err.Error(),
+		pb.HostCallableErrorCategory_HOST_CALLABLE_HOST_ERROR,
+		withTraceback(err.Error()))
+}
+
 // errorClassName returns a best-effort short type name for `err`, matching
 // the Python/Node convention of "ValueError" / "TypeError" / etc.
 func errorClassName(err error) string {
@@ -504,7 +565,12 @@ func errorClassName(err error) string {
 		t = t.Elem()
 	}
 	name := t.Name()
-	if name == "" {
+	// Unexported types (lowercase initial) are stdlib internals — e.g.
+	// `errorString` from `errors.New`, `wrapError` from `fmt.Errorf` — whose
+	// names leak Go internals rather than a meaningful class. Fall back to a
+	// generic "Error" for those, matching the Python/Node convention for plain
+	// errors; user-defined *exported* error types keep their name.
+	if name == "" || name[0] < 'A' || name[0] > 'Z' {
 		return "Error"
 	}
 	return name

@@ -12,7 +12,7 @@ import (
 // encodeCallArgs converts Go kwargs to CallFunctionArgs protobuf bytes.
 //
 // Callables encountered while encoding are registered in the per-process
-// host-value registry (see `goToInboundValue`'s reflective fallback). Those
+// host-value registry (see `goToInboundValueTracking`'s reflective fallback). Those
 // entries are normally released only when the engine GCs the corresponding
 // `HostClosure` and fires `bamlHostRelease` (a GC-timed release — see the
 // note on `registerHostValue`). But if a *later* kwarg fails to encode, the
@@ -62,14 +62,6 @@ func rollbackRegisteredHostValues(keys []uint64) {
 	for _, key := range keys {
 		unregisterHostValue(key)
 	}
-}
-
-// goToInboundValue encodes a single Go value with no registration tracking.
-// Used by the host-call *result* encode path (`runHostCallable`), where the
-// result is handed straight to the engine — there is no later sibling whose
-// failure could orphan a callable, so no rollback bookkeeping is needed.
-func goToInboundValue(v any) (*pb.InboundValue, error) {
-	return goToInboundValueTracking(v, nil)
 }
 
 // goToInboundValueTracking encodes a single Go value. When `registered` is
@@ -138,7 +130,28 @@ func goToInboundValueTracking(v any, registered *[]uint64) (*pb.InboundValue, er
 		// path coerces decoded args to the declared parameter types and
 		// reports arity / type mismatches as `HostCallableInvalidArgument`.
 		rv := reflect.ValueOf(v)
+		// Widen narrower numeric kinds — the inverse of `coerceToType`'s arg
+		// widening — so a callable can return the natural Go types (`int8`,
+		// `uint32`, `float32`, named numerics), not just `int`/`int64`/`float64`.
+		switch rv.Kind() {
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			return &pb.InboundValue{Value: &pb.InboundValue_IntValue{IntValue: rv.Int()}}, nil
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+			u := rv.Uint()
+			if u > 1<<63-1 {
+				return nil, fmt.Errorf("host-call result uint value %d exceeds int64 range", u)
+			}
+			return &pb.InboundValue{Value: &pb.InboundValue_IntValue{IntValue: int64(u)}}, nil
+		case reflect.Float32, reflect.Float64:
+			return &pb.InboundValue{Value: &pb.InboundValue_FloatValue{FloatValue: rv.Float()}}, nil
+		}
 		if rv.IsValid() && rv.Kind() == reflect.Func {
+			if rv.IsNil() {
+				// A typed-nil func has nothing to dispatch to; fail fast at
+				// encode time rather than registering it and panicking later
+				// when the host call tries to invoke it.
+				return nil, fmt.Errorf("unsupported nil callable: %T", v)
+			}
 			key := registerHostValue(rv)
 			if registered != nil {
 				*registered = append(*registered, key)

@@ -38,7 +38,7 @@ func Init(libraryPath string) error {
 		"clone_handle":         func(p unsafe.Pointer) { C.setCloneHandleFn(p) },
 		"release_handle":       func(p unsafe.Pointer) { C.setReleaseHandleFn(p) },
 		"flush_events":         func(p unsafe.Pointer) { C.setFlushEventsFn(p) },
-		// Host-value callable C symbols (Phase 3 of external-function-handles).
+		// Host-value callable C symbols.
 		"register_host_dispatch_callback": func(p unsafe.Pointer) { C.setRegisterHostDispatchCallbackFn(p) },
 		"register_host_release_callback":  func(p unsafe.Pointer) { C.setRegisterHostReleaseCallbackFn(p) },
 		"complete_host_call":              func(p unsafe.Pointer) { C.setCompleteHostCallFn(p) },

@@ -86,15 +86,14 @@ class BamlAudio:
     @classmethod
     def __get_pydantic_core_schema__(cls, _source_type: typing.Any, _handler: typing.Any) -> typing.Any: ...
 
-class BamlError(Exception):
-    ...
-
 class BamlCancelledError(BamlError):
     ...
 
 class BamlClientError(BamlError):
     ...
 
+class BamlError(Exception):
+    ...
 
 @typing.final
 class BamlImage:
@@ -454,7 +453,7 @@ def put_pyhandle_into_table(pyhandle: BamlPyHandle) -> tuple[builtins.int, built
 def register_host_callable(callable: typing.Any) -> builtins.int:
     r"""
     Insert a Python callable into the registry and return its key.
-
+    
     Exposed to Python as `baml_py.register_host_callable(callable) -> int`.
     Called from the inbound encoder in `baml_core.proto` whenever a Python
     callable appears as a kwarg.
@@ -464,7 +463,7 @@ def release_host_callable(host_value_key: builtins.int) -> None:
     r"""
     Release a host callable the inbound encoder registered but never handed to
     the engine — the encode-error rollback path.
-
+    
     Exposed to Python as `baml_py.release_host_callable(key)`. When
     `encode_call_args` registers a callable for an early kwarg and then a
     later kwarg fails to encode, the `CallFunctionArgs` is never sent, so the

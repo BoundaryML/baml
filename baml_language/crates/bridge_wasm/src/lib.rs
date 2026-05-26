@@ -264,7 +264,8 @@ impl BamlWasmRuntime {
             )))
             // One `WasmHost` per runtime, holding *this* runtime's JS
             // `host_dispatch` callback so a BAML→host call dispatches through
-            // the correct wrapper (review finding F6).
+            // the correct wrapper (a process-global callback would let a second
+            // runtime clobber the first's).
             .with_host_instance(std::sync::Arc::new(host_value::WasmHost::new(
                 host_dispatch_fn,
             )))

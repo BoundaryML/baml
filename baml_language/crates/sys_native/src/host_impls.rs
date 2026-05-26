@@ -87,31 +87,43 @@ impl io::IoNamespaceHost for NativeSysOps {
         // Allocate a fresh call id and create a CompletionHandle.
         let call_id = host_dispatch::next_call_id();
         let (result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
-        host_dispatch::insert(call_id, completion);
 
-        // RAII guard that evicts this call's in-flight table entry on drop.
-        // It is moved into the async future below so that if the engine drops
-        // the future on cancellation (the `tokio::select!` cancel arm), the
-        // dangling entry is removed — no leak, and a late `complete_host_call`
-        // for this id hits the benign unknown-id path. On normal completion the
-        // entry is already gone (taken by `complete_host_call`), so the guard's
-        // `take` is a no-op. The guard carries only the `Copy` `call_id`, never
-        // the `CompletionHandle` (which lives in the table). There is no
-        // wall-clock timeout: see the module docs.
-        let guard = host_dispatch::InflightGuard::new(call_id);
+        // On a (2^32-wrap) id collision `insert` returns `false` after failing
+        // this call's `completion` with an error — and the live entry under
+        // `call_id` belongs to the *other* call. So when it returns `false` we
+        // must NOT fire the dispatch (the host callback would run for an
+        // already-failed call) and must NOT build an `InflightGuard` (its drop
+        // would evict the other call's entry). `result` already carries the
+        // collision error, so the `match result` below returns it.
+        let guard = if host_dispatch::insert(call_id, completion) {
+            // RAII guard that evicts this call's in-flight table entry on drop.
+            // Moved into the async future below so that if the engine drops the
+            // future on cancellation (the `tokio::select!` cancel arm), the
+            // dangling entry is removed — no leak, and a late
+            // `complete_host_call` for this id hits the benign unknown-id path.
+            // On normal completion the entry is already gone (taken by
+            // `complete_host_call`), so the guard's `take` is a no-op. The guard
+            // carries only the `Copy` `call_id`. No wall-clock timeout: see the
+            // module docs.
+            let guard = host_dispatch::InflightGuard::new(call_id);
 
-        // Fire the dispatch callback. If no bridge has registered, fail
-        // synchronously so the engine does not hang waiting on the oneshot.
-        if !host_dispatch::fire_dispatch(host_arc.key, call_id, &encoded) {
-            if let Some(c) = host_dispatch::take(call_id) {
-                c.complete(Err(OpError::new(
-                    SysOp::BamlHostCallHostValue,
-                    OpErrorKind::NotImplemented {
-                        message: "no host bridge registered for host-value dispatch".to_string(),
-                    },
-                )));
+            // Fire the dispatch callback. If no bridge has registered, fail
+            // synchronously so the engine does not hang waiting on the oneshot.
+            if !host_dispatch::fire_dispatch(host_arc.key, call_id, &encoded) {
+                if let Some(c) = host_dispatch::take(call_id) {
+                    c.complete(Err(OpError::new(
+                        SysOp::BamlHostCallHostValue,
+                        OpErrorKind::NotImplemented {
+                            message: "no host bridge registered for host-value dispatch"
+                                .to_string(),
+                        },
+                    )));
+                }
             }
-        }
+            Some(guard)
+        } else {
+            None
+        };
 
         // The completion already yields a typed `BexExternalValue` (decoded
         // from the inbound payload by `complete_host_call`). Validate the
@@ -131,7 +143,9 @@ impl io::IoNamespaceHost for NativeSysOps {
             SysOpResult::Ready(Err(err)) => SysOpOutput::err(err.kind),
             SysOpResult::Async(fut) => SysOpOutput::async_op(async move {
                 // Move the guard into the future so it is dropped — and the
-                // in-flight entry evicted — if this future is cancelled.
+                // in-flight entry evicted — if this future is cancelled. It is
+                // `None` on the collision path (no entry of ours to evict); the
+                // awaited `fut` then resolves to the collision error.
                 let _guard = guard;
                 let value = fut.await.map_err(|op_err| op_err.kind)?;
                 validate_return_value(&value, &type_arg_0)?;
@@ -214,7 +228,10 @@ mod tests {
     async fn completion_table_success_round_trip() {
         let (result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
         let call_id = host_dispatch::next_call_id();
-        host_dispatch::insert(call_id, completion);
+        assert!(
+            host_dispatch::insert(call_id, completion),
+            "fresh id must insert cleanly"
+        );
 
         // Simulate the host calling back with an Int result.
         host_dispatch::complete_with_value(call_id, BexExternalValue::Int(42));
@@ -237,7 +254,10 @@ mod tests {
     async fn completion_table_host_callable_error_round_trip() {
         let (result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
         let call_id = host_dispatch::next_call_id();
-        host_dispatch::insert(call_id, completion);
+        assert!(
+            host_dispatch::insert(call_id, completion),
+            "fresh id must insert cleanly"
+        );
 
         // Simulate the host calling back with a HostCallable error.
         host_dispatch::complete_with_error(

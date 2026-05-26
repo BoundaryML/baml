@@ -554,8 +554,11 @@ fn host_call_return_ty(ret_ty_arg: Option<Value>) -> Option<baml_type::Ty> {
     let Some(Value::Object(ptr)) = ret_ty_arg else {
         return None;
     };
-    // SAFETY: the pointer was just allocated by the VM for this sys-op call
-    // and is reachable from the live `args` vector; reading it is sound.
+    // SAFETY: the pointer was just allocated by the VM for this sys-op call.
+    // This MUST be read while the heap permit is held (i.e. *before* the sys-op
+    // await releases it): the engine-local `args` Vec is not a GC root, so after
+    // the await a moving GC may relocate/collect this `Object::Type` and the raw
+    // pointer would dangle. The caller clones the `Ty` out before awaiting.
     match unsafe { ptr.get() } {
         Object::Type(ty) => Some((**ty).clone()),
         _ => None,
@@ -1294,10 +1297,10 @@ impl BexEngine {
             .collect();
 
         // Snapshot the declared parameter types so we can thread the
-        // expected `Ty` into per-arg conversion. This is needed by Phase 5
-        // (`HostValue` → `Object::HostClosure`): the closure carries the
-        // declared `Ty::Function`'s arity and return type, and we need the
-        // parameter type to extract them.
+        // expected `Ty` into per-arg conversion. Binding a `HostValue` to an
+        // `Object::HostClosure` needs it: the closure carries the declared
+        // `Ty::Function`'s arity and return type, extracted from the parameter
+        // type.
         let param_types: Vec<Ty> = self
             .function_params(function_name)?
             .into_iter()
@@ -1830,6 +1833,35 @@ impl BexEngine {
         Ok(())
     }
 
+    /// Deliver a host-callable error (a `HostCallable` throw, or another op
+    /// error) at a `SysOp` terminal site.
+    ///
+    /// A spawned child **settles its future** (errored) so the awaiter resolves
+    /// with the throw instead of hanging forever on a `Pending` future — exactly
+    /// as the VM-throw arms do. Only a root thread surfaces the throw to the
+    /// host as an `UnhandledThrow`. (Whether an in-BAML `try/catch` can catch a
+    /// host throw is a separate, deferred concern; this only fixes the spawned
+    /// child never settling.) A non-`HostCallable` op error has no throw value
+    /// and falls back to a fatal `EngineError`.
+    async fn deliver_host_call_throw(
+        &self,
+        thread: &mut ActiveHeapPermit<BexThread>,
+        op_err: OpError,
+    ) -> Result<ThreadOutcome, EngineError> {
+        if let Some(throw_value) = op_error_to_catchable_throw(&op_err) {
+            if let Some(future_id) = thread.vm_thread_settles_future() {
+                let value = self.convert_external_to_vm_value(thread, throw_value)?;
+                self.settle_child_errored(thread, future_id, value).await?;
+                return Ok(ThreadOutcome::SettledChild);
+            }
+            return Err(EngineError::UnhandledThrow {
+                value: Box::new(throw_value),
+                trace: Vec::new(),
+            });
+        }
+        Err(EngineError::from(op_err))
+    }
+
     /// True if `value` is an `Object::Instance` whose class is
     /// `baml.panics.Cancelled`. Used to differentiate cancellation panics
     /// from regular errors when settling a spawned thread that unwound.
@@ -2257,6 +2289,21 @@ impl BexEngine {
                     let bex_args: Vec<BexExternalValue> =
                         args.iter().map(|v| self.vm_arg_to_bex_value(v)).collect();
 
+                    // Capture the host-call return type as an OWNED `Ty` now,
+                    // while the heap permit is still held and `args[2]` (the
+                    // `type_arg_0` the VM packed for `BamlHostCallHostValue`) is a
+                    // live pointer. The async wait below releases the permit, and a
+                    // moving GC can then relocate/collect that `Object::Type`; the
+                    // engine-local `args` Vec is not a GC root and is never
+                    // forwarded, so re-reading the raw pointer post-await would be a
+                    // use-after-free. Cloning the `Ty` here sidesteps that.
+                    let host_ret_ty: Option<baml_type::Ty> =
+                        if operation == SysOp::BamlHostCallHostValue {
+                            host_call_return_ty(args.get(2).copied())
+                        } else {
+                            None
+                        };
+
                     if cancel.is_cancelled() {
                         // Cancel-at-yield: spawned children settle as
                         // Cancelled so the heap Future no longer hangs
@@ -2308,14 +2355,14 @@ impl BexEngine {
                             // the FFI boundary; here — where the compiled class
                             // schema is reachable — we additionally validate
                             // class *field types* against the declared return
-                            // type (`args[2]` is the `type_arg_0` the VM packed
-                            // for `SysOp::BamlHostCallHostValue`). A mismatch is
-                            // surfaced as a catchable `root.errors.HostCallable`
-                            // throw, exactly like a host-raised error.
+                            // type (`host_ret_ty`, captured from `args[2]` before
+                            // the await). A mismatch is surfaced as a catchable
+                            // `root.errors.HostCallable` throw, exactly like a
+                            // host-raised error.
                             if operation == SysOp::BamlHostCallHostValue
-                                && let Some(ret_ty) = host_call_return_ty(args.get(2).copied())
+                                && let Some(ret_ty) = host_ret_ty.as_ref()
                                 && let Err(message) =
-                                    self.validate_host_return_schema(&external, &ret_ty)
+                                    self.validate_host_return_schema(&external, ret_ty)
                             {
                                 let op_err = OpError::new(
                                     SysOp::BamlHostCallHostValue,
@@ -2327,13 +2374,7 @@ impl BexEngine {
                                         category: HOST_CALLABLE_INVALID_ARGUMENT,
                                     },
                                 );
-                                if let Some(throw_value) = op_error_to_catchable_throw(&op_err) {
-                                    return Err(EngineError::UnhandledThrow {
-                                        value: Box::new(throw_value),
-                                        trace: Vec::new(),
-                                    });
-                                }
-                                return Err(EngineError::from(op_err));
+                                return self.deliver_host_call_throw(&mut thread, op_err).await;
                             }
                             // Convert the external value back into a VM
                             // Value (allocating string / list / instance
@@ -2346,37 +2387,23 @@ impl BexEngine {
                             thread.vm.stack.push(value);
                         }
                         Err(op_err) => {
-                            // An `OpErrorKind::HostCallable` *type-checks* as a
-                            // catchable BAML throw — the compiler folds the
-                            // host-callable param's `throws` into the caller's
-                            // effect set, so `try { f(x) } catch (e:
-                            // root.errors.HostCallable)` compiles and emits a
-                            // handler. But at runtime the error is delivered
-                            // here as `EngineError::UnhandledThrow`, which exits
-                            // `run_thread_event_loop` WITHOUT re-entering the
-                            // VM, so it bypasses the in-VM exception table and a
-                            // user `catch` clause does NOT run. The throw is
-                            // therefore currently UNCATCHABLE from in-BAML
-                            // `try/catch`; it surfaces to the host as a real
-                            // `HostCallable` instance rather than an opaque
-                            // engine error.
-                            //
-                            // This changes once sys-op calls are awaited
-                            // explicitly: the host-call error will then ride the
-                            // same future-error / exception-table path the
-                            // adjacent `await` arm already uses, re-entering the
-                            // VM so user `catch` clauses run. Until then this is
-                            // a known, documented limitation (see the
-                            // `host_value_callable` test that pins the current
-                            // behaviour, plus the SDK `call_with_throwing`
-                            // xfail).
-                            if let Some(throw_value) = op_error_to_catchable_throw(&op_err) {
-                                return Err(EngineError::UnhandledThrow {
-                                    value: Box::new(throw_value),
-                                    trace: Vec::new(),
-                                });
-                            }
-                            return Err(EngineError::from(op_err));
+                            // A host-callable error. On a **root** thread it
+                            // surfaces to the host as a `HostCallable` instance
+                            // via `EngineError::UnhandledThrow`. NOTE: a root
+                            // thread's throw exits `run_thread_event_loop`
+                            // WITHOUT re-entering the VM, so an in-BAML
+                            // `try { f(x) } catch (e: root.errors.HostCallable)`
+                            // does NOT catch it today even though the compiler
+                            // folds the param's `throws` and emits a handler —
+                            // that becomes catchable once sys-op calls are
+                            // awaited explicitly (a known, documented limitation;
+                            // see the `host_value_callable` test and the SDK
+                            // `call_with_throwing` xfail). On a **spawned child**
+                            // thread, `deliver_host_call_throw` settles the
+                            // child's future (errored) so the awaiter resolves
+                            // with the throw instead of hanging on a `Pending`
+                            // future.
+                            return self.deliver_host_call_throw(&mut thread, op_err).await;
                         }
                     }
                 }

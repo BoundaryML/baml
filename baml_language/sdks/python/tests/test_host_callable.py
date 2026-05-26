@@ -170,7 +170,7 @@ async def test_async_outer_call_with_sync_callback():
 
 
 # ---------------------------------------------------------------------------
-# F11: abnormal paths must still complete the call (engine never hangs).
+# Abnormal paths must still complete the call (engine never hangs).
 # ---------------------------------------------------------------------------
 
 
@@ -209,7 +209,7 @@ def test_callable_raising_during_result_property_still_completes():
 
 
 # ---------------------------------------------------------------------------
-# F5: encode-error rollback releases callables registered for earlier kwargs.
+# Encode-error rollback releases callables registered for earlier kwargs.
 # ---------------------------------------------------------------------------
 
 
@@ -218,7 +218,10 @@ def test_encode_error_releases_registered_callables(monkeypatch):
     earlier kwarg must be released via `release_host_callable` so it doesn't
     leak in the per-process registry."""
     released: list = []
-    real_release = _proto.release_host_callable
+    # Spy on the symbol where `encode_call_args` resolves it (proto's
+    # namespace), not its canonical home in `baml_py`. proto re-imports but
+    # doesn't re-export it, so the attribute read trips reportPrivateImportUsage.
+    real_release = _proto.release_host_callable  # pyright: ignore[reportPrivateImportUsage]
 
     def spy_release(key):
         released.append(key)
@@ -247,6 +250,12 @@ def test_encode_success_does_not_release(monkeypatch):
     monkeypatch.setattr(
         _proto, "release_host_callable", lambda key: released.append(key)
     )
+    # Stub registration too, so the callable is never inserted into the real
+    # process-wide table. Otherwise this test would leak a live host-value key:
+    # `encode_call_args` registers `cb`, but the bytes are discarded (never sent
+    # to the engine) and `release_host_callable` above is a no-op recorder, so
+    # nothing would ever release it.
+    monkeypatch.setattr(_proto, "register_host_callable", lambda _value: 999)
 
     def cb(x: int) -> str:
         return str(x)

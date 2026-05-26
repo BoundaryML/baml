@@ -155,7 +155,14 @@ fn next_call_id() -> u32 {
 /// A collision trips a `debug_assert!` in debug builds; in release builds
 /// (where the assert is stripped) it is caught at runtime by refusing the
 /// insert and completing the new call with an error.
-fn insert_in_flight(call_id: u32, completion: CompletionHandle) {
+///
+/// Returns `true` when `completion` was inserted, `false` on collision. On
+/// `false` the caller **must not** fire the JS dispatch (the call has already
+/// failed) and **must not** build a [`WasmInflightGuard`] for `call_id` — the
+/// live entry under that id belongs to the *other* call, so a guard drop would
+/// evict it.
+#[must_use]
+fn insert_in_flight(call_id: u32, completion: CompletionHandle) -> bool {
     let collision = IN_FLIGHT.with(|cell| cell.borrow().contains_key(&call_id));
     debug_assert!(
         !collision,
@@ -175,11 +182,12 @@ fn insert_in_flight(call_id: u32, completion: CompletionHandle) {
                 "host-call id {call_id} collided with a live in-flight call"
             )),
         )));
-        return;
+        return false;
     }
     IN_FLIGHT.with(|cell| {
         cell.borrow_mut().insert(call_id, completion);
     });
+    true
 }
 
 /// RAII guard that evicts an in-flight call's `IN_FLIGHT` entry when dropped.
@@ -416,43 +424,52 @@ impl io::IoNamespaceHost for WasmHost {
         // the free-function `complete_host_call` can resolve it by id.
         let call_id = next_call_id();
         let (result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
-        insert_in_flight(call_id, completion);
 
-        // Fire *this runtime's* JS dispatch callback. The signature is
-        // `(key: bigint, callId: number, argsBytes: Uint8Array) => void`.
-        let host_dispatch = (*self.host_dispatch).clone();
+        // On a (2^32-wrap) id collision `insert_in_flight` returns `false` after
+        // failing this call's `completion`, and the live entry under `call_id`
+        // belongs to the *other* call. So only fire the dispatch — and only
+        // install the eviction guard (in `drain_pending`) — when our entry
+        // actually went in; otherwise `result` already carries the collision
+        // error and dispatching would run the host callback for a failed call.
+        let inserted = insert_in_flight(call_id, completion);
+        if inserted {
+            // Fire *this runtime's* JS dispatch callback. The signature is
+            // `(key: bigint, callId: number, argsBytes: Uint8Array) => void`.
+            let host_dispatch = (*self.host_dispatch).clone();
 
-        let key_js = JsValue::from(host_arc.key);
-        // u32 → f64 is lossless; the JS side reads `callId` as a plain Number.
-        let call_id_js = JsValue::from_f64(f64::from(call_id));
-        let args_js = js_sys::Uint8Array::new_with_length(
-            encoded
-                .len()
-                .try_into()
-                .expect("host-call args payload exceeds u32::MAX"),
-        );
-        args_js.copy_from(&encoded);
-        if let Err(err) = host_dispatch.call3(&JsValue::NULL, &key_js, &call_id_js, &args_js.into())
-        {
-            // The JS dispatch threw synchronously (before it could schedule
-            // work). Complete the in-flight call with an error.
-            let popped = IN_FLIGHT.with(|cell| cell.borrow_mut().remove(&call_id));
-            if let Some(c) = popped {
-                let msg = err.as_string().unwrap_or_else(|| format!("{err:?}"));
-                c.complete(Err(OpError::new(
-                    SysOp::BamlHostCallHostValue,
-                    OpErrorKind::HostCallable {
-                        class_name: "Error".to_string(),
-                        message: format!("host_dispatch JS callback threw: {msg}"),
-                        traceback: None,
-                        language: Some("javascript".to_string()),
-                        category: HostCallableErrorCategory::HostCallableHostError as i32,
-                    },
-                )));
+            let key_js = JsValue::from(host_arc.key);
+            // u32 → f64 is lossless; the JS side reads `callId` as a plain Number.
+            let call_id_js = JsValue::from_f64(f64::from(call_id));
+            let args_js = js_sys::Uint8Array::new_with_length(
+                encoded
+                    .len()
+                    .try_into()
+                    .expect("host-call args payload exceeds u32::MAX"),
+            );
+            args_js.copy_from(&encoded);
+            if let Err(err) =
+                host_dispatch.call3(&JsValue::NULL, &key_js, &call_id_js, &args_js.into())
+            {
+                // The JS dispatch threw synchronously (before it could schedule
+                // work). Complete the in-flight call with an error.
+                let popped = IN_FLIGHT.with(|cell| cell.borrow_mut().remove(&call_id));
+                if let Some(c) = popped {
+                    let msg = err.as_string().unwrap_or_else(|| format!("{err:?}"));
+                    c.complete(Err(OpError::new(
+                        SysOp::BamlHostCallHostValue,
+                        OpErrorKind::HostCallable {
+                            class_name: "Error".to_string(),
+                            message: format!("host_dispatch JS callback threw: {msg}"),
+                            traceback: None,
+                            language: Some("javascript".to_string()),
+                            category: HostCallableErrorCategory::HostCallableHostError as i32,
+                        },
+                    )));
+                }
             }
         }
 
-        drain_pending(result, type_arg_0, call_id)
+        drain_pending(result, type_arg_0, call_id, inserted)
     }
 }
 
@@ -470,17 +487,22 @@ impl io::IoNamespaceHost for WasmHost {
 /// this guard covers scalar discrimination (`int` ≠ `float`), container
 /// recursion, enum identity, and class-name identity.
 ///
-/// `call_id` owns the in-flight entry installed by the caller; a
-/// [`WasmInflightGuard`] for it is moved into the async future so that
-/// cancellation (the future being dropped before completion) evicts the
-/// dangling entry. The `Ready` arms drop the guard inline — also correct, just
-/// not reached in practice since `SysOpResult::pending` always yields `Async`.
+/// When `install_guard` is true, `call_id` owns the in-flight entry installed
+/// by the caller, and a [`WasmInflightGuard`] for it is moved into the async
+/// future so that cancellation (the future being dropped before completion)
+/// evicts the dangling entry. `install_guard` is `false` on the id-collision
+/// path, where the live entry under `call_id` belongs to another call — guarding
+/// it would evict that entry, so no guard is built and `result` simply resolves
+/// to the collision error. The `Ready` arms drop the guard inline — also
+/// correct, just not reached in practice since `SysOpResult::pending` always
+/// yields `Async`.
 fn drain_pending(
     result: SysOpResult,
     expected: baml_type::Ty,
     call_id: u32,
+    install_guard: bool,
 ) -> SysOpOutput<BexExternalValue> {
-    let guard = WasmInflightGuard { call_id };
+    let guard = install_guard.then_some(WasmInflightGuard { call_id });
     match result {
         SysOpResult::Ready(Ok(value)) => match validate_host_return_value(&value, &expected) {
             Ok(()) => SysOpOutput::ok(value),
@@ -490,7 +512,9 @@ fn drain_pending(
         SysOpResult::Async(fut) => {
             SysOpOutput::Async(Box::pin(crate::send_wrapper::SendFuture(async move {
                 // Move the guard into the future so cancellation (future drop)
-                // evicts the in-flight entry.
+                // evicts the in-flight entry. `None` on the collision path —
+                // there is no entry of ours to evict and `fut` resolves to the
+                // collision error.
                 let _guard = guard;
                 let value = fut.await.map_err(|op_err| op_err.kind)?;
                 validate_host_return_value(&value, &expected)?;
@@ -623,14 +647,18 @@ mod tests {
     fn guard_drop_evicts_in_flight_entry_on_cancel() {
         let call_id = next_call_id();
         let (result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
-        insert_in_flight(call_id, completion);
+        assert!(
+            insert_in_flight(call_id, completion),
+            "fresh id must insert cleanly"
+        );
         assert!(
             IN_FLIGHT.with(|c| c.borrow().contains_key(&call_id)),
             "entry must be present after insert"
         );
 
         // `drain_pending` wraps the result + guard into the returned future.
-        let SysOpOutput::Async(fut) = drain_pending(result, baml_type::Ty::unknown(), call_id)
+        let SysOpOutput::Async(fut) =
+            drain_pending(result, baml_type::Ty::unknown(), call_id, true)
         else {
             panic!("pending() must yield an async output");
         };
@@ -650,9 +678,13 @@ mod tests {
     fn guard_drop_after_normal_completion_is_noop() {
         let call_id = next_call_id();
         let (result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
-        insert_in_flight(call_id, completion);
+        assert!(
+            insert_in_flight(call_id, completion),
+            "fresh id must insert cleanly"
+        );
 
-        let SysOpOutput::Async(fut) = drain_pending(result, baml_type::Ty::unknown(), call_id)
+        let SysOpOutput::Async(fut) =
+            drain_pending(result, baml_type::Ty::unknown(), call_id, true)
         else {
             panic!("pending() must yield an async output");
         };

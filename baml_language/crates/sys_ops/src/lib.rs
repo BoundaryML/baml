@@ -1582,13 +1582,13 @@ impl IoSysOpsBuilder {
 
     /// Override the `host` namespace (host-callable dispatch) with a pre-built instance.
     ///
-    /// Used by bridges (Python, Node, Go, WASM) to wire the
+    /// Only the WASM bridge uses this builder method: it composes its `SysOps`
+    /// here and injects its JS dispatch impl explicitly, wiring the
     /// [`io::IoNamespaceHost::call_host_value`] sysop to a bridge-specific
-    /// dispatch implementation that fires the host-language callable. Native
-    /// bridges use the `sys_native::NativeSysOps` path instead (passing it to
-    /// [`SysOps::from_impl`]); the WASM bridge composes via this builder and
-    /// needs to inject its JS dispatch impl explicitly.
-    #[allow(clippy::needless_pass_by_value)]
+    /// dispatch implementation that fires the host-language callable. The
+    /// native bridges (Python, Node, Go) instead wire dispatch through
+    /// `sys_native::NativeSysOps` (passed to [`SysOps::from_impl`]) and never
+    /// call this method.
     #[must_use]
     pub fn with_host_instance(
         mut self,

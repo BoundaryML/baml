@@ -467,6 +467,25 @@ impl BexEngine {
                         });
                     }
                 };
+                // The host's returned value is validated against `ret` when the
+                // call completes. A generic return type erases to `Ty::Void`
+                // (or `BuiltinUnknown`) at runtime, which the return validator
+                // treats as "accept anything" — letting the host inject a value
+                // of any type into a position BAML treats as the instantiated
+                // type variable. Reject such a callable at bind time rather than
+                // admit an unvalidatable return. (This also rejects a genuine
+                // bare `-> void` host callable, which is indistinguishable from
+                // an erased generic at runtime; such a callable must declare a
+                // concrete return type.)
+                if ret_ty_has_unvalidatable_position(&ret) {
+                    return Err(EngineError::TypeMismatch {
+                        message: format!(
+                            "host callable cannot be bound: its return type `{ret}` is generic \
+                             or void, so the host's returned value cannot be validated; host \
+                             callables require a concrete return type",
+                        ),
+                    });
+                }
                 let host_closure = bex_vm_types::HostClosure {
                     handle: arc,
                     ret_ty: Box::new(ret),
@@ -606,6 +625,25 @@ pub(crate) fn peel_function_ty(ty: &Ty) -> Option<&Ty> {
             found
         }
         _ => None,
+    }
+}
+
+/// Whether a host-callable's declared return type contains a position the
+/// host-return validator treats as "accept anything": a `Ty::Void` (the runtime
+/// form of an erased generic type variable, and also a bare `-> void`) or a
+/// `Ty::BuiltinUnknown`. Recurses through `Optional` / `List` / `Map`-value /
+/// `Union` / `Class`-generic-args so a nested erased position (`(T)[]`,
+/// `Box<T>`) is caught too. A host callable with such a return type cannot have
+/// its returned value validated, so binding one is rejected.
+fn ret_ty_has_unvalidatable_position(ty: &Ty) -> bool {
+    match ty {
+        Ty::Void { .. } | Ty::BuiltinUnknown { .. } => true,
+        Ty::Optional(inner, _) => ret_ty_has_unvalidatable_position(inner),
+        Ty::List(elem, _) => ret_ty_has_unvalidatable_position(elem),
+        Ty::Map { value, .. } => ret_ty_has_unvalidatable_position(value),
+        Ty::Union(members, _) => members.iter().any(ret_ty_has_unvalidatable_position),
+        Ty::Class(_, generic_args, _) => generic_args.iter().any(ret_ty_has_unvalidatable_position),
+        _ => false,
     }
 }
 
@@ -907,6 +945,21 @@ impl BexEngine {
                     other.type_name(),
                 )),
             },
+
+            // A function-typed return position is not supported yet. The host
+            // call result is materialized by `convert_external_to_vm_value`
+            // *without* a declared type, so a returned `HostValue` (the only
+            // value that inhabits a function type) cannot be bound to an
+            // `Object::HostClosure` and would otherwise fail downstream as a raw
+            // `EngineError::CannotConvert`. Reject it here so it surfaces as a
+            // structured, catchable `HostCallable` instead. This arm covers a
+            // top-level function return and — via the `List` / `Map` / `Class`
+            // recursion above — any nested function position (`(() -> int)[]`,
+            // `class { cb: () -> int }`, …).
+            Ty::Function { .. } => Err(format!(
+                "host callable returned a value typed `{expected}`; returning a \
+                 callable (a function-typed value) is not supported",
+            )),
 
             // Scalars and everything else: defer to the schema-free shape
             // check (int ≠ float, exact tags, literal equality, media).

@@ -50,6 +50,20 @@ use sys_types::{BexExternalValue, CompletionHandle, OpError, OpErrorKind, SysOp}
 /// Called by `call_host_value` when BAML code invokes a `HostValue`. The
 /// bridge decodes `args`, invokes the host callable, and resolves the
 /// in-flight call via `complete_host_call`.
+///
+/// ## Contract (upheld by the bridges)
+///
+/// * **Complete exactly once.** Every dispatched `call_id` must be resolved by
+///   exactly one `complete_host_call` (success or error), on every exit path —
+///   including host-side exceptions and panics. There is no engine-side timeout
+///   (see "In-flight lifetime" above), so a call that is never completed and
+///   never cancelled hangs the issuing BAML call indefinitely.
+/// * **No synchronous re-entrancy.** A host callable must not synchronously
+///   re-enter the engine (e.g. issue a *blocking* BAML call from inside the
+///   callback). Dispatch is fire-and-return and the engine awaits completion,
+///   so a blocking re-entrant call would deadlock the thread that must service
+///   this dispatch. The bridges fast-fail the narrow case of passing a callable
+///   to the synchronous call path; broader sync re-entrancy is unsupported.
 pub type HostDispatchFn =
     extern "C" fn(host_value_key: u64, call_id: u32, args: *const u8, length: usize);
 
@@ -126,7 +140,14 @@ pub fn next_call_id() -> u32 {
 /// in debug builds; in release builds (where the assert is stripped) it is
 /// caught at runtime by refusing the insert and completing the new call with an
 /// error.
-pub fn insert(call_id: u32, completion: CompletionHandle) {
+///
+/// Returns `true` when `completion` was inserted, `false` on collision. On
+/// `false` the caller **must not** fire the host dispatch (the call has already
+/// failed) and **must not** build an [`InflightGuard`] for `call_id` — the live
+/// entry under that id belongs to the *other* call, so a guard drop would evict
+/// it.
+#[must_use]
+pub fn insert(call_id: u32, completion: CompletionHandle) -> bool {
     let mut table = TABLE.write().unwrap();
     let collision = table.contains_key(&call_id);
     debug_assert!(
@@ -148,9 +169,10 @@ pub fn insert(call_id: u32, completion: CompletionHandle) {
                 "host-call id {call_id} collided with a live in-flight call"
             )),
         )));
-        return;
+        return false;
     }
     table.insert(call_id, completion);
+    true
 }
 
 /// Remove and return the `CompletionHandle` for the given call id, if any.
@@ -244,7 +266,7 @@ mod tests {
     fn guard_drop_evicts_in_flight_entry_on_cancel() {
         let (result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
         let call_id = next_call_id();
-        insert(call_id, completion);
+        assert!(insert(call_id, completion), "fresh id must insert cleanly");
         assert!(contains(call_id), "entry must be present after insert");
 
         // Model the engine dropping the cancelled sysop future: the future owns
@@ -268,7 +290,7 @@ mod tests {
     async fn guard_drop_after_normal_completion_is_noop() {
         let (result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
         let call_id = next_call_id();
-        insert(call_id, completion);
+        assert!(insert(call_id, completion), "fresh id must insert cleanly");
         let guard = InflightGuard::new(call_id);
 
         // Host completes normally — this takes-and-fires the handle.
@@ -303,7 +325,7 @@ mod tests {
         for _ in 0..64 {
             let (_result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
             let id = next_call_id();
-            insert(id, completion);
+            assert!(insert(id, completion), "fresh id must insert cleanly");
             live.push(id);
         }
 
@@ -315,12 +337,56 @@ mod tests {
             !live.contains(&fresh),
             "freshly minted id collided with a live entry"
         );
-        insert(fresh, completion); // would panic via debug_assert! on collision
+        // Would panic via the `debug_assert!` on collision; returns `true`
+        // (inserted) for a fresh id.
+        assert!(insert(fresh, completion), "fresh id must insert cleanly");
 
         // Clean up so the global table does not retain entries across tests.
         for id in live {
             let _ = take(id);
         }
         let _ = take(fresh);
+    }
+
+    /// In release builds the `debug_assert!` is stripped, so a (wrapped)
+    /// collision is handled at runtime: `insert` returns `false`, leaves the
+    /// existing live entry untouched, and completes the *new* handle with an
+    /// error so its caller can bail without firing the host dispatch. This path
+    /// is unreachable in debug builds (the assert fires first), hence the gate.
+    #[cfg(not(debug_assertions))]
+    #[tokio::test]
+    async fn collision_insert_returns_false_and_preserves_live_entry() {
+        let (first_result, first_completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
+        let call_id = next_call_id();
+        assert!(
+            insert(call_id, first_completion),
+            "first insert must succeed"
+        );
+
+        // Second insert for the SAME id (models a u32 wrap onto a live entry).
+        let (second_result, second_completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
+        assert!(
+            !insert(call_id, second_completion),
+            "collision insert must return false"
+        );
+
+        // The original live entry is untouched: completing `call_id` resolves
+        // the FIRST call.
+        complete_with_value(call_id, BexExternalValue::Int(1));
+        let first = match first_result {
+            SysOpResult::Async(fut) => fut.await.expect("first call resolves"),
+            SysOpResult::Ready(Ok(v)) => v,
+            SysOpResult::Ready(Err(e)) => panic!("unexpected error: {e}"),
+        };
+        assert!(matches!(first, BexExternalValue::Int(1)));
+
+        // The second (rejected) call was already completed with an error by
+        // `insert` itself.
+        let second_err = match second_result {
+            SysOpResult::Async(fut) => fut.await.expect_err("second call must error"),
+            SysOpResult::Ready(Ok(_)) => panic!("expected an error for the rejected call"),
+            SysOpResult::Ready(Err(e)) => e,
+        };
+        assert!(matches!(second_err.kind, OpErrorKind::Other(_)));
     }
 }

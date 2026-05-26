@@ -29,6 +29,17 @@
 //! [`host_release_callback`] fires and removes the registry entry — the
 //! `ThreadsafeFunction`'s `Drop` releases the underlying JS reference, which
 //! lets the user's callable become GC-eligible.
+//!
+//! Release is therefore GC/drain-driven: the entry — and its strong
+//! (`weak::<false>`) tsfn ref, which pins the libuv loop — lives until the
+//! engine collects or drops the owning `Object::HostClosure` and the deferred
+//! release is drained (`host_release_dispatch::drain`, run at GC safepoints
+//! and after each call). A callable that is never collected before the
+//! process tears down keeps its ref, which is why the Node test suite runs
+//! jest with `forceExit`. A teardown-time drain (releasing every still-live
+//! host value when a runtime is dropped) would close that gap but depends on
+//! heap-teardown semantics owned by the engine/heap layer; it is left to that
+//! layer rather than worked around here.
 
 use std::{
     collections::HashMap,
@@ -63,7 +74,19 @@ type DispatchArgs = FnArgs<(u32, Buffer)>;
 /// - `CalleeHandled = false`: the JS wrapper is responsible for catching
 ///   its own errors and reporting them via `complete_host_call`; we don't
 ///   want napi-rs to interpret a Result on the Rust side.
-type DispatchTsfn = ThreadsafeFunction<DispatchArgs, (), DispatchArgs, Status, false>;
+/// - `Weak = false` / `MaxQueueSize = DISPATCH_QUEUE_SIZE`: a strong ref with a
+///   bounded queue (see [`DISPATCH_QUEUE_SIZE`]).
+type DispatchTsfn =
+    ThreadsafeFunction<DispatchArgs, (), DispatchArgs, Status, false, false, DISPATCH_QUEUE_SIZE>;
+
+/// Upper bound on queued, not-yet-delivered host-call dispatches per callable.
+///
+/// napi's default queue size is `0` (unbounded); with the `NonBlocking`
+/// dispatch a backlog could grow without limit if JS can't keep up. A full
+/// queue makes `tsfn.call` return `Status::QueueFull`, which the dispatch site
+/// surfaces as a `HostCallable` error (see `send_dispatch_error_tsfn_status`)
+/// rather than dropping the call silently.
+const DISPATCH_QUEUE_SIZE: usize = 1024;
 
 /// Process-wide table of JS dispatch wrappers handed to BAML.
 ///
@@ -109,6 +132,8 @@ pub fn register_host_callable(callable: Function<'_, DispatchArgs, ()>) -> napi:
         .build_threadsafe_function()
         .callee_handled::<false>()
         .weak::<false>()
+        // Bound the queue (napi's default is unbounded); see DISPATCH_QUEUE_SIZE.
+        .max_queue_size::<DISPATCH_QUEUE_SIZE>()
         .build()?;
     let key = next_key();
     REGISTRY.table.lock().unwrap().insert(key, Arc::new(tsfn));
@@ -153,7 +178,6 @@ fn drop_registry_entry(host_value_key: u64) {
 ///
 /// Fires when the last Rust clone of the corresponding `HostValueArc` is
 /// dropped — see `bex_external_types::host_value::host_release_dispatch`.
-#[unsafe(no_mangle)]
 pub extern "C" fn host_release_callback(host_value_key: u64) {
     drop_registry_entry(host_value_key);
 }
@@ -180,7 +204,6 @@ pub fn release_host_callable(key: HandleKey) {
 /// are wrapped as `BexExternalValue::Array` before encoding). The JS
 /// dispatch wrapper is responsible for decoding the list, calling the user
 /// function, and reporting the result via `complete_host_call`.
-#[unsafe(no_mangle)]
 #[expect(
     clippy::not_unsafe_ptr_arg_deref,
     reason = "C ABI entry point: pointer validity is the caller's contract, documented \

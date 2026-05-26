@@ -203,7 +203,10 @@ mod tests {
 
         let (result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
         let id = host_dispatch::next_call_id();
-        host_dispatch::insert(id, completion);
+        assert!(
+            host_dispatch::insert(id, completion),
+            "a fresh call id must insert without colliding"
+        );
 
         // Fire complete_host_call with empty success.
         complete_host_call(id, 0, std::ptr::null(), 0);
@@ -236,7 +239,10 @@ mod tests {
 
         let (result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
         let id = host_dispatch::next_call_id();
-        host_dispatch::insert(id, completion);
+        assert!(
+            host_dispatch::insert(id, completion),
+            "a fresh call id must insert without colliding"
+        );
 
         complete_host_call(id, 1, encoded.as_ptr() as *const i8, encoded.len());
 

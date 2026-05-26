@@ -150,11 +150,12 @@ def _set_inbound_value(
     nested field we happen to have descended into.
 
     `registered`, when supplied, collects the host-value keys minted by the
-    callable branch so the encode path can roll the registrations back if a
-    later kwarg fails to encode. It is `None` on the host-call *result*
-    encode path (called from Rust's `dispatch_in_python`), where rollback is
-    unnecessary — the result goes straight to the engine, which releases any
-    callables it decodes.
+    callable branch so the encode path can roll the registrations back if
+    encoding fails before the bytes reach the engine. Both the argument path
+    (`encode_call_args`) and the host-call *result* encode path (Rust's
+    `encode_result_inbound`) supply it: a callable nested in a composite value
+    whose encoding then aborts would otherwise leak, since the engine never
+    receives — and so never releases — it.
     """
     if value is None:
         return  # oneof unset ≡ null
@@ -164,6 +165,14 @@ def _set_inbound_value(
         inbound_value.bool_value = value
         return
     if isinstance(value, int):
+        # BAML encodes integers as a protobuf int64. Range-check here so an
+        # out-of-range Python int reports the offending kwarg instead of the
+        # low-level protobuf "Value out of range" error.
+        if not -(2**63) <= value < 2**63:
+            raise ValueError(
+                f"integer for {kwarg_name!r} is outside the signed 64-bit range "
+                f"BAML supports for integers: {value}"
+            )
         inbound_value.int_value = value
         return
     if isinstance(value, float):

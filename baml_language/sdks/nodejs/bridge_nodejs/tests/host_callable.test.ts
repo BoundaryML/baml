@@ -15,6 +15,15 @@
 // the event loop free, so the tsfn dispatch completes promptly. Python's
 // bridge sidesteps this by running async callables on a fresh asyncio
 // loop in the dispatch thread (different I/O architecture).
+//
+// Why the suite runs jest with `forceExit` (see package.json): each
+// registered callable holds a strong (`weak::<false>`) ThreadsafeFunction
+// ref that pins the libuv loop until the engine releases it, and release
+// is GC/drain-driven (`host_release_callback`). A runtime dropped at the
+// end of a test isn't guaranteed to have collected its `HostClosure`
+// before the process exits, so the ref can outlive the test and keep jest
+// from exiting on its own. `forceExit` lets jest terminate once the tests
+// themselves have completed.
 
 import { BamlRuntime } from '../native';
 import { callFunction, callFunctionSync } from '../index';
@@ -128,7 +137,7 @@ describe('host-callable async (Promise) callbacks', () => {
     });
 });
 
-describe('host-callable sync-call guard (F8)', () => {
+describe('host-callable sync-call guard', () => {
     test('a host callable on the sync path fast-fails instead of hanging', () => {
         const rt = makeRuntime();
         const cb = (x: number) => `got ${x}`;
@@ -162,7 +171,7 @@ describe('host-callable sync-call guard (F8)', () => {
     });
 });
 
-describe('host-callable always completes on abnormal paths (F11)', () => {
+describe('host-callable always completes on abnormal paths', () => {
     test('a callback returning an unencodable value surfaces as an error, not a hang', async () => {
         const rt = makeRuntime();
         // A BigInt is not encodable by setInboundValue → the result-encode

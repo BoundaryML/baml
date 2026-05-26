@@ -14,9 +14,10 @@
 //! 2. Decodes the `BamlOutboundValue` args into Python values via
 //!    `baml_core.proto._decode_value_holder` (already a list shape).
 //! 3. Invokes the callable. If the return is a coroutine, runs it to
-//!    completion on a fresh `asyncio` event loop in the same dispatch
-//!    thread — the engine has released its heap permit via
-//!    `block_in_place`, so blocking here is safe.
+//!    completion on a fresh `asyncio` event loop. The dispatch runs on a
+//!    spawned tokio task (see [`host_dispatch_callback`]), so blocking that
+//!    task to drive the coroutine to completion does not stall the engine,
+//!    which concurrently awaits the call's completion.
 //! 4. Encodes the result into `InboundValue` bytes via
 //!    `baml_core.proto.encode_call_args`-style serialization, then calls
 //!    `bridge_cffi::complete_host_call(call_id, 0, ptr, len)`.
@@ -43,6 +44,7 @@ use pyo3::{
     prelude::*,
     types::{PyAnyMethods, PyModule, PyTuple},
 };
+use pyo3_stub_gen::derive::gen_stub_pyfunction;
 
 /// Process-wide table of Python callables that have been handed to BAML.
 ///
@@ -73,6 +75,7 @@ fn next_key() -> u64 {
 /// Exposed to Python as `baml_py.register_host_callable(callable) -> int`.
 /// Called from the inbound encoder in `baml_core.proto` whenever a Python
 /// callable appears as a kwarg.
+#[gen_stub_pyfunction]
 #[pyfunction]
 pub fn register_host_callable(callable: Py<PyAny>) -> u64 {
     let key = next_key();
@@ -100,7 +103,6 @@ fn drop_registry_entry(host_value_key: u64) {
 ///
 /// Fires when the last Rust clone of the corresponding `HostValueArc` is
 /// dropped — see `bex_external_types::host_value::host_release_dispatch`.
-#[unsafe(no_mangle)]
 pub extern "C" fn host_release_callback(host_value_key: u64) {
     drop_registry_entry(host_value_key);
 }
@@ -115,6 +117,7 @@ pub extern "C" fn host_release_callback(host_value_key: u64) {
 /// registry entry (holding a strong ref to the user callable) would leak for
 /// the life of the process. The encoder calls this for every key it
 /// registered during a failed encode.
+#[gen_stub_pyfunction]
 #[pyfunction]
 pub fn release_host_callable(host_value_key: u64) {
     drop_registry_entry(host_value_key);
@@ -125,7 +128,6 @@ pub fn release_host_callable(host_value_key: u64) {
 /// `args` is a protobuf-encoded `BamlOutboundValue` whose variant is a
 /// `BamlValueList` (see `sys_native::host_impls::call_host_value` —
 /// args are wrapped as `BexExternalValue::Array` before encoding).
-#[unsafe(no_mangle)]
 #[expect(
     clippy::not_unsafe_ptr_arg_deref,
     reason = "C ABI entry point: pointer validity is the caller's contract, documented \
@@ -291,12 +293,24 @@ fn run_if_coroutine(py: Python<'_>, value: Py<PyAny>) -> PyResult<Py<PyAny>> {
     // thread. The bridge is on a tokio worker — Python sees a fresh loop
     // dedicated to this dispatch only.
     let new_loop = asyncio.getattr("new_event_loop")?.call0()?;
-    let result = match new_loop.call_method1("run_until_complete", (bound,)) {
-        Ok(v) => Ok(v.unbind()),
-        Err(e) => Err(e),
-    };
-    // Close the loop regardless of success/error to release its resources.
+    let set_event_loop = asyncio.getattr("set_event_loop")?;
+    let result = (|| -> PyResult<Py<PyAny>> {
+        // Install the fresh loop as this thread's current loop for the run.
+        // Coroutines (and libraries they use) commonly reach for the ambient
+        // loop via `asyncio.get_event_loop()`/`ensure_future()`; on a non-main
+        // thread with no loop set that raises "no current event loop in thread"
+        // or binds work to an unrelated loop. Installing it first makes the
+        // running loop and the thread's current loop agree.
+        set_event_loop.call1((&new_loop,))?;
+        Ok(new_loop
+            .call_method1("run_until_complete", (bound,))?
+            .unbind())
+    })();
+    // Close the loop and clear it as the thread's current loop regardless of
+    // success/error. tokio reuses worker threads, so a leftover (now-closed)
+    // current loop would poison the next dispatch that lands on this thread.
     let _ = new_loop.call_method0("close");
+    let _ = set_event_loop.call1((py.None(),));
     result
 }
 
@@ -306,13 +320,32 @@ fn encode_result_inbound(py: Python<'_>, value: Py<PyAny>) -> PyResult<Vec<u8>> 
     let inbound_pb2 = PyModule::import(py, "baml_core.cffi.v1.baml_inbound_pb2")?;
     let proto = PyModule::import(py, "baml_core.proto")?;
     let holder = inbound_pb2.getattr("InboundValue")?.call0()?;
+    // Track host callables registered while encoding so we can release them on
+    // failure. A callback nested in the result (e.g. `{"cb": lambda x: x}`)
+    // gets registered in the process-wide table before encoding finishes; if
+    // encoding/serialization then aborts, the engine never receives these
+    // bytes and nothing would release it — a leak. Mirrors the rollback
+    // `encode_call_args` already does for the argument path.
+    let registered = pyo3::types::PyList::empty(py);
     let kwargs_dict = pyo3::types::PyDict::new(py);
     kwargs_dict.set_item("kwarg_name", "<host-callable result>")?;
-    proto
-        .getattr("_set_inbound_value")?
-        .call((&holder, value), Some(&kwargs_dict))?;
-    let bytes_obj = holder.call_method0("SerializeToString")?;
-    bytes_obj.extract()
+    kwargs_dict.set_item("registered", &registered)?;
+
+    let encoded = (|| -> PyResult<Vec<u8>> {
+        proto
+            .getattr("_set_inbound_value")?
+            .call((&holder, value), Some(&kwargs_dict))?;
+        holder.call_method0("SerializeToString")?.extract()
+    })();
+
+    if encoded.is_err() {
+        for item in registered.iter() {
+            if let Ok(key) = item.extract::<u64>() {
+                release_host_callable(key);
+            }
+        }
+    }
+    encoded
 }
 
 /// Send a `complete_host_call` success with the given `InboundValue`-encoded

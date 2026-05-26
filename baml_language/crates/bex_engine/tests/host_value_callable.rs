@@ -713,3 +713,266 @@ async fn host_callable_wrong_enum_identity_surfaces_as_host_callable_throw() {
     assert_host_callable_throw(&result);
     drop(arc);
 }
+
+// ============================================================================
+// Function-typed return: the callback's declared return type is itself a
+//         callable (`() -> int`) and the host returns a `HostValue`. The engine
+//         can't materialize a *returned* callable (the result-push has no
+//         declared type to bind an `Object::HostClosure`), so the validator
+//         rejects it as a structured, catchable `HostCallable` rather than
+//         letting it die downstream as a raw `CannotConvert`.
+// ============================================================================
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_returning_a_callable_is_rejected() {
+    let source = r#"
+        function call_returns_callable(f: (int) -> (() -> int), x: int) -> int {
+            f(x);
+            return 0;
+        }
+    "#;
+
+    // The callback returns *another* host callable (a function-typed value).
+    let returned = HostValueArc::new(next_host_key(), HostValueKind::Callable);
+    let returned_for_cb = Arc::clone(&returned);
+    let arc = register_host_callable(move |_items| {
+        FakeReturn::Ok(BexExternalValue::HostValue(Arc::clone(&returned_for_cb)))
+    });
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            Arc::new(sys_native::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "call_returns_callable",
+            vec![
+                BexExternalValue::HostValue(Arc::clone(&arc)),
+                BexExternalValue::Int(1),
+            ],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    // Surfaces as a catchable `HostCallable` (not a raw `CannotConvert`), and
+    // the message explains that returning a callable is unsupported.
+    match result {
+        Err(EngineError::UnhandledThrow { value, .. }) => match value.as_ref() {
+            BexExternalValue::Instance { class_name, fields } => {
+                assert_eq!(class_name, "baml.errors.HostCallable");
+                match fields.get("message") {
+                    Some(BexExternalValue::String(m)) => assert!(
+                        m.contains("callable"),
+                        "message should explain the unsupported callable return, got {m:?}"
+                    ),
+                    other => panic!("expected a message field, got {other:?}"),
+                }
+            }
+            other => panic!("expected Instance, got {other:?}"),
+        },
+        other => panic!("expected UnhandledThrow(HostCallable), got {other:?}"),
+    }
+    drop(arc);
+    drop(returned);
+}
+
+// ============================================================================
+// A moving GC during the host-call await must not invalidate return-type
+//         validation. The engine captures the declared return type as an owned
+//         `Ty` before the await; if it instead re-read the raw `args[2]` heap
+//         pointer afterward, a GC during the await could relocate/collect that
+//         `Object::Type` (the engine-local `args` Vec is not a GC root and is
+//         never forwarded), so schema validation would read a dangling pointer
+//         and be silently skipped — wrongly accepting a type-violating return.
+//         Here we force a GC while the call is parked on the await, then
+//         complete it with a wrong-typed value, and assert it is still rejected.
+// ============================================================================
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_call_ret_ty_survives_gc_during_await() {
+    let source = r#"
+        function add_one(f: (int) -> int, x: int) -> int {
+            return f(x);
+        }
+    "#;
+
+    // Publish the dispatched call_id so the test controls GC-vs-completion order.
+    let (tx, rx) = std::sync::mpsc::channel::<u32>();
+    let slot = PENDING_CALL_ID.get_or_init(|| Mutex::new(None));
+    *slot.lock().unwrap() = Some(tx);
+
+    // Park the host call (don't complete) so we can run a GC during the await.
+    let arc = register_host_callable(|_items| FakeReturn::NeverComplete);
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            Arc::new(sys_native::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    let engine_for_call = Arc::clone(&engine);
+    let arc_for_call = Arc::clone(&arc);
+    let call = tokio::spawn(async move {
+        engine_for_call
+            .call_function(
+                "add_one",
+                vec![
+                    BexExternalValue::HostValue(arc_for_call),
+                    BexExternalValue::Int(41),
+                ],
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
+            )
+            .await
+    });
+
+    // Wait until the host call is dispatched (engine is now parked on the await).
+    let call_id = tokio::task::spawn_blocking(move || {
+        rx.recv_timeout(std::time::Duration::from_secs(10))
+            .expect("host dispatch should fire within 10s")
+    })
+    .await
+    .expect("join spawn_blocking");
+
+    // Force a moving GC while the engine is parked — relocates the `ret_ty`
+    // `Object::Type` that `args[2]` points at.
+    engine
+        .collect_garbage(bex_heap::CollectionLevel::Major)
+        .await;
+
+    // Complete the parked call with a TYPE-VIOLATING value (a string where `int`
+    // is declared). With the fix, the pre-captured `ret_ty` drives schema
+    // validation → rejected. Without it, the GC-relocated `args[2]` makes
+    // validation a silent no-op and the string is wrongly accepted.
+    sys_native::host_dispatch::complete_with_value(
+        call_id,
+        BexExternalValue::String("not-an-int".to_string()),
+    );
+
+    let result = call.await.expect("join call task");
+    assert_host_callable_throw(&result);
+
+    *slot.lock().unwrap() = None;
+    drop(arc);
+}
+
+// ============================================================================
+// A host callable that throws inside a BAML `spawn`ed body must settle the child
+//         future (errored) so the awaiting parent resolves with the throw rather
+//         than blocking forever. If the sys-op error path returned an unhandled
+//         throw without settling the child future, the child `Future` would stay
+//         Pending and `await` would hang the whole call.
+// ============================================================================
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_throw_in_spawn_settles_child_does_not_hang() {
+    let source = r#"
+        function spawn_and_await(f: (int) -> int, x: int) -> int {
+            let fut = spawn { f(x) };
+            await fut
+        }
+    "#;
+
+    // The host callable throws; the child must settle (errored), not hang.
+    let arc = register_host_callable(|_items| FakeReturn::Err {
+        class_name: "ValueError".to_string(),
+        message: "boom from host".to_string(),
+    });
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            Arc::new(sys_native::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    let call = engine.call_function(
+        "spawn_and_await",
+        vec![
+            BexExternalValue::HostValue(Arc::clone(&arc)),
+            BexExternalValue::Int(1),
+        ],
+        FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+        true,
+    );
+
+    // Must resolve, not hang. Pre-fix the child future never settles and this
+    // times out.
+    let result = tokio::time::timeout(std::time::Duration::from_secs(10), call)
+        .await
+        .expect("spawn + throwing host callable hung — child future never settled");
+
+    assert_host_callable_throw(&result);
+    drop(arc);
+}
+
+// ============================================================================
+// A host callable bound to a generic function-typed parameter is rejected at
+//         call setup. A generic parameter's type variables erase to `Ty::Void`
+//         at runtime, which the return validator treats as "accept anything" —
+//         so the host could return a value of any type into a position BAML
+//         treats as the instantiated type. Rather than admit that unvalidatable
+//         return, binding the callable fails up front.
+// ============================================================================
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_with_generic_return_is_rejected() {
+    let source = r#"
+        function apply_generic<T>(f: (T) -> T, x: T) -> T {
+            return f(x);
+        }
+    "#;
+
+    // The callable itself is well-formed; the rejection is about its declared
+    // (generic) return type, not its behaviour.
+    let arc = register_host_callable(|_items| FakeReturn::Ok(BexExternalValue::Int(1)));
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            Arc::new(sys_native::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "apply_generic",
+            vec![
+                BexExternalValue::HostValue(Arc::clone(&arc)),
+                BexExternalValue::Int(1),
+            ],
+            FunctionCallContextBuilder::new(sys_types::CallId::next())
+                .with_type_args(vec![baml_type::Ty::int()])
+                .build(),
+            true,
+        )
+        .await;
+
+    // Bind-time rejection: the generic/erased return type can't be validated.
+    assert!(
+        matches!(result, Err(EngineError::TypeMismatch { .. })),
+        "a generic-return host callable must be rejected at bind, got {result:?}"
+    );
+    drop(arc);
+}

@@ -62,6 +62,18 @@ function setInboundValue(iv, value, ctx) {
         iv.uint8arrayValue = value;
     }
     else if (value instanceof native_1.BamlHandle) {
+        // A round-tripped host callable arrives as a handle, not a raw
+        // function — apply the same sync-path fast-fail so `callFunctionSync`
+        // can't hang waiting on a callback that the blocked main thread can
+        // never run. HOST_VALUE_CALLABLE is currently the only handle type
+        // that dispatches back into the host; the rest are engine-side ADT/
+        // heap handles that need no host callback and so are safe on the sync
+        // path. Any future dispatch-backed handle type must be guarded here.
+        if (ctx.syncMode && value.handleType === BamlHandleType.HOST_VALUE_CALLABLE) {
+            throw new HostCallableSyncError('host callables are only supported on the async call path; use the async API ' +
+                '(callFunction) instead of callFunctionSync. The sync path blocks the Node main ' +
+                'thread, so the host callback can never run and the call would hang.');
+        }
         iv.handle = { key: value.key, handleType: value.handleType };
     }
     else if (typeof value === 'function') {
@@ -292,16 +304,28 @@ function isPromiseLike(value) {
 }
 function sendHostCallableResult(callId, value) {
     let bytes;
+    // Result-encode path (host → engine): no sync guard (we're already on
+    // libuv). We do track registrations, though — a callable nested in the
+    // result is registered before encoding finishes, and if encoding then
+    // throws, the bytes never reach the engine, so it never decodes (and
+    // never releases) the callable. Roll those back on failure, mirroring the
+    // argument-path rollback in `encodeCallArgs`.
+    const ctx = { syncMode: false, registered: [] };
     try {
         const iv = {};
-        // Result-encode path (host → engine): no sync guard (we're already
-        // on libuv) and no rollback tracking — the result is handed to the
-        // engine, which releases any callables it decodes.
-        setInboundValue(iv, value, { syncMode: false, registered: [] });
+        setInboundValue(iv, value, ctx);
         const msg = InboundValue.create(iv);
         bytes = Buffer.from(InboundValue.encode(msg).finish());
     }
     catch (err) {
+        for (const k of ctx.registered) {
+            try {
+                (0, native_1.releaseHostCallable)(k);
+            }
+            catch {
+                // Best-effort cleanup; never mask the original error.
+            }
+        }
         sendHostCallableError(callId, err);
         return;
     }
