@@ -2244,10 +2244,6 @@ impl BexVm {
             .checked_sub(total_inputs)
             .ok_or(VmInternalError::NotEnoughItemsOnStack(total_inputs))?;
 
-        let field_values = (0..field_value_count)
-            .map(|offset| self.stack[StackIndex::from_raw(base + offset)])
-            .collect::<Vec<_>>();
-
         let mut class_type_args = Vec::with_capacity(ntypeargs);
         for offset in 0..ntypeargs {
             let slot = base + field_value_count + offset;
@@ -2259,12 +2255,36 @@ impl BexVm {
             class_type_args.push(*ty.clone());
         }
 
-        self.stack.drain(StackIndex::from_raw(base)..);
-
-        let mut fields = vec![Value::Null; class_field_count];
-        for (field_idx, value) in plan.fields.iter().copied().zip(field_values) {
-            fields[field_idx] = value;
-        }
+        let fields = if field_value_count == class_field_count
+            && plan
+                .fields
+                .iter()
+                .copied()
+                .enumerate()
+                .all(|(idx, field_idx)| idx == field_idx)
+        {
+            let fields = self
+                .stack
+                .drain(StackIndex::from_raw(base)..StackIndex::from_raw(base + field_value_count))
+                .collect();
+            if ntypeargs > 0 {
+                drop(self.stack.drain(StackIndex::from_raw(base)..));
+            }
+            fields
+        } else {
+            let mut fields = vec![Value::Null; class_field_count];
+            let mut inputs = self.stack.drain(StackIndex::from_raw(base)..);
+            for (field_idx, value) in plan
+                .fields
+                .iter()
+                .copied()
+                .zip((&mut inputs).take(field_value_count))
+            {
+                fields[field_idx] = value;
+            }
+            drop(inputs);
+            fields
+        };
 
         Ok(Value::Object(self.tlab.alloc(Object::Instance(Instance {
             class: class_ptr,
