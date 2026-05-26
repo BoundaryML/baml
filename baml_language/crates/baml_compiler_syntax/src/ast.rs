@@ -36,30 +36,7 @@ fn extract_dotted_name<'a>(tokens: impl Iterator<Item = &'a SyntaxToken>) -> Opt
     Some(parts.join("."))
 }
 
-fn unescape_string_literal(text: &str) -> String {
-    let mut result = String::with_capacity(text.len());
-    let mut chars = text.chars();
-    while let Some(c) = chars.next() {
-        if c == '\\' {
-            match chars.next() {
-                Some('n') => result.push('\n'),
-                Some('t') => result.push('\t'),
-                Some('r') => result.push('\r'),
-                Some('0') => result.push('\0'),
-                Some('\\') => result.push('\\'),
-                Some('"') => result.push('"'),
-                Some(other) => {
-                    result.push('\\');
-                    result.push(other);
-                }
-                None => result.push('\\'),
-            }
-        } else {
-            result.push(c);
-        }
-    }
-    result
-}
+use baml_base::escape::{unescape_backtick_string_literal, unescape_string_literal};
 
 /// Match an optional single leading `MINUS` followed by exactly one `target`
 /// literal token, skipping trivia. Returns `(negated, token)` on a clean
@@ -182,6 +159,9 @@ ast_node!(ClientField, CLIENT_FIELD);
 ast_node!(PromptField, PROMPT_FIELD);
 ast_node!(RawStringLiteral, RAW_STRING_LITERAL);
 ast_node!(StringLiteral, STRING_LITERAL);
+ast_node!(BacktickStringLiteral, BACKTICK_STRING_LITERAL);
+ast_node!(BacktickText, BACKTICK_TEXT);
+ast_node!(BacktickInterpolation, BACKTICK_INTERPOLATION);
 
 // Jinja template components (inside raw strings)
 ast_node!(JinjaExpression, TEMPLATE_INTERPOLATION);
@@ -1028,6 +1008,68 @@ impl StringLiteral {
     pub fn value(&self) -> String {
         let text = self.syntax.text().to_string();
         decode_regular_string_literal_text(&text)
+    }
+}
+
+impl BacktickStringLiteral {
+    /// Get the full text including the surrounding backtick runs.
+    pub fn full_text(&self) -> String {
+        self.syntax.text().to_string()
+    }
+
+    /// Number of backticks in the opening (and closing) delimiter.
+    ///
+    /// Returns 0 if the syntax is malformed (no opening backtick).
+    pub fn delimiter_count(&self) -> usize {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .take_while(|t| t.kind() == SyntaxKind::BACKTICK)
+            .count()
+    }
+
+    /// Inner content between the opening and closing backtick runs, before any
+    /// escape decoding or dedenting. Returns `None` if the node is malformed
+    /// (missing opening or closing run).
+    pub fn raw_inner(&self) -> Option<String> {
+        let text = self.syntax.text().to_string();
+        let n = self.delimiter_count();
+        if n == 0 || text.len() < 2 * n {
+            return None;
+        }
+        // Strip N leading + N trailing backticks. Closing presence is enforced
+        // by the parser (anchored-close rule).
+        let opener_end = n;
+        let closer_start = text.len().saturating_sub(n);
+        if opener_end > closer_start {
+            return None;
+        }
+        Some(text[opener_end..closer_start].to_string())
+    }
+
+    /// Whether the literal spans multiple source lines (and therefore qualifies
+    /// for auto-dedent under §12).
+    pub fn is_multiline(&self) -> bool {
+        self.raw_inner().map(|s| s.contains('\n')).unwrap_or(false)
+    }
+
+    /// The decoded value of the backtick string, with escapes resolved and (if
+    /// multi-line) dedented per `baml_base::dedent::preprocess_template`.
+    ///
+    /// **M1 only:** treats the entire inner content as literal text. `${...}`
+    /// sequences appear verbatim because the parser does not yet split them
+    /// into interpolation segments. M2 replaces this with a segments-based
+    /// lowering.
+    pub fn value(&self) -> String {
+        let Some(inner) = self.raw_inner() else {
+            return String::new();
+        };
+        let decoded = unescape_backtick_string_literal(&inner);
+        if decoded.contains('\n') {
+            baml_base::dedent::preprocess_template(&decoded)
+        } else {
+            decoded
+        }
     }
 }
 
@@ -2591,7 +2633,8 @@ impl BlockExpr {
                         | SyntaxKind::OBJECT_LITERAL
                         | SyntaxKind::MAP_LITERAL
                         | SyntaxKind::STRING_LITERAL
-                        | SyntaxKind::RAW_STRING_LITERAL => Some(BlockElement::ExprNode(n)),
+                        | SyntaxKind::RAW_STRING_LITERAL
+                        | SyntaxKind::BACKTICK_STRING_LITERAL => Some(BlockElement::ExprNode(n)),
                         _ => None,
                     }
                 }

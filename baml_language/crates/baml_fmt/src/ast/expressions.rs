@@ -35,6 +35,7 @@ pub enum Expression {
     MapInitializer(MapLiteral),
     ObjectInitializer(ObjectInitializer),
     RawString(t::RawString),
+    BacktickString(t::BacktickString),
     ByteString(t::ByteString),
     Lambda(Box<LambdaExpr>),
     Unknown(TextRange),
@@ -104,6 +105,9 @@ impl FromCST for Expression {
             SyntaxKind::RAW_STRING_LITERAL => {
                 t::RawString::from_cst(elem).map(Expression::RawString)?
             }
+            SyntaxKind::BACKTICK_STRING_LITERAL => {
+                t::BacktickString::from_cst(elem).map(Expression::BacktickString)?
+            }
             SyntaxKind::BYTE_STRING_LITERAL => {
                 t::ByteString::from_cst(elem).map(Expression::ByteString)?
             }
@@ -145,6 +149,13 @@ impl Expression {
                     Some(usize::from(raw.span().len()))
                 }
             }
+            Expression::BacktickString(bt) => {
+                if input.input[bt.span()].contains('\n') {
+                    None
+                } else {
+                    Some(usize::from(bt.span().len()))
+                }
+            }
             Expression::ByteString(bs) => Some(usize::from(bs.span().len())),
             Expression::Lambda(_) => None,
             Expression::Unknown(_) => None,
@@ -179,6 +190,7 @@ impl Printable for Expression {
             Expression::MapInitializer(map) => map.print(shape, printer),
             Expression::ObjectInitializer(obj) => obj.print(shape, printer),
             Expression::RawString(raw) => raw.print(shape, printer),
+            Expression::BacktickString(bt) => bt.print(shape, printer),
             Expression::ByteString(bs) => bs.print(shape, printer),
             Expression::Lambda(lambda) => lambda.print(shape, printer),
             Expression::Unknown(range) => {
@@ -209,6 +221,7 @@ impl Printable for Expression {
             Expression::MapInitializer(map) => map.leftmost_token(),
             Expression::ObjectInitializer(obj) => obj.leftmost_token(),
             Expression::RawString(raw) => raw.leftmost_token(),
+            Expression::BacktickString(bt) => bt.leftmost_token(),
             Expression::ByteString(bs) => bs.leftmost_token(),
             Expression::Lambda(lambda) => lambda.leftmost_token(),
             Expression::Unknown(range) => *range,
@@ -236,6 +249,7 @@ impl Printable for Expression {
             Expression::MapInitializer(map) => map.rightmost_token(),
             Expression::ObjectInitializer(obj) => obj.rightmost_token(),
             Expression::RawString(raw) => raw.rightmost_token(),
+            Expression::BacktickString(bt) => bt.rightmost_token(),
             Expression::ByteString(bs) => bs.rightmost_token(),
             Expression::Lambda(lambda) => lambda.rightmost_token(),
             Expression::Unknown(range) => *range,

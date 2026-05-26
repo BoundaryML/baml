@@ -125,6 +125,13 @@ pub enum TokenKind {
     #[token("#")]
     Hash,
 
+    /// Backtick symbol - used for interpolated string delimiters (BEP-049)
+    /// Parser assembles backtick strings by collecting tokens between matching
+    /// runs of N backticks (multi-tick ladder, anchored close).
+    /// E.g., `hello ${name}` → Backtick, Word("hello"), ..., Backtick
+    #[token("`")]
+    Backtick,
+
     /// Integer literal
     #[regex(r"[0-9]+")]
     IntegerLiteral,
@@ -311,6 +318,7 @@ impl std::fmt::Display for TokenKind {
             TokenKind::Word => "identifier",
             TokenKind::Quote => "'\"'",
             TokenKind::Hash => "'#'",
+            TokenKind::Backtick => "'`'",
             TokenKind::IntegerLiteral => "integer",
             TokenKind::FloatLiteral => "float",
 
@@ -791,6 +799,71 @@ mod tests {
                 TokenKind::Hash,
             ]
         );
+        assert_eq!(reconstruct_source(&lex(source)), source);
+    }
+
+    #[test]
+    fn test_backtick_basic() {
+        let source = "`hello`";
+        let tokens = lex_no_whitespace(source);
+
+        assert_eq!(
+            tokens,
+            vec![
+                TokenKind::Backtick,
+                TokenKind::Word, // hello
+                TokenKind::Backtick,
+            ]
+        );
+
+        assert_eq!(reconstruct_source(&lex(source)), source);
+    }
+
+    #[test]
+    fn test_backtick_multi_tick_ladder() {
+        // Three opening + three closing backticks
+        let source = "```contains `single` ticks```";
+        let tokens = lex_no_whitespace(source);
+
+        assert_eq!(
+            tokens,
+            vec![
+                TokenKind::Backtick,
+                TokenKind::Backtick,
+                TokenKind::Backtick,
+                TokenKind::Word, // contains
+                TokenKind::Backtick,
+                TokenKind::Word, // single
+                TokenKind::Backtick,
+                TokenKind::Word, // ticks
+                TokenKind::Backtick,
+                TokenKind::Backtick,
+                TokenKind::Backtick,
+            ]
+        );
+
+        assert_eq!(reconstruct_source(&lex(source)), source);
+    }
+
+    #[test]
+    fn test_backtick_with_interpolation_tokens() {
+        // ${...} inside backtick — lexer emits the raw tokens; parser assembles
+        let source = "`Hello ${name}`";
+        let tokens = lex_no_whitespace(source);
+
+        assert_eq!(
+            tokens,
+            vec![
+                TokenKind::Backtick,
+                TokenKind::Word, // Hello
+                TokenKind::Dollar,
+                TokenKind::LBrace,
+                TokenKind::Word, // name
+                TokenKind::RBrace,
+                TokenKind::Backtick,
+            ]
+        );
+
         assert_eq!(reconstruct_source(&lex(source)), source);
     }
 

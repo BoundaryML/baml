@@ -5,6 +5,8 @@
 pub mod attr;
 pub mod core_types;
 pub mod debug_log;
+pub mod dedent;
+pub mod escape;
 pub mod files;
 pub mod qualified_name;
 

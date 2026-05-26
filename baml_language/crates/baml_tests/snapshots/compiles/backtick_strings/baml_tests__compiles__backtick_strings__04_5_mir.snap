@@ -1,0 +1,187 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.BacktickEquality() -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+
+    bb0: {
+        _0 = const true;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.BacktickEscapedBacktick() -> string {
+    // Locals:
+    let _0: string // _0 // return
+
+    bb0: {
+        _0 = const "before ` after";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.BacktickEscapedDollar() -> string {
+    // Locals:
+    let _0: string // _0 // return
+
+    bb0: {
+        _0 = const "literal ${name}";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.BacktickInCondition() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: bool
+    let _2: int
+
+    bb0: {
+        _2 = call const fn baml.String.length(const "abc") -> [bb1];
+    }
+
+    bb1: {
+        _1 = copy _2 > const 0_i64;
+        branch copy _1 -> [bb3, bb2];
+    }
+
+    bb2: {
+        _0 = const 0_i64;
+        goto -> bb4;
+    }
+
+    bb3: {
+        _0 = const 1_i64;
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.BacktickLiteralAsArg() -> string {
+    // Locals:
+    let _0: string // _0 // return
+
+    bb0: {
+        _0 = call const fn user.BacktickPassThrough(const "forwarded") -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.BacktickMultiTickThree() -> string {
+    // Locals:
+    let _0: string // _0 // return
+
+    bb0: {
+        _0 = const "nested ``double`` ticks";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.BacktickMultiTickTwo() -> string {
+    // Locals:
+    let _0: string // _0 // return
+
+    bb0: {
+        _0 = const "inline `code` here";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.BacktickMultiline() -> string {
+    // Locals:
+    let _0: string // _0 // return
+
+    bb0: {
+        _0 = const "first line\nsecond line\nthird line";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.BacktickMultilineWithBlankLines() -> string {
+    // Locals:
+    let _0: string // _0 // return
+
+    bb0: {
+        _0 = const "para one\n\npara two";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.BacktickOneLiner() -> string {
+    // Locals:
+    let _0: string // _0 // return
+
+    bb0: {
+        _0 = const "hello world";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.BacktickPassThrough(s: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // s // param
+
+    bb0: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.BacktickStandardEscapes() -> string {
+    // Locals:
+    let _0: string // _0 // return
+
+    bb0: {
+        _0 = const "line\nbreak\twith\rcr\0nul";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

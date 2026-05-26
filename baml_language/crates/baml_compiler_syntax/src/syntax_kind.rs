@@ -51,8 +51,9 @@ pub enum SyntaxKind {
     FLOAT_LITERAL,   // 123.45
 
     // String delimiters (parser assembles strings)
-    QUOTE, // "
-    HASH,  // # (for raw strings)
+    QUOTE,    // "
+    HASH,     // # (for raw strings)
+    BACKTICK, // ` (for BEP-049 interpolated strings)
 
     // Brackets
     L_BRACE,   // {
@@ -345,6 +346,11 @@ pub enum SyntaxKind {
     BYTE_STRING_LITERAL,
     UNQUOTED_STRING,
 
+    // Backtick interpolated string (BEP-049)
+    BACKTICK_STRING_LITERAL, // `...` or ``...`` etc.
+    BACKTICK_TEXT,           // Plain text segment between interpolations
+    BACKTICK_INTERPOLATION,  // ${ expr } inside a backtick string
+
     // Template components (inside raw strings)
     TEMPLATE_CONTENT,       // Plain text (deprecated, use PROMPT_TEXT)
     TEMPLATE_INTERPOLATION, // {{ expr }} - Jinja expressions
@@ -394,6 +400,7 @@ impl SyntaxKind {
                 | SyntaxKind::STRING_LITERAL
                 | SyntaxKind::RAW_STRING_LITERAL
                 | SyntaxKind::BYTE_STRING_LITERAL
+                | SyntaxKind::BACKTICK_STRING_LITERAL
         )
     }
 

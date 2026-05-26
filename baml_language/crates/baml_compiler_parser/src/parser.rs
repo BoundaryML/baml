@@ -62,6 +62,7 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Word => SyntaxKind::WORD,
         TokenKind::Quote => SyntaxKind::QUOTE,
         TokenKind::Hash => SyntaxKind::HASH,
+        TokenKind::Backtick => SyntaxKind::BACKTICK,
         TokenKind::IntegerLiteral => SyntaxKind::INTEGER_LITERAL,
         TokenKind::FloatLiteral => SyntaxKind::FLOAT_LITERAL,
 
@@ -1759,8 +1760,193 @@ impl<'a> Parser<'a> {
             self.parse_raw_string()
         } else if self.at(TokenKind::Quote) {
             self.parse_string()
+        } else if self.at(TokenKind::Backtick) {
+            self.parse_backtick_string()
         } else {
             false
+        }
+    }
+
+    /// Parse a backtick-interpolated string literal (BEP-049).
+    ///
+    /// Lexer emits: Backtick+, (content tokens), Backtick+
+    /// Parser counts opening backticks (N), then scans content until it finds
+    /// a maximal run of backticks where the run length R ≥ N and the next
+    /// token is not a backtick. The trailing N of that run form the close;
+    /// the first R - N are content (anchored-close rule, §8 of BEP-049).
+    ///
+    /// M1: contents are captured verbatim — `${...}` is left as literal tokens
+    /// inside the node, to be lifted into `BACKTICK_INTERPOLATION` segments by
+    /// M2.
+    pub(crate) fn parse_backtick_string(&mut self) -> bool {
+        if !self.at(TokenKind::Backtick) {
+            return false;
+        }
+
+        let opening_ticks = self.count_consecutive_backticks();
+        if opening_ticks == 0 {
+            return false;
+        }
+
+        // BEP-049 §8 case 1: an N-tick opener with N ≥ 2 and no matching
+        // close anywhere ahead would silently consume the rest of the file
+        // looking for one. The classic offender is `` `` ``, which a user
+        // might write meaning "empty string". Detect this at the opener and
+        // emit a clean diagnostic instead of running off the end.
+        if opening_ticks >= 2 {
+            let Some(first_backtick) = self.find_first_backtick_pos() else {
+                return false;
+            };
+            let scan_start = first_backtick + opening_ticks;
+            if !self.has_backtick_close_ahead_from(scan_start, opening_ticks) {
+                let span = self.tokens[first_backtick].span;
+                let ticks = "`".repeat(opening_ticks);
+                self.error(
+                    format!(
+                        "Empty multi-tick backtick string ({ticks}) has no matching {ticks} close. \
+                         Use \"\" for empty strings (BEP-049 §8)."
+                    ),
+                    span,
+                );
+                // Consume the opener as a degenerate BACKTICK_STRING_LITERAL so
+                // the parser advances past it; downstream code keeps parsing
+                // instead of being swallowed by an unclosed multi-tick search.
+                while self.eat_trivia() {}
+                self.with_node(SyntaxKind::BACKTICK_STRING_LITERAL, |p| {
+                    for _ in 0..opening_ticks {
+                        p.bump();
+                    }
+                });
+                return true;
+            }
+        }
+
+        // Emit leading trivia outside the node.
+        while self.eat_trivia() {}
+
+        self.with_node(SyntaxKind::BACKTICK_STRING_LITERAL, |p| {
+            for _ in 0..opening_ticks {
+                p.bump(); // opening `
+            }
+
+            p.parse_backtick_content(opening_ticks);
+        });
+
+        true
+    }
+
+    /// Position of the first `Backtick` token at or after `self.current`
+    /// (after skipping basic trivia). Used by the empty-multi-tick check.
+    fn find_first_backtick_pos(&self) -> Option<usize> {
+        let mut i = self.current;
+        while i < self.tokens.len() && self.is_basic_trivia(self.tokens[i].kind) {
+            i += 1;
+        }
+        if i < self.tokens.len() && self.tokens[i].kind == TokenKind::Backtick {
+            Some(i)
+        } else {
+            None
+        }
+    }
+
+    /// Is there a maximal run of ≥ `n` consecutive `Backtick` tokens somewhere
+    /// from `start` onward? An anchored close exists iff such a run exists,
+    /// because the run is maximal (the token after is not a backtick) and
+    /// `run_len >= n` lets the trailing `n` ticks form the close.
+    ///
+    /// Over-approximation: doesn't account for backslash-escape sequences
+    /// inside content (e.g. an escaped backtick), so this can return `true`
+    /// when the actual close lives behind a backslash. That's fine — false
+    /// negatives for the empty-multi-tick check just mean the parser proceeds
+    /// normally and either matches a real close or emits the existing
+    /// "unclosed backtick string" error.
+    fn has_backtick_close_ahead_from(&self, start: usize, n: usize) -> bool {
+        let mut i = start;
+        while i < self.tokens.len() {
+            if self.tokens[i].kind == TokenKind::Backtick {
+                let run_start = i;
+                while i < self.tokens.len() && self.tokens[i].kind == TokenKind::Backtick {
+                    i += 1;
+                }
+                if i - run_start >= n {
+                    return true;
+                }
+            } else {
+                i += 1;
+            }
+        }
+        false
+    }
+
+    /// Count consecutive `Backtick` tokens at `self.current` (after skipping
+    /// basic trivia to find the first backtick). The run itself is required
+    /// to be uninterrupted — no whitespace permitted inside the delimiter run.
+    fn count_consecutive_backticks(&self) -> usize {
+        let mut i = self.current;
+        while i < self.tokens.len() && self.is_basic_trivia(self.tokens[i].kind) {
+            i += 1;
+        }
+        let mut count = 0;
+        while i < self.tokens.len() && self.tokens[i].kind == TokenKind::Backtick {
+            count += 1;
+            i += 1;
+        }
+        count
+    }
+
+    fn parse_backtick_content(&mut self, opening_ticks: usize) {
+        let mut loop_counter = 0;
+        loop {
+            loop_counter += 1;
+            if loop_counter > 1_000_000 {
+                self.error_unexpected_token(
+                    "Backtick string parsing exceeded iteration limit".to_string(),
+                );
+                return;
+            }
+
+            if self.at_end_raw() {
+                self.error_unexpected_token(format!(
+                    "Unclosed backtick string (expected {})",
+                    "`".repeat(opening_ticks)
+                ));
+                return;
+            }
+
+            // Backslash escape: consume the `\` and the next token as content
+            // so a `\\\`` does not look like a closing delimiter and `\\${` does
+            // not look like an interpolation start (M2 forward).
+            if self.at_raw(TokenKind::Backslash) {
+                self.bump_raw();
+                if self.current < self.tokens.len() {
+                    self.bump_raw();
+                }
+                continue;
+            }
+
+            if self.at_raw(TokenKind::Backtick) {
+                let run_len = self.count_consecutive_backticks();
+                if run_len >= opening_ticks {
+                    // Anchored close: trailing `opening_ticks` ticks of the
+                    // run are the close; any leading excess is content.
+                    let content_ticks = run_len - opening_ticks;
+                    for _ in 0..content_ticks {
+                        self.bump_raw();
+                    }
+                    for _ in 0..opening_ticks {
+                        self.bump_raw();
+                    }
+                    return;
+                }
+                // run_len < opening_ticks — all of them are content.
+                for _ in 0..run_len {
+                    self.bump_raw();
+                }
+                continue;
+            }
+
+            // Plain content token (text, whitespace, newline, etc.).
+            self.bump_raw();
         }
     }
 
@@ -7421,5 +7607,189 @@ type Searcher = (query: string, max_results?: int) -> int
         assert!(optional_param.children_with_tokens().any(
             |it| matches!(it, rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::QUESTION)
         ));
+    }
+
+    // ─── BEP-049: backtick string literals ────────────────────────────────────
+
+    fn find_backtick_literal(root: &SyntaxNode) -> SyntaxNode {
+        root.descendants()
+            .find(|n| n.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
+            .expect("expected BACKTICK_STRING_LITERAL node")
+    }
+
+    #[test]
+    fn backtick_basic_one_liner() {
+        let source = r#"
+function Demo() -> string {
+    let s = `hello world`
+    s
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let lit = find_backtick_literal(&root);
+        assert_eq!(lit.text().to_string(), "`hello world`");
+    }
+
+    #[test]
+    fn backtick_multiline() {
+        let source = "
+function Demo() -> string {
+    let s = `
+        line one
+        line two
+    `
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let lit = find_backtick_literal(&root);
+        let text = lit.text().to_string();
+        assert!(text.starts_with('`') && text.ends_with('`'));
+        assert!(text.contains("line one"));
+        assert!(text.contains("line two"));
+    }
+
+    #[test]
+    fn backtick_multi_tick_ladder_two() {
+        // Two-tick delimiter allows a single backtick inside content.
+        let source = "
+function Demo() -> string {
+    let s = ``inline `code` here``
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let lit = find_backtick_literal(&root);
+        assert_eq!(lit.text().to_string(), "``inline `code` here``");
+    }
+
+    #[test]
+    fn backtick_multi_tick_ladder_three() {
+        // Three-tick delimiter allows up to two consecutive backticks in content.
+        let source = "
+function Demo() -> string {
+    let s = ```nested ``double`` ticks```
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let lit = find_backtick_literal(&root);
+        assert_eq!(lit.text().to_string(), "```nested ``double`` ticks```");
+    }
+
+    #[test]
+    fn backtick_anchored_close_jep326_trailing_extra() {
+        // §8 case 3: 3-tick opener with 4 trailing backticks.
+        // Anchored-close picks the LAST 3 ticks; one backtick stays in content.
+        let source = "
+function Demo() -> string {
+    let s = ```content````
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let lit = find_backtick_literal(&root);
+        assert_eq!(lit.text().to_string(), "```content````");
+    }
+
+    #[test]
+    fn backtick_empty_multi_tick_emits_diagnostic_without_consuming_downstream() {
+        // BEP-049 §8 case 1: `` `` `` is an empty 2-tick opener with no close
+        // anywhere. The parser must emit a clean diagnostic AT THE OPENER and
+        // leave the rest of the file alone — not silently swallow downstream
+        // functions while searching for a phantom 2-tick close.
+        let source = "
+function Empty() -> string {
+    ``
+}
+
+function After() -> string {
+    \"i should still parse\"
+}
+
+function MoreCode() -> int {
+    1 + 1
+}
+";
+        let (root, errors) = parse_source(source);
+
+        assert!(
+            errors
+                .iter()
+                .any(|e| format!("{e:?}").contains("Empty multi-tick backtick string")),
+            "expected an empty-multi-tick parse error, got: {errors:#?}"
+        );
+
+        // The degenerate BACKTICK_STRING_LITERAL should contain ONLY the two
+        // opener backticks — not the rest of the file.
+        let captured: Vec<String> = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
+            .map(|n| n.text().to_string())
+            .collect();
+        assert_eq!(captured, vec!["``".to_string()], "captured: {captured:?}");
+
+        // All three functions should still appear in the parsed tree.
+        let fns: Vec<String> = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::FUNCTION_DEF)
+            .filter_map(|f| {
+                f.children_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .find(|t| t.kind() == SyntaxKind::WORD)
+                    .map(|t| t.text().to_string())
+            })
+            .collect();
+        assert_eq!(fns, vec!["Empty", "After", "MoreCode"]);
+    }
+
+    #[test]
+    fn backtick_empty_three_tick_also_diagnosed() {
+        // Same rule applies to any N ≥ 2.
+        let source = "
+function Bad() -> string {
+    ```
+}
+function Good() -> int { 1 }
+";
+        let (root, errors) = parse_source(source);
+        assert!(
+            errors
+                .iter()
+                .any(|e| format!("{e:?}").contains("Empty multi-tick backtick string")),
+            "expected empty-multi-tick error for 3-tick opener, got: {errors:#?}"
+        );
+        let fns: Vec<String> = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::FUNCTION_DEF)
+            .filter_map(|f| {
+                f.children_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .find(|t| t.kind() == SyntaxKind::WORD)
+                    .map(|t| t.text().to_string())
+            })
+            .collect();
+        assert_eq!(fns, vec!["Bad", "Good"]);
+    }
+
+    #[test]
+    fn backtick_unclosed_emits_error() {
+        let source = "
+function Demo() -> string {
+    let s = `not closed
+}
+";
+        let (_root, errors) = parse_source(source);
+        assert!(
+            errors
+                .iter()
+                .any(|e| format!("{e:?}").contains("Unclosed backtick string")),
+            "expected an Unclosed-backtick parse error, got: {errors:#?}"
+        );
     }
 }

@@ -705,6 +705,58 @@ impl Printable for RawString {
     }
 }
 
+/// BEP-049 backtick-interpolated string literal. M1: printed verbatim — no
+/// re-indenting, no re-emission of escapes. Richer formatting (auto-choosing
+/// tick count, normalizing dedent) is deferred until there is real corpus.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BacktickString {
+    pub token_span: TextRange,
+}
+impl FromCST for BacktickString {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::BACKTICK_STRING_LITERAL)?;
+
+        let start = node
+            .first_child_token_of_kind(SyntaxKind::BACKTICK)
+            .ok_or_else(|| StrongAstError::missing(SyntaxKind::BACKTICK, node.text_range()))?;
+
+        Ok(BacktickString {
+            token_span: TextRange::new(start.text_range().start(), node.text_range().end()),
+        })
+    }
+}
+impl Token for BacktickString {
+    fn span(&self) -> TextRange {
+        self.token_span
+    }
+}
+impl KnownKind for BacktickString {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::BACKTICK_STRING_LITERAL
+    }
+}
+impl Printable for BacktickString {
+    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let text = &printer.input[self.span()];
+        let multi_lined = text.contains('\n');
+        printer.print_raw_token(self);
+        PrintInfo { multi_lined }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        TextRange::new(
+            self.token_span.start(),
+            self.token_span.start() + TextSize::from(1),
+        )
+    }
+    fn rightmost_token(&self) -> TextRange {
+        TextRange::new(
+            self.token_span.end() - TextSize::from(1),
+            self.token_span.end(),
+        )
+    }
+}
+
 #[derive(Debug)]
 pub struct ByteString {
     pub token_span: TextRange,

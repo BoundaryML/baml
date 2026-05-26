@@ -1,0 +1,40 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+function user.BacktickEquality() -> bool  [expr] {
+  {  } "abc" Eq "abc"
+}
+function user.BacktickEscapedBacktick() -> string  [expr] {
+  {  } "before ` after"
+}
+function user.BacktickEscapedDollar() -> string  [expr] {
+  {  } "literal ${name}"
+}
+function user.BacktickInCondition() -> int  [expr] {
+  {  } if ("abc".length() Gt 0) {  } 1 else {  } 0
+}
+function user.BacktickLiteralAsArg() -> string  [expr] {
+  {  } BacktickPassThrough("forwarded")
+}
+function user.BacktickMultiTickThree() -> string  [expr] {
+  {  } "nested ``double``..."
+}
+function user.BacktickMultiTickTwo() -> string  [expr] {
+  {  } "inline `code` here"
+}
+function user.BacktickMultiline() -> string  [expr] {
+  {  } "first line\nsecond..."
+}
+function user.BacktickMultilineWithBlankLines() -> string  [expr] {
+  {  } "para one\n\npara two"
+}
+function user.BacktickOneLiner() -> string  [expr] {
+  {  } "hello world"
+}
+function user.BacktickPassThrough(s: string) -> string  [expr] {
+  {  } s
+}
+function user.BacktickStandardEscapes() -> string  [expr] {
+  {  } "line\nbreak\twith\rc..."
+}

@@ -1,0 +1,306 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "BacktickOneLiner"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        BACKTICK_STRING_LITERAL "`hello world`"
+          BACKTICK "`"
+          WORD "hello"
+          WORD "world"
+          BACKTICK "`"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "BacktickStandardEscapes"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        BACKTICK_STRING_LITERAL "`line\nbreak\twith\rcr\0nul`"
+          BACKTICK "`"
+          WORD "line"
+          BACKSLASH "\"
+          WORD "nbreak"
+          BACKSLASH "\"
+          WORD "twith"
+          BACKSLASH "\"
+          WORD "rcr"
+          BACKSLASH "\"
+          INTEGER_LITERAL "0"
+          WORD "nul"
+          BACKTICK "`"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "BacktickEscapedBacktick"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        BACKTICK_STRING_LITERAL "`before \` after`"
+          BACKTICK "`"
+          WORD "before"
+          BACKSLASH "\"
+          BACKTICK "`"
+          WORD "after"
+          BACKTICK "`"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "BacktickEscapedDollar"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        BACKTICK_STRING_LITERAL "`literal \${name}`"
+          BACKTICK "`"
+          WORD "literal"
+          BACKSLASH "\"
+          DOLLAR "$"
+          L_BRACE "{"
+          WORD "name"
+          R_BRACE "}"
+          BACKTICK "`"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "BacktickMultiline"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        BACKTICK_STRING_LITERAL "`
+        first line
+        second line
+        third line
+    `"
+          BACKTICK "`"
+          WORD "first"
+          WORD "line"
+          WORD "second"
+          WORD "line"
+          WORD "third"
+          WORD "line"
+          BACKTICK "`"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "BacktickMultilineWithBlankLines"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        BACKTICK_STRING_LITERAL "`
+        para one
+
+        para two
+    `"
+          BACKTICK "`"
+          WORD "para"
+          WORD "one"
+          WORD "para"
+          WORD "two"
+          BACKTICK "`"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "BacktickMultiTickTwo"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        BACKTICK_STRING_LITERAL "``inline `code` here``"
+          BACKTICK "`"
+          BACKTICK "`"
+          WORD "inline"
+          BACKTICK "`"
+          WORD "code"
+          BACKTICK "`"
+          WORD "here"
+          BACKTICK "`"
+          BACKTICK "`"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "BacktickMultiTickThree"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        BACKTICK_STRING_LITERAL "```nested ``double`` ticks```"
+          BACKTICK "`"
+          BACKTICK "`"
+          BACKTICK "`"
+          WORD "nested"
+          BACKTICK "`"
+          BACKTICK "`"
+          WORD "double"
+          BACKTICK "`"
+          BACKTICK "`"
+          WORD "ticks"
+          BACKTICK "`"
+          BACKTICK "`"
+          BACKTICK "`"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "BacktickInCondition"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        IF_EXPR
+          KW_IF "if"
+          PAREN_EXPR
+            L_PAREN "("
+            BINARY_EXPR
+              CALL_EXPR
+                FIELD_ACCESS_EXPR
+                  BACKTICK_STRING_LITERAL "`abc`"
+                    BACKTICK "`"
+                    WORD "abc"
+                    BACKTICK "`"
+                  DOT "."
+                  WORD "length"
+                CALL_ARGS "()"
+                  L_PAREN "("
+                  R_PAREN ")"
+              GREATER ">"
+              INTEGER_LITERAL "0"
+            R_PAREN ")"
+          BLOCK_EXPR "{
+        1
+    }"
+            L_BRACE "{"
+            INTEGER_LITERAL "1"
+            R_BRACE "}"
+          KW_ELSE "else"
+          BLOCK_EXPR "{
+        0
+    }"
+            L_BRACE "{"
+            INTEGER_LITERAL "0"
+            R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "BacktickEquality"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "bool"
+      WORD "bool"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        BINARY_EXPR
+          BACKTICK_STRING_LITERAL "`abc`"
+            BACKTICK "`"
+            WORD "abc"
+            BACKTICK "`"
+          EQUALS_EQUALS "=="
+          BACKTICK_STRING_LITERAL "`abc`"
+            BACKTICK "`"
+            WORD "abc"
+            BACKTICK "`"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "BacktickPassThrough"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "s"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+    s
+}"
+        L_BRACE "{"
+        WORD "s"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "BacktickLiteralAsArg"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "BacktickPassThrough"
+          CALL_ARGS
+            L_PAREN "("
+            CALL_ARG
+              BACKTICK_STRING_LITERAL "`forwarded`"
+                BACKTICK "`"
+                WORD "forwarded"
+                BACKTICK "`"
+            R_PAREN ")"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

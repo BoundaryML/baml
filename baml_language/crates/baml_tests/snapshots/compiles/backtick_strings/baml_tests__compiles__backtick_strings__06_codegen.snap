@@ -1,0 +1,77 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.BacktickEquality() -> bool {
+    load_const true
+    return
+}
+
+function user.BacktickEscapedBacktick() -> string {
+    load_const "before ` after"
+    return
+}
+
+function user.BacktickEscapedDollar() -> string {
+    load_const "literal ${name}"
+    return
+}
+
+function user.BacktickInCondition() -> int {
+    load_const "abc"
+    call baml.String.length
+    load_const 0
+    cmp_op >
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    jump L2
+
+  L1:
+    load_const 1
+
+  L2:
+    return
+}
+
+function user.BacktickLiteralAsArg() -> string {
+    load_const "forwarded"
+    call user.BacktickPassThrough
+    return
+}
+
+function user.BacktickMultiTickThree() -> string {
+    load_const "nested ``double`` ticks"
+    return
+}
+
+function user.BacktickMultiTickTwo() -> string {
+    load_const "inline `code` here"
+    return
+}
+
+function user.BacktickMultiline() -> string {
+    load_const "first line\nsecond line\nthird line"
+    return
+}
+
+function user.BacktickMultilineWithBlankLines() -> string {
+    load_const "para one\n\npara two"
+    return
+}
+
+function user.BacktickOneLiner() -> string {
+    load_const "hello world"
+    return
+}
+
+function user.BacktickPassThrough(s: string) -> string {
+    load_var s
+    return
+}
+
+function user.BacktickStandardEscapes() -> string {
+    load_const "line\nbreak\twith\rcr\0nul"
+    return
+}

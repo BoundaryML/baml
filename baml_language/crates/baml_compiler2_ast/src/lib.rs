@@ -19,6 +19,11 @@ pub(crate) mod lower_type_expr;
 pub mod lowering_diagnostic;
 
 pub use ast::*;
+/// Decode common escape sequences in a quoted string literal body.
+///
+/// Re-exported from [`baml_base::escape::unescape_string_literal`] so existing
+/// callers don't need to change their import path.
+pub use baml_base::escape::unescape_string_literal;
 pub use disambiguate::is_field_attr;
 pub use docstring::extract_docstring;
 pub use lower_cst::{
@@ -27,32 +32,6 @@ pub use lower_cst::{
 };
 pub use lower_expr_body::EnvVarRef;
 pub use lowering_diagnostic::LoweringDiagnostic;
-
-/// Decode common escape sequences in a quoted string literal body.
-pub fn unescape_string_literal(input: &str) -> String {
-    let mut result = String::with_capacity(input.len());
-    let mut chars = input.chars();
-    while let Some(c) = chars.next() {
-        if c == '\\' {
-            match chars.next() {
-                Some('n') => result.push('\n'),
-                Some('t') => result.push('\t'),
-                Some('r') => result.push('\r'),
-                Some('0') => result.push('\0'),
-                Some('\\') => result.push('\\'),
-                Some('"') => result.push('"'),
-                Some(other) => {
-                    result.push('\\');
-                    result.push(other);
-                }
-                None => result.push('\\'),
-            }
-        } else {
-            result.push(c);
-        }
-    }
-    result
-}
 
 #[cfg(test)]
 mod tests {
@@ -1583,5 +1562,105 @@ class C {
         let (_, diags) = parse_lower_validate(source);
         assert_eq!(diags.len(), 1, "expected 1 diagnostic, got {diags:?}");
         assert_eq!(diags[0].0, "alias");
+    }
+
+    // ─── BEP-049: backtick string literal lowering ────────────────────────────
+
+    fn extract_first_string_literal(items: Vec<Item>) -> String {
+        let function = first_function(items);
+        let Some(FunctionBodyDef::Expr(body, _sm)) = &function.body else {
+            panic!("expected expression body");
+        };
+        let root = body.root_expr.expect("expected root expr");
+        // Body is wrapped in a Block; find the tail or first statement string.
+        let candidate = match &body.exprs[root] {
+            Expr::Block {
+                tail_expr: Some(tail),
+                ..
+            } => *tail,
+            Expr::Block { stmts, .. } => match &body.stmts[stmts[0]] {
+                Stmt::Expr(expr_id) => *expr_id,
+                Stmt::Let {
+                    initializer: Some(init),
+                    ..
+                } => *init,
+                other => panic!("unexpected stmt: {other:?}"),
+            },
+            _ => root,
+        };
+        match &body.exprs[candidate] {
+            Expr::Literal(baml_base::Literal::String(s)) => s.clone(),
+            other => panic!("expected string literal, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn backtick_one_liner_lowers_to_string_literal() {
+        let source = "
+function Demo() -> string {
+    `hello world`
+}
+";
+        let items = parse_and_lower(source);
+        assert_eq!(extract_first_string_literal(items), "hello world");
+    }
+
+    #[test]
+    fn backtick_decodes_standard_escapes() {
+        let source = r#"
+function Demo() -> string {
+    `line\nbreak`
+}
+"#;
+        let items = parse_and_lower(source);
+        assert_eq!(extract_first_string_literal(items), "line\nbreak");
+    }
+
+    #[test]
+    fn backtick_escapes_backtick_and_dollar() {
+        let source = r#"
+function Demo() -> string {
+    `a\`b\${name}c`
+}
+"#;
+        let items = parse_and_lower(source);
+        assert_eq!(extract_first_string_literal(items), "a`b${name}c");
+    }
+
+    #[test]
+    fn backtick_multiline_dedents() {
+        let source = "
+function Demo() -> string {
+    `
+        line one
+        line two
+    `
+}
+";
+        let items = parse_and_lower(source);
+        assert_eq!(extract_first_string_literal(items), "line one\nline two");
+    }
+
+    #[test]
+    fn backtick_multi_tick_ladder_preserves_inner_ticks() {
+        let source = "
+function Demo() -> string {
+    ``inline `code` here``
+}
+";
+        let items = parse_and_lower(source);
+        assert_eq!(extract_first_string_literal(items), "inline `code` here");
+    }
+
+    #[test]
+    fn backtick_m1_leaves_interpolation_as_literal_text() {
+        // M1 only: ${...} is not yet interpreted. It survives as literal text.
+        let source = "
+function Demo() -> string {
+    `Hello, ${name}!`
+}
+";
+        let items = parse_and_lower(source);
+        assert_eq!(extract_first_string_literal(items), "Hello, ${name}!");
     }
 }

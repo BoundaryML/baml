@@ -640,6 +640,7 @@ impl LoweringContext {
             SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
                 self.lower_string_literal(node)
             }
+            SyntaxKind::BACKTICK_STRING_LITERAL => self.lower_backtick_string_literal(node),
             SyntaxKind::BYTE_STRING_LITERAL => self.lower_byte_string_literal(node),
             SyntaxKind::ARRAY_LITERAL => self.lower_array_literal(node),
             SyntaxKind::OBJECT_LITERAL => self.lower_object_literal(node),
@@ -2286,6 +2287,23 @@ impl LoweringContext {
         let text = node.text().to_string();
         let content = strip_string_delimiters(&text);
         self.alloc_expr(Expr::Literal(Literal::String(content)), node.text_range())
+    }
+
+    /// Lower a BEP-049 backtick string literal as a string-typed expression.
+    ///
+    /// **M1 only:** content is treated as plain text. `${...}` sequences inside
+    /// are *not* interpolated yet — they appear in the decoded value as the
+    /// literal characters `$`, `{`, expression, `}`. M2 will replace this with
+    /// a segments-based lowering that builds a string from text + interpolated
+    /// expression fragments.
+    fn lower_backtick_string_literal(&mut self, node: &SyntaxNode) -> ExprId {
+        use baml_compiler_syntax::BacktickStringLiteral;
+        use rowan::ast::AstNode;
+
+        let value = BacktickStringLiteral::cast(node.clone())
+            .map(|lit| lit.value())
+            .unwrap_or_default();
+        self.alloc_expr(Expr::Literal(Literal::String(value)), node.text_range())
     }
 
     fn lower_byte_string_literal(&mut self, node: &SyntaxNode) -> ExprId {
