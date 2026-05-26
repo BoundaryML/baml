@@ -71,7 +71,7 @@ impl LazyBiasedMutex {
 
     /// Acquire the lock, returning a guard that releases it on drop.
     ///
-    /// Spins on the lock until acquired; after [`SPIN_BUDGET`] iterations
+    /// Spins on the lock until acquired; after `SPIN_BUDGET` iterations
     /// yields the time slice to the OS scheduler and resets the spin
     /// count. The acquire CAS provides the necessary happens-before
     /// edge with the previous holder's release.
