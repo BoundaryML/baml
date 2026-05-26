@@ -148,6 +148,8 @@ pub struct ImplementsBlock {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImplementsFor {
+    pub generic_params: Vec<Name>,
+    pub generic_param_bounds: Vec<Option<ast::TypeExpr>>,
     pub interface_target: ast::SpannedTypeExpr,
     pub for_target: ast::SpannedTypeExpr,
     pub fields: Vec<ClassField>,
@@ -556,6 +558,8 @@ impl ItemTree {
             })
             .collect();
         self.implements_for.push(ImplementsFor {
+            generic_params: imp.generic_params.iter().map(|(n, _)| n.clone()).collect(),
+            generic_param_bounds: imp.generic_params.iter().map(|(_, b)| b.clone()).collect(),
             interface_target: imp.interface_target.clone(),
             for_target: imp.for_target.clone(),
             fields,

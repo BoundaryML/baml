@@ -4540,3 +4540,65 @@ fn requires_chain_interface_subtype_is_ok() {
         "#,
     );
 }
+
+// ── Group: Blanket implementations — Phase 1 (parsing) ────────────────────
+
+#[test]
+fn form1_syntax_parses_without_errors() {
+    assert_no_interface_errors(r#"
+        interface Printable {
+            function display(self) -> string
+        }
+        class Box<T> {
+            value: T
+        }
+        implements<T> Printable for Box<T> {
+            function display(self) -> string { return "a box" }
+        }
+    "#);
+}
+
+#[test]
+fn form1_bounded_syntax_parses_without_errors() {
+    assert_no_interface_errors(r#"
+        interface Named {
+            name: string
+        }
+        interface Printable {
+            function display(self) -> string
+        }
+        class Wrapper<T> {
+            inner: T
+        }
+        implements<T extends Named> Printable for Wrapper<T> {
+            function display(self) -> string { return "a wrapper" }
+        }
+    "#);
+}
+
+#[test]
+fn form2_syntax_parses_without_errors() {
+    assert_no_interface_errors(r#"
+        interface Named {
+            name: string
+        }
+        interface Printable {
+            function display(self) -> string
+        }
+        implements<T extends Named> Printable for T {
+            function display(self) -> string { return "named thing" }
+        }
+    "#);
+}
+
+#[test]
+fn existing_concrete_implements_for_still_works() {
+    assert_no_interface_errors(r#"
+        interface Debuggable {
+            function debug(self) -> string
+        }
+        implements Debuggable for int {
+            function debug(self) -> string { return "int" }
+        }
+    "#);
+}

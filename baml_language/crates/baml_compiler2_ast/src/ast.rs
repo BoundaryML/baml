@@ -1332,6 +1332,8 @@ pub struct InterfaceFieldLinkDef {
 /// Top-level `implements I for T { ... }` block (BEP-044).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImplementsForDef {
+    /// Generic type parameters on the implements block (e.g. `<T>` or `<T extends Named>`).
+    pub generic_params: Vec<(Name, Option<TypeExpr>)>,
     /// The interface being implemented.
     pub interface_target: SpannedTypeExpr,
     /// The type the interface is being implemented for.

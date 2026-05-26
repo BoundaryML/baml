@@ -2865,6 +2865,10 @@ impl<'a> Parser<'a> {
                 p.expect(TokenKind::Implements);
             }
 
+            if p.at(TokenKind::Less) {
+                p.parse_generic_param_list();
+            }
+
             // Interface target (reuse IMPLEMENTS_TARGET).
             p.with_node(SyntaxKind::IMPLEMENTS_TARGET, |p| {
                 if p.is_at_type_start() {

@@ -170,6 +170,10 @@ pub fn lower_file_with_file_id(
         .collect();
     items.retain(|item| !matches!(item, Item::ImplementsFor(_)));
     for imp in impl_fors {
+        if !imp.generic_params.is_empty() {
+            items.push(Item::ImplementsFor(imp));
+            continue;
+        }
         let target_name = match &imp.for_target.expr {
             crate::ast::TypeExpr::Path {
                 segments,
@@ -1353,6 +1357,8 @@ fn lower_implements_for(
 ) -> Option<ImplementsForDef> {
     let imp = ast::ImplementsFor::cast(node.clone())?;
 
+    let generic_params = extract_generic_params_with_bounds(node);
+
     // Interface target (the `I` in `implements I for T`)
     let target_node = imp.target()?;
     let target_te = target_node.type_expr()?;
@@ -1416,6 +1422,7 @@ fn lower_implements_for(
         .collect();
 
     Some(ImplementsForDef {
+        generic_params,
         interface_target,
         for_target,
         fields: Vec::new(),
