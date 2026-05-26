@@ -161,6 +161,32 @@ async fn test_int_to_bigint_assign_op_mul() {
 }
 
 #[tokio::test]
+async fn test_int_to_bigint_assign_op_nonliteral_rhs() {
+    // Regression (review H1): compound assignment to a `bigint` with a
+    // NON-literal `int` RHS — a negated literal, an int arithmetic
+    // sub-expression, and an int-returning call. The operator self-promotes
+    // its `int` operand, so these all work even though none is a bare `int`
+    // literal or simple local. 100 + (-7) + (2 + 3) + 5 - 1 = 102.
+    let output = baml_test!(
+        r#"
+        function inc() -> int { 5 }
+        function main() -> bigint {
+            let x: bigint = 100n;
+            x += -7;
+            x += 2 + 3;
+            x += inc();
+            x -= 1;
+            x
+        }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Bigint(BigInt::from(102)))
+    );
+}
+
+#[tokio::test]
 async fn test_int_to_bigint_generic_fn_explicit_type_arg() {
     // `f<bigint>(1)`: the param `x: T` is instantiated as bigint at the call
     // site, so the int literal `1` must widen.

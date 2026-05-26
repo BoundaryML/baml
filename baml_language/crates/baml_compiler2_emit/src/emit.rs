@@ -517,7 +517,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 BinOp::Ge => Some(Instruction::CmpFloatOp(CmpOp::GtEq)),
                 _ => None,
             },
-            (ArithTyClass::Bigint, ArithTyClass::Bigint) => match op {
+            // A mixed `bigint`/`int` pair routes to the same specialized
+            // opcodes: the VM resolves the lone `int` operand to a small local
+            // `BigInt` without allocating a heap bigint for it.
+            (ArithTyClass::Bigint | ArithTyClass::Int, ArithTyClass::Bigint)
+            | (ArithTyClass::Bigint, ArithTyClass::Int) => match op {
                 BinOp::Add => Some(Instruction::AddBigint),
                 BinOp::Sub => Some(Instruction::SubBigint),
                 BinOp::Mul => Some(Instruction::MulBigint),

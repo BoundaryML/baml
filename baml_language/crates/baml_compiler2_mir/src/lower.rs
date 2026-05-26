@@ -3070,34 +3070,14 @@ impl LoweringContext<'_> {
             }
         }
 
-        // Mixed `int OP bigint` (or `bigint OP int`): widen the `int` operand
-        // with an `IntToBigint` coercion so the binop has matching `bigint`
-        // operands. Applies to arithmetic, bitwise, and comparison ops (the
-        // result type of a comparison is `bool`, but both operands still need
-        // to share the `bigint` representation for the typed opcode).
-        let lhs_ty = self.expr_ty(lhs);
-        let rhs_ty = self.expr_ty(rhs);
-        let lhs_is_int = matches!(
-            lhs_ty,
-            Ty::Int { .. } | Ty::Literal(baml_type::Literal::Int(_), _)
-        );
-        let rhs_is_int = matches!(
-            rhs_ty,
-            Ty::Int { .. } | Ty::Literal(baml_type::Literal::Int(_), _)
-        );
-        let lhs_is_bigint = matches!(
-            lhs_ty,
-            Ty::Bigint { .. } | Ty::Literal(baml_type::Literal::Bigint(_), _)
-        );
-        let rhs_is_bigint = matches!(
-            rhs_ty,
-            Ty::Bigint { .. } | Ty::Literal(baml_type::Literal::Bigint(_), _)
-        );
-        let widen_lhs = lhs_is_int && rhs_is_bigint;
-        let widen_rhs = rhs_is_int && lhs_is_bigint;
-
-        let left = self.lower_to_operand_widening(lhs, widen_lhs);
-        let right = self.lower_to_operand_widening(rhs, widen_rhs);
+        // Mixed `int OP bigint` (or `bigint OP int`) operators do NOT widen the
+        // `int` operand: the specialized `*Bigint`/`CmpBigint` opcodes accept a
+        // lone `int` operand and resolve it to a small local `BigInt` in the VM,
+        // without allocating a heap bigint. Coercion (`IntToBigint`) stays
+        // reserved for "simple moves into a bigint slot" (let-binding, call-arg,
+        // return). So lower both operands naturally.
+        let left = self.lower_to_operand(lhs);
+        let right = self.lower_to_operand(rhs);
         if let Some(mir_op) = Self::convert_binop(op) {
             self.builder.assign(
                 dest,
@@ -3252,33 +3232,11 @@ impl LoweringContext<'_> {
 
         let place = self.lower_lvalue(inner_target);
         let current = Operand::Copy(place.clone());
-        // Mixed `bigint OP= int`: widen the int rhs so the binop sees matching
-        // `bigint` operands. `expr_ty` doesn't always carry a type for
-        // single-segment Path lvalues, so derive from the local's declared
-        // type when available (mirrors the plain `AssignOp` path).
-        let target_ty = match &place {
-            Place::Local(l) => self.builder.local_ty(*l),
-            _ => self.expr_ty(inner_target),
-        };
-        let target_is_bigint = Self::dest_widens_int_to_bigint(&target_ty);
-        // See AssignOp above: TIR coerces the value to the target type, so we
-        // must inspect the AST to detect a natural-int RHS.
-        let rhs = if target_is_bigint && self.value_is_natural_int(value) {
-            let int_temp = self.builder.temp(Ty::Int {
-                attr: TyAttr::default(),
-            });
-            self.lower_expr(value, Place::local(int_temp));
-            let bigint_temp = self.builder.temp(Ty::Bigint {
-                attr: TyAttr::default(),
-            });
-            self.builder.assign(
-                Place::local(bigint_temp),
-                Rvalue::IntToBigint(Operand::Move(Place::Local(int_temp))),
-            );
-            Operand::Copy(Place::Local(bigint_temp))
-        } else {
-            self.lower_to_operand(value)
-        };
+        // Mixed `bigint OP= int` does NOT widen the int rhs: the specialized
+        // `*Bigint` opcodes accept a lone `int` operand and resolve it in the
+        // VM without allocating a heap bigint (mirrors the plain `AssignOp`
+        // path). Lower the value naturally.
+        let rhs = self.lower_to_operand(value);
         let mir_op = Self::convert_assign_op(op);
         self.builder.assign(
             place,
@@ -4469,72 +4427,6 @@ impl LoweringContext<'_> {
         let temp = self.builder.temp(ty);
         self.lower_expr(expr_id, Place::local(temp));
         Operand::Copy(Place::Local(temp))
-    }
-
-    /// Returns true if the AST expression's "natural" value type is `int` —
-    /// i.e. it would lower to an int constant or an int-typed local at runtime,
-    /// regardless of any TIR-level coercion applied at the use site.
-    ///
-    /// Used by `AssignOp` and `AssignOpOptionalChain` widening: TIR coerces an
-    /// assign-op's value to the target type, so `expr_ty(value)` reports
-    /// `Bigint` for `x += 1` even though the literal lowers to
-    /// `Constant::Int(1)`. Without this check the widening would be skipped
-    /// and the runtime would fault with `CannotApplyBinOp(Bigint, Int)`.
-    ///
-    /// Resolution strategy for `Path([name])` rhs values:
-    /// 1. Look up `self.locals` for a same-frame local and inspect its type.
-    /// 2. Fall back to the captured binding's declared TIR type via
-    ///    `pat_types` keyed by the binding's *declaring* scope. Required
-    ///    inside lambdas, where `self.locals` is reset at the boundary and
-    ///    captured int locals would otherwise be invisible.
-    fn value_is_natural_int(&self, expr_id: AstExprId) -> bool {
-        let expr = &self.body.exprs[expr_id];
-        match expr {
-            AstExpr::Literal(baml_base::Literal::Int(_)) => true,
-            AstExpr::Path(segments) if segments.len() == 1 => {
-                if let Some(&local) = self.locals.get(&segments[0]) {
-                    return matches!(
-                        self.builder.local_ty(local),
-                        Ty::Int { .. } | Ty::Literal(baml_type::Literal::Int(_), _)
-                    );
-                }
-                // Captured-from-outer-scope: `self.locals` is reset at the
-                // lambda boundary, and `expr_ty` reports the TIR-coerced
-                // type. Look the binding's *declared* type up via the
-                // pattern's TIR entry, keyed by the scope where it was
-                // declared (which may be an enclosing function or block).
-                let Some(binding_id) = self.binding_id_for_name_at(expr_id, &segments[0]) else {
-                    return false;
-                };
-                let Some(local_idx) = binding_id.local_index() else {
-                    // Parameter capture (rare); declared type isn't in
-                    // pat_types and we don't currently thread the enclosing
-                    // signature here.
-                    return false;
-                };
-                let index = file_semantic_index(self.db, self.file);
-                let Some(scope_bindings) =
-                    index.scope_bindings.get(binding_id.scope.index() as usize)
-                else {
-                    return false;
-                };
-                let Some(binding) = scope_bindings.bindings.get(local_idx) else {
-                    return false;
-                };
-                let key = (MetadataScope::Body(binding_id.scope), binding.pattern);
-                let Some(tir_ty) = self.pat_types.get(&key) else {
-                    return false;
-                };
-                matches!(
-                    self.resolved_aliases.convert(tir_ty),
-                    Ty::Int { .. } | Ty::Literal(baml_type::Literal::Int(_), _)
-                )
-            }
-            _ => matches!(
-                self.expr_ty(expr_id),
-                Ty::Int { .. } | Ty::Literal(baml_type::Literal::Int(_), _)
-            ),
-        }
     }
 
     /// Returns true if assigning an `int` RHS into a destination of type
@@ -5786,37 +5678,11 @@ impl LoweringContext<'_> {
                 } else {
                     let place = self.lower_lvalue(target);
                     let current = Operand::Copy(place.clone());
-                    // Mixed `bigint OP= int`: widen the int rhs so the binop
-                    // sees matching `bigint` operands. `expr_ty` doesn't always
-                    // carry a type for single-segment Path lvalues, so derive
-                    // from the local's declared type when available (mirrors
-                    // the `Assign` path).
-                    let target_ty = match &place {
-                        Place::Local(l) => self.builder.local_ty(*l),
-                        _ => self.expr_ty(target),
-                    };
-                    let target_is_bigint = Self::dest_widens_int_to_bigint(&target_ty);
-                    // TIR coerces an AssignOp's value to the target type, so
-                    // `expr_ty(value)` reports `Bigint` even when the literal
-                    // is `1`. Inspect the AST directly to catch the natural-int
-                    // case and insert an `IntToBigint` so the binop sees
-                    // matching `bigint` operands.
-                    let rhs = if target_is_bigint && self.value_is_natural_int(value) {
-                        let int_temp = self.builder.temp(Ty::Int {
-                            attr: TyAttr::default(),
-                        });
-                        self.lower_expr(value, Place::local(int_temp));
-                        let bigint_temp = self.builder.temp(Ty::Bigint {
-                            attr: TyAttr::default(),
-                        });
-                        self.builder.assign(
-                            Place::local(bigint_temp),
-                            Rvalue::IntToBigint(Operand::Move(Place::Local(int_temp))),
-                        );
-                        Operand::Copy(Place::Local(bigint_temp))
-                    } else {
-                        self.lower_to_operand(value)
-                    };
+                    // Mixed `bigint OP= int` does NOT widen the int rhs: the
+                    // specialized `*Bigint` opcodes accept a lone `int` operand
+                    // and resolve it in the VM without allocating a heap bigint.
+                    // Lower the value naturally.
+                    let rhs = self.lower_to_operand(value);
                     let mir_op = Self::convert_assign_op(op);
                     self.builder.assign(
                         place,

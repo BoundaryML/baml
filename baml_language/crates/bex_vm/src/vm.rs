@@ -648,6 +648,20 @@ fn value_type_tag(value: &Value) -> i64 {
     }
 }
 
+/// A popped operand for a specialized bigint opcode.
+///
+/// The specialized `*Bigint` / `CmpBigint*` opcodes accept one `int` operand
+/// (so mixed `bigint`/`int` operators don't need a MIR coercion). Rather than
+/// allocate a BEX-heap `Object::Bigint` for that `int`, it stays a small `i64`
+/// here and is widened to a local `BigInt` (a `Cow`) only at the point of use.
+#[derive(Clone, Copy)]
+enum BigintOperand {
+    /// A heap-resident `Object::Bigint`.
+    Heap(HeapPtr),
+    /// An `int` operand, to be widened to a local `BigInt` on demand.
+    Int(i64),
+}
+
 impl BexVm {
     /// Construct a [`PermitProof`] tied to `&self`'s borrow.
     ///
@@ -1190,6 +1204,266 @@ impl BexVm {
         match self.try_alloc_bigint(arc) {
             Ok(v) => Ok(v),
             Err(panic) => Err(VmError::Thrown(self.panic_to_exception_value(panic))),
+        }
+    }
+
+    /// Pop a bigint operand without allocating.
+    ///
+    /// The specialized `*Bigint` opcodes accept one `int` operand (mirroring
+    /// the way `int`/`float` mix): `try_specialize_binary_op` routes
+    /// `bigint`/`int` pairs to these opcodes, so the matched operand is
+    /// guaranteed to be either an `Object::Bigint` or a `Value::Int`. The `int`
+    /// operand is resolved to a small *local* `BigInt` (a `Cow`) at the point of
+    /// use — the operator handling itself, rather than relying on a MIR-inserted
+    /// coercion, and crucially without allocating a BEX-heap `Object::Bigint`
+    /// for the operand.
+    fn pop_bigint_operand(&mut self) -> BigintOperand {
+        match self.stack.ensure_pop() {
+            Value::Object(ptr) => {
+                debug_assert!(
+                    matches!(self.get_object(ptr), Object::Bigint(_)),
+                    "pop_bigint_operand: object operand is not a Bigint (specialization bug)"
+                );
+                BigintOperand::Heap(ptr)
+            }
+            Value::Int(n) => BigintOperand::Int(n),
+            _ => verifier_unreachable!(),
+        }
+    }
+
+    /// Resolve a [`BigintOperand`] to a borrowable `BigInt`.
+    ///
+    /// A heap operand borrows the heap-resident `BigInt` directly; an `int`
+    /// operand is widened to a small *local* `BigInt` owned by the returned
+    /// `Cow` (no BEX-heap allocation).
+    fn bigint_operand(&self, op: BigintOperand) -> std::borrow::Cow<'_, num_bigint::BigInt> {
+        match op {
+            BigintOperand::Heap(ptr) => match self.get_object(ptr) {
+                Object::Bigint(arc) => std::borrow::Cow::Borrowed(arc.as_ref()),
+                _ => verifier_unreachable!(),
+            },
+            BigintOperand::Int(n) => std::borrow::Cow::Owned(num_bigint::BigInt::from(n)),
+        }
+    }
+
+    /// Reconstruct the original `Value` for a [`BigintOperand`].
+    ///
+    /// Used to populate panic payloads (e.g. `DivisionByZero`) without
+    /// allocating: the `int` operand stays an `int`, the heap operand stays a
+    /// pointer.
+    fn bigint_operand_value(op: BigintOperand) -> Value {
+        match op {
+            BigintOperand::Heap(ptr) => Value::Object(ptr),
+            BigintOperand::Int(n) => Value::Int(n),
+        }
+    }
+
+    /// Evaluate a specialized bigint arithmetic / bitwise / shift op.
+    ///
+    /// Concentrates all the caps and panics that the per-opcode handlers used
+    /// to copy-paste. The borrows of the two operands are scoped to a block so
+    /// they drop before any heap allocation; only the resulting `BigInt` (or a
+    /// `VmPanic`) escapes.
+    fn bigint_binop(
+        &mut self,
+        op: BinOp,
+        l: BigintOperand,
+        r: BigintOperand,
+    ) -> Result<Value, VmError> {
+        let outcome: Result<num_bigint::BigInt, VmPanic> = {
+            match op {
+                BinOp::Add => {
+                    let lb = self.bigint_operand(l);
+                    let rb = self.bigint_operand(r);
+                    Ok(&*lb + &*rb)
+                }
+                BinOp::Sub => {
+                    let lb = self.bigint_operand(l);
+                    let rb = self.bigint_operand(r);
+                    Ok(&*lb - &*rb)
+                }
+                BinOp::Mul => {
+                    let lb = self.bigint_operand(l);
+                    let rb = self.bigint_operand(r);
+                    // Pre-flight bit-length check: `bits(lb * rb) ≤ bits(lb) +
+                    // bits(rb)` exactly. Reject before materializing the product
+                    // so two operands near `MAX_BIGINT_BITS` can't blow memory
+                    // with an intermediate twice the limit. Matches `Shl`.
+                    let estimated_bits = lb.bits().saturating_add(rb.bits());
+                    if estimated_bits > crate::package_baml::bigint::MAX_BIGINT_BITS {
+                        Err(VmPanic::AllocFailure {
+                            message: format!(
+                                "bigint mul: result of bigint multiplication would require ~{estimated_bits} bits (limit: {})",
+                                crate::package_baml::bigint::MAX_BIGINT_BITS
+                            ),
+                        })
+                    } else {
+                        Ok(&*lb * &*rb)
+                    }
+                }
+                BinOp::Div => {
+                    let lb = self.bigint_operand(l);
+                    let rb = self.bigint_operand(r);
+                    if *rb == num_bigint::BigInt::ZERO {
+                        Err(VmPanic::DivisionByZero {
+                            left: Self::bigint_operand_value(l),
+                            right: Self::bigint_operand_value(r),
+                        })
+                    } else {
+                        Ok(&*lb / &*rb)
+                    }
+                }
+                BinOp::Mod => {
+                    let lb = self.bigint_operand(l);
+                    let rb = self.bigint_operand(r);
+                    if *rb == num_bigint::BigInt::ZERO {
+                        Err(VmPanic::DivisionByZero {
+                            left: Self::bigint_operand_value(l),
+                            right: Self::bigint_operand_value(r),
+                        })
+                    } else {
+                        Ok(&*lb % &*rb)
+                    }
+                }
+                BinOp::BitAnd => {
+                    let lb = self.bigint_operand(l);
+                    let rb = self.bigint_operand(r);
+                    Ok(&*lb & &*rb)
+                }
+                BinOp::BitOr => {
+                    let lb = self.bigint_operand(l);
+                    let rb = self.bigint_operand(r);
+                    Ok(&*lb | &*rb)
+                }
+                BinOp::BitXor => {
+                    let lb = self.bigint_operand(l);
+                    let rb = self.bigint_operand(r);
+                    Ok(&*lb ^ &*rb)
+                }
+                BinOp::Shl => {
+                    // Two failure modes with distinct categories:
+                    // - Negative count: `baml.panics.NegativeBitShift` (caller bug).
+                    // - Count exceeds `usize`: `baml.panics.AllocFailure`
+                    //   (the would-be result is unrepresentable in memory).
+                    //
+                    // Resolve the count directly from `r`: an `int` count avoids
+                    // even a local `BigInt`.
+                    let shift: Result<usize, VmPanic> = match r {
+                        BigintOperand::Int(n) => {
+                            if n < 0 {
+                                Err(VmPanic::NegativeBitShift {
+                                    message: format!("bigint shl: negative shift count ({n})"),
+                                })
+                            } else {
+                                // On 64-bit targets a non-negative `i64` always
+                                // fits in `usize`; on 32-bit targets (wasm32) a
+                                // huge count overflows `usize`, so the would-be
+                                // result is unrepresentable — `AllocFailure`,
+                                // matching the `Heap` path and the old `ShlBigint`.
+                                usize::try_from(n).map_err(|_| VmPanic::AllocFailure {
+                                    message: format!(
+                                        "bigint shl: shift count ({n}) does not fit in usize"
+                                    ),
+                                })
+                            }
+                        }
+                        BigintOperand::Heap(_) => {
+                            let rb = self.bigint_operand(r);
+                            if rb.sign() == num_bigint::Sign::Minus {
+                                Err(VmPanic::NegativeBitShift {
+                                    message: format!("bigint shl: negative shift count ({rb})"),
+                                })
+                            } else {
+                                usize::try_from(rb.as_ref()).map_err(|_| VmPanic::AllocFailure {
+                                    message: format!(
+                                        "bigint shl: shift count ({rb}) does not fit in usize"
+                                    ),
+                                })
+                            }
+                        }
+                    };
+                    match shift {
+                        Err(panic) => Err(panic),
+                        Ok(shift) => {
+                            let lb = self.bigint_operand(l);
+                            let estimated_bits = lb.bits().saturating_add(shift as u64);
+                            if estimated_bits > crate::package_baml::bigint::MAX_BIGINT_BITS {
+                                Err(VmPanic::AllocFailure {
+                                    message: format!(
+                                        "bigint shl: result of {lb} << {shift} would require ~{estimated_bits} bits (limit: {})",
+                                        crate::package_baml::bigint::MAX_BIGINT_BITS
+                                    ),
+                                })
+                            } else {
+                                Ok(&*lb << shift)
+                            }
+                        }
+                    }
+                }
+                BinOp::Shr => {
+                    // Reject negative shift counts as `baml.panics.NegativeBitShift`
+                    // (mirrors `Shl`). Non-negative counts that don't fit in a
+                    // `usize` saturate to `0n`/`-1n` below.
+                    let shift_opt: Result<Option<usize>, VmPanic> = match r {
+                        BigintOperand::Int(n) => {
+                            if n < 0 {
+                                Err(VmPanic::NegativeBitShift {
+                                    message: format!("bigint shr: negative shift count ({n})"),
+                                })
+                            } else {
+                                Ok(usize::try_from(n).ok())
+                            }
+                        }
+                        BigintOperand::Heap(_) => {
+                            let rb = self.bigint_operand(r);
+                            if rb.sign() == num_bigint::Sign::Minus {
+                                Err(VmPanic::NegativeBitShift {
+                                    message: format!("bigint shr: negative shift count ({rb})"),
+                                })
+                            } else {
+                                Ok(usize::try_from(rb.as_ref()).ok())
+                            }
+                        }
+                    };
+                    match shift_opt {
+                        Err(panic) => Err(panic),
+                        Ok(shift_opt) => {
+                            // Right shift never grows the value, so a non-negative
+                            // shift count too large for `usize` is treated as
+                            // "shift past every bit". `num-bigint`'s `Shr` is an
+                            // arithmetic right shift (rounds toward -∞), so
+                            // positives saturate to 0 and negatives to -1 —
+                            // matching `i*::shr`.
+                            let lb = self.bigint_operand(l);
+                            Ok(match shift_opt {
+                                Some(shift) => &*lb >> shift,
+                                None if lb.sign() == num_bigint::Sign::Minus => {
+                                    num_bigint::BigInt::from(-1)
+                                }
+                                None => num_bigint::BigInt::ZERO,
+                            })
+                        }
+                    }
+                }
+            }
+        };
+        match outcome {
+            Ok(result) => self.alloc_bigint(std::sync::Arc::new(result)),
+            Err(panic) => Err(VmError::Thrown(self.panic_to_exception_value(panic))),
+        }
+    }
+
+    /// Evaluate a specialized bigint comparison.
+    fn bigint_cmp(&self, op: CmpOp, l: BigintOperand, r: BigintOperand) -> bool {
+        let lb = self.bigint_operand(l);
+        let rb = self.bigint_operand(r);
+        match op {
+            CmpOp::Eq => *lb == *rb,
+            CmpOp::NotEq => *lb != *rb,
+            CmpOp::Lt => *lb < *rb,
+            CmpOp::LtEq => *lb <= *rb,
+            CmpOp::Gt => *lb > *rb,
+            CmpOp::GtEq => *lb >= *rb,
         }
     }
 
@@ -3305,299 +3579,63 @@ impl BexVm {
 
             // ── Specialized bigint arithmetic ────────────────────────
             Instruction::AddBigint => {
-                let Value::Object(ri) = self.stack.ensure_pop() else {
-                    verifier_unreachable!()
-                };
-                let Value::Object(li) = self.stack.ensure_pop() else {
-                    verifier_unreachable!()
-                };
-                let result = {
-                    let Object::Bigint(rb) = self.get_object(ri) else {
-                        verifier_unreachable!()
-                    };
-                    let Object::Bigint(lb) = self.get_object(li) else {
-                        verifier_unreachable!()
-                    };
-                    lb.as_ref() + rb.as_ref()
-                };
-                let value = self.alloc_bigint(std::sync::Arc::new(result))?;
+                let r = self.pop_bigint_operand();
+                let l = self.pop_bigint_operand();
+                let value = self.bigint_binop(BinOp::Add, l, r)?;
                 self.stack.push(value);
             }
             Instruction::SubBigint => {
-                let Value::Object(ri) = self.stack.ensure_pop() else {
-                    verifier_unreachable!()
-                };
-                let Value::Object(li) = self.stack.ensure_pop() else {
-                    verifier_unreachable!()
-                };
-                let result = {
-                    let Object::Bigint(rb) = self.get_object(ri) else {
-                        verifier_unreachable!()
-                    };
-                    let Object::Bigint(lb) = self.get_object(li) else {
-                        verifier_unreachable!()
-                    };
-                    lb.as_ref() - rb.as_ref()
-                };
-                let value = self.alloc_bigint(std::sync::Arc::new(result))?;
+                let r = self.pop_bigint_operand();
+                let l = self.pop_bigint_operand();
+                let value = self.bigint_binop(BinOp::Sub, l, r)?;
                 self.stack.push(value);
             }
             Instruction::MulBigint => {
-                let Value::Object(ri) = self.stack.ensure_pop() else {
-                    verifier_unreachable!()
-                };
-                let Value::Object(li) = self.stack.ensure_pop() else {
-                    verifier_unreachable!()
-                };
-                let Object::Bigint(rb) = self.get_object(ri) else {
-                    verifier_unreachable!()
-                };
-                let Object::Bigint(lb) = self.get_object(li) else {
-                    verifier_unreachable!()
-                };
-                // Pre-flight bit-length check: `bits(lb * rb) ≤ bits(lb) + bits(rb)`
-                // exactly. Reject before materializing the product so two
-                // operands near `MAX_BIGINT_BITS` can't blow memory with an
-                // intermediate twice the limit. Matches the pattern in `ShlBigint`.
-                let estimated_bits = lb.bits().saturating_add(rb.bits());
-                if estimated_bits > crate::package_baml::bigint::MAX_BIGINT_BITS {
-                    return Err(VmError::Thrown(self.panic_to_exception_value(
-                        VmPanic::AllocFailure {
-                            message: format!(
-                                "bigint mul: result of bigint multiplication would require ~{estimated_bits} bits (limit: {})",
-                                crate::package_baml::bigint::MAX_BIGINT_BITS
-                            ),
-                        },
-                    )));
-                }
-                let result = lb.as_ref() * rb.as_ref();
-                let value = self.alloc_bigint(std::sync::Arc::new(result))?;
+                let r = self.pop_bigint_operand();
+                let l = self.pop_bigint_operand();
+                let value = self.bigint_binop(BinOp::Mul, l, r)?;
                 self.stack.push(value);
             }
             Instruction::DivBigint => {
-                let Value::Object(ri) = self.stack.ensure_pop() else {
-                    verifier_unreachable!()
-                };
-                let Value::Object(li) = self.stack.ensure_pop() else {
-                    verifier_unreachable!()
-                };
-                let (left_val, right_val, result) = {
-                    let Object::Bigint(rb) = self.get_object(ri) else {
-                        verifier_unreachable!()
-                    };
-                    let Object::Bigint(lb) = self.get_object(li) else {
-                        verifier_unreachable!()
-                    };
-                    if rb.as_ref() == &num_bigint::BigInt::ZERO {
-                        (Value::Object(li), Value::Object(ri), Err(()))
-                    } else {
-                        let q = lb.as_ref() / rb.as_ref();
-                        (Value::Object(li), Value::Object(ri), Ok(q))
-                    }
-                };
-                match result {
-                    Ok(q) => {
-                        let value = self.alloc_bigint(std::sync::Arc::new(q))?;
-                        self.stack.push(value);
-                    }
-                    Err(()) => {
-                        return Err(VmError::Thrown(self.panic_to_exception_value(
-                            VmPanic::DivisionByZero {
-                                left: left_val,
-                                right: right_val,
-                            },
-                        )));
-                    }
-                }
+                let r = self.pop_bigint_operand();
+                let l = self.pop_bigint_operand();
+                let value = self.bigint_binop(BinOp::Div, l, r)?;
+                self.stack.push(value);
             }
             Instruction::ModBigint => {
-                let Value::Object(ri) = self.stack.ensure_pop() else {
-                    verifier_unreachable!()
-                };
-                let Value::Object(li) = self.stack.ensure_pop() else {
-                    verifier_unreachable!()
-                };
-                let (left_val, right_val, result) = {
-                    let Object::Bigint(rb) = self.get_object(ri) else {
-                        verifier_unreachable!()
-                    };
-                    let Object::Bigint(lb) = self.get_object(li) else {
-                        verifier_unreachable!()
-                    };
-                    if rb.as_ref() == &num_bigint::BigInt::ZERO {
-                        (Value::Object(li), Value::Object(ri), Err(()))
-                    } else {
-                        let m = lb.as_ref() % rb.as_ref();
-                        (Value::Object(li), Value::Object(ri), Ok(m))
-                    }
-                };
-                match result {
-                    Ok(m) => {
-                        let value = self.alloc_bigint(std::sync::Arc::new(m))?;
-                        self.stack.push(value);
-                    }
-                    Err(()) => {
-                        return Err(VmError::Thrown(self.panic_to_exception_value(
-                            VmPanic::DivisionByZero {
-                                left: left_val,
-                                right: right_val,
-                            },
-                        )));
-                    }
-                }
+                let r = self.pop_bigint_operand();
+                let l = self.pop_bigint_operand();
+                let value = self.bigint_binop(BinOp::Mod, l, r)?;
+                self.stack.push(value);
             }
             Instruction::BitAndBigint => {
-                let Value::Object(ri) = self.stack.ensure_pop() else {
-                    verifier_unreachable!()
-                };
-                let Value::Object(li) = self.stack.ensure_pop() else {
-                    verifier_unreachable!()
-                };
-                let result = {
-                    let Object::Bigint(rb) = self.get_object(ri) else {
-                        verifier_unreachable!()
-                    };
-                    let Object::Bigint(lb) = self.get_object(li) else {
-                        verifier_unreachable!()
-                    };
-                    lb.as_ref() & rb.as_ref()
-                };
-                let value = self.alloc_bigint(std::sync::Arc::new(result))?;
+                let r = self.pop_bigint_operand();
+                let l = self.pop_bigint_operand();
+                let value = self.bigint_binop(BinOp::BitAnd, l, r)?;
                 self.stack.push(value);
             }
             Instruction::BitOrBigint => {
-                let Value::Object(ri) = self.stack.ensure_pop() else {
-                    verifier_unreachable!()
-                };
-                let Value::Object(li) = self.stack.ensure_pop() else {
-                    verifier_unreachable!()
-                };
-                let result = {
-                    let Object::Bigint(rb) = self.get_object(ri) else {
-                        verifier_unreachable!()
-                    };
-                    let Object::Bigint(lb) = self.get_object(li) else {
-                        verifier_unreachable!()
-                    };
-                    lb.as_ref() | rb.as_ref()
-                };
-                let value = self.alloc_bigint(std::sync::Arc::new(result))?;
+                let r = self.pop_bigint_operand();
+                let l = self.pop_bigint_operand();
+                let value = self.bigint_binop(BinOp::BitOr, l, r)?;
                 self.stack.push(value);
             }
             Instruction::BitXorBigint => {
-                let Value::Object(ri) = self.stack.ensure_pop() else {
-                    verifier_unreachable!()
-                };
-                let Value::Object(li) = self.stack.ensure_pop() else {
-                    verifier_unreachable!()
-                };
-                let result = {
-                    let Object::Bigint(rb) = self.get_object(ri) else {
-                        verifier_unreachable!()
-                    };
-                    let Object::Bigint(lb) = self.get_object(li) else {
-                        verifier_unreachable!()
-                    };
-                    lb.as_ref() ^ rb.as_ref()
-                };
-                let value = self.alloc_bigint(std::sync::Arc::new(result))?;
+                let r = self.pop_bigint_operand();
+                let l = self.pop_bigint_operand();
+                let value = self.bigint_binop(BinOp::BitXor, l, r)?;
                 self.stack.push(value);
             }
             Instruction::ShlBigint => {
-                let Value::Object(ri) = self.stack.ensure_pop() else {
-                    verifier_unreachable!()
-                };
-                let Value::Object(li) = self.stack.ensure_pop() else {
-                    verifier_unreachable!()
-                };
-                // Two failure modes with distinct categories:
-                // - Negative count: `baml.panics.NegativeBitShift` (caller bug).
-                // - Count exceeds `usize`: `baml.panics.AllocFailure`
-                //   (the would-be result is unrepresentable in memory).
-                let shift_or_panic: Result<usize, VmPanic> = {
-                    let Object::Bigint(rb) = self.get_object(ri) else {
-                        verifier_unreachable!()
-                    };
-                    if rb.sign() == num_bigint::Sign::Minus {
-                        Err(VmPanic::NegativeBitShift {
-                            message: format!("bigint shl: negative shift count ({rb})"),
-                        })
-                    } else {
-                        usize::try_from(rb.as_ref()).map_err(|_| VmPanic::AllocFailure {
-                            message: format!(
-                                "bigint shl: shift count ({rb}) does not fit in usize"
-                            ),
-                        })
-                    }
-                };
-                let shift = shift_or_panic
-                    .map_err(|p| VmError::Thrown(self.panic_to_exception_value(p)))?;
-                // Clone the `Arc<BigInt>` once so we can read `lb` across
-                // the bound check, the error-message formatting, and the
-                // actual shift without re-`get_object`-ing the heap each
-                // time. Cloning an `Arc` is cheap (refcount bump).
-                let lb = {
-                    let Object::Bigint(lb) = self.get_object(li) else {
-                        verifier_unreachable!()
-                    };
-                    lb.clone()
-                };
-                let val_bits = lb.bits();
-                let estimated_bits = val_bits.saturating_add(shift as u64);
-                if estimated_bits > crate::package_baml::bigint::MAX_BIGINT_BITS {
-                    return Err(VmError::Thrown(self.panic_to_exception_value(
-                        VmPanic::AllocFailure {
-                            message: format!(
-                                "bigint shl: result of {lb} << {shift} would require ~{estimated_bits} bits (limit: {})",
-                                crate::package_baml::bigint::MAX_BIGINT_BITS
-                            ),
-                        },
-                    )));
-                }
-                let result = lb.as_ref() << shift;
-                let value = self.alloc_bigint(std::sync::Arc::new(result))?;
+                let r = self.pop_bigint_operand();
+                let l = self.pop_bigint_operand();
+                let value = self.bigint_binop(BinOp::Shl, l, r)?;
                 self.stack.push(value);
             }
             Instruction::ShrBigint => {
-                let Value::Object(ri) = self.stack.ensure_pop() else {
-                    verifier_unreachable!()
-                };
-                let Value::Object(li) = self.stack.ensure_pop() else {
-                    verifier_unreachable!()
-                };
-                // Reject negative shift counts as `baml.panics.NegativeBitShift`
-                // (mirrors `ShlBigint`). Non-negative counts that don't fit in
-                // a `usize` saturate to `0n`/`-1n` below.
-                let shift_opt = {
-                    let Object::Bigint(rb) = self.get_object(ri) else {
-                        verifier_unreachable!()
-                    };
-                    if rb.sign() == num_bigint::Sign::Minus {
-                        let message = format!("bigint shr: negative shift count ({rb})");
-                        return Err(VmError::Thrown(
-                            self.panic_to_exception_value(VmPanic::NegativeBitShift { message }),
-                        ));
-                    }
-                    usize::try_from(rb.as_ref()).ok()
-                };
-                // Right shift never grows the value, so a non-negative shift
-                // count too large for `usize` is treated as "shift past every
-                // bit". `num-bigint`'s `Shr` is an arithmetic right shift
-                // (rounds toward -∞), so positives saturate to 0 and
-                // negatives saturate to -1 — matching `i*::shr`.
-                let result = {
-                    let Object::Bigint(lb) = self.get_object(li) else {
-                        verifier_unreachable!()
-                    };
-                    match shift_opt {
-                        Some(shift) => lb.as_ref() >> shift,
-                        None if lb.sign() == num_bigint::Sign::Minus => {
-                            num_bigint::BigInt::from(-1)
-                        }
-                        None => num_bigint::BigInt::ZERO,
-                    }
-                };
-                let value = self.alloc_bigint(std::sync::Arc::new(result))?;
+                let r = self.pop_bigint_operand();
+                let l = self.pop_bigint_operand();
+                let value = self.bigint_binop(BinOp::Shr, l, r)?;
                 self.stack.push(value);
             }
 
@@ -3655,28 +3693,9 @@ impl BexVm {
 
             // ── Specialized bigint comparison ────────────────────────
             Instruction::CmpBigintOp(op) => {
-                let Value::Object(ri) = self.stack.ensure_pop() else {
-                    verifier_unreachable!()
-                };
-                let Value::Object(li) = self.stack.ensure_pop() else {
-                    verifier_unreachable!()
-                };
-                let result = {
-                    let Object::Bigint(rb) = self.get_object(ri) else {
-                        verifier_unreachable!()
-                    };
-                    let Object::Bigint(lb) = self.get_object(li) else {
-                        verifier_unreachable!()
-                    };
-                    match op {
-                        CmpOp::Eq => lb == rb,
-                        CmpOp::NotEq => lb != rb,
-                        CmpOp::Lt => lb < rb,
-                        CmpOp::LtEq => lb <= rb,
-                        CmpOp::Gt => lb > rb,
-                        CmpOp::GtEq => lb >= rb,
-                    }
-                };
+                let r = self.pop_bigint_operand();
+                let l = self.pop_bigint_operand();
+                let result = self.bigint_cmp(op, l, r);
                 self.stack.push(Value::Bool(result));
             }
 
@@ -7406,403 +7425,101 @@ impl BexVm {
 
                 // ── Specialized bigint comparison (skip type dispatch) ────────
                 OpCode::CmpBigintEq => {
-                    let Value::Object(ri) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Value::Object(li) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let result = {
-                        let Object::Bigint(rb) = self.get_object(ri) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        let Object::Bigint(lb) = self.get_object(li) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        lb == rb
-                    };
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let result = self.bigint_cmp(CmpOp::Eq, l, r);
                     self.stack.push(Value::Bool(result));
                 }
                 OpCode::CmpBigintNotEq => {
-                    let Value::Object(ri) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Value::Object(li) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let result = {
-                        let Object::Bigint(rb) = self.get_object(ri) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        let Object::Bigint(lb) = self.get_object(li) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        lb != rb
-                    };
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let result = self.bigint_cmp(CmpOp::NotEq, l, r);
                     self.stack.push(Value::Bool(result));
                 }
                 OpCode::CmpBigintLt => {
-                    let Value::Object(ri) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Value::Object(li) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let result = {
-                        let Object::Bigint(rb) = self.get_object(ri) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        let Object::Bigint(lb) = self.get_object(li) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        lb < rb
-                    };
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let result = self.bigint_cmp(CmpOp::Lt, l, r);
                     self.stack.push(Value::Bool(result));
                 }
                 OpCode::CmpBigintLtEq => {
-                    let Value::Object(ri) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Value::Object(li) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let result = {
-                        let Object::Bigint(rb) = self.get_object(ri) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        let Object::Bigint(lb) = self.get_object(li) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        lb <= rb
-                    };
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let result = self.bigint_cmp(CmpOp::LtEq, l, r);
                     self.stack.push(Value::Bool(result));
                 }
                 OpCode::CmpBigintGt => {
-                    let Value::Object(ri) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Value::Object(li) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let result = {
-                        let Object::Bigint(rb) = self.get_object(ri) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        let Object::Bigint(lb) = self.get_object(li) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        lb > rb
-                    };
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let result = self.bigint_cmp(CmpOp::Gt, l, r);
                     self.stack.push(Value::Bool(result));
                 }
                 OpCode::CmpBigintGtEq => {
-                    let Value::Object(ri) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Value::Object(li) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let result = {
-                        let Object::Bigint(rb) = self.get_object(ri) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        let Object::Bigint(lb) = self.get_object(li) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        lb >= rb
-                    };
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let result = self.bigint_cmp(CmpOp::GtEq, l, r);
                     self.stack.push(Value::Bool(result));
                 }
 
                 // ── Specialized bigint arithmetic (skip type dispatch) ────────
                 OpCode::AddBigint => {
-                    let Value::Object(ri) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Value::Object(li) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let result = {
-                        let Object::Bigint(rb) = self.get_object(ri) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        let Object::Bigint(lb) = self.get_object(li) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        lb.as_ref() + rb.as_ref()
-                    };
-                    let value = self.alloc_bigint(std::sync::Arc::new(result))?;
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let value = self.bigint_binop(BinOp::Add, l, r)?;
                     self.stack.push(value);
                 }
                 OpCode::SubBigint => {
-                    let Value::Object(ri) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Value::Object(li) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let result = {
-                        let Object::Bigint(rb) = self.get_object(ri) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        let Object::Bigint(lb) = self.get_object(li) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        lb.as_ref() - rb.as_ref()
-                    };
-                    let value = self.alloc_bigint(std::sync::Arc::new(result))?;
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let value = self.bigint_binop(BinOp::Sub, l, r)?;
                     self.stack.push(value);
                 }
                 OpCode::MulBigint => {
-                    let Value::Object(ri) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Value::Object(li) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Object::Bigint(rb) = self.get_object(ri) else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Object::Bigint(lb) = self.get_object(li) else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    // Pre-flight bit-length check (mirrors `Instruction::MulBigint`).
-                    let estimated_bits = lb.bits().saturating_add(rb.bits());
-                    if estimated_bits > crate::package_baml::bigint::MAX_BIGINT_BITS {
-                        return Err(VmError::Thrown(self.panic_to_exception_value(
-                            VmPanic::AllocFailure {
-                                message: format!(
-                                    "bigint mul: result of bigint multiplication would require ~{estimated_bits} bits (limit: {})",
-                                    crate::package_baml::bigint::MAX_BIGINT_BITS
-                                ),
-                            },
-                        )));
-                    }
-                    let result = lb.as_ref() * rb.as_ref();
-                    let value = self.alloc_bigint(std::sync::Arc::new(result))?;
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let value = self.bigint_binop(BinOp::Mul, l, r)?;
                     self.stack.push(value);
                 }
                 OpCode::DivBigint => {
-                    let Value::Object(ri) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Value::Object(li) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let (left_val, right_val, quotient) = {
-                        let Object::Bigint(rb) = self.get_object(ri) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        let Object::Bigint(lb) = self.get_object(li) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        if rb.as_ref() == &num_bigint::BigInt::ZERO {
-                            (Value::Object(li), Value::Object(ri), None)
-                        } else {
-                            let q = lb.as_ref() / rb.as_ref();
-                            (Value::Object(li), Value::Object(ri), Some(q))
-                        }
-                    };
-                    match quotient {
-                        Some(q) => {
-                            let value = self.alloc_bigint(std::sync::Arc::new(q))?;
-                            self.stack.push(value);
-                        }
-                        None => {
-                            return Err(VmError::Thrown(self.panic_to_exception_value(
-                                VmPanic::DivisionByZero {
-                                    left: left_val,
-                                    right: right_val,
-                                },
-                            )));
-                        }
-                    }
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let value = self.bigint_binop(BinOp::Div, l, r)?;
+                    self.stack.push(value);
                 }
                 OpCode::ModBigint => {
-                    let Value::Object(ri) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Value::Object(li) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let (left_val, right_val, remainder) = {
-                        let Object::Bigint(rb) = self.get_object(ri) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        let Object::Bigint(lb) = self.get_object(li) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        if rb.as_ref() == &num_bigint::BigInt::ZERO {
-                            (Value::Object(li), Value::Object(ri), None)
-                        } else {
-                            let m = lb.as_ref() % rb.as_ref();
-                            (Value::Object(li), Value::Object(ri), Some(m))
-                        }
-                    };
-                    match remainder {
-                        Some(m) => {
-                            let value = self.alloc_bigint(std::sync::Arc::new(m))?;
-                            self.stack.push(value);
-                        }
-                        None => {
-                            return Err(VmError::Thrown(self.panic_to_exception_value(
-                                VmPanic::DivisionByZero {
-                                    left: left_val,
-                                    right: right_val,
-                                },
-                            )));
-                        }
-                    }
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let value = self.bigint_binop(BinOp::Mod, l, r)?;
+                    self.stack.push(value);
                 }
                 OpCode::BitAndBigint => {
-                    let Value::Object(ri) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Value::Object(li) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let result = {
-                        let Object::Bigint(rb) = self.get_object(ri) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        let Object::Bigint(lb) = self.get_object(li) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        lb.as_ref() & rb.as_ref()
-                    };
-                    let value = self.alloc_bigint(std::sync::Arc::new(result))?;
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let value = self.bigint_binop(BinOp::BitAnd, l, r)?;
                     self.stack.push(value);
                 }
                 OpCode::BitOrBigint => {
-                    let Value::Object(ri) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Value::Object(li) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let result = {
-                        let Object::Bigint(rb) = self.get_object(ri) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        let Object::Bigint(lb) = self.get_object(li) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        lb.as_ref() | rb.as_ref()
-                    };
-                    let value = self.alloc_bigint(std::sync::Arc::new(result))?;
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let value = self.bigint_binop(BinOp::BitOr, l, r)?;
                     self.stack.push(value);
                 }
                 OpCode::BitXorBigint => {
-                    let Value::Object(ri) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Value::Object(li) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let result = {
-                        let Object::Bigint(rb) = self.get_object(ri) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        let Object::Bigint(lb) = self.get_object(li) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        lb.as_ref() ^ rb.as_ref()
-                    };
-                    let value = self.alloc_bigint(std::sync::Arc::new(result))?;
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let value = self.bigint_binop(BinOp::BitXor, l, r)?;
                     self.stack.push(value);
                 }
                 OpCode::ShlBigint => {
-                    let Value::Object(ri) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Value::Object(li) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    // Negative count → NegativeBitShift; usize-overflow →
-                    // AllocFailure (see `Instruction::ShlBigint`).
-                    let shift_or_panic: Result<usize, VmPanic> = {
-                        let Object::Bigint(rb) = self.get_object(ri) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        if rb.sign() == num_bigint::Sign::Minus {
-                            Err(VmPanic::NegativeBitShift {
-                                message: format!("bigint shl: negative shift count ({rb})"),
-                            })
-                        } else {
-                            usize::try_from(rb.as_ref()).map_err(|_| VmPanic::AllocFailure {
-                                message: format!(
-                                    "bigint shl: shift count ({rb}) does not fit in usize"
-                                ),
-                            })
-                        }
-                    };
-                    let shift = shift_or_panic
-                        .map_err(|p| VmError::Thrown(self.panic_to_exception_value(p)))?;
-                    let val_bits = {
-                        let Object::Bigint(lb) = self.get_object(li) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        lb.bits()
-                    };
-                    let estimated_bits = val_bits.saturating_add(shift as u64);
-                    if estimated_bits > crate::package_baml::bigint::MAX_BIGINT_BITS {
-                        let Object::Bigint(lb) = self.get_object(li) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        return Err(VmError::Thrown(self.panic_to_exception_value(
-                            VmPanic::AllocFailure {
-                                message: format!(
-                                    "bigint shl: result of {lb} << {shift} would require ~{estimated_bits} bits (limit: {})",
-                                    crate::package_baml::bigint::MAX_BIGINT_BITS
-                                ),
-                            },
-                        )));
-                    }
-                    let result = {
-                        let Object::Bigint(lb) = self.get_object(li) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        lb.as_ref() << shift
-                    };
-                    let value = self.alloc_bigint(std::sync::Arc::new(result))?;
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let value = self.bigint_binop(BinOp::Shl, l, r)?;
                     self.stack.push(value);
                 }
                 OpCode::ShrBigint => {
-                    let Value::Object(ri) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Value::Object(li) = self.stack.ensure_pop() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    // Reject negative shift counts as `baml.panics.NegativeBitShift`;
-                    // non-negative counts that overflow `usize` saturate
-                    // (see `Instruction::ShrBigint`).
-                    let shift_opt =
-                        {
-                            let Object::Bigint(rb) = self.get_object(ri) else {
-                                std::hint::unreachable_unchecked()
-                            };
-                            if rb.sign() == num_bigint::Sign::Minus {
-                                let message = format!("bigint shr: negative shift count ({rb})");
-                                return Err(VmError::Thrown(self.panic_to_exception_value(
-                                    VmPanic::NegativeBitShift { message },
-                                )));
-                            }
-                            usize::try_from(rb.as_ref()).ok()
-                        };
-                    let result = {
-                        let Object::Bigint(lb) = self.get_object(li) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        match shift_opt {
-                            Some(shift) => lb.as_ref() >> shift,
-                            None if lb.sign() == num_bigint::Sign::Minus => {
-                                num_bigint::BigInt::from(-1)
-                            }
-                            None => num_bigint::BigInt::ZERO,
-                        }
-                    };
-                    let value = self.alloc_bigint(std::sync::Arc::new(result))?;
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let value = self.bigint_binop(BinOp::Shr, l, r)?;
                     self.stack.push(value);
                 }
 
