@@ -31,6 +31,28 @@ fn unlikely(b: bool) -> bool {
     b
 }
 
+/// `unreachable_unchecked()` guarded by a debug-build check.
+///
+/// Specialized opcodes and frame dispatch rely on the bytecode verifier /
+/// type-directed specialization guaranteeing the matched-on operand or frame
+/// type, so these branches are dead. In debug/test builds this `unreachable!()`s
+/// (surfacing a specialization or codegen bug instead of silent UB); in release
+/// it elides the check via `unreachable_unchecked()`.
+macro_rules! verifier_unreachable {
+    () => {
+        if cfg!(debug_assertions) {
+            unreachable!(
+                "VM verifier invariant violated — a specialization/codegen bug let an \
+                 unexpected operand or frame type reach an unchecked branch"
+            )
+        } else {
+            // SAFETY: guaranteed unreachable by the bytecode verifier / type-directed
+            // opcode specialization (see the matched-on type at the call site).
+            unsafe { ::std::hint::unreachable_unchecked() }
+        }
+    };
+}
+
 use ::bex_heap::TlabHolder;
 use ::bex_vm_types::{
     EarlyYieldCheck, RootHaver,
@@ -3183,37 +3205,37 @@ impl BexVm {
             // ── Specialized integer arithmetic ───────────────────────
             Instruction::AddInt => {
                 let Value::Int(r) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let Value::Int(l) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 self.stack.push(Value::Int(l + r));
             }
             Instruction::SubInt => {
                 let Value::Int(r) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let Value::Int(l) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 self.stack.push(Value::Int(l - r));
             }
             Instruction::MulInt => {
                 let Value::Int(r) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let Value::Int(l) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 self.stack.push(Value::Int(l * r));
             }
             Instruction::DivInt => {
                 let Value::Int(r) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let Value::Int(l) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 if r == 0 {
                     return Err(VmError::Thrown(self.panic_to_exception_value(
@@ -3227,10 +3249,10 @@ impl BexVm {
             }
             Instruction::ModInt => {
                 let Value::Int(r) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let Value::Int(l) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 self.stack.push(Value::Int(l % r));
             }
@@ -3238,37 +3260,37 @@ impl BexVm {
             // ── Specialized float arithmetic ─────────────────────────
             Instruction::AddFloat => {
                 let Value::Float(r) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let Value::Float(l) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 self.stack.push(Value::Float(l + r));
             }
             Instruction::SubFloat => {
                 let Value::Float(r) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let Value::Float(l) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 self.stack.push(Value::Float(l - r));
             }
             Instruction::MulFloat => {
                 let Value::Float(r) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let Value::Float(l) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 self.stack.push(Value::Float(l * r));
             }
             Instruction::DivFloat => {
                 let Value::Float(r) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let Value::Float(l) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 if r == 0.0 {
                     return Err(VmError::Thrown(self.panic_to_exception_value(
@@ -3284,17 +3306,17 @@ impl BexVm {
             // ── Specialized bigint arithmetic ────────────────────────
             Instruction::AddBigint => {
                 let Value::Object(ri) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let Value::Object(li) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let result = {
                     let Object::Bigint(rb) = self.get_object(ri) else {
-                        unsafe { std::hint::unreachable_unchecked() }
+                        verifier_unreachable!()
                     };
                     let Object::Bigint(lb) = self.get_object(li) else {
-                        unsafe { std::hint::unreachable_unchecked() }
+                        verifier_unreachable!()
                     };
                     lb.as_ref() + rb.as_ref()
                 };
@@ -3303,17 +3325,17 @@ impl BexVm {
             }
             Instruction::SubBigint => {
                 let Value::Object(ri) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let Value::Object(li) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let result = {
                     let Object::Bigint(rb) = self.get_object(ri) else {
-                        unsafe { std::hint::unreachable_unchecked() }
+                        verifier_unreachable!()
                     };
                     let Object::Bigint(lb) = self.get_object(li) else {
-                        unsafe { std::hint::unreachable_unchecked() }
+                        verifier_unreachable!()
                     };
                     lb.as_ref() - rb.as_ref()
                 };
@@ -3322,16 +3344,16 @@ impl BexVm {
             }
             Instruction::MulBigint => {
                 let Value::Object(ri) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let Value::Object(li) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let Object::Bigint(rb) = self.get_object(ri) else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let Object::Bigint(lb) = self.get_object(li) else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 // Pre-flight bit-length check: `bits(lb * rb) ≤ bits(lb) + bits(rb)`
                 // exactly. Reject before materializing the product so two
@@ -3354,17 +3376,17 @@ impl BexVm {
             }
             Instruction::DivBigint => {
                 let Value::Object(ri) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let Value::Object(li) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let (left_val, right_val, result) = {
                     let Object::Bigint(rb) = self.get_object(ri) else {
-                        unsafe { std::hint::unreachable_unchecked() }
+                        verifier_unreachable!()
                     };
                     let Object::Bigint(lb) = self.get_object(li) else {
-                        unsafe { std::hint::unreachable_unchecked() }
+                        verifier_unreachable!()
                     };
                     if rb.as_ref() == &num_bigint::BigInt::ZERO {
                         (Value::Object(li), Value::Object(ri), Err(()))
@@ -3390,17 +3412,17 @@ impl BexVm {
             }
             Instruction::ModBigint => {
                 let Value::Object(ri) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let Value::Object(li) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let (left_val, right_val, result) = {
                     let Object::Bigint(rb) = self.get_object(ri) else {
-                        unsafe { std::hint::unreachable_unchecked() }
+                        verifier_unreachable!()
                     };
                     let Object::Bigint(lb) = self.get_object(li) else {
-                        unsafe { std::hint::unreachable_unchecked() }
+                        verifier_unreachable!()
                     };
                     if rb.as_ref() == &num_bigint::BigInt::ZERO {
                         (Value::Object(li), Value::Object(ri), Err(()))
@@ -3426,17 +3448,17 @@ impl BexVm {
             }
             Instruction::BitAndBigint => {
                 let Value::Object(ri) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let Value::Object(li) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let result = {
                     let Object::Bigint(rb) = self.get_object(ri) else {
-                        unsafe { std::hint::unreachable_unchecked() }
+                        verifier_unreachable!()
                     };
                     let Object::Bigint(lb) = self.get_object(li) else {
-                        unsafe { std::hint::unreachable_unchecked() }
+                        verifier_unreachable!()
                     };
                     lb.as_ref() & rb.as_ref()
                 };
@@ -3445,17 +3467,17 @@ impl BexVm {
             }
             Instruction::BitOrBigint => {
                 let Value::Object(ri) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let Value::Object(li) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let result = {
                     let Object::Bigint(rb) = self.get_object(ri) else {
-                        unsafe { std::hint::unreachable_unchecked() }
+                        verifier_unreachable!()
                     };
                     let Object::Bigint(lb) = self.get_object(li) else {
-                        unsafe { std::hint::unreachable_unchecked() }
+                        verifier_unreachable!()
                     };
                     lb.as_ref() | rb.as_ref()
                 };
@@ -3464,17 +3486,17 @@ impl BexVm {
             }
             Instruction::BitXorBigint => {
                 let Value::Object(ri) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let Value::Object(li) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let result = {
                     let Object::Bigint(rb) = self.get_object(ri) else {
-                        unsafe { std::hint::unreachable_unchecked() }
+                        verifier_unreachable!()
                     };
                     let Object::Bigint(lb) = self.get_object(li) else {
-                        unsafe { std::hint::unreachable_unchecked() }
+                        verifier_unreachable!()
                     };
                     lb.as_ref() ^ rb.as_ref()
                 };
@@ -3483,10 +3505,10 @@ impl BexVm {
             }
             Instruction::ShlBigint => {
                 let Value::Object(ri) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let Value::Object(li) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 // Two failure modes with distinct categories:
                 // - Negative count: `baml.panics.NegativeBitShift` (caller bug).
@@ -3494,7 +3516,7 @@ impl BexVm {
                 //   (the would-be result is unrepresentable in memory).
                 let shift_or_panic: Result<usize, VmPanic> = {
                     let Object::Bigint(rb) = self.get_object(ri) else {
-                        unsafe { std::hint::unreachable_unchecked() }
+                        verifier_unreachable!()
                     };
                     if rb.sign() == num_bigint::Sign::Minus {
                         Err(VmPanic::NegativeBitShift {
@@ -3516,7 +3538,7 @@ impl BexVm {
                 // time. Cloning an `Arc` is cheap (refcount bump).
                 let lb = {
                     let Object::Bigint(lb) = self.get_object(li) else {
-                        unsafe { std::hint::unreachable_unchecked() }
+                        verifier_unreachable!()
                     };
                     lb.clone()
                 };
@@ -3538,17 +3560,17 @@ impl BexVm {
             }
             Instruction::ShrBigint => {
                 let Value::Object(ri) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let Value::Object(li) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 // Reject negative shift counts as `baml.panics.NegativeBitShift`
                 // (mirrors `ShlBigint`). Non-negative counts that don't fit in
                 // a `usize` saturate to `0n`/`-1n` below.
                 let shift_opt = {
                     let Object::Bigint(rb) = self.get_object(ri) else {
-                        unsafe { std::hint::unreachable_unchecked() }
+                        verifier_unreachable!()
                     };
                     if rb.sign() == num_bigint::Sign::Minus {
                         let message = format!("bigint shr: negative shift count ({rb})");
@@ -3565,7 +3587,7 @@ impl BexVm {
                 // negatives saturate to -1 — matching `i*::shr`.
                 let result = {
                     let Object::Bigint(lb) = self.get_object(li) else {
-                        unsafe { std::hint::unreachable_unchecked() }
+                        verifier_unreachable!()
                     };
                     match shift_opt {
                         Some(shift) => lb.as_ref() >> shift,
@@ -3582,10 +3604,10 @@ impl BexVm {
             // ── Specialized integer comparison ───────────────────────
             Instruction::CmpIntOp(op) => {
                 let Value::Int(r) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let Value::Int(l) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 self.stack.push(Value::Bool(match op {
                     CmpOp::Eq => l == r,
@@ -3616,10 +3638,10 @@ impl BexVm {
             #[allow(clippy::float_cmp)]
             Instruction::CmpFloatOp(op) => {
                 let Value::Float(r) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let Value::Float(l) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 self.stack.push(Value::Bool(match op {
                     CmpOp::Eq => l == r,
@@ -3634,17 +3656,17 @@ impl BexVm {
             // ── Specialized bigint comparison ────────────────────────
             Instruction::CmpBigintOp(op) => {
                 let Value::Object(ri) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let Value::Object(li) = self.stack.ensure_pop() else {
-                    unsafe { std::hint::unreachable_unchecked() }
+                    verifier_unreachable!()
                 };
                 let result = {
                     let Object::Bigint(rb) = self.get_object(ri) else {
-                        unsafe { std::hint::unreachable_unchecked() }
+                        verifier_unreachable!()
                     };
                     let Object::Bigint(lb) = self.get_object(li) else {
-                        unsafe { std::hint::unreachable_unchecked() }
+                        verifier_unreachable!()
                     };
                     match op {
                         CmpOp::Eq => lb == rb,
@@ -5741,7 +5763,7 @@ impl BexVm {
 
         // Save faulting PC for error reporting (points to the opcode byte).
         let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
-            unsafe { std::hint::unreachable_unchecked() }
+            verifier_unreachable!()
         };
         bf.faulting_pc = *pc - 1;
 
@@ -6271,7 +6293,7 @@ impl BexVm {
                     let locals_offset = StackIndex::from_raw(args_offset);
                     // Save pc as return address before pushing new frame.
                     let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
-                        unsafe { std::hint::unreachable_unchecked() }
+                        verifier_unreachable!()
                     };
                     bf.instruction_ptr = *pc;
 
@@ -6302,7 +6324,7 @@ impl BexVm {
                 OpCode::CallIndirect => {
                     // Save pc as return address before any call.
                     let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
-                        unsafe { std::hint::unreachable_unchecked() }
+                        verifier_unreachable!()
                     };
                     bf.instruction_ptr = *pc;
 

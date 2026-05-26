@@ -7876,12 +7876,14 @@ impl<'db> TypeInferenceBuilder<'db> {
         let lhs = &expanded_lhs;
         let rhs = &expanded_rhs;
         match op {
-            // Equality (`==`, `!=`): finds a common upcast and compares at
-            // that type. `x == null` and `int? == int` are the canonical
-            // null-check / nullable-equality cases and are intentionally
-            // allowed. The only thing rejected here is a common upcast that
-            // would still contain the float/bigint pair, since that pairing
-            // is itself unsound (see `is_float_bigint_mix`).
+            // Equality (`==`, `!=`): permissive — any two operands are
+            // accepted and the result is `bool`. This intentionally allows
+            // `x == null` (the canonical null check), `int? == int`
+            // (nullable equality), and numeric cross-type comparisons like
+            // `int == float`. The only rejected pairing is float-vs-bigint:
+            // a `bigint` beyond f64's exactly-representable range cannot be
+            // compared to a `float` without precision loss, so
+            // `is_float_bigint_mix` flags it (matching arithmetic/ordering).
             BinaryOp::Eq | BinaryOp::Ne => {
                 if Self::is_float_bigint_mix(lhs, rhs)
                     && !matches!(lhs, Ty::Unknown { .. } | Ty::Error { .. })
