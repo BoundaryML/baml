@@ -327,15 +327,20 @@ impl BexHeap {
     /// Add object references to the worklist for tracing.
     fn add_references_to_worklist(&self, obj: &Object, worklist: &mut Vec<HeapPtr>) {
         match obj {
+            // SAFETY (this match arm): GC traversal runs under STW; all
+            // mutator fibers are parked, so no concurrent writer can race
+            // with these reads. Same for the other Array/Map arms below.
             Object::Array(arr) => {
-                for value in arr {
+                let data = unsafe { arr.data_unchecked() };
+                for value in data.iter() {
                     if let Some(ptr) = value.as_object_ptr() {
                         worklist.push(ptr);
                     }
                 }
             }
             Object::Map(map) => {
-                for value in map.values() {
+                let data = unsafe { map.data_unchecked() };
+                for value in data.values() {
                     if let Some(ptr) = value.as_object_ptr() {
                         worklist.push(ptr);
                     }
@@ -452,13 +457,17 @@ impl BexHeap {
     /// Fix up references within a single object.
     fn fixup_object_references(&self, obj: &mut Object, forwarding: &HashMap<HeapPtr, HeapPtr>) {
         match obj {
+            // SAFETY: GC post-compaction fixup runs under STW with all
+            // mutators parked; no concurrent reader/writer can race.
             Object::Array(arr) => {
-                for value in arr.iter_mut() {
+                let data = unsafe { arr.data_unchecked_mut() };
+                for value in data.iter_mut() {
                     self.fixup_value(value, forwarding);
                 }
             }
             Object::Map(map) => {
-                for value in map.values_mut() {
+                let data = unsafe { map.data_unchecked_mut() };
+                for value in data.values_mut() {
                     self.fixup_value(value, forwarding);
                 }
             }
@@ -694,16 +703,19 @@ impl BexHeap {
     /// generation is one of [`Generation::Gen0`] or [`Generation::Gen1`].
     fn collect_young_references(&self, obj: &Object, worklist: &mut Vec<HeapPtr>) {
         match obj {
+            // SAFETY: GC traversal under STW; no mutator can race.
             Object::Array(arr) => {
+                let data = unsafe { arr.data_unchecked() };
                 worklist.extend(
-                    arr.iter()
+                    data.iter()
                         .filter_map(Value::as_object_ptr)
                         .filter(|ptr| self.generation_of(*ptr).is_young()),
                 );
             }
             Object::Map(map) => {
+                let data = unsafe { map.data_unchecked() };
                 worklist.extend(
-                    map.values()
+                    data.values()
                         .filter_map(Value::as_object_ptr)
                         .filter(|ptr| self.generation_of(*ptr).is_young()),
                 );
@@ -1178,7 +1190,7 @@ mod tests {
         let arr_obj = unsafe { new_arr_ptr.get() };
         if let Object::Array(elements) = arr_obj {
             // The string reference should have been updated
-            if let Some(str_ptr) = elements[0].as_object_ptr() {
+            if let Some(str_ptr) = elements.get(0).and_then(|__v| __v.as_object_ptr()) {
                 // Verify the referenced string is valid
                 let str_obj = unsafe { str_ptr.get() };
                 if let Object::String(s) = str_obj {
@@ -1459,7 +1471,7 @@ mod tests {
         let outer_obj = unsafe { new_outer.get() };
 
         if let Object::Array(arr) = outer_obj
-            && let Some(map_ptr) = arr[0].as_object_ptr()
+            && let Some(map_ptr) = arr.get(0).and_then(|v| v.as_object_ptr())
         {
             let map_obj = unsafe { map_ptr.get() };
             if let Object::Map(m) = map_obj
@@ -1467,7 +1479,7 @@ mod tests {
             {
                 let inner_arr_obj = unsafe { inner_arr_ptr.get() };
                 if let Object::Array(inner_arr) = inner_arr_obj
-                    && let Some(str_ptr) = inner_arr[0].as_object_ptr()
+                    && let Some(str_ptr) = inner_arr.get(0).and_then(|__v| __v.as_object_ptr())
                 {
                     let str_obj = unsafe { str_ptr.get() };
                     if let Object::String(s) = str_obj {
@@ -2077,19 +2089,19 @@ mod tests {
         let Object::Array(d_arr) = (unsafe { new_roots[0].get() }) else {
             panic!("not array at d")
         };
-        let Some(c_ptr) = d_arr[0].as_object_ptr() else {
+        let Some(c_ptr) = d_arr.get(0).and_then(|__v| __v.as_object_ptr()) else {
             panic!("d[0] not object")
         };
         let Object::Array(c_arr) = (unsafe { c_ptr.get() }) else {
             panic!("not array at c")
         };
-        let Some(b_ptr) = c_arr[0].as_object_ptr() else {
+        let Some(b_ptr) = c_arr.get(0).and_then(|__v| __v.as_object_ptr()) else {
             panic!("c[0] not object")
         };
         let Object::Array(b_arr) = (unsafe { b_ptr.get() }) else {
             panic!("not array at b")
         };
-        let Some(a_ptr) = b_arr[0].as_object_ptr() else {
+        let Some(a_ptr) = b_arr.get(0).and_then(|__v| __v.as_object_ptr()) else {
             panic!("b[0] not object")
         };
         let Object::String(s) = (unsafe { a_ptr.get() }) else {
@@ -2137,10 +2149,10 @@ mod tests {
         let Object::Array(b) = (unsafe { new_roots[1].get() }) else {
             panic!("not array b")
         };
-        let Some(a_child) = a[0].as_object_ptr() else {
+        let Some(a_child) = a.get(0).and_then(|__v| __v.as_object_ptr()) else {
             panic!("a[0] not object")
         };
-        let Some(b_child) = b[0].as_object_ptr() else {
+        let Some(b_child) = b.get(0).and_then(|__v| __v.as_object_ptr()) else {
             panic!("b[0] not object")
         };
         // Forwarding deduplication: both must point to the same new location
@@ -2169,10 +2181,10 @@ mod tests {
         let Object::Array(root_arr) = (unsafe { new_roots[0].get() }) else {
             panic!("not array root")
         };
-        let Some(b_ptr) = root_arr[0].as_object_ptr() else {
+        let Some(b_ptr) = root_arr.get(0).and_then(|__v| __v.as_object_ptr()) else {
             panic!("root[0] not object")
         };
-        let Some(c_ptr) = root_arr[1].as_object_ptr() else {
+        let Some(c_ptr) = root_arr.get(1).and_then(|__v| __v.as_object_ptr()) else {
             panic!("root[1] not object")
         };
         let Object::Array(b_arr) = (unsafe { b_ptr.get() }) else {
@@ -2181,10 +2193,10 @@ mod tests {
         let Object::Array(c_arr) = (unsafe { c_ptr.get() }) else {
             panic!("not array c")
         };
-        let Some(d_from_b) = b_arr[0].as_object_ptr() else {
+        let Some(d_from_b) = b_arr.get(0).and_then(|__v| __v.as_object_ptr()) else {
             panic!("b[0] not object")
         };
-        let Some(d_from_c) = c_arr[0].as_object_ptr() else {
+        let Some(d_from_c) = c_arr.get(0).and_then(|__v| __v.as_object_ptr()) else {
             panic!("c[0] not object")
         };
         // D copied only once — both paths reach the same pointer
@@ -2206,7 +2218,7 @@ mod tests {
         }));
         // Patch A to reference B, forming a cycle
         unsafe {
-            *a.get_mut() = Object::Array(vec![Value::object(b)]);
+            *a.get_mut() = Object::Array(vec![Value::object(b)].into());
         }
 
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&[a]) };
@@ -2216,7 +2228,7 @@ mod tests {
         let Object::Array(a_arr) = (unsafe { new_roots[0].get() }) else {
             panic!("not array a")
         };
-        let Some(b_ptr) = a_arr[0].as_object_ptr() else {
+        let Some(b_ptr) = a_arr.get(0).and_then(|__v| __v.as_object_ptr()) else {
             panic!("a[0] not object")
         };
         let Object::Cell(cell) = (unsafe { b_ptr.get() }) else {
@@ -2242,7 +2254,7 @@ mod tests {
         let y = tlab.alloc_array(vec![Value::object(x)]);
         let z = tlab.alloc_array(vec![Value::object(y)]);
         unsafe {
-            *x.get_mut() = Object::Array(vec![Value::object(z)]);
+            *x.get_mut() = Object::Array(vec![Value::object(z)].into());
         }
 
         // Separate rooted survivor
@@ -2453,7 +2465,7 @@ mod tests {
         let Object::Array(arr) = (unsafe { new_roots[0].get() }) else {
             panic!("new_roots[0] not Array")
         };
-        let Some(arr_leaf) = arr[0].as_object_ptr() else {
+        let Some(arr_leaf) = arr.get(0).and_then(|__v| __v.as_object_ptr()) else {
             panic!("arr[0] not Object")
         };
         let Object::String(s) = (unsafe { arr_leaf.get() }) else {
@@ -2465,7 +2477,7 @@ mod tests {
         let Object::Map(m) = (unsafe { new_roots[1].get() }) else {
             panic!("new_roots[1] not Map")
         };
-        let Some(map_leaf) = m["k"].as_object_ptr() else {
+        let Some(map_leaf) = m.get("k").and_then(|v| v.as_object_ptr()) else {
             panic!("map[\"k\"] not Object")
         };
         let Object::String(s) = (unsafe { map_leaf.get() }) else {
@@ -2477,7 +2489,7 @@ mod tests {
         let Object::Closure(clo) = (unsafe { new_roots[2].get() }) else {
             panic!("new_roots[2] not Closure")
         };
-        let Some(cap_leaf) = clo.captures[0].as_object_ptr() else {
+        let Some(cap_leaf) = clo.captures.first().and_then(|v| v.as_object_ptr()) else {
             panic!("capture[0] not Object")
         };
         let Object::String(s) = (unsafe { cap_leaf.get() }) else {
@@ -2511,7 +2523,7 @@ mod tests {
         let Object::Instance(inst) = (unsafe { new_roots[5].get() }) else {
             panic!("new_roots[5] not Instance")
         };
-        let Some(inst_leaf) = inst.fields[0].as_object_ptr() else {
+        let Some(inst_leaf) = inst.fields.first().and_then(|v| v.as_object_ptr()) else {
             panic!("instance.fields[0] not Object")
         };
         let Object::String(s) = (unsafe { inst_leaf.get() }) else {

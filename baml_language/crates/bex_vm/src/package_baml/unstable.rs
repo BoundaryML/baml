@@ -74,7 +74,7 @@ fn format_value_recursive(vm: &BexVm, value: Value, depth: usize) -> Result<Stri
             }
 
             Object::Array(values) => {
-                let values = values.clone();
+                let values = values.to_vec();
                 let mut result = String::from("[");
                 for (i, value) in values.iter().enumerate() {
                     if i > 0 {
@@ -87,7 +87,7 @@ fn format_value_recursive(vm: &BexVm, value: Value, depth: usize) -> Result<Stri
             }
 
             Object::Map(map) => {
-                let map = map.clone();
+                let map = map.to_index_map();
                 let mut result = String::from("{\n");
                 let field_indent = "    ".repeat(depth + 1);
 

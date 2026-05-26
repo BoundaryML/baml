@@ -13,6 +13,7 @@
 pub mod bytecode;
 pub mod heap_ptr;
 pub mod indexable;
+pub mod lazy_biased_mutex;
 mod roots;
 pub mod types;
 
@@ -26,9 +27,10 @@ pub use indexable::{
 };
 pub use roots::{PermitProof, RootHaver, WriteBarrier};
 pub use types::{
-    Class, ClassField, ClientBuildMeta, ClientBuildType, CollectorRef, ConstValue, Enum,
-    EnumVariant, Function, FunctionKind, FunctionMeta, FunctionOrigin, Future, FutureRead,
-    HostClosure, Instance, MediaValue, Object, ObjectType, PanicClass, Program, PromptAst,
+    ArrayContainer, ArrayReadGuard, ArrayWriteGuard, Class, ClassField, ClientBuildMeta,
+    ClientBuildType, CollectorRef, ConstValue, Enum, EnumVariant, Function, FunctionKind,
+    FunctionMeta, FunctionOrigin, Future, FutureRead, HostClosure, Instance, MapContainer,
+    MapReadGuard, MapWriteGuard, MediaValue, Object, ObjectType, PanicClass, Program, PromptAst,
     RetryPolicyMeta, SysOp, SysOpErrorCategory, SysOpPanicCategory, TestArgValue, TestCase,
     UnscheduledFuture, Value, ValueKind, Variant, format_float, sys_op_for_path, type_tags,
 };

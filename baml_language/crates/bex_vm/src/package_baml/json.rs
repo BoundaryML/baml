@@ -175,7 +175,7 @@ impl BamlNamespaceJson for PackageBamlImpl {
     fn field(vm: &mut BexVm, j: &Value, key: &str) -> Value {
         match j.as_object_ptr() {
             Some(ptr) => match vm.get_object(ptr) {
-                Object::Map(m) => m.get(key).copied().unwrap_or(Value::NULL),
+                Object::Map(m) => m.get(key).unwrap_or(Value::NULL),
                 _ => Value::NULL,
             },
             None => Value::NULL,
@@ -320,14 +320,14 @@ pub fn serde_to_value(vm: &mut BexVm, v: &serde_json::Value) -> Value {
         serde_json::Value::String(s) => vm.alloc_string(s.clone()),
         serde_json::Value::Array(arr) => {
             let items: Vec<Value> = arr.iter().map(|elem| serde_to_value(vm, elem)).collect();
-            Value::object(vm.tlab.alloc(Object::Array(items)))
+            Value::object(vm.tlab.alloc(Object::Array(items.into())))
         }
         serde_json::Value::Object(map) => {
             let entries: IndexMap<String, Value> = map
                 .iter()
                 .map(|(k, v)| (k.clone(), serde_to_value(vm, v)))
                 .collect();
-            Value::object(vm.tlab.alloc(Object::Map(entries)))
+            Value::object(vm.tlab.alloc(Object::Map(Box::new(entries.into()))))
         }
     }
 }
@@ -349,11 +349,11 @@ pub fn value_to_serde(vm: &BexVm, v: Value) -> serde_json::Value {
                 .unwrap_or(serde_json::Value::Null),
             Object::String(s) => serde_json::Value::String(s.clone()),
             Object::Array(arr) => {
-                let arr = arr.clone();
+                let arr = arr.to_vec();
                 serde_json::Value::Array(arr.iter().map(|el| value_to_serde(vm, *el)).collect())
             }
             Object::Map(map) => {
-                let map = map.clone();
+                let map = map.to_index_map();
                 let entries: serde_json::Map<String, serde_json::Value> = map
                     .iter()
                     .map(|(k, v)| (k.clone(), value_to_serde(vm, *v)))
@@ -433,7 +433,7 @@ fn ty_value_to_serde(
         Ty::List(elem, _) => {
             let items = match value.as_object_ptr() {
                 Some(ptr) => match vm.get_object(ptr) {
-                    Object::Array(arr) => arr.clone(),
+                    Object::Array(arr) => arr.to_vec(),
                     _ => return Err(raise_serialize(vm, "expected array", path, "list")),
                 },
                 None => return Err(raise_serialize(vm, "expected array", path, "list")),
@@ -451,7 +451,7 @@ fn ty_value_to_serde(
         Ty::Map { value: vty, .. } => {
             let entries = match value.as_object_ptr() {
                 Some(ptr) => match vm.get_object(ptr) {
-                    Object::Map(m) => m.clone(),
+                    Object::Map(m) => m.to_index_map(),
                     _ => return Err(raise_serialize(vm, "expected map", path, "map")),
                 },
                 None => return Err(raise_serialize(vm, "expected map", path, "map")),
@@ -784,7 +784,7 @@ fn ty_serde_to_value(
                     })?;
                     items.push(v);
                 }
-                Ok(Value::object(vm.tlab.alloc(Object::Array(items))))
+                Ok(Value::object(vm.tlab.alloc(Object::Array(items.into()))))
             }
             _ => Err(raise_decode(vm, "expected array", path)),
         },
@@ -798,7 +798,9 @@ fn ty_serde_to_value(
                     })?;
                     entries.insert(k.clone(), v);
                 }
-                Ok(Value::object(vm.tlab.alloc(Object::Map(entries))))
+                Ok(Value::object(
+                    vm.tlab.alloc(Object::Map(Box::new(entries.into()))),
+                ))
             }
             _ => Err(raise_decode(vm, "expected object", path)),
         },
@@ -1157,7 +1159,7 @@ impl Continuation for IdentityFromJsonCont {
 fn list_from_json_start(vm: &mut BexVm, j: Value, elem_ty: &Ty) -> NativeCallResult {
     let array = match j.as_object_ptr() {
         Some(p) => match vm.get_object(p) {
-            Object::Array(a) => a.clone(),
+            Object::Array(a) => a.to_vec(),
             _ => {
                 return NativeCallResult::Error(raise_decode(vm, "expected JSON array", ""));
             }
@@ -1199,7 +1201,7 @@ fn list_drive(
             Err(e) => return NativeCallResult::Error(e),
         }
     }
-    let arr_val = Value::object(vm.tlab.alloc(Object::Array(results)));
+    let arr_val = Value::object(vm.tlab.alloc(Object::Array(results.into())));
     NativeCallResult::Done(arr_val)
 }
 
@@ -1270,7 +1272,7 @@ impl Continuation for ListFromJsonCont {
 fn map_from_json_start(vm: &mut BexVm, j: Value, val_ty: &Ty) -> NativeCallResult {
     let entries: Vec<(String, Value)> = match j.as_object_ptr() {
         Some(p) => match vm.get_object(p) {
-            Object::Map(m) => m.iter().map(|(k, v)| (k.clone(), *v)).collect(),
+            Object::Map(m) => m.lock().iter().map(|(k, v)| (k.clone(), *v)).collect(),
             _ => {
                 return NativeCallResult::Error(raise_decode(vm, "expected JSON object", ""));
             }
@@ -1309,7 +1311,7 @@ fn map_drive(
             Err(e) => return NativeCallResult::Error(e),
         }
     }
-    let map_val = Value::object(vm.tlab.alloc(Object::Map(results)));
+    let map_val = Value::object(vm.tlab.alloc(Object::Map(Box::new(results.into()))));
     NativeCallResult::Done(map_val)
 }
 

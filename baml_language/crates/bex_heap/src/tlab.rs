@@ -168,13 +168,13 @@ impl Tlab {
     /// Allocate an array object.
     #[inline]
     pub fn alloc_array(&mut self, values: Vec<Value>) -> HeapPtr {
-        self.alloc(Object::Array(values))
+        self.alloc(Object::Array(values.into()))
     }
 
     /// Allocate a map object.
     #[inline]
     pub fn alloc_map(&mut self, values: IndexMap<String, Value>) -> HeapPtr {
-        self.alloc(Object::Map(values))
+        self.alloc(Object::Map(Box::new(values.into())))
     }
 
     /// Allocate an instance object.
@@ -451,7 +451,7 @@ mod tests {
             match ptr.get() {
                 Object::Array(arr) => {
                     assert_eq!(arr.len(), 3);
-                    assert_eq!(arr[0], Value::int(1));
+                    assert_eq!(arr.get(0), Some(Value::int(1)));
                 }
                 _ => panic!("Expected Array"),
             }
@@ -470,7 +470,7 @@ mod tests {
         unsafe {
             match ptr.get() {
                 Object::Map(m) => {
-                    assert_eq!(m.get("key"), Some(&Value::int(42)));
+                    assert_eq!(m.get("key"), Some(Value::int(42)));
                 }
                 _ => panic!("Expected Map"),
             }

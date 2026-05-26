@@ -475,12 +475,14 @@ pub fn track_watch_dependencies(watch: &mut Watch, parent: NodeId, path: Path, c
                 .collect(),
 
             Object::Array(array) => array
+                .lock()
                 .iter()
                 .enumerate()
                 .filter_map(|(idx, v)| v.as_object_ptr().map(|p| (Path::ArrayIndex(idx), p)))
                 .collect(),
 
             Object::Map(map) => map
+                .lock()
                 .iter()
                 .filter_map(|(key, v)| v.as_object_ptr().map(|p| (Path::MapKey(key.clone()), p)))
                 .collect(),
