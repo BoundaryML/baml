@@ -360,9 +360,3 @@ lto = "fat"
 # The profile that 'cargo dist' will build with.
 [profile.dist]
 inherits = "release"
-
-# Local patch: darwin-kperf-events upstream doesn't recognize the M5 Max
-# CPU brand `as5-1`. The fork adds the missing match arm. NOT for upstream
-# PR — keep local only.
-[patch.crates-io]
-darwin-kperf-events = { path = "/Users/antonio/Desktop/github/baml-perf/darwin-kperf-events-fork" }
