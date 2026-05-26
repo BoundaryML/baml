@@ -626,6 +626,9 @@ fn owned_inner(
                 Ok(BexExternalValue::RustData(std::sync::Arc::clone(data)))
             }
             BexExternalValue::Adt(adt) => Ok(BexExternalValue::Adt(adt.clone())),
+            BexExternalValue::HostValue(hv) => {
+                Ok(BexExternalValue::HostValue(std::sync::Arc::clone(hv)))
+            }
         },
         // Object path: either `HeapPtr` directly, or a `Value` whose payload
         // is an object pointer. The two cases share a single object deep-
@@ -748,6 +751,15 @@ fn convert_object(
         Object::Float(f) => Ok(BexExternalValue::Float(*f)),
         Object::Closure(_) => unconvertible("closure"),
         Object::BoundMethod(_) => unconvertible("bound_method"),
+        // `HostClosure` is a callable wrapper for a host-owned value.
+        // The native sysop impl matches on `BexExternalValue::HostValue`
+        // and extracts the `Arc<HostValueArc>` from it, so unwrap the
+        // closure here to its underlying handle. The `ret_ty` field is
+        // *not* surfaced through this conversion (it flows separately
+        // via the type-arg channel of `SysOp::BamlHostCallHostValue`).
+        Object::HostClosure(hc) => Ok(BexExternalValue::HostValue(std::sync::Arc::clone(
+            &hc.handle,
+        ))),
         Object::Cell(_) => unconvertible("cell"),
         #[cfg(feature = "heap_debug")]
         Object::Sentinel(sentinel_kind) => unconvertible(&format!("sentinel: {:?}", sentinel_kind)),

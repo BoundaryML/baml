@@ -60,6 +60,7 @@ $root.baml_core = (function() {
              * @property {number} ADT_COLLECTOR=12 ADT_COLLECTOR value
              * @property {number} ADT_TYPE=13 ADT_TYPE value
              * @property {number} ADT_TAGGED_HEAP_HANDLE=14 ADT_TAGGED_HEAP_HANDLE value
+             * @property {number} HOST_VALUE_CALLABLE=15 HOST_VALUE_CALLABLE value
              */
             v1.BamlHandleType = (function() {
                 var valuesById = {}, values = Object.create(valuesById);
@@ -76,6 +77,7 @@ $root.baml_core = (function() {
                 values[valuesById[12] = "ADT_COLLECTOR"] = 12;
                 values[valuesById[13] = "ADT_TYPE"] = 13;
                 values[valuesById[14] = "ADT_TAGGED_HEAP_HANDLE"] = 14;
+                values[valuesById[15] = "HOST_VALUE_CALLABLE"] = 15;
                 return values;
             })();
 
@@ -247,6 +249,7 @@ $root.baml_core = (function() {
                         case 12:
                         case 13:
                         case 14:
+                        case 15:
                             break;
                         }
                     return null;
@@ -331,6 +334,10 @@ $root.baml_core = (function() {
                     case "ADT_TAGGED_HEAP_HANDLE":
                     case 14:
                         message.handleType = 14;
+                        break;
+                    case "HOST_VALUE_CALLABLE":
+                    case 15:
+                        message.handleType = 15;
                         break;
                     }
                     return message;
@@ -2209,6 +2216,375 @@ $root.baml_core = (function() {
                 return InboundEnumValue;
             })();
 
+            /**
+             * HostCallableErrorCategory enum.
+             * @name baml_core.cffi.v1.HostCallableErrorCategory
+             * @enum {number}
+             * @property {number} HOST_CALLABLE_ERROR_UNSPECIFIED=0 HOST_CALLABLE_ERROR_UNSPECIFIED value
+             * @property {number} HOST_CALLABLE_HOST_ERROR=1 HOST_CALLABLE_HOST_ERROR value
+             * @property {number} HOST_CALLABLE_INVALID_ARGUMENT=2 HOST_CALLABLE_INVALID_ARGUMENT value
+             * @property {number} HOST_CALLABLE_CANCELLED=3 HOST_CALLABLE_CANCELLED value
+             */
+            v1.HostCallableErrorCategory = (function() {
+                var valuesById = {}, values = Object.create(valuesById);
+                values[valuesById[0] = "HOST_CALLABLE_ERROR_UNSPECIFIED"] = 0;
+                values[valuesById[1] = "HOST_CALLABLE_HOST_ERROR"] = 1;
+                values[valuesById[2] = "HOST_CALLABLE_INVALID_ARGUMENT"] = 2;
+                values[valuesById[3] = "HOST_CALLABLE_CANCELLED"] = 3;
+                return values;
+            })();
+
+            v1.HostCallableError = (function() {
+
+                /**
+                 * Properties of a HostCallableError.
+                 * @memberof baml_core.cffi.v1
+                 * @interface IHostCallableError
+                 * @property {string|null} [className] HostCallableError className
+                 * @property {string|null} [message] HostCallableError message
+                 * @property {string|null} [traceback] HostCallableError traceback
+                 * @property {string|null} [language] HostCallableError language
+                 * @property {baml_core.cffi.v1.HostCallableErrorCategory|null} [category] HostCallableError category
+                 */
+
+                /**
+                 * Constructs a new HostCallableError.
+                 * @memberof baml_core.cffi.v1
+                 * @classdesc Represents a HostCallableError.
+                 * @implements IHostCallableError
+                 * @constructor
+                 * @param {baml_core.cffi.v1.IHostCallableError=} [properties] Properties to set
+                 */
+                function HostCallableError(properties) {
+                    if (properties)
+                        for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                            if (properties[keys[i]] != null)
+                                this[keys[i]] = properties[keys[i]];
+                }
+
+                /**
+                 * HostCallableError className.
+                 * @member {string} className
+                 * @memberof baml_core.cffi.v1.HostCallableError
+                 * @instance
+                 */
+                HostCallableError.prototype.className = "";
+
+                /**
+                 * HostCallableError message.
+                 * @member {string} message
+                 * @memberof baml_core.cffi.v1.HostCallableError
+                 * @instance
+                 */
+                HostCallableError.prototype.message = "";
+
+                /**
+                 * HostCallableError traceback.
+                 * @member {string|null|undefined} traceback
+                 * @memberof baml_core.cffi.v1.HostCallableError
+                 * @instance
+                 */
+                HostCallableError.prototype.traceback = null;
+
+                /**
+                 * HostCallableError language.
+                 * @member {string|null|undefined} language
+                 * @memberof baml_core.cffi.v1.HostCallableError
+                 * @instance
+                 */
+                HostCallableError.prototype.language = null;
+
+                /**
+                 * HostCallableError category.
+                 * @member {baml_core.cffi.v1.HostCallableErrorCategory} category
+                 * @memberof baml_core.cffi.v1.HostCallableError
+                 * @instance
+                 */
+                HostCallableError.prototype.category = 0;
+
+                // OneOf field names bound to virtual getters and setters
+                var $oneOfFields;
+
+                // Virtual OneOf for proto3 optional field
+                Object.defineProperty(HostCallableError.prototype, "_traceback", {
+                    get: $util.oneOfGetter($oneOfFields = ["traceback"]),
+                    set: $util.oneOfSetter($oneOfFields)
+                });
+
+                // Virtual OneOf for proto3 optional field
+                Object.defineProperty(HostCallableError.prototype, "_language", {
+                    get: $util.oneOfGetter($oneOfFields = ["language"]),
+                    set: $util.oneOfSetter($oneOfFields)
+                });
+
+                /**
+                 * Creates a new HostCallableError instance using the specified properties.
+                 * @function create
+                 * @memberof baml_core.cffi.v1.HostCallableError
+                 * @static
+                 * @param {baml_core.cffi.v1.IHostCallableError=} [properties] Properties to set
+                 * @returns {baml_core.cffi.v1.HostCallableError} HostCallableError instance
+                 */
+                HostCallableError.create = function create(properties) {
+                    return new HostCallableError(properties);
+                };
+
+                /**
+                 * Encodes the specified HostCallableError message. Does not implicitly {@link baml_core.cffi.v1.HostCallableError.verify|verify} messages.
+                 * @function encode
+                 * @memberof baml_core.cffi.v1.HostCallableError
+                 * @static
+                 * @param {baml_core.cffi.v1.IHostCallableError} message HostCallableError message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                HostCallableError.encode = function encode(message, writer) {
+                    if (!writer)
+                        writer = $Writer.create();
+                    if (message.className != null && Object.hasOwnProperty.call(message, "className"))
+                        writer.uint32(/* id 1, wireType 2 =*/10).string(message.className);
+                    if (message.message != null && Object.hasOwnProperty.call(message, "message"))
+                        writer.uint32(/* id 2, wireType 2 =*/18).string(message.message);
+                    if (message.traceback != null && Object.hasOwnProperty.call(message, "traceback"))
+                        writer.uint32(/* id 3, wireType 2 =*/26).string(message.traceback);
+                    if (message.language != null && Object.hasOwnProperty.call(message, "language"))
+                        writer.uint32(/* id 4, wireType 2 =*/34).string(message.language);
+                    if (message.category != null && Object.hasOwnProperty.call(message, "category"))
+                        writer.uint32(/* id 5, wireType 0 =*/40).int32(message.category);
+                    return writer;
+                };
+
+                /**
+                 * Encodes the specified HostCallableError message, length delimited. Does not implicitly {@link baml_core.cffi.v1.HostCallableError.verify|verify} messages.
+                 * @function encodeDelimited
+                 * @memberof baml_core.cffi.v1.HostCallableError
+                 * @static
+                 * @param {baml_core.cffi.v1.IHostCallableError} message HostCallableError message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                HostCallableError.encodeDelimited = function encodeDelimited(message, writer) {
+                    return this.encode(message, writer).ldelim();
+                };
+
+                /**
+                 * Decodes a HostCallableError message from the specified reader or buffer.
+                 * @function decode
+                 * @memberof baml_core.cffi.v1.HostCallableError
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @param {number} [length] Message length if known beforehand
+                 * @returns {baml_core.cffi.v1.HostCallableError} HostCallableError
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                HostCallableError.decode = function decode(reader, length, error) {
+                    if (!(reader instanceof $Reader))
+                        reader = $Reader.create(reader);
+                    var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.HostCallableError();
+                    while (reader.pos < end) {
+                        var tag = reader.uint32();
+                        if (tag === error)
+                            break;
+                        switch (tag >>> 3) {
+                        case 1: {
+                                message.className = reader.string();
+                                break;
+                            }
+                        case 2: {
+                                message.message = reader.string();
+                                break;
+                            }
+                        case 3: {
+                                message.traceback = reader.string();
+                                break;
+                            }
+                        case 4: {
+                                message.language = reader.string();
+                                break;
+                            }
+                        case 5: {
+                                message.category = reader.int32();
+                                break;
+                            }
+                        default:
+                            reader.skipType(tag & 7);
+                            break;
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Decodes a HostCallableError message from the specified reader or buffer, length delimited.
+                 * @function decodeDelimited
+                 * @memberof baml_core.cffi.v1.HostCallableError
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @returns {baml_core.cffi.v1.HostCallableError} HostCallableError
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                HostCallableError.decodeDelimited = function decodeDelimited(reader) {
+                    if (!(reader instanceof $Reader))
+                        reader = new $Reader(reader);
+                    return this.decode(reader, reader.uint32());
+                };
+
+                /**
+                 * Verifies a HostCallableError message.
+                 * @function verify
+                 * @memberof baml_core.cffi.v1.HostCallableError
+                 * @static
+                 * @param {Object.<string,*>} message Plain object to verify
+                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
+                 */
+                HostCallableError.verify = function verify(message) {
+                    if (typeof message !== "object" || message === null)
+                        return "object expected";
+                    var properties = {};
+                    if (message.className != null && message.hasOwnProperty("className"))
+                        if (!$util.isString(message.className))
+                            return "className: string expected";
+                    if (message.message != null && message.hasOwnProperty("message"))
+                        if (!$util.isString(message.message))
+                            return "message: string expected";
+                    if (message.traceback != null && message.hasOwnProperty("traceback")) {
+                        properties._traceback = 1;
+                        if (!$util.isString(message.traceback))
+                            return "traceback: string expected";
+                    }
+                    if (message.language != null && message.hasOwnProperty("language")) {
+                        properties._language = 1;
+                        if (!$util.isString(message.language))
+                            return "language: string expected";
+                    }
+                    if (message.category != null && message.hasOwnProperty("category"))
+                        switch (message.category) {
+                        default:
+                            return "category: enum value expected";
+                        case 0:
+                        case 1:
+                        case 2:
+                        case 3:
+                            break;
+                        }
+                    return null;
+                };
+
+                /**
+                 * Creates a HostCallableError message from a plain object. Also converts values to their respective internal types.
+                 * @function fromObject
+                 * @memberof baml_core.cffi.v1.HostCallableError
+                 * @static
+                 * @param {Object.<string,*>} object Plain object
+                 * @returns {baml_core.cffi.v1.HostCallableError} HostCallableError
+                 */
+                HostCallableError.fromObject = function fromObject(object) {
+                    if (object instanceof $root.baml_core.cffi.v1.HostCallableError)
+                        return object;
+                    var message = new $root.baml_core.cffi.v1.HostCallableError();
+                    if (object.className != null)
+                        message.className = String(object.className);
+                    if (object.message != null)
+                        message.message = String(object.message);
+                    if (object.traceback != null)
+                        message.traceback = String(object.traceback);
+                    if (object.language != null)
+                        message.language = String(object.language);
+                    switch (object.category) {
+                    default:
+                        if (typeof object.category === "number") {
+                            message.category = object.category;
+                            break;
+                        }
+                        break;
+                    case "HOST_CALLABLE_ERROR_UNSPECIFIED":
+                    case 0:
+                        message.category = 0;
+                        break;
+                    case "HOST_CALLABLE_HOST_ERROR":
+                    case 1:
+                        message.category = 1;
+                        break;
+                    case "HOST_CALLABLE_INVALID_ARGUMENT":
+                    case 2:
+                        message.category = 2;
+                        break;
+                    case "HOST_CALLABLE_CANCELLED":
+                    case 3:
+                        message.category = 3;
+                        break;
+                    }
+                    return message;
+                };
+
+                /**
+                 * Creates a plain object from a HostCallableError message. Also converts values to other types if specified.
+                 * @function toObject
+                 * @memberof baml_core.cffi.v1.HostCallableError
+                 * @static
+                 * @param {baml_core.cffi.v1.HostCallableError} message HostCallableError
+                 * @param {$protobuf.IConversionOptions} [options] Conversion options
+                 * @returns {Object.<string,*>} Plain object
+                 */
+                HostCallableError.toObject = function toObject(message, options) {
+                    if (!options)
+                        options = {};
+                    var object = {};
+                    if (options.defaults) {
+                        object.className = "";
+                        object.message = "";
+                        object.category = options.enums === String ? "HOST_CALLABLE_ERROR_UNSPECIFIED" : 0;
+                    }
+                    if (message.className != null && message.hasOwnProperty("className"))
+                        object.className = message.className;
+                    if (message.message != null && message.hasOwnProperty("message"))
+                        object.message = message.message;
+                    if (message.traceback != null && message.hasOwnProperty("traceback")) {
+                        object.traceback = message.traceback;
+                        if (options.oneofs)
+                            object._traceback = "traceback";
+                    }
+                    if (message.language != null && message.hasOwnProperty("language")) {
+                        object.language = message.language;
+                        if (options.oneofs)
+                            object._language = "language";
+                    }
+                    if (message.category != null && message.hasOwnProperty("category"))
+                        object.category = options.enums === String ? $root.baml_core.cffi.v1.HostCallableErrorCategory[message.category] === undefined ? message.category : $root.baml_core.cffi.v1.HostCallableErrorCategory[message.category] : message.category;
+                    return object;
+                };
+
+                /**
+                 * Converts this HostCallableError to JSON.
+                 * @function toJSON
+                 * @memberof baml_core.cffi.v1.HostCallableError
+                 * @instance
+                 * @returns {Object.<string,*>} JSON object
+                 */
+                HostCallableError.prototype.toJSON = function toJSON() {
+                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+                };
+
+                /**
+                 * Gets the default type url for HostCallableError
+                 * @function getTypeUrl
+                 * @memberof baml_core.cffi.v1.HostCallableError
+                 * @static
+                 * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns {string} The default type url
+                 */
+                HostCallableError.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                    if (typeUrlPrefix === undefined) {
+                        typeUrlPrefix = "type.googleapis.com";
+                    }
+                    return typeUrlPrefix + "/baml_core.cffi.v1.HostCallableError";
+                };
+
+                return HostCallableError;
+            })();
+
             v1.CallFunctionArgs = (function() {
 
                 /**
@@ -3543,6 +3919,7 @@ $root.baml_core = (function() {
                         case 12:
                         case 13:
                         case 14:
+                        case 15:
                             break;
                         }
                     if (message.name != null && message.hasOwnProperty("name")) {
@@ -3632,6 +4009,10 @@ $root.baml_core = (function() {
                     case "ADT_TAGGED_HEAP_HANDLE":
                     case 14:
                         message.handleType = 14;
+                        break;
+                    case "HOST_VALUE_CALLABLE":
+                    case 15:
+                        message.handleType = 15;
                         break;
                     }
                     if (object.name != null) {

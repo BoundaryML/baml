@@ -120,6 +120,10 @@ fn deep_copy_value_recursive(
                 // state is shared by design (mutation semantics).
                 Object::Closure(c) => vm.tlab.alloc(Object::Closure(c)),
                 Object::BoundMethod(bm) => vm.tlab.alloc(Object::BoundMethod(bm)),
+                // `HostClosure` is a value-type wrapper around an
+                // `Arc<HostValueArc>`; cloning the Arc is cheap and matches
+                // the closure semantics (shared handle).
+                Object::HostClosure(hc) => vm.tlab.alloc(Object::HostClosure(hc)),
                 Object::Cell(cell) => vm.tlab.alloc(Object::Cell(cell)),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(kind) => vm.tlab.alloc(Object::Sentinel(kind)),

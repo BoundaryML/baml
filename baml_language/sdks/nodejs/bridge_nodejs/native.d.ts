@@ -86,6 +86,19 @@ export declare class Usage {
   get cachedInputTokens(): number | null
 }
 
+/**
+ * Complete an in-flight host call from the JS dispatch wrapper.
+ *
+ * Exposed to JS as `completeHostCall(callId, isError, content)`. The JS
+ * dispatch wrapper invokes this after it has decoded `argsBytes`, called
+ * the user function, and encoded the result (success) or constructed a
+ * `HostCallableError` (failure).
+ *
+ * Forwards directly to the `bridge_cffi::complete_host_call` C entry point
+ * the engine uses for cross-language completion.
+ */
+export declare function completeHostCall(callId: number, isError: number, content: Buffer): void
+
 /** Flush all buffered trace events to the JSONL file (if BAML_TRACE_FILE is set). */
 export declare function flushEvents(): void
 
@@ -107,3 +120,31 @@ export interface HandleKey {
   low: number
   high: number
 }
+
+/**
+ * Register a JS dispatch wrapper in the host-value table and return its key.
+ *
+ * Exposed to JS as `registerHostCallable(fn) -> HandleKey`. Called from
+ * the inbound encoder in `typescript_src/proto.ts` whenever a JS callable
+ * appears as a kwarg — the encoder constructs the dispatch wrapper around
+ * the user's function before calling this.
+ *
+ * The `Function` is converted into a `ThreadsafeFunction` so it can outlive
+ * the napi call scope and be invoked from any thread (the engine's tokio
+ * runtime calls into this entry point from a worker thread).
+ */
+export declare function registerHostCallable(callable: (callId: number, argsBytes: Buffer) => void): HandleKey
+
+/**
+ * Release a host callable the inbound encoder registered but never handed to
+ * the engine — the encode-error rollback path.
+ *
+ * Exposed to JS as `releaseHostCallable(key)`. When `encodeCallArgs`
+ * registers a callable for an early kwarg and then fails to encode a later
+ * kwarg, the `CallFunctionArgs` is never sent, so the engine never decodes
+ * (and so never releases) that key. Without this, the registry entry — and
+ * its strong `weak::<false>` tsfn ref, which keeps the libuv loop alive —
+ * would leak for the life of the process. The encoder calls this for every
+ * key it registered during a failed encode.
+ */
+export declare function releaseHostCallable(key: HandleKey): void

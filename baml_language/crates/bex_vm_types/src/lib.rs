@@ -28,9 +28,9 @@ pub use roots::{PermitProof, RootHaver, WriteBarrier};
 pub use types::{
     Class, ClassField, ClientBuildMeta, ClientBuildType, CollectorRef, ConstValue, Enum,
     EnumVariant, Function, FunctionKind, FunctionMeta, FunctionOrigin, Future, FutureRead,
-    Instance, MediaValue, Object, ObjectType, PanicClass, Program, PromptAst, RetryPolicyMeta,
-    SysOp, SysOpErrorCategory, SysOpPanicCategory, TestArgValue, TestCase, UnscheduledFuture,
-    Value, ValueKind, Variant, format_float, sys_op_for_path, type_tags,
+    HostClosure, Instance, MediaValue, Object, ObjectType, PanicClass, Program, PromptAst,
+    RetryPolicyMeta, SysOp, SysOpErrorCategory, SysOpPanicCategory, TestArgValue, TestCase,
+    UnscheduledFuture, Value, ValueKind, Variant, format_float, sys_op_for_path, type_tags,
 };
 
 /// Used to check if the VM should yield early.

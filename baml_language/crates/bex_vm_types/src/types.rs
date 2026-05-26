@@ -172,6 +172,8 @@ pub enum SysOpErrorCategory {
     /// Wildcard for development convenience. Must be explicitly declared in
     /// `#[throws(DevOther)]` and should be migrated to named categories.
     DevOther,
+    /// A host-language callable raised an exception or invalid-argument error.
+    HostCallable,
 }
 
 impl std::fmt::Display for SysOpErrorCategory {
@@ -186,6 +188,7 @@ impl std::fmt::Display for SysOpErrorCategory {
             Self::RenderPrompt => write!(f, "RenderPrompt"),
             Self::LlmClient => write!(f, "LlmClient"),
             Self::DevOther => write!(f, "DevOther"),
+            Self::HostCallable => write!(f, "HostCallable"),
         }
     }
 }
@@ -1263,6 +1266,14 @@ pub enum Object {
     /// at call time by `CallIndirect`.
     BoundMethod(BoundMethod),
 
+    /// A host-language callable bound to a BAML function type.
+    ///
+    /// Created at the FFI boundary when a `HostValue` is passed for a
+    /// `Ty::Function` parameter. Calling it (`CallIndirect`) dispatches
+    /// `SysOp::BamlHostCallHostValue`, which fires the bridge's
+    /// `HostDispatchFn` and awaits the host's response.
+    HostClosure(HostClosure),
+
     /// A mutable cell holding a single captured value.
     Cell(Cell),
 
@@ -1362,6 +1373,11 @@ impl Serialize for Object {
             Self::Collector(_) => {
                 return Err(serde::ser::Error::custom("Collector cannot be serialized"));
             }
+            Self::HostClosure(_) => {
+                return Err(serde::ser::Error::custom(
+                    "HostClosure cannot be serialized",
+                ));
+            }
             #[cfg(feature = "heap_debug")]
             Self::Sentinel(_) => {
                 return Err(serde::ser::Error::custom("Sentinel cannot be serialized"));
@@ -1425,6 +1441,33 @@ pub struct BoundMethod {
     pub receiver: Value,
 }
 
+/// A host-language callable bound to a BAML function type.
+///
+/// Created at the FFI boundary when a `HostValue` is passed for a
+/// `Ty::Function` parameter. Calling it (`CallIndirect`) dispatches
+/// `SysOp::BamlHostCallHostValue`, which fires the bridge's
+/// `HostDispatchFn` and awaits the host's response.
+///
+/// `Box<Ty>` keeps the `Object` enum within its `<= 80`-byte budget
+/// (see the `size_of::<Object>()` assertion below).
+#[derive(Clone, Debug)]
+pub struct HostClosure {
+    /// Opaque handle to the host-owned callable. `Drop` of the last clone
+    /// fires the registered `HostReleaseFn`; see
+    /// [`bex_resource_types::HostValueArc`].
+    pub handle: std::sync::Arc<bex_resource_types::HostValueArc>,
+    /// The declared return type of the host-callable, threaded through
+    /// `SysOp::BamlHostCallHostValue` as `type_arg_0` so the sysop impl
+    /// can validate the host's returned value against the BAML signature.
+    pub ret_ty: Box<baml_type::Ty>,
+    /// Number of value arguments the host callable expects.
+    ///
+    /// `CallIndirect` reads this to drain the right number of operand slots
+    /// off the eval stack — host closures don't wrap an `Object::Function`,
+    /// so there is no `arity` field to read from there.
+    pub arity: usize,
+}
+
 /// A mutable cell wrapping a single captured value.
 ///
 /// Variables that are closed over are heap-allocated as `Cell` objects so that
@@ -1447,6 +1490,7 @@ impl std::fmt::Display for Object {
                 write!(f, "<closure captures={captures_len}>")
             }
             Object::BoundMethod(_) => write!(f, "<bound_method>"),
+            Object::HostClosure(_) => write!(f, "<host_closure>"),
             Object::Cell(cell) => write!(f, "<cell {}>", cell.value),
             Object::String(string) => string.fmt(f),
             Object::Uint8Array(bytes) => write!(f, "<uint8array len={}>", bytes.len()),
@@ -2060,6 +2104,8 @@ impl ObjectType {
             Object::Function(func) => Self::Function(FunctionType::from(&func.kind)),
             Object::Closure(_) => Self::Closure,
             Object::BoundMethod(_) => Self::Closure, // Treat as callable like closures
+            Object::HostClosure(_) => Self::Closure, // Callable like closures
+
             Object::Cell(_) => Self::Cell,
             Object::Class(_) => Self::Class,
             Object::Instance(_) => Self::Instance,

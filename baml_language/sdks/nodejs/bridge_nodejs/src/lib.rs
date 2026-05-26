@@ -6,6 +6,7 @@
 mod abort_controller;
 mod errors;
 pub mod handle;
+pub mod host_value;
 mod runtime;
 mod types;
 
@@ -16,6 +17,13 @@ fn init() {
     // Initialize logging if BAML_TRACE_FILE is set.
     // Unlike language_client_typescript, we don't use baml_log —
     // we follow bridge_python's pattern and rely on bridge_cffi's event sink.
+
+    // Wire the bridge_cffi C entry points to this bridge's per-process
+    // Node host-value registry. First-call-wins inside bridge_cffi, so
+    // repeated module loads (rare under napi-rs, which loads each addon
+    // once per Node process) are harmless.
+    bridge_cffi::register_host_dispatch_callback(host_value::host_dispatch_callback);
+    bridge_cffi::register_host_release_callback(host_value::host_release_callback);
 }
 
 #[napi]

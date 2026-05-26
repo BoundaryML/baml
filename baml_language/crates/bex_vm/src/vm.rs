@@ -621,6 +621,7 @@ fn value_type_tag(value: Value) -> i64 {
                 Object::Function(_) => type_tags::FUNCTION,
                 Object::Closure(_) => type_tags::FUNCTION,
                 Object::BoundMethod(_) => type_tags::FUNCTION,
+                Object::HostClosure(_) => type_tags::FUNCTION,
                 Object::Cell(_) => type_tags::UNKNOWN,
                 Object::Future(_) => type_tags::FUTURE,
                 Object::UnscheduledFuture(_) => type_tags::FUTURE,
@@ -1771,6 +1772,55 @@ impl BexVm {
         callee
     }
 
+    /// Build the single-yield `SysOp::BamlHostCallHostValue` dispatch for
+    /// invoking a host closure. `closure_ptr` is the `Object::HostClosure` heap
+    /// pointer (passed straight through as the sys-op handle); `user_args` are
+    /// the call arguments in positional order, already drained off the stack by
+    /// the caller.
+    ///
+    /// The engine's `VmExecState::SysOp` handler runs the op (firing the
+    /// bridge's `HostDispatchFn`, awaiting the host's response, racing
+    /// cancellation) and pushes the converted result back onto the VM stack, so
+    /// a host-closure call resolves to a value with no `Future` surfaced to
+    /// BAML. Shared by the direct `CallIndirect` opcodes and the indirect
+    /// native higher-order-builtin callback path
+    /// (`execute_call_from_locals_offset`).
+    ///
+    /// Sys-op arg layout (mirrors the codegen-generated glue for
+    /// `baml.host.call_host_value` in `sys_ops/.../io_generated.rs`):
+    ///   args\[0\] = `handle`     (`Object::HostClosure` → `BexExternalValue::HostValue`)
+    ///   args\[1\] = `args_array` (`Object::Array<Value>`)
+    ///   args\[2\] = `ret_ty`     (`Object::Type<Ty>`)
+    fn host_closure_call_sysop(
+        &mut self,
+        closure_ptr: HeapPtr,
+        user_args: Vec<Value>,
+    ) -> VmExecState {
+        // Read arity + return type out of the closure, then drop the borrow
+        // before allocating (a TLAB allocation may move/collect heap objects).
+        let (arity, ret_ty) = match self.get_object(closure_ptr) {
+            Object::HostClosure(hc) => (hc.arity, hc.ret_ty.as_ref().clone()),
+            // Every caller gates on `Object::HostClosure` before calling.
+            _ => unreachable!("host_closure_call_sysop requires an Object::HostClosure"),
+        };
+        debug_assert_eq!(
+            user_args.len(),
+            arity,
+            "HostClosure call: drained {} args but declared arity is {arity}",
+            user_args.len(),
+        );
+        let args_array_ptr = self.tlab.alloc(Object::Array(user_args));
+        let ret_ty_ptr = self.tlab.alloc(Object::Type(Box::new(ret_ty)));
+        VmExecState::SysOp {
+            operation: bex_vm_types::SysOp::BamlHostCallHostValue,
+            args: vec![
+                Value::object(closure_ptr),
+                Value::object(args_array_ptr),
+                Value::object(ret_ty_ptr),
+            ],
+        }
+    }
+
     fn execute_call_from_locals_offset(
         &mut self,
         callee_ptr: HeapPtr,
@@ -1779,6 +1829,21 @@ impl BexVm {
         frame_idx: &mut usize,
         function: &mut &'static Function,
     ) -> Result<Option<VmExecState>, VmError> {
+        // A host closure isn't a Function/Closure/BoundMethod and dispatches via
+        // a single-yield sys-op rather than a pushed frame. This path is reached
+        // when a host callable is invoked *indirectly* — e.g. handed to a native
+        // higher-order builtin like `array.map(f)`, whose `YieldToCall` funnels
+        // its callback through here (a direct `f(x)` is handled inline by the
+        // `CallIndirect` opcodes). The call args are already on the stack at
+        // `locals_offset`; drain them and yield. The Native continuation frame
+        // the caller pushed resumes — with the host result on the stack — once
+        // the engine completes the op, exactly as for a bytecode callback's
+        // return value.
+        if matches!(self.get_object(callee_ptr), Object::HostClosure(_)) {
+            let user_args: Vec<Value> = self.stack.drain(locals_offset..).collect();
+            return Ok(Some(self.host_closure_call_sysop(callee_ptr, user_args)));
+        }
+
         // Extract captured_type_args from a Closure callee before we discard
         // the concrete Closure type in favour of the inner Function.
         // These are injected into the new BytecodeFrame after it is created.
@@ -3319,7 +3384,34 @@ impl BexVm {
                         self.as_object_ptr(callee_value, FunctionType::Callable.into())?;
                     let obj = self.get_object(callee_ptr);
 
-                    if let Object::BoundMethod(bm) = obj {
+                    if let Object::HostClosure(host_closure) = obj {
+                        // Host-callable dispatch via a single-yield sys-op. See
+                        // `Instruction::CallIndirect` / `host_closure_call_sysop`
+                        // for the args-layout rationale.
+                        let arity = host_closure.arity;
+                        let _popped_callee = self.stack.ensure_pop();
+                        // Defense-in-depth: see `Instruction::CallIndirect`
+                        // above — a `HostClosure` has no inner `Object::Function`
+                        // to cross-check `arity` against, so assert the operand
+                        // stack actually holds the declared args before draining.
+                        // Debug-only; the `checked_sub` below still guards
+                        // underflow in release builds.
+                        debug_assert!(
+                            self.stack.len() >= arity,
+                            "HostClosure CallIndirect: operand stack holds {} slots but declared arity is {arity}",
+                            self.stack.len(),
+                        );
+                        let args_offset = self
+                            .stack
+                            .len()
+                            .checked_sub(arity)
+                            .ok_or(VmInternalError::NotEnoughItemsOnStack(arity))?;
+                        let user_args: Vec<Value> = self
+                            .stack
+                            .drain(StackIndex::from_raw(args_offset)..)
+                            .collect();
+                        return Ok(Some(self.host_closure_call_sysop(callee_ptr, user_args)));
+                    } else if let Object::BoundMethod(bm) = obj {
                         let func_obj = unsafe { bm.function.get() };
                         let full_arity = match func_obj {
                             Object::Function(f) => f.arity,

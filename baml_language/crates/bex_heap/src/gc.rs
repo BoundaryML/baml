@@ -385,6 +385,9 @@ impl BexHeap {
             // Primitives have no references
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
+            // `HostClosure` carries only an `Arc<HostValueArc>` (Rust-side
+            // stub, not a heap object) and a `Box<Ty>` (no `HeapPtr`s).
+            Object::HostClosure(_) => {}
             Object::String(_)
             | Object::Uint8Array(_)
             | Object::Class(_)
@@ -513,6 +516,9 @@ impl BexHeap {
             // Primitives have no references
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
+            // `HostClosure` carries no heap references; see
+            // `add_references_to_worklist`.
+            Object::HostClosure(_) => {}
             Object::String(_)
             | Object::Uint8Array(_)
             | Object::Class(_)
@@ -767,6 +773,8 @@ impl BexHeap {
             // Primitives/leaf variants have no heap references.
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
+            // `HostClosure` carries no heap references.
+            Object::HostClosure(_) => {}
             Object::String(_)
             | Object::Uint8Array(_)
             | Object::Class(_)

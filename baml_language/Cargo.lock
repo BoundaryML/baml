@@ -1579,13 +1579,16 @@ dependencies = [
  "bex_events",
  "bex_external_types",
  "bex_heap",
+ "bex_resource_types",
  "bex_vm",
  "bex_vm_types",
+ "bridge_ctypes",
  "futures",
  "futures-timer",
  "indexmap 2.14.0",
  "insta",
  "log",
+ "prost",
  "serde_json",
  "sys_llm",
  "sys_native",
@@ -1639,6 +1642,7 @@ dependencies = [
  "bex_resource_types",
  "bex_vm_types",
  "indexmap 2.14.0",
+ "once_cell",
  "tokio",
 ]
 
@@ -1701,6 +1705,9 @@ dependencies = [
 [[package]]
 name = "bex_resource_types"
 version = "0.0.0-beta"
+dependencies = [
+ "once_cell",
+]
 
 [[package]]
 name = "bex_sap"
@@ -7790,10 +7797,14 @@ name = "sys_native"
 version = "0.0.0-beta"
 dependencies = [
  "baml_type",
+ "bex_external_types",
  "bex_heap",
  "bex_resource_types",
+ "bridge_ctypes",
  "futures",
  "indexmap 2.14.0",
+ "once_cell",
+ "prost",
  "reqwest",
  "rustls",
  "serde_json",
@@ -7801,6 +7812,7 @@ dependencies = [
  "sys_ops",
  "sys_types",
  "tokio",
+ "tracing",
  "walkdir",
 ]
 

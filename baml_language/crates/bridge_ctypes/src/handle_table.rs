@@ -25,6 +25,12 @@ impl std::fmt::Debug for BexRustData {
 
 /// Subset of `BexExternalValue` that can be held as a handle.
 /// Enforces at the type level that primitives/containers never enter the table.
+///
+/// Note: `HOST_VALUE_CALLABLE` keys do NOT live in this table. They are
+/// bridge-side identifiers backed by a per-bridge `HostValueRegistry`.
+/// See `bex_external_types::host_value` for the inverted-direction
+/// lifetime model (Rust holds keys + Arc-with-Drop; bridge holds the
+/// underlying host object).
 #[derive(Clone, Debug)]
 pub enum CffiHandleTableEntry {
     BexHeapHandle(Handle),
@@ -92,7 +98,9 @@ impl TryFrom<BexExternalValue> for CffiHandleTableEntry {
             }
             BexExternalValue::Adt(a) => Ok(Self::Adt(a)),
             BexExternalValue::RustData(arc) => Ok(Self::RustData(BexRustData(arc))),
-            BexExternalValue::Null
+            // HostValue uses a separate per-bridge registry, not HANDLE_TABLE.
+            BexExternalValue::HostValue(_)
+            | BexExternalValue::Null
             | BexExternalValue::Int(_)
             | BexExternalValue::Float(_)
             | BexExternalValue::Bool(_)
