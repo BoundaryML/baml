@@ -541,7 +541,16 @@ fn copy_field_type(ty: &BamlType) -> String {
 fn copy_field_to_value(field_name: &str, ty: &BamlType) -> String {
     match ty {
         BamlType::RustType => format!("vm.alloc_rust_data(self.{field_name})"),
-        BamlType::Int => format!("Value::int(self.{field_name})"),
+        // `to_value` has no error channel (`fn to_value(self, vm) -> Value`),
+        // so an out-of-i63 native i64 reaches this path only when caller-side
+        // Rust constructed a struct field that violates the i63 BAML
+        // contract. Fail loudly in *both* debug and release rather than
+        // truncating silently via `Value::int`'s `debug_assert`.
+        BamlType::Int => format!(
+            "Value::try_int(self.{field_name}).unwrap_or_else(|| panic!(\
+                \"`{field_name}: int` is outside BAML int range [{{}}, {{}}], got {{}}\", \
+                Value::INT_MIN, Value::INT_MAX, self.{field_name}))"
+        ),
         BamlType::Float => format!("vm.alloc_float(self.{field_name})"),
         BamlType::Bool => format!("Value::bool(self.{field_name})"),
         BamlType::Null => "Value::NULL".to_string(),
@@ -1440,7 +1449,15 @@ fn result_conversion_expr(name: &str, ty: &BamlType) -> String {
     match ty {
         BamlType::String => format!("vm.alloc_string({name})"),
         BamlType::Uint8Array => format!("vm.alloc_uint8array({name})"),
-        BamlType::Int => format!("Value::int({name})"),
+        // Surface out-of-i63 native returns as a normal VM error instead
+        // of silently truncating via the bare `Value::int` constructor's
+        // `debug_assert` (which is a no-op in release).
+        BamlType::Int => format!(
+            "Value::try_int({name}).ok_or_else(|| VmBamlError::InvalidArgument {{ \
+                message: format!(\"native int return value {{}} is outside the BAML int range [{{}}, {{}}]\", \
+                    {name}, Value::INT_MIN, Value::INT_MAX) \
+            }})?"
+        ),
         BamlType::Float => format!("vm.alloc_float({name})"),
         BamlType::Bool => format!("Value::bool({name})"),
         BamlType::Null => "Value::NULL".to_string(),

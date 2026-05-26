@@ -429,7 +429,7 @@ impl BexEngine {
 ///
 /// Caller must hold a GC permit (the `HeapPtr` deref invariant). Mirrors the
 /// surrounding accessors that take `PermitProof` and dereference `HeapPtr`.
-unsafe fn unbox_float_object(ptr: HeapPtr) -> Option<BexExternalValue> {
+pub(crate) unsafe fn unbox_float_object(ptr: HeapPtr) -> Option<BexExternalValue> {
     if let Object::Float(f) = unsafe { ptr.get() } {
         Some(BexExternalValue::Float(*f))
     } else {

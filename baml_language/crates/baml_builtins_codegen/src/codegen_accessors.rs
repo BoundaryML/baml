@@ -350,9 +350,10 @@ fn gen_into_owned_field(field: &AccessorFieldDef) -> TokenStream2 {
     let name = &field.name;
     match field.kind {
         FieldTypeKind::String => quote!(#name: self.#name(heap, permit)?.clone()),
-        FieldTypeKind::Int | FieldTypeKind::Float | FieldTypeKind::Bool => {
-            quote!(#name: self.#name()?)
-        }
+        FieldTypeKind::Int | FieldTypeKind::Bool => quote!(#name: self.#name()?),
+        // Float is heap-boxed (`Object::Float`); the accessor takes
+        // `(heap, permit)` like the other heap-touching ones.
+        FieldTypeKind::Float => quote!(#name: self.#name(heap, permit)?),
         FieldTypeKind::ResourceHandle => quote!(#name: self.#name(heap, permit)?),
         FieldTypeKind::MapStringString => {
             quote!(#name: self.#name(heap, permit)?

@@ -2078,11 +2078,23 @@ impl BexEngine {
 
                     let (return_value, event_result) = if !copy_objects {
                         if let Some(ptr) = value.as_object_ptr() {
-                            let handle = self.heap.create_handle(ptr);
-                            (
-                                BexExternalValue::Handle(handle),
-                                self.vm_value_to_owned(thread.proof(), value),
-                            )
+                            // SAFETY: the active thread holds the heap permit
+                            // through `thread.proof()`. Heap-boxed floats must
+                            // surface as `BexExternalValue::Float` instead of an
+                            // opaque handle so callers see a primitive — a
+                            // function declared `-> float` should never escape
+                            // wrapped in a `Handle`.
+                            if let Some(unboxed) =
+                                unsafe { crate::conversion::unbox_float_object(ptr) }
+                            {
+                                (unboxed.clone(), unboxed)
+                            } else {
+                                let handle = self.heap.create_handle(ptr);
+                                (
+                                    BexExternalValue::Handle(handle),
+                                    self.vm_value_to_owned(thread.proof(), value),
+                                )
+                            }
                         } else {
                             let external = self.convert_vm_value_to_external_with_type(
                                 value,
