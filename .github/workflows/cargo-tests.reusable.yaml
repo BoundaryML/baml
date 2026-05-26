@@ -427,33 +427,6 @@ jobs:
           path: baml_language/target/cargo-timings/
           if-no-files-found: ignore
 
-  check-dependencies:
-    name: "check dependencies"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    # Advisory only — never gate the cargo-tests reusable workflow's result.
-    # The step below also has `continue-on-error: true`; this job-level flag
-    # is the belt to the step's suspenders so removing the step-level
-    # bypass later doesn't accidentally start blocking required CI.
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
-      - name: "Install Rust toolchain"
-        run: rustup show
-        working-directory: baml_language
-
-      - name: "Install cargo-deny"
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-deny
-
-      - name: "Check dependencies"
-        run: cargo deny check
-        working-directory: baml_language
-        continue-on-error: true # For now, just warn
-
   cargo-doc:
     name: "cargo doc"
     runs-on: blacksmith-4vcpu-ubuntu-2404
