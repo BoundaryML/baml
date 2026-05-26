@@ -363,7 +363,9 @@ impl BexHeap {
             | Object::Uint8Array(_)
             | Object::RustData(_)
             | Object::Collector(_)
-            | Object::Type(_) => {}
+            | Object::Type(_)
+            // `HostClosure` carries no heap references.
+            | Object::HostClosure(_) => {}
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
         }

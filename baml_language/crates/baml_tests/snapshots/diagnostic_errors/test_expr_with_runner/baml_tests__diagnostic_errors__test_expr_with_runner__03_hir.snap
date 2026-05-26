@@ -2,6 +2,6 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR2 ===
-function user.$init_test_33(registry: testing.TestCollector) -> ?  [expr] {
+function user.$init_test_34(registry: testing.TestCollector) -> ?  [expr] {
   { registry.register_test("with quorum", () -> void { { let result = "hello" } assert.not_null(result) }, testing.Quorum(5, 3)) } null
 }

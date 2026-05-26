@@ -3,7 +3,10 @@
 //! This crate defines opaque resource handles that can be stored on the VM heap.
 //! The actual resources (files, sockets) are managed by the sys provider.
 
+pub mod host_value;
 use std::sync::Arc;
+
+pub use host_value::{HostReleaseFn, HostValueArc, HostValueKind, host_release_dispatch};
 
 /// Type of resource for identification and cleanup.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

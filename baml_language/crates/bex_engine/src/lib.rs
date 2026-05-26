@@ -98,7 +98,7 @@ pub use conversion::test_arg_to_external;
 // Re-export CancellationToken for callers.
 pub use function_call_context::{FunctionCallContext, FunctionCallContextBuilder};
 pub use sys_types::{CallId, ClassDefinition, ClassFieldDefinition};
-use sys_types::{OpError, SysOpResult};
+use sys_types::{OpError, OpErrorKind, SysOpResult};
 use thiserror::Error;
 pub use tokio_util::sync::CancellationToken;
 use web_time::{Instant, SystemTime};
@@ -530,6 +530,93 @@ fn _default_round_robin_start() -> usize {
     #[allow(clippy::cast_possible_truncation)]
     {
         nanos as usize
+    }
+}
+
+/// `HostCallableErrorCategory::HostCallableInvalidArgument` as a plain `i32`.
+///
+/// `bex_engine` depends on `bridge_ctypes` only as a dev-dependency, so the
+/// generated proto enum is not reachable from the library target. The value
+/// is pinned to the proto definition
+/// (`baml_core.cffi.v1.HostCallableErrorCategory`); a wire-numbering change
+/// would be caught by the bridge round-trip tests that own the enum.
+const HOST_CALLABLE_INVALID_ARGUMENT: i32 = 2;
+
+/// Extract the declared host-callable return type from the third
+/// `SysOp::BamlHostCallHostValue` argument.
+///
+/// The VM packs the sys-op args as `[handle, args_array, ret_ty]` (see
+/// `bex_vm::vm`'s `CallIndirect`-`HostClosure` path), where `ret_ty` is an
+/// `Object::Type(Box<Ty>)`. Returns `None` if the slot is absent or not a
+/// `Type` object — in which case the engine skips schema validation and falls
+/// back to the bridge's shape-level guard.
+fn host_call_return_ty(ret_ty_arg: Option<Value>) -> Option<baml_type::Ty> {
+    let Some(Value::Object(ptr)) = ret_ty_arg else {
+        return None;
+    };
+    // SAFETY: the pointer was just allocated by the VM for this sys-op call.
+    // This MUST be read while the heap permit is held (i.e. *before* the sys-op
+    // await releases it): the engine-local `args` Vec is not a GC root, so after
+    // the await a moving GC may relocate/collect this `Object::Type` and the raw
+    // pointer would dangle. The caller clones the `Ty` out before awaiting.
+    match unsafe { ptr.get() } {
+        Object::Type(ty) => Some((**ty).clone()),
+        _ => None,
+    }
+}
+
+/// Convert a `HostCallable` `OpError` into a `BexExternalValue::Instance`
+/// that can be routed through `err_future` as a catchable BAML throw.
+///
+/// Returns `Some(instance)` only for `OpErrorKind::HostCallable` errors.
+/// All other error kinds return `None` and should be routed through
+/// `internal_error_future` as fatal engine errors.
+///
+/// This is a free function (not an `&self` method) because it depends only on
+/// the error argument — it constructs a `BexExternalValue` from pure data and
+/// does not need access to engine state.
+pub(crate) fn op_error_to_catchable_throw(op_err: &OpError) -> Option<BexExternalValue> {
+    if let OpErrorKind::HostCallable {
+        class_name,
+        message,
+        traceback,
+        language,
+        category,
+    } = &op_err.kind
+    {
+        // `message` is the primary human-readable diagnostic for both
+        // host-raised exceptions and host-return type mismatches; surface it on
+        // the BAML class alongside the structured fields (order matches the
+        // `HostCallable` class in `ns_errors/errors.baml`).
+        let mut fields = indexmap::IndexMap::new();
+        fields.insert(
+            "message".to_string(),
+            BexExternalValue::String(message.clone()),
+        );
+        fields.insert(
+            "class_name".to_string(),
+            BexExternalValue::String(class_name.clone()),
+        );
+        fields.insert(
+            "language".to_string(),
+            BexExternalValue::String(language.clone().unwrap_or_default()),
+        );
+        fields.insert(
+            "traceback".to_string(),
+            traceback.as_ref().map_or(BexExternalValue::Null, |t| {
+                BexExternalValue::String(t.clone())
+            }),
+        );
+        fields.insert(
+            "category".to_string(),
+            BexExternalValue::Int(i64::from(*category)),
+        );
+        Some(BexExternalValue::Instance {
+            class_name: "baml.errors.HostCallable".to_string(),
+            fields,
+        })
+    } else {
+        None
     }
 }
 
@@ -1051,6 +1138,19 @@ impl BexEngine {
 
         drop(heap_guard);
 
+        // Flush deferred host-value releases now that the stop-the-world window
+        // has closed. Collecting a dead `Object::HostClosure` runs
+        // `HostValueArc::drop`, which only *enqueues* the key (it cannot fire
+        // the host release callback inline: `Drop` runs while all heap permits
+        // are parked, and the callback runs arbitrary host code — e.g. Python
+        // re-acquires the GIL — which would be an AB-BA deadlock against the
+        // parked permits). The `heap_guard` is dropped above, so all permits
+        // are released and we hold none here; this is a safe point to invoke
+        // the host callbacks. (`gc_safepoint` re-acquires its permit only
+        // *after* `collect_garbage` returns; both `maybe_collect_garbage` call
+        // sites release their permit before calling.)
+        bex_external_types::host_value::host_release_dispatch::drain();
+
         tracing::debug!(
             "GC completed: {} live, {} collected",
             stats.live_count,
@@ -1196,10 +1296,25 @@ impl BexEngine {
             })
             .collect();
 
+        // Snapshot the declared parameter types so we can thread the
+        // expected `Ty` into per-arg conversion. Binding a `HostValue` to an
+        // `Object::HostClosure` needs it: the closure carries the declared
+        // `Ty::Function`'s arity and return type, extracted from the parameter
+        // type.
+        let param_types: Vec<Ty> = self
+            .function_params(function_name)?
+            .into_iter()
+            .map(|(_, ty, _)| ty.clone())
+            .collect();
         let vm_args: Vec<Value> = args
             .into_iter()
-            .map(|arg| match arg {
-                BexCallArg::Provided(arg) => self.convert_external_to_vm_value(&mut thread, *arg),
+            .enumerate()
+            .map(|(idx, arg)| match arg {
+                BexCallArg::Provided(arg) => self.convert_external_to_vm_value_with_ty(
+                    &mut thread,
+                    *arg,
+                    param_types.get(idx),
+                ),
                 BexCallArg::OmittedDefault => Ok(Value::OmittedArg),
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -1296,6 +1411,21 @@ impl BexEngine {
             let error = err.to_string();
             self.emit_error_function_end_events(call_id, &mut span_state, &error);
         }
+
+        // Flush any host-value releases queued during this call. The root
+        // thread's `ActiveHeapPermit` was consumed by `run_thread_event_loop`
+        // (taken by value) and has been dropped by the time it returns, so we
+        // hold no heap permit here and the host release callbacks run safely
+        // off the parked-permit window. This makes release prompt even when a
+        // GC never ran during the call.
+        bex_external_types::host_value::host_release_dispatch::drain();
+
+        // active_calls cleanup is done by ActiveCallGuard on drop.
+        //
+        // Keep genuine engine errors intact. Cancellation is surfaced as a
+        // `baml.panics.Cancelled` panic — either raised by the VM's `Await`
+        // opcode, or synthesized by engine safepoints (see
+        // `cancelled_unhandled_throw`).
         match result {
             Ok(ThreadOutcome::RootValue(value)) => Ok(value),
             Ok(ThreadOutcome::SettledChild) => {
@@ -1307,13 +1437,6 @@ impl BexEngine {
             }
             Err(err) => Err(err),
         }
-
-        // active_calls cleanup is done by ActiveCallGuard on drop.
-        //
-        // Keep genuine engine errors intact. Cancellation is surfaced as a
-        // `baml.panics.Cancelled` panic — either raised by the VM's `Await`
-        // opcode, or synthesized by engine safepoints (see
-        // `cancelled_unhandled_throw`).
     }
 
     /// Cancel a function call by its ID.
@@ -1708,6 +1831,35 @@ impl BexEngine {
             thread.vm_thread_notify_parent_of_error(future_id, ptr);
         }
         Ok(())
+    }
+
+    /// Deliver a host-callable error (a `HostCallable` throw, or another op
+    /// error) at a `SysOp` terminal site.
+    ///
+    /// A spawned child **settles its future** (errored) so the awaiter resolves
+    /// with the throw instead of hanging forever on a `Pending` future — exactly
+    /// as the VM-throw arms do. Only a root thread surfaces the throw to the
+    /// host as an `UnhandledThrow`. (Whether an in-BAML `try/catch` can catch a
+    /// host throw is a separate, deferred concern; this only fixes the spawned
+    /// child never settling.) A non-`HostCallable` op error has no throw value
+    /// and falls back to a fatal `EngineError`.
+    async fn deliver_host_call_throw(
+        &self,
+        thread: &mut ActiveHeapPermit<BexThread>,
+        op_err: OpError,
+    ) -> Result<ThreadOutcome, EngineError> {
+        if let Some(throw_value) = op_error_to_catchable_throw(&op_err) {
+            if let Some(future_id) = thread.vm_thread_settles_future() {
+                let value = self.convert_external_to_vm_value(thread, throw_value)?;
+                self.settle_child_errored(thread, future_id, value).await?;
+                return Ok(ThreadOutcome::SettledChild);
+            }
+            return Err(EngineError::UnhandledThrow {
+                value: Box::new(throw_value),
+                trace: Vec::new(),
+            });
+        }
+        Err(EngineError::from(op_err))
     }
 
     /// True if `value` is an `Object::Instance` whose class is
@@ -2122,13 +2274,12 @@ impl BexEngine {
                 }
 
                 VmExecState::SysOp { operation, args } => {
-                    // BEP-034 phase D′: single round-trip sys-op call.
-                    // Convert args, race the op against the active
-                    // cancel token, and push the resulting value back
-                    // on the VM stack. No `Object::Future` is
-                    // allocated and no `FutureManager` entry is
-                    // created — the schedule/await dance was pure
-                    // overhead because the user never sees the future.
+                    // Single round-trip sys-op call. Convert args, race
+                    // the op against the active cancel token, and push the
+                    // resulting value back on the VM stack. No
+                    // `Object::Future` is allocated and no `FutureManager`
+                    // entry is created — the schedule/await dance would be
+                    // pure overhead because the user never sees the future.
                     #[allow(clippy::large_enum_variant)]
                     enum SysOpOutcome {
                         Cancelled,
@@ -2137,6 +2288,21 @@ impl BexEngine {
 
                     let bex_args: Vec<BexExternalValue> =
                         args.iter().map(|v| self.vm_arg_to_bex_value(v)).collect();
+
+                    // Capture the host-call return type as an OWNED `Ty` now,
+                    // while the heap permit is still held and `args[2]` (the
+                    // `type_arg_0` the VM packed for `BamlHostCallHostValue`) is a
+                    // live pointer. The async wait below releases the permit, and a
+                    // moving GC can then relocate/collect that `Object::Type`; the
+                    // engine-local `args` Vec is not a GC root and is never
+                    // forwarded, so re-reading the raw pointer post-await would be a
+                    // use-after-free. Cloning the `Ty` here sidesteps that.
+                    let host_ret_ty: Option<baml_type::Ty> =
+                        if operation == SysOp::BamlHostCallHostValue {
+                            host_call_return_ty(args.get(2).copied())
+                        } else {
+                            None
+                        };
 
                     if cancel.is_cancelled() {
                         // Cancel-at-yield: spawned children settle as
@@ -2182,6 +2348,34 @@ impl BexEngine {
 
                     match outcome {
                         Ok(external) => {
+                            // Schema-aware return-type validation for host
+                            // callables. The bridge's shared
+                            // `validate_host_return` guard already rejected
+                            // scalar / enum-identity / class-name mismatches at
+                            // the FFI boundary; here — where the compiled class
+                            // schema is reachable — we additionally validate
+                            // class *field types* against the declared return
+                            // type (`host_ret_ty`, captured from `args[2]` before
+                            // the await). A mismatch is surfaced as a catchable
+                            // `root.errors.HostCallable` throw, exactly like a
+                            // host-raised error.
+                            if operation == SysOp::BamlHostCallHostValue
+                                && let Some(ret_ty) = host_ret_ty.as_ref()
+                                && let Err(message) =
+                                    self.validate_host_return_schema(&external, ret_ty)
+                            {
+                                let op_err = OpError::new(
+                                    SysOp::BamlHostCallHostValue,
+                                    OpErrorKind::HostCallable {
+                                        class_name: "TypeError".to_string(),
+                                        message,
+                                        traceback: None,
+                                        language: None,
+                                        category: HOST_CALLABLE_INVALID_ARGUMENT,
+                                    },
+                                );
+                                return self.deliver_host_call_throw(&mut thread, op_err).await;
+                            }
                             // Convert the external value back into a VM
                             // Value (allocating string / list / instance
                             // heap objects as needed) and push it onto
@@ -2193,7 +2387,23 @@ impl BexEngine {
                             thread.vm.stack.push(value);
                         }
                         Err(op_err) => {
-                            return Err(EngineError::from(op_err));
+                            // A host-callable error. On a **root** thread it
+                            // surfaces to the host as a `HostCallable` instance
+                            // via `EngineError::UnhandledThrow`. NOTE: a root
+                            // thread's throw exits `run_thread_event_loop`
+                            // WITHOUT re-entering the VM, so an in-BAML
+                            // `try { f(x) } catch (e: root.errors.HostCallable)`
+                            // does NOT catch it today even though the compiler
+                            // folds the param's `throws` and emits a handler —
+                            // that becomes catchable once sys-op calls are
+                            // awaited explicitly (a known, documented limitation;
+                            // see the `host_value_callable` test and the SDK
+                            // `call_with_throwing` xfail). On a **spawned child**
+                            // thread, `deliver_host_call_throw` settles the
+                            // child's future (errored) so the awaiter resolves
+                            // with the throw instead of hanging on a `Pending`
+                            // future.
+                            return self.deliver_host_call_throw(&mut thread, op_err).await;
                         }
                     }
                 }
@@ -2621,6 +2831,121 @@ impl sys_types::VmSpawner for BexEngine {
         )
         .await
         .map_err(|e| Box::new(e) as Box<dyn Send + Sync + 'static>)
+    }
+}
+
+/// Unit tests for the `call_host_value` sysop error routing.
+///
+/// These tests verify that `OpErrorKind::HostCallable` errors are converted
+/// to a `BexExternalValue::Instance` (catchable BAML throw) rather than
+/// being routed as fatal `internal_error_future` errors.
+#[cfg(test)]
+mod call_host_value_tests {
+    use sys_types::{OpError, OpErrorKind, SysOp};
+
+    use super::*;
+
+    #[test]
+    fn call_host_value_host_callable_error_converts_to_instance() {
+        let op_err = OpError::new(
+            SysOp::BamlHostCallHostValue,
+            OpErrorKind::HostCallable {
+                class_name: "ValueError".to_string(),
+                message: "host raised".to_string(),
+                traceback: Some("at line 1".to_string()),
+                language: Some("python".to_string()),
+                category: 2,
+            },
+        );
+
+        let result = op_error_to_catchable_throw(&op_err);
+        assert!(
+            result.is_some(),
+            "HostCallable error should convert to catchable throw"
+        );
+
+        let instance = result.unwrap();
+        match &instance {
+            BexExternalValue::Instance { class_name, fields } => {
+                assert_eq!(class_name, "baml.errors.HostCallable");
+                assert!(matches!(
+                    fields.get("message"),
+                    Some(BexExternalValue::String(s)) if s == "host raised"
+                ));
+                assert!(matches!(
+                    fields.get("class_name"),
+                    Some(BexExternalValue::String(s)) if s == "ValueError"
+                ));
+                assert!(matches!(
+                    fields.get("language"),
+                    Some(BexExternalValue::String(s)) if s == "python"
+                ));
+                assert!(matches!(
+                    fields.get("traceback"),
+                    Some(BexExternalValue::String(s)) if s == "at line 1"
+                ));
+                assert!(matches!(
+                    fields.get("category"),
+                    Some(BexExternalValue::Int(2))
+                ));
+            }
+            other => panic!("expected Instance, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn call_host_value_host_callable_error_null_traceback() {
+        let op_err = OpError::new(
+            SysOp::BamlHostCallHostValue,
+            OpErrorKind::HostCallable {
+                class_name: "KeyError".to_string(),
+                message: "key not found".to_string(),
+                traceback: None,
+                language: None,
+                category: 0,
+            },
+        );
+
+        let result = op_error_to_catchable_throw(&op_err);
+        let instance = result.expect("should convert");
+        if let BexExternalValue::Instance { fields, .. } = &instance {
+            assert!(
+                matches!(fields.get("traceback"), Some(BexExternalValue::Null)),
+                "null traceback should map to Null"
+            );
+            // language: None → empty string
+            assert!(
+                matches!(fields.get("language"), Some(BexExternalValue::String(s)) if s.is_empty()),
+                "missing language should map to empty string"
+            );
+        } else {
+            panic!("expected Instance");
+        }
+    }
+
+    #[test]
+    fn call_host_value_other_error_kinds_return_none() {
+        let io_err = OpError::new(
+            SysOp::BamlHostCallHostValue,
+            OpErrorKind::Io {
+                message: "disk full".to_string(),
+            },
+        );
+        assert!(
+            op_error_to_catchable_throw(&io_err).is_none(),
+            "Io error should NOT convert to catchable throw"
+        );
+
+        let not_impl = OpError::new(
+            SysOp::BamlHostCallHostValue,
+            OpErrorKind::NotImplemented {
+                message: "unsupported".to_string(),
+            },
+        );
+        assert!(
+            op_error_to_catchable_throw(&not_impl).is_none(),
+            "NotImplemented error should NOT convert to catchable throw"
+        );
     }
 }
 

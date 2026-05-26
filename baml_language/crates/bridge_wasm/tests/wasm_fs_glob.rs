@@ -289,6 +289,14 @@ fn callbacks() -> JsValue {
         &noop,
     )
     .unwrap();
+    // host_dispatch: invoked when BAML calls a host-registered JS callable.
+    // The fs/glob tests don't exercise host callables; a noop is sufficient.
+    js_sys::Reflect::set(
+        &obj,
+        &JsValue::from_str("host_dispatch"),
+        &js_sys::Function::new_with_args("key, callId, argsBytes", ""),
+    )
+    .unwrap();
 
     obj.into()
 }
