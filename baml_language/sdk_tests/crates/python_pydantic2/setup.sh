@@ -7,17 +7,37 @@
 # (no nextest) run this manually after `cargo test --no-run` populates
 # each fixture's `generated/pyproject.toml`.
 #
-# This turns those generated/ dirs into a real `.venv/` with baml_core
-# installed editable. The crucial bit is `--reinstall-package
-# baml_core`: a plain `uv sync` is a NO-OP on incremental Rust edits —
-# uv doesn't track the Rust sources behind the editable install — so
-# the maturin-built `baml_core/baml_py.abi3.so` stays stale and pytest
-# imports fail on freshly-added symbols (e.g. `register_host_callable`).
-# `--reinstall-package` forces uv to rebuild that editable install,
-# which kicks off the maturin build of bridge_python's native addon.
-# The cargo compile underneath is incremental, so steady-state re-runs
-# are cheap. Re-run after bridge_python Rust changes or after adding a
-# new fixture.
+# Two responsibilities, split by tool:
+#
+#   1. `uv sync` per fixture turns each generated/ dir into a real
+#      `.venv/` with pytest/pydantic/etc. installed and baml_core
+#      editable-linked. Every fixture's editable link resolves to the
+#      same shared `sdks/python/src/baml_core/baml_py.abi3.so`.
+#
+#   2. `maturin develop` (once) rebuilds that shared `.so` from the
+#      current Rust sources. We use a STABLE build venv under target/
+#      so maturin always sees the same interpreter path — that keeps
+#      pyo3's build-config fingerprint valid, so cargo's incremental
+#      cache hits and steady-state rebuilds are ~7s.
+#
+# Why not `uv sync --reinstall-package baml_core` (the old approach)?
+# That was strictly slower, ~70s EVERY run even when nothing changed.
+# uv builds the editable wheel in an isolated env with an *ephemeral*
+# interpreter at a fresh `target/uv-cache/builds-v0/.tmpXXXX/bin/python`
+# path each invocation. pyo3-build-config is keyed on the interpreter,
+# so its fingerprint changed every run, invalidating pyo3 and cascading
+# into a full recompile + relink of the bridge_python addon — i.e. the
+# cargo cache was present but never hit. `maturin develop` against a
+# pinned venv has none of that overhead and is purely incremental, so
+# it dominates the old path on every axis. (It also builds the dev
+# profile, matching what `cargo nextest` builds the rest of the
+# workspace with, so the engine crates' debug artifacts are shared too;
+# pass `--release` below if you need release semantics in the .so.)
+#
+# Note the split is deliberate: a plain `uv sync` (no --reinstall) does
+# NOT rebuild the .so on incremental Rust edits — uv doesn't track the
+# Rust sources behind the editable install — so step 2 owns rebuilds.
+# Re-run after bridge_python Rust changes or after adding a new fixture.
 #
 # This mirrors the nodejs_typescript crate's setup.sh: install/native-
 # build lives here, OUT of build.rs, so `cargo check`/`cargo doc`
@@ -29,6 +49,7 @@ set -euo pipefail
 cd "$(dirname "$0")"  # baml_language/sdk_tests/crates/python_pydantic2
 
 WORKSPACE_ROOT="$(cd ../../.. && pwd)"
+SDK_PY="$WORKSPACE_ROOT/sdks/python"
 
 # Shared uv cache under target/, matching the UV_CACHE_DIR the emitted
 # tests thread through (run_test_cmd / CACHE_ENV_VAR in harness_setup).
@@ -40,15 +61,28 @@ mkdir -p "$UV_CACHE_DIR"
 uv_bin="uv"
 command -v uv >/dev/null 2>&1 || uv_bin="$(mise which uv)"
 
-# baml_core is editable-installed into every fixture's venv but resolves
-# to the same shared `sdks/python/.../baml_py.abi3.so`, so the first
-# reinstall rebuilds it and the rest are quick no-ops. We loop all
-# fixtures anyway to guarantee each venv exists and is synced.
+# 1. Ensure each fixture venv exists, deps are installed, and baml_core
+#    is editable-linked. Plain `uv sync` (no --reinstall): on a fresh
+#    checkout this builds the editable wheel once; afterward it's a
+#    no-op. The shared .so it points at is (re)built by step 2.
 for fixture_dir in */generated; do
     [[ -d "$fixture_dir" ]] || continue
-    echo "==> uv sync --reinstall-package baml_core in $fixture_dir"
-    (cd "$fixture_dir" && "$uv_bin" sync --reinstall-package baml_core)
+    echo "==> uv sync in $fixture_dir"
+    (cd "$fixture_dir" && "$uv_bin" sync)
 done
+
+# 2. Rebuild the shared baml_core extension incrementally via maturin.
+#    The build venv is pinned at a fixed path so its interpreter never
+#    moves (see the --reinstall-package note above for why that matters).
+#    abi3 wheels are interpreter-version-agnostic, so any >=3.10 works.
+BUILD_VENV="$WORKSPACE_ROOT/target/maturin-build-venv"
+if [[ ! -x "$BUILD_VENV/bin/maturin" ]]; then
+    echo "==> creating maturin build venv at $BUILD_VENV"
+    "$uv_bin" venv "$BUILD_VENV"
+    "$uv_bin" pip install --python "$BUILD_VENV/bin/python" 'maturin>=1.0,<2.0'
+fi
+echo "==> maturin develop (shared baml_core extension)"
+(cd "$SDK_PY" && VIRTUAL_ENV="$BUILD_VENV" "$BUILD_VENV/bin/maturin" develop)
 
 # Per-run breadcrumb for the in-test guard. nextest reads $NEXTEST_ENV
 # after this script and injects these vars into the matched tests'

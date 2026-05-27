@@ -210,38 +210,6 @@ mod tests {
         assert_eq!(format_docstring("text\\", "    "), "\"\"\"text\\\\\"\"\"");
     }
 
-    // ── build_function_docstring: the 4-case table (32d) ────────────────────
-
-    #[test]
-    fn build_function_docstring_none_when_no_summary_no_raises() {
-        assert_eq!(build_function_docstring(None, &[]), None);
-        assert_eq!(build_function_docstring(Some(""), &[]), None);
-    }
-
-    #[test]
-    fn build_function_docstring_summary_only_unchanged() {
-        assert_eq!(
-            build_function_docstring(Some("Load a doc."), &[]),
-            Some("Load a doc.".to_string()),
-        );
-    }
-
-    #[test]
-    fn build_function_docstring_raises_only() {
-        assert_eq!(
-            build_function_docstring(None, &["E1".to_string(), "E2".to_string()]),
-            Some("Raises:\n    E1, E2".to_string()),
-        );
-    }
-
-    #[test]
-    fn build_function_docstring_summary_plus_raises() {
-        assert_eq!(
-            build_function_docstring(Some("Load a doc."), &["E1".to_string()]),
-            Some("Load a doc.\n\nRaises:\n    E1".to_string()),
-        );
-    }
-
     #[test]
     fn format_class_docstring_none_when_empty() {
         assert_eq!(

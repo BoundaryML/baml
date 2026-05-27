@@ -13,7 +13,7 @@ import inspect
 
 def test_imports():
     import baml_sdk  # noqa: F401
-    from baml_sdk.raises import (  # noqa: F401
+    from baml_sdk.raises_test import (  # noqa: F401
         DocLoader,
         InferredThrow,
         LoadDoc,
@@ -23,7 +23,7 @@ def test_imports():
 
 
 def test_union_throws_lists_all_names():
-    from baml_sdk.raises import LoadDoc
+    from baml_sdk.raises_test import LoadDoc
 
     doc = inspect.getdoc(LoadDoc)
     assert doc is not None
@@ -31,7 +31,7 @@ def test_union_throws_lists_all_names():
 
 
 def test_async_sibling_also_has_raises():
-    from baml_sdk.raises import LoadDoc_async
+    from baml_sdk.raises_test import LoadDoc_async
 
     doc = inspect.getdoc(LoadDoc_async)
     assert doc is not None
@@ -39,7 +39,7 @@ def test_async_sibling_also_has_raises():
 
 
 def test_single_throws():
-    from baml_sdk.raises import Reparse
+    from baml_sdk.raises_test import Reparse
 
     doc = inspect.getdoc(Reparse)
     assert doc is not None
@@ -47,7 +47,7 @@ def test_single_throws():
 
 
 def test_summary_precedes_raises_block():
-    from baml_sdk.raises import LoadDoc
+    from baml_sdk.raises_test import LoadDoc
 
     doc = inspect.getdoc(LoadDoc)
     assert doc is not None
@@ -58,7 +58,7 @@ def test_summary_precedes_raises_block():
 def test_inferred_contract_without_clause_still_raises():
     # No written `throws` clause, but the body throws ParseError — the
     # inferred contract (callable_throws) still surfaces a Raises block.
-    from baml_sdk.raises import InferredThrow
+    from baml_sdk.raises_test import InferredThrow
 
     doc = inspect.getdoc(InferredThrow)
     assert doc is not None
@@ -66,7 +66,7 @@ def test_inferred_contract_without_clause_still_raises():
 
 
 def test_non_throwing_function_has_no_raises_block():
-    from baml_sdk.raises import PureLen
+    from baml_sdk.raises_test import PureLen
 
     doc = inspect.getdoc(PureLen) or ""
     assert "Raises:" not in doc, repr(doc)
@@ -75,7 +75,7 @@ def test_non_throwing_function_has_no_raises_block():
 def test_method_raises_block_in_pyi():
     # Methods carry `Raises:` in the .pyi (pyright/IDE surface) per the 32d
     # decision; the runtime `.py` __doc__ trailer is free-functions-only.
-    import baml_sdk.raises as mod
+    import baml_sdk.raises_test as mod
 
     pyi_src = open(mod.__file__ + "i").read()  # __init__.py -> __init__.pyi
 
