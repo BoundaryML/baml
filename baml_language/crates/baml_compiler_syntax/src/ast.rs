@@ -1098,6 +1098,11 @@ impl BacktickStringLiteral {
             Interp(SyntaxNode),
         }
 
+        // U+F8FF (Apple-logo PUA codepoint) is a safe sentinel — single
+        // codepoint, never appears in real source, doesn't affect indent
+        // calculation since it's a non-whitespace content character.
+        const PLACEHOLDER: char = '\u{F8FF}';
+
         let n = self.delimiter_count();
         if n == 0 {
             return Vec::new();
@@ -1150,7 +1155,7 @@ impl BacktickStringLiteral {
         }
 
         // Decode escapes per text chunk.
-        let mut decoded: Vec<RawPart> = parts
+        let decoded: Vec<RawPart> = parts
             .into_iter()
             .map(|p| match p {
                 RawPart::Text(s) => RawPart::Text(unescape_backtick_string_literal(&s)),
@@ -1165,43 +1170,54 @@ impl BacktickStringLiteral {
         let needs_dedent = decoded
             .iter()
             .any(|p| matches!(p, RawPart::Text(s) if s.contains('\n')));
-        if needs_dedent {
-            // U+F8FF (Apple-logo PUA codepoint) is a safe sentinel — single
-            // codepoint, never appears in real source, doesn't affect indent
-            // calculation since it's a non-whitespace content character.
-            const PLACEHOLDER: char = '\u{F8FF}';
-            let mut joined = String::new();
-            for p in &decoded {
-                match p {
-                    RawPart::Text(s) => joined.push_str(s),
-                    RawPart::Interp(_) => joined.push(PLACEHOLDER),
-                }
-            }
-            let dedented = baml_base::dedent::preprocess_template(&joined);
-            let mut iter = dedented.split(PLACEHOLDER);
-            for p in &mut decoded {
-                if let RawPart::Text(s) = p {
-                    *s = iter.next().unwrap_or("").to_string();
-                }
-            }
-            if let Some(rest) = iter.next() {
-                if !rest.is_empty() {
-                    if let Some(RawPart::Text(s)) = decoded.last_mut() {
-                        s.push_str(rest);
-                    } else {
-                        decoded.push(RawPart::Text(rest.to_string()));
-                    }
+        if !needs_dedent {
+            return decoded
+                .into_iter()
+                .map(|p| match p {
+                    RawPart::Text(s) => BacktickSegment::Text(s),
+                    RawPart::Interp(node) => BacktickSegment::Interp(node),
+                })
+                .collect();
+        }
+
+        let mut joined = String::new();
+        let mut interps: Vec<SyntaxNode> = Vec::new();
+        for p in decoded {
+            match p {
+                RawPart::Text(s) => joined.push_str(&s),
+                RawPart::Interp(node) => {
+                    interps.push(node);
+                    joined.push(PLACEHOLDER);
                 }
             }
         }
+        let dedented = baml_base::dedent::preprocess_template(&joined);
 
-        decoded
-            .into_iter()
-            .map(|p| match p {
-                RawPart::Text(s) => BacktickSegment::Text(s),
-                RawPart::Interp(node) => BacktickSegment::Interp(node),
-            })
-            .collect()
+        // Pieces from split correspond 1:1 to text *positions* in `joined`:
+        // there are `interps.len() + 1` of them, one before each
+        // interpolation plus one after the last. Walk pieces and interps in
+        // lockstep and emit segments — skipping empty Text pieces (they
+        // represent positions that had no source content there) so the
+        // returned shape matches the M1 invariant ("no empty Text segments").
+        //
+        // Previous bug: looping over the original `decoded` vec and only
+        // advancing the piece iterator for Text parts left the leading
+        // empty piece on the iterator when decoded started with Interp,
+        // shifting every subsequent Text by one position.
+        let pieces: Vec<&str> = dedented.split(PLACEHOLDER).collect();
+        let mut out: Vec<BacktickSegment> = Vec::with_capacity(pieces.len() + interps.len());
+        let mut interp_iter = interps.into_iter();
+        for (i, piece) in pieces.iter().enumerate() {
+            if !piece.is_empty() {
+                out.push(BacktickSegment::Text((*piece).to_string()));
+            }
+            if i + 1 < pieces.len() {
+                if let Some(node) = interp_iter.next() {
+                    out.push(BacktickSegment::Interp(node));
+                }
+            }
+        }
+        out
     }
 }
 

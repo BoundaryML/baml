@@ -2295,10 +2295,10 @@ impl LoweringContext {
     /// builds a left-folded `+` concatenation chain. Text segments lower to
     /// `Literal::String`; interpolation segments lower the inner block
     /// expression (BEP §4 block-expression semantics — statements + optional
-    /// trailing expression).
-    ///
-    /// **M2 limitation (§11):** interpolated values must already be strings.
-    /// Implicit `.to_string()` for non-string types is task #13.
+    /// trailing expression) and wrap the result with an implicit
+    /// `.to_string()` call (BEP §11) so non-string values participate in
+    /// the concatenation without explicit casts. Empty / statement-only
+    /// blocks (unit-valued) emit `""` directly — see the inline guard.
     fn lower_backtick_string_literal(&mut self, node: &SyntaxNode) -> ExprId {
         use baml_compiler_syntax::{BacktickSegment, BacktickStringLiteral};
         use rowan::ast::AstNode;

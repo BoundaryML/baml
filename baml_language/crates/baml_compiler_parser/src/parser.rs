@@ -1836,12 +1836,12 @@ impl<'a> Parser<'a> {
     }
 
     /// Position of the first `Backtick` token at or after `self.current`
-    /// (after skipping basic trivia). Used by the empty-multi-tick check.
+    /// (after skipping basic trivia *and* comments). Used by the empty-
+    /// multi-tick check; comment-skipping parity with `at(Backtick)` so
+    /// backticks preceded by a comment (`/*c*/ <backtick>ok<backtick>`)
+    /// don't get rejected.
     fn find_first_backtick_pos(&self) -> Option<usize> {
-        let mut i = self.current;
-        while i < self.tokens.len() && self.is_basic_trivia(self.tokens[i].kind) {
-            i += 1;
-        }
+        let i = self.skip_trivia_and_comments_from(self.current);
         if i < self.tokens.len() && self.tokens[i].kind == TokenKind::Backtick {
             Some(i)
         } else {
@@ -1879,13 +1879,16 @@ impl<'a> Parser<'a> {
     }
 
     /// Count consecutive `Backtick` tokens at `self.current` (after skipping
-    /// basic trivia to find the first backtick). The run itself is required
-    /// to be uninterrupted — no whitespace permitted inside the delimiter run.
+    /// basic trivia *and* comments to find the first backtick). The run
+    /// itself is required to be uninterrupted — no whitespace or comments
+    /// permitted inside the delimiter run.
+    ///
+    /// Skipping comments mirrors the entry guard `self.at(TokenKind::Backtick)`,
+    /// which uses comment-skipping `current()`. Without parity here a literal
+    /// like `let s = /*c*/ <backtick>ok<backtick>` would have `at` succeed but
+    /// the helper return 0, falsely rejecting the parse.
     fn count_consecutive_backticks(&self) -> usize {
-        let mut i = self.current;
-        while i < self.tokens.len() && self.is_basic_trivia(self.tokens[i].kind) {
-            i += 1;
-        }
+        let mut i = self.skip_trivia_and_comments_from(self.current);
         let mut count = 0;
         while i < self.tokens.len() && self.tokens[i].kind == TokenKind::Backtick {
             count += 1;
@@ -7826,6 +7829,96 @@ function Demo() -> string {
 ";
         let (_root, errors) = parse_source(source);
         assert_no_errors(&errors);
+    }
+
+    #[test]
+    fn backtick_after_block_comment_parses() {
+        // Regression for PR #3577 review (CodeRabbit r3307652890): the
+        // entry guard `self.at(TokenKind::Backtick)` skips comments, so
+        // `let s = /*c*/ \`ok\`` reaches `parse_backtick_string`. But the
+        // helpers `count_consecutive_backticks` and `find_first_backtick_pos`
+        // only skipped *basic* trivia (whitespace + newlines), not comments —
+        // returning 0 and failing the parse.
+        let source = "
+function Demo() -> string {
+    let s = /*c*/ `ok`
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let lit = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
+            .expect("expected backtick literal");
+        assert_eq!(lit.text().to_string(), "`ok`");
+    }
+
+    #[test]
+    fn backtick_after_line_comment_parses() {
+        let source = "
+function Demo() -> string {
+    let s = // line comment
+        `ok`
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let lit = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
+            .expect("expected backtick literal");
+        assert_eq!(lit.text().to_string(), "`ok`");
+    }
+
+    #[test]
+    fn backtick_segments_multiline_starts_with_interp() {
+        // Regression for PR #3577 review (CodeRabbit r3312486624): when the
+        // first decoded part is `Interp` and the literal is multi-line (so
+        // dedent runs), the remapping loop previously only advanced the
+        // split iterator for Text parts. The leading empty piece (for "no
+        // Text before first Interp") got assigned to the FIRST Text part,
+        // shifting all subsequent Text parts to the wrong piece. The tail-
+        // append rescued single-Text cases by accident; multi-Text cases
+        // collapsed the wrong pieces together.
+        use baml_compiler_syntax::{BacktickSegment, BacktickStringLiteral};
+        use rowan::ast::AstNode;
+
+        // Source: backtick body begins with `${a}` (no leading whitespace
+        // or newline), followed by multi-line content containing another
+        // interp. decoded = [Interp(a), Text("\nhi "), Interp(b), Text(" bye\nend")].
+        let source = "
+function Demo(a: string, b: string) -> string {
+    let s = `${a}
+hi ${b} bye
+end`
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let lit = BacktickStringLiteral::cast(
+            root.descendants()
+                .find(|n| n.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
+                .unwrap(),
+        )
+        .unwrap();
+        let segs = lit.segments();
+        let text_parts: Vec<&str> = segs
+            .iter()
+            .filter_map(|s| match s {
+                BacktickSegment::Text(t) => Some(t.as_str()),
+                BacktickSegment::Interp(_) => None,
+            })
+            .collect();
+        // Each text *between* interpolations should remain at its own
+        // segment — not all collapse into the last one.
+        assert_eq!(
+            text_parts,
+            vec!["\nhi ", " bye\nend"],
+            "got: {text_parts:?}"
+        );
     }
 
     #[test]
