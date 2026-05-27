@@ -1815,6 +1815,39 @@ impl<'db> TypeInferenceBuilder<'db> {
                     shadowed.truncate(saved_len);
                 }
             }
+            Expr::IfLet {
+                pattern,
+                scrutinee,
+                then_branch,
+                else_branch,
+            } => {
+                Self::collect_default_expr_forward_references(
+                    *scrutinee,
+                    body,
+                    later_params,
+                    shadowed,
+                    refs,
+                );
+                let saved_len = shadowed.len();
+                Self::push_pattern_bindings(*pattern, body, shadowed);
+                Self::collect_default_expr_forward_references(
+                    *then_branch,
+                    body,
+                    later_params,
+                    shadowed,
+                    refs,
+                );
+                shadowed.truncate(saved_len);
+                if let Some(else_branch) = else_branch {
+                    Self::collect_default_expr_forward_references(
+                        *else_branch,
+                        body,
+                        later_params,
+                        shadowed,
+                        refs,
+                    );
+                }
+            }
             Expr::Is { scrutinee, .. } => {
                 // The pattern has no body and its bindings don't escape, so we
                 // only need to recurse into the scrutinee.
@@ -2634,6 +2667,19 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                 result_ty
             }
+            Expr::IfLet {
+                pattern,
+                scrutinee,
+                then_branch,
+                else_branch,
+            } => self.infer_if_let_expr(
+                expr_id,
+                *pattern,
+                *scrutinee,
+                *then_branch,
+                *else_branch,
+                body,
+            ),
             Expr::Call { .. } => {
                 // Delegate to check_expr with Ty::Unknown so the generic
                 // inference logic in check_expr handles all call expressions.
@@ -3242,6 +3288,24 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.record_expr_type(expr_id, ty.clone());
                 ty
             }
+            // IfLet: like `If`, push the expected type into both branches —
+            // critical for the function-body tail-expression path so that
+            // `if let pat = e { v1 } else { v2 }` doesn't report
+            // "missing return" when the if-let *is* the return value.
+            Expr::IfLet {
+                pattern,
+                scrutinee,
+                then_branch,
+                else_branch,
+            } => self.check_if_let_expr(
+                expr_id,
+                *pattern,
+                *scrutinee,
+                *then_branch,
+                *else_branch,
+                body,
+                expected,
+            ),
             // If: check both branches against expected type
             Expr::If {
                 condition,
@@ -4184,6 +4248,152 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
 
         Self::join_all(&arm_types)
+    }
+
+    /// Type-check `if let PATTERN = SCRUTINEE { THEN } else { ELSE }`.
+    ///
+    /// Refutable pattern match in condition position. Modeled on
+    /// [`Self::infer_match_expr`] with effectively two arms:
+    ///   - the user-written pattern (binds names in the then-branch)
+    ///   - an implicit wildcard arm (the else-branch)
+    ///
+    /// Side effects:
+    /// - Pattern bindings registered in `self.locals` for the then-branch only
+    ///   (snapshot/restore around the body).
+    /// - Scrutinee local narrowed to `matched_ty` in the then-branch, and to
+    ///   the complement type in the else-branch (when the scrutinee is a
+    ///   simple-path local).
+    /// - If the matrix says the pattern is irrefutable, emit a warning at the
+    ///   pattern span suggesting `let` instead.
+    /// - Joined branch types returned as the if-let's value; if there is no
+    ///   else, the type is `Void`.
+    fn infer_if_let_expr(
+        &mut self,
+        if_let_expr_id: ExprId,
+        pattern_id: PatId,
+        scrutinee_expr_id: ExprId,
+        then_branch: ExprId,
+        else_branch: Option<ExprId>,
+        body: &ExprBody,
+    ) -> Ty {
+        self.if_let_expr_common(
+            if_let_expr_id,
+            pattern_id,
+            scrutinee_expr_id,
+            then_branch,
+            else_branch,
+            body,
+            None,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn check_if_let_expr(
+        &mut self,
+        if_let_expr_id: ExprId,
+        pattern_id: PatId,
+        scrutinee_expr_id: ExprId,
+        then_branch: ExprId,
+        else_branch: Option<ExprId>,
+        body: &ExprBody,
+        expected: &Ty,
+    ) -> Ty {
+        let ty = self.if_let_expr_common(
+            if_let_expr_id,
+            pattern_id,
+            scrutinee_expr_id,
+            then_branch,
+            else_branch,
+            body,
+            Some(expected),
+        );
+        self.record_expr_type(if_let_expr_id, ty.clone());
+        ty
+    }
+
+    /// Shared inference/checking core for `Expr::IfLet`. When `expected` is
+    /// `Some`, branches are propagated through `check_expr` (giving the
+    /// function-body tail-expression path the same expected-type flow as
+    /// `if`/`match`); when `None`, they're inferred bottom-up.
+    #[allow(clippy::too_many_arguments)]
+    fn if_let_expr_common(
+        &mut self,
+        if_let_expr_id: ExprId,
+        pattern_id: PatId,
+        scrutinee_expr_id: ExprId,
+        then_branch: ExprId,
+        else_branch: Option<ExprId>,
+        body: &ExprBody,
+        expected: Option<&Ty>,
+    ) -> Ty {
+        let scrutinee_ty = self.infer_expr(scrutinee_expr_id, body);
+        let scrutinee_name = match &body.exprs[scrutinee_expr_id] {
+            Expr::Path(segments) if segments.len() == 1 => Some(segments[0].clone()),
+            _ => None,
+        };
+
+        // Lower the pattern against the scrutinee type. Same machinery as
+        // `match` arms — does subtype check, populates `pattern_types`.
+        let result = self.analyze_and_lower(pattern_id, &scrutinee_ty, body, then_branch);
+        let matched_ty = result.matched_ty.clone();
+
+        // Then-branch: push a fresh scope, narrow scrutinee, register
+        // pattern bindings, then infer/check the body.
+        let snapshot = self.snapshot_scoped_locals();
+        if let Some(name) = &scrutinee_name {
+            self.narrow_local(name.clone(), matched_ty.clone());
+        }
+        self.finalize_pattern_lowering(pattern_id, &result, None, None, &scrutinee_ty);
+        let then_ty = match expected {
+            Some(exp) => self.check_expr(then_branch, body, exp),
+            None => self.infer_expr(then_branch, body),
+        };
+        self.restore_scoped_locals(&snapshot);
+
+        // Else-branch: narrow scrutinee to the complement (residual type
+        // after subtracting matched_ty), then infer/check.
+        let else_ty = if let Some(else_expr) = else_branch {
+            let else_snapshot = self.snapshot_scoped_locals();
+            if let Some(name) = &scrutinee_name {
+                let complement =
+                    crate::narrowing::subtract_pattern_type(&scrutinee_ty, &matched_ty);
+                self.narrow_local(name.clone(), complement);
+            }
+            let ty = match expected {
+                Some(exp) => self.check_expr(else_expr, body, exp),
+                None => self.infer_expr(else_expr, body),
+            };
+            self.restore_scoped_locals(&else_snapshot);
+            Some(ty)
+        } else {
+            None
+        };
+
+        // Refutability check: run the matrix with a single arm. If nothing
+        // is missing, the pattern covers every value of the scrutinee — the
+        // else branch is dead.
+        let scrutinee_ty_for_matrix = self.matrix_normalize_scrut(&scrutinee_ty);
+        let report = crate::pattern_lowering::compute_match_usefulness(
+            self,
+            std::slice::from_ref(&result.dpat),
+            scrutinee_ty_for_matrix,
+        );
+        if report.missing.is_empty() {
+            let err = crate::infer_context::TirTypeError::IrrefutablePatternInIfLet;
+            if let Some(sm) = self.body_source_map.as_ref() {
+                self.context
+                    .report_warning_at_span(err, sm.pattern_span(pattern_id));
+            } else {
+                self.context.report_warning_simple(err, if_let_expr_id);
+            }
+        }
+
+        match else_ty {
+            Some(else_ty) => Self::join_types(&then_ty, &else_ty),
+            None => Ty::Void {
+                attr: TyAttr::default(),
+            },
+        }
     }
 
     /// Type-check `<expr> is <pattern>` (Rust `matches!`-style pattern test).
@@ -5147,6 +5357,18 @@ impl<'db> TypeInferenceBuilder<'db> {
                 else_branch,
             } => {
                 self.collect_throw_facts_from_expr(*condition, body, out);
+                self.collect_throw_facts_from_expr(*then_branch, body, out);
+                if let Some(else_expr) = else_branch {
+                    self.collect_throw_facts_from_expr(*else_expr, body, out);
+                }
+            }
+            Expr::IfLet {
+                scrutinee,
+                then_branch,
+                else_branch,
+                ..
+            } => {
+                self.collect_throw_facts_from_expr(*scrutinee, body, out);
                 self.collect_throw_facts_from_expr(*then_branch, body, out);
                 if let Some(else_expr) = else_branch {
                     self.collect_throw_facts_from_expr(*else_expr, body, out);

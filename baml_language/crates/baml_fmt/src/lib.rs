@@ -296,3 +296,65 @@ mod is_format_tests {
         assert_formats_to(source, source);
     }
 }
+
+#[cfg(test)]
+mod if_let_format_tests {
+    //! Formatter tests for `if let PATTERN = SCRUTINEE { ... } else { ... }`.
+
+    use super::*;
+
+    fn assert_formats_to(source: &str, expected: &str) {
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed on `if let`");
+        assert_eq!(
+            formatted, expected,
+            "formatter output didn't match expected\n--- got ---\n{formatted}\n--- want ---\n{expected}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn test_if_let_basic_binding() {
+        let source = "function f(r: int | string) -> string {\n    if let v: int = r {\n        \"int\"\n    } else {\n        \"other\"\n    }\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_if_let_no_else() {
+        // Statement form — no else branch, expression evaluates to void.
+        let source = "function f(r: int | string) -> void {\n    if let v: int = r {\n        let _ = v;\n    }\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_if_let_else_if_let_chain() {
+        // `else if let` should preserve the chain shape on one statement.
+        let source = "function f(r: int | string | bool) -> string {\n    if let v: int = r {\n        \"int\"\n    } else if let v: string = r {\n        v\n    } else {\n        \"bool\"\n    }\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_if_let_else_if_plain() {
+        // Mixing `if let` with a plain `else if` (using `is`) must format
+        // cleanly. Tests the IF_EXPR-after-IF_LET_EXPR else branch.
+        // Plain `if` conditions are canonicalised with parens by the
+        // formatter, hence the `if (r is string)` in the expected output.
+        let source = "function f(r: int | string) -> string {\n    if let v: int = r {\n        \"int\"\n    } else if r is string {\n        \"str\"\n    } else {\n        \"other\"\n    }\n}\n";
+        let expected = "function f(r: int | string) -> string {\n    if let v: int = r {\n        \"int\"\n    } else if (r is string) {\n        \"str\"\n    } else {\n        \"other\"\n    }\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    #[test]
+    fn test_if_let_destructure_pattern() {
+        // Class destructure pattern inside if-let.
+        let source = "class User {\n    name: string,\n    age: int,\n}\n\nfunction f(u: User) -> string {\n    if let User { name, age } = u {\n        name\n    } else {\n        \"none\"\n    }\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_if_let_or_pattern() {
+        let source = "class Ok {\n    value: string,\n}\n\nclass Warn {\n    value: string,\n}\n\nfunction f(r: Ok | Warn) -> string {\n    if let s: Ok | Warn = r {\n        s.value\n    } else {\n        \"none\"\n    }\n}\n";
+        assert_formats_to(source, source);
+    }
+}

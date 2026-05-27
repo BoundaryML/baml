@@ -2284,6 +2284,15 @@ impl LoweringContext<'_> {
                 self.lower_if(expr_id, condition, then_branch, else_branch, dest);
             }
 
+            AstExpr::IfLet {
+                pattern,
+                scrutinee,
+                then_branch,
+                else_branch,
+            } => {
+                self.lower_if_let(expr_id, pattern, scrutinee, then_branch, else_branch, dest);
+            }
+
             AstExpr::Binary { op, lhs, rhs } => {
                 self.lower_binary(expr_id, op, lhs, rhs, dest);
             }
@@ -4387,6 +4396,61 @@ impl LoweringContext<'_> {
             self.builder.goto(bb_join);
         }
 
+        self.builder.set_current_block(bb_else);
+        if let Some(else_expr) = else_branch {
+            self.lower_expr(else_expr, dest);
+        } else {
+            self.builder
+                .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+        }
+        if !self.builder.is_current_terminated() {
+            self.builder.goto(bb_join);
+        }
+
+        self.builder.set_current_block(bb_join);
+    }
+
+    /// MIR lowering for `if let PATTERN = SCRUTINEE { THEN } else { ELSE }`.
+    ///
+    /// Same shape as a two-arm match (`PATTERN => then, _ => else`), but we
+    /// emit it inline rather than synthesizing a match. The pattern test
+    /// jumps to the then-block on success (where we bind names from the
+    /// pattern before lowering the body) and to the else-block on failure.
+    fn lower_if_let(
+        &mut self,
+        _expr_id: AstExprId,
+        pattern: AstPatId,
+        scrutinee: AstExprId,
+        then_branch: AstExprId,
+        else_branch: Option<AstExprId>,
+        dest: Place,
+    ) {
+        let scrutinee_local = self.try_resolve_to_local(scrutinee).unwrap_or_else(|| {
+            let op = self.lower_to_operand(scrutinee);
+            let ty = self.expr_ty(scrutinee);
+            self.operand_to_local(op, ty)
+        });
+
+        let bb_then = self.builder.create_block();
+        let bb_else = self.builder.create_block();
+        let bb_join = self.builder.create_block();
+
+        self.lower_pattern_test(scrutinee_local, pattern, bb_then, bb_else);
+
+        // Then-branch: bind pattern locals, lower body, restore on exit.
+        self.builder.set_current_block(bb_then);
+        let saved_locals = self.locals.clone();
+        let watched_depth = self.watched_locals_stack.len();
+        self.bind_pattern(scrutinee_local, pattern);
+        self.lower_expr(then_branch, dest.clone());
+        if !self.builder.is_current_terminated() {
+            self.emit_unwatch_to_depth(watched_depth);
+            self.builder.goto(bb_join);
+        }
+        self.restore_locals_after_scope(saved_locals, watched_depth);
+
+        // Else-branch: no bindings from the pattern, just lower the else
+        // (or write Null if absent — same as plain `if` with no else).
         self.builder.set_current_block(bb_else);
         if let Some(else_expr) = else_branch {
             self.lower_expr(else_expr, dest);

@@ -305,6 +305,7 @@ fn detect_context(
             | SyntaxKind::PAREN_EXPR
             | SyntaxKind::BLOCK_EXPR
             | SyntaxKind::IF_EXPR
+            | SyntaxKind::IF_LET_EXPR
             | SyntaxKind::FOR_EXPR
             | SyntaxKind::LET_STMT
             | SyntaxKind::RETURN_STMT => {
