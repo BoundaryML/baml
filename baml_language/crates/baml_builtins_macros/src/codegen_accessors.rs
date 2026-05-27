@@ -253,14 +253,16 @@ fn gen_owned_enum(ed: &AccessorEnumDef) -> TokenStream2 {
 
 fn gen_accessor_return_type(kind: &FieldTypeKind) -> TokenStream2 {
     match kind {
-        FieldTypeKind::String => quote!(&'a String),
+        FieldTypeKind::String => quote!(&'a bex_str::BexStr),
         FieldTypeKind::Int => quote!(i64),
         FieldTypeKind::Float => quote!(f64),
         FieldTypeKind::Bool => quote!(bool),
         FieldTypeKind::ResourceHandle => quote!(bex_resource_types::ResourceHandle),
-        FieldTypeKind::MapStringString => quote!(indexmap::IndexMap<String, &'a String>),
+        FieldTypeKind::MapStringString => {
+            quote!(indexmap::IndexMap<String, &'a bex_str::BexStr>)
+        }
         FieldTypeKind::MapStringUnknown => quote!(indexmap::IndexMap<String, BexValue<'a>>),
-        FieldTypeKind::ArrayString => quote!(Vec<&'a String>),
+        FieldTypeKind::ArrayString => quote!(Vec<&'a bex_str::BexStr>),
         // Complex types: accessor reading from heap is not supported
         FieldTypeKind::BuiltinEnum(_)
         | FieldTypeKind::ArrayBuiltinStruct(_)
@@ -349,7 +351,7 @@ fn gen_accessor_body(field: &AccessorFieldDef) -> TokenStream2 {
 fn gen_into_owned_field(field: &AccessorFieldDef) -> TokenStream2 {
     let name = &field.name;
     match field.kind {
-        FieldTypeKind::String => quote!(#name: self.#name(heap, permit)?.clone()),
+        FieldTypeKind::String => quote!(#name: self.#name(heap, permit)?.to_string()),
         FieldTypeKind::Int | FieldTypeKind::Bool => quote!(#name: self.#name()?),
         // Float is heap-boxed (`Object::Float`); the accessor takes
         // `(heap, permit)` like the other heap-touching ones.
@@ -358,7 +360,7 @@ fn gen_into_owned_field(field: &AccessorFieldDef) -> TokenStream2 {
         FieldTypeKind::MapStringString => {
             quote!(#name: self.#name(heap, permit)?
                 .into_iter()
-                .map(|(k, v)| (k, v.clone()))
+                .map(|(k, v)| (k, v.to_string()))
                 .collect())
         }
         FieldTypeKind::MapStringUnknown => {
@@ -368,7 +370,7 @@ fn gen_into_owned_field(field: &AccessorFieldDef) -> TokenStream2 {
                 .collect::<Result<_, _>>()?)
         }
         FieldTypeKind::ArrayString => {
-            quote!(#name: self.#name(heap, permit)?.into_iter().cloned().collect())
+            quote!(#name: self.#name(heap, permit)?.into_iter().map(|s| s.to_string()).collect())
         }
         // Complex types: into_owned from heap reads not yet implemented
         FieldTypeKind::BuiltinEnum(_)

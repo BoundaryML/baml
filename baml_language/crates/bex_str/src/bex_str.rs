@@ -469,6 +469,30 @@ impl PartialEq for BexStr {
 
 impl Eq for BexStr {}
 
+impl PartialEq<str> for BexStr {
+    fn eq(&self, other: &str) -> bool {
+        self.as_str() == other
+    }
+}
+
+impl PartialEq<BexStr> for str {
+    fn eq(&self, other: &BexStr) -> bool {
+        self == other.as_str()
+    }
+}
+
+impl PartialEq<String> for BexStr {
+    fn eq(&self, other: &String) -> bool {
+        self.as_str() == other.as_str()
+    }
+}
+
+impl PartialEq<BexStr> for String {
+    fn eq(&self, other: &BexStr) -> bool {
+        self.as_str() == other.as_str()
+    }
+}
+
 impl PartialOrd for BexStr {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))

@@ -231,7 +231,7 @@ fn view_return_type(ty: &BamlType, needs_heap: &mut bool) -> TokenStream {
         BamlType::Bool => quote! { Result<bool, AccessError> },
         BamlType::String => {
             *needs_heap = true;
-            quote! { Result<&'a String, AccessError> }
+            quote! { Result<&'a bex_str::BexStr, AccessError> }
         }
         BamlType::RustType => {
             *needs_heap = true;
@@ -386,7 +386,7 @@ fn into_owned_expr(
         }
         // Float accessor is now heap-aware (`Object::Float` deref).
         BamlType::Float => quote! { self.#field_ident(heap, permit)? },
-        BamlType::String => quote! { self.#field_ident(heap, permit)?.clone() },
+        BamlType::String => quote! { self.#field_ident(heap, permit)?.to_string() },
         BamlType::RustType => quote! { self.#field_ident(heap, permit)? },
         BamlType::Uint8Array | BamlType::List(_) | BamlType::Map(_, _) | BamlType::Optional(_) => {
             let val = quote! { self.#field_ident(heap, permit)? };

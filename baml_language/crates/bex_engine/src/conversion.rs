@@ -65,7 +65,7 @@ impl BexEngine {
 
         match obj {
             Object::Float(f) => Ok(BexExternalValue::Float(*f)),
-            Object::String(s) => Ok(BexExternalValue::String(s.clone())),
+            Object::String(s) => Ok(BexExternalValue::String(s.to_string())),
 
             Object::Array(arr) => {
                 // Get element type from declared type, falling back to Null when
@@ -113,7 +113,7 @@ impl BexEngine {
                         .iter()
                         .map(|(k, v)| {
                             Ok((
-                                k.clone(),
+                                k.to_string(),
                                 self.convert_vm_value_to_external_with_type(
                                     *v, value_type, permit,
                                 )?,
@@ -321,8 +321,11 @@ impl BexEngine {
             BexExternalValue::Map { entries, .. } => {
                 let values = entries
                     .into_iter()
-                    .map(|(k, v)| self.convert_external_to_vm_value(holder, v).map(|v| (k, v)))
-                    .collect::<Result<indexmap::IndexMap<String, Value>, _>>()?;
+                    .map(|(k, v)| {
+                        self.convert_external_to_vm_value(holder, v)
+                            .map(|v| (bex_vm_types::BexStr::from(k.as_str()), v))
+                    })
+                    .collect::<Result<indexmap::IndexMap<bex_vm_types::BexStr, Value>, _>>()?;
                 Value::object(holder.holder_mut().tlab_mut().alloc_map(values))
             }
             BexExternalValue::Uint8Array(bytes) => {
@@ -1126,7 +1129,7 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
             let obj = vm.get_object(idx);
             match obj {
                 Object::Float(f) => BexExternalValue::Float(*f),
-                Object::String(s) => BexExternalValue::String(s.clone()),
+                Object::String(s) => BexExternalValue::String(s.to_string()),
                 Object::Array(arr) => {
                     let snap = arr.to_vec();
                     let items: Vec<BexExternalValue> =
@@ -1142,7 +1145,7 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
                     let snap = map.to_index_map();
                     let entries: indexmap::IndexMap<String, BexExternalValue> = snap
                         .iter()
-                        .map(|(k, v)| (k.clone(), vm_arg_to_external(vm, *v)))
+                        .map(|(k, v)| (k.to_string(), vm_arg_to_external(vm, *v)))
                         .collect();
                     BexExternalValue::Map {
                         key_type: bex_external_types::Ty::String {

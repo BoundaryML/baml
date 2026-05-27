@@ -449,7 +449,11 @@ impl BamlClassArray for PackageBamlImpl {
     fn join(vm: &BexVm, array: &[Value], separator: &str) -> String {
         array
             .iter()
-            .map(|v| vm.as_string(v).cloned().unwrap_or_default())
+            .map(|v| {
+                vm.as_string(v)
+                    .map(|s| s.as_str().to_owned())
+                    .unwrap_or_default()
+            })
             .collect::<Vec<_>>()
             .join(separator)
     }

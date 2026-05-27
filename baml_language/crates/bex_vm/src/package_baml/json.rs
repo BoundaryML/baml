@@ -323,9 +323,14 @@ pub fn serde_to_value(vm: &mut BexVm, v: &serde_json::Value) -> Value {
             Value::object(vm.tlab.alloc(Object::Array(items.into())))
         }
         serde_json::Value::Object(map) => {
-            let entries: IndexMap<String, Value> = map
+            let entries: IndexMap<bex_vm_types::BexStr, Value> = map
                 .iter()
-                .map(|(k, v)| (k.clone(), serde_to_value(vm, v)))
+                .map(|(k, v)| {
+                    (
+                        bex_vm_types::BexStr::from(k.as_str()),
+                        serde_to_value(vm, v),
+                    )
+                })
                 .collect();
             Value::object(vm.tlab.alloc(Object::Map(Box::new(entries.into()))))
         }
@@ -347,7 +352,7 @@ pub fn value_to_serde(vm: &BexVm, v: Value) -> serde_json::Value {
             Object::Float(f) => serde_json::Number::from_f64(*f)
                 .map(serde_json::Value::Number)
                 .unwrap_or(serde_json::Value::Null),
-            Object::String(s) => serde_json::Value::String(s.clone()),
+            Object::String(s) => serde_json::Value::String(s.to_string()),
             Object::Array(arr) => {
                 let arr = arr.to_vec();
                 serde_json::Value::Array(arr.iter().map(|el| value_to_serde(vm, *el)).collect())
@@ -356,7 +361,7 @@ pub fn value_to_serde(vm: &BexVm, v: Value) -> serde_json::Value {
                 let map = map.to_index_map();
                 let entries: serde_json::Map<String, serde_json::Value> = map
                     .iter()
-                    .map(|(k, v)| (k.clone(), value_to_serde(vm, *v)))
+                    .map(|(k, v)| (k.to_string(), value_to_serde(vm, *v)))
                     .collect();
                 serde_json::Value::Object(entries)
             }
@@ -461,7 +466,7 @@ fn ty_value_to_serde(
                 let val_json = with_path_segment(path, format_args!("[{k:?}]"), |p| {
                     ty_value_to_serde(vm, v, vty, p)
                 })?;
-                out.insert(k, val_json);
+                out.insert(k.to_string(), val_json);
             }
             Ok(serde_json::Value::Object(out))
         }
@@ -791,12 +796,13 @@ fn ty_serde_to_value(
 
         Ty::Map { value: vty, .. } => match json {
             serde_json::Value::Object(map) => {
-                let mut entries: IndexMap<String, Value> = IndexMap::with_capacity(map.len());
+                let mut entries: IndexMap<bex_vm_types::BexStr, Value> =
+                    IndexMap::with_capacity(map.len());
                 for (k, val) in map {
                     let v = with_path_segment(path, format_args!("[{k:?}]"), |p| {
                         ty_serde_to_value(vm, val, vty, p)
                     })?;
-                    entries.insert(k.clone(), v);
+                    entries.insert(bex_vm_types::BexStr::from(k.as_str()), v);
                 }
                 Ok(Value::object(
                     vm.tlab.alloc(Object::Map(Box::new(entries.into()))),
@@ -1270,7 +1276,7 @@ impl Continuation for ListFromJsonCont {
 // ── Map dispatch ──────────────────────────────────────────────────────────────
 
 fn map_from_json_start(vm: &mut BexVm, j: Value, val_ty: &Ty) -> NativeCallResult {
-    let entries: Vec<(String, Value)> = match j.as_object_ptr() {
+    let entries: Vec<(bex_vm_types::BexStr, Value)> = match j.as_object_ptr() {
         Some(p) => match vm.get_object(p) {
             Object::Map(m) => m.lock().iter().map(|(k, v)| (k.clone(), *v)).collect(),
             _ => {
@@ -1286,9 +1292,9 @@ fn map_from_json_start(vm: &mut BexVm, j: Value, val_ty: &Ty) -> NativeCallResul
 
 fn map_drive(
     vm: &mut BexVm,
-    entries: Vec<(String, Value)>,
+    entries: Vec<(bex_vm_types::BexStr, Value)>,
     val_ty: Ty,
-    mut results: IndexMap<String, Value>,
+    mut results: IndexMap<bex_vm_types::BexStr, Value>,
     mut idx: usize,
 ) -> NativeCallResult {
     while idx < entries.len() {
@@ -1317,9 +1323,9 @@ fn map_drive(
 
 fn wrap_map_yield(
     yld: NativeCallResult,
-    entries: Vec<(String, Value)>,
+    entries: Vec<(bex_vm_types::BexStr, Value)>,
     val_ty: Ty,
-    results: IndexMap<String, Value>,
+    results: IndexMap<bex_vm_types::BexStr, Value>,
     idx: usize,
 ) -> NativeCallResult {
     let (callee, args, type_args) = match yld {
@@ -1345,9 +1351,9 @@ fn wrap_map_yield(
 }
 
 struct MapFromJsonCont {
-    entries: Vec<(String, Value)>,
+    entries: Vec<(bex_vm_types::BexStr, Value)>,
     val_ty: Ty,
-    results: IndexMap<String, Value>,
+    results: IndexMap<bex_vm_types::BexStr, Value>,
     idx: usize,
 }
 

@@ -977,7 +977,7 @@ impl BexVm {
     }
 
     /// Get string from a Value.
-    pub fn as_string(&self, value: &Value) -> Result<&String, VmInternalError> {
+    pub fn as_string(&self, value: &Value) -> Result<&bex_vm_types::BexStr, VmInternalError> {
         let ptr = self.as_object_ptr(*value, ObjectType::String)?;
         self.get_object(ptr).as_string()
     }
@@ -1013,7 +1013,10 @@ impl BexVm {
     }
 
     /// Get mutable string from a Value.
-    pub fn as_string_mut(&mut self, value: &Value) -> Result<&mut String, VmInternalError> {
+    pub fn as_string_mut(
+        &mut self,
+        value: &Value,
+    ) -> Result<&mut bex_vm_types::BexStr, VmInternalError> {
         let ptr = self.as_object_ptr(*value, ObjectType::String)?;
         self.get_object_mut(ptr).as_string_mut()
     }
@@ -1292,12 +1295,12 @@ impl BexVm {
         Value::object(self.tlab.alloc(Object::Array(values.into())))
     }
 
-    pub fn alloc_map(&mut self, values: IndexMap<String, Value>) -> Value {
+    pub fn alloc_map(&mut self, values: IndexMap<bex_vm_types::BexStr, Value>) -> Value {
         Value::object(self.tlab.alloc(Object::Map(Box::new(values.into()))))
     }
 
-    pub fn alloc_string(&mut self, s: String) -> Value {
-        Value::object(self.tlab.alloc(Object::String(s)))
+    pub fn alloc_string(&mut self, s: impl Into<bex_vm_types::BexStr>) -> Value {
+        Value::object(self.tlab.alloc(Object::String(s.into())))
     }
 
     /// Allocate a heap-boxed float and return it as a `Value`.
@@ -2854,8 +2857,8 @@ impl BexVm {
         } else if left.is_object() && right.is_object() && op == BinOp::Add {
             let ls = self.as_string(&left)?;
             let rs = self.as_string(&right)?;
-            let mut concat = ls.clone();
-            concat.push_str(rs);
+            let mut concat = ls.as_str().to_owned();
+            concat.push_str(rs.as_str());
             self.alloc_string(concat)
         } else {
             return Err(VmInternalError::CannotApplyBinOp {
@@ -3543,7 +3546,7 @@ impl BexVm {
                         return Err(VmInternalError::InvalidFilter.into());
                     };
                     let channel_value = self.stack.ensure_pop();
-                    let channel = self.as_string(&channel_value)?.to_owned();
+                    let channel = self.as_string(&channel_value)?.to_string();
                     let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
                         unreachable!()
                     };
@@ -4581,7 +4584,7 @@ impl BexVm {
                     let watched_node = NodeId::HeapObject(map_index);
                     self.update_watched_node(
                         watched_node,
-                        watch::Path::MapKey(key),
+                        watch::Path::MapKey(key.to_string()),
                         old_value,
                         new_value,
                     );
@@ -4782,7 +4785,7 @@ impl BexVm {
                 OpCode::SendEvent => {
                     let data = self.stack.ensure_pop();
                     let name_value = self.stack.ensure_pop();
-                    let event_name = self.as_string(&name_value)?.clone();
+                    let event_name = self.as_string(&name_value)?.to_string();
                     let source_location = if let Frame::Bytecode(bf) = &self.frames[*frame_idx] {
                         let pc = bf.faulting_pc;
                         let func_obj = self.get_object(bf.function).as_callable().ok();

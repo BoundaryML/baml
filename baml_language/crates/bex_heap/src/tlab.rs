@@ -161,8 +161,8 @@ impl Tlab {
 
     /// Allocate a string object.
     #[inline]
-    pub fn alloc_string(&mut self, s: String) -> HeapPtr {
-        self.alloc(Object::String(s))
+    pub fn alloc_string(&mut self, s: impl Into<bex_str::BexStr>) -> HeapPtr {
+        self.alloc(Object::String(s.into()))
     }
 
     /// Allocate an array object.
@@ -173,7 +173,7 @@ impl Tlab {
 
     /// Allocate a map object.
     #[inline]
-    pub fn alloc_map(&mut self, values: IndexMap<String, Value>) -> HeapPtr {
+    pub fn alloc_map(&mut self, values: IndexMap<bex_str::BexStr, Value>) -> HeapPtr {
         self.alloc(Object::Map(Box::new(values.into())))
     }
 
@@ -329,7 +329,10 @@ mod tests {
         let runtime_idx = canary_idx - ct_len;
         unsafe {
             let gen0 = &*heap.gen0.get();
-            gen0.set(runtime_idx, Object::String("clobbered".to_string()));
+            gen0.set(
+                runtime_idx,
+                Object::String(bex_str::BexStr::from("clobbered")),
+            );
         }
 
         let result = catch_unwind(AssertUnwindSafe(|| {
@@ -343,7 +346,7 @@ mod tests {
         let heap = BexHeap::with_tlab_size(vec![], 100);
         let mut tlab = Tlab::new(heap);
 
-        let _ptr = tlab.alloc(Object::String("hello".to_string()));
+        let _ptr = tlab.alloc(Object::String(bex_str::BexStr::from("hello")));
         assert_eq!(tlab.remaining(), 99);
     }
 
@@ -353,7 +356,7 @@ mod tests {
         let mut tlab = Tlab::new(heap);
 
         for i in 0..10 {
-            let _ptr = tlab.alloc(Object::String(format!("obj{i}")));
+            let _ptr = tlab.alloc(Object::String(bex_str::BexStr::from(format!("obj{i}"))));
         }
         assert_eq!(tlab.remaining(), 90);
     }
@@ -365,26 +368,26 @@ mod tests {
 
         // Allocate 5 objects (fills first chunk)
         for i in 0..5 {
-            let _ptr = tlab.alloc(Object::String(format!("obj{i}")));
+            let _ptr = tlab.alloc(Object::String(bex_str::BexStr::from(format!("obj{i}"))));
         }
         assert_eq!(tlab.remaining(), 0);
 
         // Next allocation triggers refill
-        let _ptr = tlab.alloc(Object::String("obj5".to_string()));
+        let _ptr = tlab.alloc(Object::String(bex_str::BexStr::from("obj5")));
         assert_eq!(tlab.remaining(), 4);
     }
 
     #[test]
     fn test_tlab_with_compile_time_objects() {
         let compile_time: Vec<Object> = vec![
-            Object::String("builtin1".to_string()),
-            Object::String("builtin2".to_string()),
+            Object::String(bex_str::BexStr::from("builtin1")),
+            Object::String(bex_str::BexStr::from("builtin2")),
         ];
         let heap = BexHeap::with_tlab_size(compile_time, 100);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         // First runtime allocation must land outside the compile-time region.
-        let ptr = tlab.alloc(Object::String("runtime".to_string()));
+        let ptr = tlab.alloc(Object::String(bex_str::BexStr::from("runtime")));
         assert!(
             !heap.is_compile_time_ptr(ptr),
             "runtime allocation must not overlap compile-time objects"
@@ -400,8 +403,8 @@ mod tests {
         let mut tlab2 = Tlab::new(heap2);
 
         // Allocate from both TLABs
-        let ptr1 = tlab1.alloc(Object::String("from_tlab1".to_string()));
-        let ptr2 = tlab2.alloc(Object::String("from_tlab2".to_string()));
+        let ptr1 = tlab1.alloc(Object::String(bex_str::BexStr::from("from_tlab1")));
+        let ptr2 = tlab2.alloc(Object::String(bex_str::BexStr::from("from_tlab2")));
 
         // They should get different pointers (different TLAB regions).
         assert_ne!(ptr1, ptr2);
@@ -412,13 +415,13 @@ mod tests {
         let heap = BexHeap::with_tlab_size(vec![], 100);
         let mut tlab = Tlab::new(heap);
 
-        let ptr = tlab.alloc(Object::String("test_value".to_string()));
+        let ptr = tlab.alloc(Object::String(bex_str::BexStr::from("test_value")));
 
         // SAFETY: Single-threaded test, no concurrent access
         unsafe {
             let obj = tlab.get_object(ptr);
             match obj {
-                Object::String(s) => assert_eq!(s, "test_value"),
+                Object::String(s) => assert_eq!(s.as_str(), "test_value"),
                 _ => panic!("Expected String object"),
             }
         }
@@ -429,11 +432,11 @@ mod tests {
         let heap = BexHeap::with_tlab_size(vec![], 100);
         let mut tlab = Tlab::new(heap);
 
-        let ptr = tlab.alloc_string("hello world".to_string());
+        let ptr = tlab.alloc_string("hello world");
 
         unsafe {
             match ptr.get() {
-                Object::String(s) => assert_eq!(s, "hello world"),
+                Object::String(s) => assert_eq!(s.as_str(), "hello world"),
                 _ => panic!("Expected String"),
             }
         }
@@ -464,7 +467,7 @@ mod tests {
         let mut tlab = Tlab::new(heap);
 
         let mut map = IndexMap::new();
-        map.insert("key".to_string(), Value::int(42));
+        map.insert(bex_str::BexStr::from("key"), Value::int(42));
         let ptr = tlab.alloc_map(map);
 
         unsafe {
@@ -650,7 +653,7 @@ mod tests {
         let mut tlab = Tlab::new(heap);
 
         // Allocate an object
-        let ptr = tlab.alloc(Object::String("original".to_string()));
+        let ptr = tlab.alloc(Object::String(bex_str::BexStr::from("original")));
 
         // Verify original value
         unsafe {
@@ -662,7 +665,7 @@ mod tests {
 
         // Mutate the object using set_object
         unsafe {
-            tlab.set_object(ptr, Object::String("mutated".to_string()));
+            tlab.set_object(ptr, Object::String(bex_str::BexStr::from("mutated")));
         }
 
         // Verify mutation
@@ -698,7 +701,9 @@ mod tests {
                     // Each thread allocates multiple objects
                     let mut pointers = Vec::new();
                     for i in 0..10 {
-                        let ptr = tlab.alloc(Object::String(format!("thread_{thread_id}_obj_{i}")));
+                        let ptr = tlab.alloc(Object::String(bex_str::BexStr::from(format!(
+                            "thread_{thread_id}_obj_{i}"
+                        ))));
                         pointers.push(ptr);
                     }
 
@@ -775,7 +780,9 @@ mod tests {
                     // to force multiple refills
                     let mut pointers = Vec::new();
                     for i in 0..20 {
-                        let ptr = tlab.alloc(Object::String(format!("t{thread_id}_o{i}")));
+                        let ptr = tlab.alloc(Object::String(bex_str::BexStr::from(format!(
+                            "t{thread_id}_o{i}"
+                        ))));
                         pointers.push(ptr);
                     }
 

@@ -17,6 +17,7 @@ pub mod lazy_biased_mutex;
 mod roots;
 pub mod types;
 
+pub use bex_str::BexStr;
 pub use bytecode::{
     BinOp, Bytecode, CmpOp, Instruction, JumpTableData, UnaryOp, VizExecDelta, VizExecEvent,
     VizNodeMeta, VizNodeType,

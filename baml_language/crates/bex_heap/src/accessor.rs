@@ -244,9 +244,17 @@ impl<'a> BexValue<'a> {
         self,
         heap: &BexHeap,
         permit: PermitProof<'a>,
-    ) -> Result<&'a String, AccessError> {
+    ) -> Result<&'a bex_str::BexStr, AccessError> {
         match self {
-            BexValue::ExternalValue(BexExternalValue::String(s)) => Ok(s),
+            // Phase 3 will change BexExternalValue::String(String) to BexStr,
+            // unifying this branch. For now, external strings go through the
+            // `owned_inner` conversion path.
+            BexValue::ExternalValue(BexExternalValue::String(_)) => {
+                Err(AccessError::TypeMismatch {
+                    expected: "heap string",
+                    actual: "external string (not yet converted to BexStr)".to_string(),
+                })
+            }
             other => other.as_object("string", heap, permit, |ptr| {
                 let obj = unsafe { ptr.get() };
                 let Object::String(s) = obj else {
@@ -307,7 +315,7 @@ impl<'a> BexValue<'a> {
                 let data = unsafe { map.data_unchecked() };
                 Ok(data
                     .iter()
-                    .map(|(k, v)| (k.clone(), BexValue::Value(v)))
+                    .map(|(k, v)| (k.to_string(), BexValue::Value(v)))
                     .collect())
             }),
         }
@@ -680,7 +688,7 @@ fn convert_object(
         Object::Future(..) => unconvertible("future"),
         Object::UnscheduledFuture(..) => unconvertible("unscheduled_future"),
 
-        Object::String(s) => Ok(BexExternalValue::String(s.clone())),
+        Object::String(s) => Ok(BexExternalValue::String(s.to_string())),
         // Deep-copy path for trace payloads: no declared type is available here,
         // so placeholder types with default attr are used.
         Object::Array(array) => Ok(BexExternalValue::Array {
@@ -704,7 +712,7 @@ fn convert_object(
             // SAFETY: see `Object::Array` arm above.
             entries: unsafe { map.data_unchecked() }
                 .iter()
-                .map(|(k, v)| Ok((k.clone(), owned_inner(BexValue::Value(v), heap, lossy)?)))
+                .map(|(k, v)| Ok((k.to_string(), owned_inner(BexValue::Value(v), heap, lossy)?)))
                 .collect::<Result<_, _>>()?,
         }),
         Object::Instance(instance) => {

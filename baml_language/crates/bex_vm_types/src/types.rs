@@ -1413,7 +1413,7 @@ impl std::ops::DerefMut for ArrayWriteGuard<'_> {
     }
 }
 
-/// Heap-mutable map container. Pairs an `IndexMap<String, Value>` with a
+/// Heap-mutable map container. Pairs an `IndexMap<BexStr, Value>` with a
 /// [`LazyBiasedMutex`]. Boxed by `Object::Map` because `IndexMap` is
 /// already 72 bytes — inlining the mutex would push the Object variant
 /// past the 80-byte size cap.
@@ -1423,7 +1423,7 @@ impl std::ops::DerefMut for ArrayWriteGuard<'_> {
 #[derive(Debug)]
 pub struct MapContainer {
     mutex: LazyBiasedMutex,
-    data: UnsafeCell<IndexMap<String, Value>>,
+    data: UnsafeCell<IndexMap<bex_str::BexStr, Value>>,
 }
 
 // SAFETY: as for `ArrayContainer` — cross-thread access is serialized by
@@ -1431,7 +1431,7 @@ pub struct MapContainer {
 unsafe impl Sync for MapContainer {}
 
 impl MapContainer {
-    pub fn new(data: IndexMap<String, Value>) -> Self {
+    pub fn new(data: IndexMap<bex_str::BexStr, Value>) -> Self {
         Self {
             mutex: LazyBiasedMutex::new(),
             data: UnsafeCell::new(data),
@@ -1464,7 +1464,7 @@ impl MapContainer {
     /// # Safety
     /// See [`ArrayContainer::data_unchecked`].
     #[allow(clippy::missing_safety_doc)]
-    pub unsafe fn data_unchecked(&self) -> &IndexMap<String, Value> {
+    pub unsafe fn data_unchecked(&self) -> &IndexMap<bex_str::BexStr, Value> {
         // SAFETY: caller upholds the no-concurrent-writer contract.
         unsafe { &*self.data.get() }
     }
@@ -1472,7 +1472,7 @@ impl MapContainer {
     /// # Safety
     /// See [`ArrayContainer::data_unchecked_mut`].
     #[allow(clippy::missing_safety_doc, clippy::mut_from_ref)]
-    pub unsafe fn data_unchecked_mut(&self) -> &mut IndexMap<String, Value> {
+    pub unsafe fn data_unchecked_mut(&self) -> &mut IndexMap<bex_str::BexStr, Value> {
         // SAFETY: caller upholds the contract.
         unsafe { &mut *self.data.get() }
     }
@@ -1493,13 +1493,13 @@ impl MapContainer {
     }
 
     /// Locked convenience: snapshot the underlying `IndexMap`.
-    pub fn to_index_map(&self) -> IndexMap<String, Value> {
+    pub fn to_index_map(&self) -> IndexMap<bex_str::BexStr, Value> {
         self.lock().clone()
     }
 }
 
-impl From<IndexMap<String, Value>> for MapContainer {
-    fn from(data: IndexMap<String, Value>) -> Self {
+impl From<IndexMap<bex_str::BexStr, Value>> for MapContainer {
+    fn from(data: IndexMap<bex_str::BexStr, Value>) -> Self {
         Self::new(data)
     }
 }
@@ -1512,31 +1512,31 @@ impl Clone for MapContainer {
 }
 
 pub struct MapReadGuard<'a> {
-    data: &'a IndexMap<String, Value>,
+    data: &'a IndexMap<bex_str::BexStr, Value>,
     _access: crate::lazy_biased_mutex::AccessGuard<'a>,
 }
 
 impl std::ops::Deref for MapReadGuard<'_> {
-    type Target = IndexMap<String, Value>;
-    fn deref(&self) -> &IndexMap<String, Value> {
+    type Target = IndexMap<bex_str::BexStr, Value>;
+    fn deref(&self) -> &IndexMap<bex_str::BexStr, Value> {
         self.data
     }
 }
 
 pub struct MapWriteGuard<'a> {
-    data: &'a mut IndexMap<String, Value>,
+    data: &'a mut IndexMap<bex_str::BexStr, Value>,
     _access: crate::lazy_biased_mutex::AccessGuard<'a>,
 }
 
 impl std::ops::Deref for MapWriteGuard<'_> {
-    type Target = IndexMap<String, Value>;
-    fn deref(&self) -> &IndexMap<String, Value> {
+    type Target = IndexMap<bex_str::BexStr, Value>;
+    fn deref(&self) -> &IndexMap<bex_str::BexStr, Value> {
         self.data
     }
 }
 
 impl std::ops::DerefMut for MapWriteGuard<'_> {
-    fn deref_mut(&mut self) -> &mut IndexMap<String, Value> {
+    fn deref_mut(&mut self) -> &mut IndexMap<bex_str::BexStr, Value> {
         self.data
     }
 }
@@ -1594,7 +1594,7 @@ pub enum Object {
     /// reference will cause some lifetime issues because the VM would have
     /// pointers to itself, so we'd have to figure how to implement it
     /// otherwise.
-    String(String),
+    String(bex_str::BexStr),
 
     /// Byte array (uint8array).
     Uint8Array(Vec<u8>),
@@ -1633,9 +1633,15 @@ pub enum Object {
     Sentinel(SentinelKind),
 }
 
+#[cfg(not(feature = "heap_debug"))]
 const _: () = assert!(
-    std::mem::size_of::<Object>() <= 80,
-    "Object enum size regression — expected <= 80 bytes"
+    std::mem::size_of::<Object>() == 64,
+    "Object enum size changed — expected exactly 64 bytes (release)"
+);
+#[cfg(feature = "heap_debug")]
+const _: () = assert!(
+    std::mem::size_of::<Object>() == 72,
+    "Object enum size changed — expected exactly 72 bytes (heap_debug)"
 );
 
 // Custom serde for Object: RustData and Collector contain non-serializable
@@ -1671,10 +1677,17 @@ impl Serialize for Object {
             Self::Closure(v) => ObjectSerde::Closure(v.clone()),
             Self::BoundMethod(v) => ObjectSerde::BoundMethod(v.clone()),
             Self::Cell(v) => ObjectSerde::Cell(v.clone()),
-            Self::String(v) => ObjectSerde::String(v.clone()),
+            Self::String(v) => ObjectSerde::String(v.as_str().to_owned()),
             Self::Uint8Array(v) => ObjectSerde::Uint8Array(v.clone()),
             Self::Array(v) => ObjectSerde::Array(v.lock().clone()),
-            Self::Map(v) => ObjectSerde::Map(v.lock().clone()),
+            Self::Map(v) => {
+                let map = v.lock();
+                let string_map: IndexMap<String, Value> = map
+                    .iter()
+                    .map(|(k, v)| (k.as_str().to_owned(), *v))
+                    .collect();
+                ObjectSerde::Map(string_map)
+            }
             Self::Float(v) => ObjectSerde::Float(*v),
             Self::Future(v) => ObjectSerde::Future(v.clone()),
             Self::UnscheduledFuture(v) => ObjectSerde::UnscheduledFuture(v.clone()),
@@ -1711,10 +1724,16 @@ impl<'de> Deserialize<'de> for Object {
             ObjectSerde::Closure(v) => Self::Closure(v),
             ObjectSerde::BoundMethod(v) => Self::BoundMethod(v),
             ObjectSerde::Cell(v) => Self::Cell(v),
-            ObjectSerde::String(v) => Self::String(v),
+            ObjectSerde::String(v) => Self::String(bex_str::BexStr::from(v)),
             ObjectSerde::Uint8Array(v) => Self::Uint8Array(v),
             ObjectSerde::Array(v) => Self::Array(ArrayContainer::new(v)),
-            ObjectSerde::Map(v) => Self::Map(Box::new(MapContainer::new(v))),
+            ObjectSerde::Map(v) => {
+                let bex_map: IndexMap<bex_str::BexStr, Value> = v
+                    .into_iter()
+                    .map(|(k, v)| (bex_str::BexStr::from(k), v))
+                    .collect();
+                Self::Map(Box::new(MapContainer::new(bex_map)))
+            }
             ObjectSerde::Float(v) => Self::Float(v),
             ObjectSerde::Future(v) => Self::Future(v),
             ObjectSerde::UnscheduledFuture(v) => Self::UnscheduledFuture(v),

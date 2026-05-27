@@ -80,14 +80,20 @@ fn media_value_to_json(
         None => Value::NULL,
     };
 
-    let mut map = IndexMap::new();
-    map.insert("kind".to_string(), vm.alloc_string(kind_str.to_string()));
+    let mut map: IndexMap<bex_vm_types::BexStr, _> = IndexMap::new();
     map.insert(
-        "source".to_string(),
+        bex_vm_types::BexStr::from("kind"),
+        vm.alloc_string(kind_str.to_string()),
+    );
+    map.insert(
+        bex_vm_types::BexStr::from("source"),
         vm.alloc_string(source_str.to_string()),
     );
-    map.insert("value".to_string(), vm.alloc_string(value_str));
-    map.insert("mime".to_string(), mime_val);
+    map.insert(
+        bex_vm_types::BexStr::from("value"),
+        vm.alloc_string(value_str),
+    );
+    map.insert(bex_vm_types::BexStr::from("mime"), mime_val);
     vm.alloc_map(map)
 }
 

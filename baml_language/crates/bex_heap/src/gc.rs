@@ -313,7 +313,7 @@ impl BexHeap {
         let new_ptr = unsafe {
             let inactive = self.inactive_mut();
             let new_runtime_idx = inactive.len();
-            inactive.push_with(obj, || Object::String(String::new()));
+            inactive.push_with(obj, || Object::String(bex_str::BexStr::empty()));
             let raw_ptr = inactive.get_ptr(new_runtime_idx);
             self.make_heap_ptr(raw_ptr)
         };
@@ -620,7 +620,7 @@ impl BexHeap {
         let new_ptr = unsafe {
             let vec = &mut *space.get();
             let new_idx = vec.len();
-            vec.push_with(obj, || Object::String(String::new()));
+            vec.push_with(obj, || Object::String(bex_str::BexStr::empty()));
             let raw_ptr = vec.get_ptr(new_idx);
             self.make_heap_ptr(raw_ptr)
         };
@@ -1011,8 +1011,8 @@ mod tests {
     #[test]
     fn test_gc_preserves_compile_time_objects() {
         let compile_time: Vec<Object> = vec![
-            Object::String("builtin1".to_string()),
-            Object::String("builtin2".to_string()),
+            Object::String(bex_str::BexStr::from("builtin1")),
+            Object::String(bex_str::BexStr::from("builtin2")),
         ];
         let heap = BexHeap::new(compile_time);
 
@@ -1285,8 +1285,8 @@ mod tests {
     #[test]
     fn test_compile_time_objects_never_collected() {
         let compile_time: Vec<Object> = vec![
-            Object::String("builtin1".to_string()),
-            Object::String("builtin2".to_string()),
+            Object::String(bex_str::BexStr::from("builtin1")),
+            Object::String(bex_str::BexStr::from("builtin2")),
         ];
         let heap = BexHeap::new(compile_time);
         let mut tlab = Tlab::new(Arc::clone(&heap));
@@ -1325,7 +1325,7 @@ mod tests {
 
         // Allocate a map that references the string
         let mut map = indexmap::IndexMap::new();
-        map.insert("key".to_string(), Value::object(str_obj));
+        map.insert(bex_str::BexStr::from("key"), Value::object(str_obj));
         let map_obj = tlab.alloc_map(map);
 
         // Allocate unreferenced garbage
@@ -1450,7 +1450,7 @@ mod tests {
         let inner_array = tlab.alloc_array(vec![Value::object(leaf_str)]);
 
         let mut map = indexmap::IndexMap::new();
-        map.insert("nested".to_string(), Value::object(inner_array));
+        map.insert(bex_str::BexStr::from("nested"), Value::object(inner_array));
         let middle_map = tlab.alloc_map(map);
 
         let outer_array = tlab.alloc_array(vec![Value::object(middle_map)]);
@@ -1705,7 +1705,7 @@ mod tests {
     fn test_generation_of_compile_time() {
         use crate::heap::Generation;
 
-        let heap = BexHeap::new(vec![Object::String("builtin".to_string())]);
+        let heap = BexHeap::new(vec![Object::String(bex_str::BexStr::from("builtin"))]);
         let ct_ptr = heap.compile_time_ptr(0);
         assert_eq!(heap.generation_of(ct_ptr), Generation::CompileTime);
     }
@@ -2381,7 +2381,7 @@ mod tests {
 
         // --- Container: Object::Map ---
         let mut map_data = indexmap::IndexMap::new();
-        map_data.insert("k".to_string(), Value::object(leaf_for_map));
+        map_data.insert(bex_str::BexStr::from("k"), Value::object(leaf_for_map));
         let map_container = tlab.alloc_map(map_data);
 
         // --- Container: Object::Closure ---
