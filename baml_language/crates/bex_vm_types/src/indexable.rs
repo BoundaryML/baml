@@ -14,37 +14,37 @@
 
 use std::{cell::UnsafeCell, collections::HashMap, marker::PhantomData, sync::Arc};
 
-use serde::{Deserialize, Serialize};
+use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{HeapPtr, Object, PermitProof, RootHaver, Value};
 
 // Marker types for different pool kinds
 
 /// Evaluation stack index type.
-#[derive(Copy, Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Default, BorshSerialize, BorshDeserialize)]
 pub struct StackKind;
 
 /// Global pool index type.
-#[derive(Copy, Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Default, BorshSerialize, BorshDeserialize)]
 pub struct GlobalKind;
 
 /// Object pool index type.
-#[derive(Copy, Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Default, BorshSerialize, BorshDeserialize)]
 pub struct ObjectKind;
 
 /// Generic index type that forces a subtype during compilation.
 #[derive(Clone, Copy)]
 pub struct Index<K>(pub(crate) usize, PhantomData<K>);
 
-impl<K> Serialize for Index<K> {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.0.serialize(serializer)
+impl<K> BorshSerialize for Index<K> {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        BorshSerialize::serialize(&self.0, writer)
     }
 }
 
-impl<'de, K> Deserialize<'de> for Index<K> {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        usize::deserialize(deserializer).map(|v| Self(v, PhantomData))
+impl<K> BorshDeserialize for Index<K> {
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        usize::deserialize_reader(reader).map(|v| Self(v, PhantomData))
     }
 }
 
@@ -143,15 +143,15 @@ impl<K> std::fmt::Display for Index<K> {
 #[repr(transparent)]
 pub struct Pool<T, K>(pub Vec<T>, PhantomData<K>);
 
-impl<T: Serialize, K> Serialize for Pool<T, K> {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.0.serialize(serializer)
+impl<T: BorshSerialize, K> BorshSerialize for Pool<T, K> {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        BorshSerialize::serialize(&self.0, writer)
     }
 }
 
-impl<'de, T: Deserialize<'de>, K> Deserialize<'de> for Pool<T, K> {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        Vec::<T>::deserialize(deserializer).map(|v| Self(v, PhantomData))
+impl<T: BorshDeserialize, K> BorshDeserialize for Pool<T, K> {
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        Vec::<T>::deserialize_reader(reader).map(|v| Self(v, PhantomData))
     }
 }
 
@@ -533,7 +533,7 @@ pub type StackIndex = Index<StackKind>;
 pub type GlobalIndex = Index<GlobalKind>;
 
 #[cfg(feature = "heap_debug")]
-#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, BorshSerialize, BorshDeserialize)]
 pub struct ObjectIndex {
     raw: usize,
     epoch: u32,

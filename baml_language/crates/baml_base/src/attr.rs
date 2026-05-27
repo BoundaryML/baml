@@ -5,14 +5,24 @@
 //! These live in `baml_base` b/c they're shared by `baml_compiler_tir::Ty`
 //! (TIR) and `baml_type::Ty` (VIR+).
 
-use serde::{Deserialize, Serialize};
+use borsh::{BorshDeserialize, BorshSerialize};
 
 /// Binary present/absent flag for SAP attributes.
 ///
 /// Used instead of `bool` for extensibility — future attributes may
 /// need additional states (e.g., `Inherited`, `Explicit`).
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default, Serialize, Deserialize,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Default,
+    BorshSerialize,
+    BorshDeserialize,
 )]
 pub enum TyAttrValue {
     #[default]
@@ -41,7 +51,9 @@ impl TyAttrValue {
 ///
 /// BEP-006 v12 defines three binary (present/absent) SAP attributes
 /// that control how the schema-aligned parser handles each streaming state.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default, BorshSerialize, BorshDeserialize,
+)]
 pub struct TyAttr {
     /// `@sap.parse_without_null`: during parsing (both in-progress and done
     /// states), exclude `null` from the type's parse candidates.

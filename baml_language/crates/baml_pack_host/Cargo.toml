@@ -21,9 +21,8 @@ bex_events = { workspace = true }
 bex_vm_types = { workspace = true }
 sys_native = { workspace = true, default-features = false, features = [ "ring-crypto" ] }
 anyhow = { workspace = true }
-bitcode = { workspace = true }
+borsh = { workspace = true }
 libsui = { workspace = true }
-serde = { workspace = true }
 tokio = { workspace = true, features = [ "rt" ] }
 
 [features]
