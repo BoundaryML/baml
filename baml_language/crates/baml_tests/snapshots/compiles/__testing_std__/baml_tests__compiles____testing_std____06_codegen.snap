@@ -128,7 +128,7 @@ function testing.TestCollector.find_testset(self: null, name: string) -> testing
     load_var __for_idx
     load_var _3
     call baml.Array.length
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L1
     jump L2
 
@@ -234,14 +234,14 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
     load_var __for_idx
     load_var _13
     call baml.Array.length
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L4
     jump L8
 
   L4:
     load_var count
     load_const 0
-    cmp_op >
+    cmp_int_op >
     pop_jump_if_false L5
     jump L6
 
@@ -257,7 +257,7 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
     store_var _28
     load_var count
     load_const 1
-    bin_op +
+    add_int
     call baml.unstable.string
     store_var _30
     load_var _28
@@ -349,14 +349,14 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
     load_var __for_idx
     load_var _13
     call baml.Array.length
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L4
     jump L8
 
   L4:
     load_var count
     load_const 0
-    cmp_op >
+    cmp_int_op >
     pop_jump_if_false L5
     jump L6
 
@@ -372,7 +372,7 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
     store_var _28
     load_var count
     load_const 1
-    bin_op +
+    add_int
     call baml.unstable.string
     store_var _30
     load_var _28
@@ -488,7 +488,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
     load_var __for_idx
     load_var _3
     call baml.Array.length
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L1
     jump L7
 
@@ -504,7 +504,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
     load_var __for_idx_1
     load_var _28
     call baml.Array.length
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L3
     jump L4
 
@@ -584,7 +584,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
     alloc_map 0
     load_var _19
     load_var start
-    bin_op -
+    sub_int
     init_instance testing.TestRegistry .collector, .expansions, .loading_time_ms
     call baml.Map.set
     pop 1
@@ -641,7 +641,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
     load_var __for_idx
     load_var _3
     call baml.Array.length
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L1
     jump L7
 
@@ -657,7 +657,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
     load_var __for_idx_1
     load_var _13
     call baml.Array.length
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L3
     jump L4
 
@@ -741,7 +741,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
     load_var __for_idx
     load_var _3
     call baml.Array.length
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L1
     jump L8
 
@@ -757,7 +757,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
     load_var __for_idx_1
     load_var _12
     call baml.Array.length
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L3
     jump L4
 

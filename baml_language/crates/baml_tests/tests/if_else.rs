@@ -79,11 +79,11 @@ async fn if_else_comparison() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 1
         load_const 2
-        cmp_op <
+        cmp_int_op <
         pop_jump_if_false L0
         jump L1
 
@@ -112,11 +112,11 @@ async fn if_else_equality() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 5
         load_const 5
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L1
 
@@ -458,18 +458,18 @@ async fn else_if_with_comparisons() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 5
         load_const 0
-        cmp_op <
+        cmp_int_op <
         pop_jump_if_false L0
         jump L3
 
       L0:
         load_const 5
         load_const 10
-        cmp_op <
+        cmp_int_op <
         pop_jump_if_false L1
         jump L2
 
@@ -744,13 +744,13 @@ async fn if_else_arithmetic_condition() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 1
         load_const 1
-        bin_op +
+        add_int
         load_const 2
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L1
 
@@ -1286,7 +1286,7 @@ async fn nested_block_with_if() {
         add_int
         store_var_load_var a
         load_const 5
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         load_const 10
         store_var a

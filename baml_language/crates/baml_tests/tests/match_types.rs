@@ -278,7 +278,7 @@ async fn match_guard_true() {
         load_var s
         load_field .value
         load_const 90
-        cmp_op >=
+        cmp_int_op >=
         pop_jump_if_false L0
         jump L3
 
@@ -289,7 +289,7 @@ async fn match_guard_true() {
         load_var s
         load_field .value
         load_const 70
-        cmp_op >=
+        cmp_int_op >=
         pop_jump_if_false L1
         jump L2
 
@@ -344,7 +344,7 @@ async fn match_guard_fallthrough() {
         load_var s
         load_field .value
         load_const 90
-        cmp_op >=
+        cmp_int_op >=
         pop_jump_if_false L0
         jump L3
 
@@ -355,7 +355,7 @@ async fn match_guard_fallthrough() {
         load_var s
         load_field .value
         load_const 70
-        cmp_op >=
+        cmp_int_op >=
         pop_jump_if_false L1
         jump L2
 
@@ -410,7 +410,7 @@ async fn match_guard_all_fail() {
         load_var s
         load_field .value
         load_const 90
-        cmp_op >=
+        cmp_int_op >=
         pop_jump_if_false L0
         jump L3
 
@@ -421,7 +421,7 @@ async fn match_guard_all_fail() {
         load_var s
         load_field .value
         load_const 70
-        cmp_op >=
+        cmp_int_op >=
         pop_jump_if_false L1
         jump L2
 
@@ -475,7 +475,7 @@ async fn match_guarded_int_literal_guard_true() {
     function classify(x: int, flag: bool) -> string {
         load_var x
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         load_var flag
         pop_jump_if_false L0
@@ -484,14 +484,14 @@ async fn match_guarded_int_literal_guard_true() {
       L0:
         load_var x
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L1
         jump L4
 
       L1:
         load_var x
         load_const 2
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L2
         jump L3
 
@@ -552,7 +552,7 @@ async fn match_guarded_int_literal_guard_false() {
     function classify(x: int, flag: bool) -> string {
         load_var x
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         load_var flag
         pop_jump_if_false L0
@@ -561,14 +561,14 @@ async fn match_guarded_int_literal_guard_false() {
       L0:
         load_var x
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L1
         jump L4
 
       L1:
         load_var x
         load_const 2
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L2
         jump L3
 
@@ -631,7 +631,7 @@ async fn match_all_arms_guarded_all_fail() {
     function classify(x: int, flag: bool) -> string {
         load_var x
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         load_var flag
         pop_jump_if_false L0
@@ -640,7 +640,7 @@ async fn match_all_arms_guarded_all_fail() {
       L0:
         load_var x
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L1
         load_var flag
         pop_jump_if_false L1
@@ -649,7 +649,7 @@ async fn match_all_arms_guarded_all_fail() {
       L1:
         load_var x
         load_const 2
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L2
         load_var flag
         pop_jump_if_false L2
@@ -713,14 +713,14 @@ async fn match_mixed_literal_typed_guard() {
     function classify(x: int, flag: bool) -> string {
         load_var x
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L3
 
       L0:
         load_var x
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L1
         load_var flag
         pop_jump_if_false L1
@@ -776,14 +776,14 @@ async fn match_mixed_literal_typed_guard_fallthrough() {
     function classify(x: int, flag: bool) -> string {
         load_var x
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L3
 
       L0:
         load_var x
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L1
         load_var flag
         pop_jump_if_false L1
@@ -1688,7 +1688,7 @@ async fn match_multiple_typed_patterns_with_guards() {
         load_var result
         load_field .code
         load_const 200
-        cmp_op >
+        cmp_int_op >
         pop_jump_if_false L0
         jump L5
 

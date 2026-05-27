@@ -54,6 +54,12 @@ pub enum VmPanic {
     /// fall back gracefully instead of aborting the host process.
     #[error("host resource '{resource}' unavailable: {message}")]
     HostUnavailable { resource: String, message: String },
+
+    /// The right operand of a bigint shift (`<<` / `>>`) was negative.
+    /// Catchable because the count is a runtime `bigint` and the type
+    /// system can't rule out negative values.
+    #[error("negative bit shift: {message}")]
+    NegativeBitShift { message: String },
 }
 
 /// An error value from the BAML standard library. Maps 1:1 to a `baml.errors.*` class.

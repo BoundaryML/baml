@@ -74,6 +74,7 @@ message InboundValue {
     InboundEnumValue enum_value = 9;
     BamlHandle handle = 10;
     bytes uint8array_value = 11;
+    string bigint_value = 12;
   }
   // Absent oneof = null value.
 }

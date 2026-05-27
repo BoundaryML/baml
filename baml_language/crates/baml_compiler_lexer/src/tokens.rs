@@ -125,6 +125,10 @@ pub enum TokenKind {
     #[token("#")]
     Hash,
 
+    /// Bigint literal (must come before Integer so the longer `42n` match wins)
+    #[regex(r"[0-9]+n")]
+    BigintLiteral,
+
     /// Integer literal
     #[regex(r"[0-9]+")]
     IntegerLiteral,
@@ -311,6 +315,7 @@ impl std::fmt::Display for TokenKind {
             TokenKind::Word => "identifier",
             TokenKind::Quote => "'\"'",
             TokenKind::Hash => "'#'",
+            TokenKind::BigintLiteral => "bigint",
             TokenKind::IntegerLiteral => "integer",
             TokenKind::FloatLiteral => "float",
 
@@ -1001,5 +1006,41 @@ mod tests {
 
         // Verify lossless
         assert_eq!(reconstruct_source(&lex(source)), source);
+    }
+
+    #[test]
+    fn lex_bigint_literal() {
+        // Plain bigint literals
+        assert_eq!(lex_no_whitespace("42n"), vec![TokenKind::BigintLiteral]);
+        assert_eq!(lex_no_whitespace("0n"), vec![TokenKind::BigintLiteral]);
+        assert_eq!(
+            lex_no_whitespace("99999999999999999999n"),
+            vec![TokenKind::BigintLiteral]
+        );
+
+        // Bigint followed by an identifier — must not consume the identifier part
+        assert_eq!(
+            lex_no_whitespace("42na"),
+            vec![TokenKind::BigintLiteral, TokenKind::Word]
+        );
+
+        // `42n.5` — the `42n` is consumed as BigintLiteral, leaving `.5`
+        // which splits into Dot then IntegerLiteral (not FloatLiteral because the
+        // integer part was already consumed).
+        assert_eq!(
+            lex_no_whitespace("42n.5"),
+            vec![
+                TokenKind::BigintLiteral,
+                TokenKind::Dot,
+                TokenKind::IntegerLiteral
+            ]
+        );
+
+        // Verify that plain integers still lex as IntegerLiteral (no regression)
+        assert_eq!(lex_no_whitespace("42"), vec![TokenKind::IntegerLiteral]);
+
+        // Lossless reconstruction
+        assert_eq!(reconstruct_source(&lex("42n")), "42n");
+        assert_eq!(reconstruct_source(&lex("0n")), "0n");
     }
 }

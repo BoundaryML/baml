@@ -122,7 +122,7 @@ function user.is_not_string(v: int | string) -> bool {
 function user.is_zero(n: int) -> bool {
     load_var n
     load_const 0
-    cmp_op ==
+    cmp_int_op ==
     pop_jump_if_false L0
     jump L1
 

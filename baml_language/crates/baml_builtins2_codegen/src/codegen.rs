@@ -40,6 +40,9 @@ fn is_fallible(b: &NativeBuiltin) -> bool {
                 | "baml.media.Video.to_json"
                 | "baml.media.Image.to_json"
                 | "baml.Float.random"
+                // `bigint.pow` raises `AllocFailure` (a panic, not in `throws`) when
+                // the estimated result size exceeds `MAX_BIGINT_BITS`.
+                | "baml.Bigint.pow"
         )
 }
 
@@ -524,6 +527,7 @@ fn copy_field_type(ty: &BamlType) -> String {
     match ty {
         BamlType::RustType => "Arc<dyn Any + Send + Sync>".to_string(),
         BamlType::Int => "i64".to_string(),
+        BamlType::Bigint => "Arc<num_bigint::BigInt>".to_string(),
         BamlType::Float => "f64".to_string(),
         BamlType::Bool => "bool".to_string(),
         BamlType::Null => "()".to_string(),
@@ -1306,6 +1310,9 @@ fn receiver_immut_extraction_expr(
                 *f \
             }}"
         ),
+        // Bigint is heap-allocated behind an Arc; always clone the Arc so the
+        // trait method receives an owned `Arc<BigInt>` regardless of needs_owned.
+        "Bigint" => format!("vm.as_bigint({val})?.clone()"),
         name if is_media_class(name) => {
             let kind = media_kind_expr(&recv.class_name);
             if needs_owned {
@@ -1352,6 +1359,7 @@ fn extraction_expr(
                 i \
             }}"
         ),
+        BamlType::Bigint => format!("vm.as_bigint({val})?.clone()"),
         BamlType::Float => format!(
             "{{ \
                 let __v = {val}; \
@@ -1519,6 +1527,7 @@ fn call_arg_for_type(name: &str, ty: &BamlType, is_ref: bool) -> String {
             }
         }
         BamlType::Int | BamlType::Float | BamlType::Bool | BamlType::Null => name.to_string(),
+        BamlType::Bigint => name.to_string(),
         // Media class view types (Pdf, Audio, Video, Image) are Named and need to be passed by ref
         BamlType::Named(class_name) if is_media_class(class_name.as_str()) => {
             format!("&{name}")
@@ -1575,7 +1584,11 @@ fn emit_result_conversion_ok(out: &mut String, b: &NativeBuiltin, indent: &str) 
 /// conversion runs.
 fn return_type_needs_alloc(ty: &BamlType) -> bool {
     match ty {
-        BamlType::String | BamlType::Uint8Array | BamlType::List(_) | BamlType::Map(_, _) => true,
+        BamlType::String
+        | BamlType::Uint8Array
+        | BamlType::Bigint
+        | BamlType::List(_)
+        | BamlType::Map(_, _) => true,
         BamlType::Optional(inner) => return_type_needs_alloc(inner),
         BamlType::Int
         | BamlType::Float
@@ -1588,6 +1601,16 @@ fn return_type_needs_alloc(ty: &BamlType) -> bool {
     }
 }
 
+/// Emit a Rust expression that converts a native method's return value into a
+/// `Value` for the surrounding `Ok({conversion})` line in the glue closure.
+///
+/// **Invariant**: the closure this expression lands in returns
+/// `NativeFunctionResult` (= `Result<Value, VmRustFnError>`, see
+/// `bex_vm::package_baml::NativeFunctionResult`), so any `?` inside the
+/// emitted expression propagates via `VmRustFnError`. In particular the
+/// `Bigint` arm uses `try_alloc_bigint(...)?` so a `VmPanic::AllocFailure`
+/// from a too-large bigint is promoted to `VmRustFnError::Panic` via the
+/// `#[from]` on `VmRustFnError`.
 fn result_conversion_expr(name: &str, ty: &BamlType) -> String {
     match ty {
         BamlType::String => format!("vm.alloc_string({name})"),
@@ -1601,6 +1624,7 @@ fn result_conversion_expr(name: &str, ty: &BamlType) -> String {
                     {name}, Value::INT_MIN, Value::INT_MAX) \
             }})?"
         ),
+        BamlType::Bigint => format!("vm.try_alloc_bigint({name})?"),
         BamlType::Float => format!("vm.alloc_float({name})"),
         BamlType::Bool => format!("Value::bool({name})"),
         BamlType::Null => "Value::NULL".to_string(),
@@ -1630,6 +1654,7 @@ fn baml_type_to_input(ty: &BamlType, is_mut: bool) -> String {
             }
         }
         BamlType::Int => "i64".to_string(),
+        BamlType::Bigint => "std::sync::Arc<num_bigint::BigInt>".to_string(),
         BamlType::Float => "f64".to_string(),
         BamlType::Bool => "bool".to_string(),
         BamlType::Null => "()".to_string(),
@@ -1667,6 +1692,7 @@ fn baml_type_to_output(ty: &BamlType) -> String {
     match ty {
         BamlType::String => "bex_str::BexStr".to_string(),
         BamlType::Int => "i64".to_string(),
+        BamlType::Bigint => "std::sync::Arc<num_bigint::BigInt>".to_string(),
         BamlType::Float => "f64".to_string(),
         BamlType::Bool => "bool".to_string(),
         BamlType::Null => "()".to_string(),
@@ -1738,6 +1764,9 @@ fn receiver_input_type_with_vm_usage(recv: &Receiver, vm_usage: VmUsage) -> Stri
         // (`i64` / `f64` / `bool`) is `Copy` and that's the natural Rust idiom.
         "Int" => "i64".to_string(),
         "Float" => "f64".to_string(),
+        // Bigint is heap-allocated; the glue extracts and clones the Arc so the
+        // trait method receives an owned `Arc<num_bigint::BigInt>`.
+        "Bigint" => "std::sync::Arc<num_bigint::BigInt>".to_string(),
         name if is_media_class(name) => {
             // For `//baml:mut_vm` methods the view struct cannot coexist with
             // `&mut BexVm` (split-borrow).  Use the raw `Value` instead so the
@@ -1769,6 +1798,7 @@ fn receiver_baml_type(recv: &Receiver) -> BamlType {
         "String" => BamlType::String,
         "Uint8Array" => BamlType::Uint8Array,
         "Int" => BamlType::Int,
+        "Bigint" => BamlType::Bigint,
         "Float" => BamlType::Float,
         "Pdf" | "Audio" | "Video" | "Image" => BamlType::Named(recv.class_name.clone()),
         _ => BamlType::Named(recv.class_name.clone()),

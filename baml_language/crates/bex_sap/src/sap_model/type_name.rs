@@ -3,9 +3,9 @@
 use std::{borrow::Cow, fmt};
 
 use crate::sap_model::{
-    ArrayTy, BoolLiteralTy, BoolTy, ClassTy, EnumTy, EnumVariantTy, FloatTy, IntLiteralTy, IntTy,
-    LiteralTy, MapTy, MediaTy, NullTy, PrimitiveTy, StreamStateTy, StringLiteralTy, StringTy, Ty,
-    TyResolved, TyResolvedRef, TyWithMeta, TypeIdent, UnionTy,
+    ArrayTy, BigintLiteralTy, BigintTy, BoolLiteralTy, BoolTy, ClassTy, EnumTy, EnumVariantTy,
+    FloatTy, IntLiteralTy, IntTy, LiteralTy, MapTy, MediaTy, NullTy, PrimitiveTy, StreamStateTy,
+    StringLiteralTy, StringTy, Ty, TyResolved, TyResolvedRef, TyWithMeta, TypeIdent, UnionTy,
 };
 
 /// A trait that provides a type name for a given type.
@@ -34,6 +34,7 @@ macro_rules! impl_type_name {
     };
 }
 impl_type_name!(IntTy => "int");
+impl_type_name!(BigintTy => "bigint");
 impl_type_name!(FloatTy => "float");
 impl_type_name!(StringTy => "string");
 impl_type_name!(BoolTy => "bool");
@@ -54,6 +55,7 @@ impl TypeName for PrimitiveTy {
     fn type_name(&self) -> Cow<'static, str> {
         match self {
             PrimitiveTy::Int(int) => int.type_name(),
+            PrimitiveTy::Bigint(bigint) => bigint.type_name(),
             PrimitiveTy::Float(float) => float.type_name(),
             PrimitiveTy::String(string) => string.type_name(),
             PrimitiveTy::Bool(bool) => bool.type_name(),
@@ -66,6 +68,11 @@ impl TypeName for PrimitiveTy {
 impl TypeName for IntLiteralTy {
     fn type_name(&self) -> Cow<'static, str> {
         Cow::Owned(format!("literal[{}]", self.0))
+    }
+}
+impl TypeName for BigintLiteralTy {
+    fn type_name(&self) -> Cow<'static, str> {
+        Cow::Owned(format!("literal[{}n]", self.0))
     }
 }
 impl TypeName for StringLiteralTy<'_> {
@@ -87,6 +94,7 @@ impl TypeName for LiteralTy<'_> {
         match self {
             LiteralTy::String(s) => s.type_name(),
             LiteralTy::Int(i) => i.type_name(),
+            LiteralTy::Bigint(b) => b.type_name(),
             LiteralTy::Bool(b) => b.type_name(),
         }
     }
@@ -147,6 +155,7 @@ impl<N: TypeIdent> TypeName for TyResolved<'_, N> {
     fn type_name(&self) -> Cow<'static, str> {
         match self {
             TyResolved::Int(v) => v.type_name(),
+            TyResolved::Bigint(v) => v.type_name(),
             TyResolved::Float(v) => v.type_name(),
             TyResolved::String(v) => v.type_name(),
             TyResolved::Bool(v) => v.type_name(),
@@ -154,6 +163,7 @@ impl<N: TypeIdent> TypeName for TyResolved<'_, N> {
             TyResolved::Media(v) => v.type_name(),
             TyResolved::LiteralString(v) => v.type_name(),
             TyResolved::LiteralInt(v) => v.type_name(),
+            TyResolved::LiteralBigint(v) => v.type_name(),
             TyResolved::LiteralBool(v) => v.type_name(),
             TyResolved::Array(a) => a.type_name(),
             TyResolved::Map(m) => m.type_name(),
@@ -176,6 +186,7 @@ impl<N: TypeIdent> TypeName for TyResolvedRef<'_, N> {
     fn type_name(&self) -> Cow<'static, str> {
         match self {
             TyResolvedRef::Int(v) => v.type_name(),
+            TyResolvedRef::Bigint(v) => v.type_name(),
             TyResolvedRef::Float(v) => v.type_name(),
             TyResolvedRef::String(v) => v.type_name(),
             TyResolvedRef::Bool(v) => v.type_name(),
@@ -183,6 +194,7 @@ impl<N: TypeIdent> TypeName for TyResolvedRef<'_, N> {
             TyResolvedRef::Media(v) => v.type_name(),
             TyResolvedRef::LiteralString(v) => v.type_name(),
             TyResolvedRef::LiteralInt(v) => v.type_name(),
+            TyResolvedRef::LiteralBigint(v) => v.type_name(),
             TyResolvedRef::LiteralBool(v) => v.type_name(),
             TyResolvedRef::Array(a) => a.type_name(),
             TyResolvedRef::Map(m) => m.type_name(),

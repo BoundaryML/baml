@@ -348,10 +348,19 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::Stmt::Let {
                 pattern,
                 initializer,
+                else_branch,
                 ..
             } => {
                 if let Some(initializer) = initializer {
                     self.walk_expr(*initializer, body, source_map, true);
+                }
+                if let Some(else_expr) = else_branch {
+                    // `let … else { … }` — the else block runs in the
+                    // enclosing scope BEFORE the pattern's names are
+                    // registered, so walk it before `register_local_pattern`.
+                    // The block-expr's own push_scope/pop_scope keeps any
+                    // inner bindings from leaking out.
+                    self.walk_expr(*else_expr, body, source_map, true);
                 }
                 self.register_local_pattern(
                     *pattern,
@@ -1660,6 +1669,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 .collect::<Vec<_>>()
                 .join("."),
             ast::TypeExpr::Int { .. } => "int".to_string(),
+            ast::TypeExpr::Bigint { .. } => "bigint".to_string(),
             ast::TypeExpr::Float { .. } => "float".to_string(),
             ast::TypeExpr::String { .. } => "string".to_string(),
             ast::TypeExpr::Bool { .. } => "bool".to_string(),

@@ -326,10 +326,57 @@ pub enum Instruction {
     /// `[left: Float, right: Float] → [Float]` — throws `DivisionByZero` if right == 0.0
     DivFloat,
 
+    /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]`
+    /// — raises `VmPanic::AllocFailure` if the result would exceed
+    /// `MAX_BIGINT_BITS`.
+    AddBigint,
+    /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]`
+    /// — raises `VmPanic::AllocFailure` if the result would exceed
+    /// `MAX_BIGINT_BITS`.
+    SubBigint,
+    /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]`
+    /// — the VM pre-checks `lb.bits() + rb.bits() > MAX_BIGINT_BITS` and
+    /// raises `VmPanic::AllocFailure` before computing the product.
+    MulBigint,
+    /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]` — throws `DivisionByZero` if right == 0n
+    DivBigint,
+    /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]` — throws `DivisionByZero` if right == 0n
+    ModBigint,
+    /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]`
+    /// — bitwise AND uses two's-complement on negatives; result bit-length
+    /// is bounded by the operands, so no `AllocFailure`.
+    BitAndBigint,
+    /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]`
+    /// — bitwise OR uses two's-complement on negatives; result bit-length
+    /// is bounded by the operands, so no `AllocFailure`.
+    BitOrBigint,
+    /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]`
+    /// — bitwise XOR uses two's-complement on negatives; result bit-length
+    /// is bounded by the operands, so no `AllocFailure`.
+    BitXorBigint,
+    /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]`
+    ///
+    /// The right operand is the shift count. The VM raises
+    /// `VmPanic::NegativeBitShift` (`baml.panics.NegativeBitShift`) for a
+    /// negative count, and `VmPanic::AllocFailure` (`baml.panics.AllocFailure`)
+    /// when the count does not fit in a `usize` or the resulting value would
+    /// exceed `MAX_BIGINT_BITS`.
+    ShlBigint,
+    /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]`
+    ///
+    /// The right operand is the shift count. The VM raises
+    /// `VmPanic::NegativeBitShift` (`baml.panics.NegativeBitShift`) for a
+    /// negative count. Non-negative counts that do not fit in a `usize`
+    /// saturate to `0n` (or `-1n` for negative left operands, matching
+    /// arithmetic right shift).
+    ShrBigint,
+
     /// `[left: Int, right: Int] → [Bool]`
     CmpIntOp(CmpOp),
     /// `[left: Float, right: Float] → [Bool]`
     CmpFloatOp(CmpOp),
+    /// `[left: Object::Bigint, right: Object::Bigint] → [Bool]`
+    CmpBigintOp(CmpOp),
 
     /// Performs a unary operation.
     ///
@@ -741,6 +788,16 @@ pub enum OpCode {
     SubFloat,
     MulFloat,
     DivFloat,
+    AddBigint,
+    SubBigint,
+    MulBigint,
+    DivBigint,
+    ModBigint,
+    BitAndBigint,
+    BitOrBigint,
+    BitXorBigint,
+    ShlBigint,
+    ShrBigint,
 
     // ── Specialized comparison (no operands, 1 byte) ───────────
     CmpIntEq,
@@ -755,6 +812,12 @@ pub enum OpCode {
     CmpFloatLtEq,
     CmpFloatGt,
     CmpFloatGtEq,
+    CmpBigintEq,
+    CmpBigintNotEq,
+    CmpBigintLt,
+    CmpBigintLtEq,
+    CmpBigintGt,
+    CmpBigintGtEq,
 
     // ── Expanded unary (no operands, 1 byte) ───────────────────
     Not,
@@ -858,6 +921,16 @@ impl OpCode {
             | Self::SubFloat
             | Self::MulFloat
             | Self::DivFloat
+            | Self::AddBigint
+            | Self::SubBigint
+            | Self::MulBigint
+            | Self::DivBigint
+            | Self::ModBigint
+            | Self::BitAndBigint
+            | Self::BitOrBigint
+            | Self::BitXorBigint
+            | Self::ShlBigint
+            | Self::ShrBigint
             | Self::CmpIntEq
             | Self::CmpIntNotEq
             | Self::CmpIntLt
@@ -870,6 +943,12 @@ impl OpCode {
             | Self::CmpFloatLtEq
             | Self::CmpFloatGt
             | Self::CmpFloatGtEq
+            | Self::CmpBigintEq
+            | Self::CmpBigintNotEq
+            | Self::CmpBigintLt
+            | Self::CmpBigintLtEq
+            | Self::CmpBigintGt
+            | Self::CmpBigintGtEq
             | Self::Not
             | Self::Neg
             | Self::LoadNull
@@ -972,6 +1051,16 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::SubFloat as u8 => Ok(Self::SubFloat),
             x if x == Self::MulFloat as u8 => Ok(Self::MulFloat),
             x if x == Self::DivFloat as u8 => Ok(Self::DivFloat),
+            x if x == Self::AddBigint as u8 => Ok(Self::AddBigint),
+            x if x == Self::SubBigint as u8 => Ok(Self::SubBigint),
+            x if x == Self::MulBigint as u8 => Ok(Self::MulBigint),
+            x if x == Self::DivBigint as u8 => Ok(Self::DivBigint),
+            x if x == Self::ModBigint as u8 => Ok(Self::ModBigint),
+            x if x == Self::BitAndBigint as u8 => Ok(Self::BitAndBigint),
+            x if x == Self::BitOrBigint as u8 => Ok(Self::BitOrBigint),
+            x if x == Self::BitXorBigint as u8 => Ok(Self::BitXorBigint),
+            x if x == Self::ShlBigint as u8 => Ok(Self::ShlBigint),
+            x if x == Self::ShrBigint as u8 => Ok(Self::ShrBigint),
             x if x == Self::CmpIntEq as u8 => Ok(Self::CmpIntEq),
             x if x == Self::CmpIntNotEq as u8 => Ok(Self::CmpIntNotEq),
             x if x == Self::CmpIntLt as u8 => Ok(Self::CmpIntLt),
@@ -984,6 +1073,12 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::CmpFloatLtEq as u8 => Ok(Self::CmpFloatLtEq),
             x if x == Self::CmpFloatGt as u8 => Ok(Self::CmpFloatGt),
             x if x == Self::CmpFloatGtEq as u8 => Ok(Self::CmpFloatGtEq),
+            x if x == Self::CmpBigintEq as u8 => Ok(Self::CmpBigintEq),
+            x if x == Self::CmpBigintNotEq as u8 => Ok(Self::CmpBigintNotEq),
+            x if x == Self::CmpBigintLt as u8 => Ok(Self::CmpBigintLt),
+            x if x == Self::CmpBigintLtEq as u8 => Ok(Self::CmpBigintLtEq),
+            x if x == Self::CmpBigintGt as u8 => Ok(Self::CmpBigintGt),
+            x if x == Self::CmpBigintGtEq as u8 => Ok(Self::CmpBigintGtEq),
             x if x == Self::Not as u8 => Ok(Self::Not),
             x if x == Self::Neg as u8 => Ok(Self::Neg),
             x if x == Self::LoadNull as u8 => Ok(Self::LoadNull),
@@ -1077,6 +1172,16 @@ impl std::fmt::Display for OpCode {
             Self::SubFloat => "SUB_FLOAT",
             Self::MulFloat => "MUL_FLOAT",
             Self::DivFloat => "DIV_FLOAT",
+            Self::AddBigint => "ADD_BIGINT",
+            Self::SubBigint => "SUB_BIGINT",
+            Self::MulBigint => "MUL_BIGINT",
+            Self::DivBigint => "DIV_BIGINT",
+            Self::ModBigint => "MOD_BIGINT",
+            Self::BitAndBigint => "BIT_AND_BIGINT",
+            Self::BitOrBigint => "BIT_OR_BIGINT",
+            Self::BitXorBigint => "BIT_XOR_BIGINT",
+            Self::ShlBigint => "SHL_BIGINT",
+            Self::ShrBigint => "SHR_BIGINT",
             Self::CmpIntEq => "CMP_INT_EQ",
             Self::CmpIntNotEq => "CMP_INT_NOT_EQ",
             Self::CmpIntLt => "CMP_INT_LT",
@@ -1089,6 +1194,12 @@ impl std::fmt::Display for OpCode {
             Self::CmpFloatLtEq => "CMP_FLOAT_LT_EQ",
             Self::CmpFloatGt => "CMP_FLOAT_GT",
             Self::CmpFloatGtEq => "CMP_FLOAT_GT_EQ",
+            Self::CmpBigintEq => "CMP_BIGINT_EQ",
+            Self::CmpBigintNotEq => "CMP_BIGINT_NOT_EQ",
+            Self::CmpBigintLt => "CMP_BIGINT_LT",
+            Self::CmpBigintLtEq => "CMP_BIGINT_LT_EQ",
+            Self::CmpBigintGt => "CMP_BIGINT_GT",
+            Self::CmpBigintGtEq => "CMP_BIGINT_GT_EQ",
             Self::Not => "NOT",
             Self::Neg => "NEG",
             Self::LoadNull => "LOAD_NULL",
@@ -1351,8 +1462,19 @@ impl std::fmt::Display for Instruction {
             Instruction::SubFloat => f.write_str("SUB_FLOAT"),
             Instruction::MulFloat => f.write_str("MUL_FLOAT"),
             Instruction::DivFloat => f.write_str("DIV_FLOAT"),
+            Instruction::AddBigint => f.write_str("ADD_BIGINT"),
+            Instruction::SubBigint => f.write_str("SUB_BIGINT"),
+            Instruction::MulBigint => f.write_str("MUL_BIGINT"),
+            Instruction::DivBigint => f.write_str("DIV_BIGINT"),
+            Instruction::ModBigint => f.write_str("MOD_BIGINT"),
+            Instruction::BitAndBigint => f.write_str("BIT_AND_BIGINT"),
+            Instruction::BitOrBigint => f.write_str("BIT_OR_BIGINT"),
+            Instruction::BitXorBigint => f.write_str("BIT_XOR_BIGINT"),
+            Instruction::ShlBigint => f.write_str("SHL_BIGINT"),
+            Instruction::ShrBigint => f.write_str("SHR_BIGINT"),
             Instruction::CmpIntOp(op) => write!(f, "CMP_INT_OP {op}"),
             Instruction::CmpFloatOp(op) => write!(f, "CMP_FLOAT_OP {op}"),
+            Instruction::CmpBigintOp(op) => write!(f, "CMP_BIGINT_OP {op}"),
             Instruction::UnaryOp(op) => write!(f, "UNARY_OP {op}"),
             Instruction::AllocArray(n) => write!(f, "ALLOC_ARRAY {n}"),
             Instruction::LoadArrayElement => f.write_str("LOAD_ARRAY_ELEMENT"),
@@ -1801,8 +1923,19 @@ impl Bytecode {
                 | Instruction::SubFloat
                 | Instruction::MulFloat
                 | Instruction::DivFloat
+                | Instruction::AddBigint
+                | Instruction::SubBigint
+                | Instruction::MulBigint
+                | Instruction::DivBigint
+                | Instruction::ModBigint
+                | Instruction::BitAndBigint
+                | Instruction::BitOrBigint
+                | Instruction::BitXorBigint
+                | Instruction::ShlBigint
+                | Instruction::ShrBigint
                 | Instruction::CmpIntOp(_)
-                | Instruction::CmpFloatOp(_) => {}
+                | Instruction::CmpFloatOp(_)
+                | Instruction::CmpBigintOp(_) => {}
 
                 // ── Constant specialization ──────────────────────────
                 Instruction::LoadConst(idx) => {
@@ -2149,6 +2282,16 @@ impl Bytecode {
             Instruction::SubFloat => OpCode::SubFloat,
             Instruction::MulFloat => OpCode::MulFloat,
             Instruction::DivFloat => OpCode::DivFloat,
+            Instruction::AddBigint => OpCode::AddBigint,
+            Instruction::SubBigint => OpCode::SubBigint,
+            Instruction::MulBigint => OpCode::MulBigint,
+            Instruction::DivBigint => OpCode::DivBigint,
+            Instruction::ModBigint => OpCode::ModBigint,
+            Instruction::BitAndBigint => OpCode::BitAndBigint,
+            Instruction::BitOrBigint => OpCode::BitOrBigint,
+            Instruction::BitXorBigint => OpCode::BitXorBigint,
+            Instruction::ShlBigint => OpCode::ShlBigint,
+            Instruction::ShrBigint => OpCode::ShrBigint,
             Instruction::CmpIntOp(op) => match op {
                 CmpOp::Eq => OpCode::CmpIntEq,
                 CmpOp::NotEq => OpCode::CmpIntNotEq,
@@ -2164,6 +2307,14 @@ impl Bytecode {
                 CmpOp::LtEq => OpCode::CmpFloatLtEq,
                 CmpOp::Gt => OpCode::CmpFloatGt,
                 CmpOp::GtEq => OpCode::CmpFloatGtEq,
+            },
+            Instruction::CmpBigintOp(op) => match op {
+                CmpOp::Eq => OpCode::CmpBigintEq,
+                CmpOp::NotEq => OpCode::CmpBigintNotEq,
+                CmpOp::Lt => OpCode::CmpBigintLt,
+                CmpOp::LtEq => OpCode::CmpBigintLtEq,
+                CmpOp::Gt => OpCode::CmpBigintGt,
+                CmpOp::GtEq => OpCode::CmpBigintGtEq,
             },
 
             // Jump variants

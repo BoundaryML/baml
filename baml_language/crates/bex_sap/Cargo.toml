@@ -25,6 +25,7 @@ sys_types = { workspace = true }
 derive_more = { workspace = true }
 indexmap = { workspace = true }
 log = { workspace = true }
+num-bigint = { workspace = true }
 ouroboros = { workspace = true }
 regex = { workspace = true }
 rowan = { workspace = true }

@@ -42,7 +42,7 @@ function user.DestructureNamespaceQualifiedMatch() -> int {
     load_var response
     load_field .score
     load_const 0
-    cmp_op ==
+    cmp_int_op ==
     pop_jump_if_false L0
     jump L1
 
@@ -76,7 +76,7 @@ function user.DestructureQualifiedMatch() -> int {
     load_var response
     load_field .score
     load_const 0
-    cmp_op ==
+    cmp_int_op ==
     pop_jump_if_false L0
     jump L1
 

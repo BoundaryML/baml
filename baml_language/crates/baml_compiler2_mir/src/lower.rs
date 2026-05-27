@@ -114,6 +114,7 @@ pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
     match ty {
         // Primitives
         Tir2Ty::Primitive(PrimitiveType::Int, attr) => Ty::Int { attr: attr.clone() },
+        Tir2Ty::Primitive(PrimitiveType::Bigint, attr) => Ty::Bigint { attr: attr.clone() },
         Tir2Ty::Primitive(PrimitiveType::Float, attr) => Ty::Float { attr: attr.clone() },
         Tir2Ty::Primitive(PrimitiveType::String, attr) => Ty::String { attr: attr.clone() },
         Tir2Ty::Primitive(PrimitiveType::Bool, attr) => Ty::Bool { attr: attr.clone() },
@@ -2534,6 +2535,7 @@ impl LoweringContext<'_> {
         use baml_base::Literal;
         match lit {
             Literal::Int(v) => Constant::Int(*v),
+            Literal::Bigint(v) => Constant::Bigint(v.clone()),
             Literal::Float(s) => {
                 // Literal::Float stores a string representation — parse to f64
                 let v: f64 = s.parse().unwrap_or(0.0);
@@ -3077,6 +3079,12 @@ impl LoweringContext<'_> {
             }
         }
 
+        // Mixed `int OP bigint` (or `bigint OP int`) operators resolve the
+        // `int` operand to a small local `BigInt` in the VM (the specialized
+        // `*Bigint`/`CmpBigint` opcodes accept a lone `int` operand), without
+        // allocating a heap bigint. `int` is not a subtype of `bigint` and
+        // there is no implicit move coercion — only these operators and the FFI
+        // boundary convert — so lower both operands naturally.
         let left = self.lower_to_operand(lhs);
         let right = self.lower_to_operand(rhs);
         if let Some(mir_op) = Self::convert_binop(op) {
@@ -3201,7 +3209,7 @@ impl LoweringContext<'_> {
         // Lower target as lvalue (this will trigger null checks at each ?. node)
         let place = self.lower_lvalue(inner_target);
 
-        // Lower value and assign
+        // Lower value and assign.
         self.lower_expr(value, place);
 
         self.chain_null_exits.pop();
@@ -3232,6 +3240,10 @@ impl LoweringContext<'_> {
 
         let place = self.lower_lvalue(inner_target);
         let current = Operand::Copy(place.clone());
+        // Mixed `bigint OP= int` does NOT widen the int rhs: the specialized
+        // `*Bigint` opcodes accept a lone `int` operand and resolve it in the
+        // VM without allocating a heap bigint (mirrors the plain `AssignOp`
+        // path). Lower the value naturally.
         let rhs = self.lower_to_operand(value);
         let mir_op = Self::convert_assign_op(op);
         self.builder.assign(
@@ -3443,11 +3455,16 @@ impl LoweringContext<'_> {
             .get(&self.expr_metadata_key(expr_id))
             .cloned()
         else {
+            // No call plan: lower each arg in order (the type checker would
+            // have already flagged any mismatch).
             return args.iter().map(|&a| self.lower_to_operand(a)).collect();
         };
 
+        // Pre-lower each provided arg in source order (the order `args` appear
+        // in the call expression). This preserves the original evaluation
+        // order, which matters for side effects.
         let provided_args: Vec<_> = plan.provided_args().collect();
-        let mut lowered_args = FxHashMap::default();
+        let mut lowered_args: FxHashMap<AstExprId, Operand> = FxHashMap::default();
         for &arg in args {
             if provided_args.contains(&arg) {
                 lowered_args.insert(arg, self.lower_to_operand(arg));
@@ -5032,6 +5049,85 @@ impl LoweringContext<'_> {
                 self.lower_expr(expr_id, Place::local(temp));
             }
 
+            // `let PATTERN = init else { … };` — refutable binding lowered
+            // as a two-way pattern test. On match: bind into the current
+            // scope (locals survive past the statement); on miss: lower the
+            // else expression (guaranteed `Ty::Never` by TIR, so no
+            // successor edge is needed). Handled before the structural
+            // arms below because a refutable destructure ends up here too.
+            AstStmt::Let {
+                pattern,
+                initializer,
+                is_watched,
+                else_branch: Some(else_expr),
+                ..
+            } => {
+                // Materialize the scrutinee into a local once. The
+                // scrutinee carries the BROAD initializer type (e.g.
+                // `int | string`), not the pattern's narrowed match type —
+                // narrowing only kicks in on the match arm, after the
+                // refutable test.
+                let scrutinee_ty = initializer
+                    .map(|init| self.expr_ty(init))
+                    .unwrap_or_else(|| self.pat_ty(pattern));
+                let scrutinee = self.builder.temp(scrutinee_ty);
+                if let Some(init) = initializer {
+                    self.lower_expr(init, Place::local(scrutinee));
+                } else {
+                    self.builder.assign(
+                        Place::local(scrutinee),
+                        Rvalue::Use(Operand::Constant(Constant::Null)),
+                    );
+                }
+
+                let bb_match = self.builder.create_block();
+                let bb_fail = self.builder.create_block();
+                self.lower_pattern_test(scrutinee, pattern, bb_match, bb_fail);
+
+                // Fail path: lower the else expression. TIR enforced that
+                // the else has type `!`, so this block has no successor and
+                // we don't emit a join edge. Use a throwaway temp as dest
+                // because diverging expressions don't write through it.
+                self.builder.set_current_block(bb_fail);
+                let else_ty = self.expr_ty(else_expr);
+                let else_dest = self.builder.temp(else_ty);
+                self.lower_expr(else_expr, Place::local(else_dest));
+                // If for any reason lowering produced a fall-through (e.g.
+                // recovery state with an Unknown-typed else), terminate the
+                // block with an unreachable so the CFG stays valid.
+                if !self.builder.is_current_terminated() {
+                    self.builder.unreachable();
+                }
+
+                // Match path: bind pattern names into the enclosing scope.
+                // No saved/restored locals — these flow forward like a
+                // plain `let`.
+                self.builder.set_current_block(bb_match);
+                self.bind_pattern_inner(scrutinee, pattern, pattern, pattern, false, is_watched);
+
+                let names: Vec<Name> = self.body.patterns[pattern]
+                    .bound_names(&self.body.patterns)
+                    .into_iter()
+                    .cloned()
+                    .collect();
+                for name in names {
+                    if let Some(&local) = self.locals.get(&name)
+                        && let Some(binding_id) =
+                            self.binding_id_for_statement_name(stmt_id, pattern, &name)
+                    {
+                        self.binding_locals.insert(binding_id, local);
+                    }
+                }
+
+                if is_watched {
+                    for name in self.body.patterns[pattern].bound_names(&self.body.patterns) {
+                        if let Some(&local) = self.locals.get(name) {
+                            self.watched_locals_stack.push(local);
+                        }
+                    }
+                }
+            }
+
             AstStmt::Let {
                 pattern,
                 initializer,
@@ -5418,6 +5514,10 @@ impl LoweringContext<'_> {
                 } else {
                     let place = self.lower_lvalue(target);
                     let current = Operand::Copy(place.clone());
+                    // Mixed `bigint OP= int` does NOT widen the int rhs: the
+                    // specialized `*Bigint` opcodes accept a lone `int` operand
+                    // and resolve it in the VM without allocating a heap bigint.
+                    // Lower the value naturally.
                     let rhs = self.lower_to_operand(value);
                     let mir_op = Self::convert_assign_op(op);
                     self.builder.assign(
@@ -6608,6 +6708,7 @@ impl LoweringContext<'_> {
     fn type_tag_for_ty(&self, ty: &Ty) -> Option<i64> {
         match ty {
             Ty::Int { .. } => Some(baml_type::typetag::INT),
+            Ty::Bigint { .. } => Some(baml_type::typetag::BIGINT),
             Ty::String { .. } => Some(baml_type::typetag::STRING),
             Ty::Bool { .. } => Some(baml_type::typetag::BOOL),
             Ty::Null { .. } => Some(baml_type::typetag::NULL),
@@ -7533,6 +7634,7 @@ impl LoweringContext<'_> {
 fn format_type_tag_name(tag: i64) -> String {
     match tag {
         baml_type::typetag::INT => "int".to_string(),
+        baml_type::typetag::BIGINT => "bigint".to_string(),
         baml_type::typetag::STRING => "string".to_string(),
         baml_type::typetag::BOOL => "bool".to_string(),
         baml_type::typetag::NULL => "null".to_string(),

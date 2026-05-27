@@ -29,6 +29,24 @@ pub fn inbound_to_external(
         Some(variant) => match variant {
             InboundValueVariant::StringValue(s) => Ok(BexExternalValue::String(s.into())),
             InboundValueVariant::IntValue(i) => Ok(BexExternalValue::Int(i)),
+            InboundValueVariant::BigintValue(s) => {
+                // Pre-allocation cap: stop a multi-megabyte hex blob from
+                // building a multi-megabyte `BigInt` before the VM's own
+                // `MAX_BIGINT_BITS` guard fires. Sized to match that VM cap
+                // (~268M bits ≈ 67M hex digits, +2 for sign and slack).
+                const MAX_BIGINT_HEX_LEN: usize = (1 << 28) / 4 + 2;
+                // Hex / base sixteen on the wire, parsed strictly: `parse_bytes`
+                // accepts only `[0-9a-fA-F]` plus an optional leading `-`/`+`
+                // (no `0x` prefix, underscores, or surrounding whitespace),
+                // matching the encoders' output and the Python/JS bridges.
+                let len = s.len();
+                if len > MAX_BIGINT_HEX_LEN {
+                    return Err(CtypesError::InvalidBigint { len });
+                }
+                let bi = num_bigint::BigInt::parse_bytes(s.as_bytes(), 16)
+                    .ok_or(CtypesError::InvalidBigint { len })?;
+                Ok(BexExternalValue::Bigint(bi))
+            }
             InboundValueVariant::FloatValue(f) => Ok(BexExternalValue::Float(f)),
             InboundValueVariant::BoolValue(b) => Ok(BexExternalValue::Bool(b)),
             InboundValueVariant::ListValue(list) => convert_list(list, handle_table),
@@ -234,5 +252,91 @@ mod tests {
         };
         let err = inbound_to_external(inbound, &table).expect_err("missing key should error");
         assert!(matches!(err, CtypesError::InvalidHandleKey(9999)));
+    }
+
+    /// Helper: round-trip a `BexExternalValue` through the outbound encoder and
+    /// the inbound decoder by translating the outbound `bigint_value` discriminator
+    /// to the parallel inbound discriminator.
+    fn bigint_round_trip(original: &BexExternalValue) -> BexExternalValue {
+        use crate::{
+            baml_core::cffi::baml_outbound_value::Value as OutboundVariant,
+            handle_table::CffiHandleTableOptions, value_encode::external_to_outbound,
+        };
+
+        let opts = CffiHandleTableOptions::for_in_process();
+        let outbound = external_to_outbound(original, &opts).expect("encode succeeds");
+        let s = match outbound.value {
+            Some(OutboundVariant::BigintValue(s)) => s,
+            other => panic!("expected outbound BigintValue, got {other:?}"),
+        };
+        let inbound = InboundValue {
+            value: Some(InboundValueVariant::BigintValue(s)),
+        };
+        let table = CffiHandleTable::new();
+        inbound_to_external(inbound, &table).expect("decode succeeds")
+    }
+
+    #[test]
+    fn test_bigint_round_trip_small() {
+        let bi = num_bigint::BigInt::from(42);
+        let v = BexExternalValue::Bigint(bi);
+        let decoded = bigint_round_trip(&v);
+        assert_eq!(decoded, v);
+    }
+
+    #[test]
+    fn test_bigint_round_trip_huge() {
+        let bi = num_bigint::BigInt::parse_bytes(
+            b"99999999999999999999999999999999999999999999999999",
+            10,
+        )
+        .unwrap();
+        let v = BexExternalValue::Bigint(bi);
+        let decoded = bigint_round_trip(&v);
+        assert_eq!(decoded, v);
+    }
+
+    #[test]
+    fn test_bigint_round_trip_negative() {
+        let bi = num_bigint::BigInt::from(-42);
+        let v = BexExternalValue::Bigint(bi);
+        let decoded = bigint_round_trip(&v);
+        assert_eq!(decoded, v);
+    }
+
+    #[test]
+    fn test_bigint_decode_invalid() {
+        let inbound = InboundValue {
+            value: Some(InboundValueVariant::BigintValue("not-a-number".into())),
+        };
+        let table = CffiHandleTable::new();
+        let err = inbound_to_external(inbound, &table).expect_err("invalid bigint should error");
+        assert!(matches!(err, CtypesError::InvalidBigint { len: 12 }));
+        assert_eq!(err.to_string(), "Invalid bigint hex string (12 bytes)");
+    }
+
+    #[test]
+    fn test_bigint_decode_too_long() {
+        // Build a hex blob just over the FFI cap so the size check fires
+        // before `parse_bytes`. The error must carry only the length, not the
+        // input itself.
+        let blob = "f".repeat((1 << 28) / 4 + 3);
+        let blob_len = blob.len();
+        let inbound = InboundValue {
+            value: Some(InboundValueVariant::BigintValue(blob)),
+        };
+        let table = CffiHandleTable::new();
+        let err = inbound_to_external(inbound, &table).expect_err("over-cap bigint should error");
+        let CtypesError::InvalidBigint { len } = err else {
+            panic!("expected InvalidBigint, got: {err:?}");
+        };
+        assert_eq!(len, blob_len);
+        let message = err.to_string();
+        assert_eq!(
+            message,
+            format!("Invalid bigint hex string ({blob_len} bytes)")
+        );
+        // Sanity: the error message does not embed the megabyte-scale input.
+        assert!(message.len() < 200);
     }
 }

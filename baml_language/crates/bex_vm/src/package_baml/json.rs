@@ -367,6 +367,7 @@ pub fn value_to_serde(vm: &BexVm, v: Value) -> serde_json::Value {
                     .collect();
                 serde_json::Value::Object(entries)
             }
+            Object::Bigint(bi) => serde_json::Value::String(bi.to_string()),
             Object::Instance(_)
             | Object::Class(_)
             | Object::Enum(_)
@@ -427,6 +428,7 @@ fn ty_value_to_serde(
         Ty::Int { .. } | Ty::Float { .. } | Ty::Bool { .. } | Ty::String { .. } => {
             Ok(value_to_serde(vm, value))
         }
+        Ty::Bigint { .. } => Ok(value_to_serde(vm, value)),
         Ty::Literal(_, _) => Ok(value_to_serde(vm, value)),
 
         Ty::Optional(inner, _) => {
@@ -761,6 +763,13 @@ fn ty_serde_to_value(
             _ => Err(raise_decode(vm, "expected integer", path)),
         },
 
+        // Bigint JSON decoding is not yet implemented (Phase 9+).
+        Ty::Bigint { .. } => Err(raise_decode(
+            vm,
+            "bigint JSON decoding not yet implemented",
+            path,
+        )),
+
         Ty::Float { .. } => match json {
             serde_json::Value::Number(n) => {
                 if let Some(f) = n.as_f64() {
@@ -885,6 +894,12 @@ fn ty_serde_to_value(
                 }
                 Err(raise_decode(vm, "literal float mismatch", path))
             }
+            // Literal bigint decoding is not yet implemented (Phase 9+).
+            (baml_type::Literal::Bigint(_), _) => Err(raise_decode(
+                vm,
+                "literal bigint JSON decoding not yet implemented",
+                path,
+            )),
             _ => Err(raise_decode(vm, "literal mismatch", path)),
         },
 

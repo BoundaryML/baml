@@ -326,7 +326,7 @@ function user.test_shadowing() -> string {
     load_var __for_idx
     load_var _5
     call baml.Array.length
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L1
     jump L2
 
@@ -345,7 +345,7 @@ function user.test_shadowing() -> string {
   L3:
     load_var i
     load_var y
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L4
     jump L5
 

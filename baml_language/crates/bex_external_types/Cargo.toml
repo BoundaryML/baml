@@ -13,5 +13,6 @@ bex_resource_types = { workspace = true }
 bex_str = { workspace = true }
 bex_vm_types = { workspace = true }
 indexmap = { workspace = true }
+num-bigint = { workspace = true }
 once_cell = { workspace = true }
 

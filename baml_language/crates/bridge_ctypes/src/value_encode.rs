@@ -5,8 +5,8 @@ use bex_project::{BexExternalAdt, BexExternalValue, Ty};
 
 use crate::{
     baml_core::cffi::{
-        BamlOutboundHandle, BamlOutboundMapEntry, BamlOutboundValue, BamlTy, BamlTyBool,
-        BamlTyFloat, BamlTyGenericArg, BamlTyInt, BamlTyList, BamlTyLiteral, BamlTyMap,
+        BamlOutboundHandle, BamlOutboundMapEntry, BamlOutboundValue, BamlTy, BamlTyBigint,
+        BamlTyBool, BamlTyFloat, BamlTyGenericArg, BamlTyInt, BamlTyList, BamlTyLiteral, BamlTyMap,
         BamlTyMedia, BamlTyName, BamlTyNull, BamlTyOptional, BamlTyString, BamlTyUint8Array,
         BamlTyUnionVariant, BamlTyUnknown, BamlValueClass, BamlValueEnum, BamlValueList,
         BamlValueMap, BamlValueUnionVariant, baml_outbound_value::Value as BamlValueVariant,
@@ -29,6 +29,10 @@ pub fn external_to_outbound(
     let variant = match value {
         BexExternalValue::Null => None,
         BexExternalValue::Int(i) => Some(BamlValueVariant::IntValue(*i)),
+        // Hex / base sixteen on the wire (see Phase 10 of the bigint plan).
+        // Power-of-two-base parsing is SIMD-friendly; `num-bigint`'s
+        // `LowerHex` impl handles the leading-minus sign convention.
+        BexExternalValue::Bigint(bi) => Some(BamlValueVariant::BigintValue(format!("{bi:x}"))),
         BexExternalValue::Float(f) => Some(BamlValueVariant::FloatValue(*f)),
         BexExternalValue::Bool(b) => Some(BamlValueVariant::BoolValue(*b)),
         BexExternalValue::String(s) => Some(BamlValueVariant::StringValue(s.to_string())),
@@ -217,12 +221,15 @@ fn ty_to_baml_ty_name(ty: &Ty) -> BamlTyName {
 
 fn literal_to_field_type_literal(lit: &Literal) -> BamlTyLiteral {
     use crate::baml_core::cffi::{
-        BamlLiteralBool, BamlLiteralInt, BamlLiteralString,
+        BamlLiteralBigint, BamlLiteralBool, BamlLiteralInt, BamlLiteralString,
         baml_ty_literal::Literal as LiteralOneof,
     };
     let literal = match lit {
         Literal::String(s) => LiteralOneof::StringLiteral(BamlLiteralString { value: s.clone() }),
         Literal::Int(i) => LiteralOneof::IntLiteral(BamlLiteralInt { value: *i }),
+        Literal::Bigint(n) => LiteralOneof::BigintLiteral(BamlLiteralBigint {
+            value: format!("{n:x}"),
+        }),
         Literal::Bool(b) => LiteralOneof::BoolLiteral(BamlLiteralBool { value: *b }),
         Literal::Float(s) => LiteralOneof::StringLiteral(BamlLiteralString { value: s.clone() }),
     };
@@ -374,6 +381,7 @@ fn ty_to_field_type(ty: &Ty) -> BamlTy {
         // BuiltinUnknown is used for dynamic types (e.g., map values, array elements)
         // when the element type isn't known at compile time.
         Ty::BuiltinUnknown { .. } => Some(FieldType::UnknownType(BamlTyUnknown {})),
+        Ty::Bigint { .. } => Some(FieldType::BigintType(BamlTyBigint {})),
         Ty::TypeAlias(_, _)
         | Ty::Future(..)
         | Ty::Function { .. }

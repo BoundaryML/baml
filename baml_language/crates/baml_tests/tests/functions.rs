@@ -113,11 +113,11 @@ async fn call_function_assign_to_variable() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         call user.two
         load_const 1
-        bin_op +
+        add_int
         return
     }
 
@@ -234,11 +234,11 @@ async fn early_return() {
         args: { "x" => BexExternalValue::Int(42) },
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function early_return(x: int) -> int {
         load_var x
         load_const 42
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L1
 
@@ -290,48 +290,48 @@ async fn early_return_from_nested_scopes() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
-        function main() -> int {
-            load_const 1
-            load_const 0
-            cmp_op ==
-            pop_jump_if_false L0
-            jump L5
+    insta::assert_snapshot!(output.bytecode, @"
+    function main() -> int {
+        load_const 1
+        load_const 0
+        cmp_int_op ==
+        pop_jump_if_false L0
+        jump L5
 
-          L0:
-            load_const 1
-            load_const 1
-            cmp_op !=
-            pop_jump_if_false L1
-            jump L4
+      L0:
+        load_const 1
+        load_const 1
+        cmp_int_op !=
+        pop_jump_if_false L1
+        jump L4
 
-          L1:
-            load_const 3
-            load_const 2
-            cmp_op !=
-            pop_jump_if_false L2
-            jump L3
+      L1:
+        load_const 3
+        load_const 2
+        cmp_int_op !=
+        pop_jump_if_false L2
+        jump L3
 
-          L2:
-            load_const 7
-            jump L6
+      L2:
+        load_const 7
+        jump L6
 
-          L3:
-            load_const true
-            pop_jump_if_false L1
-            load_const 0
-            jump L6
+      L3:
+        load_const true
+        pop_jump_if_false L1
+        load_const 0
+        jump L6
 
-          L4:
-            load_const 0
-            jump L6
+      L4:
+        load_const 0
+        jump L6
 
-          L5:
-            load_const 0
+      L5:
+        load_const 0
 
-          L6:
-            return
-        }
+      L6:
+        return
+    }
     ");
 
     assert_eq!(output.result, Ok(BexExternalValue::Int(0)));
@@ -355,23 +355,23 @@ async fn recursion() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function fib(n: int) -> int {
         load_var n
         load_const 1
-        cmp_op <=
+        cmp_int_op <=
         pop_jump_if_false L0
         jump L1
 
       L0:
         load_var n
         load_const 1
-        bin_op -
+        sub_int
         call user.fib
         store_var _3
         load_var n
         load_const 2
-        bin_op -
+        sub_int
         call user.fib
         load_var _3
         add_int
@@ -413,11 +413,11 @@ async fn function_as_value() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function add(a: int, b: int) -> int {
         load_var a
         load_var b
-        bin_op +
+        add_int
         return
     }
 
@@ -434,7 +434,7 @@ async fn function_as_value() {
         store_var _5
         load_var _4
         load_var _5
-        bin_op +
+        add_int
         return
     }
 
