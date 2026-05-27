@@ -20,7 +20,6 @@ workspace = true
 ariadne = { workspace = true }
 borsh = { workspace = true }
 salsa = { workspace = true }
-serde = { workspace = true }
 smol_str = { workspace = true }
 text-size = { workspace = true }
 

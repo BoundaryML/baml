@@ -979,7 +979,6 @@ dependencies = [
  "ariadne",
  "borsh",
  "salsa",
- "serde",
  "smol_str 0.3.6",
  "text-size",
 ]
