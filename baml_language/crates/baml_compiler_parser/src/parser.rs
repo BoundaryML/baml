@@ -2984,6 +2984,28 @@ impl<'a> Parser<'a> {
                 p.error_unexpected_token("initializer (=)".to_string());
             }
 
+            // Optional `let … else { … }` — refutable binding whose else
+            // branch must diverge. Allowed in every position `parse_let_stmt`
+            // is called from, including C-style for-init (a diverging init
+            // just makes the loop unreachable — same kind of dead code we
+            // already accept elsewhere, not a parse-time concern).
+            if p.at(TokenKind::Else) {
+                p.bump(); // else
+                if p.at(TokenKind::If) {
+                    // `else if` after `let … else` has no value to chain
+                    // through (unlike `if let`, which produces a value), so
+                    // reject. The `if` token is left in place so recovery can
+                    // parse it as the next statement.
+                    p.error_unexpected_token(
+                        "block after 'else' (`else if` is not valid in let-else)".to_string(),
+                    );
+                } else if p.at(TokenKind::LBrace) {
+                    p.parse_block_expr();
+                } else {
+                    p.error_unexpected_token("block after 'else'".to_string());
+                }
+            }
+
             // Consume trailing semicolon
             p.eat(TokenKind::Semicolon);
         });
@@ -3008,6 +3030,20 @@ impl<'a> Parser<'a> {
                 p.parse_expr_bp(3);
             } else {
                 p.error_unexpected_token("initializer (=)".to_string());
+            }
+
+            // Reject `watch let … else { … }` — the divergence semantics of
+            // let-else don't compose with the auto-rerun semantics of a
+            // watched binding. Emit a parse error but eat the else block so
+            // recovery proceeds cleanly past it.
+            if p.at(TokenKind::Else) {
+                p.error_unexpected_token(
+                    "';' (`watch let` cannot have an `else` clause)".to_string(),
+                );
+                p.bump(); // else
+                if p.at(TokenKind::LBrace) {
+                    p.parse_block_expr();
+                }
             }
 
             // Consume trailing semicolon
@@ -3966,7 +4002,10 @@ impl<'a> Parser<'a> {
                         p.expect(TokenKind::In);
                         p.parse_expr(); // iterator expression
                     } else {
-                        // C-style: for (let i = 0; cond; update)
+                        // C-style: for (let i = 0; cond; update). A
+                        // `let … else` here is unusual but legal — it
+                        // makes the loop unreachable, same as any other
+                        // diverging statement before the loop.
                         p.parse_let_stmt();
                         // The let statement already consumed the semicolon
                         // Now parse condition
@@ -7888,5 +7927,159 @@ type Searcher = (query: string, max_results?: int) -> int
         assert!(optional_param.children_with_tokens().any(
             |it| matches!(it, rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::QUESTION)
         ));
+    }
+
+    // ============ let-else ============
+
+    #[test]
+    fn let_else_basic_parses() {
+        // `let Pattern = scrutinee else { ... };` — refutable binding with a
+        // diverging else clause. The LET_STMT should carry both an EQUALS
+        // initializer and a trailing KW_ELSE + BLOCK_EXPR.
+        let source = r#"
+function f(r: int | string) -> int {
+  let v: int = r else { return 0; };
+  v
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let let_stmt = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::LET_STMT)
+            .expect("expected LET_STMT");
+        let has_else = let_stmt.children_with_tokens().any(
+            |elem| matches!(elem, rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::KW_ELSE),
+        );
+        assert!(has_else, "LET_STMT should have a KW_ELSE token");
+        let block_count = let_stmt
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
+            .count();
+        assert_eq!(
+            block_count, 1,
+            "LET_STMT should have one BLOCK_EXPR (the else body)"
+        );
+    }
+
+    #[test]
+    fn let_else_rejects_else_if() {
+        // `let X = y else if z { ... }` — `else if` is meaningless without a
+        // value being produced (unlike `if let`). Reject at parse time.
+        let source = r#"
+function f(r: int | string) -> int {
+  let v: int = r else if true { return 0; };
+  v
+}
+"#;
+        let (_, errors) = parse_source(source);
+        assert!(
+            !errors.is_empty(),
+            "expected parse error for `let ... else if ...`"
+        );
+    }
+
+    #[test]
+    fn let_else_rejected_in_watch_let() {
+        // `watch let X = y else { ... };` — combining watched bindings with
+        // let-else divergence is rejected at parse time.
+        let source = r#"
+function f(r: int | string) -> int {
+  watch let v: int = r else { return 0; };
+  v
+}
+"#;
+        let (_, errors) = parse_source(source);
+        assert!(
+            !errors.is_empty(),
+            "expected parse error for `watch let ... else {{ ... }}`"
+        );
+    }
+
+    #[test]
+    fn let_else_destructure_pattern_parses() {
+        // `let Class { f } = expr else { ... };` — destructure pattern with
+        // an else branch; verifies parser handles the structural pattern in
+        // combination with the trailing else block.
+        let source = r#"
+class User { name string }
+
+function f(u: User) -> string {
+  let User { name } = u else { return ""; };
+  name
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let let_stmt = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::LET_STMT)
+            .expect("expected LET_STMT");
+        let has_destructure = let_stmt
+            .descendants()
+            .any(|n| n.kind() == SyntaxKind::DESTRUCTURE_PATTERN);
+        assert!(has_destructure, "should contain a destructure pattern");
+        let has_else = let_stmt.children_with_tokens().any(
+            |elem| matches!(elem, rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::KW_ELSE),
+        );
+        assert!(has_else, "LET_STMT should have a KW_ELSE token");
+    }
+
+    #[test]
+    fn let_else_accepted_in_c_style_for_init() {
+        // C-style `for (let i = 0; cond; update)` accepts a let-else in the
+        // init slot. Makes the loop unreachable (the else diverges), which
+        // is silly but not a parse error — same kind of dead code we
+        // already allow elsewhere.
+        let source = r#"
+function f() -> int {
+  for (let i: int = 0 else { return 0; }; i < 3; i += 1) {
+    let _ = i;
+  }
+  0
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let for_expr = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FOR_EXPR)
+            .expect("expected FOR_EXPR");
+        let let_stmt = for_expr
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::LET_STMT)
+            .expect("for-init should expose a LET_STMT");
+        let has_else = let_stmt.children_with_tokens().any(
+            |elem| matches!(elem, rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::KW_ELSE),
+        );
+        assert!(has_else, "for-init LET_STMT should carry the else branch");
+    }
+
+    #[test]
+    fn let_without_else_unchanged() {
+        // Regression: plain `let x = …;` continues to parse with no else
+        // sibling — the new else handling must not turn surrounding tokens
+        // into a phantom else block.
+        let source = r#"
+function f() -> int {
+  let x: int = 1;
+  x
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let let_stmt = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::LET_STMT)
+            .expect("expected LET_STMT");
+        let block_count = let_stmt
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
+            .count();
+        assert_eq!(block_count, 0, "plain let-stmt should have no BLOCK_EXPR");
     }
 }
