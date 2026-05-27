@@ -35,6 +35,28 @@ fn unlikely(b: bool) -> bool {
     b
 }
 
+/// `unreachable_unchecked()` guarded by a debug-build check.
+///
+/// Specialized opcodes and frame dispatch rely on the bytecode verifier /
+/// type-directed specialization guaranteeing the matched-on operand or frame
+/// type, so these branches are dead. In debug/test builds this `unreachable!()`s
+/// (surfacing a specialization or codegen bug instead of silent UB); in release
+/// it elides the check via `unreachable_unchecked()`.
+macro_rules! verifier_unreachable {
+    () => {
+        if cfg!(debug_assertions) {
+            unreachable!(
+                "VM verifier invariant violated — a specialization/codegen bug let an \
+                 unexpected operand or frame type reach an unchecked branch"
+            )
+        } else {
+            // SAFETY: guaranteed unreachable by the bytecode verifier / type-directed
+            // opcode specialization (see the matched-on type at the call site).
+            unsafe { ::std::hint::unreachable_unchecked() }
+        }
+    };
+}
+
 use ::bex_heap::TlabHolder;
 use ::bex_vm_types::{
     EarlyYieldCheck, RootHaver,
@@ -236,16 +258,16 @@ mod tests {
     fn init_spread_preserves_pre_spread_watch_baseline() {
         let mut vm = test_vm(vec![test_class(2)]);
         let class_ptr = vm.idx_to_ptr(ObjectIndex::from_raw(0));
-        let source_ptr = vm.tlab.alloc(Object::Instance(Instance {
-            class: class_ptr,
-            class_type_args: Vec::new(),
-            fields: vec![Value::int(10), Value::int(2)],
-        }));
-        let dest_ptr = vm.tlab.alloc(Object::Instance(Instance {
-            class: class_ptr,
-            class_type_args: Vec::new(),
-            fields: vec![Value::int(1), Value::int(2)],
-        }));
+        let source_ptr = vm.tlab.alloc(Object::Instance(Instance::new(
+            class_ptr,
+            Vec::new(),
+            vec![Value::int(10), Value::int(2)],
+        )));
+        let dest_ptr = vm.tlab.alloc(Object::Instance(Instance::new(
+            class_ptr,
+            Vec::new(),
+            vec![Value::int(1), Value::int(2)],
+        )));
         let root = NodeId::HeapObject(dest_ptr);
         vm.watch.register_root(
             root,
@@ -279,7 +301,10 @@ mod tests {
         let Object::Instance(dest) = vm.get_object(dest_ptr) else {
             panic!("destination should remain an instance");
         };
-        assert_eq!(dest.fields, vec![Value::int(10), Value::int(2)]);
+        assert_eq!(
+            dest.field_values().collect::<Vec<_>>(),
+            vec![Value::int(10), Value::int(2)]
+        );
     }
 }
 
@@ -741,6 +766,7 @@ fn value_type_tag(value: Value) -> i64 {
             match obj {
                 Object::Float(_) => type_tags::FLOAT,
                 Object::String(_) => type_tags::STRING,
+                Object::Bigint(_) => type_tags::BIGINT,
                 Object::Uint8Array(_) => type_tags::UINT8ARRAY,
                 Object::Variant(_) => type_tags::ENUM,
                 Object::Array(_) => type_tags::LIST,
@@ -769,6 +795,20 @@ fn value_type_tag(value: Value) -> i64 {
             }
         }
     }
+}
+
+/// A popped operand for a specialized bigint opcode.
+///
+/// The specialized `*Bigint` / `CmpBigint*` opcodes accept one `int` operand
+/// (so mixed `bigint`/`int` operators don't need a MIR coercion). Rather than
+/// allocate a BEX-heap `Object::Bigint` for that `int`, it stays a small `i64`
+/// here and is widened to a local `BigInt` (a `Cow`) only at the point of use.
+#[derive(Clone, Copy)]
+enum BigintOperand {
+    /// A heap-resident `Object::Bigint`.
+    Heap(HeapPtr),
+    /// An `int` operand, to be widened to a local `BigInt` on demand.
+    Int(i64),
 }
 
 impl BexVm {
@@ -887,14 +927,14 @@ impl BexVm {
     ///
     /// # Safety
     ///
-    /// This is safe for:
-    /// - Compile-time objects (immutable)
-    /// - Objects allocated by this VM's TLAB
-    /// - Objects from other VMs when they're not being mutated
+    /// The returned `&Object` may be aliased by other spawned VMs. It is safe
+    /// to inspect immutable object metadata through it, and to reach mutable
+    /// internals only when that field has its own synchronization (for example
+    /// `LockedContainer` data, atomic instance fields, cells, or futures).
     #[inline]
     pub fn get_object(&self, ptr: HeapPtr) -> &Object {
-        // SAFETY: Single-threaded execution within a VM. Objects are only
-        // written during allocation or field writes, both controlled by this VM.
+        // SAFETY: `HeapPtr` points into stable heap storage. Shared mutable
+        // state behind the object must provide its own synchronization.
         unsafe { ptr.get() }
     }
 
@@ -902,17 +942,17 @@ impl BexVm {
     ///
     /// # Safety
     ///
-    /// Caller must ensure exclusive access (typically via TLAB ownership
-    /// or single-threaded execution). Only runtime objects can be mutated.
+    /// Caller must ensure exclusive access to the heap object itself. `&mut
+    /// self` only proves exclusive access to this VM, not to objects shared with
+    /// spawned VMs. Mutator paths for shared state should use [`Self::get_object`]
+    /// plus the object's interior synchronization instead.
     #[inline]
     pub fn get_object_mut(&mut self, ptr: HeapPtr) -> &mut Object {
-        // SAFETY: We have &mut self, so no other code can access the VM.
-        // The TLAB ensures this VM has exclusive access to its allocated objects.
         debug_assert!(
             !self.heap.is_compile_time_ptr(ptr),
             "Cannot mutate compile-time object"
         );
-        // SAFETY: We have &mut self, ensuring exclusive access to this VM's objects
+        // SAFETY: caller upholds the object-exclusivity contract documented above.
         unsafe { ptr.get_mut() }
     }
 
@@ -982,12 +1022,30 @@ impl BexVm {
         self.get_object(ptr).as_string()
     }
 
-    /// Get uint8array from a Value.
-    pub fn as_uint8array(&self, value: &Value) -> Result<&Vec<u8>, VmInternalError> {
+    /// Get a reference to the `Arc<BigInt>` from a bigint Value.
+    pub fn as_bigint(
+        &self,
+        value: &Value,
+    ) -> Result<&std::sync::Arc<num_bigint::BigInt>, VmInternalError> {
+        let ptr = self.as_object_ptr(*value, ObjectType::Bigint)?;
+        match self.get_object(ptr) {
+            Object::Bigint(arc) => Ok(arc),
+            other => Err(VmInternalError::TypeError {
+                expected: ObjectType::Bigint.into(),
+                got: ObjectType::of(other).into(),
+            }),
+        }
+    }
+
+    /// Get uint8array from a Value. Acquires the container's mutex.
+    pub fn as_uint8array(
+        &self,
+        value: &Value,
+    ) -> Result<bex_vm_types::Uint8ArrayReadGuard<'_>, VmInternalError> {
         let ptr = self.as_object_ptr(*value, ObjectType::Uint8Array)?;
         let obj = self.get_object(ptr);
         match obj {
-            Object::Uint8Array(bytes) => Ok(bytes),
+            Object::Uint8Array(bytes) => Ok(bytes.lock()),
             _ => Err(VmInternalError::TypeError {
                 expected: ObjectType::Uint8Array.into(),
                 got: ObjectType::of(obj).into(),
@@ -995,11 +1053,14 @@ impl BexVm {
         }
     }
 
-    /// Get mutable uint8array from a Value.
-    pub fn as_uint8array_mut(&mut self, value: &Value) -> Result<&mut Vec<u8>, VmInternalError> {
+    /// Get mutable uint8array from a Value. Acquires the container's mutex.
+    pub fn as_uint8array_mut(
+        &mut self,
+        value: &Value,
+    ) -> Result<bex_vm_types::Uint8ArrayWriteGuard<'_>, VmInternalError> {
         let ptr = self.as_object_ptr(*value, ObjectType::Uint8Array)?;
-        match self.get_object_mut(ptr) {
-            Object::Uint8Array(bytes) => Ok(bytes),
+        match self.get_object(ptr) {
+            Object::Uint8Array(bytes) => Ok(bytes.lock_mut()),
             other => Err(VmInternalError::TypeError {
                 expected: ObjectType::Uint8Array.into(),
                 got: ObjectType::of(other).into(),
@@ -1013,6 +1074,10 @@ impl BexVm {
     }
 
     /// Get mutable string from a Value.
+    ///
+    /// Strings are immutable at the current BAML language surface. Do not use
+    /// this for spawned user-code mutation unless strings gain the same
+    /// object-level synchronization as containers.
     pub fn as_string_mut(&mut self, value: &Value) -> Result<&mut String, VmInternalError> {
         let ptr = self.as_object_ptr(*value, ObjectType::String)?;
         self.get_object_mut(ptr).as_string_mut()
@@ -1055,7 +1120,7 @@ impl BexVm {
                 got: ObjectType::of(self.get_object(ptr)).into(),
             });
         }
-        match self.get_object_mut(ptr) {
+        match self.get_object(ptr) {
             Object::Array(arr) => Ok(arr.lock_mut()),
             _ => unreachable!("type was just checked"),
         }
@@ -1091,7 +1156,7 @@ impl BexVm {
                 got: ObjectType::of(self.get_object(index)).into(),
             });
         }
-        match self.get_object_mut(index) {
+        match self.get_object(index) {
             Object::Map(map) => Ok(map.lock_mut()),
             _ => unreachable!("type was just checked"),
         }
@@ -1293,7 +1358,7 @@ impl BexVm {
     }
 
     pub fn alloc_map(&mut self, values: IndexMap<String, Value>) -> Value {
-        Value::object(self.tlab.alloc(Object::Map(Box::new(values.into()))))
+        Value::object(self.tlab.alloc(Object::Map(values.into())))
     }
 
     pub fn alloc_string(&mut self, s: String) -> Value {
@@ -1305,6 +1370,331 @@ impl BexVm {
         Value::object(self.tlab.alloc(Object::Float(f)))
     }
 
+    /// Allocate a bigint on the heap. Takes an `Arc<BigInt>` to allow sharing.
+    ///
+    /// Refuses values exceeding `MAX_BIGINT_BITS` so a single arithmetic op
+    /// (add/sub/mul/shl) can't materialise an arbitrarily large bigint and
+    /// blow out memory. Callers whose input is bounded — e.g. a bounded-length
+    /// literal parse, or a small operand promoted in a `bigint × int` operator
+    /// — can never trip the check in practice, but routing through this path
+    /// keeps the guard central.
+    ///
+    /// On failure returns `VmError::Thrown` with an `AllocFailure` exception
+    /// already constructed so instruction handlers can use `?` directly.
+    /// Codegenned glue functions return `VmRustFnError`; they call
+    /// `try_alloc_bigint` instead, which returns the raw `VmPanic`
+    /// (auto-converts to `VmRustFnError::Panic` via `#[from]`).
+    pub fn alloc_bigint(
+        &mut self,
+        arc: std::sync::Arc<num_bigint::BigInt>,
+    ) -> Result<Value, VmError> {
+        match self.try_alloc_bigint(arc) {
+            Ok(v) => Ok(v),
+            Err(panic) => Err(VmError::Thrown(self.panic_to_exception_value(panic))),
+        }
+    }
+
+    /// Pop a bigint operand without allocating.
+    ///
+    /// The specialized `*Bigint` opcodes accept one `int` operand (mirroring
+    /// the way `int`/`float` mix): `try_specialize_binary_op` routes
+    /// `bigint`/`int` pairs to these opcodes, so the matched operand is
+    /// guaranteed to be either an `Object::Bigint` or a `Value::Int`. The `int`
+    /// operand is resolved to a small *local* `BigInt` (a `Cow`) at the point of
+    /// use — the operator handling itself, rather than relying on a MIR-inserted
+    /// coercion, and crucially without allocating a BEX-heap `Object::Bigint`
+    /// for the operand.
+    fn pop_bigint_operand(&mut self) -> BigintOperand {
+        let v = self.stack.ensure_pop();
+        if let Some(ptr) = v.as_object_ptr() {
+            debug_assert!(
+                matches!(self.get_object(ptr), Object::Bigint(_)),
+                "pop_bigint_operand: object operand is not a Bigint (specialization bug)"
+            );
+            BigintOperand::Heap(ptr)
+        } else if let Some(n) = v.as_int() {
+            BigintOperand::Int(n)
+        } else {
+            verifier_unreachable!()
+        }
+    }
+
+    /// Resolve a [`BigintOperand`] to a borrowable `BigInt`.
+    ///
+    /// A heap operand borrows the heap-resident `BigInt` directly; an `int`
+    /// operand is widened to a small *local* `BigInt` owned by the returned
+    /// `Cow` (no BEX-heap allocation).
+    fn bigint_operand(&self, op: BigintOperand) -> std::borrow::Cow<'_, num_bigint::BigInt> {
+        match op {
+            BigintOperand::Heap(ptr) => match self.get_object(ptr) {
+                Object::Bigint(arc) => std::borrow::Cow::Borrowed(arc.as_ref()),
+                _ => verifier_unreachable!(),
+            },
+            BigintOperand::Int(n) => std::borrow::Cow::Owned(num_bigint::BigInt::from(n)),
+        }
+    }
+
+    /// View a `Value` as a `BigInt` for comparison, if it is numerically a
+    /// bigint or an `int`: an `int` is widened to a small *local* `BigInt`
+    /// (owned `Cow`, no heap alloc), a heap `Object::Bigint` is borrowed.
+    /// Returns `None` for anything else (float, string, …).
+    ///
+    /// Used by the generic comparison path (`exec_cmpop`) so a `bigint` vs
+    /// `int` mix compares by value — matching the specialized `CmpBigint*`
+    /// opcodes (`bigint_cmp`) — when the static types were erased (e.g. a
+    /// union/`any` operand) and the generic `CmpOp` was emitted instead.
+    fn value_as_bigint_cow(&self, v: Value) -> Option<std::borrow::Cow<'_, num_bigint::BigInt>> {
+        if let Some(n) = v.as_int() {
+            Some(std::borrow::Cow::Owned(num_bigint::BigInt::from(n)))
+        } else if let Some(ptr) = v.as_object_ptr() {
+            match self.get_object(ptr) {
+                Object::Bigint(arc) => Some(std::borrow::Cow::Borrowed(arc.as_ref())),
+                _ => None,
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Reconstruct the original `Value` for a [`BigintOperand`].
+    ///
+    /// Used to populate panic payloads (e.g. `DivisionByZero`) without
+    /// allocating: the `int` operand stays an `int`, the heap operand stays a
+    /// pointer.
+    fn bigint_operand_value(op: BigintOperand) -> Value {
+        match op {
+            BigintOperand::Heap(ptr) => Value::object(ptr),
+            BigintOperand::Int(n) => Value::int(n),
+        }
+    }
+
+    /// Evaluate a specialized bigint arithmetic / bitwise / shift op.
+    ///
+    /// Concentrates all the caps and panics that the per-opcode handlers used
+    /// to copy-paste. The borrows of the two operands are scoped to a block so
+    /// they drop before any heap allocation; only the resulting `BigInt` (or a
+    /// `VmPanic`) escapes.
+    fn bigint_binop(
+        &mut self,
+        op: BinOp,
+        l: BigintOperand,
+        r: BigintOperand,
+    ) -> Result<Value, VmError> {
+        let outcome: Result<num_bigint::BigInt, VmPanic> = {
+            match op {
+                BinOp::Add => {
+                    let lb = self.bigint_operand(l);
+                    let rb = self.bigint_operand(r);
+                    Ok(&*lb + &*rb)
+                }
+                BinOp::Sub => {
+                    let lb = self.bigint_operand(l);
+                    let rb = self.bigint_operand(r);
+                    Ok(&*lb - &*rb)
+                }
+                BinOp::Mul => {
+                    let lb = self.bigint_operand(l);
+                    let rb = self.bigint_operand(r);
+                    // Pre-flight bit-length check: `bits(lb * rb) ≤ bits(lb) +
+                    // bits(rb)` exactly. Reject before materializing the product
+                    // so two operands near `MAX_BIGINT_BITS` can't blow memory
+                    // with an intermediate twice the limit. Matches `Shl`.
+                    let estimated_bits = lb.bits().saturating_add(rb.bits());
+                    if estimated_bits > crate::package_baml::bigint::MAX_BIGINT_BITS {
+                        Err(VmPanic::AllocFailure {
+                            message: format!(
+                                "bigint mul: result of bigint multiplication would require ~{estimated_bits} bits (limit: {})",
+                                crate::package_baml::bigint::MAX_BIGINT_BITS
+                            ),
+                        })
+                    } else {
+                        Ok(&*lb * &*rb)
+                    }
+                }
+                BinOp::Div => {
+                    let lb = self.bigint_operand(l);
+                    let rb = self.bigint_operand(r);
+                    if *rb == num_bigint::BigInt::ZERO {
+                        Err(VmPanic::DivisionByZero {
+                            left: Self::bigint_operand_value(l),
+                            right: Self::bigint_operand_value(r),
+                        })
+                    } else {
+                        Ok(&*lb / &*rb)
+                    }
+                }
+                BinOp::Mod => {
+                    let lb = self.bigint_operand(l);
+                    let rb = self.bigint_operand(r);
+                    if *rb == num_bigint::BigInt::ZERO {
+                        Err(VmPanic::DivisionByZero {
+                            left: Self::bigint_operand_value(l),
+                            right: Self::bigint_operand_value(r),
+                        })
+                    } else {
+                        Ok(&*lb % &*rb)
+                    }
+                }
+                BinOp::BitAnd => {
+                    let lb = self.bigint_operand(l);
+                    let rb = self.bigint_operand(r);
+                    Ok(&*lb & &*rb)
+                }
+                BinOp::BitOr => {
+                    let lb = self.bigint_operand(l);
+                    let rb = self.bigint_operand(r);
+                    Ok(&*lb | &*rb)
+                }
+                BinOp::BitXor => {
+                    let lb = self.bigint_operand(l);
+                    let rb = self.bigint_operand(r);
+                    Ok(&*lb ^ &*rb)
+                }
+                BinOp::Shl => {
+                    // Two failure modes with distinct categories:
+                    // - Negative count: `baml.panics.NegativeBitShift` (caller bug).
+                    // - Count exceeds `usize`: `baml.panics.AllocFailure`
+                    //   (the would-be result is unrepresentable in memory).
+                    //
+                    // Resolve the count directly from `r`: an `int` count avoids
+                    // even a local `BigInt`.
+                    let shift: Result<usize, VmPanic> = match r {
+                        BigintOperand::Int(n) => {
+                            if n < 0 {
+                                Err(VmPanic::NegativeBitShift {
+                                    message: format!("bigint shl: negative shift count ({n})"),
+                                })
+                            } else {
+                                // On 64-bit targets a non-negative `i64` always
+                                // fits in `usize`; on 32-bit targets (wasm32) a
+                                // huge count overflows `usize`, so the would-be
+                                // result is unrepresentable — `AllocFailure`,
+                                // matching the `Heap` path and the old `ShlBigint`.
+                                usize::try_from(n).map_err(|_| VmPanic::AllocFailure {
+                                    message: format!(
+                                        "bigint shl: shift count ({n}) does not fit in usize"
+                                    ),
+                                })
+                            }
+                        }
+                        BigintOperand::Heap(_) => {
+                            let rb = self.bigint_operand(r);
+                            if rb.sign() == num_bigint::Sign::Minus {
+                                Err(VmPanic::NegativeBitShift {
+                                    message: format!("bigint shl: negative shift count ({rb})"),
+                                })
+                            } else {
+                                usize::try_from(rb.as_ref()).map_err(|_| VmPanic::AllocFailure {
+                                    message: format!(
+                                        "bigint shl: shift count ({rb}) does not fit in usize"
+                                    ),
+                                })
+                            }
+                        }
+                    };
+                    match shift {
+                        Err(panic) => Err(panic),
+                        Ok(shift) => {
+                            let lb = self.bigint_operand(l);
+                            let estimated_bits = lb.bits().saturating_add(shift as u64);
+                            if estimated_bits > crate::package_baml::bigint::MAX_BIGINT_BITS {
+                                Err(VmPanic::AllocFailure {
+                                    message: format!(
+                                        "bigint shl: result of {lb} << {shift} would require ~{estimated_bits} bits (limit: {})",
+                                        crate::package_baml::bigint::MAX_BIGINT_BITS
+                                    ),
+                                })
+                            } else {
+                                Ok(&*lb << shift)
+                            }
+                        }
+                    }
+                }
+                BinOp::Shr => {
+                    // Reject negative shift counts as `baml.panics.NegativeBitShift`
+                    // (mirrors `Shl`). Non-negative counts that don't fit in a
+                    // `usize` saturate to `0n`/`-1n` below.
+                    let shift_opt: Result<Option<usize>, VmPanic> = match r {
+                        BigintOperand::Int(n) => {
+                            if n < 0 {
+                                Err(VmPanic::NegativeBitShift {
+                                    message: format!("bigint shr: negative shift count ({n})"),
+                                })
+                            } else {
+                                Ok(usize::try_from(n).ok())
+                            }
+                        }
+                        BigintOperand::Heap(_) => {
+                            let rb = self.bigint_operand(r);
+                            if rb.sign() == num_bigint::Sign::Minus {
+                                Err(VmPanic::NegativeBitShift {
+                                    message: format!("bigint shr: negative shift count ({rb})"),
+                                })
+                            } else {
+                                Ok(usize::try_from(rb.as_ref()).ok())
+                            }
+                        }
+                    };
+                    match shift_opt {
+                        Err(panic) => Err(panic),
+                        Ok(shift_opt) => {
+                            // Right shift never grows the value, so a non-negative
+                            // shift count too large for `usize` is treated as
+                            // "shift past every bit". `num-bigint`'s `Shr` is an
+                            // arithmetic right shift (rounds toward -∞), so
+                            // positives saturate to 0 and negatives to -1 —
+                            // matching `i*::shr`.
+                            let lb = self.bigint_operand(l);
+                            Ok(match shift_opt {
+                                Some(shift) => &*lb >> shift,
+                                None if lb.sign() == num_bigint::Sign::Minus => {
+                                    num_bigint::BigInt::from(-1)
+                                }
+                                None => num_bigint::BigInt::ZERO,
+                            })
+                        }
+                    }
+                }
+            }
+        };
+        match outcome {
+            Ok(result) => self.alloc_bigint(std::sync::Arc::new(result)),
+            Err(panic) => Err(VmError::Thrown(self.panic_to_exception_value(panic))),
+        }
+    }
+
+    /// Evaluate a specialized bigint comparison.
+    fn bigint_cmp(&self, op: CmpOp, l: BigintOperand, r: BigintOperand) -> bool {
+        let lb = self.bigint_operand(l);
+        let rb = self.bigint_operand(r);
+        match op {
+            CmpOp::Eq => *lb == *rb,
+            CmpOp::NotEq => *lb != *rb,
+            CmpOp::Lt => *lb < *rb,
+            CmpOp::LtEq => *lb <= *rb,
+            CmpOp::Gt => *lb > *rb,
+            CmpOp::GtEq => *lb >= *rb,
+        }
+    }
+
+    /// Like `alloc_bigint` but returns the raw `VmPanic` so codegen glue
+    /// (which returns `VmRustFnError`) can use `?` to propagate.
+    pub fn try_alloc_bigint(
+        &mut self,
+        arc: std::sync::Arc<num_bigint::BigInt>,
+    ) -> Result<Value, VmPanic> {
+        let bits = arc.bits();
+        if bits > crate::package_baml::bigint::MAX_BIGINT_BITS {
+            return Err(VmPanic::AllocFailure {
+                message: format!(
+                    "bigint allocation requires {bits} bits (limit: {})",
+                    crate::package_baml::bigint::MAX_BIGINT_BITS
+                ),
+            });
+        }
+        Ok(Value::object(self.tlab.alloc(Object::Bigint(arc))))
+    }
+
     pub fn alloc_uint8array(&mut self, data: Vec<u8>) -> Value {
         Value::object(self.tlab.alloc_uint8array(data))
     }
@@ -1312,11 +1702,10 @@ impl BexVm {
     /// TODO: Seems to low level for an embedder, provide an API that takes
     /// class name and mapping of field name => value instead.
     pub fn alloc_instance(&mut self, class: HeapPtr, fields: Vec<Value>) -> Value {
-        Value::object(self.tlab.alloc(Object::Instance(Instance {
-            class,
-            class_type_args: vec![],
-            fields,
-        })))
+        Value::object(
+            self.tlab
+                .alloc(Object::Instance(Instance::new(class, vec![], fields))),
+        )
     }
 
     // TODO: Same problem as above. Ideally takes (&str, &str) instead.
@@ -1640,11 +2029,9 @@ impl BexVm {
 
     pub(crate) fn alloc_error_value(&mut self, class: ErrorClass, fields: Vec<Value>) -> Value {
         let class_ptr = self.error_class_ptrs[class as usize];
-        let instance_ptr = self.tlab.alloc(Object::Instance(Instance {
-            class: class_ptr,
-            class_type_args: vec![],
-            fields,
-        }));
+        let instance_ptr =
+            self.tlab
+                .alloc(Object::Instance(Instance::new(class_ptr, vec![], fields)));
         Value::object(instance_ptr)
     }
 
@@ -1715,6 +2102,10 @@ impl BexVm {
                 let message = self.alloc_string(message);
                 (PanicClass::HostUnavailable, vec![resource, message])
             }
+            VmPanic::NegativeBitShift { message } => {
+                let msg = self.alloc_string(message);
+                (PanicClass::NegativeBitShift, vec![msg])
+            }
         };
         self.alloc_panic_value(class, fields)
     }
@@ -1722,11 +2113,9 @@ impl BexVm {
     /// Allocate a `baml.panics.*` class instance using pre-resolved pointers.
     pub fn alloc_panic_value(&mut self, class: PanicClass, fields: Vec<Value>) -> Value {
         let class_ptr = self.panic_class_ptrs[class as usize];
-        let instance_ptr = self.tlab.alloc(Object::Instance(Instance {
-            class: class_ptr,
-            class_type_args: vec![],
-            fields,
-        }));
+        let instance_ptr =
+            self.tlab
+                .alloc(Object::Instance(Instance::new(class_ptr, vec![], fields)));
         Value::object(instance_ptr)
     }
 
@@ -2414,8 +2803,8 @@ impl BexVm {
                 .map(|copy| {
                     (
                         copy.dest,
-                        dest.fields[copy.dest],
-                        source.fields[copy.source],
+                        dest.load_field(copy.dest),
+                        source.load_field(copy.source),
                     )
                 })
                 .collect()
@@ -2438,10 +2827,10 @@ impl BexVm {
                 new_value,
             );
             self.heap.write_barrier(dest_ptr, new_value);
-            let Object::Instance(dest) = self.get_object_mut(dest_ptr) else {
+            let Object::Instance(dest) = self.get_object(dest_ptr) else {
                 unreachable!("destination instance already type-checked above");
             };
-            dest.fields[dest_field] = new_value;
+            dest.store_field(dest_field, new_value);
         }
 
         for (&root, old_value) in roots.iter().zip(old_roots_copies) {
@@ -2526,11 +2915,9 @@ impl BexVm {
             fields
         };
 
-        Ok(Value::object(self.tlab.alloc(Object::Instance(Instance {
-            class: class_ptr,
-            class_type_args,
-            fields,
-        }))))
+        Ok(Value::object(self.tlab.alloc(Object::Instance(
+            Instance::new(class_ptr, class_type_args, fields),
+        ))))
     }
 
     /// When a watched node changes, we need to update the graph topology
@@ -2687,6 +3074,25 @@ impl BexVm {
                 CmpOp::Gt => l > r,
                 CmpOp::GtEq => l >= r,
             })
+        } else if let (Some(l), Some(r)) = (
+            self.value_as_bigint_cow(left),
+            self.value_as_bigint_cow(right),
+        ) {
+            // Mixed `bigint`/`int` comparison reached via the generic path: one
+            // operand's static `bigint` type was erased (e.g. a union/`any`
+            // operand), so emit produced a generic `CmpOp` rather than
+            // `CmpBigint*`. The `int` operand is widened to a local `BigInt`;
+            // comparison is by value, matching the specialized path. (Both
+            // operands being `int` is already handled by the first arm above,
+            // so at least one is a `bigint` here.)
+            Value::bool(match op {
+                CmpOp::Eq => l == r,
+                CmpOp::NotEq => l != r,
+                CmpOp::Lt => l < r,
+                CmpOp::LtEq => l <= r,
+                CmpOp::Gt => l > r,
+                CmpOp::GtEq => l >= r,
+            })
         } else if let (Some(li), Some(ri)) = (left.as_object_ptr(), right.as_object_ptr()) {
             let lobj = self.get_object(li);
             let robj = self.get_object(ri);
@@ -2704,8 +3110,8 @@ impl BexVm {
                     })
                 }
                 (Object::Uint8Array(_), Object::Uint8Array(_)) => {
-                    let la = self.as_uint8array(&left)?;
-                    let ra = self.as_uint8array(&right)?;
+                    let la = self.as_uint8array(&left)?.to_vec();
+                    let ra = self.as_uint8array(&right)?.to_vec();
                     Value::bool(match op {
                         CmpOp::Eq => la == ra,
                         CmpOp::NotEq => la != ra,
@@ -2743,6 +3149,8 @@ impl BexVm {
                         .into());
                     }
                 }),
+                // (Bigint, Bigint) — and any bigint/int mix — is handled by the
+                // `value_as_bigint_cow` branch above, before this object match.
                 _ => Value::bool(match op {
                     CmpOp::Eq => left == right,
                     CmpOp::NotEq => left != right,
@@ -3125,7 +3533,7 @@ impl BexVm {
 
         // Save faulting PC for error reporting (points to the opcode byte).
         let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
-            unsafe { std::hint::unreachable_unchecked() }
+            verifier_unreachable!()
         };
         bf.faulting_pc = *pc - 1;
 
@@ -3252,7 +3660,7 @@ impl BexVm {
                         }
                         .into());
                     };
-                    let value = instance.fields[idx];
+                    let value = instance.load_field(idx);
                     self.stack.push(value);
                 }
 
@@ -3270,7 +3678,7 @@ impl BexVm {
                             }
                             .into());
                         };
-                        instance.fields[idx]
+                        instance.load_field(idx)
                     };
 
                     let watched_node = NodeId::HeapObject(obj_ptr);
@@ -3281,10 +3689,10 @@ impl BexVm {
                         new_value,
                     );
                     self.heap.write_barrier(obj_ptr, new_value);
-                    let Object::Instance(instance) = self.get_object_mut(obj_ptr) else {
+                    let Object::Instance(instance) = self.get_object(obj_ptr) else {
                         unreachable!("already type-checked above");
                     };
-                    instance.fields[idx] = new_value;
+                    instance.store_field(idx, new_value);
 
                     let notifications = self.process_notifications(watched_node)?;
                     if !notifications.is_empty() {
@@ -3300,14 +3708,14 @@ impl BexVm {
                     let instance_value = self.stack.ensure_pop();
                     let obj_ptr = self.as_object_ptr(instance_value, ObjectType::Instance)?;
                     self.heap.write_barrier(obj_ptr, new_value);
-                    let Object::Instance(instance) = self.get_object_mut(obj_ptr) else {
+                    let Object::Instance(instance) = self.get_object(obj_ptr) else {
                         return Err(VmInternalError::TypeError {
                             expected: ObjectType::Instance.into(),
                             got: ObjectType::of(self.get_object(obj_ptr)).into(),
                         }
                         .into());
                     };
-                    instance.fields[idx] = new_value;
+                    instance.store_field(idx, new_value);
                     self.stack.push(instance_value);
                 }
 
@@ -3369,7 +3777,7 @@ impl BexVm {
                     } else {
                         IndexMap::new()
                     };
-                    let obj_index = self.tlab.alloc(Object::Map(Box::new(map.into())));
+                    let obj_index = self.tlab.alloc(Object::Map(map.into()));
                     self.stack.push(Value::object(obj_index));
                 }
 
@@ -3414,11 +3822,11 @@ impl BexVm {
                     fields.resize(class.fields.len(), Value::NULL);
                     let instance_ptr =
                         self.tlab
-                            .alloc(Object::Instance(bex_vm_types::types::Instance {
-                                class: class_ptr,
+                            .alloc(Object::Instance(bex_vm_types::types::Instance::new(
+                                class_ptr,
                                 class_type_args,
                                 fields,
-                            }));
+                            )));
                     self.stack.push(Value::object(instance_ptr));
                 }
 
@@ -3702,7 +4110,7 @@ impl BexVm {
                     let locals_offset = StackIndex::from_raw(args_offset);
                     // Save pc as return address before pushing new frame.
                     let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
-                        unsafe { std::hint::unreachable_unchecked() }
+                        verifier_unreachable!()
                     };
                     bf.instruction_ptr = *pc;
 
@@ -3733,7 +4141,7 @@ impl BexVm {
                 OpCode::CallIndirect => {
                     // Save pc as return address before any call.
                     let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
-                        unsafe { std::hint::unreachable_unchecked() }
+                        verifier_unreachable!()
                     };
                     bf.instruction_ptr = *pc;
 
@@ -4139,7 +4547,7 @@ impl BexVm {
                 // ── MakeCell ──────────────────────────────────────────────────
                 OpCode::MakeCell => {
                     let value = self.stack.ensure_pop();
-                    let cell = Object::Cell(bex_vm_types::types::Cell { value });
+                    let cell = Object::Cell(bex_vm_types::types::Cell::new(value));
                     let ptr = self.tlab.alloc(cell);
                     self.stack.push(Value::object(ptr));
                 }
@@ -4253,7 +4661,7 @@ impl BexVm {
                         }
                         .into());
                     };
-                    self.stack.push(cell.value);
+                    self.stack.push(cell.load());
                 }
 
                 OpCode::StoreDeref => {
@@ -4272,7 +4680,7 @@ impl BexVm {
                         .into());
                     };
                     self.heap.write_barrier(cell_ptr, value);
-                    let obj = unsafe { cell_ptr.get_mut() };
+                    let obj = unsafe { cell_ptr.get() };
                     let Object::Cell(cell) = obj else {
                         return Err(VmInternalError::TypeError {
                             expected: ObjectType::Cell.into(),
@@ -4280,7 +4688,7 @@ impl BexVm {
                         }
                         .into());
                     };
-                    cell.value = value;
+                    cell.store(value);
                 }
 
                 // ── LoadCapture / StoreCapture / CaptureRef ───────────────────
@@ -4314,7 +4722,7 @@ impl BexVm {
                         }
                         .into());
                     };
-                    self.stack.push(cell.value);
+                    self.stack.push(cell.load());
                 }
 
                 OpCode::StoreCapture => {
@@ -4341,7 +4749,7 @@ impl BexVm {
                         .into());
                     };
                     self.heap.write_barrier(cell_ptr, value);
-                    let cell_obj = unsafe { cell_ptr.get_mut() };
+                    let cell_obj = unsafe { cell_ptr.get() };
                     let Object::Cell(cell) = cell_obj else {
                         return Err(VmInternalError::TypeError {
                             expected: ObjectType::Cell.into(),
@@ -4349,7 +4757,7 @@ impl BexVm {
                         }
                         .into());
                     };
-                    cell.value = value;
+                    cell.store(value);
                 }
 
                 OpCode::CaptureRef => {
@@ -4399,10 +4807,12 @@ impl BexVm {
                                 }
                             }
                             Object::Uint8Array(bytes) => {
-                                if i < 0 || (i as usize) >= bytes.len() {
-                                    Err((i, bytes.len()))
+                                let guard = bytes.lock();
+                                let len = guard.len();
+                                if i < 0 || (i as usize) >= len {
+                                    Err((i, len))
                                 } else {
-                                    Ok(Value::int(i64::from(bytes[i as usize])))
+                                    Ok(Value::int(i64::from(guard[i as usize])))
                                 }
                             }
                             other => {
@@ -4482,7 +4892,7 @@ impl BexVm {
                     // inner scope before any `&mut self` ops.
                     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
                     let store_result: Result<Value, (i64, usize)> = {
-                        match self.get_object_mut(array_object_index) {
+                        match self.get_object(array_object_index) {
                             Object::Array(arr) => {
                                 let mut guard = arr.lock_mut();
                                 let len = guard.len();
@@ -4502,11 +4912,13 @@ impl BexVm {
                                     }
                                     .into());
                                 };
-                                if i < 0 || (i as usize) >= bytes.len() {
-                                    Err((i, bytes.len()))
+                                let mut guard = bytes.lock_mut();
+                                let len = guard.len();
+                                if i < 0 || (i as usize) >= len {
+                                    Err((i, len))
                                 } else {
-                                    let old = Value::int(i64::from(bytes[i as usize]));
-                                    bytes[i as usize] = byte_v;
+                                    let old = Value::int(i64::from(guard[i as usize]));
+                                    guard[i as usize] = byte_v;
                                     Ok(old)
                                 }
                             }
@@ -4558,7 +4970,7 @@ impl BexVm {
                     // Take the map's write lock for capture-old + insert-new
                     // atomically. Guard drops before any `&mut self` ops.
                     let store_result: Result<Value, ObjectType> = {
-                        match self.get_object_mut(map_index) {
+                        match self.get_object(map_index) {
                             Object::Map(map) => {
                                 let mut guard = map.lock_mut();
                                 let old = guard.get(&key).copied().unwrap_or(Value::NULL);
@@ -4748,6 +5160,106 @@ impl BexVm {
                 OpCode::CmpFloatGt => cmp_float_op!(>),
                 OpCode::CmpFloatGtEq => cmp_float_op!(>=),
 
+                // ── Specialized bigint comparison (skip type dispatch) ────────
+                OpCode::CmpBigintEq => {
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let result = self.bigint_cmp(CmpOp::Eq, l, r);
+                    self.stack.push(Value::bool(result));
+                }
+                OpCode::CmpBigintNotEq => {
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let result = self.bigint_cmp(CmpOp::NotEq, l, r);
+                    self.stack.push(Value::bool(result));
+                }
+                OpCode::CmpBigintLt => {
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let result = self.bigint_cmp(CmpOp::Lt, l, r);
+                    self.stack.push(Value::bool(result));
+                }
+                OpCode::CmpBigintLtEq => {
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let result = self.bigint_cmp(CmpOp::LtEq, l, r);
+                    self.stack.push(Value::bool(result));
+                }
+                OpCode::CmpBigintGt => {
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let result = self.bigint_cmp(CmpOp::Gt, l, r);
+                    self.stack.push(Value::bool(result));
+                }
+                OpCode::CmpBigintGtEq => {
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let result = self.bigint_cmp(CmpOp::GtEq, l, r);
+                    self.stack.push(Value::bool(result));
+                }
+
+                // ── Specialized bigint arithmetic (skip type dispatch) ────────
+                OpCode::AddBigint => {
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let value = self.bigint_binop(BinOp::Add, l, r)?;
+                    self.stack.push(value);
+                }
+                OpCode::SubBigint => {
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let value = self.bigint_binop(BinOp::Sub, l, r)?;
+                    self.stack.push(value);
+                }
+                OpCode::MulBigint => {
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let value = self.bigint_binop(BinOp::Mul, l, r)?;
+                    self.stack.push(value);
+                }
+                OpCode::DivBigint => {
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let value = self.bigint_binop(BinOp::Div, l, r)?;
+                    self.stack.push(value);
+                }
+                OpCode::ModBigint => {
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let value = self.bigint_binop(BinOp::Mod, l, r)?;
+                    self.stack.push(value);
+                }
+                OpCode::BitAndBigint => {
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let value = self.bigint_binop(BinOp::BitAnd, l, r)?;
+                    self.stack.push(value);
+                }
+                OpCode::BitOrBigint => {
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let value = self.bigint_binop(BinOp::BitOr, l, r)?;
+                    self.stack.push(value);
+                }
+                OpCode::BitXorBigint => {
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let value = self.bigint_binop(BinOp::BitXor, l, r)?;
+                    self.stack.push(value);
+                }
+                OpCode::ShlBigint => {
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let value = self.bigint_binop(BinOp::Shl, l, r)?;
+                    self.stack.push(value);
+                }
+                OpCode::ShrBigint => {
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
+                    let value = self.bigint_binop(BinOp::Shr, l, r)?;
+                    self.stack.push(value);
+                }
+
                 // ── Expanded unary ────────────────────────────────────────────
                 OpCode::Not => {
                     let val = self.stack.ensure_pop();
@@ -4769,6 +5281,27 @@ impl BexVm {
                     } else if let Some(n) = value_as_float(val) {
                         let v = self.alloc_float(-n);
                         self.stack.push(v);
+                    } else if let Some(ptr) = val.as_object_ptr() {
+                        // Bigint negation. Compute the negated value into an
+                        // owned `Arc` first so the immutable `get_object` borrow
+                        // is released before the `&mut self` `alloc_bigint`.
+                        let negated = match self.get_object(ptr) {
+                            Object::Bigint(bi) => Some(std::sync::Arc::new(-bi.as_ref().clone())),
+                            _ => None,
+                        };
+                        match negated {
+                            Some(arc) => {
+                                let result = self.alloc_bigint(arc)?;
+                                self.stack.push(result);
+                            }
+                            None => {
+                                return Err(VmInternalError::CannotApplyUnaryOp {
+                                    op: UnaryOp::Neg,
+                                    value: self.type_of(&val),
+                                }
+                                .into());
+                            }
+                        }
                     } else {
                         return Err(VmInternalError::CannotApplyUnaryOp {
                             op: UnaryOp::Neg,

@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.$init_test_34(registry: testing.TestCollector) -> null {
+fn user.$init_test_35(registry: testing.TestCollector) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.TestCollector // registry // param
@@ -32,7 +32,7 @@ fn user.$init_test_34(registry: testing.TestCollector) -> null {
 }
 
 // lambda[0]
-fn .<lambda($init_test_34, 0)>(testset: testing.TestCollector) -> null {
+fn .<lambda($init_test_35, 0)>(testset: testing.TestCollector) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.TestCollector // testset // param
@@ -83,7 +83,7 @@ fn .<lambda($init_test_34, 0)>(testset: testing.TestCollector) -> null {
 }
 
 // lambda[0]
-fn .<lambda(<lambda($init_test_34, 0)>, 1)>() -> null {
+fn .<lambda(<lambda($init_test_35, 0)>, 1)>() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: string
@@ -99,7 +99,7 @@ fn .<lambda(<lambda($init_test_34, 0)>, 1)>() -> null {
 }
 
 // lambda[1]
-fn .<lambda($init_test_34, 2)>(testset: testing.TestCollector) -> null {
+fn .<lambda($init_test_35, 2)>(testset: testing.TestCollector) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.TestCollector // testset // param
@@ -137,7 +137,7 @@ fn .<lambda($init_test_34, 2)>(testset: testing.TestCollector) -> null {
 }
 
 // lambda[0]
-fn .<lambda(<lambda($init_test_34, 2)>, 3)>() -> null {
+fn .<lambda(<lambda($init_test_35, 2)>, 3)>() -> null {
     // Locals:
     let _0: null // _0 // return
 
@@ -151,7 +151,7 @@ fn .<lambda(<lambda($init_test_34, 2)>, 3)>() -> null {
 }
 
 // lambda[1]
-fn .<lambda(<lambda($init_test_34, 2)>, 4)>() -> null {
+fn .<lambda(<lambda($init_test_35, 2)>, 4)>() -> null {
     // Locals:
     let _0: null // _0 // return
 

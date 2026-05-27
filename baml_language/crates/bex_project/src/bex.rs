@@ -1,60 +1,11 @@
 use ::bex_heap::HeapPermit as _;
 use ::std::sync::Arc;
 use async_trait::async_trait;
-use baml_type::Ty;
 use bex_engine::{BexCallArg, BexEngine, FunctionCallContext};
 use bex_heap::{BexExternalValue, BexValue};
 use sys_types::CallId;
 
 use crate::{BexArgs, RuntimeError, project::BexProject};
-
-/// Coerce a raw external value to match the shape the VM expects for a
-/// declared parameter type.
-///
-/// Host bridges (Python/Node) that encode via protobuf don't always have
-/// per-call type metadata, so a plain dict comes across as
-/// `BexExternalValue::Map` even when the function declares a class
-/// parameter. The VM treats `Map` and `Instance` as distinct object kinds
-/// (see `bex_vm::vm::as_instance`) and refuses the mismatch, which surfaces
-/// as "type error: expected instance, got map" the first time the function
-/// body reads a field.
-///
-/// The class / enum name on an incoming `Instance` / `Variant` is also
-/// diagnostic metadata from the host encoder (Python codegen 09d §2: the
-/// name on `InboundClassValue` / `InboundEnumValue` is informational —
-/// Rust rederives the expected name from the function signature). Override
-/// it here so `resolved_class_names` / `resolved_enum_names` lookups use
-/// the engine-registered FQN instead of whatever the host side derived
-/// (e.g. a `root.lorem.MyLorem` vs. engine `user.lorem.MyLorem` mismatch).
-///
-/// Coercing at the project boundary — rather than inside each bridge —
-/// keeps host encoders simple and fixes this uniformly across Python, Node,
-/// and future bridges. Optional/list/map wrappers and unions are not
-/// walked here; host-side schema-aware encoders (codegen phase 4+) remain
-/// responsible for nested class shaping.
-fn coerce_arg_to_declared_type(value: BexExternalValue, ty: &Ty) -> BexExternalValue {
-    match (value, ty) {
-        (BexExternalValue::Map { entries, .. }, Ty::Class(type_name, _, _)) => {
-            BexExternalValue::Instance {
-                class_name: type_name.to_string(),
-                fields: entries,
-            }
-        }
-        (BexExternalValue::Instance { fields, .. }, Ty::Class(type_name, _, _)) => {
-            BexExternalValue::Instance {
-                class_name: type_name.to_string(),
-                fields,
-            }
-        }
-        (BexExternalValue::Variant { variant_name, .. }, Ty::Enum(type_name, _)) => {
-            BexExternalValue::Variant {
-                enum_name: type_name.to_string(),
-                variant_name,
-            }
-        }
-        (v, _) => v,
-    }
-}
 
 /// Core runtime API: call functions and introspect parameters.
 #[async_trait]
@@ -112,11 +63,13 @@ impl Bex for BexEngine {
 
         let ordered_args: Vec<BexCallArg> = params
             .into_iter()
-            .map(|(name, ty, has_default)| {
+            .map(|(name, _ty, has_default)| {
                 if let Some(value) = args.remove(name) {
-                    Ok(BexCallArg::Provided(Box::new(coerce_arg_to_declared_type(
-                        value, ty,
-                    ))))
+                    // Type-directed coercion (class-name rewriting,
+                    // int↔bigint widening, optional/union recursion) now
+                    // happens inside `call_function_bound_args` for all
+                    // entry paths; we just deliver the raw provided value.
+                    Ok(BexCallArg::Provided(Box::new(value)))
                 } else if has_default {
                     Ok(BexCallArg::OmittedDefault)
                 } else {

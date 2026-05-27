@@ -279,6 +279,7 @@ pub enum FunctionParamMode {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum PrimitiveType {
     Int,
+    Bigint,
     Float,
     String,
     Bool,
@@ -299,6 +300,7 @@ impl PrimitiveType {
     pub fn builtin_class_path(&self) -> &'static [&'static str] {
         match self {
             Self::Int => &["Int"],
+            Self::Bigint => &["Bigint"],
             Self::Float => &["Float"],
             Self::Bool => &["Bool"],
             Self::Null => &["Null"],
@@ -314,6 +316,7 @@ impl PrimitiveType {
     pub fn from_literal(lit: &baml_base::Literal) -> Self {
         match lit {
             baml_base::Literal::Int(_) => Self::Int,
+            baml_base::Literal::Bigint(_) => Self::Bigint,
             baml_base::Literal::Float(_) => Self::Float,
             baml_base::Literal::String(_) => Self::String,
             baml_base::Literal::Bool(_) => Self::Bool,
@@ -628,6 +631,7 @@ impl fmt::Display for PrimitiveType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             PrimitiveType::Int => write!(f, "int"),
+            PrimitiveType::Bigint => write!(f, "bigint"),
             PrimitiveType::Float => write!(f, "float"),
             PrimitiveType::String => write!(f, "string"),
             PrimitiveType::Bool => write!(f, "bool"),

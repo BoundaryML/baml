@@ -174,17 +174,13 @@ impl Tlab {
     /// Allocate a map object.
     #[inline]
     pub fn alloc_map(&mut self, values: IndexMap<String, Value>) -> HeapPtr {
-        self.alloc(Object::Map(Box::new(values.into())))
+        self.alloc(Object::Map(values.into()))
     }
 
     /// Allocate an instance object.
     #[inline]
     pub fn alloc_instance(&mut self, class: HeapPtr, fields: Vec<Value>) -> HeapPtr {
-        self.alloc(Object::Instance(Instance {
-            class,
-            class_type_args: vec![],
-            fields,
-        }))
+        self.alloc(Object::Instance(Instance::new(class, vec![], fields)))
     }
 
     /// Allocate a variant object.
@@ -196,7 +192,14 @@ impl Tlab {
     /// Allocate a uint8 array object.
     #[inline]
     pub fn alloc_uint8array(&mut self, data: Vec<u8>) -> HeapPtr {
-        self.alloc(Object::Uint8Array(data))
+        self.alloc(Object::Uint8Array(data.into()))
+    }
+
+    /// Allocate an arbitrary-precision integer on the heap. Wraps the value in
+    /// an `Arc` so the digit slice can be shared by clones without a deep copy.
+    #[inline]
+    pub fn alloc_bigint(&mut self, value: num_bigint::BigInt) -> HeapPtr {
+        self.alloc(Object::Bigint(Arc::new(value)))
     }
 
     /// Allocate opaque Rust data on the heap.
@@ -529,7 +532,7 @@ mod tests {
                 Object::Instance(inst) => {
                     assert_eq!(inst.class, class_ptr);
                     assert_eq!(inst.fields.len(), 2);
-                    assert_eq!(inst.fields[0], Value::int(10));
+                    assert_eq!(inst.load_field(0), Value::int(10));
                 }
                 _ => panic!("Expected Instance"),
             }

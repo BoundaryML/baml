@@ -336,6 +336,30 @@ fn resolve_type_alias_query() {
 }
 
 #[test]
+fn class_field_bigint() {
+    // Asserts that `class Foo { x bigint }` lowers the field type to
+    // `Ty::Primitive(PrimitiveType::Bigint, _)`, displayed as `bigint`.
+    // Note: to_json returns `map<string, unknown>` for bigint until Phase 2
+    // wires up the bigint.to_json() method.
+    let mut db = make_db();
+    let file = db.add_file("test.baml", "class Foo { x bigint }");
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    class user.Foo {
+      x: bigint
+    }
+    function user.Foo.to_json(self: user.Foo) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      map { "x": self.x.to_json() } : map<string, baml.json.json>
+    }
+    function user.Foo.from_json(j: baml.json.json) -> user.Foo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      Foo { x: baml.json.from_json<bigint>(baml.json.field(j, "x")) } : user.Foo
+    }
+    class user.Foo$stream {
+      x: null | bigint
+    }
+    "#);
+}
+
+#[test]
 fn two_functions_independent() {
     let mut db = make_db();
     let file = db.add_file(

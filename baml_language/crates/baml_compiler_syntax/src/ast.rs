@@ -315,6 +315,22 @@ impl UnionMemberParts {
             .cloned()
     }
 
+    /// Check if this member has a `BIGINT_LITERAL` token, optionally preceded by a
+    /// single `MINUS` token (for negative literals like `-7n`). Returns the numeric
+    /// digit string (without the trailing `n`) with an optional leading `-`.
+    pub fn bigint_literal(&self) -> Option<String> {
+        let (negated, tok) =
+            scan_signed_literal_token(self.tokens.iter().cloned(), SyntaxKind::BIGINT_LITERAL)?;
+        let text = tok.text();
+        // Strip the trailing `n` suffix.
+        let digits = text.strip_suffix('n').unwrap_or(text);
+        Some(if negated {
+            format!("-{digits}")
+        } else {
+            digits.to_string()
+        })
+    }
+
     /// Check if this member has an `INTEGER_LITERAL` token, optionally
     /// preceded by a single `MINUS` token (for negative literals like `-42`).
     /// Rejects `--42` and any other shape.
@@ -581,6 +597,24 @@ impl TypeExpr {
             .children()
             .find(|n| n.kind() == SyntaxKind::STRING_LITERAL)
             .map(|n| decode_regular_string_literal_text(&n.text().to_string()))
+    }
+
+    /// Check if this is a bigint literal type like `42n` or `-7n`. A single leading
+    /// `MINUS` negates. Returns the digit string (without the trailing `n`) with an
+    /// optional leading `-`.
+    pub fn bigint_literal(&self) -> Option<String> {
+        let tokens = self
+            .syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token);
+        let (negated, tok) = scan_signed_literal_token(tokens, SyntaxKind::BIGINT_LITERAL)?;
+        let text = tok.text();
+        let digits = text.strip_suffix('n').unwrap_or(text);
+        Some(if negated {
+            format!("-{digits}")
+        } else {
+            digits.to_string()
+        })
     }
 
     /// Check if this is an integer literal type like `200` or `-42`. A
@@ -2601,6 +2635,7 @@ impl BlockExpr {
                     // Keep literals and identifiers (potential tail expressions)
                     match t.kind() {
                         SyntaxKind::WORD
+                        | SyntaxKind::BIGINT_LITERAL
                         | SyntaxKind::INTEGER_LITERAL
                         | SyntaxKind::FLOAT_LITERAL
                         | SyntaxKind::STRING_LITERAL

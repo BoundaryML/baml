@@ -19,7 +19,7 @@ async fn add() {
     function main() -> int {
         load_const 1
         load_const 2
-        bin_op +
+        add_int
         return
     }
     ");
@@ -41,7 +41,7 @@ async fn subtract() {
     function main() -> int {
         load_const 1
         load_const 2
-        bin_op -
+        sub_int
         return
     }
     ");
@@ -63,7 +63,7 @@ async fn multiply() {
     function main() -> int {
         load_const 1
         load_const 2
-        bin_op *
+        mul_int
         return
     }
     ");
@@ -85,7 +85,7 @@ async fn divide() {
     function main() -> int {
         load_const 10
         load_const 2
-        bin_op /
+        div_int
         return
     }
     ");
@@ -107,7 +107,7 @@ async fn modulo() {
     function main() -> int {
         load_const 10
         load_const 3
-        bin_op %
+        mod_int
         return
     }
     ");
@@ -308,7 +308,7 @@ async fn negative_int_arithmetic() {
         load_const 5
         unary_op -
         load_const 3
-        bin_op +
+        add_int
         return
     }
     ");
@@ -331,7 +331,7 @@ async fn negative_int_comparison() {
         load_const 5
         unary_op -
         load_const 0
-        cmp_op <
+        cmp_int_op <
         return
     }
     ");
@@ -423,7 +423,7 @@ async fn equal() {
     function main() -> bool {
         load_const 1
         load_const 2
-        cmp_op ==
+        cmp_int_op ==
         return
     }
     ");
@@ -445,7 +445,7 @@ async fn not_equal() {
     function main() -> bool {
         load_const 1
         load_const 2
-        cmp_op !=
+        cmp_int_op !=
         return
     }
     ");
@@ -467,7 +467,7 @@ async fn greater_than() {
     function main() -> bool {
         load_const 1
         load_const 2
-        cmp_op >
+        cmp_int_op >
         return
     }
     ");
@@ -489,7 +489,7 @@ async fn greater_than_or_equal() {
     function main() -> bool {
         load_const 1
         load_const 2
-        cmp_op >=
+        cmp_int_op >=
         return
     }
     ");
@@ -511,7 +511,7 @@ async fn less_than() {
     function main() -> bool {
         load_const 1
         load_const 2
-        cmp_op <
+        cmp_int_op <
         return
     }
     ");
@@ -533,7 +533,7 @@ async fn less_than_or_equal() {
     function main() -> bool {
         load_const 1
         load_const 2
-        cmp_op <=
+        cmp_int_op <=
         return
     }
     ");

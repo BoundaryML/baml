@@ -49,6 +49,7 @@ bex_external_types = { workspace = true }
 darwin-kperf = { workspace = true }
 darwin-kperf-events = { workspace = true }
 divan = { workspace = true }
+num-bigint = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = [ "rt-multi-thread", "macros", "net" ] }

@@ -27,12 +27,12 @@ async fn while_loop_gcd() {
         args: { "a" => BexExternalValue::Int(21), "b" => BexExternalValue::Int(15) },
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function gcd(a: int, b: int) -> int {
       L0:
         load_var a
         load_var b
-        cmp_op !=
+        cmp_int_op !=
         pop_jump_if_false L1
         jump L2
 
@@ -43,7 +43,7 @@ async fn while_loop_gcd() {
       L2:
         load_var a
         load_var b
-        cmp_op >
+        cmp_int_op >
         pop_jump_if_false L3
         jump L4
 
@@ -88,7 +88,7 @@ async fn while_with_scope() {
         args: { "n" => BexExternalValue::Int(5) },
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function fib(n: int) -> int {
         load_const 0
         store_var a
@@ -98,7 +98,7 @@ async fn while_with_scope() {
       L0:
         load_var n
         load_const 0
-        cmp_op >
+        cmp_int_op >
         pop_jump_if_false L1
         jump L2
 
@@ -154,14 +154,14 @@ async fn while_with_break() {
       L0:
         load_var a
         load_const 5
-        cmp_op <
+        cmp_int_op <
         pop_jump_if_false L1
         load_var a
         load_const 1
         add_int
         store_var_load_var a
         load_const 2
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
 
       L1:
@@ -199,7 +199,7 @@ async fn break_factorial() {
         args: { "limit" => BexExternalValue::Int(5) },
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function factorial(limit: int) -> int {
         load_const 1
         store_var result
@@ -209,7 +209,7 @@ async fn break_factorial() {
         pop_jump_if_false L2
         load_var limit
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L1
         jump L2
 
@@ -367,7 +367,7 @@ async fn while_with_conditional_break() {
         sub_int
         store_var_load_var n
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
 
       L1:
@@ -435,7 +435,7 @@ async fn continue_factorial() {
         sub_int
         store_var_load_var limit
         load_const 0
-        cmp_op !=
+        cmp_int_op !=
         pop_jump_if_false L3
         jump L0
 

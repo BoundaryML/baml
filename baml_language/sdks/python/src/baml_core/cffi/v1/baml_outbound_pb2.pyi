@@ -24,7 +24,7 @@ VIDEO: MediaTypeEnum
 OTHER: MediaTypeEnum
 
 class BamlOutboundValue(_message.Message):
-    __slots__ = ("null_value", "string_value", "int_value", "float_value", "bool_value", "class_value", "enum_value", "literal_value", "list_value", "map_value", "union_variant_value", "handle_value", "media_value", "prompt_ast_value", "uint8array_value")
+    __slots__ = ("null_value", "string_value", "int_value", "float_value", "bool_value", "class_value", "enum_value", "literal_value", "list_value", "map_value", "union_variant_value", "handle_value", "media_value", "prompt_ast_value", "uint8array_value", "bigint_value")
     NULL_VALUE_FIELD_NUMBER: _ClassVar[int]
     STRING_VALUE_FIELD_NUMBER: _ClassVar[int]
     INT_VALUE_FIELD_NUMBER: _ClassVar[int]
@@ -40,6 +40,7 @@ class BamlOutboundValue(_message.Message):
     MEDIA_VALUE_FIELD_NUMBER: _ClassVar[int]
     PROMPT_AST_VALUE_FIELD_NUMBER: _ClassVar[int]
     UINT8ARRAY_VALUE_FIELD_NUMBER: _ClassVar[int]
+    BIGINT_VALUE_FIELD_NUMBER: _ClassVar[int]
     null_value: BamlValueNull
     string_value: str
     int_value: int
@@ -55,7 +56,8 @@ class BamlOutboundValue(_message.Message):
     media_value: BamlValueMedia
     prompt_ast_value: BamlValuePromptAst
     uint8array_value: bytes
-    def __init__(self, null_value: _Optional[_Union[BamlValueNull, _Mapping]] = ..., string_value: _Optional[str] = ..., int_value: _Optional[int] = ..., float_value: _Optional[float] = ..., bool_value: bool = ..., class_value: _Optional[_Union[BamlValueClass, _Mapping]] = ..., enum_value: _Optional[_Union[BamlValueEnum, _Mapping]] = ..., literal_value: _Optional[_Union[BamlTyLiteral, _Mapping]] = ..., list_value: _Optional[_Union[BamlValueList, _Mapping]] = ..., map_value: _Optional[_Union[BamlValueMap, _Mapping]] = ..., union_variant_value: _Optional[_Union[BamlValueUnionVariant, _Mapping]] = ..., handle_value: _Optional[_Union[BamlOutboundHandle, _Mapping]] = ..., media_value: _Optional[_Union[BamlValueMedia, _Mapping]] = ..., prompt_ast_value: _Optional[_Union[BamlValuePromptAst, _Mapping]] = ..., uint8array_value: _Optional[bytes] = ...) -> None: ...
+    bigint_value: str
+    def __init__(self, null_value: _Optional[_Union[BamlValueNull, _Mapping]] = ..., string_value: _Optional[str] = ..., int_value: _Optional[int] = ..., float_value: _Optional[float] = ..., bool_value: bool = ..., class_value: _Optional[_Union[BamlValueClass, _Mapping]] = ..., enum_value: _Optional[_Union[BamlValueEnum, _Mapping]] = ..., literal_value: _Optional[_Union[BamlTyLiteral, _Mapping]] = ..., list_value: _Optional[_Union[BamlValueList, _Mapping]] = ..., map_value: _Optional[_Union[BamlValueMap, _Mapping]] = ..., union_variant_value: _Optional[_Union[BamlValueUnionVariant, _Mapping]] = ..., handle_value: _Optional[_Union[BamlOutboundHandle, _Mapping]] = ..., media_value: _Optional[_Union[BamlValueMedia, _Mapping]] = ..., prompt_ast_value: _Optional[_Union[BamlValuePromptAst, _Mapping]] = ..., uint8array_value: _Optional[bytes] = ..., bigint_value: _Optional[str] = ...) -> None: ...
 
 class BamlOutboundHandle(_message.Message):
     __slots__ = ("key", "handle_type", "name")
@@ -204,7 +206,7 @@ class BamlValuePromptAstSimpleMultiple(_message.Message):
     def __init__(self, items: _Optional[_Iterable[_Union[BamlValuePromptAstSimple, _Mapping]]] = ...) -> None: ...
 
 class BamlTy(_message.Message):
-    __slots__ = ("string_type", "int_type", "float_type", "bool_type", "null_type", "literal_type", "media_type", "enum_type", "class_type", "type_alias_type", "list_type", "map_type", "union_variant_type", "optional_type", "any_type", "uint8array_type", "unknown_type")
+    __slots__ = ("string_type", "int_type", "float_type", "bool_type", "null_type", "literal_type", "media_type", "enum_type", "class_type", "type_alias_type", "list_type", "map_type", "union_variant_type", "optional_type", "any_type", "uint8array_type", "unknown_type", "bigint_type")
     STRING_TYPE_FIELD_NUMBER: _ClassVar[int]
     INT_TYPE_FIELD_NUMBER: _ClassVar[int]
     FLOAT_TYPE_FIELD_NUMBER: _ClassVar[int]
@@ -222,6 +224,7 @@ class BamlTy(_message.Message):
     ANY_TYPE_FIELD_NUMBER: _ClassVar[int]
     UINT8ARRAY_TYPE_FIELD_NUMBER: _ClassVar[int]
     UNKNOWN_TYPE_FIELD_NUMBER: _ClassVar[int]
+    BIGINT_TYPE_FIELD_NUMBER: _ClassVar[int]
     string_type: BamlTyString
     int_type: BamlTyInt
     float_type: BamlTyFloat
@@ -239,7 +242,8 @@ class BamlTy(_message.Message):
     any_type: BamlTyAny
     uint8array_type: BamlTyUint8Array
     unknown_type: BamlTyUnknown
-    def __init__(self, string_type: _Optional[_Union[BamlTyString, _Mapping]] = ..., int_type: _Optional[_Union[BamlTyInt, _Mapping]] = ..., float_type: _Optional[_Union[BamlTyFloat, _Mapping]] = ..., bool_type: _Optional[_Union[BamlTyBool, _Mapping]] = ..., null_type: _Optional[_Union[BamlTyNull, _Mapping]] = ..., literal_type: _Optional[_Union[BamlTyLiteral, _Mapping]] = ..., media_type: _Optional[_Union[BamlTyMedia, _Mapping]] = ..., enum_type: _Optional[_Union[BamlTyEnum, _Mapping]] = ..., class_type: _Optional[_Union[BamlTyClass, _Mapping]] = ..., type_alias_type: _Optional[_Union[BamlTyTypeAlias, _Mapping]] = ..., list_type: _Optional[_Union[BamlTyList, _Mapping]] = ..., map_type: _Optional[_Union[BamlTyMap, _Mapping]] = ..., union_variant_type: _Optional[_Union[BamlTyUnionVariant, _Mapping]] = ..., optional_type: _Optional[_Union[BamlTyOptional, _Mapping]] = ..., any_type: _Optional[_Union[BamlTyAny, _Mapping]] = ..., uint8array_type: _Optional[_Union[BamlTyUint8Array, _Mapping]] = ..., unknown_type: _Optional[_Union[BamlTyUnknown, _Mapping]] = ...) -> None: ...
+    bigint_type: BamlTyBigint
+    def __init__(self, string_type: _Optional[_Union[BamlTyString, _Mapping]] = ..., int_type: _Optional[_Union[BamlTyInt, _Mapping]] = ..., float_type: _Optional[_Union[BamlTyFloat, _Mapping]] = ..., bool_type: _Optional[_Union[BamlTyBool, _Mapping]] = ..., null_type: _Optional[_Union[BamlTyNull, _Mapping]] = ..., literal_type: _Optional[_Union[BamlTyLiteral, _Mapping]] = ..., media_type: _Optional[_Union[BamlTyMedia, _Mapping]] = ..., enum_type: _Optional[_Union[BamlTyEnum, _Mapping]] = ..., class_type: _Optional[_Union[BamlTyClass, _Mapping]] = ..., type_alias_type: _Optional[_Union[BamlTyTypeAlias, _Mapping]] = ..., list_type: _Optional[_Union[BamlTyList, _Mapping]] = ..., map_type: _Optional[_Union[BamlTyMap, _Mapping]] = ..., union_variant_type: _Optional[_Union[BamlTyUnionVariant, _Mapping]] = ..., optional_type: _Optional[_Union[BamlTyOptional, _Mapping]] = ..., any_type: _Optional[_Union[BamlTyAny, _Mapping]] = ..., uint8array_type: _Optional[_Union[BamlTyUint8Array, _Mapping]] = ..., unknown_type: _Optional[_Union[BamlTyUnknown, _Mapping]] = ..., bigint_type: _Optional[_Union[BamlTyBigint, _Mapping]] = ...) -> None: ...
 
 class BamlTyString(_message.Message):
     __slots__ = ()
@@ -273,6 +277,10 @@ class BamlTyUnknown(_message.Message):
     __slots__ = ()
     def __init__(self) -> None: ...
 
+class BamlTyBigint(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
 class BamlLiteralString(_message.Message):
     __slots__ = ("value",)
     VALUE_FIELD_NUMBER: _ClassVar[int]
@@ -291,15 +299,23 @@ class BamlLiteralBool(_message.Message):
     value: bool
     def __init__(self, value: bool = ...) -> None: ...
 
+class BamlLiteralBigint(_message.Message):
+    __slots__ = ("value",)
+    VALUE_FIELD_NUMBER: _ClassVar[int]
+    value: str
+    def __init__(self, value: _Optional[str] = ...) -> None: ...
+
 class BamlTyLiteral(_message.Message):
-    __slots__ = ("string_literal", "int_literal", "bool_literal")
+    __slots__ = ("string_literal", "int_literal", "bool_literal", "bigint_literal")
     STRING_LITERAL_FIELD_NUMBER: _ClassVar[int]
     INT_LITERAL_FIELD_NUMBER: _ClassVar[int]
     BOOL_LITERAL_FIELD_NUMBER: _ClassVar[int]
+    BIGINT_LITERAL_FIELD_NUMBER: _ClassVar[int]
     string_literal: BamlLiteralString
     int_literal: BamlLiteralInt
     bool_literal: BamlLiteralBool
-    def __init__(self, string_literal: _Optional[_Union[BamlLiteralString, _Mapping]] = ..., int_literal: _Optional[_Union[BamlLiteralInt, _Mapping]] = ..., bool_literal: _Optional[_Union[BamlLiteralBool, _Mapping]] = ...) -> None: ...
+    bigint_literal: BamlLiteralBigint
+    def __init__(self, string_literal: _Optional[_Union[BamlLiteralString, _Mapping]] = ..., int_literal: _Optional[_Union[BamlLiteralInt, _Mapping]] = ..., bool_literal: _Optional[_Union[BamlLiteralBool, _Mapping]] = ..., bigint_literal: _Optional[_Union[BamlLiteralBigint, _Mapping]] = ...) -> None: ...
 
 class BamlTyMedia(_message.Message):
     __slots__ = ("media",)

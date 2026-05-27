@@ -7,6 +7,25 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use smol_str::SmolStr;
 use text_size::{TextRange, TextSize};
 
+/// Borsh adapters for `num_bigint::BigInt`, which has no native borsh impl.
+/// Encoded as a length-prefixed little-endian two's-complement byte string —
+/// `BigInt::to_signed_bytes_le` / `from_signed_bytes_le` are the canonical
+/// binary form and round-trip without loss.
+pub mod borsh_bigint {
+    use borsh::{BorshDeserialize, BorshSerialize};
+    use num_bigint::BigInt;
+
+    pub fn serialize<W: std::io::Write>(value: &BigInt, writer: &mut W) -> std::io::Result<()> {
+        let bytes = value.to_signed_bytes_le();
+        BorshSerialize::serialize(&bytes, writer)
+    }
+
+    pub fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<BigInt> {
+        let bytes = Vec::<u8>::deserialize_reader(reader)?;
+        Ok(BigInt::from_signed_bytes_le(&bytes))
+    }
+}
+
 /// Unique identifier for a source file.
 ///
 /// ## Bit layout
@@ -275,6 +294,13 @@ impl fmt::Display for MediaKind {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, BorshSerialize, BorshDeserialize)]
 pub enum Literal {
     Int(i64),
+    Bigint(
+        #[borsh(
+            serialize_with = "borsh_bigint::serialize",
+            deserialize_with = "borsh_bigint::deserialize"
+        )]
+        num_bigint::BigInt,
+    ),
     Float(String),
     String(String),
     Bool(bool),
@@ -285,6 +311,7 @@ impl fmt::Display for Literal {
         match self {
             Literal::String(s) => write!(f, "{s:?}"),
             Literal::Int(i) => write!(f, "{i}"),
+            Literal::Bigint(n) => write!(f, "{n}n"),
             Literal::Float(s) => write!(f, "{s}"),
             Literal::Bool(b) => write!(f, "{b}"),
         }

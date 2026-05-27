@@ -1761,7 +1761,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                       )}
                     </div>
                   </div>
-                  {promptPreviewResult && <PromptStats text={stringifyResult(promptPreviewResult)} />}
+                  {promptPreviewResult != null && <PromptStats text={stringifyResult(promptPreviewResult)} />}
                 </TabsContent>
               )}
 

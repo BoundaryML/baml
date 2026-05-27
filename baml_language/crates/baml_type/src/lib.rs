@@ -23,6 +23,29 @@ pub use attr::*;
 pub use defs::*;
 pub use template::TyTemplate;
 
+/// Upper bound on the bit-length of a `bigint` value we are willing to
+/// materialize at runtime. ~268 million bits ≈ 80 million decimal digits ≈ 32
+/// MiB of digits. Operations that would produce a larger result raise
+/// `baml.panics.AllocFailure` instead of either succeeding (and starving the
+/// rest of the runtime) or aborting the process outright.
+///
+/// Shared by the VM's allocation guard (`bex_vm::package_baml::bigint`),
+/// the FFI decoder's pre-allocation cap
+/// (`bridge_ctypes::value_decode::MAX_BIGINT_HEX_LEN`), and TIR's
+/// constant-folding refusal threshold.
+pub const MAX_BIGINT_BITS: u64 = 1 << 28;
+
+/// Permissive upper bound on the number of base-ten digits a `bigint` may
+/// have before it cannot possibly fit in [`MAX_BIGINT_BITS`].
+///
+/// Each base-ten digit carries `log2(10) ≈ 3.32` bits, so any decimal string
+/// longer than `MAX_BIGINT_BITS / 3 + 2` is guaranteed to overflow the cap.
+/// Used as a cheap pre-flight reject before `BigInt::parse_bytes`; callers
+/// follow up with an exact `bits()` check for borderline inputs. Shared by
+/// SAP deserialization, the jsonish number visitor, and `bigint.parse`.
+#[allow(clippy::cast_possible_truncation)] // MAX_BIGINT_BITS is 2^28; fits in usize on 32/64-bit
+pub const MAX_BIGINT_DECIMAL_DIGITS: usize = (MAX_BIGINT_BITS / 3 + 2) as usize;
+
 /// A lightweight name type for class/enum/type-alias references.
 ///
 /// Replaces both `QualifiedName` (VIR+) and plain `String` keys.
@@ -112,6 +135,9 @@ impl fmt::Display for TypeName {
 pub enum Ty {
     // --- Core: used by all VIR+ stages ---
     Int {
+        attr: TyAttr,
+    },
+    Bigint {
         attr: TyAttr,
     },
     Float {
@@ -221,6 +247,7 @@ impl Ty {
     pub fn with_attr(self, attr: TyAttr) -> Ty {
         match self {
             Ty::Int { .. } => Ty::Int { attr },
+            Ty::Bigint { .. } => Ty::Bigint { attr },
             Ty::Float { .. } => Ty::Float { attr },
             Ty::String { .. } => Ty::String { attr },
             Ty::Bool { .. } => Ty::Bool { attr },
@@ -259,6 +286,7 @@ impl Ty {
     pub fn attr(&self) -> &TyAttr {
         match self {
             Ty::Int { attr }
+            | Ty::Bigint { attr }
             | Ty::Float { attr }
             | Ty::String { attr }
             | Ty::Bool { attr }
@@ -288,6 +316,13 @@ impl Ty {
     /// `int` with default attributes.
     pub fn int() -> Self {
         Ty::Int {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `bigint` with default attributes.
+    pub fn bigint() -> Self {
+        Ty::Bigint {
             attr: TyAttr::default(),
         }
     }
@@ -468,6 +503,7 @@ impl Ty {
         matches!(
             self,
             Ty::Int { .. }
+                | Ty::Bigint { .. }
                 | Ty::Float { .. }
                 | Ty::String { .. }
                 | Ty::Bool { .. }
@@ -490,6 +526,15 @@ impl Ty {
     /// - Unknown/Error are mapped to Null during TIR→baml_type conversion
     /// - Never is mapped to Void during VIR lowering
     /// - All real type checking (where those variants matter) happens in TIR
+    ///
+    /// Structural subtyping for `Ty`. This is the runtime / SAP analogue of
+    /// `baml_compiler2_tir::normalize::is_subtype_of`. The relation is purely
+    /// structural — only representation-preserving widenings are allowed.
+    /// Representation-changing numeric coercions (`int → bigint`, `int → float`,
+    /// and their literal forms) are not subtype relations: `int → bigint`
+    /// happens only at the FFI boundary (`bex_engine::conversion`), and
+    /// `int → float` requires an explicit `float` literal. Keep behaviour
+    /// aligned with `crate::normalize::is_subtype_of` in TIR.
     pub fn is_subtype_of(&self, other: &Ty) -> bool {
         // Same types are subtypes
         if self == other {
@@ -502,13 +547,14 @@ impl Ty {
         }
 
         match (self, other) {
-            // Literal types are subtypes of their corresponding primitives
+            // Literal types are subtypes of their corresponding primitives.
+            // (Same representation — these are free widenings, like
+            // `Literal(Int 42) <: Int`.)
             (Ty::Literal(Literal::Int(_), _), Ty::Int { .. }) => true,
             (Ty::Literal(Literal::Float(_), _), Ty::Float { .. }) => true,
             (Ty::Literal(Literal::String(_), _), Ty::String { .. }) => true,
             (Ty::Literal(Literal::Bool(_), _), Ty::Bool { .. }) => true,
-            // Literal int widens to float
-            (Ty::Literal(Literal::Int(_), _), Ty::Float { .. }) => true,
+            (Ty::Literal(Literal::Bigint(_), _), Ty::Bigint { .. }) => true,
 
             // Null is a subtype of Optional<T>
             (Ty::Null { .. }, Ty::Optional(..)) => true,
@@ -522,10 +568,14 @@ impl Ty {
             // Union<T1, T2> is a subtype of U if all Ti are subtypes of U
             (Ty::Union(types, _), other) => types.iter().all(|t| t.is_subtype_of(other)),
 
-            // List covariance
+            // List: structural recursion. Since this impl is coercion-free,
+            // recursion via `is_subtype_of` only admits free widenings —
+            // `int[]` is **not** a subtype of `bigint[]`/`float[]`.
             (Ty::List(inner1, _), Ty::List(inner2, _)) => inner1.is_subtype_of(inner2),
 
-            // Map covariance in value (key invariant)
+            // Map: structural recursion in both key and value. Same coercion-
+            // free semantics as `List` — values cannot widen across
+            // representation boundaries.
             (
                 Ty::Map {
                     key: k1, value: v1, ..
@@ -533,11 +583,12 @@ impl Ty {
                 Ty::Map {
                     key: k2, value: v2, ..
                 },
-            ) => k1 == k2 && v1.is_subtype_of(v2),
+            ) => k1.is_subtype_of(k2) && v1.is_subtype_of(v2),
 
-            // Int is a subtype of Float (numeric widening)
-            (Ty::Int { .. }, Ty::Float { .. }) => true,
-
+            // Note: `int <: bigint`, `int <: float`, and the literal-int
+            // widenings to bigint/float are intentionally absent — numeric
+            // types do not widen across representations in the type system (TIR
+            // matches this). `int → bigint` is an FFI-boundary coercion only.
             _ => false,
         }
     }
@@ -605,6 +656,7 @@ impl Ty {
                 Ok(())
             }
             Ty::Int { .. }
+            | Ty::Bigint { .. }
             | Ty::Float { .. }
             | Ty::String { .. }
             | Ty::Bool { .. }
@@ -655,10 +707,12 @@ impl fmt::Display for Ty {
             Ty::Media(kind, _) => write!(f, "{kind}"),
             Ty::Literal(lit, _) => match lit {
                 Literal::Int(i) => write!(f, "{i}"),
+                Literal::Bigint(n) => write!(f, "{n}n"),
                 Literal::Float(s) => write!(f, "{s}"),
                 Literal::String(s) => write!(f, "{s:?}"),
                 Literal::Bool(b) => write!(f, "{b}"),
             },
+            Ty::Bigint { .. } => write!(f, "bigint"),
             Ty::Class(tn, args, _) => {
                 write!(f, "{tn}")?;
                 if !args.is_empty() {
@@ -762,9 +816,13 @@ mod tests {
     }
 
     #[test]
-    fn test_literal_int_widens_to_float() {
+    fn test_literal_int_does_not_widen_to_float() {
+        // `baml_type::Ty::is_subtype_of` is coercion-free; the int-literal
+        // → float widening is a representation change, not a structural
+        // subtype. TIR keeps the scalar widening as a runtime coercion
+        // (MIR-level), not as a subtype relation modeled here.
         let lit_42 = Ty::Literal(Literal::Int(42), TyAttr::default());
-        assert!(lit_42.is_subtype_of(&ty_float()));
+        assert!(!lit_42.is_subtype_of(&ty_float()));
     }
 
     #[test]
@@ -807,8 +865,34 @@ mod tests {
     }
 
     #[test]
-    fn test_int_subtype_of_float() {
-        assert!(ty_int().is_subtype_of(&ty_float()));
+    fn test_int_not_subtype_of_float() {
+        // Coercion-free: `int` is i64, `float` is f64. Values past 2^53 lose
+        // precision; TIR removed this scalar rule, and `baml_type` mirrors it.
+        assert!(!ty_int().is_subtype_of(&ty_float()));
+    }
+
+    #[test]
+    fn test_int_not_subtype_of_bigint() {
+        // Scalar int→bigint widening is a representation change (i64 → heap
+        // BigInt) and is not a subtype relation in either `baml_type` or TIR;
+        // it happens only at the FFI boundary.
+        assert!(!ty_int().is_subtype_of(&Ty::Bigint {
+            attr: TyAttr::default()
+        }));
+    }
+
+    #[test]
+    fn test_int_array_not_subtype_of_bigint_array() {
+        // Regression: container invariance. `int[]` must not be a subtype
+        // of `bigint[]`.
+        let int_arr = Ty::List(Box::new(ty_int()), TyAttr::default());
+        let bigint_arr = Ty::List(
+            Box::new(Ty::Bigint {
+                attr: TyAttr::default(),
+            }),
+            TyAttr::default(),
+        );
+        assert!(!int_arr.is_subtype_of(&bigint_arr));
     }
 
     #[test]

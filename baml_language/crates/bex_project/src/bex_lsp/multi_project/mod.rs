@@ -926,6 +926,8 @@ fn bex_value_to_json(v: &bex_engine::BexExternalValue) -> serde_json::Value {
     match v {
         bex_engine::BexExternalValue::Null => serde_json::Value::Null,
         bex_engine::BexExternalValue::Int(i) => serde_json::json!(i),
+        // Bigints can exceed JSON number precision; emit as a decimal string.
+        bex_engine::BexExternalValue::Bigint(b) => serde_json::json!(b.to_string()),
         bex_engine::BexExternalValue::Float(f) => serde_json::json!(f),
         bex_engine::BexExternalValue::Bool(b) => serde_json::json!(b),
         bex_engine::BexExternalValue::String(s) => serde_json::json!(s),

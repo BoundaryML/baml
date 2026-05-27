@@ -470,6 +470,7 @@ fn expr_desc_spans<'db>(
                     }
                 }
                 Literal::Int(i) => i.to_string(),
+                Literal::Bigint(n) => format!("{n}n"),
                 Literal::Float(f) => f.clone(),
                 Literal::Bool(b) => b.to_string(),
             };
@@ -2049,6 +2050,7 @@ impl CompilerRunner {
                         format!("\"{}\"", truncated)
                     }
                     Literal::Int(i) => i.to_string(),
+                    Literal::Bigint(n) => format!("{n}n"),
                     Literal::Float(f) => f.clone(),
                     Literal::Bool(b) => b.to_string(),
                 },
@@ -5073,7 +5075,9 @@ fn format_vm_value(value: &bex_vm_types::Value, vm: &bex_vm::BexVm) -> String {
                             .fields
                             .iter()
                             .zip(inst.fields.iter())
-                            .map(|(f, val)| format!("{}: {}", f.name, format_vm_value(val, vm)))
+                            .map(|(f, val)| {
+                                format!("{}: {}", f.name, format_vm_value(&val.load(), vm))
+                            })
                             .collect();
                         format!("{}{{ {} }}", class.name, fields.join(", "))
                     } else {
@@ -5102,7 +5106,8 @@ fn format_vm_value(value: &bex_vm_types::Value, vm: &bex_vm::BexVm) -> String {
                 Object::Closure(c) => format!("<closure captures={}>", c.captures.len()),
                 Object::BoundMethod(_) => "<bound_method>".to_string(),
                 Object::HostClosure(_) => "<host_closure>".to_string(),
-                Object::Cell(c) => format!("<cell {}>", format_vm_value(&c.value, vm)),
+                Object::Cell(c) => format!("<cell {}>", format_vm_value(&c.load(), vm)),
+                Object::Bigint(bi) => bi.to_string(),
                 Object::Uint8Array(bytes) => format!("<uint8array len={}>", bytes.len()),
                 Object::RustData(_) => "<rust_data>".to_string(),
                 #[cfg(feature = "heap_debug")]
