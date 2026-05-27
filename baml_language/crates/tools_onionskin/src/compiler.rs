@@ -599,6 +599,11 @@ fn expr_desc_spans<'db>(
             spans.extend(expr_desc_spans(*condition, body, inference));
             spans.push(DetailSpan::Code(") { ... }".into()));
         }
+        Expr::IfLet { scrutinee, .. } => {
+            spans.push(DetailSpan::Code("if let ... = ".into()));
+            spans.extend(expr_desc_spans(*scrutinee, body, inference));
+            spans.push(DetailSpan::Code(" { ... }".into()));
+        }
         Expr::Match { scrutinee, .. } => {
             spans.push(DetailSpan::Code("match (".into()));
             spans.extend(expr_desc_spans(*scrutinee, body, inference));
@@ -2054,6 +2059,7 @@ impl CompilerRunner {
                     .collect::<Vec<_>>()
                     .join("."),
                 Expr::If { .. } => "if ...".into(),
+                Expr::IfLet { .. } => "if let ...".into(),
                 Expr::Match { .. } => "match ...".into(),
                 Expr::Is { scrutinee, .. } => {
                     format!("{} is <pattern>", expr_desc(*scrutinee, body))
