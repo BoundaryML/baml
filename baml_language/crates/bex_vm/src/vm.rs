@@ -890,14 +890,14 @@ impl BexVm {
     ///
     /// # Safety
     ///
-    /// This is safe for:
-    /// - Compile-time objects (immutable)
-    /// - Objects allocated by this VM's TLAB
-    /// - Objects from other VMs when they're not being mutated
+    /// The returned `&Object` may be aliased by other spawned VMs. It is safe
+    /// to inspect immutable object metadata through it, and to reach mutable
+    /// internals only when that field has its own synchronization (for example
+    /// `LockedContainer` data, atomic instance fields, cells, or futures).
     #[inline]
     pub fn get_object(&self, ptr: HeapPtr) -> &Object {
-        // SAFETY: Single-threaded execution within a VM. Objects are only
-        // written during allocation or field writes, both controlled by this VM.
+        // SAFETY: `HeapPtr` points into stable heap storage. Shared mutable
+        // state behind the object must provide its own synchronization.
         unsafe { ptr.get() }
     }
 
@@ -905,17 +905,17 @@ impl BexVm {
     ///
     /// # Safety
     ///
-    /// Caller must ensure exclusive access (typically via TLAB ownership
-    /// or single-threaded execution). Only runtime objects can be mutated.
+    /// Caller must ensure exclusive access to the heap object itself. `&mut
+    /// self` only proves exclusive access to this VM, not to objects shared with
+    /// spawned VMs. Mutator paths for shared state should use [`Self::get_object`]
+    /// plus the object's interior synchronization instead.
     #[inline]
     pub fn get_object_mut(&mut self, ptr: HeapPtr) -> &mut Object {
-        // SAFETY: We have &mut self, so no other code can access the VM.
-        // The TLAB ensures this VM has exclusive access to its allocated objects.
         debug_assert!(
             !self.heap.is_compile_time_ptr(ptr),
             "Cannot mutate compile-time object"
         );
-        // SAFETY: We have &mut self, ensuring exclusive access to this VM's objects
+        // SAFETY: caller upholds the object-exclusivity contract documented above.
         unsafe { ptr.get_mut() }
     }
 
@@ -1022,6 +1022,10 @@ impl BexVm {
     }
 
     /// Get mutable string from a Value.
+    ///
+    /// Strings are immutable at the current BAML language surface. Do not use
+    /// this for spawned user-code mutation unless strings gain the same
+    /// object-level synchronization as containers.
     pub fn as_string_mut(&mut self, value: &Value) -> Result<&mut String, VmInternalError> {
         let ptr = self.as_object_ptr(*value, ObjectType::String)?;
         self.get_object_mut(ptr).as_string_mut()
