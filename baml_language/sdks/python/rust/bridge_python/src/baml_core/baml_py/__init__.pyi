@@ -35,7 +35,7 @@ __all__ = [
 class AbortController:
     r"""
     An abort controller for cancelling BAML function calls.
-    
+
     Usage from Python:
     ```python
     controller = AbortController()
@@ -54,7 +54,7 @@ class AbortController:
     def abort(self) -> None:
         r"""
         Cancel the associated function call.
-        
+
         If the function is still running, it will be interrupted at the next
         cancellation check point (before HTTP calls, between retries, etc.).
         Calling `abort()` multiple times is harmless.
@@ -164,11 +164,11 @@ class BamlRuntime:
     def initialize_runtime(root_path: builtins.str, files: typing.Mapping[builtins.str, builtins.str]) -> BamlRuntime:
         r"""
         Initialize the process-global runtime from in-memory BAML source files.
-        
+
         Mirrors `bridge_cffi::engine::initialize_runtime`: the same
         single-slot singleton is used, so a second call replaces the prior
         runtime.
-        
+
         # Arguments
         * `root_path` - Root path for BAML files
         * `files` - Map of filename to file content
@@ -211,7 +211,7 @@ class BamlVideo:
 class Collector:
     r"""
     Python-facing Collector that tracks BAML function call logs.
-    
+
     Usage:
     ```python
     from baml_py import Collector
@@ -299,7 +299,7 @@ class FunctionLog:
 class FunctionResult:
     r"""
     Result of a BAML function call.
-    
+
     Contains the parsed Python object returned by the function.
     """
     def __new__(cls, value: typing.Any) -> FunctionResult:
@@ -317,7 +317,7 @@ class FunctionResult:
 class HostSpanManager:
     r"""
     Manages host-side span tracking for `@trace` in Python.
-    
+
     This is a thin PyO3 wrapper around `bridge_cffi::host_spans::HostSpanManager`.
     All core logic (span stack, event emission) lives in bridge_cffi.
     """
@@ -434,7 +434,7 @@ def get_runtime() -> BamlRuntime:
     r"""
     Return the process-global `BamlRuntime`, or raise `BamlError` if
     `BamlRuntime.initialize_runtime(...)` has not been called yet.
-    
+
     Used by the pure-Python factories in `baml_core` so generated
     leaves don't have to thread a runtime reference through every call
     site.
@@ -453,7 +453,7 @@ def put_pyhandle_into_table(pyhandle: BamlPyHandle) -> tuple[builtins.int, built
 def register_host_callable(callable: typing.Any) -> builtins.int:
     r"""
     Insert a Python callable into the registry and return its key.
-    
+
     Exposed to Python as `baml_py.register_host_callable(callable) -> int`.
     Called from the inbound encoder in `baml_core.proto` whenever a Python
     callable appears as a kwarg.
@@ -463,7 +463,7 @@ def release_host_callable(host_value_key: builtins.int) -> None:
     r"""
     Release a host callable the inbound encoder registered but never handed to
     the engine — the encode-error rollback path.
-    
+
     Exposed to Python as `baml_py.release_host_callable(key)`. When
     `encode_call_args` registers a callable for an early kwarg and then a
     later kwarg fails to encode, the `CallFunctionArgs` is never sent, so the
@@ -481,4 +481,3 @@ def take_pyhandle_from_table(key: builtins.int, handle_type: builtins.int) -> Ba
     key exists so a malformed wire payload errors here rather than on
     later use.
     """
-

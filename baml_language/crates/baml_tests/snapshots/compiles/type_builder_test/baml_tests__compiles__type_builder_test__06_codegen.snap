@@ -3,18 +3,13 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.Fn() -> string {
     load_type string
-    alloc_instance baml.llm.Client
     load_const "openai/gpt-4o"
-    init_field .name
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
-    init_field .client_type
     alloc_array 0
-    init_field .sub_clients
     load_const null
-    init_field .retry
     load_const 0
-    init_field .counter
+    init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
     load_const "Fn"
     alloc_map 0
     call baml.llm.call_llm_function
@@ -22,18 +17,13 @@ function user.Fn() -> string {
 }
 
 function user.Fn$build_request() -> baml.http.Request {
-    alloc_instance baml.llm.Client
     load_const "openai/gpt-4o"
-    init_field .name
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
-    init_field .client_type
     alloc_array 0
-    init_field .sub_clients
     load_const null
-    init_field .retry
     load_const 0
-    init_field .counter
+    init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
     load_const "Fn"
     alloc_map 0
     call baml.llm.build_request
@@ -41,18 +31,13 @@ function user.Fn$build_request() -> baml.http.Request {
 }
 
 function user.Fn$build_request_stream() -> baml.http.Request {
-    alloc_instance baml.llm.Client
     load_const "openai/gpt-4o"
-    init_field .name
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
-    init_field .client_type
     alloc_array 0
-    init_field .sub_clients
     load_const null
-    init_field .retry
     load_const 0
-    init_field .counter
+    init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
     load_const "Fn"
     alloc_map 0
     call baml.llm.build_request_stream
@@ -67,18 +52,13 @@ function user.Fn$parse(json: string) -> string {
 }
 
 function user.Fn$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<null | string, string> {
-    alloc_instance baml.llm.Client
     load_const "openai/gpt-4o"
-    init_field .name
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
-    init_field .client_type
     alloc_array 0
-    init_field .sub_clients
     load_const null
-    init_field .retry
     load_const 0
-    init_field .counter
+    init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
     load_var sse
     load_const "Fn"
     call baml.llm.Client.__make_stream
@@ -86,18 +66,13 @@ function user.Fn$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<null 
 }
 
 function user.Fn$render_prompt() -> baml.llm.PromptAst {
-    alloc_instance baml.llm.Client
     load_const "openai/gpt-4o"
-    init_field .name
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
-    init_field .client_type
     alloc_array 0
-    init_field .sub_clients
     load_const null
-    init_field .retry
     load_const 0
-    init_field .counter
+    init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
     load_const "Fn"
     alloc_map 0
     call baml.llm.render_prompt
@@ -105,18 +80,13 @@ function user.Fn$render_prompt() -> baml.llm.PromptAst {
 }
 
 function user.Fn$stream() -> baml.llm.Stream<null | string, string> {
-    alloc_instance baml.llm.Client
     load_const "openai/gpt-4o"
-    init_field .name
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
-    init_field .client_type
     alloc_array 0
-    init_field .sub_clients
     load_const null
-    init_field .retry
     load_const 0
-    init_field .counter
+    init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
     load_const "Fn"
     alloc_map 0
     call baml.llm.stream_llm_function
@@ -131,10 +101,7 @@ function user.TopLevelClass.from_json(j: baml.json.json) -> TopLevelClass {
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance user.TopLevelClass
-    load_var _2
-    init_field .a
+    init_instance user.TopLevelClass .a
     return
 }
 

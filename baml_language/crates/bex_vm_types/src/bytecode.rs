@@ -125,6 +125,34 @@ pub struct MatchHashEntry {
     pub dense_index: u8,
 }
 
+/// One field copy performed by `Instruction::InitSpread`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FieldCopy {
+    /// Field index read from the source instance.
+    pub source: usize,
+    /// Field index written to the destination instance.
+    pub dest: usize,
+}
+
+/// A compact field-copy program for class/object spread initialization.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FieldCopySet {
+    /// Ordered field copies. Runtime reads all source values before writing so
+    /// overlapping source/destination objects behave like a simultaneous copy.
+    pub fields: Vec<FieldCopy>,
+}
+
+/// A compact class initialization program used by `Instruction::InitInstance`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClassInitPlan {
+    /// Class object allocated by the instruction.
+    pub class_obj: ObjectIndex,
+    /// Number of class-level type args stacked after the field values.
+    pub ntypeargs: u16,
+    /// Destination field indices initialized from stacked values, in value order.
+    pub fields: Vec<usize>,
+}
+
 /// Individual bytecode instruction.
 ///
 /// For faster iteration we'll start with an in-memory data structure that
@@ -174,6 +202,14 @@ pub enum Instruction {
     /// `Vm::stack` array.
     StoreVar(usize),
 
+    /// Stores the stack top in the frame's local variable slots and leaves it on the stack.
+    ///
+    /// Equivalent to `STORE_VAR i; LOAD_VAR i`, but without the redundant local reload.
+    ///
+    /// Format: `STORE_VAR_LOAD_VAR i` where `i` is the relative index of the variable
+    /// in `Vm::stack` array.
+    StoreVarLoadVar(usize),
+
     /// Load a global variable from the `Vm::globals` array.
     ///
     /// Format: `LOAD_GLOBAL i` where `i` is the index of the global variable
@@ -216,6 +252,14 @@ pub enum Instruction {
     ///
     /// Format: `INIT_FIELD i` where `i` is the index of the field.
     InitField(usize),
+
+    /// Initialize destination fields from a spread source instance during construction.
+    ///
+    /// Stack effect: `[..., dest, source] -> [..., dest]`.
+    ///
+    /// Format: `INIT_SPREAD i` where `i` indexes into
+    /// [`Bytecode::field_copy_sets`].
+    InitSpread(usize),
 
     /// Pop N values from the top of `Vm::stack` (the evaluation stack).
     ///
@@ -341,6 +385,14 @@ pub enum Instruction {
         class_obj: ObjectIndex,
         ntypeargs: u16,
     },
+
+    /// Builds an initialized class instance from pre-stacked field values.
+    ///
+    /// Format: `INIT_INSTANCE plan_idx`, where `plan_idx` indexes
+    /// [`Bytecode::class_init_plans`]. The stack contains field values in plan
+    /// order, followed by any class-level type args. The instruction consumes
+    /// those values and pushes the initialized instance.
+    InitInstance(usize),
 
     /// Builds a variant of an enum and allocates it on the heap.
     ///
@@ -718,16 +770,19 @@ pub enum OpCode {
     LoadConst,
     LoadVar,
     StoreVar,
+    StoreVarLoadVar,
     LoadGlobal,
     StoreGlobal,
     LoadField,
     StoreField,
     InitField,
+    InitSpread,
     Pop,
     Copy,
     AllocArray,
     AllocMap,
     AllocInstance,
+    InitInstance,
     AllocVariant,
     SysOp,
     Spawn,
@@ -828,15 +883,18 @@ impl OpCode {
             Self::LoadConst
             | Self::LoadVar
             | Self::StoreVar
+            | Self::StoreVarLoadVar
             | Self::LoadGlobal
             | Self::StoreGlobal
             | Self::LoadField
             | Self::StoreField
             | Self::InitField
+            | Self::InitSpread
             | Self::Pop
             | Self::Copy
             | Self::AllocArray
             | Self::AllocMap
+            | Self::InitInstance
             | Self::AllocVariant
             | Self::SysOp
             | Self::Watch
@@ -935,16 +993,19 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::LoadConst as u8 => Ok(Self::LoadConst),
             x if x == Self::LoadVar as u8 => Ok(Self::LoadVar),
             x if x == Self::StoreVar as u8 => Ok(Self::StoreVar),
+            x if x == Self::StoreVarLoadVar as u8 => Ok(Self::StoreVarLoadVar),
             x if x == Self::LoadGlobal as u8 => Ok(Self::LoadGlobal),
             x if x == Self::StoreGlobal as u8 => Ok(Self::StoreGlobal),
             x if x == Self::LoadField as u8 => Ok(Self::LoadField),
             x if x == Self::StoreField as u8 => Ok(Self::StoreField),
             x if x == Self::InitField as u8 => Ok(Self::InitField),
+            x if x == Self::InitSpread as u8 => Ok(Self::InitSpread),
             x if x == Self::Pop as u8 => Ok(Self::Pop),
             x if x == Self::Copy as u8 => Ok(Self::Copy),
             x if x == Self::AllocArray as u8 => Ok(Self::AllocArray),
             x if x == Self::AllocMap as u8 => Ok(Self::AllocMap),
             x if x == Self::AllocInstance as u8 => Ok(Self::AllocInstance),
+            x if x == Self::InitInstance as u8 => Ok(Self::InitInstance),
             x if x == Self::AllocVariant as u8 => Ok(Self::AllocVariant),
             x if x == Self::SysOp as u8 => Ok(Self::SysOp),
             x if x == Self::Spawn as u8 => Ok(Self::Spawn),
@@ -1037,16 +1098,19 @@ impl std::fmt::Display for OpCode {
             Self::LoadConst => "LOAD_CONST",
             Self::LoadVar => "LOAD_VAR",
             Self::StoreVar => "STORE_VAR",
+            Self::StoreVarLoadVar => "STORE_VAR_LOAD_VAR",
             Self::LoadGlobal => "LOAD_GLOBAL",
             Self::StoreGlobal => "STORE_GLOBAL",
             Self::LoadField => "LOAD_FIELD",
             Self::StoreField => "STORE_FIELD",
             Self::InitField => "INIT_FIELD",
+            Self::InitSpread => "INIT_SPREAD",
             Self::Pop => "POP",
             Self::Copy => "COPY",
             Self::AllocArray => "ALLOC_ARRAY",
             Self::AllocMap => "ALLOC_MAP",
             Self::AllocInstance => "ALLOC_INSTANCE",
+            Self::InitInstance => "INIT_INSTANCE",
             Self::AllocVariant => "ALLOC_VARIANT",
             Self::SysOp => "SYS_OP",
             Self::Spawn => "SPAWN",
@@ -1264,11 +1328,13 @@ impl std::fmt::Display for Instruction {
             Instruction::LoadConst(i) => write!(f, "LOAD_CONST {i}"),
             Instruction::LoadVar(i) => write!(f, "LOAD_VAR {i}"),
             Instruction::StoreVar(i) => write!(f, "STORE_VAR {i}"),
+            Instruction::StoreVarLoadVar(i) => write!(f, "STORE_VAR_LOAD_VAR {i}"),
             Instruction::LoadGlobal(i) => write!(f, "LOAD_GLOBAL {i}"),
             Instruction::StoreGlobal(i) => write!(f, "STORE_GLOBAL {i}"),
             Instruction::LoadField(i) => write!(f, "LOAD_FIELD {i}"),
             Instruction::StoreField(i) => write!(f, "STORE_FIELD {i}"),
             Instruction::InitField(i) => write!(f, "INIT_FIELD {i}"),
+            Instruction::InitSpread(i) => write!(f, "INIT_SPREAD {i}"),
             Instruction::Pop(n) => write!(f, "POP {n}"),
             Instruction::Copy(i) => write!(f, "COPY {i}"),
             Instruction::Jump(o) => write!(f, "JUMP {o:+}"),
@@ -1299,6 +1365,7 @@ impl std::fmt::Display for Instruction {
             } => {
                 write!(f, "ALLOC_INSTANCE {class_obj} ntypeargs={ntypeargs}")
             }
+            Instruction::InitInstance(i) => write!(f, "INIT_INSTANCE {i}"),
             Instruction::AllocVariant(i) => write!(f, "ALLOC_VARIANT {i}"),
             Instruction::SysOp(callee) => write!(f, "SYS_OP {callee}"),
             Instruction::Spawn => write!(f, "SPAWN"),
@@ -1557,6 +1624,13 @@ pub struct Bytecode {
     /// Jump tables for switch dispatch (indexed by `JumpTable` instruction).
     pub jump_tables: Vec<JumpTableData>,
 
+    /// Field-copy programs used by `InitSpread`.
+    pub field_copy_sets: Vec<FieldCopySet>,
+
+    /// Class initialization programs used by `InitInstance`.
+    #[serde(default)]
+    pub class_init_plans: Vec<ClassInitPlan>,
+
     /// Perfect hash tables for sparse `TypeTag` switch dispatch.
     /// Indexed by `DenseTag` instruction operand.
     pub match_hash_tables: Vec<MatchHashTable>,
@@ -1596,6 +1670,8 @@ impl Bytecode {
             constants: Vec::new(),
             resolved_constants: Vec::new(),
             jump_tables: Vec::new(),
+            field_copy_sets: Vec::new(),
+            class_init_plans: Vec::new(),
             match_hash_tables: Vec::new(),
             line_table: Vec::new(),
             meta: Vec::new(),
@@ -1756,9 +1832,12 @@ impl Bytecode {
                 // ── Single usize operand → u32 ─────────────────────
                 Instruction::LoadVar(v)
                 | Instruction::StoreVar(v)
+                | Instruction::StoreVarLoadVar(v)
                 | Instruction::LoadField(v)
                 | Instruction::StoreField(v)
                 | Instruction::InitField(v)
+                | Instruction::InitSpread(v)
+                | Instruction::InitInstance(v)
                 | Instruction::Pop(v)
                 | Instruction::Copy(v)
                 | Instruction::AllocArray(v)
@@ -2027,16 +2106,19 @@ impl Bytecode {
             // Single-operand variants
             Instruction::LoadVar(_) => OpCode::LoadVar,
             Instruction::StoreVar(_) => OpCode::StoreVar,
+            Instruction::StoreVarLoadVar(_) => OpCode::StoreVarLoadVar,
             Instruction::LoadGlobal(_) => OpCode::LoadGlobal,
             Instruction::StoreGlobal(_) => OpCode::StoreGlobal,
             Instruction::LoadField(_) => OpCode::LoadField,
             Instruction::StoreField(_) => OpCode::StoreField,
             Instruction::InitField(_) => OpCode::InitField,
+            Instruction::InitSpread(_) => OpCode::InitSpread,
             Instruction::Pop(_) => OpCode::Pop,
             Instruction::Copy(_) => OpCode::Copy,
             Instruction::AllocArray(_) => OpCode::AllocArray,
             Instruction::AllocMap(_) => OpCode::AllocMap,
             Instruction::AllocInstance { .. } => OpCode::AllocInstance,
+            Instruction::InitInstance(_) => OpCode::InitInstance,
             Instruction::AllocVariant(_) => OpCode::AllocVariant,
             Instruction::SysOp(_) => OpCode::SysOp,
             Instruction::Spawn => OpCode::Spawn,
@@ -2119,6 +2201,8 @@ mod compact_tests {
             constants,
             resolved_constants: Vec::new(),
             jump_tables: Vec::new(),
+            field_copy_sets: Vec::new(),
+            class_init_plans: Vec::new(),
             match_hash_tables: Vec::new(),
             line_table: Vec::new(),
             meta,
@@ -2190,6 +2274,23 @@ mod compact_tests {
     }
 
     #[test]
+    fn encode_init_instance_operand() {
+        let bc = make_bytecode(vec![Instruction::InitInstance(7)], vec![]);
+        let compact = bc.lower_to_compact();
+        assert_eq!(compact.code.len(), 5);
+        assert_eq!(compact.code[0], OpCode::InitInstance as u8);
+        let plan_idx = u32::from_le_bytes([
+            compact.code[1],
+            compact.code[2],
+            compact.code[3],
+            compact.code[4],
+        ]);
+        assert_eq!(plan_idx, 7);
+        assert_eq!(Instruction::InitInstance(7).to_string(), "INIT_INSTANCE 7");
+        assert_eq!(OpCode::try_from(compact.code[0]), Ok(OpCode::InitInstance));
+    }
+
+    #[test]
     fn encode_jump_forward() {
         // Jump(+2) from instruction 0 should skip instruction 1 and land on instruction 2.
         // Layout: [Jump(+2), Return, Return, Return]
@@ -2253,6 +2354,8 @@ mod compact_tests {
             constants: vec![ConstValue::Int(1)],
             resolved_constants: Vec::new(),
             jump_tables: Vec::new(),
+            field_copy_sets: Vec::new(),
+            class_init_plans: Vec::new(),
             match_hash_tables: Vec::new(),
             line_table: vec![
                 LineTableEntry {
@@ -2290,6 +2393,8 @@ mod compact_tests {
             constants: vec![ConstValue::Int(0)],
             resolved_constants: Vec::new(),
             jump_tables: Vec::new(),
+            field_copy_sets: Vec::new(),
+            class_init_plans: Vec::new(),
             match_hash_tables: Vec::new(),
             line_table: Vec::new(),
             meta: vec![InstructionMeta { operand: None }; 3],

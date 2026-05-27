@@ -239,23 +239,19 @@ fn combined_constant_fold_and_struct() {
     "#;
     insta::assert_snapshot!(unoptimized(source), @r#"
     function main() -> Result {
-        alloc_instance user.Result
         load_const 2
         load_const 3
         bin_op +
-        init_field .value
         load_const "sum"
-        init_field .label
+        init_instance user.Result .value, .label
         return
     }
     "#);
     insta::assert_snapshot!(optimized(source), @r#"
     function main() -> Result {
-        alloc_instance user.Result
         load_const 5
-        init_field .value
         load_const "sum"
-        init_field .label
+        init_instance user.Result .value, .label
         return
     }
     "#);
