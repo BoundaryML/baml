@@ -4,6 +4,12 @@
 //! These ensure that we have only one of:
 //! - A single exclusive heap access [`HeapGuard`], or
 //! - Any number of non-exclusive tracked active heap permits [`ActiveHeapPermit`].
+//!
+//! Spawn-safety invariant: an active permit excludes moving/collecting GC, but
+//! it does not serialize multiple VM mutators. Heap objects reachable from
+//! spawned VMs must use object-level synchronization for mutable state. Raw
+//! heap/container access is only sound while holding [`HeapGuard`] (all mutators
+//! parked) or during proven single-threaded setup.
 
 use ::bex_vm_types::{HeapPtr, PermitProof, RootHaver};
 use ::core::{

@@ -2622,7 +2622,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
         }
         display.push('"');
         let obj_idx = self.objects.len();
-        self.objects.push(Object::Uint8Array(bytes.to_vec()));
+        self.objects.push(Object::Uint8Array(bytes.to_vec().into()));
         let idx = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(obj_idx)));
         let inst = self.emit(Instruction::LoadConst(idx));
         self.set_operand(inst, OperandMeta::Const(display));
