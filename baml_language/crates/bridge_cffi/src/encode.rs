@@ -28,6 +28,8 @@ use futures::future::FutureExt;
 use indexmap::IndexMap;
 use prost::Message;
 
+use crate::error::BridgeError;
+
 /// Namespace prefix marking a thrown value as a panic rather than an error.
 const PANIC_NS_PREFIX: &str = "baml.panics.";
 
@@ -194,6 +196,49 @@ pub fn result_to_outbound(
     BamlOutboundResult {
         result: Some(inner),
     }
+}
+
+/// Encode a pre-call host-boundary [`BridgeError`] as `BamlOutboundResult`
+/// envelope bytes (32c). These failures never entered the VM, so they carry an
+/// empty trace and ride the *same* decode path as engine errors via
+/// `decode_call_result` — surfacing host-side as a structured
+/// `BamlError(baml.errors.*)`, indistinguishable from an engine failure.
+///
+/// The `Runtime` arm reuses [`result_to_outbound`] verbatim (the fine-grained
+/// `baml.errors.*` / `SdkPanic` mapping from 31d/31e); the remaining pre-call
+/// variants map to `InvalidArgument` (bad function name / arguments) or
+/// `GenericSdkError` (setup / internal), reusing the same synthesis helpers —
+/// no new construction logic.
+pub fn error_to_outbound(err: BridgeError) -> Vec<u8> {
+    let options = CffiHandleTableOptions::for_in_process();
+    let inner = match err {
+        // Reuse the engine-error mapping verbatim for the wrapped RuntimeError.
+        BridgeError::Runtime(rt) => result_to_outbound(Err(rt), &options)
+            .result
+            .expect("result_to_outbound always sets the result oneof"),
+
+        // Bad function name / arguments → InvalidArgument.
+        err @ (BridgeError::NullFunctionName
+        | BridgeError::InvalidFunctionName(_)
+        | BridgeError::FunctionNotFound { .. }
+        | BridgeError::MissingArgument { .. }) => error_arm(
+            message_instance(INVALID_ARGUMENT_CLASS, err.to_string()),
+            &options,
+        ),
+
+        // Setup / internal host failures (Ctypes, NotInitialized,
+        // ProjectNotInitialized, LockPoisoned, NotImplemented, DuplicateCallId,
+        // Internal) → GenericSdkError.
+        err => error_arm(
+            message_instance(GENERIC_SDK_ERROR_CLASS, err.to_string()),
+            &options,
+        ),
+    };
+
+    BamlOutboundResult {
+        result: Some(inner),
+    }
+    .encode_to_vec()
 }
 
 /// Render a caught panic payload into a message for `baml.panics.SdkPanic`.

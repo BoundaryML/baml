@@ -22,7 +22,7 @@ from .baml_py import (
     get_runtime as _rust_get_runtime,
     get_version,
 )
-from .errors import BamlError, BamlPanic
+from .errors import BamlError, BamlPanic, make_sdk_panic
 from ._stream import BamlStream
 from .ctx_manager import CtxManager as BamlCtxManager
 from .proto import decode_call_result, encode_call_args
@@ -248,6 +248,7 @@ __all__ = [
     "BamlCtxManager",
     "BamlError",
     "BamlPanic",
+    "make_sdk_panic",
     "flush_events",
     "get_runtime",
     "get_version",

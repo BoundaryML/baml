@@ -12,7 +12,7 @@ pub mod host_spans;
 mod panic;
 
 pub use bridge_ctypes::baml_core;
-pub use encode::{call_and_encode, result_to_outbound};
+pub use encode::{call_and_encode, error_to_outbound, result_to_outbound};
 pub use engine::{flush_event_sink, get_event_sink};
 pub use error::BridgeError;
 pub use ffi::{
