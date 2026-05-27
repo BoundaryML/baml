@@ -187,6 +187,12 @@ def _set_inbound_value(
         return
     if isinstance(value, (list, tuple)):
         list_val = inbound_value.list_value
+        # Mark the `list_value` oneof arm present even for an empty list.
+        # Merely reading `inbound_value.list_value` doesn't set the oneof
+        # case; without an `add()` (empty list) the arm stays unset, which
+        # the engine reads as null (see `value is None` above) — so an
+        # empty list would round-trip back as `None`.
+        list_val.SetInParent()
         for item in value:
             _set_inbound_value(
                 list_val.values.add(), item, kwarg_name=kwarg_name, registered=registered
@@ -194,6 +200,9 @@ def _set_inbound_value(
         return
     if isinstance(value, dict):
         map_val = inbound_value.map_value
+        # Same as the empty-list case above: set the oneof arm so an empty
+        # dict encodes as an empty map rather than an unset (null) value.
+        map_val.SetInParent()
         for k, v in value.items():
             _set_inbound_map_entry(
                 map_val.entries.add(), k, v, kwarg_name=kwarg_name, registered=registered
