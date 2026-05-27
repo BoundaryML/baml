@@ -80,7 +80,7 @@ async fn serialize_via_baml_json(
         .await
         .map_err(|e| anyhow!("baml.json.serialize failed: {e:?}"))?;
     match result {
-        BexExternalValue::String(s) => Ok(s),
+        BexExternalValue::String(s) => Ok(s.to_string()),
         other => Err(anyhow!(
             "baml.json.serialize returned non-string value: {other:?}"
         )),

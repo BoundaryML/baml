@@ -69,7 +69,7 @@ async fn roundtrip_stringify_parse() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("[1,2,3]".to_string()))
+        Ok(BexExternalValue::String("[1,2,3]".to_string().into()))
     );
 }
 
@@ -160,6 +160,8 @@ async fn roundtrip_nested_object() {
     // serde_json compact output preserves key order (preserve_order feature).
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String(r#"{"x":1,"y":[2,3]}"#.to_string()))
+        Ok(BexExternalValue::String(
+            r#"{"x":1,"y":[2,3]}"#.to_string().into()
+        ))
     );
 }

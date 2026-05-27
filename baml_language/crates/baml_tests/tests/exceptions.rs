@@ -565,7 +565,7 @@ async fn named_binding_string_access_value() {
     "#);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("boom".to_string()))
+        Ok(BexExternalValue::String("boom".to_string().into()))
     );
 }
 
@@ -1007,7 +1007,9 @@ async fn named_class_binding_access_field() {
     "#);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("http://example.com".to_string()))
+        Ok(BexExternalValue::String(
+            "http://example.com".to_string().into()
+        ))
     );
 }
 
@@ -1084,7 +1086,7 @@ async fn named_class_binding_dispatch_access_fields() {
     "#);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("bad json".to_string()))
+        Ok(BexExternalValue::String("bad json".to_string().into()))
     );
 }
 
@@ -1343,7 +1345,7 @@ async fn unhandled_throw_string() {
     };
     assert_eq!(
         value.as_ref(),
-        &BexExternalValue::String("something went wrong".to_string())
+        &BexExternalValue::String("something went wrong".to_string().into())
     );
 }
 
@@ -2421,7 +2423,7 @@ async fn mixed_union_no_wildcard_unmatched_rethrows() {
     };
     assert_eq!(
         value.as_ref(),
-        &BexExternalValue::String("not matched".to_string())
+        &BexExternalValue::String("not matched".to_string().into())
     );
 }
 
@@ -3356,7 +3358,7 @@ async fn throw_in_match_arm_propagates() {
     };
     assert_eq!(
         value.as_ref(),
-        &BexExternalValue::String("boom".to_string())
+        &BexExternalValue::String("boom".to_string().into())
     );
 }
 
@@ -4465,7 +4467,7 @@ function main() -> string {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("oops".to_string()))
+        Ok(BexExternalValue::String("oops".to_string().into()))
     );
 }
 
@@ -4529,6 +4531,6 @@ function main() -> string {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("caught".to_string()))
+        Ok(BexExternalValue::String("caught".to_string().into()))
     );
 }

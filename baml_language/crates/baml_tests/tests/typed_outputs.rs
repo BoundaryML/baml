@@ -35,7 +35,7 @@ async fn union_int_or_string_returns_string() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::union(
-            BexExternalValue::String("hello".to_string()),
+            BexExternalValue::String("hello".to_string().into()),
             [Ty::int(), Ty::string()],
             Ty::string()
         ))
@@ -142,7 +142,7 @@ async fn union_of_classes_returns_failure() {
         Ok(BexExternalValue::union(
             BexExternalValue::Instance {
                 class_name: "user.Failure".to_string(),
-                fields: indexmap! { "error".to_string() => BexExternalValue::String("something went wrong".to_string()) },
+                fields: indexmap! { "error".to_string() => BexExternalValue::String("something went wrong".to_string().into()) },
             },
             [Ty::user_class("Success"), Ty::user_class("Failure")],
             Ty::user_class("Failure"),
@@ -196,7 +196,7 @@ async fn array_of_unions() {
                     Ty::int()
                 ),
                 BexExternalValue::union(
-                    BexExternalValue::String("two".to_string()),
+                    BexExternalValue::String("two".to_string().into()),
                     [Ty::int(), Ty::string()],
                     Ty::string()
                 ),
@@ -267,7 +267,7 @@ async fn class_with_optional_field() {
         Ok(BexExternalValue::Instance {
             class_name: "user.Person".to_string(),
             fields: indexmap! {
-                "name".to_string() => BexExternalValue::String("Alice".to_string()),
+                "name".to_string() => BexExternalValue::String("Alice".to_string().into()),
                 "age".to_string() => BexExternalValue::Null,
             },
         })
@@ -323,7 +323,7 @@ async fn map_with_union_values() {
             value_type: Ty::union([Ty::int(), Ty::string()]),
             entries: indexmap! {
                 "count".to_string() => BexExternalValue::union(BexExternalValue::Int(42), [Ty::int(), Ty::string()], Ty::int()),
-                "name".to_string() => BexExternalValue::union(BexExternalValue::String("test".to_string()), [Ty::int(), Ty::string()], Ty::string()),
+                "name".to_string() => BexExternalValue::union(BexExternalValue::String("test".to_string().into()), [Ty::int(), Ty::string()], Ty::string()),
             },
         })
     );

@@ -26,11 +26,11 @@ async fn string_input() {
             }
         "#,
         entry: "greet",
-        args: { "name" => BexExternalValue::String("World".to_string()) },
+        args: { "name" => BexExternalValue::String("World".to_string().into()) },
     };
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("Hello, World!".to_string()))
+        Ok(BexExternalValue::String("Hello, World!".to_string().into()))
     );
 }
 
@@ -149,7 +149,7 @@ async fn map_input() {
                     "bar".to_string() => BexExternalValue::Int(100),
                 },
             },
-            "key" => BexExternalValue::String("foo".to_string())
+            "key" => BexExternalValue::String("foo".to_string().into())
         },
     };
     assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
@@ -179,13 +179,15 @@ async fn mixed_types_inputs() {
         "#,
         entry: "concat",
         args: {
-            "a" => BexExternalValue::String("Hello".to_string()),
-            "b" => BexExternalValue::String("from".to_string()),
-            "c" => BexExternalValue::String("BAML".to_string())
+            "a" => BexExternalValue::String("Hello".to_string().into()),
+            "b" => BexExternalValue::String("from".to_string().into()),
+            "c" => BexExternalValue::String("BAML".to_string().into())
         },
     };
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("Hello from BAML".to_string()))
+        Ok(BexExternalValue::String(
+            "Hello from BAML".to_string().into()
+        ))
     );
 }

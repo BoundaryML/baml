@@ -46,7 +46,7 @@ async fn concat_strings() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("Hello World".to_string()))
+        Ok(BexExternalValue::String("Hello World".to_string().into()))
     );
 }
 
@@ -247,7 +247,7 @@ async fn string_to_lower_case() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("hello world".to_string()))
+        Ok(BexExternalValue::String("hello world".to_string().into()))
     );
 }
 
@@ -272,7 +272,7 @@ async fn string_to_upper_case() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("HELLO WORLD".to_string()))
+        Ok(BexExternalValue::String("HELLO WORLD".to_string().into()))
     );
 }
 
@@ -297,7 +297,7 @@ async fn string_trim() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("hello world".to_string()))
+        Ok(BexExternalValue::String("hello world".to_string().into()))
     );
 }
 
@@ -397,9 +397,9 @@ async fn string_split() {
                 attr: baml_base::TyAttr::default()
             },
             items: vec![
-                BexExternalValue::String("hello".to_string()),
-                BexExternalValue::String("world".to_string()),
-                BexExternalValue::String("test".to_string()),
+                BexExternalValue::String("hello".to_string().into()),
+                BexExternalValue::String("world".to_string().into()),
+                BexExternalValue::String("test".to_string().into()),
             ],
         })
     );
@@ -428,7 +428,7 @@ async fn string_substring() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("hello".to_string()))
+        Ok(BexExternalValue::String("hello".to_string().into()))
     );
 }
 
@@ -455,7 +455,7 @@ async fn string_substring_bounds() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("llo".to_string()))
+        Ok(BexExternalValue::String("llo".to_string().into()))
     );
 }
 
@@ -499,7 +499,7 @@ async fn string_substring_byte_indexed_keeps_multibyte_char() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("hé".to_string()))
+        Ok(BexExternalValue::String("hé".to_string().into()))
     );
 }
 
@@ -527,7 +527,7 @@ async fn string_substring_negative_clamps_to_zero() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("hell".to_string()))
+        Ok(BexExternalValue::String("hell".to_string().into()))
     );
 }
 
@@ -540,7 +540,10 @@ async fn string_substring_empty_when_start_past_end() {
         }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("".to_string())));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("".to_string().into()))
+    );
 }
 
 #[tokio::test]
@@ -553,7 +556,10 @@ async fn string_char_at_byte_indexed_returns_multibyte_char() {
         }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("é".to_string())));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("é".to_string().into()))
+    );
 }
 
 #[tokio::test]
@@ -566,7 +572,10 @@ async fn string_char_at_byte_indexed_after_multibyte() {
         }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("l".to_string())));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("l".to_string().into()))
+    );
 }
 
 #[tokio::test]
@@ -590,7 +599,10 @@ async fn string_char_at_end_returns_empty() {
         }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("".to_string())));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("".to_string().into()))
+    );
 }
 
 #[tokio::test]
@@ -693,7 +705,7 @@ async fn string_trim_start_removes_leading_only() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("hi  ".to_string()))
+        Ok(BexExternalValue::String("hi  ".to_string().into()))
     );
 }
 
@@ -708,7 +720,7 @@ async fn string_trim_end_removes_trailing_only() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("  hi".to_string()))
+        Ok(BexExternalValue::String("  hi".to_string().into()))
     );
 }
 
@@ -723,7 +735,7 @@ async fn string_trim_start_handles_newlines_and_tabs() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("hi".to_string()))
+        Ok(BexExternalValue::String("hi".to_string().into()))
     );
 }
 
@@ -738,7 +750,7 @@ async fn string_trim_end_no_whitespace_unchanged() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("hi".to_string()))
+        Ok(BexExternalValue::String("hi".to_string().into()))
     );
 }
 
@@ -751,7 +763,10 @@ async fn string_trim_start_empty() {
         }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("".to_string())));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("".to_string().into()))
+    );
 }
 
 // ─── lines ────────────────────────────────────────────────────────────────────
@@ -771,9 +786,9 @@ async fn string_lines_lf() {
     assert_eq!(
         items,
         vec![
-            BexExternalValue::String("a".to_string()),
-            BexExternalValue::String("b".to_string()),
-            BexExternalValue::String("c".to_string()),
+            BexExternalValue::String("a".to_string().into()),
+            BexExternalValue::String("b".to_string().into()),
+            BexExternalValue::String("c".to_string().into()),
         ]
     );
 }
@@ -793,9 +808,9 @@ async fn string_lines_crlf() {
     assert_eq!(
         items,
         vec![
-            BexExternalValue::String("a".to_string()),
-            BexExternalValue::String("b".to_string()),
-            BexExternalValue::String("c".to_string()),
+            BexExternalValue::String("a".to_string().into()),
+            BexExternalValue::String("b".to_string().into()),
+            BexExternalValue::String("c".to_string().into()),
         ]
     );
 }
@@ -815,8 +830,8 @@ async fn string_lines_trailing_newline_no_empty() {
     assert_eq!(
         items,
         vec![
-            BexExternalValue::String("a".to_string()),
-            BexExternalValue::String("b".to_string()),
+            BexExternalValue::String("a".to_string().into()),
+            BexExternalValue::String("b".to_string().into()),
         ]
     );
 }
@@ -848,7 +863,7 @@ async fn string_lines_just_newline() {
     let BexExternalValue::Array { items, .. } = output.result.unwrap() else {
         panic!("expected array");
     };
-    assert_eq!(items, vec![BexExternalValue::String("".to_string())]);
+    assert_eq!(items, vec![BexExternalValue::String("".to_string().into())]);
 }
 
 // ─── code_point_at ────────────────────────────────────────────────────────────
@@ -983,7 +998,7 @@ async fn string_from_utf8_ascii_round_trip() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("hi".to_string()))
+        Ok(BexExternalValue::String("hi".to_string().into()))
     );
 }
 
@@ -996,7 +1011,10 @@ async fn string_from_utf8_multibyte_round_trip() {
         }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("é".to_string())));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("é".to_string().into()))
+    );
 }
 
 #[tokio::test]
@@ -1021,7 +1039,10 @@ async fn string_from_utf8_empty() {
         }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("".to_string())));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("".to_string().into()))
+    );
 }
 
 // ─── from_code_points ─────────────────────────────────────────────────────────
@@ -1037,7 +1058,7 @@ async fn string_from_code_points_ascii() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("hi".to_string()))
+        Ok(BexExternalValue::String("hi".to_string().into()))
     );
 }
 
@@ -1050,7 +1071,10 @@ async fn string_from_code_points_multibyte() {
         }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("é".to_string())));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("é".to_string().into()))
+    );
 }
 
 #[tokio::test]
@@ -1064,7 +1088,7 @@ async fn string_from_code_points_emoji() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("🐑".to_string()))
+        Ok(BexExternalValue::String("🐑".to_string().into()))
     );
 }
 
@@ -1077,7 +1101,10 @@ async fn string_from_code_points_empty() {
         }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("".to_string())));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("".to_string().into()))
+    );
 }
 
 #[tokio::test]
@@ -1561,6 +1588,8 @@ async fn string_replace() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("hello BAML world".to_string()))
+        Ok(BexExternalValue::String(
+            "hello BAML world".to_string().into()
+        ))
     );
 }

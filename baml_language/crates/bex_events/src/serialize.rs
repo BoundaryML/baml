@@ -338,7 +338,7 @@ fn bex_value_to_json_impl(value: &BexExternalValue, depth: usize) -> serde_json:
         BexExternalValue::Bool(b) => serde_json::Value::Bool(*b),
         BexExternalValue::Int(i) => serde_json::json!(i),
         BexExternalValue::Float(f) => serde_json::json!(f),
-        BexExternalValue::String(s) => serde_json::Value::String(s.clone()),
+        BexExternalValue::String(s) => serde_json::Value::String(s.to_string()),
         BexExternalValue::Array { items, .. } => bex_value_vec_to_json_impl(items, depth + 1),
         BexExternalValue::Map { entries, .. } => {
             let mut obj = serde_json::Map::new();

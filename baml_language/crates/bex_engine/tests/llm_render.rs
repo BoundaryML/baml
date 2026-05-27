@@ -19,7 +19,7 @@ async fn test_render_prompt_directly() {
     let mut args = IndexMap::new();
     args.insert(
         "name".to_string(),
-        BexExternalValue::String("Alice".to_string()),
+        BexExternalValue::String("Alice".to_string().into()),
     );
     args.insert("age".to_string(), BexExternalValue::Int(30));
 
@@ -78,7 +78,7 @@ You are a helpful assistant.
     let mut args = IndexMap::new();
     args.insert(
         "question".to_string(),
-        BexExternalValue::String("What is 2+2?".to_string()),
+        BexExternalValue::String("What is 2+2?".to_string().into()),
     );
 
     let client =
@@ -561,7 +561,7 @@ function Greet(name: string) -> string {
     let result = engine
         .call_function(
             "Greet",
-            vec![BexExternalValue::String("World".to_string())],
+            vec![BexExternalValue::String("World".to_string().into())],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             true,
         )

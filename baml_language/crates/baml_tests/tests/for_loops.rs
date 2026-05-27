@@ -596,7 +596,7 @@ async fn for_loop_final_if_else_without_semicolon_can_mutate() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("x.o".to_string()))
+        Ok(BexExternalValue::String("x.o".to_string().into()))
     );
 }
 

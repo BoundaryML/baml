@@ -1330,7 +1330,7 @@ async fn match_negative_jump_table() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("neg two".to_string()))
+        Ok(BexExternalValue::String("neg two".to_string().into()))
     );
 }
 
@@ -1390,7 +1390,7 @@ async fn match_negative_jump_table_fallback() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("other".to_string()))
+        Ok(BexExternalValue::String("other".to_string().into()))
     );
 }
 
@@ -1459,7 +1459,7 @@ async fn match_spanning_zero_jump_table() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("one".to_string()))
+        Ok(BexExternalValue::String("one".to_string().into()))
     );
 }
 
@@ -1525,7 +1525,7 @@ async fn match_spanning_zero_negative_hit() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("neg one".to_string()))
+        Ok(BexExternalValue::String("neg one".to_string().into()))
     );
 }
 
@@ -1589,7 +1589,10 @@ async fn match_binary_search_negative_sparse() {
     }
     "#);
 
-    assert_eq!(output.result, Ok(BexExternalValue::String("b".to_string())));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("b".to_string().into()))
+    );
 }
 
 #[tokio::test]
@@ -1649,7 +1652,7 @@ async fn match_binary_search_spanning_zero_sparse() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("one".to_string()))
+        Ok(BexExternalValue::String("one".to_string().into()))
     );
 }
 
@@ -1705,7 +1708,10 @@ async fn match_union_aggregated_jump_table() {
     }
     "#);
 
-    assert_eq!(output.result, Ok(BexExternalValue::String("c".to_string())));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("c".to_string().into()))
+    );
 }
 
 // ============================================================================

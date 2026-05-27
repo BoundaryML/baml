@@ -904,7 +904,7 @@ mod tests {
         match result {
             SysOpResult::Async(fut) => {
                 let value = fut.await.unwrap();
-                assert!(matches!(value, BexExternalValue::String(s) if s == "done"));
+                assert!(matches!(value, BexExternalValue::String(s) if s.as_str() == "done"));
             }
             SysOpResult::Ready(_) => panic!("Expected Async result"),
         }

@@ -1640,6 +1640,7 @@ dependencies = [
  "baml_builtins2",
  "baml_type",
  "bex_resource_types",
+ "bex_str",
  "bex_vm_types",
  "indexmap 2.14.0",
  "once_cell",
@@ -1716,6 +1717,7 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_type",
  "bex_external_types",
+ "bex_str",
  "bex_vm_types",
  "derive_more",
  "indexmap 2.14.0",

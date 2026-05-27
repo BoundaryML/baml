@@ -65,7 +65,7 @@ impl BexEngine {
 
         match obj {
             Object::Float(f) => Ok(BexExternalValue::Float(*f)),
-            Object::String(s) => Ok(BexExternalValue::String(s.to_string())),
+            Object::String(s) => Ok(BexExternalValue::String(s.clone())),
 
             Object::Array(arr) => {
                 // Get element type from declared type, falling back to Null when
@@ -586,7 +586,7 @@ impl BexEngine {
                         // and embed the error in the trace payload so it shows
                         // up wherever traces are consumed.
                         tracing::error!(error = %e, "trace payload deep-copy failed");
-                        BexExternalValue::String(format!("<trace-error: {e}>"))
+                        BexExternalValue::String(format!("<trace-error: {e}>").into())
                     })
             }
         }
@@ -1129,7 +1129,7 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
             let obj = vm.get_object(idx);
             match obj {
                 Object::Float(f) => BexExternalValue::Float(*f),
-                Object::String(s) => BexExternalValue::String(s.to_string()),
+                Object::String(s) => BexExternalValue::String(s.clone()),
                 Object::Array(arr) => {
                     let snap = arr.to_vec();
                     let items: Vec<BexExternalValue> =
@@ -1231,7 +1231,7 @@ pub fn test_arg_to_external(v: &bex_vm_types::TestArgValue) -> BexExternalValue 
         bex_vm_types::TestArgValue::Int(i) => BexExternalValue::Int(*i),
         bex_vm_types::TestArgValue::Float(f) => BexExternalValue::Float(*f),
         bex_vm_types::TestArgValue::Bool(b) => BexExternalValue::Bool(*b),
-        bex_vm_types::TestArgValue::String(s) => BexExternalValue::String(s.clone()),
+        bex_vm_types::TestArgValue::String(s) => BexExternalValue::String(s.as_str().into()),
         bex_vm_types::TestArgValue::Array {
             element_type,
             items,

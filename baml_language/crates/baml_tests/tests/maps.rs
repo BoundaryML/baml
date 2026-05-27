@@ -37,7 +37,7 @@ async fn create_and_access() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("world".to_string()))
+        Ok(BexExternalValue::String("world".to_string().into()))
     );
 }
 
@@ -134,7 +134,7 @@ async fn contains() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("world".to_string()))
+        Ok(BexExternalValue::String("world".to_string().into()))
     );
 }
 

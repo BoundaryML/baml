@@ -268,7 +268,7 @@ fn external_to_typed_expr(
     match ty {
         BamlType::String => quote! {
             match #val_expr {
-                BexExternalValue::String(v) => Ok(v),
+                BexExternalValue::String(v) => Ok(v.to_string()),
                 other => Err(AccessError::TypeMismatch {
                     expected: "string",
                     actual: other.type_name().to_string(),
@@ -413,7 +413,7 @@ fn owned_to_external_expr(
         BamlType::Int => quote! { BexExternalValue::Int(#field_expr) },
         BamlType::Float => quote! { BexExternalValue::Float(#field_expr) },
         BamlType::Bool => quote! { BexExternalValue::Bool(#field_expr) },
-        BamlType::String => quote! { BexExternalValue::String(#field_expr) },
+        BamlType::String => quote! { BexExternalValue::String((#field_expr).into()) },
         BamlType::RustType => quote! { BexExternalValue::RustData(#field_expr) },
         BamlType::Null => quote! { BexExternalValue::Null },
         BamlType::List(inner) => {
@@ -2246,7 +2246,7 @@ fn emit_result_conversion_for_ty(
             let msg = format!("expected string{ctx}, got {{}}");
             quote! {
                 match __val {
-                    BexExternalValue::String(s) => Ok(s),
+                    BexExternalValue::String(s) => Ok(s.to_string()),
                     other => Err(RuntimeIoError::Other(
                         format!(#msg, other.type_name()),
                     )),

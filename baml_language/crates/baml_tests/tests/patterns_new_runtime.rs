@@ -278,7 +278,7 @@ async fn catch_or_of_same_typed_binding() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("boom".to_string()))
+        Ok(BexExternalValue::String("boom".to_string().into()))
     );
 }
 
@@ -2200,7 +2200,7 @@ async fn rustc_port_enum_full_variant_dispatch_north() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("up".to_string()))
+        Ok(BexExternalValue::String("up".to_string().into()))
     );
 }
 
@@ -2231,7 +2231,7 @@ async fn rustc_port_enum_full_variant_dispatch_west() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("left".to_string()))
+        Ok(BexExternalValue::String("left".to_string().into()))
     );
 }
 

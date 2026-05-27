@@ -35,7 +35,9 @@ async fn spawn_returning_string() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("hello from spawn".to_string()))
+        Ok(BexExternalValue::String(
+            "hello from spawn".to_string().into()
+        ))
     );
 }
 

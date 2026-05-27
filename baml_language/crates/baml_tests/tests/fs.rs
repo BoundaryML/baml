@@ -45,7 +45,9 @@ async fn fs_open_and_read() {
     "#);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("Hello from BAML!".to_string()))
+        Ok(BexExternalValue::String(
+            "Hello from BAML!".to_string().into()
+        ))
     );
 }
 
@@ -246,7 +248,9 @@ async fn fs_roundtrip_write_and_read() {
     "#);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("roundtrip data".to_string()))
+        Ok(BexExternalValue::String(
+            "roundtrip data".to_string().into()
+        ))
     );
 }
 
@@ -282,7 +286,7 @@ async fn fs_file_rw_seek_and_read() {
     "#);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("from BAML!".to_string()))
+        Ok(BexExternalValue::String("from BAML!".to_string().into()))
     );
 }
 
@@ -329,7 +333,9 @@ async fn fs_file_rw_write_and_read_back() {
     "#);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("Hello to Rust!!!".to_string()))
+        Ok(BexExternalValue::String(
+            "Hello to Rust!!!".to_string().into()
+        ))
     );
 }
 
@@ -540,7 +546,7 @@ async fn fs_file_read_n_bytes() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("Hello".to_string()))
+        Ok(BexExternalValue::String("Hello".to_string().into()))
     );
 }
 
@@ -559,7 +565,7 @@ async fn fs_file_read_truncates_at_eof() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("abc".to_string()))
+        Ok(BexExternalValue::String("abc".to_string().into()))
     );
 }
 
@@ -598,7 +604,7 @@ async fn fs_file_read_advances_cursor() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("DEF".to_string()))
+        Ok(BexExternalValue::String("DEF".to_string().into()))
     );
 }
 
@@ -675,7 +681,7 @@ async fn fs_open_append_plus_can_read() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("existing more".to_string()))
+        Ok(BexExternalValue::String("existing more".to_string().into()))
     );
 }
 
@@ -756,7 +762,9 @@ async fn fs_read_returns_contents() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("Hello from fs.read!".to_string()))
+        Ok(BexExternalValue::String(
+            "Hello from fs.read!".to_string().into()
+        ))
     );
 }
 
@@ -850,7 +858,7 @@ async fn fs_open_w_plus_reads_after_write() {
     // "w+" truncates on open, so only the new write is visible.
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("fresh".to_string()))
+        Ok(BexExternalValue::String("fresh".to_string().into()))
     );
 }
 
@@ -907,7 +915,7 @@ async fn fs_read_dir_returns_entries() {
             let BexExternalValue::String(name) = &fields["name"] else {
                 panic!("expected string name");
             };
-            name.clone()
+            name.to_string()
         })
         .collect();
     names.sort();

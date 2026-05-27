@@ -38,7 +38,7 @@ async fn type_of_class_to_string() {
     ");
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("User".to_string()))
+        Ok(BexExternalValue::String("User".to_string().into()))
     );
 }
 
@@ -52,7 +52,7 @@ async fn type_of_int_to_string() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("int".to_string()))
+        Ok(BexExternalValue::String("int".to_string().into()))
     );
 }
 
@@ -66,7 +66,7 @@ async fn type_of_string_to_string() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("string".to_string()))
+        Ok(BexExternalValue::String("string".to_string().into()))
     );
 }
 
@@ -80,7 +80,7 @@ async fn type_of_bool_to_string() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("bool".to_string()))
+        Ok(BexExternalValue::String("bool".to_string().into()))
     );
 }
 
@@ -97,7 +97,7 @@ async fn type_of_array_to_string() {
     let output = baml_test!(&source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("User[]".to_string()))
+        Ok(BexExternalValue::String("User[]".to_string().into()))
     );
 }
 
@@ -114,7 +114,7 @@ async fn type_of_optional_to_string() {
     let output = baml_test!(&source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("User?".to_string()))
+        Ok(BexExternalValue::String("User?".to_string().into()))
     );
 }
 
@@ -131,7 +131,9 @@ async fn type_of_map_to_string() {
     let output = baml_test!(&source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("map<string, User>".to_string()))
+        Ok(BexExternalValue::String(
+            "map<string, User>".to_string().into()
+        ))
     );
 }
 
@@ -150,7 +152,9 @@ async fn type_of_generic_class_runs_without_crash() {
     let output = baml_test!(&source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("Container<User>".to_string()))
+        Ok(BexExternalValue::String(
+            "Container<User>".to_string().into()
+        ))
     );
 }
 
@@ -230,7 +234,9 @@ async fn wrap_in_container_to_string() {
     let output = baml_test!(&source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("Container<int>".to_string()))
+        Ok(BexExternalValue::String(
+            "Container<int>".to_string().into()
+        ))
     );
 }
 
@@ -295,7 +301,7 @@ async fn type_of_enum_to_string() {
     let output = baml_test!(&source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("Color".to_string()))
+        Ok(BexExternalValue::String("Color".to_string().into()))
     );
 }
 

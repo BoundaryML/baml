@@ -87,7 +87,7 @@ async fn stream_string_final_value() {
     let output = baml_test!(&source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("Hello, world!".to_string()))
+        Ok(BexExternalValue::String("Hello, world!".to_string().into()))
     );
 }
 

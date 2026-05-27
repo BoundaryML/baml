@@ -246,15 +246,8 @@ impl<'a> BexValue<'a> {
         permit: PermitProof<'a>,
     ) -> Result<&'a bex_str::BexStr, AccessError> {
         match self {
-            // Phase 3 will change BexExternalValue::String(String) to BexStr,
-            // unifying this branch. For now, external strings go through the
-            // `owned_inner` conversion path.
-            BexValue::ExternalValue(BexExternalValue::String(_)) => {
-                Err(AccessError::TypeMismatch {
-                    expected: "heap string",
-                    actual: "external string (not yet converted to BexStr)".to_string(),
-                })
-            }
+            // Phase 3: BexExternalValue::String now holds BexStr directly.
+            BexValue::ExternalValue(BexExternalValue::String(s)) => Ok(s),
             other => other.as_object("string", heap, permit, |ptr| {
                 let obj = unsafe { ptr.get() };
                 let Object::String(s) = obj else {
@@ -562,7 +555,9 @@ fn owned_inner(
 ) -> Result<BexExternalValue, AccessError> {
     let unconvertible = |reason: &str| -> Result<BexExternalValue, AccessError> {
         if lossy {
-            Ok(BexExternalValue::String(format!("<{reason}>")))
+            Ok(BexExternalValue::String(bex_str::BexStr::from(format!(
+                "<{reason}>"
+            ))))
         } else {
             Err(AccessError::CannotConvertToOwned {
                 reason: reason.to_string(),
@@ -673,7 +668,9 @@ fn convert_object(
 ) -> Result<BexExternalValue, AccessError> {
     let unconvertible = |type_name: &str| -> Result<BexExternalValue, AccessError> {
         if lossy {
-            Ok(BexExternalValue::String(format!("<{type_name}>")))
+            Ok(BexExternalValue::String(bex_str::BexStr::from(format!(
+                "<{type_name}>"
+            ))))
         } else {
             Err(AccessError::CannotConvertToOwned {
                 reason: format!("cannot convert {type_name} to BexExternalValue"),
@@ -688,7 +685,7 @@ fn convert_object(
         Object::Future(..) => unconvertible("future"),
         Object::UnscheduledFuture(..) => unconvertible("unscheduled_future"),
 
-        Object::String(s) => Ok(BexExternalValue::String(s.to_string())),
+        Object::String(s) => Ok(BexExternalValue::String(s.clone())),
         // Deep-copy path for trace payloads: no declared type is available here,
         // so placeholder types with default attr are used.
         Object::Array(array) => Ok(BexExternalValue::Array {

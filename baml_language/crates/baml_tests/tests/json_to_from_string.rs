@@ -26,7 +26,7 @@ async fn to_string_simple_class() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            r#"{"name":"Ada","age":30}"#.to_string()
+            r#"{"name":"Ada","age":30}"#.to_string().into()
         ))
     );
 }
@@ -43,7 +43,7 @@ async fn from_string_simple_class() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("Ada".to_string()))
+        Ok(BexExternalValue::String("Ada".to_string().into()))
     );
 }
 
@@ -79,7 +79,7 @@ async fn composite_generic_roundtrip() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("Ada".to_string()))
+        Ok(BexExternalValue::String("Ada".to_string().into()))
     );
 }
 
@@ -100,7 +100,7 @@ async fn generic_forwarding_user() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("Ada".to_string()))
+        Ok(BexExternalValue::String("Ada".to_string().into()))
     );
 }
 
@@ -120,7 +120,7 @@ async fn generic_forwarding_composite() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("Ada".to_string()))
+        Ok(BexExternalValue::String("Ada".to_string().into()))
     );
 }
 
@@ -147,7 +147,7 @@ async fn three_level_forwarding() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("Ada".to_string()))
+        Ok(BexExternalValue::String("Ada".to_string().into()))
     );
 }
 
@@ -169,7 +169,7 @@ async fn closure_captures_type_arg() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("Ada".to_string()))
+        Ok(BexExternalValue::String("Ada".to_string().into()))
     );
 }
 
@@ -186,7 +186,7 @@ async fn enum_variant_to_string() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String(r#""Red""#.to_string()))
+        Ok(BexExternalValue::String(r#""Red""#.to_string().into()))
     );
 }
 
@@ -224,7 +224,7 @@ async fn optional_field_present() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            r#"{"nickname":"ada"}"#.to_string()
+            r#"{"nickname":"ada"}"#.to_string().into()
         ))
     );
 }
@@ -241,7 +241,9 @@ async fn optional_field_null() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String(r#"{"nickname":null}"#.to_string()))
+        Ok(BexExternalValue::String(
+            r#"{"nickname":null}"#.to_string().into()
+        ))
     );
 }
 
@@ -388,7 +390,7 @@ async fn media_field_to_string() {
         output.result,
         Ok(BexExternalValue::String(
             r#"{"avatar":{"kind":"image","source":"url","value":"https://example.com/a.png","mime":"image/png"}}"#
-                .to_string()
+                .to_string().into()
         ))
     );
 }
@@ -411,7 +413,7 @@ async fn media_field_roundtrip() {
         output.result,
         Ok(BexExternalValue::String(
             r#"{"avatar":{"kind":"image","source":"url","value":"https://example.com/a.png","mime":"image/png"}}"#
-                .to_string()
+                .to_string().into()
         ))
     );
 }
@@ -433,7 +435,7 @@ async fn alias_field_uses_raw_name_in_json() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            r#"{"display_name":"Ada"}"#.to_string()
+            r#"{"display_name":"Ada"}"#.to_string().into()
         ))
     );
 }
@@ -452,7 +454,7 @@ async fn alias_field_decodes_raw_name() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("Ada".to_string()))
+        Ok(BexExternalValue::String("Ada".to_string().into()))
     );
 }
 
@@ -473,7 +475,7 @@ async fn skip_field_still_emitted_in_json() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            r#"{"name":"Ada","internal_id":"secret"}"#.to_string()
+            r#"{"name":"Ada","internal_id":"secret"}"#.to_string().into()
         ))
     );
 }
@@ -523,6 +525,6 @@ async fn to_string_json_passthrough() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("[1,2,3]".to_string()))
+        Ok(BexExternalValue::String("[1,2,3]".to_string().into()))
     );
 }

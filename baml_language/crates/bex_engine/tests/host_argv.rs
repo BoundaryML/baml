@@ -54,7 +54,7 @@ async fn set_argv_updates_what_baml_sys_argv_returns() {
     let strings: Vec<String> = items
         .into_iter()
         .map(|v| match v {
-            BexExternalValue::String(s) => s,
+            BexExternalValue::String(s) => s.to_string(),
             other => panic!("expected String, got {other:?}"),
         })
         .collect();

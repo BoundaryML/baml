@@ -27,7 +27,7 @@ fn string_items(value: &BexExternalValue) -> Vec<String> {
             let BexExternalValue::String(s) = v else {
                 panic!("expected string, got: {v:?}");
             };
-            s.clone()
+            s.to_string()
         })
         .collect();
     strings.sort();

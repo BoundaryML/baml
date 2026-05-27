@@ -195,7 +195,7 @@ async fn declared_type_restored_across_scope() {
 
     assert_eq!(
         string_output.result,
-        Ok(BexExternalValue::String("outer".to_string()))
+        Ok(BexExternalValue::String("outer".to_string().into()))
     );
 }
 
@@ -243,7 +243,7 @@ async fn lambdas_capture_match_and_catch_pattern_bindings() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            "matched:caught:caught".to_string()
+            "matched:caught:caught".to_string().into()
         ))
     );
 }

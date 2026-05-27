@@ -27,7 +27,7 @@ pub fn inbound_to_external(
     match value.value {
         None => Ok(BexExternalValue::Null),
         Some(variant) => match variant {
-            InboundValueVariant::StringValue(s) => Ok(BexExternalValue::String(s)),
+            InboundValueVariant::StringValue(s) => Ok(BexExternalValue::String(s.into())),
             InboundValueVariant::IntValue(i) => Ok(BexExternalValue::Int(i)),
             InboundValueVariant::FloatValue(f) => Ok(BexExternalValue::Float(f)),
             InboundValueVariant::BoolValue(b) => Ok(BexExternalValue::Bool(b)),

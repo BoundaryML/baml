@@ -124,6 +124,7 @@ async fn any_value_to_string() {
     }
 }"#
             .to_string()
+            .into()
         ))
     );
 }
@@ -145,6 +146,8 @@ async fn float_to_string_preserves_decimal() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("1.0 0.0 -1.0 3.14 2".to_string()))
+        Ok(BexExternalValue::String(
+            "1.0 0.0 -1.0 3.14 2".to_string().into()
+        ))
     );
 }

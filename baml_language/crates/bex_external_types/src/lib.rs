@@ -33,5 +33,6 @@ pub use bex_external_value::{
 pub use bex_resource_types::{
     HostReleaseFn, HostValueArc, HostValueKind, host_release_dispatch, host_value,
 };
+pub use bex_str::BexStr;
 pub use handle::{Handle, HandleInner, WeakHeapRef};
 pub use host_return::{HostReturnTypeError, validate_host_return};

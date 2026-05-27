@@ -136,7 +136,7 @@ pub enum BexExternalValue {
     Bool(bool),
 
     /// Owned string.
-    String(String),
+    String(bex_str::BexStr),
 
     /// Owned array of values with element type.
     Array {
@@ -442,9 +442,9 @@ impl BexExternalValue {
     /// `Union { value: String(...), .. }` for static-typed inputs and as
     /// `String(...)` for ad-hoc literals, and consumers don't usually care
     /// about that distinction.
-    pub fn as_string(&self) -> Option<String> {
+    pub fn as_string(&self) -> Option<bex_str::BexStr> {
         match self {
-            BexExternalValue::String(value) => Some(value.clone()),
+            BexExternalValue::String(value) => Some(value.clone()), // O(1) now
             BexExternalValue::Union { value, .. } => value.as_string(),
             _ => None,
         }
@@ -491,13 +491,13 @@ impl From<crate::Handle> for BexExternalValue {
 
 impl From<String> for BexExternalValue {
     fn from(value: String) -> Self {
-        BexExternalValue::String(value)
+        BexExternalValue::String(bex_str::BexStr::from(value))
     }
 }
 
 impl From<&str> for BexExternalValue {
     fn from(value: &str) -> Self {
-        BexExternalValue::String(value.to_string())
+        BexExternalValue::String(bex_str::BexStr::from(value))
     }
 }
 
@@ -538,7 +538,7 @@ impl AsBexExternalValue for f64 {
 
 impl AsBexExternalValue for String {
     fn into_bex_external_value(self) -> BexExternalValue {
-        BexExternalValue::String(self)
+        BexExternalValue::String(bex_str::BexStr::from(self))
     }
 }
 
@@ -592,7 +592,10 @@ impl AsBexExternalValue for Vec<String> {
     fn into_bex_external_value(self) -> BexExternalValue {
         BexExternalValue::Array {
             element_type: baml_type::Ty::string(),
-            items: self.into_iter().map(BexExternalValue::String).collect(),
+            items: self
+                .into_iter()
+                .map(|s| BexExternalValue::String(bex_str::BexStr::from(s)))
+                .collect(),
         }
         .into_bex_external_value()
     }

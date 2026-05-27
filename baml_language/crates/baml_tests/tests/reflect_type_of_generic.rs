@@ -45,7 +45,7 @@ async fn describe_user_returns_user() {
     ");
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("User".to_string()))
+        Ok(BexExternalValue::String("User".to_string().into()))
     );
 }
 
@@ -62,7 +62,7 @@ async fn describe_int_returns_int() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("int".to_string()))
+        Ok(BexExternalValue::String("int".to_string().into()))
     );
 }
 
@@ -79,7 +79,7 @@ async fn describe_string_returns_string() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("string".to_string()))
+        Ok(BexExternalValue::String("string".to_string().into()))
     );
 }
 
@@ -102,7 +102,7 @@ async fn array_of_user_to_string() {
     let output = baml_test!(&source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("User[]".to_string()))
+        Ok(BexExternalValue::String("User[]".to_string().into()))
     );
 }
 
@@ -119,7 +119,7 @@ async fn array_of_int_to_string() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("int[]".to_string()))
+        Ok(BexExternalValue::String("int[]".to_string().into()))
     );
 }
 
@@ -197,7 +197,7 @@ async fn closure_captures_type_arg_user() {
     ");
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("User".to_string()))
+        Ok(BexExternalValue::String("User".to_string().into()))
     );
 }
 
@@ -215,7 +215,7 @@ async fn closure_captures_type_arg_int() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("int".to_string()))
+        Ok(BexExternalValue::String("int".to_string().into()))
     );
 }
 
@@ -307,7 +307,7 @@ async fn three_level_forwarding_to_string() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("int".to_string()))
+        Ok(BexExternalValue::String("int".to_string().into()))
     );
 }
 
@@ -332,7 +332,7 @@ async fn closure_captures_type_arg_array_of_user() {
     let output = baml_test!(&source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("User[]".to_string()))
+        Ok(BexExternalValue::String("User[]".to_string().into()))
     );
 }
 
@@ -350,7 +350,7 @@ async fn closure_captures_type_arg_optional_of_int() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("int?".to_string()))
+        Ok(BexExternalValue::String("int?".to_string().into()))
     );
 }
 
@@ -388,7 +388,7 @@ async fn type_of_depth3_path_in_method() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("int".to_string()))
+        Ok(BexExternalValue::String("int".to_string().into()))
     );
 }
 
@@ -421,7 +421,7 @@ async fn type_of_depth3_picks_inner_type_param() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("int".to_string()))
+        Ok(BexExternalValue::String("int".to_string().into()))
     );
 }
 
@@ -452,7 +452,7 @@ async fn type_of_self_field_method_depth3() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("string".to_string()))
+        Ok(BexExternalValue::String("string".to_string().into()))
     );
 }
 
@@ -483,6 +483,6 @@ async fn type_of_depth4_path_picks_prefix_class_args() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("int".to_string()))
+        Ok(BexExternalValue::String("int".to_string().into()))
     );
 }

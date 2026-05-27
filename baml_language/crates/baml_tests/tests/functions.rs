@@ -65,7 +65,7 @@ async fn return_literal_string() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("hello".to_string()))
+        Ok(BexExternalValue::String("hello".to_string().into()))
     );
 }
 
@@ -217,7 +217,7 @@ async fn unused_variable_does_not_affect_result() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("Hello".to_string()))
+        Ok(BexExternalValue::String("Hello".to_string().into()))
     );
 }
 

@@ -603,7 +603,7 @@ async fn is_in_if_condition() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("number".to_string()))
+        Ok(BexExternalValue::String("number".to_string().into()))
     );
 }
 
@@ -779,7 +779,7 @@ async fn narrowing_then_branch_picks_or_pattern_type() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("got bool".to_string()))
+        Ok(BexExternalValue::String("got bool".to_string().into()))
     );
 }
 
@@ -797,7 +797,7 @@ async fn narrowing_else_branch_runs_for_non_matching_value() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("text".to_string()))
+        Ok(BexExternalValue::String("text".to_string().into()))
     );
 }
 
@@ -855,7 +855,7 @@ async fn narrowing_else_branch_with_class_types() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("oops".to_string()))
+        Ok(BexExternalValue::String("oops".to_string().into()))
     );
 }
 
@@ -947,7 +947,7 @@ async fn narrowing_picks_class_type_in_then_branch() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("ok".to_string()))
+        Ok(BexExternalValue::String("ok".to_string().into()))
     );
 }
 
@@ -991,7 +991,7 @@ async fn narrowing_skipped_for_non_path_scrutinee() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("int".to_string()))
+        Ok(BexExternalValue::String("int".to_string().into()))
     );
 }
 

@@ -66,7 +66,9 @@ async fn match_typed_pattern_first_arm() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("success: hello".to_string()))
+        Ok(BexExternalValue::String(
+            "success: hello".to_string().into()
+        ))
     );
 }
 
@@ -123,7 +125,9 @@ async fn match_typed_pattern_second_arm() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("failure: error".to_string()))
+        Ok(BexExternalValue::String(
+            "failure: error".to_string().into()
+        ))
     );
 }
 
@@ -307,7 +311,7 @@ async fn match_guard_true() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("excellent".to_string()))
+        Ok(BexExternalValue::String("excellent".to_string().into()))
     );
 }
 
@@ -373,7 +377,7 @@ async fn match_guard_fallthrough() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("good".to_string()))
+        Ok(BexExternalValue::String("good".to_string().into()))
     );
 }
 
@@ -439,7 +443,7 @@ async fn match_guard_all_fail() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("needs work".to_string()))
+        Ok(BexExternalValue::String("needs work".to_string().into()))
     );
 }
 
@@ -520,7 +524,7 @@ async fn match_guarded_int_literal_guard_true() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("one with flag".to_string()))
+        Ok(BexExternalValue::String("one with flag".to_string().into()))
     );
 }
 
@@ -597,7 +601,9 @@ async fn match_guarded_int_literal_guard_false() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("one without flag".to_string()))
+        Ok(BexExternalValue::String(
+            "one without flag".to_string().into()
+        ))
     );
 }
 
@@ -678,7 +684,7 @@ async fn match_all_arms_guarded_all_fail() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("fallback".to_string()))
+        Ok(BexExternalValue::String("fallback".to_string().into()))
     );
 }
 
@@ -745,7 +751,7 @@ async fn match_mixed_literal_typed_guard() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("one with flag".to_string()))
+        Ok(BexExternalValue::String("one with flag".to_string().into()))
     );
 }
 
@@ -808,7 +814,7 @@ async fn match_mixed_literal_typed_guard_fallthrough() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("other int".to_string()))
+        Ok(BexExternalValue::String("other int".to_string().into()))
     );
 }
 
@@ -876,7 +882,9 @@ async fn match_guard_on_typed_pattern_field_access() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("success with data".to_string()))
+        Ok(BexExternalValue::String(
+            "success with data".to_string().into()
+        ))
     );
 }
 
@@ -944,7 +952,7 @@ async fn match_guard_on_typed_pattern_field_access_fails() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("empty success".to_string()))
+        Ok(BexExternalValue::String("empty success".to_string().into()))
     );
 }
 
@@ -1017,7 +1025,7 @@ async fn match_enum_variant_first() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("active".to_string()))
+        Ok(BexExternalValue::String("active".to_string().into()))
     );
 }
 
@@ -1086,7 +1094,7 @@ async fn match_enum_variant_last() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("pending".to_string()))
+        Ok(BexExternalValue::String("pending".to_string().into()))
     );
 }
 
@@ -1159,7 +1167,7 @@ async fn match_enum_variant_with_wildcard() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("other".to_string()))
+        Ok(BexExternalValue::String("other".to_string().into()))
     );
 }
 
@@ -1228,7 +1236,7 @@ async fn match_enum_variant_with_wildcard_matched() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("active".to_string()))
+        Ok(BexExternalValue::String("active".to_string().into()))
     );
 }
 
@@ -1297,7 +1305,10 @@ async fn match_enum_four_variants_jump_table() {
     }
     "#);
 
-    assert_eq!(output.result, Ok(BexExternalValue::String("S".to_string())));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("S".to_string().into()))
+    );
 }
 
 // ============================================================================
@@ -1372,7 +1383,7 @@ async fn match_class_types_exhaustive_first() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("cat: Whiskers".to_string()))
+        Ok(BexExternalValue::String("cat: Whiskers".to_string().into()))
     );
 }
 
@@ -1444,7 +1455,7 @@ async fn match_class_types_exhaustive_last() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("bird: Tweety".to_string()))
+        Ok(BexExternalValue::String("bird: Tweety".to_string().into()))
     );
 }
 
@@ -1513,7 +1524,7 @@ async fn match_class_types_non_exhaustive_wildcard() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("other".to_string()))
+        Ok(BexExternalValue::String("other".to_string().into()))
     );
 }
 
@@ -1582,7 +1593,7 @@ async fn match_class_types_non_exhaustive_matched() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("dog: Rex".to_string()))
+        Ok(BexExternalValue::String("dog: Rex".to_string().into()))
     );
 }
 
@@ -1605,7 +1616,7 @@ async fn match_union_type_four_patterns_type_tag() {
             }
         "#,
         entry: "identify",
-        args: { "x" => BexExternalValue::String("hello".to_string()) },
+        args: { "x" => BexExternalValue::String("hello".to_string().into()) },
     };
 
     insta::assert_snapshot!(output.bytecode, @r#"
@@ -1639,7 +1650,7 @@ async fn match_union_type_four_patterns_type_tag() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("text".to_string()))
+        Ok(BexExternalValue::String("text".to_string().into()))
     );
 }
 
@@ -1725,7 +1736,7 @@ async fn match_multiple_typed_patterns_with_guards() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("redirect".to_string()))
+        Ok(BexExternalValue::String("redirect".to_string().into()))
     );
 }
 
@@ -1812,7 +1823,7 @@ async fn match_class_type_tag_jump_table() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("dog".to_string()))
+        Ok(BexExternalValue::String("dog".to_string().into()))
     );
 }
 
@@ -1864,7 +1875,7 @@ async fn match_class_type_is_type_chain() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("cat".to_string()))
+        Ok(BexExternalValue::String("cat".to_string().into()))
     );
 }
 
@@ -1928,7 +1939,7 @@ async fn match_mixed_class_primitive_type_tag_switch() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("class".to_string()))
+        Ok(BexExternalValue::String("class".to_string().into()))
     );
 }
 
@@ -1971,7 +1982,7 @@ async fn match_sparse_class_type_tag_perfect_hash() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("dog".to_string()))
+        Ok(BexExternalValue::String("dog".to_string().into()))
     );
 }
 
@@ -2030,7 +2041,7 @@ async fn match_null_in_type_tag_jump_table() {
     "#);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("null".to_string()))
+        Ok(BexExternalValue::String("null".to_string().into()))
     );
 }
 
@@ -2091,7 +2102,7 @@ async fn match_null_with_class_types_type_tag() {
     "#);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("nothing".to_string()))
+        Ok(BexExternalValue::String("nothing".to_string().into()))
     );
 }
 
@@ -2121,6 +2132,6 @@ async fn match_dense_class_still_uses_direct_jump_table() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("dog".to_string()))
+        Ok(BexExternalValue::String("dog".to_string().into()))
     );
 }

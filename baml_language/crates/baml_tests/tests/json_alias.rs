@@ -99,7 +99,7 @@ async fn let_json_string() {
     "#);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("hello".to_string()))
+        Ok(BexExternalValue::String("hello".to_string().into()))
     );
 }
 
@@ -256,6 +256,6 @@ async fn match_json_arms_exhaustive() {
     "#);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("null".to_string()))
+        Ok(BexExternalValue::String("null".to_string().into()))
     );
 }

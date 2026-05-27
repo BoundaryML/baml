@@ -394,7 +394,10 @@ async fn array_index_with_int_works() {
     "#
     );
 
-    assert_eq!(output.result, Ok(BexExternalValue::String("b".to_string())));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("b".to_string().into()))
+    );
 }
 
 /// Baseline: passing int through a function call and using it as index works.
@@ -413,7 +416,10 @@ async fn int_through_function_call_as_index_works() {
     "#
     );
 
-    assert_eq!(output.result, Ok(BexExternalValue::String("b".to_string())));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("b".to_string().into()))
+    );
 }
 
 // ============================================================================
@@ -440,7 +446,10 @@ async fn nested_array_index_with_int_works() {
     "#
     );
 
-    assert_eq!(output.result, Ok(BexExternalValue::String("f".to_string())));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("f".to_string().into()))
+    );
 }
 
 // ============================================================================
@@ -467,7 +476,10 @@ async fn array_element_assignment_2d_type_error() {
 
     // BUG: This should succeed but currently fails with
     // "type error: expected int, got any"
-    assert_eq!(output.result, Ok(BexExternalValue::String("x".to_string())));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("x".to_string().into()))
+    );
 }
 
 /// Simpler case: 1D array assignment.
@@ -483,7 +495,10 @@ async fn array_element_assignment_1d() {
     "#
     );
 
-    assert_eq!(output.result, Ok(BexExternalValue::String("z".to_string())));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("z".to_string().into()))
+    );
 }
 
 /// Class method with array read — this works.
@@ -516,7 +531,10 @@ async fn class_method_array_read_works() {
     "#
     );
 
-    assert_eq!(output.result, Ok(BexExternalValue::String("".to_string())));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("".to_string().into()))
+    );
 }
 
 /// Class method with array WRITE — this is the tic-tac-toe bug.
@@ -558,7 +576,10 @@ async fn class_method_array_write_type_error() {
     // BUG: This should return "x" but fails with:
     // TypeError { expected: Int, got: Object(Any) }
     // The error occurs in Board.play at `self.cells[row][col] = player`
-    assert_eq!(output.result, Ok(BexExternalValue::String("x".to_string())));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("x".to_string().into()))
+    );
 }
 
 // ============================================================================
@@ -583,7 +604,10 @@ async fn nested_array_read_with_variables() {
     "#
     );
 
-    assert_eq!(output.result, Ok(BexExternalValue::String("f".to_string())));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("f".to_string().into()))
+    );
 }
 
 /// 2D array write with variables — isolates the assignment path.
@@ -605,7 +629,10 @@ async fn nested_array_write_with_variables() {
     "#
     );
 
-    assert_eq!(output.result, Ok(BexExternalValue::String("x".to_string())));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("x".to_string().into()))
+    );
 }
 
 /// Simplest possible: 1D array assignment with a variable index.
@@ -622,7 +649,10 @@ async fn array_write_with_variable_index() {
     "#
     );
 
-    assert_eq!(output.result, Ok(BexExternalValue::String("z".to_string())));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("z".to_string().into()))
+    );
 }
 
 // ============================================================================
@@ -659,7 +689,10 @@ async fn class_method_1d_array_write_through_self() {
     "#
     );
 
-    assert_eq!(output.result, Ok(BexExternalValue::String("z".to_string())));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("z".to_string().into()))
+    );
 }
 
 /// 2D array assignment through self with literal indices — is it self + 2D?
@@ -699,7 +732,10 @@ async fn class_method_2d_array_write_through_self_literals() {
     );
 
     // This isolates: is it self + 2D array + assignment?
-    assert_eq!(output.result, Ok(BexExternalValue::String("x".to_string())));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("x".to_string().into()))
+    );
 }
 
 /// Same as Board.play but without the if/else guards — minimal class method.
@@ -828,7 +864,10 @@ async fn class_method_nested_field_array_write() {
     "#
     );
 
-    assert_eq!(output.result, Ok(BexExternalValue::String("z".to_string())));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("z".to_string().into()))
+    );
 }
 
 // ============================================================================
@@ -970,5 +1009,8 @@ async fn non_self_param_array_write() {
     "#
     );
 
-    assert_eq!(output.result, Ok(BexExternalValue::String("z".to_string())));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("z".to_string().into()))
+    );
 }

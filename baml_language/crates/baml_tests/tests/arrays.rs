@@ -1115,7 +1115,7 @@ async fn array_reduce_concat_strings() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("abc".to_string()))
+        Ok(BexExternalValue::String("abc".to_string().into()))
     );
 }
 

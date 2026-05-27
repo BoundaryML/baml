@@ -101,7 +101,7 @@ impl ModelFeatures {
                         .iter()
                         .filter_map(|item| {
                             if let BexExternalValue::String(s) = item {
-                                Some(s.clone())
+                                Some(s.to_string())
                             } else {
                                 None
                             }

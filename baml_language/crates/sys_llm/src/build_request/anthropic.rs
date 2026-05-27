@@ -330,7 +330,7 @@ mod tests {
         for (k, v) in options {
             if k == "model" {
                 if let BexExternalValue::String(s) = &v {
-                    model = Some(s.clone());
+                    model = Some(s.to_string());
                 }
             } else {
                 request_body.insert(k.to_string(), v);

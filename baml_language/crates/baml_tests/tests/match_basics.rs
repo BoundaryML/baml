@@ -275,7 +275,7 @@ async fn match_literal_null() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("was null".to_string()))
+        Ok(BexExternalValue::String("was null".to_string().into()))
     );
 }
 
@@ -315,7 +315,7 @@ async fn match_literal_bool_true() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("yes".to_string()))
+        Ok(BexExternalValue::String("yes".to_string().into()))
     );
 }
 
@@ -355,7 +355,7 @@ async fn match_literal_bool_false() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("no".to_string()))
+        Ok(BexExternalValue::String("no".to_string().into()))
     );
 }
 
@@ -381,7 +381,7 @@ async fn match_literal_bool_exhaustive_constant() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("yes".to_string()))
+        Ok(BexExternalValue::String("yes".to_string().into()))
     );
 }
 
@@ -428,7 +428,7 @@ async fn match_union_literal_first() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("success".to_string()))
+        Ok(BexExternalValue::String("success".to_string().into()))
     );
 }
 
@@ -471,7 +471,7 @@ async fn match_union_literal_second() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("success".to_string()))
+        Ok(BexExternalValue::String("success".to_string().into()))
     );
 }
 
@@ -519,7 +519,7 @@ async fn match_union_large() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("success".to_string()))
+        Ok(BexExternalValue::String("success".to_string().into()))
     );
 }
 
@@ -567,7 +567,7 @@ async fn match_union_client_error() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("client error".to_string()))
+        Ok(BexExternalValue::String("client error".to_string().into()))
     );
 }
 
@@ -626,7 +626,7 @@ async fn match_union_with_duplicates() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("one or two".to_string()))
+        Ok(BexExternalValue::String("one or two".to_string().into()))
     );
 }
 
@@ -1228,7 +1228,7 @@ async fn match_negative_int_first_arm() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("negative one".to_string()))
+        Ok(BexExternalValue::String("negative one".to_string().into()))
     );
 }
 
@@ -1297,7 +1297,7 @@ async fn match_negative_int_fallback() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("other".to_string()))
+        Ok(BexExternalValue::String("other".to_string().into()))
     );
 }
 
@@ -1351,7 +1351,7 @@ async fn match_negative_int_with_variable() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("negative one".to_string()))
+        Ok(BexExternalValue::String("negative one".to_string().into()))
     );
 }
 
@@ -1419,7 +1419,7 @@ async fn match_negative_float_pattern() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            "negative one point five".to_string()
+            "negative one point five".to_string().into()
         ))
     );
 }
@@ -1490,7 +1490,7 @@ async fn match_multiple_negative_patterns() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("negative two".to_string()))
+        Ok(BexExternalValue::String("negative two".to_string().into()))
     );
 }
 
@@ -1550,7 +1550,7 @@ async fn match_negative_in_union_pattern() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("small".to_string()))
+        Ok(BexExternalValue::String("small".to_string().into()))
     );
 }
 
@@ -1632,7 +1632,7 @@ async fn match_three_levels_nested() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("all zero".to_string()))
+        Ok(BexExternalValue::String("all zero".to_string().into()))
     );
 }
 
@@ -1710,7 +1710,7 @@ async fn match_three_levels_nested_middle() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("y nonzero".to_string()))
+        Ok(BexExternalValue::String("y nonzero".to_string().into()))
     );
 }
 
@@ -1762,7 +1762,7 @@ async fn match_optional_null_pattern() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("none".to_string()))
+        Ok(BexExternalValue::String("none".to_string().into()))
     );
 }
 
@@ -1810,7 +1810,7 @@ async fn match_optional_value_pattern() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("some".to_string()))
+        Ok(BexExternalValue::String("some".to_string().into()))
     );
 }
 
@@ -1870,7 +1870,7 @@ async fn match_optional_with_literal_and_typed() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("zero".to_string()))
+        Ok(BexExternalValue::String("zero".to_string().into()))
     );
 }
 
@@ -1940,7 +1940,7 @@ async fn match_arithmetic_scrutinee() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("one".to_string()))
+        Ok(BexExternalValue::String("one".to_string().into()))
     );
 }
 
@@ -1996,7 +1996,7 @@ async fn match_function_call_scrutinee() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("answer".to_string()))
+        Ok(BexExternalValue::String("answer".to_string().into()))
     );
 }
 
@@ -2278,7 +2278,7 @@ async fn match_bool_variable_exhaustive() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("yes".to_string()))
+        Ok(BexExternalValue::String("yes".to_string().into()))
     );
 }
 
@@ -2319,7 +2319,7 @@ async fn match_string_many_arms() {
             }
         "#,
         entry: "classify",
-        args: { "s" => BexExternalValue::String("gamma".to_string()) },
+        args: { "s" => BexExternalValue::String("gamma".to_string().into()) },
     };
 
     insta::assert_snapshot!(output.bytecode, @r#"

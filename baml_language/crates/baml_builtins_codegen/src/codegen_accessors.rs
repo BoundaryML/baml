@@ -82,7 +82,7 @@ fn gen_as_bex_external_field(field: &AccessorFieldDef) -> (Option<TokenStream2>,
     match &field.kind {
         FieldTypeKind::String => (
             None,
-            quote!(#name_str.to_string() => BexExternalValue::String(self.#name)),
+            quote!(#name_str.to_string() => BexExternalValue::String((self.#name).into())),
         ),
         FieldTypeKind::Int => (
             None,
@@ -107,7 +107,7 @@ fn gen_as_bex_external_field(field: &AccessorFieldDef) -> (Option<TokenStream2>,
                     value_type: bex_external_types::Ty::String { attr: baml_type::TyAttr::default() },
                     entries: self.#name
                         .into_iter()
-                        .map(|(k, v)| (k, BexExternalValue::String(v)))
+                        .map(|(k, v)| (k, BexExternalValue::String(v.into())))
                         .collect(),
                 };
             };
@@ -131,7 +131,7 @@ fn gen_as_bex_external_field(field: &AccessorFieldDef) -> (Option<TokenStream2>,
                     element_type: bex_external_types::Ty::String { attr: baml_type::TyAttr::default() },
                     items: self.#name
                         .into_iter()
-                        .map(BexExternalValue::String)
+                        .map(|s| BexExternalValue::String(s.into()))
                         .collect(),
                 };
             };

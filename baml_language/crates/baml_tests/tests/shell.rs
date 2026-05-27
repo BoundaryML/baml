@@ -43,7 +43,7 @@ async fn shell_with_pipe() {
     "#);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("HELLO WORLD\n".to_string()))
+        Ok(BexExternalValue::String("HELLO WORLD\n".to_string().into()))
     );
 }
 
@@ -190,7 +190,7 @@ async fn exec_with_args() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("hello world".to_string()))
+        Ok(BexExternalValue::String("hello world".to_string().into()))
     );
 }
 
@@ -288,7 +288,9 @@ async fn exec_with_stdin() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("hello from stdin".to_string()))
+        Ok(BexExternalValue::String(
+            "hello from stdin".to_string().into()
+        ))
     );
 }
 

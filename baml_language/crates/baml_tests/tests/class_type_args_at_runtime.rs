@@ -36,7 +36,7 @@ async fn method_sees_class_type_arg_int() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("int".to_string()))
+        Ok(BexExternalValue::String("int".to_string().into()))
     );
 }
 
@@ -58,7 +58,7 @@ async fn method_sees_class_type_arg_string() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("string".to_string()))
+        Ok(BexExternalValue::String("string".to_string().into()))
     );
 }
 
@@ -82,7 +82,7 @@ async fn method_sees_composite_class_type_arg() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("Box<int>".to_string()))
+        Ok(BexExternalValue::String("Box<int>".to_string().into()))
     );
 }
 
@@ -107,7 +107,7 @@ async fn union_dispatch_generic_class_int() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("int".to_string()))
+        Ok(BexExternalValue::String("int".to_string().into()))
     );
 }
 
@@ -129,7 +129,7 @@ async fn union_dispatch_generic_class_string() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("string".to_string()))
+        Ok(BexExternalValue::String("string".to_string().into()))
     );
 }
 
@@ -218,7 +218,7 @@ async fn closure_inside_method_captures_class_type_arg() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("int".to_string()))
+        Ok(BexExternalValue::String("int".to_string().into()))
     );
 }
 
@@ -255,6 +255,6 @@ async fn closure_inside_method_survives_gc() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("int".to_string()))
+        Ok(BexExternalValue::String("int".to_string().into()))
     );
 }

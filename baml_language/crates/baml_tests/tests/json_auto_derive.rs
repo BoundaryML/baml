@@ -38,7 +38,7 @@ async fn simple_class_to_json_roundtrip() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("Ada".to_string()))
+        Ok(BexExternalValue::String("Ada".to_string().into()))
     );
 }
 
@@ -108,7 +108,7 @@ async fn user_to_json_override_suppresses_auto_derive() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("[redacted]".to_string()))
+        Ok(BexExternalValue::String("[redacted]".to_string().into()))
     );
 }
 
@@ -297,7 +297,7 @@ async fn primitive_field_to_json() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String(r#"{"x":42}"#.to_string()))
+        Ok(BexExternalValue::String(r#"{"x":42}"#.to_string().into()))
     );
 }
 
@@ -318,7 +318,9 @@ async fn array_of_primitive_to_json() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String(r#"{"xs":[1,2,3]}"#.to_string()))
+        Ok(BexExternalValue::String(
+            r#"{"xs":[1,2,3]}"#.to_string().into()
+        ))
     );
 }
 
@@ -345,7 +347,9 @@ async fn nested_class_override_honored_direct() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String(r#"{"b":"[secret]"}"#.to_string()))
+        Ok(BexExternalValue::String(
+            r#"{"b":"[secret]"}"#.to_string().into()
+        ))
     );
 }
 
@@ -373,7 +377,9 @@ async fn nested_class_override_honored_in_array() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String(r#"{"items":[0,0]}"#.to_string()))
+        Ok(BexExternalValue::String(
+            r#"{"items":[0,0]}"#.to_string().into()
+        ))
     );
 }
 
@@ -435,7 +441,9 @@ async fn recursive_class_to_json() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            r#"{"value":1,"children":[{"value":2,"children":[]}]}"#.to_string()
+            r#"{"value":1,"children":[{"value":2,"children":[]}]}"#
+                .to_string()
+                .into()
         ))
     );
 }
@@ -457,7 +465,9 @@ async fn generic_class_to_json_concrete() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String(r#"{"value":42}"#.to_string()))
+        Ok(BexExternalValue::String(
+            r#"{"value":42}"#.to_string().into()
+        ))
     );
 }
 
@@ -479,7 +489,9 @@ async fn generic_class_to_json_array_typearg() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String(r#"{"value":[1,2,3]}"#.to_string()))
+        Ok(BexExternalValue::String(
+            r#"{"value":[1,2,3]}"#.to_string().into()
+        ))
     );
 }
 
@@ -509,7 +521,7 @@ async fn generic_class_honors_override_through_typevar() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            r#"{"value":"[redacted]"}"#.to_string()
+            r#"{"value":"[redacted]"}"#.to_string().into()
         ))
     );
 }
@@ -531,7 +543,9 @@ async fn generic_class_with_optional_typevar_field() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String(r#"{"value":42}"#.to_string()))
+        Ok(BexExternalValue::String(
+            r#"{"value":42}"#.to_string().into()
+        ))
     );
 }
 
@@ -550,7 +564,9 @@ async fn generic_class_with_optional_typevar_field_null() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String(r#"{"value":null}"#.to_string()))
+        Ok(BexExternalValue::String(
+            r#"{"value":null}"#.to_string().into()
+        ))
     );
 }
 
@@ -578,7 +594,7 @@ async fn generic_class_with_optional_typevar_field_honors_override() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            r#"{"value":"[redacted]"}"#.to_string()
+            r#"{"value":"[redacted]"}"#.to_string().into()
         ))
     );
 }
@@ -772,7 +788,7 @@ async fn generic_class_honors_override_through_typevar_from_json() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("[reset]".to_string()))
+        Ok(BexExternalValue::String("[reset]".to_string().into()))
     );
 }
 
@@ -899,7 +915,7 @@ async fn top_level_from_json_call_concrete_class() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("Ada".to_string()))
+        Ok(BexExternalValue::String("Ada".to_string().into()))
     );
 }
 
@@ -951,7 +967,9 @@ async fn independent_synthesis_only_from_json_defined() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("override-honored".to_string()))
+        Ok(BexExternalValue::String(
+            "override-honored".to_string().into()
+        ))
     );
 }
 
@@ -1010,7 +1028,7 @@ async fn round_trip_with_overrides_both_directions() {
     let output = baml_test!(source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("[reset]".to_string()))
+        Ok(BexExternalValue::String("[reset]".to_string().into()))
     );
 }
 
