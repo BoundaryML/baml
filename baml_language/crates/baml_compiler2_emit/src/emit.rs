@@ -479,6 +479,89 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         }
     }
 
+    fn local_reads_captured_local(&self, local: Local, seen: &mut HashSet<Local>) -> bool {
+        if self.captured_locals.contains(&local) {
+            return true;
+        }
+        if !seen.insert(local) {
+            return false;
+        }
+
+        match self.analysis.classifications.get(&local).copied() {
+            Some(LocalClassification::CopyOf) => {
+                let source = self.analysis.resolve_copy_source(local);
+                self.local_reads_captured_local(source, seen)
+            }
+            Some(LocalClassification::Virtual) => self
+                .analysis
+                .def_use
+                .get(&local)
+                .and_then(|du| du.def.as_ref())
+                .is_some_and(|def| self.rvalue_reads_captured_local(&def.rvalue, seen)),
+            _ => false,
+        }
+    }
+
+    fn place_reads_captured_local(&self, place: &Place, seen: &mut HashSet<Local>) -> bool {
+        match place {
+            Place::Local(local) => self.local_reads_captured_local(*local, seen),
+            Place::Capture(_) => true,
+            Place::Field { base, .. } => self.place_reads_captured_local(base, seen),
+            Place::Index { base, index, .. } => {
+                self.place_reads_captured_local(base, seen)
+                    || self.local_reads_captured_local(*index, seen)
+            }
+        }
+    }
+
+    fn operand_reads_captured_local(&self, operand: &Operand, seen: &mut HashSet<Local>) -> bool {
+        match operand {
+            Operand::Copy(place) | Operand::Move(place) => {
+                self.place_reads_captured_local(place, seen)
+            }
+            Operand::Constant(_) => false,
+        }
+    }
+
+    fn rvalue_reads_captured_local(&self, rvalue: &Rvalue, seen: &mut HashSet<Local>) -> bool {
+        match rvalue {
+            Rvalue::Use(operand) | Rvalue::UnaryOp { operand, .. } => {
+                self.operand_reads_captured_local(operand, seen)
+            }
+            Rvalue::BinaryOp { left, right, .. } => {
+                self.operand_reads_captured_local(left, seen)
+                    || self.operand_reads_captured_local(right, seen)
+            }
+            Rvalue::Array(elements)
+            | Rvalue::Aggregate {
+                fields: elements, ..
+            } => elements
+                .iter()
+                .any(|operand| self.operand_reads_captured_local(operand, seen)),
+            Rvalue::Uint8Array(_) | Rvalue::LoadType(_) => false,
+            Rvalue::Map(entries) => entries.iter().any(|(key, value)| {
+                self.operand_reads_captured_local(key, seen)
+                    || self.operand_reads_captured_local(value, seen)
+            }),
+            Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
+                self.place_reads_captured_local(place, seen)
+            }
+            Rvalue::IsType { operand, .. }
+            | Rvalue::MakeBoundMethod {
+                receiver: operand, ..
+            } => self.operand_reads_captured_local(operand, seen),
+            Rvalue::MakeClosure { captures, .. } => captures
+                .iter()
+                .any(|operand| self.operand_reads_captured_local(operand, seen)),
+        }
+    }
+
+    fn binary_operands_can_use_specialized_op(&self, left: &Operand, right: &Operand) -> bool {
+        let mut seen = HashSet::new();
+        !self.operand_reads_captured_local(left, &mut seen)
+            && !self.operand_reads_captured_local(right, &mut seen)
+    }
+
     /// Try to emit a specialized instruction for a binary operation based on
     /// static operand types. Returns `None` when types can't be resolved or
     /// don't match a specialized form (mixed int/float, strings, bitwise, etc.).
@@ -488,6 +571,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         left: &Operand,
         right: &Operand,
     ) -> Option<Instruction> {
+        if !self.binary_operands_can_use_specialized_op(left, right) {
+            return None;
+        }
+
         let left_ty = self.resolve_operand_type(left)?;
         let right_ty = self.resolve_operand_type(right)?;
 
