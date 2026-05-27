@@ -392,7 +392,7 @@ impl fmt::Display for TirTypeError {
             ),
             TirTypeError::LetElseMustDiverge { got } => write!(
                 f,
-                "`let … else` requires a diverging else block (`return`, `throw`, `break`, `continue`, or an infinite loop); got `{}`",
+                "`let … else` requires a diverging else block (`return`, `throw`, `break`, or `continue`); got `{}`",
                 humanize_ty(got)
             ),
             TirTypeError::IrrefutablePatternInLetElse => write!(

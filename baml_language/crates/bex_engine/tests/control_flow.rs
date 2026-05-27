@@ -532,6 +532,157 @@ async fn let_else_or_pattern_matches_either_alternative() -> anyhow::Result<()> 
 }
 
 #[tokio::test]
+async fn let_else_break_in_else_inside_loop() -> anyhow::Result<()> {
+    // `break` is a diverging form (`Ty::Never`). When the pattern fails,
+    // the else branch breaks out of the enclosing loop instead of running
+    // the rest of the loop body — proving the unreachable terminator on
+    // the miss block doesn't fall through.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            class Ok { value string }
+            class Err { message string }
+
+            function pick_first_ok(items: (Ok | Err)[]) -> string {
+                let result = "no-ok";
+                let i = 0;
+                while (i < 3) {
+                    let item = items[i];
+                    let o: Ok = item else { break; };
+                    result = o.value;
+                    i += 1;
+                }
+                result
+            }
+
+            function main() -> string {
+                pick_first_ok([Ok { value: "first" }, Err { message: "stop" }, Ok { value: "third" }])
+            }
+        "#,
+        entry: "main",
+        // Iteration 0: Ok → result = "first". Iteration 1: Err → break.
+        // Iteration 2 never runs; result stays "first".
+        expected: Ok(BexExternalValue::String("first".to_string())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn let_else_continue_in_else_inside_loop() -> anyhow::Result<()> {
+    // `continue` is a diverging form: skip to the next iteration when the
+    // pattern fails. Aggregates only the matching items.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            class Ok { value string }
+            class Err { message string }
+
+            function concat_oks(items: (Ok | Err)[]) -> string {
+                let acc = "";
+                let i = 0;
+                while (i < 3) {
+                    let item = items[i];
+                    i += 1;
+                    let o: Ok = item else { continue; };
+                    acc = acc + o.value;
+                }
+                acc
+            }
+
+            function main() -> string {
+                concat_oks([Ok { value: "a" }, Err { message: "skip" }, Ok { value: "c" }])
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("ac".to_string())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn let_else_multiple_consecutive_bindings() -> anyhow::Result<()> {
+    // Two let-else statements back-to-back: both bindings should be live
+    // in the tail, locals must not collide, and a miss in the second one
+    // diverges past the first binding cleanly.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            class Ok { value string }
+            class Err { message string }
+
+            function chain(a: Ok | Err, b: Ok | Err) -> string {
+                let oa: Ok = a else { return "a-failed"; };
+                let ob: Ok = b else { return "b-failed"; };
+                oa.value + "-" + ob.value
+            }
+
+            function main() -> string {
+                chain(Ok { value: "x" }, Ok { value: "y" })
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("x-y".to_string())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn let_else_second_miss_skips_first_binding() -> anyhow::Result<()> {
+    // First let-else succeeds, second fails. Else of the second runs and
+    // returns; the rest of the function never executes.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            class Ok { value string }
+            class Err { message string }
+
+            function chain(a: Ok | Err, b: Ok | Err) -> string {
+                let oa: Ok = a else { return "a-failed"; };
+                let ob: Ok = b else { return "b-failed"; };
+                oa.value + "-" + ob.value
+            }
+
+            function main() -> string {
+                chain(Ok { value: "x" }, Err { message: "boom" })
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("b-failed".to_string())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn let_else_throw_in_else_is_caught_by_outer_catch() -> anyhow::Result<()> {
+    // A thrown value from the else branch participates in the surrounding
+    // throws contract — an enclosing `catch` block must receive it. This
+    // checks that throws-analysis on `Stmt::Let.else_branch` correctly
+    // surfaces the thrown type.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            class Ok { value string }
+            class Err { message string }
+            class NoMatch {}
+
+            function inner(r: Ok | Err) -> string throws NoMatch {
+                let o: Ok = r else { throw NoMatch {}; };
+                o.value
+            }
+
+            function main() -> string {
+                inner(Err { message: "ignored" }) catch (e) {
+                    NoMatch => "caught"
+                }
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("caught".to_string())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
 async fn let_else_throw_in_else_propagates_when_uncaught() -> anyhow::Result<()> {
     // `throw` in the else branch is a diverging form. When uncaught, the
     // thrown value escapes the function and the engine reports the error.
