@@ -1,7 +1,7 @@
 //! Instruction set and bytecode representation.
 
 use baml_base::Span;
-use serde::{Deserialize, Serialize};
+use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{GlobalIndex, ObjectIndex, types::ConstValue};
 
@@ -13,7 +13,7 @@ use crate::{GlobalIndex, ObjectIndex, types::ConstValue};
 ///
 /// Maps a contiguous range of integer values to jump offsets.
 /// Values outside the range or "holes" jump to the default offset.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct JumpTableData {
     /// Minimum discriminant value (maps to index 0).
     pub min: i64,
@@ -98,7 +98,7 @@ impl JumpTableData {
 ///   Optimized at Compile Time"
 /// - Dietz 1992, "Coding Multiway Branches Using Customized Hash Functions"
 /// - Proposed for LLVM (issue #96971), Roslyn (#66604), Go (#34381)
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct MatchHashTable {
     /// Multiplicative hash constant, found at compile time.
     pub multiply: u64,
@@ -117,7 +117,7 @@ pub struct MatchHashTable {
 }
 
 /// Single entry in a [`MatchHashTable`].
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct MatchHashEntry {
     /// The type tag expected at this slot (for verification).
     pub expected_tag: i64,
@@ -126,7 +126,7 @@ pub struct MatchHashEntry {
 }
 
 /// One field copy performed by `Instruction::InitSpread`.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct FieldCopy {
     /// Field index read from the source instance.
     pub source: usize,
@@ -135,7 +135,7 @@ pub struct FieldCopy {
 }
 
 /// A compact field-copy program for class/object spread initialization.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct FieldCopySet {
     /// Ordered field copies. Runtime reads all source values before writing so
     /// overlapping source/destination objects behave like a simultaneous copy.
@@ -143,7 +143,7 @@ pub struct FieldCopySet {
 }
 
 /// A compact class initialization program used by `Instruction::InitInstance`.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct ClassInitPlan {
     /// Class object allocated by the instruction.
     pub class_obj: ObjectIndex,
@@ -182,7 +182,7 @@ pub struct ClassInitPlan {
 /// Instead store the state or complex structure in the `Vm` struct (in `bex_vm` crate) and
 /// find a way to reference it with very simple instructions.
 #[allow(clippy::large_enum_variant)]
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub enum Instruction {
     /// Loads a constant from the bytecode's constant pool.
     ///
@@ -691,7 +691,8 @@ pub enum Instruction {
 /// Each variant maps to a 1-byte opcode in the `CompactCode.code` stream.
 /// The operand format is determined by the opcode — see `OpCode::encoded_size()`.
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+#[borsh(use_discriminant = true)]
 pub enum OpCode {
     // ── Unit ops (no operands, 1 byte) ─────────────────────────
     Return = 0,
@@ -1176,7 +1177,7 @@ pub fn read_i8(code: &[u8], pc: &mut usize) -> i8 {
 /// Block notification metadata stored in the Function struct.
 /// The `function_name` field is populated at runtime from the Function containing this notification.
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct BlockNotification {
     pub function_name: String, // Populated at runtime from Function::name
     pub block_name: String,
@@ -1185,7 +1186,7 @@ pub struct BlockNotification {
     pub is_enter: bool,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub enum BlockNotificationType {
     Statement,
     If,
@@ -1196,7 +1197,7 @@ pub enum BlockNotificationType {
 
 /// Visualization node metadata stored in the Function struct.
 /// Used for control flow visualization (branches, loops, scopes).
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct VizNodeMeta {
     /// Unique node ID within this function.
     pub node_id: u32,
@@ -1213,7 +1214,7 @@ pub struct VizNodeMeta {
 }
 
 /// Type of visualization node.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub enum VizNodeType {
     /// Root of a function's control flow.
     FunctionRoot,
@@ -1230,7 +1231,7 @@ pub enum VizNodeType {
 }
 
 /// Delta type for viz execution events.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub enum VizExecDelta {
     /// Entering a visualization node.
     Enter,
@@ -1239,7 +1240,7 @@ pub enum VizExecDelta {
 }
 
 /// Visualization execution event emitted when entering/exiting a viz node.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct VizExecEvent {
     /// Enter or exit.
     pub delta: VizExecDelta,
@@ -1253,7 +1254,7 @@ pub struct VizExecEvent {
     pub header_level: Option<u8>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub enum BinOp {
     Add,
     Sub,
@@ -1267,7 +1268,7 @@ pub enum BinOp {
     Shr,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub enum CmpOp {
     Eq,
     NotEq,
@@ -1277,7 +1278,7 @@ pub enum CmpOp {
     GtEq,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub enum UnaryOp {
     Not,
     Neg,
@@ -1431,7 +1432,7 @@ impl std::fmt::Display for Instruction {
 ///
 /// Populated by the compiler at emit time so that debug display doesn't
 /// need to resolve names from the `ObjectPool` or runtime stack.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub enum OperandMeta {
     /// `LoadVar`, `StoreVar`, `Watch`, `Unwatch`, `Notify` — variable name.
     Var(String),
@@ -1465,7 +1466,7 @@ impl OperandMeta {
 ///
 /// Parallel to `Bytecode::instructions`. Contains resolved operand names for
 /// debug display.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, BorshSerialize, BorshDeserialize)]
 pub struct InstructionMeta {
     /// Resolved operand name (if applicable to the instruction type).
     pub operand: Option<OperandMeta>,
@@ -1474,7 +1475,7 @@ pub struct InstructionMeta {
 /// Run-length encoded source mapping entry.
 ///
 /// Each entry applies from `pc` (inclusive) until the next entry.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct LineTableEntry {
     /// Bytecode program counter where this entry begins.
     pub pc: usize,
@@ -1489,7 +1490,7 @@ pub struct LineTableEntry {
 }
 
 /// Debug metadata for a named local variable and its lexical scope.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct DebugLocalScope {
     /// Stack slot used by this local.
     pub slot: usize,
@@ -1512,7 +1513,7 @@ pub struct DebugLocalScope {
 /// handler. The handler bytecode is responsible for filtering: a
 /// `ThrowIfPanic` instruction before wildcard arms rethrows panics the
 /// programmer didn't explicitly name.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct ExceptionTableEntry {
     /// First protected instruction (inclusive).
     pub start_pc: usize,
@@ -1538,7 +1539,7 @@ impl ExceptionTableEntry {
 /// Compact jump table: maps discriminant values to i32 byte offsets
 /// (relative to the end of the `JumpTable` instruction in the compact stream).
 /// Parallel to `Bytecode::jump_tables` but with translated offsets.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct CompactJumpTable {
     /// Minimum discriminant value (maps to index 0), same as `JumpTableData::min`.
     pub min: i64,
@@ -1565,7 +1566,7 @@ impl CompactJumpTable {
 /// A re-encoding of `Vec<Instruction>` as `Vec<u8>` with 1-byte opcodes and
 /// fixed u32 operands. Produced by `Bytecode::lower_to_compact()` at engine
 /// load time. The line table and exception table are translated to byte-offset PCs.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct CompactCode {
     /// The encoded instruction stream.
     pub code: Vec<u8>,
@@ -1607,7 +1608,7 @@ impl CompactCode {
 /// Executable bytecode.
 ///
 /// Contains the instructions to run and all the associated constants.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Bytecode {
     /// Sequence of instructions.
     pub instructions: Vec<Instruction>,
@@ -1618,7 +1619,7 @@ pub struct Bytecode {
 
     /// Resolved constants (runtime, populated at load time).
     /// Contains `HeapPtr` for object references. Used by `LoadConst`.
-    #[serde(skip)]
+    #[borsh(skip)]
     pub resolved_constants: Vec<crate::Value>,
 
     /// Jump tables for switch dispatch (indexed by `JumpTable` instruction).
@@ -1628,7 +1629,6 @@ pub struct Bytecode {
     pub field_copy_sets: Vec<FieldCopySet>,
 
     /// Class initialization programs used by `InitInstance`.
-    #[serde(default)]
     pub class_init_plans: Vec<ClassInitPlan>,
 
     /// Perfect hash tables for sparse `TypeTag` switch dispatch.
@@ -1653,7 +1653,7 @@ pub struct Bytecode {
 
     /// Compact bytecode encoding. Populated at engine load time by
     /// `lower_to_compact()`. `None` until lowering runs.
-    #[serde(skip)]
+    #[borsh(skip)]
     pub compact: Option<CompactCode>,
 }
 

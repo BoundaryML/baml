@@ -12,7 +12,7 @@ use std::{
 // Re-export core baml_base types so downstream crates can depend on baml_type
 // instead of baml_base directly.
 pub use baml_base::{Literal, MediaKind, Name, Span};
-use serde::{Deserialize, Serialize};
+use borsh::{BorshDeserialize, BorshSerialize};
 
 mod attr;
 mod defs;
@@ -28,7 +28,7 @@ pub use template::TyTemplate;
 /// Replaces both `QualifiedName` (VIR+) and plain `String` keys.
 /// `display_name` is pre-computed from the source FQN and does NOT participate
 /// in equality/hashing — it's a cache for display purposes.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
 pub struct TypeName {
     /// Short name: "Response", "User"
     pub name: Name,
@@ -108,7 +108,7 @@ impl fmt::Display for TypeName {
 /// variants) that holds SAP streaming annotations. All existing code uses
 /// `TyAttr::default()` — only stream type generation (HIR lowering) will populate
 /// non-default values.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub enum Ty {
     // --- Core: used by all VIR+ stages ---
     Int {

@@ -18,6 +18,7 @@ workspace = true
 
 [dependencies]
 ariadne = { workspace = true }
+borsh = { workspace = true }
 salsa = { workspace = true }
 serde = { workspace = true }
 smol_str = { workspace = true }

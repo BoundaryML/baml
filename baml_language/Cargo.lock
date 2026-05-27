@@ -977,6 +977,7 @@ name = "baml_base"
 version = "0.0.0-beta"
 dependencies = [
  "ariadne",
+ "borsh",
  "salsa",
  "serde",
  "smol_str 0.3.6",
@@ -1061,7 +1062,7 @@ dependencies = [
  "bex_events",
  "bex_events_native",
  "bex_vm_types",
- "bitcode",
+ "borsh",
  "clap",
  "clap-cargo",
  "codegen_python",
@@ -1276,9 +1277,9 @@ dependencies = [
  "baml_type",
  "bex_engine",
  "bex_vm_types",
+ "borsh",
  "clap",
  "console",
- "serde",
  "serde_json",
  "sys_native",
  "tempfile",
@@ -1397,9 +1398,8 @@ dependencies = [
  "bex_engine",
  "bex_events",
  "bex_vm_types",
- "bitcode",
+ "borsh",
  "libsui",
- "serde",
  "sys_native",
  "tokio",
 ]
@@ -1491,7 +1491,7 @@ name = "baml_type"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
- "serde",
+ "borsh",
 ]
 
 [[package]]
@@ -1738,10 +1738,9 @@ dependencies = [
  "baml_builtins2_codegen",
  "baml_type",
  "bex_resource_types",
+ "borsh",
  "codspeed-divan-compat",
  "indexmap 2.14.0",
- "serde",
- "serde_json",
  "tokio",
  "tokio-util",
 ]
@@ -1760,30 +1759,6 @@ name = "bit-vec"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e764a1d40d510daf35e07be9eb06e75770908c27d411ee6c92109c9840eaaf7"
-
-[[package]]
-name = "bitcode"
-version = "0.6.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a6ed1b54d8dc333e7be604d00fa9262f4635485ffea923647b6521a5fff045d"
-dependencies = [
- "arrayvec",
- "bitcode_derive",
- "bytemuck",
- "glam",
- "serde",
-]
-
-[[package]]
-name = "bitcode_derive"
-version = "0.6.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "238b90427dfad9da4a9abd60f3ec1cdee6b80454bde49ed37f1781dd8e9dc7f9"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.117",
-]
 
 [[package]]
 name = "bitflags"
@@ -1858,8 +1833,23 @@ version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cfd1e3f8955a5d7de9fab72fc8373fade9fb8a703968cb200ae3dc6cf08e185a"
 dependencies = [
+ "borsh-derive",
  "bytes",
  "cfg_aliases",
+ "indexmap 2.14.0",
+]
+
+[[package]]
+name = "borsh-derive"
+version = "1.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bfcfdc083699101d5a7965e49925975f2f55060f94f9a05e7187be95d530ca59"
+dependencies = [
+ "once_cell",
+ "proc-macro-crate",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -3598,12 +3588,6 @@ dependencies = [
  "log",
  "xml-rs",
 ]
-
-[[package]]
-name = "glam"
-version = "0.32.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f70749695b063ecbf6b62949ccccde2e733ec3ecbbd71d467dca4e5c6c97cca0"
 
 [[package]]
 name = "glob"

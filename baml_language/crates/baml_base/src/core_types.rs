@@ -3,6 +3,7 @@
 use std::fmt;
 
 use ariadne;
+use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
 use text_size::{TextRange, TextSize};
@@ -33,7 +34,19 @@ use text_size::{TextRange, TextSize};
 ///
 /// - **Roslyn** (C#): synthetic `SyntaxTree`s constructed with a virtual file path.
 /// - **Clang**: bit 31 of `SourceLocation` distinguishes file vs macro-expansion locs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    Serialize,
+    Deserialize,
+    BorshSerialize,
+    BorshDeserialize,
+)]
 pub struct FileId(u32);
 
 impl FileId {
@@ -89,6 +102,32 @@ impl fmt::Display for FileId {
 pub struct Span {
     pub file_id: FileId,
     pub range: TextRange,
+}
+
+// `TextRange` (from the `text-size` crate) doesn't impl `BorshSerialize` /
+// `BorshDeserialize`, so we write the impls by hand as `(start_u32, end_u32)`
+// — the same shape `text-size`'s serde impl uses.
+impl BorshSerialize for Span {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        BorshSerialize::serialize(&self.file_id, writer)?;
+        let start: u32 = self.range.start().into();
+        let end: u32 = self.range.end().into();
+        BorshSerialize::serialize(&start, writer)?;
+        BorshSerialize::serialize(&end, writer)?;
+        Ok(())
+    }
+}
+
+impl BorshDeserialize for Span {
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let file_id = FileId::deserialize_reader(reader)?;
+        let start = u32::deserialize_reader(reader)?;
+        let end = u32::deserialize_reader(reader)?;
+        Ok(Span {
+            file_id,
+            range: TextRange::new(TextSize::new(start), TextSize::new(end)),
+        })
+    }
 }
 
 impl Default for Span {
@@ -204,7 +243,18 @@ impl fmt::Display for TypePath {
 }
 
 /// The types of media we support
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Copy,
+    Serialize,
+    Deserialize,
+    BorshSerialize,
+    BorshDeserialize,
+)]
 pub enum MediaKind {
     Image,
     Audio,
@@ -238,7 +288,19 @@ impl fmt::Display for MediaKind {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    BorshSerialize,
+    BorshDeserialize,
+)]
 pub enum Literal {
     Int(i64),
     Float(String),

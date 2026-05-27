@@ -20,7 +20,7 @@ use crate::output::OutputFormat;
 pub const PACK_SECTION_NAME: &str = "baaaaaaaaaaaaaml";
 
 /// One entry-point baked into a packaged binary.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct TargetEntry {
     /// Fully qualified name of the target function (engine form, includes
     /// any `user.` prefix). Used to look up the function at dispatch.
@@ -37,7 +37,7 @@ pub struct TargetEntry {
 }
 
 /// Dispatch shape baked into the binary.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum PackMode {
     /// One target, no subcommand layer. Flags on the binary bind directly
     /// to the target's parameters: `./summarize --text=hi`.
@@ -53,7 +53,7 @@ pub enum PackMode {
 /// Stable across `baml pack` / `baml-pack-host` versions built from the
 /// same source tree. Version-skew is the author's responsibility; a
 /// binary packed by `baml pack` ships its own host.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct PackEnvelope {
     /// The compiled BAML program.
     pub program: Program,
