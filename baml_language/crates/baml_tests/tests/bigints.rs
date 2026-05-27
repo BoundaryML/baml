@@ -10,7 +10,7 @@ use num_bigint::BigInt;
 // ─── bigint compound-assign & generics (one `int` operand allowed) ───────────
 
 #[tokio::test]
-async fn test_int_to_bigint_assign_op_add() {
+async fn test_bigint_compound_assign_int_add() {
     // `x += 1` on a `bigint` local desugars to `x = x + 1`; the `bigint + int`
     // operator accepts the lone `int` rhs (promoting it locally), so no move
     // coercion is needed.
@@ -27,7 +27,7 @@ async fn test_int_to_bigint_assign_op_add() {
 }
 
 #[tokio::test]
-async fn test_int_to_bigint_assign_op_mul() {
+async fn test_bigint_compound_assign_int_mul() {
     let output = baml_test!(
         r#"
         function main() -> bigint {
@@ -44,7 +44,7 @@ async fn test_int_to_bigint_assign_op_mul() {
 }
 
 #[tokio::test]
-async fn test_int_to_bigint_assign_op_nonliteral_rhs() {
+async fn test_bigint_compound_assign_int_nonliteral_rhs() {
     // Regression (review H1): compound assignment to a `bigint` with a
     // NON-literal `int` RHS — a negated literal, an int arithmetic
     // sub-expression, and an int-returning call. The operator self-promotes
@@ -340,7 +340,7 @@ async fn test_bigint_constant_fold_negative_shift_refused() {
 }
 
 #[tokio::test]
-async fn test_int_to_bigint_captured_in_lambda() {
+async fn test_bigint_compound_assign_int_in_lambda() {
     // `local_bigint += captured_int` inside a closure: the lambda boundary
     // resets `self.locals`, so widening must consult the captured binding's
     // declared type via TIR rather than the lambda-local table. Uses a

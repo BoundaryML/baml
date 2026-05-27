@@ -588,15 +588,21 @@ _MAX_BIGINT_HEX_LEN = (1 << 28) // 4 + 2
 
 
 def _parse_hex_bigint(s: str) -> int:
-    # Strip exactly one leading minus (matching the Node.js bridge); any
-    # other malformed prefix is left for `int(s, 16)` to reject.
-    magnitude = s[1:] if s.startswith("-") else s
+    # Strip exactly one leading minus (matching the other bridges).
+    negative = s.startswith("-")
+    magnitude = s[1:] if negative else s
     if len(magnitude) > _MAX_BIGINT_HEX_LEN:
         raise ValueError(
             f"bigint hex exceeds the workspace cap ({len(magnitude)} chars, "
             f"limit {_MAX_BIGINT_HEX_LEN})"
         )
-    return int(s, base=16)
+    # Strict hex: reject the `0x` prefixes, underscores, and surrounding
+    # whitespace that `int(s, 16)` would otherwise silently accept, matching
+    # the encoders' output and the Rust/JS bridges.
+    if not magnitude or not all(c in "0123456789abcdefABCDEF" for c in magnitude):
+        raise ValueError(f"invalid bigint hex string: {s!r}")
+    value = int(magnitude, base=16)
+    return -value if negative else value
 
 
 def _decode_literal(literal) -> Any:

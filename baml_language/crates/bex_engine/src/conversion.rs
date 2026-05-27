@@ -1362,14 +1362,22 @@ fn coerce_numeric_to_declared_type(
         // Unions containing both are left alone; `find_matching_union_member`
         // picks by value shape at the VM boundary.
         (v, Ty::Union(members, _)) => {
-            let has_int = members.iter().any(|m| matches!(m, Ty::Int { .. }));
-            let has_bigint = members.iter().any(|m| matches!(m, Ty::Bigint { .. }));
+            let has_int = members
+                .iter()
+                .any(|m| matches!(m, Ty::Int { .. } | Ty::Literal(Literal::Int(_), _)));
+            let has_bigint = members
+                .iter()
+                .any(|m| matches!(m, Ty::Bigint { .. } | Ty::Literal(Literal::Bigint(_), _)));
             if has_int == has_bigint {
                 Ok(v)
-            } else if let Some(target) = members
-                .iter()
-                .find(|m| matches!(m, Ty::Int { .. } | Ty::Bigint { .. }))
-            {
+            } else if let Some(target) = members.iter().find(|m| {
+                matches!(
+                    m,
+                    Ty::Int { .. }
+                        | Ty::Bigint { .. }
+                        | Ty::Literal(Literal::Int(_) | Literal::Bigint(_), _)
+                )
+            }) {
                 coerce_numeric_to_declared_type(v, target)
             } else {
                 Ok(v)

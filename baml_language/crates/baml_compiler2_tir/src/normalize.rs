@@ -1837,9 +1837,9 @@ mod tests {
     #[test]
     fn test_map_invariant_no_int_to_bigint_value_widening() {
         let aliases = HashMap::new();
-        // `Map` is invariant — scalar `int <: bigint` widening is still
-        // allowed at scalar position but does **not** propagate through
-        // container values.
+        // `Map` is invariant, and `int` is not a subtype of `bigint` anywhere
+        // (no implicit numeric widening), so `map<string, int>` is not a
+        // subtype of `map<string, bigint>`.
         assert!(!is_subtype_of(
             &Ty::Map(
                 Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),

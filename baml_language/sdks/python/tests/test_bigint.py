@@ -17,9 +17,7 @@ function EchoBigint(x: bigint) -> bigint {
 
 
 def make_runtime(baml_source: str) -> BamlRuntime:
-    return BamlRuntime.initialize_runtime(
-        ".", {"main.baml": baml_source}, sdk_root="__bridge_python_tests__"
-    )
+    return BamlRuntime.initialize_runtime(".", {"main.baml": baml_source})
 
 
 class TestBigintRoundTripSync:

@@ -35,13 +35,15 @@ pub fn inbound_to_external(
                 // `MAX_BIGINT_BITS` guard fires. Sized to match that VM cap
                 // (~268M bits ≈ 67M hex digits, +2 for sign and slack).
                 const MAX_BIGINT_HEX_LEN: usize = (1 << 28) / 4 + 2;
-                // Hex / base sixteen on the wire. `parse_bytes` honors a leading `-` for negatives.
-                let trimmed = s.trim();
-                let len = trimmed.len();
+                // Hex / base sixteen on the wire, parsed strictly: `parse_bytes`
+                // accepts only `[0-9a-fA-F]` plus an optional leading `-`/`+`
+                // (no `0x` prefix, underscores, or surrounding whitespace),
+                // matching the encoders' output and the Python/JS bridges.
+                let len = s.len();
                 if len > MAX_BIGINT_HEX_LEN {
                     return Err(CtypesError::InvalidBigint { len });
                 }
-                let bi = num_bigint::BigInt::parse_bytes(trimmed.as_bytes(), 16)
+                let bi = num_bigint::BigInt::parse_bytes(s.as_bytes(), 16)
                     .ok_or(CtypesError::InvalidBigint { len })?;
                 Ok(BexExternalValue::Bigint(bi))
             }
