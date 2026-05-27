@@ -22,11 +22,6 @@ function EvolvingRetype() -> bigint[] {
     a
 }
 
-// A scalar `int` still widens to `bigint`.
-function ScalarIntToBigint(x: int) -> bigint {
-    x
-}
-
 // `int[]` is assignable to `int[]` (reflexive).
 function IntArrayIdentity() -> int[] {
     let a = [1, 2];

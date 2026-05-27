@@ -1247,29 +1247,26 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         // The arms below bridge between the builtin `Class<Array, [T]>` /
         // `Class<Map, [K, V]>` wrapper types and their raw `List<T>` /
-        // `Map<K, V>` shapes. The element-type checks must use the
-        // coercion-free relation — `List`/`Map` are invariant, so an
-        // `int[]` argument must not slide into an `Array<bigint>` slot via
-        // the scalar `int <: bigint` rule. (If the outer `is_subtype` had
-        // permitted this it would have returned `true` above; we get here
-        // only when the shapes differ.)
+        // `Map<K, V>` shapes, recursing structurally on the element types.
+        // `List`/`Map` are invariant, so an `int[]` argument does not satisfy
+        // an `(int | string)[]` slot.
         match (&expanded_expected, &expanded_got) {
             (Ty::Class(class_name, expected_args, _), Ty::List(actual_inner, _))
                 if class_name.is_builtin_root_type("Array") && expected_args.len() == 1 =>
             {
-                self.is_coercion_free_subtype(actual_inner, &expected_args[0])
+                self.is_subtype(actual_inner, &expected_args[0])
             }
             (Ty::Class(class_name, expected_args, _), Ty::EvolvingList(actual_inner, _))
                 if class_name.is_builtin_root_type("Array") && expected_args.len() == 1 =>
             {
-                self.is_coercion_free_subtype(actual_inner, &expected_args[0])
+                self.is_subtype(actual_inner, &expected_args[0])
             }
             (
                 Ty::Class(class_name, expected_args, _),
                 Ty::Map(actual_key, actual_val, _) | Ty::EvolvingMap(actual_key, actual_val, _),
             ) if class_name.is_builtin_root_type("Map") && expected_args.len() == 2 => {
-                self.is_coercion_free_subtype(actual_key, &expected_args[0])
-                    && self.is_coercion_free_subtype(actual_val, &expected_args[1])
+                self.is_subtype(actual_key, &expected_args[0])
+                    && self.is_subtype(actual_val, &expected_args[1])
             }
             _ => false,
         }
@@ -1665,33 +1662,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                         attr: TyAttr::default(),
                     });
             let got_ty = self.infer_expr(default_expr, &defaults.exprs);
-            if !matches!(expected_ty, Ty::Unknown { .. } | Ty::Error { .. }) {
-                if !self.argument_matches_expected(&got_ty, &expected_ty) {
-                    self.report_at_span(
-                        TirTypeError::TypeMismatch {
-                            expected: expected_ty,
-                            got: got_ty,
-                        },
-                        default_span,
-                    );
-                } else if self.is_subtype(&got_ty, &expected_ty)
-                    && !self.is_coercion_free_subtype(&got_ty, &expected_ty)
-                {
-                    // The default value lands directly in the parameter slot —
-                    // the default-parameter prologue performs no `int → bigint`
-                    // widening (unlike call-site arguments) — so a
-                    // representation-changing coercion is unsound here. Require
-                    // the default to already carry the parameter's type
-                    // (e.g. `0n` for a `bigint` parameter), mirroring the
-                    // container-element invariance check.
-                    self.report_at_span(
-                        TirTypeError::TypeMismatch {
-                            expected: expected_ty,
-                            got: got_ty,
-                        },
-                        default_span,
-                    );
-                }
+            if !matches!(expected_ty, Ty::Unknown { .. } | Ty::Error { .. })
+                && !self.argument_matches_expected(&got_ty, &expected_ty)
+            {
+                self.report_at_span(
+                    TirTypeError::TypeMismatch {
+                        expected: expected_ty,
+                        got: got_ty,
+                    },
+                    default_span,
+                );
             }
 
             let later_params: FxHashSet<Name> = params
@@ -3321,8 +3301,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 };
                 if let Some(elem_ty) = elem_ty {
                     for e in elements {
-                        let et = self.check_expr(*e, body, elem_ty);
-                        self.reject_coercive_container_element(*e, &et, elem_ty);
+                        self.check_expr(*e, body, elem_ty);
                     }
                     let ty = expected.clone();
                     self.record_expr_type(expr_id, ty.clone());
@@ -3333,21 +3312,17 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             // Object: if expected is Class(name), check fields against declared types.
             //
-            // Class fields are invariant — the same reasoning as `Array`/`Map`
-            // element types. Without the coercion-free element check, an `int`
-            // expression silently lands in a `bigint`-typed field (the runtime
-            // does no field-level widening), so the field would hold an int at
-            // runtime despite its declared type. Mirror the `Array`/`Map`
-            // arms above: still call `check_expr` for nested promotion
-            // (object → class, etc.), then re-verify with the coercion-free
-            // relation.
+            // Class fields are invariant, like `Array`/`Map` elements. Checking
+            // each field against its declared type rejects a mismatched value
+            // (e.g. an `int` field expression against a `bigint` field — `int`
+            // is not a subtype of `bigint`, and the runtime does no field-level
+            // widening, so it must be written `1n`).
             Expr::Object { fields, .. } => {
                 if let Ty::Class(class_name, type_args, _) = expected {
                     let field_types = self.lookup_class_fields(class_name, type_args);
                     for (field_name, field_expr) in fields {
                         if let Some(declared_ty) = field_types.get(field_name) {
-                            let ft = self.check_expr(*field_expr, body, declared_ty);
-                            self.reject_coercive_container_element(*field_expr, &ft, declared_ty);
+                            self.check_expr(*field_expr, body, declared_ty);
                         } else {
                             self.infer_expr(*field_expr, body);
                         }
@@ -3366,10 +3341,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                 };
                 if let Some((key_ty, val_ty)) = kv {
                     for (k, v) in entries {
-                        let kt = self.check_expr(*k, body, key_ty);
-                        self.reject_coercive_container_element(*k, &kt, key_ty);
-                        let vt = self.check_expr(*v, body, val_ty);
-                        self.reject_coercive_container_element(*v, &vt, val_ty);
+                        self.check_expr(*k, body, key_ty);
+                        self.check_expr(*v, body, val_ty);
                     }
                     let ty = expected.clone();
                     self.record_expr_type(expr_id, ty.clone());
@@ -7788,44 +7761,6 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// and performs equirecursive structural subtyping.
     fn is_subtype(&self, sub: &Ty, sup: &Ty) -> bool {
         crate::normalize::is_subtype_of(sub, sup, &self.aliases)
-    }
-
-    /// Subtype check that rejects representation-changing numeric coercions
-    /// (`int` → `bigint`). Used to check the element types of container
-    /// literals — `List`/`Map` are invariant, so `[1, 2]` does not satisfy
-    /// a `bigint[]` slot.
-    fn is_coercion_free_subtype(&self, sub: &Ty, sup: &Ty) -> bool {
-        crate::normalize::is_coercion_free_subtype_of(sub, sup, &self.aliases)
-    }
-
-    /// Container element types and class field types are invariant. A numeric
-    /// coercion (`int` → `bigint`) that is valid at a scalar position must
-    /// not slip through a container literal or class-literal field — `[1, 2]`
-    /// is an `int[]`, not a `bigint[]` (write `[1n, 2n]`), and `{ x: 1 }` is
-    /// not an instance of `{ x: bigint }`. Reports a mismatch when
-    /// `elem_actual` only satisfies `elem_expected` via such a coercion.
-    ///
-    /// Used by the `Expr::Array`, `Expr::Map`, and `Expr::Object` arms of
-    /// `check_expr` — each one calls this after the per-element/field
-    /// `check_expr` to enforce invariance.
-    fn reject_coercive_container_element(
-        &mut self,
-        elem: ExprId,
-        elem_actual: &Ty,
-        elem_expected: &Ty,
-    ) {
-        if self.is_subtype(elem_actual, elem_expected)
-            && !self.is_coercion_free_subtype(elem_actual, elem_expected)
-        {
-            self.context.report(
-                TirTypeError::TypeMismatch {
-                    expected: elem_expected.clone(),
-                    got: elem_actual.clone(),
-                },
-                elem,
-                Vec::new(),
-            );
-        }
     }
 
     /// Type intersection (greatest common subtype). Used by match-arm

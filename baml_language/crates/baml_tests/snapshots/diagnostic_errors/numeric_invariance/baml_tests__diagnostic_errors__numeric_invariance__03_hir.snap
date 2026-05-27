@@ -20,6 +20,9 @@ function user.IntFieldIntoBigintClass() -> user.BigintHolder  [expr] {
 function user.IntLiteralArrayToBigint() -> bigint[]  [expr] {
   {  } [1, 2]
 }
+function user.IntLiteralToBigint() -> bigint  [expr] {
+  {  } 1
+}
 function user.IntLiteralToFloat() -> float  [expr] {
   {  } 1
 }
@@ -28,6 +31,9 @@ function user.IntMapLiteralToBigint() -> map<string, bigint>  [expr] {
 }
 function user.IntMapToBigintMap() -> map<string, bigint>  [expr] {
   { let m = map { "a": 1 } } m
+}
+function user.IntToBigint(x: int) -> bigint  [expr] {
+  {  } x
 }
 function user.IntToFloat(x: int) -> float  [expr] {
   {  } x

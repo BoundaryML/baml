@@ -90,21 +90,6 @@ fn user.IntArrayIdentity() -> int[] {
     }
 }
 
-fn user.ScalarIntToBigint(x: int) -> bigint {
-    // Locals:
-    let _0: bigint // _0 // return
-    let _1: int // x // param
-
-    bb0: {
-        _0 = copy _1;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.BigintCounter.from_json(j: baml.json.json) -> BigintCounter {
     // Locals:
     let _0: BigintCounter // _0 // return

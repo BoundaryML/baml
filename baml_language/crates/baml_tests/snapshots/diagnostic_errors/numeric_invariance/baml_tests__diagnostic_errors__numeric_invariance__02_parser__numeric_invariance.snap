@@ -42,6 +42,43 @@ SOURCE_FILE
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
+    WORD "IntToBigint"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "bigint"
+      WORD "bigint"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+    x
+}"
+        L_BRACE "{"
+        WORD "x"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "IntLiteralToBigint"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "bigint"
+      WORD "bigint"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+    1
+}"
+        L_BRACE "{"
+        INTEGER_LITERAL "1"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
     WORD "IntArrayToBigintArray"
     PARAMETER_LIST "()"
       L_PAREN "("

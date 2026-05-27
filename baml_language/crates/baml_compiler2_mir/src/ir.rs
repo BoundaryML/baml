@@ -695,14 +695,6 @@ pub enum Rvalue {
     /// Emitted by the `reflect.type_of<T>()` intrinsic.
     /// Lowers to `Instruction::LoadType(const_idx)` in bytecode.
     LoadType(TyTemplate),
-
-    /// Widen an `Int` operand to `Bigint`.
-    ///
-    /// Inserted by the MIR lowering pass at implicit widening sites where an
-    /// `int` expression is used in a `bigint` context (annotated `let`,
-    /// function return, argument passing).  Lowers to
-    /// `Instruction::IntToBigint` in bytecode.
-    IntToBigint(Operand),
 }
 
 /// The kind of aggregate being constructed.

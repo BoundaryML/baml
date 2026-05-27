@@ -528,20 +528,13 @@ impl Ty {
     /// - All real type checking (where those variants matter) happens in TIR
     ///
     /// Structural subtyping for `Ty`. This is the runtime / SAP analogue of
-    /// `baml_compiler2_tir::normalize::is_subtype_of` and is intentionally
-    /// **coercion-free** — only representation-preserving widenings are
-    /// allowed. Representation-changing numeric coercions (`int → bigint`,
-    /// `int → float`, and their literal forms) are rejected here even at
-    /// scalar position, because:
-    ///   1. `List`/`Map` are invariant (see TIR `normalize.rs`); allowing the
-    ///      coercive numeric rules would silently re-enable container
-    ///      covariance through the structural recursion below.
-    ///   2. The TIR-side scalar widening is realised by an explicit MIR
-    ///      coercion (`Rvalue::IntToBigint`), not by a subtype relation, so
-    ///      this `Ty::is_subtype_of` does not need to model it.
-    ///
-    /// Keep behaviour aligned with `crate::normalize::is_subtype_of`'s
-    /// coercion-free branch in TIR.
+    /// `baml_compiler2_tir::normalize::is_subtype_of`. The relation is purely
+    /// structural — only representation-preserving widenings are allowed.
+    /// Representation-changing numeric coercions (`int → bigint`, `int → float`,
+    /// and their literal forms) are not subtype relations: `int → bigint`
+    /// happens only at the FFI boundary (`bex_engine::conversion`), and
+    /// `int → float` requires an explicit `float` literal. Keep behaviour
+    /// aligned with `crate::normalize::is_subtype_of` in TIR.
     pub fn is_subtype_of(&self, other: &Ty) -> bool {
         // Same types are subtypes
         if self == other {
@@ -593,11 +586,9 @@ impl Ty {
             ) => k1.is_subtype_of(k2) && v1.is_subtype_of(v2),
 
             // Note: `int <: bigint`, `int <: float`, and the literal-int
-            // widenings to bigint/float are intentionally absent — see the
-            // type-level doc comment. The TIR side keeps them as coercive
-            // scalar rules realised via MIR `IntToBigint` / runtime coercion;
-            // `baml_type::Ty::is_subtype_of` deliberately does not model
-            // those.
+            // widenings to bigint/float are intentionally absent — numeric
+            // types do not widen across representations in the type system (TIR
+            // matches this). `int → bigint` is an FFI-boundary coercion only.
             _ => false,
         }
     }
@@ -883,9 +874,8 @@ mod tests {
     #[test]
     fn test_int_not_subtype_of_bigint() {
         // Scalar int→bigint widening is a representation change (i64 → heap
-        // BigInt). TIR realises it via MIR `IntToBigint`, not via subtyping;
-        // `baml_type::Ty::is_subtype_of` is coercion-free so the rule is
-        // absent here too.
+        // BigInt) and is not a subtype relation in either `baml_type` or TIR;
+        // it happens only at the FFI boundary.
         assert!(!ty_int().is_subtype_of(&Ty::Bigint {
             attr: TyAttr::default()
         }));

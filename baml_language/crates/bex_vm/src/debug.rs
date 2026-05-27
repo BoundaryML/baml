@@ -224,7 +224,6 @@ pub(crate) fn display_instruction(
         | Instruction::CmpIntOp(_)
         | Instruction::CmpFloatOp(_)
         | Instruction::CmpBigintOp(_)
-        | Instruction::IntToBigint
         | Instruction::UnaryOp(_)
         | Instruction::AllocArray(_)
         | Instruction::AllocMap(_)
@@ -392,7 +391,6 @@ fn instruction_color(instruction: &Instruction) -> Color {
         | Instruction::CmpIntOp(_)
         | Instruction::CmpFloatOp(_)
         | Instruction::CmpBigintOp(_)
-        | Instruction::IntToBigint
         | Instruction::UnaryOp(_) => Color::BrightBlue,
         Instruction::Jump(_)
         | Instruction::PopJumpIfFalse(_)
@@ -830,7 +828,6 @@ fn display_instruction_textual(
         Instruction::CmpIntOp(op) => format!("cmp_int_op {op}"),
         Instruction::CmpFloatOp(op) => format!("cmp_float_op {op}"),
         Instruction::CmpBigintOp(op) => format!("cmp_bigint_op {op}"),
-        Instruction::IntToBigint => "int_to_bigint".to_string(),
         Instruction::UnaryOp(op) => format!("unary_op {op}"),
 
         // --- Allocation ---
@@ -1286,8 +1283,7 @@ pub fn display_compact_bytecode(
             | OpCode::Neg
             | OpCode::LoadNull
             | OpCode::LoadTrue
-            | OpCode::LoadFalse
-            | OpCode::IntToBigint => {
+            | OpCode::LoadFalse => {
                 writeln!(f)?;
             }
 

@@ -35,9 +35,6 @@ pub(crate) trait PullSink {
 
     fn binary_op(&mut self, op: BinOp) -> Result<(), Self::Error>;
     fn unary_op(&mut self, op: UnaryOp) -> Result<(), Self::Error>;
-    /// Widen an `Int` value on top of the stack to a `Bigint` heap object.
-    /// Stack effect: pops 1 (`Int`), pushes 1 (`Object::Bigint`).
-    fn int_to_bigint(&mut self) -> Result<(), Self::Error>;
 
     fn alloc_array(&mut self, len: usize) -> Result<(), Self::Error>;
     fn alloc_uint8array(&mut self, bytes: &[u8]) -> Result<(), Self::Error>;
@@ -442,9 +439,5 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
             unreachable!("MakeBoundMethod must be handled in emit_rvalue_pull")
         }
         Rvalue::LoadType(template) => sink.load_type(template),
-        Rvalue::IntToBigint(operand) => {
-            walk_operand_pull(sink, operand)?;
-            sink.int_to_bigint()
-        }
     }
 }

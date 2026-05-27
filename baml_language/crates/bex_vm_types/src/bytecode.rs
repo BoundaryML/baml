@@ -378,11 +378,6 @@ pub enum Instruction {
     /// `[left: Object::Bigint, right: Object::Bigint] → [Bool]`
     CmpBigintOp(CmpOp),
 
-    /// Widen an `Int` value to `Bigint`.
-    ///
-    /// `[Int] → [Object::Bigint]`
-    IntToBigint,
-
     /// Performs a unary operation.
     ///
     /// Format: `UNARY_OP op` where `op` is the unary operation to perform.
@@ -824,9 +819,6 @@ pub enum OpCode {
     CmpBigintGt,
     CmpBigintGtEq,
 
-    // ── Type widening (no operands, 1 byte) ────────────────────
-    IntToBigint,
-
     // ── Expanded unary (no operands, 1 byte) ───────────────────
     Not,
     Neg,
@@ -957,7 +949,6 @@ impl OpCode {
             | Self::CmpBigintLtEq
             | Self::CmpBigintGt
             | Self::CmpBigintGtEq
-            | Self::IntToBigint
             | Self::Not
             | Self::Neg
             | Self::LoadNull
@@ -1088,7 +1079,6 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::CmpBigintLtEq as u8 => Ok(Self::CmpBigintLtEq),
             x if x == Self::CmpBigintGt as u8 => Ok(Self::CmpBigintGt),
             x if x == Self::CmpBigintGtEq as u8 => Ok(Self::CmpBigintGtEq),
-            x if x == Self::IntToBigint as u8 => Ok(Self::IntToBigint),
             x if x == Self::Not as u8 => Ok(Self::Not),
             x if x == Self::Neg as u8 => Ok(Self::Neg),
             x if x == Self::LoadNull as u8 => Ok(Self::LoadNull),
@@ -1210,7 +1200,6 @@ impl std::fmt::Display for OpCode {
             Self::CmpBigintLtEq => "CMP_BIGINT_LT_EQ",
             Self::CmpBigintGt => "CMP_BIGINT_GT",
             Self::CmpBigintGtEq => "CMP_BIGINT_GT_EQ",
-            Self::IntToBigint => "INT_TO_BIGINT",
             Self::Not => "NOT",
             Self::Neg => "NEG",
             Self::LoadNull => "LOAD_NULL",
@@ -1486,7 +1475,6 @@ impl std::fmt::Display for Instruction {
             Instruction::CmpIntOp(op) => write!(f, "CMP_INT_OP {op}"),
             Instruction::CmpFloatOp(op) => write!(f, "CMP_FLOAT_OP {op}"),
             Instruction::CmpBigintOp(op) => write!(f, "CMP_BIGINT_OP {op}"),
-            Instruction::IntToBigint => f.write_str("INT_TO_BIGINT"),
             Instruction::UnaryOp(op) => write!(f, "UNARY_OP {op}"),
             Instruction::AllocArray(n) => write!(f, "ALLOC_ARRAY {n}"),
             Instruction::LoadArrayElement => f.write_str("LOAD_ARRAY_ELEMENT"),
@@ -1947,8 +1935,7 @@ impl Bytecode {
                 | Instruction::ShrBigint
                 | Instruction::CmpIntOp(_)
                 | Instruction::CmpFloatOp(_)
-                | Instruction::CmpBigintOp(_)
-                | Instruction::IntToBigint => {}
+                | Instruction::CmpBigintOp(_) => {}
 
                 // ── Constant specialization ──────────────────────────
                 Instruction::LoadConst(idx) => {
@@ -2329,7 +2316,6 @@ impl Bytecode {
                 CmpOp::Gt => OpCode::CmpBigintGt,
                 CmpOp::GtEq => OpCode::CmpBigintGtEq,
             },
-            Instruction::IntToBigint => OpCode::IntToBigint,
 
             // Jump variants
             Instruction::Jump(_) => OpCode::Jump,

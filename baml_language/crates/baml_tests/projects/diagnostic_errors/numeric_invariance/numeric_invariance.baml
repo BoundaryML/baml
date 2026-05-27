@@ -1,9 +1,10 @@
 // Regression tests for numeric subtyping invariance.
 //
-// - `int` is not a subtype of `float`: i64 values past 2^53 are not exactly
-//   representable as f64, so the conversion is lossy and must be explicit.
-// - `List`/`Map` are invariant. `int[]` is not assignable to `bigint[]` or
-//   `float[]`, even though a scalar `int` widens to `bigint`.
+// Numeric types do not widen across representations in the type system. `int`
+// is not a subtype of `bigint` (i64 vs heap BigInt) or `float` (i64 values past
+// 2^53 are not exactly representable as f64). The only conversions are the
+// `bigint × int` operators and the FFI boundary — never an implicit move or
+// subtype coercion. `List`/`Map` are invariant for the same reason.
 
 // Scalar int -> float is rejected.
 function IntToFloat(x: int) -> float {
@@ -12,6 +13,17 @@ function IntToFloat(x: int) -> float {
 
 // An int *literal* into a float slot is also rejected; write `1.0` explicitly.
 function IntLiteralToFloat() -> float {
+    1
+}
+
+// Scalar int -> bigint is rejected; write `1n` (or convert via an operator /
+// the FFI boundary).
+function IntToBigint(x: int) -> bigint {
+    x
+}
+
+// An int *literal* into a bigint slot is also rejected; write `1n`.
+function IntLiteralToBigint() -> bigint {
     1
 }
 
@@ -87,10 +99,8 @@ function IntFieldIntoBigintClass() -> BigintHolder {
     BigintHolder { count: 1 }
 }
 
-// A parameter default lands directly in the parameter slot — the
-// default-parameter prologue performs no `int -> bigint` widening (unlike
-// call-site arguments), so an `int` default for a `bigint` parameter must be
-// a compile error; write `0n`.
+// An `int` default for a `bigint` parameter is rejected — `int` is not a
+// subtype of `bigint`. Write `0n`.
 function BigintParamDefaultInt(x: bigint = 0) -> bigint {
     x
 }

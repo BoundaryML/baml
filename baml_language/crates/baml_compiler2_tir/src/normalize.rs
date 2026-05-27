@@ -19,25 +19,7 @@ pub(crate) fn is_subtype_of(sub: &Ty, sup: &Ty, aliases: &HashMap<QualifiedTypeN
     let recursive = find_recursive_aliases(aliases);
     let sub_norm = normalize(sub, aliases, &recursive);
     let sup_norm = normalize(sup, aliases, &recursive);
-    sub_norm.is_subtype_of(&sup_norm, &mut HashSet::new(), false)
-}
-
-/// Like [`is_subtype_of`], but rejects representation-changing numeric
-/// coercions (`int <: bigint`, int-literal `<: bigint`/`float`).
-///
-/// `int` may be coerced to `bigint` at a scalar position, but the element
-/// types of container literals are checked with this stricter relation so
-/// that `[1, 2]` does not silently satisfy a `bigint[]` slot — `List`/`Map`
-/// are invariant.
-pub(crate) fn is_coercion_free_subtype_of(
-    sub: &Ty,
-    sup: &Ty,
-    aliases: &HashMap<QualifiedTypeName, Ty>,
-) -> bool {
-    let recursive = find_recursive_aliases(aliases);
-    let sub_norm = normalize(sub, aliases, &recursive);
-    let sup_norm = normalize(sup, aliases, &recursive);
-    sub_norm.is_subtype_of(&sup_norm, &mut HashSet::new(), true)
+    sub_norm.is_subtype_of(&sup_norm, &mut HashSet::new())
 }
 
 /// Find all recursive type aliases via DFS.
@@ -124,20 +106,17 @@ struct StructuralFunctionParam {
 impl StructuralTy {
     /// Equirecursive subtyping with co-inductive assumptions.
     ///
-    /// When `coercion_free` is set, representation-changing numeric coercions
-    /// (`int <: bigint`, int-literal `<: bigint`/`float`) are rejected.
-    /// `List`/`Map` always recurse coercion-free, which makes them invariant:
-    /// `int[]` is not a subtype of `bigint[]`.
+    /// Purely structural: there are no representation-changing coercions in the
+    /// subtype relation (`int` is not a subtype of `bigint` or `float`). The
+    /// only numeric widenings are representation-preserving literal-to-base
+    /// (`literal 1 <: int`, `1n <: bigint`).
     fn is_subtype_of(
         &self,
         other: &StructuralTy,
-        assumptions: &mut HashSet<(StructuralTy, StructuralTy, bool)>,
-        coercion_free: bool,
+        assumptions: &mut HashSet<(StructuralTy, StructuralTy)>,
     ) -> bool {
-        // Co-inductive: if we've assumed this pair, it holds. The `coercion_free`
-        // flag is part of the key — a pair assumed in one mode must not satisfy
-        // a re-encounter in the other.
-        let pair = (self.clone(), other.clone(), coercion_free);
+        // Co-inductive: if we've assumed this pair, it holds.
+        let pair = (self.clone(), other.clone());
         if assumptions.contains(&pair) {
             return true;
         }
@@ -187,11 +166,11 @@ impl StructuralTy {
             // Mu unfolding
             (StructuralTy::Mu { var, body }, other) => {
                 let unfolded = substitute(body, var, self);
-                unfolded.is_subtype_of(other, assumptions, coercion_free)
+                unfolded.is_subtype_of(other, assumptions)
             }
             (self_ty, StructuralTy::Mu { var, body }) => {
                 let unfolded = substitute(body, var, other);
-                self_ty.is_subtype_of(&unfolded, assumptions, coercion_free)
+                self_ty.is_subtype_of(&unfolded, assumptions)
             }
 
             // TyVar (inside Mu bodies)
@@ -202,28 +181,25 @@ impl StructuralTy {
 
             // Optional<T> <: Optional<U> iff T <: U (covariance)
             (StructuralTy::Optional(inner), StructuralTy::Optional(opt_inner)) => {
-                inner.is_subtype_of(opt_inner, assumptions, coercion_free)
+                inner.is_subtype_of(opt_inner, assumptions)
             }
 
             // Union<T1, ..., Tn> <: Optional<U> iff every Ti is either Null or <: U
             (StructuralTy::Union(types), StructuralTy::Optional(opt_inner)) => {
                 types.iter().all(|t| {
-                    matches!(t, StructuralTy::Null)
-                        || t.is_subtype_of(opt_inner, assumptions, coercion_free)
+                    matches!(t, StructuralTy::Null) || t.is_subtype_of(opt_inner, assumptions)
                 })
             }
 
             // Optional<T> <: Union  iff Null <: Union and T <: Union
             (StructuralTy::Optional(inner), StructuralTy::Union(types)) => {
                 types.iter().any(|t| matches!(t, StructuralTy::Null))
-                    && types
-                        .iter()
-                        .any(|t| inner.is_subtype_of(t, assumptions, coercion_free))
+                    && types.iter().any(|t| inner.is_subtype_of(t, assumptions))
             }
 
             // T <: Optional<T>
             (inner, StructuralTy::Optional(opt_inner)) => {
-                inner.is_subtype_of(opt_inner, assumptions, coercion_free)
+                inner.is_subtype_of(opt_inner, assumptions)
             }
 
             // Union<T1, T2> <: U iff all Ti <: U.
@@ -231,26 +207,26 @@ impl StructuralTy {
             // below — otherwise `Union(int, string) <: Union(int, string,
             // float)` matches `T <: Union` with T=Union, and asks whether
             // the LHS is one of the RHS members, which it isn't.)
-            (StructuralTy::Union(types), other) => types
-                .iter()
-                .all(|t| t.is_subtype_of(other, assumptions, coercion_free)),
-
-            // T <: T | U
-            (inner, StructuralTy::Union(types)) => types
-                .iter()
-                .any(|t| inner.is_subtype_of(t, assumptions, coercion_free)),
-
-            // List invariance: the element recursion is always coercion-free,
-            // so `int[]` is NOT a subtype of `bigint[]` even though the scalar
-            // `int <: bigint` holds. `never <: T` stays free, so empty lists
-            // (`list<never>`) remain assignable anywhere.
-            (StructuralTy::List(inner1), StructuralTy::List(inner2)) => {
-                inner1.is_subtype_of(inner2, assumptions, true)
+            (StructuralTy::Union(types), other) => {
+                types.iter().all(|t| t.is_subtype_of(other, assumptions))
             }
 
-            // Map: invariant in both key and value — recursion is coercion-free
-            // (see `List` above), so numeric element widening does not leak
-            // through. `never`/literal-key widening stays free, so:
+            // T <: T | U
+            (inner, StructuralTy::Union(types)) => {
+                types.iter().any(|t| inner.is_subtype_of(t, assumptions))
+            }
+
+            // List invariance: element-wise structural subtyping. `int[]` is
+            // NOT a subtype of `bigint[]` (the element rule `int <: bigint` no
+            // longer exists). `never <: T` stays free, so empty lists
+            // (`list<never>`) remain assignable anywhere.
+            (StructuralTy::List(inner1), StructuralTy::List(inner2)) => {
+                inner1.is_subtype_of(inner2, assumptions)
+            }
+
+            // Map: invariant in both key and value. The relation is purely
+            // structural, so `map<string, int>` is not a subtype of
+            // `map<string, bigint>`. `never`/literal-key widening stays free:
             //   - map<never, T>   <: map<K, V>    (empty map is assignable anywhere)
             //   - map<"lit", T>   <: map<string, V>  (literal keys widen to string)
             //   - map<string, T>  <: map<string, V>  (same key type)
@@ -261,22 +237,18 @@ impl StructuralTy {
             (
                 StructuralTy::Map { key: k1, value: v1 },
                 StructuralTy::Map { key: k2, value: v2 },
-            ) => k1.is_subtype_of(k2, assumptions, true) && v1.is_subtype_of(v2, assumptions, true),
+            ) => k1.is_subtype_of(k2, assumptions) && v1.is_subtype_of(v2, assumptions),
 
-            // Int <: Bigint (numeric widening) — a representation-changing
-            // coercion (i64 → heap BigInt), so it is rejected when checking
-            // the element types of invariant containers.
-            (StructuralTy::Int, StructuralTy::Bigint) => !coercion_free,
-            // Note: neither `int` nor an int literal is a subtype of `float`.
-            // `int` is an i64, and i64 values past 2^53 are not exactly
-            // representable as f64; rather than special-casing a representability
-            // check on the literal, we reject the conversion uniformly and
-            // require an explicit float literal (`1.0`, not `1`).
+            // Numeric types do not widen across representations: `int` is
+            // neither a subtype of `bigint` (i64 vs heap BigInt) nor of `float`
+            // (i64 values past 2^53 are not exactly representable as f64). Write
+            // the target literal explicitly (`1n`, `1.0`), or rely on the
+            // `bigint × int` operators / the FFI boundary to convert at runtime.
 
-            // Literal types are subtypes of their base types. Int-literal to
-            // `bigint` is a coercion, so it is rejected coercion-free.
+            // Literal types are subtypes of their (same-representation) base
+            // type only: `literal 1 <: int`, `1n <: bigint`. An int literal is
+            // NOT a subtype of `bigint` — write `1n`.
             (StructuralTy::Literal(LiteralValue::Int(_)), StructuralTy::Int) => true,
-            (StructuralTy::Literal(LiteralValue::Int(_)), StructuralTy::Bigint) => !coercion_free,
             (StructuralTy::Literal(LiteralValue::Bigint(_)), StructuralTy::Bigint) => true,
             (StructuralTy::Literal(LiteralValue::Float(_)), StructuralTy::Float) => true,
             (StructuralTy::Literal(LiteralValue::String(_)), StructuralTy::String) => true,
@@ -285,17 +257,10 @@ impl StructuralTy {
             // EnumVariant(E, V) <: Enum(E)
             (StructuralTy::EnumVariant(e, _), StructuralTy::Enum(sup_e)) => e == sup_e,
 
-            // Function subtyping: contravariant params, covariant return —
-            // checked *coercion-free* in every position. A function value
-            // offers no boundary at which to insert a representation-changing
-            // coercion (`int → bigint`) on its arguments or result: an indirect
-            // call through the supertype hands raw values straight to the
-            // callee and back, with no widening site. So `fn() -> int` is not
-            // usable as `fn() -> bigint`, nor `fn(bigint)` as `fn(int)`, even
-            // though `int <: bigint` as a scalar. (To widen, wrap the call in a
-            // lambda whose own return/arg moves insert the coercion.) The
-            // `coercion_free` flag is forced to `true` here regardless of the
-            // surrounding context.
+            // Function subtyping: contravariant params, covariant return and
+            // throws. As everywhere, the relation is structural — there is no
+            // numeric coercion, so `fn() -> int` is not usable as
+            // `fn() -> bigint`, nor `fn(bigint)` as `fn(int)`.
             (
                 StructuralTy::Function {
                     params: params1,
@@ -308,10 +273,10 @@ impl StructuralTy {
                     throws: throws2,
                 },
             ) => {
-                if !ret1.is_subtype_of(ret2, assumptions, true) {
+                if !ret1.is_subtype_of(ret2, assumptions) {
                     return false;
                 }
-                if !throws1.is_subtype_of(throws2, assumptions, true) {
+                if !throws1.is_subtype_of(throws2, assumptions) {
                     return false;
                 }
                 function_params_subtype(params1, params2, assumptions)
@@ -331,13 +296,11 @@ impl StructuralTy {
     }
 }
 
-/// Subtype check for function parameter lists (contravariant). Always
-/// coercion-free: see the `Function` arm of [`StructuralTy::is_subtype_of`]
-/// for why a function boundary admits no `int → bigint` widening.
+/// Subtype check for function parameter lists (contravariant).
 fn function_params_subtype(
     sub_params: &[StructuralFunctionParam],
     sup_params: &[StructuralFunctionParam],
-    assumptions: &mut HashSet<(StructuralTy, StructuralTy, bool)>,
+    assumptions: &mut HashSet<(StructuralTy, StructuralTy)>,
 ) -> bool {
     let sub_required: Vec<_> = sub_params
         .iter()
@@ -353,7 +316,7 @@ fn function_params_subtype(
     }
 
     for (sub, sup) in sub_required.iter().zip(sup_required.iter()) {
-        if !sup.ty.is_subtype_of(&sub.ty, assumptions, true) {
+        if !sup.ty.is_subtype_of(&sub.ty, assumptions) {
             return false;
         }
     }
@@ -370,7 +333,7 @@ fn function_params_subtype(
         }) else {
             return false;
         };
-        if !sup.ty.is_subtype_of(&sub.ty, assumptions, true) {
+        if !sup.ty.is_subtype_of(&sub.ty, assumptions) {
             return false;
         }
     }
@@ -1285,13 +1248,13 @@ mod tests {
     }
 
     #[test]
-    fn test_int_subtype_of_bigint() {
-        // Scalar `int <: bigint` is still a coercive subtype relation — the
-        // compiler inserts `MIR::IntToBigint` at use sites. It is rejected
-        // when checking the **element types** of containers (invariant), but
-        // remains valid at scalar position.
+    fn test_int_not_subtype_of_bigint() {
+        // `int` is not a subtype of `bigint`: the relation is purely
+        // structural (i64 and heap BigInt are different representations).
+        // Widening happens only at the `bigint × int` operators and the FFI
+        // boundary, never as an implicit move/subtype coercion.
         let aliases = HashMap::new();
-        assert!(is_subtype_of(
+        assert!(!is_subtype_of(
             &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
             &Ty::Primitive(PrimitiveType::Bigint, TyAttr::default()),
             &aliases
@@ -1671,12 +1634,11 @@ mod tests {
     }
 
     #[test]
-    fn test_evolving_list_recurses_coercion_free() {
+    fn test_evolving_list_is_invariant() {
         let aliases = HashMap::new();
-        // `List`/`EvolvingList` are invariant — the inner recursion is
-        // coercion-free. So `EvolvingList(int) NOT <: List(bigint)` even
-        // though scalar `int <: bigint` holds (the latter is a coercive
-        // rule, blocked inside containers).
+        // `List`/`EvolvingList` are invariant. So `EvolvingList(int)` is NOT a
+        // subtype of `List(bigint)` — `int` is not a subtype of `bigint`
+        // anywhere, including inside containers.
         assert!(!is_subtype_of(
             &Ty::EvolvingList(
                 Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),

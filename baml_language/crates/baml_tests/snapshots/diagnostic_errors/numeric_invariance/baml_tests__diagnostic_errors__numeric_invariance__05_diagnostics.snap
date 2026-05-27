@@ -3,9 +3,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] error: type mismatch: expected float, got int
-    ╭─[ numeric_invariance.baml:10:5 ]
+    ╭─[ numeric_invariance.baml:11:5 ]
     │
- 10 │     x
+ 11 │     x
     │     ┬  
     │     ╰── type mismatch: expected float, got int
     │ 
@@ -13,19 +13,39 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: type mismatch: expected float, got 1
-    ╭─[ numeric_invariance.baml:15:5 ]
+    ╭─[ numeric_invariance.baml:16:5 ]
     │
- 15 │     1
+ 16 │     1
     │     ┬  
     │     ╰── type mismatch: expected float, got 1
     │ 
     │ Note: Error code: E0001
 ────╯
 
-  [type] error: type mismatch: expected bigint[], got int[]
-    ╭─[ numeric_invariance.baml:21:5 ]
+  [type] error: type mismatch: expected bigint, got int
+    ╭─[ numeric_invariance.baml:22:5 ]
     │
- 21 │     a
+ 22 │     x
+    │     ┬  
+    │     ╰── type mismatch: expected bigint, got int
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] error: type mismatch: expected bigint, got 1
+    ╭─[ numeric_invariance.baml:27:5 ]
+    │
+ 27 │     1
+    │     ┬  
+    │     ╰── type mismatch: expected bigint, got 1
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] error: type mismatch: expected bigint[], got int[]
+    ╭─[ numeric_invariance.baml:33:5 ]
+    │
+ 33 │     a
     │     ┬  
     │     ╰── type mismatch: expected bigint[], got int[]
     │ 
@@ -33,9 +53,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: type mismatch: expected bigint, got 1
-    ╭─[ numeric_invariance.baml:27:6 ]
+    ╭─[ numeric_invariance.baml:39:6 ]
     │
- 27 │     [1, 2]
+ 39 │     [1, 2]
     │      ┬  
     │      ╰── type mismatch: expected bigint, got 1
     │ 
@@ -43,9 +63,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: type mismatch: expected bigint, got 2
-    ╭─[ numeric_invariance.baml:27:9 ]
+    ╭─[ numeric_invariance.baml:39:9 ]
     │
- 27 │     [1, 2]
+ 39 │     [1, 2]
     │         ┬  
     │         ╰── type mismatch: expected bigint, got 2
     │ 
@@ -53,9 +73,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: type mismatch: expected float[], got int[]
-    ╭─[ numeric_invariance.baml:33:5 ]
+    ╭─[ numeric_invariance.baml:45:5 ]
     │
- 33 │     a
+ 45 │     a
     │     ┬  
     │     ╰── type mismatch: expected float[], got int[]
     │ 
@@ -63,9 +83,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: type mismatch: expected bigint, got 1
-    ╭─[ numeric_invariance.baml:38:7 ]
+    ╭─[ numeric_invariance.baml:50:7 ]
     │
- 38 │     [[1], [2]]
+ 50 │     [[1], [2]]
     │       ┬  
     │       ╰── type mismatch: expected bigint, got 1
     │ 
@@ -73,9 +93,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: type mismatch: expected bigint, got 2
-    ╭─[ numeric_invariance.baml:38:12 ]
+    ╭─[ numeric_invariance.baml:50:12 ]
     │
- 38 │     [[1], [2]]
+ 50 │     [[1], [2]]
     │            ┬  
     │            ╰── type mismatch: expected bigint, got 2
     │ 
@@ -83,9 +103,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: type mismatch: expected map<string, bigint>, got map<string, int>
-    ╭─[ numeric_invariance.baml:44:5 ]
+    ╭─[ numeric_invariance.baml:56:5 ]
     │
- 44 │     m
+ 56 │     m
     │     ┬  
     │     ╰── type mismatch: expected map<string, bigint>, got map<string, int>
     │ 
@@ -93,9 +113,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: type mismatch: expected bigint, got 1
-    ╭─[ numeric_invariance.baml:49:11 ]
+    ╭─[ numeric_invariance.baml:61:11 ]
     │
- 49 │     {"a": 1}
+ 61 │     {"a": 1}
     │           ┬  
     │           ╰── type mismatch: expected bigint, got 1
     │ 
@@ -103,9 +123,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: operator `Add` cannot be applied to `int?` and `int`
-    ╭─[ numeric_invariance.baml:55:5 ]
+    ╭─[ numeric_invariance.baml:67:5 ]
     │
- 55 │     x + y
+ 67 │     x + y
     │     ──┬──  
     │       ╰──── operator `Add` cannot be applied to `int?` and `int`
     │ 
@@ -113,9 +133,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: operator `BitAnd` cannot be applied to `int?` and `int`
-    ╭─[ numeric_invariance.baml:60:5 ]
+    ╭─[ numeric_invariance.baml:72:5 ]
     │
- 60 │     x & y
+ 72 │     x & y
     │     ──┬──  
     │       ╰──── operator `BitAnd` cannot be applied to `int?` and `int`
     │ 
@@ -123,9 +143,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: operator `Lt` cannot be applied to `int?` and `int`
-    ╭─[ numeric_invariance.baml:67:5 ]
+    ╭─[ numeric_invariance.baml:79:5 ]
     │
- 67 │     x < y
+ 79 │     x < y
     │     ──┬──  
     │       ╰──── operator `Lt` cannot be applied to `int?` and `int`
     │ 
@@ -133,9 +153,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: operator `Eq` cannot be applied to `float?` and `bigint`
-    ╭─[ numeric_invariance.baml:73:5 ]
+    ╭─[ numeric_invariance.baml:85:5 ]
     │
- 73 │     x == y
+ 85 │     x == y
     │     ───┬──  
     │        ╰──── operator `Eq` cannot be applied to `float?` and `bigint`
     │ 
@@ -143,9 +163,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: operator `Lt` cannot be applied to `float?` and `bigint`
-    ╭─[ numeric_invariance.baml:79:5 ]
+    ╭─[ numeric_invariance.baml:91:5 ]
     │
- 79 │     x < y
+ 91 │     x < y
     │     ──┬──  
     │       ╰──── operator `Lt` cannot be applied to `float?` and `bigint`
     │ 
@@ -153,9 +173,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: type mismatch: expected bigint, got 1
-    ╭─[ numeric_invariance.baml:87:27 ]
+    ╭─[ numeric_invariance.baml:99:27 ]
     │
- 87 │     BigintHolder { count: 1 }
+ 99 │     BigintHolder { count: 1 }
     │                           ┬  
     │                           ╰── type mismatch: expected bigint, got 1
     │ 
@@ -163,11 +183,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: type mismatch: expected bigint, got 0
-    ╭─[ numeric_invariance.baml:94:44 ]
-    │
- 94 │ function BigintParamDefaultInt(x: bigint = 0) -> bigint {
-    │                                            ┬  
-    │                                            ╰── type mismatch: expected bigint, got 0
-    │ 
-    │ Note: Error code: E0001
-────╯
+     ╭─[ numeric_invariance.baml:104:44 ]
+     │
+ 104 │ function BigintParamDefaultInt(x: bigint = 0) -> bigint {
+     │                                            ┬  
+     │                                            ╰── type mismatch: expected bigint, got 0
+     │ 
+     │ Note: Error code: E0001
+─────╯

@@ -1291,15 +1291,13 @@ pub(crate) fn coerce_arg_to_declared_type(
 
 /// Coerce an **outgoing** return value to match the declared return type.
 ///
-/// Handles the int↔bigint conversion at the FFI boundary: `int → bigint`
-/// widens unconditionally (mirrors the TIR scalar rule, realised at MIR
-/// level by `Rvalue::IntToBigint`), and `bigint → int` succeeds when the
-/// value fits in i64 — the latter is **not** a TIR subtype rule
-/// (`baml_type::Ty::is_subtype_of` is coercion-free; see
-/// `baml_compiler2_tir::normalize::is_subtype_of`), it is an
-/// FFI-boundary narrowing that errors on overflow rather than silently
-/// truncate. Also performs optional unwrap and numeric-singleton union
-/// routing.
+/// Handles int↔bigint conversion at the FFI boundary. These conversions exist
+/// **only** at the host boundary — the type system is purely structural and
+/// does not relate `int` and `bigint` (see
+/// `baml_compiler2_tir::normalize::is_subtype_of`). `int → bigint` widens
+/// unconditionally; `bigint → int` succeeds when the value fits in i64,
+/// erroring on overflow rather than silently truncating. Also performs optional
+/// unwrap and numeric-singleton union routing.
 ///
 /// Class / enum naming is intentionally *not* rewritten here — the
 /// engine-side FQN (e.g. `user.lorem.MyLorem`) is the authoritative
@@ -1315,17 +1313,18 @@ pub(crate) fn coerce_return_to_declared_type(
 /// Shared numeric / optional / union coercion used by both arg and return
 /// paths.
 ///
-/// Each arm here is the FFI-boundary realisation of a TIR coercion. See
-/// `baml_compiler2_tir::normalize::is_subtype_of` for the compile-time
-/// counterparts; `baml_type::Ty::is_subtype_of` documents the
-/// coercion-free relation these arms intentionally extend at runtime.
+/// These conversions exist only at the FFI boundary. The compile-time subtype
+/// relation (`baml_compiler2_tir::normalize::is_subtype_of`,
+/// `baml_type::Ty::is_subtype_of`) is purely structural and does **not** widen
+/// `int` to `bigint`; the arms below add that widening (plus a checked
+/// `bigint → int` narrowing) only when crossing the host boundary.
 fn coerce_numeric_to_declared_type(
     value: BexExternalValue,
     ty: &Ty,
 ) -> Result<BexExternalValue, EngineError> {
     match (value, ty) {
-        // Int → Bigint widening. Mirrors the TIR scalar coercion (TIR keeps
-        // `Int <: Bigint` as a coercive rule realised by MIR `IntToBigint`).
+        // Int → Bigint widening (FFI boundary only — `int` is not a subtype of
+        // `bigint` in the type system).
         (BexExternalValue::Int(i), Ty::Bigint { .. } | Ty::Literal(Literal::Bigint(_), _)) => {
             Ok(BexExternalValue::Bigint(num_bigint::BigInt::from(i)))
         }

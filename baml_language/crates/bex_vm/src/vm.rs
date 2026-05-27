@@ -1361,9 +1361,10 @@ impl BexVm {
     ///
     /// Refuses values exceeding `MAX_BIGINT_BITS` so a single arithmetic op
     /// (add/sub/mul/shl) can't materialise an arbitrarily large bigint and
-    /// blow out memory. Callers whose input is bounded — e.g. `int → bigint`
-    /// widening or a bounded-length literal parse — can never trip the check
-    /// in practice, but routing through this path keeps the guard central.
+    /// blow out memory. Callers whose input is bounded — e.g. a bounded-length
+    /// literal parse, or a small operand promoted in a `bigint × int` operator
+    /// — can never trip the check in practice, but routing through this path
+    /// keeps the guard central.
     ///
     /// On failure returns `VmError::Thrown` with an `AllocFailure` exception
     /// already constructed so instruction handlers can use `?` directly.
@@ -5213,22 +5214,6 @@ impl BexVm {
                     let l = self.pop_bigint_operand();
                     let value = self.bigint_binop(BinOp::Shr, l, r)?;
                     self.stack.push(value);
-                }
-
-                // ── Int-to-Bigint widening ────────────────────────────────────
-                OpCode::IntToBigint => {
-                    let v = self.stack.ensure_pop();
-                    if let Some(n) = v.as_int() {
-                        let bi = num_bigint::BigInt::from(n);
-                        let result = self.alloc_bigint(std::sync::Arc::new(bi))?;
-                        self.stack.push(result);
-                    } else {
-                        // Promote only the `int` arm of an `int → bigint` move;
-                        // any other value (an already-`bigint`, a `null`, or any
-                        // other member valid in the destination) passes through
-                        // unchanged.
-                        self.stack.push(v);
-                    }
                 }
 
                 // ── Expanded unary ────────────────────────────────────────────

@@ -1140,15 +1140,6 @@ impl PullSink for StackCarryPullSink<'_> {
         Ok(())
     }
 
-    fn int_to_bigint(&mut self) -> Result<(), Self::Error> {
-        // Stack effect: pop 1 (Int), push 1 (Object::Bigint).
-        if !self.sim.pop_n(1) {
-            return Err(());
-        }
-        self.sim.push();
-        Ok(())
-    }
-
     fn alloc_array(&mut self, len: usize) -> Result<(), Self::Error> {
         if !self.sim.pop_n(len) {
             return Err(());

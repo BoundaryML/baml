@@ -392,9 +392,6 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
             crate::Rvalue::LoadType(_) => {
                 // LoadType takes no local operands.
             }
-            crate::Rvalue::IntToBigint(operand) => {
-                scan_operand(operand, set);
-            }
         }
     }
 
@@ -593,9 +590,6 @@ fn count_in_rvalue(rv: &crate::Rvalue, uses: &mut [usize]) {
         }
         crate::Rvalue::LoadType(_) => {
             // LoadType takes no local operands.
-        }
-        crate::Rvalue::IntToBigint(operand) => {
-            count_in_operand(operand, uses);
         }
     }
 }
@@ -918,9 +912,6 @@ fn apply_subst_to_rvalue(rv: &mut crate::Rvalue, subst: &HashMap<Local, Operand>
         crate::Rvalue::LoadType(_) => {
             // LoadType takes no local operands — nothing to substitute.
         }
-        crate::Rvalue::IntToBigint(operand) => {
-            apply_subst_to_operand(operand, subst);
-        }
     }
 }
 
@@ -1143,9 +1134,6 @@ fn remap_rvalue(rv: &mut crate::Rvalue, map: &[Option<Local>]) {
         crate::Rvalue::LoadType(_) => {
             // LoadType takes no local operands — nothing to remap.
         }
-        crate::Rvalue::IntToBigint(operand) => {
-            remap_operand(operand, map);
-        }
     }
 }
 
@@ -1367,9 +1355,6 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                         }
                         crate::Rvalue::LoadType(_) => {
                             // LoadType takes no local operands — nothing to check.
-                        }
-                        crate::Rvalue::IntToBigint(op) => {
-                            check_operand(op, &blk);
                         }
                     }
                 }

@@ -58,8 +58,3 @@ function user.IntArrayIdentity() -> int[] {
     alloc_array 2
     return
 }
-
-function user.ScalarIntToBigint(x: int) -> bigint {
-    load_var x
-    return
-}

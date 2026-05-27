@@ -18,11 +18,6 @@ function user.EvolvingRetype() -> bigint[] throws never {
     a : bigint[]
   }
 }
-function user.ScalarIntToBigint(x: int) -> bigint throws never {
-  { : int
-    x : int
-  }
-}
 function user.IntArrayIdentity() -> int[] throws never {
   { : int[]
     let a = [1, 2] : int[]
