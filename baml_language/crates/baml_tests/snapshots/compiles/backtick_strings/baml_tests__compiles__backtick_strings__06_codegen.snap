@@ -96,18 +96,16 @@ function user.BacktickInterpInt(n: int) -> string {
 function user.BacktickInterpMultiline(name: string, count: int) -> string {
     load_var name
     call baml.String.to_string
-    store_var _6
+    store_var _5
     load_var count
     call baml.Int.to_string
-    store_var _7
+    store_var _6
     load_const "name:  "
-    load_var _6
+    load_var _5
     bin_op +
     load_const "\ncount: "
     bin_op +
-    load_var _7
-    bin_op +
-    load_const ""
+    load_var _6
     bin_op +
     return
 }

@@ -33,7 +33,7 @@ function user.BacktickInterpInt(n: int) -> string  [expr] {
   {  } "count: " Add {  } n.to_string()
 }
 function user.BacktickInterpMultiline(name: string, count: int) -> string  [expr] {
-  {  } "name:  " Add {  } name.to_string() Add "\ncount: " Add {  } count.to_string() Add ""
+  {  } "name:  " Add {  } name.to_string() Add "\ncount: " Add {  } count.to_string()
 }
 function user.BacktickInterpMultiple(first: string, last: string) -> string  [expr] {
   {  } {  } first.to_string() Add " " Add {  } last.to_string()

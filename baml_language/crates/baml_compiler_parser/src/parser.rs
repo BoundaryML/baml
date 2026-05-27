@@ -3379,17 +3379,27 @@ impl<'a> Parser<'a> {
         self.with_node(SyntaxKind::MATCH_EXPR, |p| {
             p.expect(TokenKind::Match);
 
-            // Scrutinee expression in parentheses
+            // Scrutinee expression — parens are optional, mirroring `if`
+            // and `while`. The `: Type` annotation is only accepted in the
+            // parenthesized form (the non-paren form ends the scrutinee at
+            // the `{` of the match body, so `match x: Type { ... }` would
+            // be ambiguous with a type-ascribed binding).
             if p.at(TokenKind::LParen) {
                 p.bump(); // (
                 p.parse_expr();
-                // Optional type annotation: match (expr : Type)
                 if p.eat(TokenKind::Colon) {
                     p.parse_type();
                 }
                 p.expect(TokenKind::RParen);
             } else {
-                p.error_unexpected_token("'(' after 'match'".to_string());
+                // No-paren form: scrutinee runs until the `{` of the match
+                // body. Suppress the object-literal postfix so a scrutinee
+                // like `match Foo { ... }` (where `Foo` happens to look
+                // like a constructor) doesn't gobble the match body's
+                // brace. Mirrors `spawn`'s approach.
+                p.suppress_object_literal_depth += 1;
+                p.parse_expr();
+                p.suppress_object_literal_depth -= 1;
             }
 
             // Match body with arms
@@ -7734,6 +7744,58 @@ type Searcher = (query: string, max_results?: int) -> int
         root.descendants()
             .find(|n| n.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
             .expect("expected BACKTICK_STRING_LITERAL node")
+    }
+
+    #[test]
+    fn match_scrutinee_parens_optional() {
+        // Host parser inconsistency: `if`/`while` accept parens-optional
+        // conditions, but `match` previously required parens. Bring it in
+        // line with the other control-flow forms.
+        let source = "
+function Demo(x: int) -> int {
+    match x {
+        1 => 10,
+        _ => 0,
+    }
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let m = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::MATCH_EXPR)
+            .expect("expected MATCH_EXPR");
+        assert!(m.text().to_string().contains("match x {"));
+    }
+
+    #[test]
+    fn match_scrutinee_with_type_annotation_no_parens() {
+        // `match (expr : Type)` was the only place the `: Type` annotation
+        // worked. With paren-optional, ensure the annotation still works
+        // when parens ARE present.
+        let source = "
+function Demo(x: int) -> int {
+    match (x : int) {
+        _ => 0,
+    }
+}
+";
+        let (_root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+    }
+
+    #[test]
+    fn match_paren_form_still_works() {
+        let source = "
+function Demo(x: int) -> int {
+    match (x) {
+        1 => 10,
+        _ => 0,
+    }
+}
+";
+        let (_root, errors) = parse_source(source);
+        assert_no_errors(&errors);
     }
 
     #[test]

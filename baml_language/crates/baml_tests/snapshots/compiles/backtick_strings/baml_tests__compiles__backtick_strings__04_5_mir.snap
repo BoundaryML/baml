@@ -209,21 +209,19 @@ fn user.BacktickInterpMultiline(name: string, count: int) -> string {
     let _4: string
     let _5: string
     let _6: string
-    let _7: string
 
     bb0: {
-        _6 = call const fn baml.String.to_string(copy _1) -> [bb1];
+        _5 = call const fn baml.String.to_string(copy _1) -> [bb1];
     }
 
     bb1: {
-        _5 = const "name:  " + copy _6;
-        _4 = copy _5 + const "\ncount: ";
-        _7 = call const fn baml.Int.to_string(copy _2) -> [bb2];
+        _4 = const "name:  " + copy _5;
+        _3 = copy _4 + const "\ncount: ";
+        _6 = call const fn baml.Int.to_string(copy _2) -> [bb2];
     }
 
     bb2: {
-        _3 = copy _4 + copy _7;
-        _0 = copy _3 + const "";
+        _0 = copy _3 + copy _6;
         goto -> bb3;
     }
 

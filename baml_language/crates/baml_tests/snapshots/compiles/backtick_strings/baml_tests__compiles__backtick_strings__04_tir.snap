@@ -118,7 +118,7 @@ function user.BacktickInterpCallsFn() -> string throws never {
 }
 function user.BacktickInterpMultiline(name: string, count: int) -> string throws never {
   { : string
-    "name:  " + { 0 stmts + tail }.to_string() + "\ncount: " + { 0 stmts + tail }.to_string() + "" : string
+    "name:  " + { 0 stmts + tail }.to_string() + "\ncount: " + { 0 stmts + tail }.to_string() : string
   }
 }
 function user.BacktickEscapedInterpStaysLiteral() -> string throws never {
