@@ -14,7 +14,7 @@ use std::{
     mem::MaybeUninit,
     sync::{
         Arc,
-        atomic::{AtomicU8, Ordering},
+        atomic::{AtomicU8, AtomicU64, Ordering},
     },
 };
 
@@ -538,8 +538,34 @@ pub struct Instance {
     /// `enclosing_generic_params()`: index 0 = first class param, etc.
     pub class_type_args: Vec<baml_type::Ty>,
 
-    /// Fields are accessed by index. No string lookups.
-    pub fields: Vec<Value>,
+    /// Fields are accessed by index. No string lookups. Each slot is atomic so
+    /// racing field reads/writes across `spawn` fibers cannot become a Rust
+    /// data race.
+    pub fields: Vec<AtomicValueSlot>,
+}
+
+impl Instance {
+    pub fn new(class: HeapPtr, class_type_args: Vec<baml_type::Ty>, fields: Vec<Value>) -> Self {
+        Self {
+            class,
+            class_type_args,
+            fields: fields.into_iter().map(AtomicValueSlot::new).collect(),
+        }
+    }
+
+    #[inline]
+    pub fn load_field(&self, idx: usize) -> Value {
+        self.fields[idx].load()
+    }
+
+    #[inline]
+    pub fn store_field(&self, idx: usize, value: Value) {
+        self.fields[idx].store(value);
+    }
+
+    pub fn field_values(&self) -> impl Iterator<Item = Value> + '_ {
+        self.fields.iter().map(AtomicValueSlot::load)
+    }
 }
 
 impl std::fmt::Display for Instance {
@@ -936,6 +962,62 @@ impl Default for Value {
     #[allow(clippy::inline_always)]
     fn default() -> Self {
         Self::NULL
+    }
+}
+
+/// Atomic storage for a single [`Value`].
+///
+/// This is used for heap slots whose value may be read and written by multiple
+/// spawned VM fibers (`Cell.value` and `Instance.fields`). It preserves
+/// atomicity of the 8-byte tagged value and uses release/acquire ordering so a
+/// newly stored object pointer is safely published to a racing reader.
+#[repr(transparent)]
+pub struct AtomicValueSlot(AtomicU64);
+
+impl AtomicValueSlot {
+    #[inline]
+    pub const fn new(value: Value) -> Self {
+        Self(AtomicU64::new(value.bits()))
+    }
+
+    #[inline]
+    pub fn load(&self) -> Value {
+        Value(self.0.load(Ordering::Acquire))
+    }
+
+    #[inline]
+    pub fn store(&self, value: Value) {
+        self.0.store(value.bits(), Ordering::Release);
+    }
+}
+
+impl From<Value> for AtomicValueSlot {
+    fn from(value: Value) -> Self {
+        Self::new(value)
+    }
+}
+
+impl Clone for AtomicValueSlot {
+    fn clone(&self) -> Self {
+        Self::new(self.load())
+    }
+}
+
+impl std::fmt::Debug for AtomicValueSlot {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.load().fmt(f)
+    }
+}
+
+impl Serialize for AtomicValueSlot {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.load().serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for AtomicValueSlot {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Value::deserialize(deserializer).map(Self::new)
     }
 }
 
@@ -1723,7 +1805,25 @@ pub struct HostClosure {
 /// both the enclosing scope and any closures share the same storage.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Cell {
-    pub value: Value,
+    pub value: AtomicValueSlot,
+}
+
+impl Cell {
+    pub fn new(value: Value) -> Self {
+        Self {
+            value: AtomicValueSlot::new(value),
+        }
+    }
+
+    #[inline]
+    pub fn load(&self) -> Value {
+        self.value.load()
+    }
+
+    #[inline]
+    pub fn store(&self, value: Value) {
+        self.value.store(value);
+    }
 }
 
 impl std::fmt::Display for Object {
@@ -1740,7 +1840,7 @@ impl std::fmt::Display for Object {
             }
             Object::BoundMethod(_) => write!(f, "<bound_method>"),
             Object::HostClosure(_) => write!(f, "<host_closure>"),
-            Object::Cell(cell) => write!(f, "<cell {}>", cell.value),
+            Object::Cell(cell) => write!(f, "<cell {}>", cell.load()),
             Object::String(string) => string.fmt(f),
             Object::Uint8Array(bytes) => write!(f, "<uint8array len={}>", bytes.len()),
             Object::Array(array) => write!(f, "<array len={}>", array.lock().len()),

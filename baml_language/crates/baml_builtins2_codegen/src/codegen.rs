@@ -240,7 +240,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}vm.as_rust_data::<T>(&self.instance.fields[{}])",
+                    "{inner2}vm.as_rust_data::<T>(&self.instance.load_field({}))",
                     field.index
                 )
                 .unwrap();
@@ -255,7 +255,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 writeln!(out, "{inner}pub fn {field_name}(&self) -> i64 {{").unwrap();
                 writeln!(
                     out,
-                    "{inner2}self.instance.fields[{}].as_int()",
+                    "{inner2}self.instance.load_field({}).as_int()",
                     field.index
                 )
                 .unwrap();
@@ -270,7 +270,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 writeln!(out, "{inner}pub fn {field_name}(&self) -> f64 {{").unwrap();
                 writeln!(
                     out,
-                    "{inner2}match self.instance.fields[{}].as_object_ptr() {{",
+                    "{inner2}match self.instance.load_field({}).as_object_ptr() {{",
                     field.index
                 )
                 .unwrap();
@@ -298,7 +298,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 writeln!(out, "{inner}pub fn {field_name}(&self) -> bool {{").unwrap();
                 writeln!(
                     out,
-                    "{inner2}self.instance.fields[{}].as_bool()",
+                    "{inner2}self.instance.load_field({}).as_bool()",
                     field.index
                 )
                 .unwrap();
@@ -318,7 +318,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}vm.as_string(&self.instance.fields[{}])",
+                    "{inner2}vm.as_string(&self.instance.load_field({}))",
                     field.index
                 )
                 .unwrap();
@@ -337,7 +337,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}vm.as_array(&self.instance.fields[{}])",
+                    "{inner2}vm.as_array(&self.instance.load_field({}))",
                     field.index
                 )
                 .unwrap();
@@ -356,7 +356,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}vm.as_map(&self.instance.fields[{}])",
+                    "{inner2}vm.as_map(&self.instance.load_field({}))",
                     field.index
                 )
                 .unwrap();
@@ -378,7 +378,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}if self.instance.fields[{}].is_null() {{",
+                    "{inner2}if self.instance.load_field({}).is_null() {{",
                     field.index
                 )
                 .unwrap();
@@ -388,10 +388,10 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 writeln!(out, "{inner2}}}").unwrap();
                 writeln!(out, "{inner}}}\n").unwrap();
             }
-            // Generic, Named, Media, Null — fallback to &Value
+            // Generic, Named, Media, Null — fallback to a copied Value.
             _ => {
-                writeln!(out, "{inner}pub fn {field_name}(&self) -> &Value {{").unwrap();
-                writeln!(out, "{inner2}&self.instance.fields[{}]", field.index).unwrap();
+                writeln!(out, "{inner}pub fn {field_name}(&self) -> Value {{").unwrap();
+                writeln!(out, "{inner2}self.instance.load_field({})", field.index).unwrap();
                 writeln!(out, "{inner}}}\n").unwrap();
             }
         }
@@ -411,14 +411,14 @@ fn view_optional_type_and_expr(
         BamlType::Int => (
             "Option<i64>".to_string(),
             format!(
-                "self.instance.fields[{field_index}].as_int().unwrap_or_else(|| panic!(\"{class_name}.{field_name}: expected Int\"))"
+                "self.instance.load_field({field_index}).as_int().unwrap_or_else(|| panic!(\"{class_name}.{field_name}: expected Int\"))"
             ),
         ),
         BamlType::Float => (
             "Option<f64>".to_string(),
             format!(
                 "{{ \
-                    let Some(ptr) = self.instance.fields[{field_index}].as_object_ptr() \
+                    let Some(ptr) = self.instance.load_field({field_index}).as_object_ptr() \
                         else {{ panic!(\"{class_name}.{field_name}: expected Float\") }}; \
                     let bex_vm_types::Object::Float(f) = (unsafe {{ ptr.get() }}) \
                         else {{ panic!(\"{class_name}.{field_name}: expected Float\") }}; \
@@ -429,18 +429,18 @@ fn view_optional_type_and_expr(
         BamlType::Bool => (
             "Option<bool>".to_string(),
             format!(
-                "self.instance.fields[{field_index}].as_bool().unwrap_or_else(|| panic!(\"{class_name}.{field_name}: expected Bool\"))"
+                "self.instance.load_field({field_index}).as_bool().unwrap_or_else(|| panic!(\"{class_name}.{field_name}: expected Bool\"))"
             ),
         ),
         BamlType::String => (
             "Option<&'v str>".to_string(),
             format!(
-                "vm.as_string(&self.instance.fields[{field_index}]).expect(\"{class_name}.{field_name}: expected String\")"
+                "vm.as_string(&self.instance.load_field({field_index})).expect(\"{class_name}.{field_name}: expected String\")"
             ),
         ),
         _ => (
-            "Option<&Value>".to_string(),
-            format!("&self.instance.fields[{field_index}]"),
+            "Option<Value>".to_string(),
+            format!("self.instance.load_field({field_index})"),
         ),
     }
 }

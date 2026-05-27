@@ -172,11 +172,12 @@ impl BexEngine {
                         .fields
                         .iter()
                         .zip(instance.fields.iter())
-                        .map(|(class_field, value)| {
+                        .map(|(class_field, slot)| {
+                            let value = slot.load();
                             Ok((
                                 class_field.name.clone(),
                                 self.convert_vm_value_to_external_with_type(
-                                    *value,
+                                    value,
                                     &class_field.field_type,
                                     permit,
                                 )?,
@@ -1171,8 +1172,11 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
                     let fields: indexmap::IndexMap<String, BexExternalValue> = class_fields
                         .iter()
                         .zip(instance.fields.iter())
-                        .map(|(class_field, value)| {
-                            (class_field.name.clone(), vm_arg_to_external(vm, *value))
+                        .map(|(class_field, slot)| {
+                            (
+                                class_field.name.clone(),
+                                vm_arg_to_external(vm, slot.load()),
+                            )
                         })
                         .collect();
 

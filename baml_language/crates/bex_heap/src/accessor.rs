@@ -35,6 +35,7 @@ pub enum BexValue<'a> {
     ExternalValue(&'a BexExternalValue),
     HeapPtr(&'a HeapPtr),
     Value(&'a Value),
+    OwnedValue(Value),
 }
 
 impl<'a> From<&'a BexExternalValue> for BexValue<'a> {
@@ -80,14 +81,14 @@ impl<'a> BexClass<'a> {
                     .ok_or_else(|| AccessError::FieldNotFound {
                         expected: name.to_string(),
                     })?;
-                let field =
-                    instance
-                        .fields
-                        .get(field_idx)
-                        .ok_or_else(|| AccessError::FieldNotFound {
-                            expected: name.to_string(),
-                        })?;
-                Ok(BexValue::Value(field))
+                let field = instance
+                    .fields
+                    .get(field_idx)
+                    .ok_or_else(|| AccessError::FieldNotFound {
+                        expected: name.to_string(),
+                    })?
+                    .load();
+                Ok(BexValue::OwnedValue(field))
             }
         }
     }
@@ -122,6 +123,7 @@ impl<'a> BexValue<'a> {
             BexValue::ExternalValue(value) => value.type_name().to_string(),
             BexValue::HeapPtr(ptr) => ptr.to_string(),
             BexValue::Value(value) => value.to_string(),
+            BexValue::OwnedValue(value) => value.to_string(),
         }
     }
 
@@ -129,6 +131,10 @@ impl<'a> BexValue<'a> {
         match self {
             BexValue::ExternalValue(BexExternalValue::Int(i)) => Ok(*i),
             BexValue::Value(v) => v.as_int().ok_or_else(|| AccessError::TypeMismatch {
+                expected: "int",
+                actual: v.to_string(),
+            }),
+            BexValue::OwnedValue(v) => v.as_int().ok_or_else(|| AccessError::TypeMismatch {
                 expected: "int",
                 actual: v.to_string(),
             }),
@@ -170,6 +176,10 @@ impl<'a> BexValue<'a> {
                 expected: "bool",
                 actual: v.to_string(),
             }),
+            BexValue::OwnedValue(v) => v.as_bool().ok_or_else(|| AccessError::TypeMismatch {
+                expected: "bool",
+                actual: v.to_string(),
+            }),
             other => Err(AccessError::TypeMismatch {
                 expected: "bool",
                 actual: other.type_name(),
@@ -181,6 +191,7 @@ impl<'a> BexValue<'a> {
         match self {
             BexValue::ExternalValue(BexExternalValue::Null) => Ok(()),
             BexValue::Value(v) if v.is_null() => Ok(()),
+            BexValue::OwnedValue(v) if v.is_null() => Ok(()),
             other => Err(AccessError::TypeMismatch {
                 expected: "null",
                 actual: other.type_name(),
@@ -205,6 +216,10 @@ impl<'a> BexValue<'a> {
             }
             BexValue::HeapPtr(ptr) => f(ptr),
             BexValue::Value(v) if v.is_object() => {
+                let ptr = v.as_object_ptr().expect("just checked is_object");
+                f(&ptr)
+            }
+            BexValue::OwnedValue(v) if v.is_object() => {
                 let ptr = v.as_object_ptr().expect("just checked is_object");
                 f(&ptr)
             }
@@ -655,6 +670,7 @@ fn owned_inner(
                 }
             }
         }
+        BexValue::OwnedValue(v) => owned_inner(BexValue::Value(&v), heap, lossy),
     }
 }
 
@@ -719,10 +735,10 @@ fn convert_object(
                 .fields
                 .iter()
                 .zip(instance.fields.iter())
-                .map(|(field, value)| {
+                .map(|(field, slot)| {
                     Ok((
                         field.name.clone(),
-                        owned_inner(BexValue::Value(value), heap, lossy)?,
+                        owned_inner(BexValue::OwnedValue(slot.load()), heap, lossy)?,
                     ))
                 })
                 .collect::<Result<_, _>>()?;

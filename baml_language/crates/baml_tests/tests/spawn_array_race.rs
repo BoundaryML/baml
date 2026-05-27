@@ -534,3 +534,118 @@ async fn racing_uint8array_sort_vs_grow_does_not_crash() {
         other => panic!("expected Int result, got {other:?}"),
     }
 }
+
+#[tokio::test]
+async fn racing_captured_local_increment_does_not_crash() {
+    let program = compile_source_with_opt(
+        r#"
+        function main() -> int {
+            let value = 0;
+            let a = spawn {
+                let i = 0;
+                while i < 400 {
+                    value = value + 1;
+                    i = i + 1;
+                };
+                0
+            };
+            let b = spawn {
+                let i = 0;
+                while i < 400 {
+                    value = value + 1;
+                    i = i + 1;
+                };
+                0
+            };
+            (await a) + (await b);
+            value
+        }
+        "#,
+        OptLevel::One,
+    );
+    let engine = Arc::new(
+        BexEngine::new(
+            program,
+            Arc::new(sys_ops::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("engine"),
+    );
+
+    let result = engine
+        .call_function_bound_args(
+            "user.main",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    match result {
+        Ok(BexExternalValue::Int(value)) => {
+            assert!(
+                (0..=800).contains(&value),
+                "expected captured local value in 0..=800, got {value}"
+            );
+        }
+        other => panic!("expected Int result, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn racing_class_field_increment_does_not_crash() {
+    let program = compile_source_with_opt(
+        r#"
+        class Counter {
+            value int
+        }
+
+        function bump(c: Counter, n: int) -> int {
+            let i = 0;
+            while i < n {
+                c.value = c.value + 1;
+                i = i + 1;
+            };
+            c.value
+        }
+
+        function main() -> int {
+            let c = Counter { value: 0 };
+            let a = spawn { bump(c, 400) };
+            let b = spawn { bump(c, 400) };
+            (await a) + (await b);
+            c.value
+        }
+        "#,
+        OptLevel::One,
+    );
+    let engine = Arc::new(
+        BexEngine::new(
+            program,
+            Arc::new(sys_ops::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("engine"),
+    );
+
+    let result = engine
+        .call_function_bound_args(
+            "user.main",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    match result {
+        Ok(BexExternalValue::Int(value)) => {
+            assert!(
+                (0..=800).contains(&value),
+                "expected class field value in 0..=800, got {value}"
+            );
+        }
+        other => panic!("expected Int result, got {other:?}"),
+    }
+}

@@ -87,23 +87,20 @@ fn deep_copy_value_recursive(
                 }
 
                 Object::Instance(instance) => {
-                    let placeholder_ptr = vm.tlab.alloc(Object::Instance(Instance {
-                        class: instance.class,
-                        class_type_args: instance.class_type_args.clone(),
-                        fields: Vec::new(),
-                    }));
+                    let placeholder_ptr = vm.tlab.alloc(Object::Instance(Instance::new(
+                        instance.class,
+                        instance.class_type_args.clone(),
+                        Vec::new(),
+                    )));
                     copied_objects.insert(ptr, placeholder_ptr);
 
                     let mut new_fields = Vec::with_capacity(instance.fields.len());
-                    for field in instance.fields {
+                    for field in instance.field_values() {
                         new_fields.push(deep_copy_value_recursive(vm, field, copied_objects));
                     }
 
-                    let new_instance = Instance {
-                        class: instance.class,
-                        class_type_args: instance.class_type_args,
-                        fields: new_fields,
-                    };
+                    let new_instance =
+                        Instance::new(instance.class, instance.class_type_args, new_fields);
                     // no GC write barrier because it is all in gen0
                     *vm.get_object_mut(placeholder_ptr) = Object::Instance(new_instance);
                     placeholder_ptr
@@ -210,7 +207,7 @@ fn deep_equals_recursive(
                             .fields
                             .iter()
                             .zip(b_inst.fields.iter())
-                            .all(|(a, b)| deep_equals_recursive(vm, *a, *b, visited))
+                            .all(|(a, b)| deep_equals_recursive(vm, a.load(), b.load(), visited))
                 }
 
                 (Object::Variant(a_var), Object::Variant(b_var)) => {

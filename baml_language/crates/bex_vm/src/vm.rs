@@ -236,16 +236,16 @@ mod tests {
     fn init_spread_preserves_pre_spread_watch_baseline() {
         let mut vm = test_vm(vec![test_class(2)]);
         let class_ptr = vm.idx_to_ptr(ObjectIndex::from_raw(0));
-        let source_ptr = vm.tlab.alloc(Object::Instance(Instance {
-            class: class_ptr,
-            class_type_args: Vec::new(),
-            fields: vec![Value::int(10), Value::int(2)],
-        }));
-        let dest_ptr = vm.tlab.alloc(Object::Instance(Instance {
-            class: class_ptr,
-            class_type_args: Vec::new(),
-            fields: vec![Value::int(1), Value::int(2)],
-        }));
+        let source_ptr = vm.tlab.alloc(Object::Instance(Instance::new(
+            class_ptr,
+            Vec::new(),
+            vec![Value::int(10), Value::int(2)],
+        )));
+        let dest_ptr = vm.tlab.alloc(Object::Instance(Instance::new(
+            class_ptr,
+            Vec::new(),
+            vec![Value::int(1), Value::int(2)],
+        )));
         let root = NodeId::HeapObject(dest_ptr);
         vm.watch.register_root(
             root,
@@ -279,7 +279,10 @@ mod tests {
         let Object::Instance(dest) = vm.get_object(dest_ptr) else {
             panic!("destination should remain an instance");
         };
-        assert_eq!(dest.fields, vec![Value::int(10), Value::int(2)]);
+        assert_eq!(
+            dest.field_values().collect::<Vec<_>>(),
+            vec![Value::int(10), Value::int(2)]
+        );
     }
 }
 
@@ -1061,7 +1064,7 @@ impl BexVm {
                 got: ObjectType::of(self.get_object(ptr)).into(),
             });
         }
-        match self.get_object_mut(ptr) {
+        match self.get_object(ptr) {
             Object::Array(arr) => Ok(arr.lock_mut()),
             _ => unreachable!("type was just checked"),
         }
@@ -1097,7 +1100,7 @@ impl BexVm {
                 got: ObjectType::of(self.get_object(index)).into(),
             });
         }
-        match self.get_object_mut(index) {
+        match self.get_object(index) {
             Object::Map(map) => Ok(map.lock_mut()),
             _ => unreachable!("type was just checked"),
         }
@@ -1318,11 +1321,10 @@ impl BexVm {
     /// TODO: Seems to low level for an embedder, provide an API that takes
     /// class name and mapping of field name => value instead.
     pub fn alloc_instance(&mut self, class: HeapPtr, fields: Vec<Value>) -> Value {
-        Value::object(self.tlab.alloc(Object::Instance(Instance {
-            class,
-            class_type_args: vec![],
-            fields,
-        })))
+        Value::object(
+            self.tlab
+                .alloc(Object::Instance(Instance::new(class, vec![], fields))),
+        )
     }
 
     // TODO: Same problem as above. Ideally takes (&str, &str) instead.
@@ -1646,11 +1648,9 @@ impl BexVm {
 
     pub(crate) fn alloc_error_value(&mut self, class: ErrorClass, fields: Vec<Value>) -> Value {
         let class_ptr = self.error_class_ptrs[class as usize];
-        let instance_ptr = self.tlab.alloc(Object::Instance(Instance {
-            class: class_ptr,
-            class_type_args: vec![],
-            fields,
-        }));
+        let instance_ptr =
+            self.tlab
+                .alloc(Object::Instance(Instance::new(class_ptr, vec![], fields)));
         Value::object(instance_ptr)
     }
 
@@ -1728,11 +1728,9 @@ impl BexVm {
     /// Allocate a `baml.panics.*` class instance using pre-resolved pointers.
     pub fn alloc_panic_value(&mut self, class: PanicClass, fields: Vec<Value>) -> Value {
         let class_ptr = self.panic_class_ptrs[class as usize];
-        let instance_ptr = self.tlab.alloc(Object::Instance(Instance {
-            class: class_ptr,
-            class_type_args: vec![],
-            fields,
-        }));
+        let instance_ptr =
+            self.tlab
+                .alloc(Object::Instance(Instance::new(class_ptr, vec![], fields)));
         Value::object(instance_ptr)
     }
 
@@ -2420,8 +2418,8 @@ impl BexVm {
                 .map(|copy| {
                     (
                         copy.dest,
-                        dest.fields[copy.dest],
-                        source.fields[copy.source],
+                        dest.load_field(copy.dest),
+                        source.load_field(copy.source),
                     )
                 })
                 .collect()
@@ -2444,10 +2442,10 @@ impl BexVm {
                 new_value,
             );
             self.heap.write_barrier(dest_ptr, new_value);
-            let Object::Instance(dest) = self.get_object_mut(dest_ptr) else {
+            let Object::Instance(dest) = self.get_object(dest_ptr) else {
                 unreachable!("destination instance already type-checked above");
             };
-            dest.fields[dest_field] = new_value;
+            dest.store_field(dest_field, new_value);
         }
 
         for (&root, old_value) in roots.iter().zip(old_roots_copies) {
@@ -2532,11 +2530,9 @@ impl BexVm {
             fields
         };
 
-        Ok(Value::object(self.tlab.alloc(Object::Instance(Instance {
-            class: class_ptr,
-            class_type_args,
-            fields,
-        }))))
+        Ok(Value::object(self.tlab.alloc(Object::Instance(
+            Instance::new(class_ptr, class_type_args, fields),
+        ))))
     }
 
     /// When a watched node changes, we need to update the graph topology
@@ -3258,7 +3254,7 @@ impl BexVm {
                         }
                         .into());
                     };
-                    let value = instance.fields[idx];
+                    let value = instance.load_field(idx);
                     self.stack.push(value);
                 }
 
@@ -3276,7 +3272,7 @@ impl BexVm {
                             }
                             .into());
                         };
-                        instance.fields[idx]
+                        instance.load_field(idx)
                     };
 
                     let watched_node = NodeId::HeapObject(obj_ptr);
@@ -3287,10 +3283,10 @@ impl BexVm {
                         new_value,
                     );
                     self.heap.write_barrier(obj_ptr, new_value);
-                    let Object::Instance(instance) = self.get_object_mut(obj_ptr) else {
+                    let Object::Instance(instance) = self.get_object(obj_ptr) else {
                         unreachable!("already type-checked above");
                     };
-                    instance.fields[idx] = new_value;
+                    instance.store_field(idx, new_value);
 
                     let notifications = self.process_notifications(watched_node)?;
                     if !notifications.is_empty() {
@@ -3306,14 +3302,14 @@ impl BexVm {
                     let instance_value = self.stack.ensure_pop();
                     let obj_ptr = self.as_object_ptr(instance_value, ObjectType::Instance)?;
                     self.heap.write_barrier(obj_ptr, new_value);
-                    let Object::Instance(instance) = self.get_object_mut(obj_ptr) else {
+                    let Object::Instance(instance) = self.get_object(obj_ptr) else {
                         return Err(VmInternalError::TypeError {
                             expected: ObjectType::Instance.into(),
                             got: ObjectType::of(self.get_object(obj_ptr)).into(),
                         }
                         .into());
                     };
-                    instance.fields[idx] = new_value;
+                    instance.store_field(idx, new_value);
                     self.stack.push(instance_value);
                 }
 
@@ -3420,11 +3416,11 @@ impl BexVm {
                     fields.resize(class.fields.len(), Value::NULL);
                     let instance_ptr =
                         self.tlab
-                            .alloc(Object::Instance(bex_vm_types::types::Instance {
-                                class: class_ptr,
+                            .alloc(Object::Instance(bex_vm_types::types::Instance::new(
+                                class_ptr,
                                 class_type_args,
                                 fields,
-                            }));
+                            )));
                     self.stack.push(Value::object(instance_ptr));
                 }
 
@@ -4145,7 +4141,7 @@ impl BexVm {
                 // ── MakeCell ──────────────────────────────────────────────────
                 OpCode::MakeCell => {
                     let value = self.stack.ensure_pop();
-                    let cell = Object::Cell(bex_vm_types::types::Cell { value });
+                    let cell = Object::Cell(bex_vm_types::types::Cell::new(value));
                     let ptr = self.tlab.alloc(cell);
                     self.stack.push(Value::object(ptr));
                 }
@@ -4259,7 +4255,7 @@ impl BexVm {
                         }
                         .into());
                     };
-                    self.stack.push(cell.value);
+                    self.stack.push(cell.load());
                 }
 
                 OpCode::StoreDeref => {
@@ -4278,7 +4274,7 @@ impl BexVm {
                         .into());
                     };
                     self.heap.write_barrier(cell_ptr, value);
-                    let obj = unsafe { cell_ptr.get_mut() };
+                    let obj = unsafe { cell_ptr.get() };
                     let Object::Cell(cell) = obj else {
                         return Err(VmInternalError::TypeError {
                             expected: ObjectType::Cell.into(),
@@ -4286,7 +4282,7 @@ impl BexVm {
                         }
                         .into());
                     };
-                    cell.value = value;
+                    cell.store(value);
                 }
 
                 // ── LoadCapture / StoreCapture / CaptureRef ───────────────────
@@ -4320,7 +4316,7 @@ impl BexVm {
                         }
                         .into());
                     };
-                    self.stack.push(cell.value);
+                    self.stack.push(cell.load());
                 }
 
                 OpCode::StoreCapture => {
@@ -4347,7 +4343,7 @@ impl BexVm {
                         .into());
                     };
                     self.heap.write_barrier(cell_ptr, value);
-                    let cell_obj = unsafe { cell_ptr.get_mut() };
+                    let cell_obj = unsafe { cell_ptr.get() };
                     let Object::Cell(cell) = cell_obj else {
                         return Err(VmInternalError::TypeError {
                             expected: ObjectType::Cell.into(),
@@ -4355,7 +4351,7 @@ impl BexVm {
                         }
                         .into());
                     };
-                    cell.value = value;
+                    cell.store(value);
                 }
 
                 OpCode::CaptureRef => {
@@ -4568,7 +4564,7 @@ impl BexVm {
                     // Take the map's write lock for capture-old + insert-new
                     // atomically. Guard drops before any `&mut self` ops.
                     let store_result: Result<Value, ObjectType> = {
-                        match self.get_object_mut(map_index) {
+                        match self.get_object(map_index) {
                             Object::Map(map) => {
                                 let mut guard = map.lock_mut();
                                 let old = guard.get(&key).copied().unwrap_or(Value::NULL);

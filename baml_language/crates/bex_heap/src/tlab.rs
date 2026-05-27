@@ -180,11 +180,7 @@ impl Tlab {
     /// Allocate an instance object.
     #[inline]
     pub fn alloc_instance(&mut self, class: HeapPtr, fields: Vec<Value>) -> HeapPtr {
-        self.alloc(Object::Instance(Instance {
-            class,
-            class_type_args: vec![],
-            fields,
-        }))
+        self.alloc(Object::Instance(Instance::new(class, vec![], fields)))
     }
 
     /// Allocate a variant object.
@@ -529,7 +525,7 @@ mod tests {
                 Object::Instance(inst) => {
                     assert_eq!(inst.class, class_ptr);
                     assert_eq!(inst.fields.len(), 2);
-                    assert_eq!(inst.fields[0], Value::int(10));
+                    assert_eq!(inst.load_field(0), Value::int(10));
                 }
                 _ => panic!("Expected Instance"),
             }
