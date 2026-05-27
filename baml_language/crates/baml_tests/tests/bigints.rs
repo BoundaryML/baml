@@ -222,6 +222,61 @@ async fn test_int_param_accepts_max_i63() {
     assert_eq!(from_bigint.result, Ok(BexExternalValue::Int(max_i63)));
 }
 
+// ─── generic-path bigint comparison (union operand → generic CmpOp) ──────────
+//
+// When an operand's static `bigint` type is erased (here via an `int | bigint`
+// union return), emit produces a generic `CmpOp` rather than the specialized
+// `CmpBigint*`. The generic comparison must still widen an `int` operand and
+// compare by value, agreeing with the specialized path.
+
+#[tokio::test]
+async fn test_bigint_generic_cmp_eq_int_true() {
+    let output = baml_test!(
+        r#"
+        function Pick() -> int | bigint { 2n }
+        function main() -> bool { Pick() == 2 }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn test_bigint_generic_cmp_eq_int_false() {
+    let output = baml_test!(
+        r#"
+        function Pick() -> int | bigint { 2n }
+        function main() -> bool { Pick() == 3 }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(false)));
+}
+
+#[tokio::test]
+async fn test_bigint_generic_cmp_ordering() {
+    // Ordering via the generic path previously raised `CannotApplyCmpOp`.
+    let output = baml_test!(
+        r#"
+        function Pick() -> int | bigint { 2n }
+        function main() -> bool { Pick() < 5 }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn test_bigint_generic_cmp_bigint_bigint() {
+    // Two union-typed bigints compared via the generic path still compare by
+    // value (regression for routing bigint/bigint through the new branch).
+    let output = baml_test!(
+        r#"
+        function PickA() -> int | bigint { 7n }
+        function PickB() -> int | bigint { 7n }
+        function main() -> bool { PickA() == PickB() }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
 // ─── Bigint × Bigint constant folding (TIR `try_fold_binary`) ────────────────
 
 #[tokio::test]

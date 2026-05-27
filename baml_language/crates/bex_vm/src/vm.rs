@@ -1421,6 +1421,28 @@ impl BexVm {
         }
     }
 
+    /// View a `Value` as a `BigInt` for comparison, if it is numerically a
+    /// bigint or an `int`: an `int` is widened to a small *local* `BigInt`
+    /// (owned `Cow`, no heap alloc), a heap `Object::Bigint` is borrowed.
+    /// Returns `None` for anything else (float, string, …).
+    ///
+    /// Used by the generic comparison path (`exec_cmpop`) so a `bigint` vs
+    /// `int` mix compares by value — matching the specialized `CmpBigint*`
+    /// opcodes (`bigint_cmp`) — when the static types were erased (e.g. a
+    /// union/`any` operand) and the generic `CmpOp` was emitted instead.
+    fn value_as_bigint_cow(&self, v: Value) -> Option<std::borrow::Cow<'_, num_bigint::BigInt>> {
+        if let Some(n) = v.as_int() {
+            Some(std::borrow::Cow::Owned(num_bigint::BigInt::from(n)))
+        } else if let Some(ptr) = v.as_object_ptr() {
+            match self.get_object(ptr) {
+                Object::Bigint(arc) => Some(std::borrow::Cow::Borrowed(arc.as_ref())),
+                _ => None,
+            }
+        } else {
+            None
+        }
+    }
+
     /// Reconstruct the original `Value` for a [`BigintOperand`].
     ///
     /// Used to populate panic payloads (e.g. `DivisionByZero`) without
@@ -3046,6 +3068,25 @@ impl BexVm {
                 CmpOp::Gt => l > r,
                 CmpOp::GtEq => l >= r,
             })
+        } else if let (Some(l), Some(r)) = (
+            self.value_as_bigint_cow(left),
+            self.value_as_bigint_cow(right),
+        ) {
+            // Mixed `bigint`/`int` comparison reached via the generic path: one
+            // operand's static `bigint` type was erased (e.g. a union/`any`
+            // operand), so emit produced a generic `CmpOp` rather than
+            // `CmpBigint*`. The `int` operand is widened to a local `BigInt`;
+            // comparison is by value, matching the specialized path. (Both
+            // operands being `int` is already handled by the first arm above,
+            // so at least one is a `bigint` here.)
+            Value::bool(match op {
+                CmpOp::Eq => l == r,
+                CmpOp::NotEq => l != r,
+                CmpOp::Lt => l < r,
+                CmpOp::LtEq => l <= r,
+                CmpOp::Gt => l > r,
+                CmpOp::GtEq => l >= r,
+            })
         } else if let (Some(li), Some(ri)) = (left.as_object_ptr(), right.as_object_ptr()) {
             let lobj = self.get_object(li);
             let robj = self.get_object(ri);
@@ -3102,15 +3143,8 @@ impl BexVm {
                         .into());
                     }
                 }),
-                // Bigint comparison: structural ordering via num_bigint::BigInt's PartialOrd.
-                (Object::Bigint(lb), Object::Bigint(rb)) => Value::bool(match op {
-                    CmpOp::Eq => lb == rb,
-                    CmpOp::NotEq => lb != rb,
-                    CmpOp::Lt => lb < rb,
-                    CmpOp::LtEq => lb <= rb,
-                    CmpOp::Gt => lb > rb,
-                    CmpOp::GtEq => lb >= rb,
-                }),
+                // (Bigint, Bigint) — and any bigint/int mix — is handled by the
+                // `value_as_bigint_cow` branch above, before this object match.
                 _ => Value::bool(match op {
                     CmpOp::Eq => left == right,
                     CmpOp::NotEq => left != right,
