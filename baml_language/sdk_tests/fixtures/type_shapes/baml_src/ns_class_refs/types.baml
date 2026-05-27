@@ -10,14 +10,14 @@ class Outer {
   inner Inner
 }
 
-function MakeOuter(value: int) -> Outer {
+function make_outer(value: int) -> Outer {
   Outer { inner: Inner { value: value } }
 }
 
-function RoundTripInner(i: Inner) -> Inner {
+function round_trip_inner(i: Inner) -> Inner {
   i
 }
 
-function RoundTripOuter(o: Outer) -> Outer {
+function round_trip_outer(o: Outer) -> Outer {
   o
 }

@@ -50,6 +50,6 @@ class WrapperMarker {
 // `test_stream_next_reaches_finished` takes against `Stream<T, S>` —
 // builds the generic instance on one side, calls the generic instance
 // method from the other.
-function MakeWrapperMethods(text: string) -> WrapperMethods<string> {
+function make_wrapper_methods(text: string) -> WrapperMethods<string> {
   WrapperMethods<string> { value: text }
 }

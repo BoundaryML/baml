@@ -7,6 +7,6 @@
 // the bare `b.Thing` form 18a hints at would be namespace-relative and
 // resolve to a sibling under `a` that doesn't exist.
 
-function RoundTripDeepThingFromA(t: root.a.b.Thing) -> root.a.b.Thing {
+function round_trip_deep_thing_from_a(t: root.a.b.Thing) -> root.a.b.Thing {
   t
 }

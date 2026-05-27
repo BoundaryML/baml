@@ -10,14 +10,14 @@
 // case in 18a is misleading; the absolute `root.Foo` form covered above
 // is the only correct way to write it.
 
-function RoundTripResume(r: Resume) -> Resume {
+function round_trip_resume(r: Resume) -> Resume {
   r
 }
 
-function RoundTripRootFoo(f: root.Foo) -> root.Foo {
+function round_trip_root_foo(f: root.Foo) -> root.Foo {
   f
 }
 
-function RoundTripHttpResponse(r: baml.http.Response) -> baml.http.Response {
+function round_trip_http_response(r: baml.http.Response) -> baml.http.Response {
   r
 }

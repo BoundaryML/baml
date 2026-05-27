@@ -22,14 +22,14 @@ class AliasContainer {
   rec_field RecList
 }
 
-function RoundTripStringList(s: StringList) -> StringList {
+function round_trip_string_list(s: StringList) -> StringList {
   s
 }
 
-function RoundTripRecList(r: RecList) -> RecList {
+function round_trip_rec_list(r: RecList) -> RecList {
   r
 }
 
-function RoundTripAliasContainer(c: AliasContainer) -> AliasContainer {
+function round_trip_alias_container(c: AliasContainer) -> AliasContainer {
   c
 }
