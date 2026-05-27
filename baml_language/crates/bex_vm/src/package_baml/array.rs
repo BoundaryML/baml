@@ -23,7 +23,10 @@ fn baml_eq(vm: &BexVm, a: Value, b: Value) -> bool {
                 _ => false,
             },
             (Object::Uint8Array(_), Object::Uint8Array(_)) => {
-                match (vm.as_uint8array(&a), vm.as_uint8array(&b)) {
+                match (
+                    vm.as_uint8array(&a).map(|bytes| bytes.to_vec()),
+                    vm.as_uint8array(&b).map(|bytes| bytes.to_vec()),
+                ) {
                     (Ok(lb), Ok(rb)) => lb == rb,
                     _ => false,
                 }

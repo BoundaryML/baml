@@ -172,11 +172,12 @@ impl BexEngine {
                         .fields
                         .iter()
                         .zip(instance.fields.iter())
-                        .map(|(class_field, value)| {
+                        .map(|(class_field, slot)| {
+                            let value = slot.load();
                             Ok((
                                 class_field.name.clone(),
                                 self.convert_vm_value_to_external_with_type(
-                                    *value,
+                                    value,
                                     &class_field.field_type,
                                     permit,
                                 )?,
@@ -233,7 +234,7 @@ impl BexEngine {
             }),
             Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
             Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type((**ty).clone()))),
-            Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.clone())),
+            Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.to_vec())),
             Object::RustData(arc) => Ok(bex_external_types::try_convert_rust_data(arc)
                 .unwrap_or_else(|| BexExternalValue::RustData(arc.clone()))),
             Object::Closure(_) => Err(EngineError::CannotConvert {
@@ -1174,14 +1175,17 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
                     let fields: indexmap::IndexMap<String, BexExternalValue> = class_fields
                         .iter()
                         .zip(instance.fields.iter())
-                        .map(|(class_field, value)| {
-                            (class_field.name.clone(), vm_arg_to_external(vm, *value))
+                        .map(|(class_field, slot)| {
+                            (
+                                class_field.name.clone(),
+                                vm_arg_to_external(vm, slot.load()),
+                            )
                         })
                         .collect();
 
                     BexExternalValue::Instance { class_name, fields }
                 }
-                Object::Uint8Array(bytes) => BexExternalValue::Uint8Array(bytes.clone()),
+                Object::Uint8Array(bytes) => BexExternalValue::Uint8Array(bytes.to_vec()),
                 Object::Variant(variant) => {
                     let enum_obj = vm.get_object(variant.enm);
                     let Object::Enum(enm) = enum_obj else {

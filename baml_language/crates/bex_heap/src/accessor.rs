@@ -35,6 +35,7 @@ pub enum BexValue<'a> {
     ExternalValue(&'a BexExternalValue),
     HeapPtr(&'a HeapPtr),
     Value(&'a Value),
+    OwnedValue(Value),
 }
 
 impl<'a> From<&'a BexExternalValue> for BexValue<'a> {
@@ -80,14 +81,14 @@ impl<'a> BexClass<'a> {
                     .ok_or_else(|| AccessError::FieldNotFound {
                         expected: name.to_string(),
                     })?;
-                let field =
-                    instance
-                        .fields
-                        .get(field_idx)
-                        .ok_or_else(|| AccessError::FieldNotFound {
-                            expected: name.to_string(),
-                        })?;
-                Ok(BexValue::Value(field))
+                let field = instance
+                    .fields
+                    .get(field_idx)
+                    .ok_or_else(|| AccessError::FieldNotFound {
+                        expected: name.to_string(),
+                    })?
+                    .load();
+                Ok(BexValue::OwnedValue(field))
             }
         }
     }
@@ -122,6 +123,7 @@ impl<'a> BexValue<'a> {
             BexValue::ExternalValue(value) => value.type_name().to_string(),
             BexValue::HeapPtr(ptr) => ptr.to_string(),
             BexValue::Value(value) => value.to_string(),
+            BexValue::OwnedValue(value) => value.to_string(),
         }
     }
 
@@ -129,6 +131,10 @@ impl<'a> BexValue<'a> {
         match self {
             BexValue::ExternalValue(BexExternalValue::Int(i)) => Ok(*i),
             BexValue::Value(v) => v.as_int().ok_or_else(|| AccessError::TypeMismatch {
+                expected: "int",
+                actual: v.to_string(),
+            }),
+            BexValue::OwnedValue(v) => v.as_int().ok_or_else(|| AccessError::TypeMismatch {
                 expected: "int",
                 actual: v.to_string(),
             }),
@@ -170,6 +176,10 @@ impl<'a> BexValue<'a> {
                 expected: "bool",
                 actual: v.to_string(),
             }),
+            BexValue::OwnedValue(v) => v.as_bool().ok_or_else(|| AccessError::TypeMismatch {
+                expected: "bool",
+                actual: v.to_string(),
+            }),
             other => Err(AccessError::TypeMismatch {
                 expected: "bool",
                 actual: other.type_name(),
@@ -181,6 +191,7 @@ impl<'a> BexValue<'a> {
         match self {
             BexValue::ExternalValue(BexExternalValue::Null) => Ok(()),
             BexValue::Value(v) if v.is_null() => Ok(()),
+            BexValue::OwnedValue(v) if v.is_null() => Ok(()),
             other => Err(AccessError::TypeMismatch {
                 expected: "null",
                 actual: other.type_name(),
@@ -205,6 +216,10 @@ impl<'a> BexValue<'a> {
             }
             BexValue::HeapPtr(ptr) => f(ptr),
             BexValue::Value(v) if v.is_object() => {
+                let ptr = v.as_object_ptr().expect("just checked is_object");
+                f(&ptr)
+            }
+            BexValue::OwnedValue(v) if v.is_object() => {
                 let ptr = v.as_object_ptr().expect("just checked is_object");
                 f(&ptr)
             }
@@ -278,10 +293,8 @@ impl<'a> BexValue<'a> {
                         actual: obj.to_string(),
                     });
                 };
-                // SAFETY: host accessor invoked under a serialized FFI
-                // callback; no `spawn`ed mutator is concurrently active.
-                let data = unsafe { array.data_unchecked() };
-                Ok(data.iter().map(BexValue::Value).collect())
+                let data = array.to_vec();
+                Ok(data.into_iter().map(BexValue::OwnedValue).collect())
             }),
         }
     }
@@ -304,11 +317,10 @@ impl<'a> BexValue<'a> {
                         actual: obj.to_string(),
                     });
                 };
-                // SAFETY: see `as_array` above.
-                let data = unsafe { map.data_unchecked() };
+                let data = map.to_index_map();
                 Ok(data
-                    .iter()
-                    .map(|(k, v)| (k.to_string(), BexValue::Value(v)))
+                    .into_iter()
+                    .map(|(k, v)| (k.as_str().to_owned(), BexValue::OwnedValue(v)))
                     .collect())
             }),
         }
@@ -658,6 +670,7 @@ fn owned_inner(
                 }
             }
         }
+        BexValue::OwnedValue(v) => owned_inner(BexValue::Value(&v), heap, lossy),
     }
 }
 
@@ -692,11 +705,10 @@ fn convert_object(
             element_type: Ty::BuiltinUnknown {
                 attr: baml_type::TyAttr::default(),
             },
-            // SAFETY: host accessor invoked under a serialized FFI
-            // callback; no `spawn`ed mutator is concurrently active.
-            items: unsafe { array.data_unchecked() }
-                .iter()
-                .map(|item| owned_inner(BexValue::Value(item), heap, lossy))
+            items: array
+                .to_vec()
+                .into_iter()
+                .map(|item| owned_inner(BexValue::OwnedValue(item), heap, lossy))
                 .collect::<Result<_, _>>()?,
         }),
         Object::Map(map) => Ok(BexExternalValue::Map {
@@ -706,10 +718,15 @@ fn convert_object(
             value_type: Ty::BuiltinUnknown {
                 attr: baml_type::TyAttr::default(),
             },
-            // SAFETY: see `Object::Array` arm above.
-            entries: unsafe { map.data_unchecked() }
-                .iter()
-                .map(|(k, v)| Ok((k.to_string(), owned_inner(BexValue::Value(v), heap, lossy)?)))
+            entries: map
+                .to_index_map()
+                .into_iter()
+                .map(|(k, v)| {
+                    Ok((
+                        k.as_str().to_owned(),
+                        owned_inner(BexValue::OwnedValue(v), heap, lossy)?,
+                    ))
+                })
                 .collect::<Result<_, _>>()?,
         }),
         Object::Instance(instance) => {
@@ -724,10 +741,10 @@ fn convert_object(
                 .fields
                 .iter()
                 .zip(instance.fields.iter())
-                .map(|(field, value)| {
+                .map(|(field, slot)| {
                     Ok((
                         field.name.clone(),
-                        owned_inner(BexValue::Value(value), heap, lossy)?,
+                        owned_inner(BexValue::OwnedValue(slot.load()), heap, lossy)?,
                     ))
                 })
                 .collect::<Result<_, _>>()?;
@@ -758,7 +775,7 @@ fn convert_object(
         }
         Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
         Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type((**ty).clone()))),
-        Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.clone())),
+        Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.to_vec())),
         Object::RustData(data) => Ok(bex_external_types::try_convert_rust_data(data)
             .unwrap_or_else(|| BexExternalValue::RustData(data.clone()))),
         Object::Float(f) => Ok(BexExternalValue::Float(*f)),

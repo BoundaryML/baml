@@ -34,7 +34,7 @@ codegen_python = { workspace = true }
 sys_native = { workspace = true }
 anyhow = { workspace = true }
 bitcode = { workspace = true }
-clap = { workspace = true, features = [ "color", "env" ] }
+clap = { workspace = true, features = [ "color" ] }
 clap-cargo = { workspace = true }
 console = { workspace = true }
 ctrlc = { workspace = true }
@@ -43,7 +43,7 @@ indexmap = { workspace = true }
 indicatif = { workspace = true }
 libsui = { workspace = true }
 regex = { workspace = true }
-reqwest = { workspace = true, features = [ "blocking" ] }
+reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }

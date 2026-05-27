@@ -15,5 +15,3 @@ bex_vm_types = { workspace = true }
 indexmap = { workspace = true }
 once_cell = { workspace = true }
 
-[dev-dependencies]
-tokio = { workspace = true, features = [ "fs", "net", "rt" ] }

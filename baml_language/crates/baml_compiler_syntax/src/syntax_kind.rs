@@ -252,6 +252,13 @@ pub enum SyntaxKind {
     PAREN_EXPR,
     BLOCK_EXPR,
     IF_EXPR,
+    /// `if let PATTERN = SCRUTINEE { THEN } (else (BLOCK | IF_EXPR | IF_LET_EXPR))?`
+    ///
+    /// Refutable pattern match in a condition position. Pattern bindings are
+    /// in scope inside `THEN` only — not in `else` or after the `if let`.
+    /// Children, in order: `PATTERN`, scrutinee expr, then `BLOCK_EXPR`,
+    /// optional else `BLOCK_EXPR` / `IF_EXPR` / `IF_LET_EXPR`.
+    IF_LET_EXPR,
     MATCH_EXPR,
     MATCH_ARM,
     MATCH_PATTERN,
