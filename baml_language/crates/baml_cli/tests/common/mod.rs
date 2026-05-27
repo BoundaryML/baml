@@ -56,18 +56,23 @@ pub struct BuiltPaths {
 /// rebuilds when source files change.
 pub fn ensure_built() -> &'static BuiltPaths {
     BUILT.get_or_init(|| {
+        // Build for the same profile the test binary is using — otherwise
+        // `cargo test --release` would build into `target/debug` while we
+        // resolve paths from `target/release` and fail.
+        let profile = profile();
         let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-        let status = Command::new(&cargo)
-            .args(["build", "-p", "baml_cli", "-p", "baml_pack_host"])
-            .status()
-            .expect("spawn cargo build");
+        let mut build = Command::new(&cargo);
+        build.args(["build", "-p", "baml_cli", "-p", "baml_pack_host"]);
+        if profile == "release" {
+            build.arg("--release");
+        }
+        let status = build.status().expect("spawn cargo build");
         assert!(
             status.success(),
             "cargo build for baml_cli + baml_pack_host failed — see output above",
         );
 
         let target = target_dir();
-        let profile = profile();
         let bin_dir = target.join(&profile);
         let baml_cli = bin_dir.join(bin_name("baml-cli"));
         let baml_pack_host = bin_dir.join(bin_name("baml-pack-host"));
