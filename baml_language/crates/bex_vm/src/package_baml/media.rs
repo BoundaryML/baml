@@ -26,7 +26,7 @@ fn clone_media_value(
     // Step 1: get the _data field value (Copy) from the instance.
     let data_field: Value = {
         let instance = vm.as_instance(&media_val)?;
-        instance.fields[0]
+        instance.load_field(0)
         // `instance` borrow dropped here.
     };
 

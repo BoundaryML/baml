@@ -612,6 +612,7 @@ impl LoweringContext {
             SyntaxKind::UNARY_EXPR => self.lower_unary_expr(node),
             SyntaxKind::CALL_EXPR => self.lower_call_expr(node),
             SyntaxKind::IF_EXPR => self.lower_if_expr(node),
+            SyntaxKind::IF_LET_EXPR => self.lower_if_let_expr(node),
             SyntaxKind::MATCH_EXPR => self.lower_match_expr(node),
             SyntaxKind::CATCH_EXPR => self.lower_catch_expr(node),
             SyntaxKind::THROW_EXPR => self.lower_throw_expr(node),
@@ -1097,6 +1098,62 @@ impl LoweringContext {
         self.alloc_expr(
             Expr::If {
                 condition,
+                then_branch,
+                else_branch,
+            },
+            node.text_range(),
+        )
+    }
+
+    fn lower_if_let_expr(&mut self, node: &SyntaxNode) -> ExprId {
+        // CST shape: `if let PATTERN = SCRUTINEE THEN_BLOCK (else (BLOCK | IF_EXPR | IF_LET_EXPR))?`
+        //
+        // Children we care about, in source order:
+        //   1. PATTERN
+        //   2. scrutinee expression (may be a bare WORD/literal token, not a node)
+        //   3. then-branch (BLOCK_EXPR)
+        //   4. else-branch (BLOCK_EXPR | IF_EXPR | IF_LET_EXPR), optional
+        //
+        // The scrutinee can appear as either a wrapper node (PATH_EXPR,
+        // BINARY_EXPR, …) or as a bare token (single identifier / literal), so
+        // we mirror `lower_if_expr` and walk children-with-tokens.
+        let mut pattern = None;
+        let mut exprs: Vec<ExprId> = Vec::new();
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Node(child) => {
+                    if child.kind() == SyntaxKind::PATTERN {
+                        if pattern.is_none() {
+                            pattern = Some(self.lower_pattern(&child));
+                        }
+                    } else {
+                        exprs.push(self.lower_expr(&child));
+                    }
+                }
+                rowan::NodeOrToken::Token(token) => {
+                    if let Some(expr_id) = self.try_lower_bare_token(&token) {
+                        exprs.push(expr_id);
+                    }
+                }
+            }
+        }
+
+        let pattern =
+            pattern.unwrap_or_else(|| self.alloc_pattern(Pattern::Wildcard, node.text_range()));
+        let scrutinee = exprs
+            .first()
+            .copied()
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+        let then_branch = exprs
+            .get(1)
+            .copied()
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+        let else_branch = exprs.get(2).copied();
+
+        self.alloc_expr(
+            Expr::IfLet {
+                pattern,
+                scrutinee,
                 then_branch,
                 else_branch,
             },
@@ -1773,6 +1830,7 @@ impl LoweringContext {
                     | SyntaxKind::ENV_ACCESS_EXPR
                     | SyntaxKind::INDEX_EXPR
                     | SyntaxKind::IF_EXPR
+                    | SyntaxKind::IF_LET_EXPR
                     | SyntaxKind::MATCH_EXPR
                     | SyntaxKind::BLOCK_EXPR
                     | SyntaxKind::PAREN_EXPR

@@ -19,8 +19,9 @@ use bex_vm_types::{
     BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionKind, FunctionOrigin,
     GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp,
     bytecode::{
-        BlockNotification, BlockNotificationType, DebugLocalScope, InstructionMeta, JumpTableData,
-        LineTableEntry, MatchHashEntry, MatchHashTable, OperandMeta,
+        BlockNotification, BlockNotificationType, ClassInitPlan, DebugLocalScope, FieldCopy,
+        FieldCopySet, InstructionMeta, JumpTableData, LineTableEntry, MatchHashEntry,
+        MatchHashTable, OperandMeta,
     },
 };
 
@@ -302,6 +303,9 @@ struct StackifyCodegen<'ctx, 'obj> {
     /// The next block in RPO order (for fall-through optimization).
     next_block: Option<BlockId>,
 
+    /// Instruction index where the currently emitted basic block starts.
+    current_block_start: usize,
+
     /// Watched locals that have already had Watch instruction emitted.
     /// We only emit Watch once per watched local (at initialization).
     watched_locals_initialized: HashSet<Local>,
@@ -373,6 +377,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             pending_sequence_point: false,
             next_line_discriminator: HashMap::new(),
             next_block: None,
+            current_block_start: 0,
             watched_locals_initialized: HashSet::new(),
             block_notifications: Vec::new(),
             local_types: HashMap::new(),
@@ -603,7 +608,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 continue;
             }
 
-            self.block_addresses.insert(block_id, self.current_pc());
+            let block_start = self.current_pc();
+            self.block_addresses.insert(block_id, block_start);
+            self.current_block_start = block_start;
             let block = mir.block(block_id);
             self.emit_block(block);
         }
@@ -714,9 +721,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 | LocalClassification::PhiLike
                 | LocalClassification::ReturnPhi
                 | LocalClassification::CallResultImmediate
+                | LocalClassification::AggregateOperand
                 | LocalClassification::CopyOf
                 | LocalClassification::Dead => {
-                    // Virtual, phi-like, return-phi, call-result-immediate, copy-of, and dead locals don't get slots!
+                    // Virtual, stack-carried, copy-of, and dead locals don't get slots.
                 }
             }
         }
@@ -825,6 +833,23 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         self.bytecode.meta.push(InstructionMeta { operand: None });
         self.emit_line_table_entry(index);
         index
+    }
+
+    fn emit_load_var(&mut self, slot: usize) {
+        if matches!(
+            self.bytecode.instructions.last(),
+            Some(Instruction::StoreVar(prev_slot)) if *prev_slot == slot
+        ) {
+            let last_idx = self.bytecode.instructions.len() - 1;
+            if last_idx >= self.current_block_start {
+                self.bytecode.instructions[last_idx] = Instruction::StoreVarLoadVar(slot);
+                self.set_var_operand(last_idx, slot);
+                return;
+            }
+        }
+
+        let inst = self.emit(Instruction::LoadVar(slot));
+        self.set_var_operand(inst, slot);
     }
 
     /// Set the resolved operand metadata for an already-emitted instruction.
@@ -961,6 +986,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                         }
                         LocalAssignBehavior::EvalAndStore => {}
                     }
+                }
+
+                if self.emit_copy_aware_field_store(destination, value) {
+                    return;
                 }
 
                 // For field/index stores, push the base object first, then emit the value
@@ -1154,6 +1183,218 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         unwrap_infallible(pull_semantics::walk_operand_pull(self, operand));
     }
 
+    fn emit_init_spread(&mut self, fields: Vec<FieldCopy>, display_fields: &[String]) {
+        let set_idx = self.bytecode.field_copy_sets.len();
+        self.bytecode.field_copy_sets.push(FieldCopySet { fields });
+        let inst = self.emit(Instruction::InitSpread(set_idx));
+        self.set_operand(inst, OperandMeta::Field(display_fields.join(", ")));
+    }
+
+    fn emit_init_instance(&mut self, class_name: &str, ntypeargs: u16, field_count: usize) {
+        if let Some(&class_obj_idx) = self.class_object_indices.get(class_name) {
+            let fields = (0..field_count).collect::<Vec<_>>();
+            let display_fields = fields
+                .iter()
+                .map(|field_idx| format!(".{}", self.class_field_name(class_name, *field_idx)))
+                .collect::<Vec<_>>();
+            let plan_idx = self.bytecode.class_init_plans.len();
+            self.bytecode.class_init_plans.push(ClassInitPlan {
+                class_obj: ObjectIndex::from_raw(class_obj_idx),
+                ntypeargs,
+                fields,
+            });
+            let inst = self.emit(Instruction::InitInstance(plan_idx));
+            self.set_operand(
+                inst,
+                OperandMeta::Object(format!("{class_name} {}", display_fields.join(", "))),
+            );
+        } else {
+            let total_inputs = field_count + usize::from(ntypeargs);
+            if total_inputs > 0 {
+                self.emit(Instruction::Pop(total_inputs));
+            }
+            let null_idx = self.add_constant(bex_vm_types::ConstValue::Null);
+            let inst = self.emit(bex_vm_types::Instruction::LoadConst(null_idx));
+            self.set_operand(
+                inst,
+                OperandMeta::Const(format!("null /* unknown class: {class_name} */")),
+            );
+        }
+    }
+
+    fn field_copy_operand(operand: &Operand) -> Option<(&Place, usize)> {
+        let place = match operand {
+            Operand::Copy(place) | Operand::Move(place) => place,
+            Operand::Constant(_) => return None,
+        };
+        let Place::Field { base, field } = place else {
+            return None;
+        };
+        Some((base, *field))
+    }
+
+    fn try_emit_class_aggregate_init_instance(
+        &mut self,
+        class_name: &str,
+        type_arg_templates: &[TyTemplate],
+        fields: &[Operand],
+    ) -> bool {
+        if fields.is_empty()
+            || fields
+                .iter()
+                .any(|field| Self::field_copy_operand(field).is_some())
+        {
+            return false;
+        }
+
+        for field in fields {
+            self.emit_operand_pull(field);
+        }
+
+        let ntypeargs =
+            u16::try_from(type_arg_templates.len()).expect("type_arg_templates count fits in u16");
+        for template in type_arg_templates {
+            unwrap_infallible(self.load_type(template));
+        }
+        self.emit_init_instance(class_name, ntypeargs, fields.len());
+        true
+    }
+
+    fn place_mentions_stack_carried_local(&self, place: &Place) -> bool {
+        match place {
+            Place::Local(local) => matches!(
+                self.analysis
+                    .classifications
+                    .get(local)
+                    .copied()
+                    .unwrap_or(LocalClassification::Real),
+                LocalClassification::PhiLike
+                    | LocalClassification::ReturnPhi
+                    | LocalClassification::CallResultImmediate
+                    | LocalClassification::AggregateOperand
+            ),
+            Place::Field { base, .. } => self.place_mentions_stack_carried_local(base),
+            Place::Index { base, index, .. } => {
+                self.place_mentions_stack_carried_local(base)
+                    || matches!(
+                        self.analysis
+                            .classifications
+                            .get(index)
+                            .copied()
+                            .unwrap_or(LocalClassification::Real),
+                        LocalClassification::PhiLike
+                            | LocalClassification::ReturnPhi
+                            | LocalClassification::CallResultImmediate
+                            | LocalClassification::AggregateOperand
+                    )
+            }
+            Place::Capture(_) => false,
+        }
+    }
+
+    fn try_emit_class_aggregate_field_copy_sets(
+        &mut self,
+        class_name: &str,
+        type_arg_templates: &[TyTemplate],
+        fields: &[Operand],
+    ) -> bool {
+        if !fields
+            .iter()
+            .any(|field| Self::field_copy_operand(field).is_some())
+        {
+            return false;
+        }
+
+        let ntypeargs =
+            u16::try_from(type_arg_templates.len()).expect("type_arg_templates count fits in u16");
+        for template in type_arg_templates {
+            unwrap_infallible(self.load_type(template));
+        }
+        unwrap_infallible(self.alloc_class_instance(class_name, ntypeargs));
+
+        let mut field_idx = 0usize;
+        while field_idx < fields.len() {
+            let Some((base, source_field)) = Self::field_copy_operand(&fields[field_idx]) else {
+                let name = self.class_field_name(class_name, field_idx);
+                self.emit_operand_pull(&fields[field_idx]);
+                unwrap_infallible(self.init_field(field_idx, &name));
+                field_idx += 1;
+                continue;
+            };
+
+            if self.place_mentions_stack_carried_local(base) {
+                let name = self.class_field_name(class_name, field_idx);
+                self.emit_operand_pull(&fields[field_idx]);
+                unwrap_infallible(self.init_field(field_idx, &name));
+                field_idx += 1;
+                continue;
+            }
+
+            let mut copies = vec![FieldCopy {
+                source: source_field,
+                dest: field_idx,
+            }];
+            let mut display_fields =
+                vec![format!(".{}", self.class_field_name(class_name, field_idx))];
+            field_idx += 1;
+
+            while field_idx < fields.len() {
+                let Some((next_base, next_source_field)) =
+                    Self::field_copy_operand(&fields[field_idx])
+                else {
+                    break;
+                };
+                if next_base != base || self.place_mentions_stack_carried_local(next_base) {
+                    break;
+                }
+                copies.push(FieldCopy {
+                    source: next_source_field,
+                    dest: field_idx,
+                });
+                display_fields.push(format!(".{}", self.class_field_name(class_name, field_idx)));
+                field_idx += 1;
+            }
+
+            unwrap_infallible(pull_semantics::walk_place_pull(self, base));
+            self.emit_init_spread(copies, &display_fields);
+        }
+
+        true
+    }
+
+    /// Emit `base.field = base.field <op> rhs` as:
+    ///
+    /// `base; copy 0; load_field; rhs; op; store_field`
+    ///
+    /// The generic projection-store path evaluates the destination receiver and
+    /// then independently pulls the full rvalue, which re-emits the receiver for
+    /// lowered compound assignments. Keeping the receiver on the stack and
+    /// duplicating it avoids that second receiver evaluation without changing
+    /// the VM's existing `StoreField` stack contract.
+    fn emit_copy_aware_field_store(&mut self, destination: &Place, value: &Rvalue) -> bool {
+        let Place::Field { base, field } = destination else {
+            return false;
+        };
+
+        let Rvalue::BinaryOp { op, left, right } = value else {
+            return false;
+        };
+
+        match left {
+            Operand::Copy(place) | Operand::Move(place) if place == destination => {}
+            _ => return false,
+        }
+
+        let name = self.resolve_field_name(base, *field);
+        unwrap_infallible(pull_semantics::walk_place_pull(self, base));
+        self.emit(Instruction::Copy(0));
+        unwrap_infallible(self.load_field(*field, &name));
+        self.emit_operand_pull(right);
+        self.emit(Self::binop_instruction(*op));
+        unwrap_infallible(self.store_field_value(*field, &name));
+        true
+    }
+
     /// Emit an rvalue using the pull model.
     fn emit_rvalue_pull(&mut self, rvalue: &Rvalue) {
         // MakeClosure is handled specially: capture operands must load the cell
@@ -1181,6 +1422,34 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 type_arg_templates.len(),
             ));
             return;
+        }
+        if let Rvalue::Aggregate {
+            kind:
+                baml_compiler2_mir::AggregateKind::Class {
+                    name,
+                    type_arg_templates,
+                },
+            fields,
+        } = rvalue
+        {
+            if !self.class_object_indices.contains_key(name) {
+                for field in fields {
+                    self.emit_operand_pull(field);
+                }
+                let ntypeargs = u16::try_from(type_arg_templates.len())
+                    .expect("type_arg_templates count fits in u16");
+                for template in type_arg_templates {
+                    unwrap_infallible(self.load_type(template));
+                }
+                self.emit_init_instance(name, ntypeargs, fields.len());
+                return;
+            }
+            if self.try_emit_class_aggregate_init_instance(name, type_arg_templates, fields) {
+                return;
+            }
+            if self.try_emit_class_aggregate_field_copy_sets(name, type_arg_templates, fields) {
+                return;
+            }
         }
         // Specialize BinaryOp when both operand types are statically known.
         if let Rvalue::BinaryOp { op, left, right } = rvalue {
@@ -2186,9 +2455,16 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 // is called rather than the generic `walk_rvalue_pull` inlining path.
                 // MakeBoundMethod must also be handled specially: it is not handled by
                 // `walk_rvalue_pull` (which panics on it), so route through `emit_rvalue_pull`.
+                // Class aggregates may use emitter-only spread helpers, so they
+                // also need to flow through `emit_rvalue_pull` when inlined.
                 if matches!(
                     rvalue,
-                    Rvalue::MakeClosure { .. } | Rvalue::MakeBoundMethod { .. }
+                    Rvalue::MakeClosure { .. }
+                        | Rvalue::MakeBoundMethod { .. }
+                        | Rvalue::Aggregate {
+                            kind: baml_compiler2_mir::AggregateKind::Class { .. },
+                            ..
+                        }
                 ) {
                     self.emit_rvalue_pull(&rvalue);
                     return Ok(LocalPullAction::Done);
@@ -2197,7 +2473,8 @@ impl PullSink for StackifyCodegen<'_, '_> {
             }
             LocalClassification::PhiLike
             | LocalClassification::ReturnPhi
-            | LocalClassification::CallResultImmediate => LocalPullAction::Done,
+            | LocalClassification::CallResultImmediate
+            | LocalClassification::AggregateOperand => LocalPullAction::Done,
             LocalClassification::CopyOf => {
                 // Copy propagation: load from source slot directly.
                 let source = self.analysis.resolve_copy_source(local);
@@ -2205,8 +2482,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 if self.captured_locals.contains(&source) && !self.loading_for_closure_capture {
                     self.emit(Instruction::LoadDeref(slot));
                 } else {
-                    let inst = self.emit(Instruction::LoadVar(slot));
-                    self.set_var_operand(inst, slot);
+                    self.emit_load_var(slot);
                 }
                 LocalPullAction::Done
             }
@@ -2219,8 +2495,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
                     self.emit(Instruction::LoadDeref(slot));
                 } else {
                     // Normal local or loading cell pointer for MakeClosure.
-                    let inst = self.emit(Instruction::LoadVar(slot));
-                    self.set_var_operand(inst, slot);
+                    self.emit_load_var(slot);
                 }
                 LocalPullAction::Done
             }
@@ -2272,7 +2547,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
         }
         display.push('"');
         let obj_idx = self.objects.len();
-        self.objects.push(Object::Uint8Array(bytes.to_vec()));
+        self.objects.push(Object::Uint8Array(bytes.to_vec().into()));
         let idx = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(obj_idx)));
         let inst = self.emit(Instruction::LoadConst(idx));
         self.set_operand(inst, OperandMeta::Const(display));
@@ -2317,6 +2592,16 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 OperandMeta::Const(format!("null /* unknown class: {class_name} */")),
             );
         }
+        Ok(())
+    }
+
+    fn init_class_instance(
+        &mut self,
+        class_name: &str,
+        ntypeargs: u16,
+        field_count: usize,
+    ) -> Result<(), Self::Error> {
+        self.emit_init_instance(class_name, ntypeargs, field_count);
         Ok(())
     }
 

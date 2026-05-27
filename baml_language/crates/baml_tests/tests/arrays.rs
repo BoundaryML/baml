@@ -89,8 +89,7 @@ async fn array_push() {
         load_const 2
         load_const 3
         alloc_array 3
-        store_var a
-        load_var a
+        store_var_load_var a
         load_const 4
         call baml.Array.push
         pop 1

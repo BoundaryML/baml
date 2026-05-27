@@ -67,6 +67,8 @@ pub enum DiagnosticId {
     DuplicateMethod,
     DuplicateBinding,
     RefutablePatternInLet,
+    /// `if let` pattern that always matches — the `else` branch is dead.
+    IrrefutablePatternInIfLet,
     DuplicateAttribute,
     UnknownAttribute,
     InvalidAttributeContext,
@@ -233,6 +235,7 @@ impl DiagnosticId {
             DiagnosticId::DuplicateMethod => "E0093",
             DiagnosticId::DuplicateBinding => "E0094",
             DiagnosticId::RefutablePatternInLet => "E0111",
+            DiagnosticId::IrrefutablePatternInIfLet => "E0112",
             DiagnosticId::DuplicateAttribute => "E0014",
             DiagnosticId::UnknownAttribute => "E0015",
             DiagnosticId::InvalidAttributeContext => "E0016",

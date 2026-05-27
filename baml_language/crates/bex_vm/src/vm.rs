@@ -136,9 +136,86 @@ impl Frame {
 
 #[cfg(test)]
 mod tests {
-    use bex_vm_types::{Value, ValueKind, types::type_tags};
+    #[cfg(not(target_arch = "wasm32"))]
+    use std::sync::atomic::AtomicBool;
+    use std::{collections::HashMap, sync::Arc};
 
-    use super::value_type_tag;
+    use baml_type::{Name, Ty, TyAttr, TyTemplate, TypeName};
+    use bex_heap::{BexHeap, Tlab};
+    use bex_vm_types::{
+        EarlyYieldCheck, GlobalPool, Object, ObjectIndex, Value, ValueKind, VmGlobals,
+        bytecode::{FieldCopy, FieldCopySet},
+        types::{Class, ClassField, Instance, type_tags},
+    };
+
+    use super::{BexVm, VmExecState, WatchNotification, value_type_tag};
+    use crate::{
+        indexable::EvalStack,
+        watch::{NodeId, RootState, Watch, WatchFilter},
+    };
+
+    fn int_ty() -> Ty {
+        Ty::Int {
+            attr: TyAttr::default(),
+        }
+    }
+
+    fn test_field(name: &str) -> ClassField {
+        ClassField {
+            name: name.to_string(),
+            field_type: int_ty(),
+            field_template: TyTemplate::Concrete(int_ty()),
+            description: None,
+            alias: None,
+            skip: false,
+        }
+    }
+
+    fn test_class(field_count: usize) -> Object {
+        Object::Class(Box::new(Class {
+            name: TypeName::local(Name::new("TestClass")),
+            fields: (0..field_count)
+                .map(|idx| test_field(&format!("field{idx}")))
+                .collect(),
+            description: None,
+            alias: None,
+            type_tag: 100,
+            ty_attr: TyAttr::default(),
+        }))
+    }
+
+    fn early_yield_for_test() -> EarlyYieldCheck {
+        #[cfg(target_arch = "wasm32")]
+        {
+            EarlyYieldCheck::new()
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            EarlyYieldCheck::new(Arc::new(AtomicBool::new(false)))
+        }
+    }
+
+    fn test_vm(compile_time_objects: Vec<Object>) -> BexVm {
+        let heap = BexHeap::new(compile_time_objects);
+        BexVm {
+            frames: Vec::new(),
+            stack: EvalStack::new(),
+            heap: Arc::clone(&heap),
+            early_yield: early_yield_for_test(),
+            tlab: Tlab::new(heap),
+            globals: VmGlobals::Owned(GlobalPool::new()),
+            resolved_class_names: HashMap::new(),
+            error_class_ptrs: Vec::new(),
+            panic_class_ptrs: Vec::new(),
+            watch: Watch::new(),
+            watched_vars: HashMap::new(),
+            interrupt_frame: None,
+            traced_frames: Vec::new(),
+            current_span_context: None,
+            argv: Arc::from([]),
+            pending_call_type_args: Vec::new(),
+        }
+    }
 
     #[test]
     fn omitted_arg_uses_unknown_type_tag() {
@@ -153,6 +230,59 @@ mod tests {
             Value::int(type_tags::INT).kind(),
             ValueKind::Int(tag) if value_type_tag(value) == tag
         ));
+    }
+
+    #[test]
+    fn init_spread_preserves_pre_spread_watch_baseline() {
+        let mut vm = test_vm(vec![test_class(2)]);
+        let class_ptr = vm.idx_to_ptr(ObjectIndex::from_raw(0));
+        let source_ptr = vm.tlab.alloc(Object::Instance(Instance::new(
+            class_ptr,
+            Vec::new(),
+            vec![Value::int(10), Value::int(2)],
+        )));
+        let dest_ptr = vm.tlab.alloc(Object::Instance(Instance::new(
+            class_ptr,
+            Vec::new(),
+            vec![Value::int(1), Value::int(2)],
+        )));
+        let root = NodeId::HeapObject(dest_ptr);
+        vm.watch.register_root(
+            root,
+            RootState {
+                value: Value::object(dest_ptr),
+                last_assigned: None,
+                last_notified: None,
+                channel: "test".to_string(),
+                filter: WatchFilter::Default,
+            },
+        );
+
+        let result = vm
+            .init_spread(
+                Value::object(dest_ptr),
+                Value::object(source_ptr),
+                &FieldCopySet {
+                    fields: vec![
+                        FieldCopy { source: 0, dest: 0 },
+                        FieldCopy { source: 1, dest: 1 },
+                    ],
+                },
+            )
+            .expect("spread should succeed");
+
+        let Some(VmExecState::Notify(WatchNotification::Variables(notifications))) = result else {
+            panic!("expected watched spread notification");
+        };
+        assert_eq!(notifications, vec![root]);
+
+        let Object::Instance(dest) = vm.get_object(dest_ptr) else {
+            panic!("destination should remain an instance");
+        };
+        assert_eq!(
+            dest.field_values().collect::<Vec<_>>(),
+            vec![Value::int(10), Value::int(2)]
+        );
     }
 }
 
@@ -760,14 +890,14 @@ impl BexVm {
     ///
     /// # Safety
     ///
-    /// This is safe for:
-    /// - Compile-time objects (immutable)
-    /// - Objects allocated by this VM's TLAB
-    /// - Objects from other VMs when they're not being mutated
+    /// The returned `&Object` may be aliased by other spawned VMs. It is safe
+    /// to inspect immutable object metadata through it, and to reach mutable
+    /// internals only when that field has its own synchronization (for example
+    /// `LockedContainer` data, atomic instance fields, cells, or futures).
     #[inline]
     pub fn get_object(&self, ptr: HeapPtr) -> &Object {
-        // SAFETY: Single-threaded execution within a VM. Objects are only
-        // written during allocation or field writes, both controlled by this VM.
+        // SAFETY: `HeapPtr` points into stable heap storage. Shared mutable
+        // state behind the object must provide its own synchronization.
         unsafe { ptr.get() }
     }
 
@@ -775,17 +905,17 @@ impl BexVm {
     ///
     /// # Safety
     ///
-    /// Caller must ensure exclusive access (typically via TLAB ownership
-    /// or single-threaded execution). Only runtime objects can be mutated.
+    /// Caller must ensure exclusive access to the heap object itself. `&mut
+    /// self` only proves exclusive access to this VM, not to objects shared with
+    /// spawned VMs. Mutator paths for shared state should use [`Self::get_object`]
+    /// plus the object's interior synchronization instead.
     #[inline]
     pub fn get_object_mut(&mut self, ptr: HeapPtr) -> &mut Object {
-        // SAFETY: We have &mut self, so no other code can access the VM.
-        // The TLAB ensures this VM has exclusive access to its allocated objects.
         debug_assert!(
             !self.heap.is_compile_time_ptr(ptr),
             "Cannot mutate compile-time object"
         );
-        // SAFETY: We have &mut self, ensuring exclusive access to this VM's objects
+        // SAFETY: caller upholds the object-exclusivity contract documented above.
         unsafe { ptr.get_mut() }
     }
 
@@ -855,12 +985,15 @@ impl BexVm {
         self.get_object(ptr).as_string()
     }
 
-    /// Get uint8array from a Value.
-    pub fn as_uint8array(&self, value: &Value) -> Result<&Vec<u8>, VmInternalError> {
+    /// Get uint8array from a Value. Acquires the container's mutex.
+    pub fn as_uint8array(
+        &self,
+        value: &Value,
+    ) -> Result<bex_vm_types::Uint8ArrayReadGuard<'_>, VmInternalError> {
         let ptr = self.as_object_ptr(*value, ObjectType::Uint8Array)?;
         let obj = self.get_object(ptr);
         match obj {
-            Object::Uint8Array(bytes) => Ok(bytes),
+            Object::Uint8Array(bytes) => Ok(bytes.lock()),
             _ => Err(VmInternalError::TypeError {
                 expected: ObjectType::Uint8Array.into(),
                 got: ObjectType::of(obj).into(),
@@ -868,11 +1001,14 @@ impl BexVm {
         }
     }
 
-    /// Get mutable uint8array from a Value.
-    pub fn as_uint8array_mut(&mut self, value: &Value) -> Result<&mut Vec<u8>, VmInternalError> {
+    /// Get mutable uint8array from a Value. Acquires the container's mutex.
+    pub fn as_uint8array_mut(
+        &mut self,
+        value: &Value,
+    ) -> Result<bex_vm_types::Uint8ArrayWriteGuard<'_>, VmInternalError> {
         let ptr = self.as_object_ptr(*value, ObjectType::Uint8Array)?;
-        match self.get_object_mut(ptr) {
-            Object::Uint8Array(bytes) => Ok(bytes),
+        match self.get_object(ptr) {
+            Object::Uint8Array(bytes) => Ok(bytes.lock_mut()),
             other => Err(VmInternalError::TypeError {
                 expected: ObjectType::Uint8Array.into(),
                 got: ObjectType::of(other).into(),
@@ -886,6 +1022,10 @@ impl BexVm {
     }
 
     /// Get mutable string from a Value.
+    ///
+    /// Strings are immutable at the current BAML language surface. Do not use
+    /// this for spawned user-code mutation unless strings gain the same
+    /// object-level synchronization as containers.
     pub fn as_string_mut(&mut self, value: &Value) -> Result<&mut String, VmInternalError> {
         let ptr = self.as_object_ptr(*value, ObjectType::String)?;
         self.get_object_mut(ptr).as_string_mut()
@@ -928,7 +1068,7 @@ impl BexVm {
                 got: ObjectType::of(self.get_object(ptr)).into(),
             });
         }
-        match self.get_object_mut(ptr) {
+        match self.get_object(ptr) {
             Object::Array(arr) => Ok(arr.lock_mut()),
             _ => unreachable!("type was just checked"),
         }
@@ -964,7 +1104,7 @@ impl BexVm {
                 got: ObjectType::of(self.get_object(index)).into(),
             });
         }
-        match self.get_object_mut(index) {
+        match self.get_object(index) {
             Object::Map(map) => Ok(map.lock_mut()),
             _ => unreachable!("type was just checked"),
         }
@@ -1166,7 +1306,7 @@ impl BexVm {
     }
 
     pub fn alloc_map(&mut self, values: IndexMap<String, Value>) -> Value {
-        Value::object(self.tlab.alloc(Object::Map(Box::new(values.into()))))
+        Value::object(self.tlab.alloc(Object::Map(values.into())))
     }
 
     pub fn alloc_string(&mut self, s: String) -> Value {
@@ -1185,11 +1325,10 @@ impl BexVm {
     /// TODO: Seems to low level for an embedder, provide an API that takes
     /// class name and mapping of field name => value instead.
     pub fn alloc_instance(&mut self, class: HeapPtr, fields: Vec<Value>) -> Value {
-        Value::object(self.tlab.alloc(Object::Instance(Instance {
-            class,
-            class_type_args: vec![],
-            fields,
-        })))
+        Value::object(
+            self.tlab
+                .alloc(Object::Instance(Instance::new(class, vec![], fields))),
+        )
     }
 
     // TODO: Same problem as above. Ideally takes (&str, &str) instead.
@@ -1415,6 +1554,57 @@ impl BexVm {
         StackIndex::from_raw(locals_offset.raw() + slot - 1)
     }
 
+    fn store_local_value(
+        &mut self,
+        local_var_index: StackIndex,
+        value: Value,
+    ) -> Result<Option<VmExecState>, VmError> {
+        // Old value being replaced.
+        let old_value = std::mem::replace(&mut self.stack[local_var_index], value);
+
+        // If this local is watched, update the watch graph.
+        //
+        // A watched local is a root in the watch graph. When
+        // reassigned (e.g. `v = new_val`), three things happen:
+        //
+        // 1. `update_watched_node` handles edge topology: unlinks
+        //    the old binding (so mutations to the old object no
+        //    longer trigger notifications), links the new one, and
+        //    deep-copies the previous root state into
+        //    `last_assigned` so the notification filter can diff
+        //    old vs new.
+        //
+        // 2. `state.value` is updated to the new value. This is
+        //    specific to local stores — for field/array/map stores
+        //    the root's top-level binding hasn't changed, but here
+        //    the root itself is being rebound.
+        //
+        // 3. `process_notifications` walks all roots reaching this
+        //    node (just itself, since it IS a root) and applies
+        //    the watch filter to decide whether to notify.
+        if unlikely(!self.watched_vars.is_empty())
+            && self.watched_vars.contains_key(&local_var_index)
+        {
+            let watched_node = NodeId::LocalVar(local_var_index);
+
+            self.update_watched_node(watched_node, watch::Path::Binding, old_value, value);
+
+            if let Some(state) = self.watch.root_state_mut(watched_node) {
+                state.value = value;
+            }
+
+            let notifications = self.process_notifications(watched_node)?;
+
+            if !notifications.is_empty() {
+                return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
+                    notifications,
+                ))));
+            }
+        }
+
+        Ok(None)
+    }
+
     pub fn error_to_exception_value(&mut self, error: VmBamlError) -> Value {
         let (class, fields) = match error {
             VmBamlError::InvalidArgument { message } => (
@@ -1462,11 +1652,9 @@ impl BexVm {
 
     pub(crate) fn alloc_error_value(&mut self, class: ErrorClass, fields: Vec<Value>) -> Value {
         let class_ptr = self.error_class_ptrs[class as usize];
-        let instance_ptr = self.tlab.alloc(Object::Instance(Instance {
-            class: class_ptr,
-            class_type_args: vec![],
-            fields,
-        }));
+        let instance_ptr =
+            self.tlab
+                .alloc(Object::Instance(Instance::new(class_ptr, vec![], fields)));
         Value::object(instance_ptr)
     }
 
@@ -1544,11 +1732,9 @@ impl BexVm {
     /// Allocate a `baml.panics.*` class instance using pre-resolved pointers.
     pub fn alloc_panic_value(&mut self, class: PanicClass, fields: Vec<Value>) -> Value {
         let class_ptr = self.panic_class_ptrs[class as usize];
-        let instance_ptr = self.tlab.alloc(Object::Instance(Instance {
-            class: class_ptr,
-            class_type_args: vec![],
-            fields,
-        }));
+        let instance_ptr =
+            self.tlab
+                .alloc(Object::Instance(Instance::new(class_ptr, vec![], fields)));
         Value::object(instance_ptr)
     }
 
@@ -2205,6 +2391,154 @@ impl BexVm {
         Ok(filtered_notifications)
     }
 
+    fn init_spread(
+        &mut self,
+        dest_value: Value,
+        source_value: Value,
+        field_copy_set: &bytecode::FieldCopySet,
+    ) -> Result<Option<VmExecState>, VmError> {
+        let dest_ptr = self.as_object_ptr(dest_value, ObjectType::Instance)?;
+        let source_ptr = self.as_object_ptr(source_value, ObjectType::Instance)?;
+
+        let copied_fields: Vec<(usize, Value, Value)> = {
+            let Object::Instance(source) = self.get_object(source_ptr) else {
+                return Err(VmInternalError::TypeError {
+                    expected: ObjectType::Instance.into(),
+                    got: ObjectType::of(self.get_object(source_ptr)).into(),
+                }
+                .into());
+            };
+            let Object::Instance(dest) = self.get_object(dest_ptr) else {
+                return Err(VmInternalError::TypeError {
+                    expected: ObjectType::Instance.into(),
+                    got: ObjectType::of(self.get_object(dest_ptr)).into(),
+                }
+                .into());
+            };
+
+            field_copy_set
+                .fields
+                .iter()
+                .map(|copy| {
+                    (
+                        copy.dest,
+                        dest.load_field(copy.dest),
+                        source.load_field(copy.source),
+                    )
+                })
+                .collect()
+        };
+
+        let watched_node = NodeId::HeapObject(dest_ptr);
+        let roots = self.watch.copy_roots_reaching(watched_node);
+        let mut old_roots_copies = Vec::with_capacity(roots.len());
+        for &root in &roots {
+            if let Some(val) = self.watch.root_state(root).map(|s| s.value) {
+                old_roots_copies.push(crate::package_baml::PackageBamlImpl::deep_copy(self, &val));
+            }
+        }
+
+        for (dest_field, old_value, new_value) in copied_fields {
+            self.update_watched_node_dependencies(
+                watched_node,
+                watch::Path::InstanceField(dest_field),
+                old_value,
+                new_value,
+            );
+            self.heap.write_barrier(dest_ptr, new_value);
+            let Object::Instance(dest) = self.get_object(dest_ptr) else {
+                unreachable!("destination instance already type-checked above");
+            };
+            dest.store_field(dest_field, new_value);
+        }
+
+        for (&root, old_value) in roots.iter().zip(old_roots_copies) {
+            if let Some(state) = self.watch.root_state_mut(root) {
+                state.last_assigned = Some(old_value);
+            }
+        }
+
+        let notifications = self.process_notifications(watched_node)?;
+        if !notifications.is_empty() {
+            return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
+                notifications,
+            ))));
+        }
+
+        Ok(None)
+    }
+
+    fn alloc_initialized_instance(
+        &mut self,
+        plan: &bytecode::ClassInitPlan,
+    ) -> Result<Value, VmError> {
+        let class_ptr = self.idx_to_ptr(plan.class_obj);
+        let class_field_count = match self.get_object(class_ptr) {
+            Object::Class(class) => class.fields.len(),
+            other => {
+                return Err(VmInternalError::TypeError {
+                    expected: ObjectType::Class.into(),
+                    got: ObjectType::of(other).into(),
+                }
+                .into());
+            }
+        };
+        let field_value_count = plan.fields.len();
+        let ntypeargs = plan.ntypeargs as usize;
+        let total_inputs = field_value_count + ntypeargs;
+        let base = self
+            .stack
+            .len()
+            .checked_sub(total_inputs)
+            .ok_or(VmInternalError::NotEnoughItemsOnStack(total_inputs))?;
+
+        let mut class_type_args = Vec::with_capacity(ntypeargs);
+        for offset in 0..ntypeargs {
+            let slot = base + field_value_count + offset;
+            let value = self.stack[StackIndex::from_raw(slot)];
+            let ptr = self.as_object_ptr(value, ObjectType::Type)?;
+            let Object::Type(ty) = self.get_object(ptr) else {
+                unreachable!("as_object_ptr guarantees Type variant");
+            };
+            class_type_args.push(*ty.clone());
+        }
+
+        let fields = if field_value_count == class_field_count
+            && plan
+                .fields
+                .iter()
+                .copied()
+                .enumerate()
+                .all(|(idx, field_idx)| idx == field_idx)
+        {
+            let fields = self
+                .stack
+                .drain(StackIndex::from_raw(base)..StackIndex::from_raw(base + field_value_count))
+                .collect();
+            if ntypeargs > 0 {
+                drop(self.stack.drain(StackIndex::from_raw(base)..));
+            }
+            fields
+        } else {
+            let mut fields = vec![Value::NULL; class_field_count];
+            let mut inputs = self.stack.drain(StackIndex::from_raw(base)..);
+            for (field_idx, value) in plan
+                .fields
+                .iter()
+                .copied()
+                .zip((&mut inputs).take(field_value_count))
+            {
+                fields[field_idx] = value;
+            }
+            drop(inputs);
+            fields
+        };
+
+        Ok(Value::object(self.tlab.alloc(Object::Instance(
+            Instance::new(class_ptr, class_type_args, fields),
+        ))))
+    }
+
     /// When a watched node changes, we need to update the graph topology
     /// and copy the previous values of the affected roots.
     fn update_watched_node(
@@ -2214,15 +2548,6 @@ impl BexVm {
         old_value: Value,
         new_value: Value,
     ) {
-        if let Some(old) = old_value.as_object_ptr() {
-            self.watch
-                .unlink_edge(watched_node, path.clone(), NodeId::HeapObject(old));
-        }
-
-        if let Some(new) = new_value.as_object_ptr() {
-            watch::track_watch_dependencies(&mut self.watch, watched_node, path, new);
-        }
-
         // Deep-copy previous root values so the notification filter can diff
         // old vs new. Two-pass because `baml_deep_copy` needs `&mut self`,
         // which conflicts with borrowing `self.watch` for root_state.
@@ -2236,10 +2561,29 @@ impl BexVm {
             }
         }
 
+        self.update_watched_node_dependencies(watched_node, path, old_value, new_value);
+
         for (&root, old_value) in roots.iter().zip(old_roots_copies) {
             if let Some(state) = self.watch.root_state_mut(root) {
                 state.last_assigned = Some(old_value);
             }
+        }
+    }
+
+    fn update_watched_node_dependencies(
+        &mut self,
+        watched_node: NodeId,
+        path: watch::Path,
+        old_value: Value,
+        new_value: Value,
+    ) {
+        if let Some(old) = old_value.as_object_ptr() {
+            self.watch
+                .unlink_edge(watched_node, path.clone(), NodeId::HeapObject(old));
+        }
+
+        if let Some(new) = new_value.as_object_ptr() {
+            watch::track_watch_dependencies(&mut self.watch, watched_node, path, new);
         }
     }
 
@@ -2366,8 +2710,8 @@ impl BexVm {
                     })
                 }
                 (Object::Uint8Array(_), Object::Uint8Array(_)) => {
-                    let la = self.as_uint8array(&left)?;
-                    let ra = self.as_uint8array(&right)?;
+                    let la = self.as_uint8array(&left)?.to_vec();
+                    let ra = self.as_uint8array(&right)?.to_vec();
                     Value::bool(match op {
                         CmpOp::Eq => la == ra,
                         CmpOp::NotEq => la != ra,
@@ -2866,31 +3210,21 @@ impl BexVm {
                     };
                     let local_var_index = Self::local_slot_stack_index(bf.locals_offset, slot);
                     let value = self.stack.ensure_pop();
-                    let old_value = std::mem::replace(&mut self.stack[local_var_index], value);
+                    if let Some(state) = self.store_local_value(local_var_index, value)? {
+                        return Ok(Some(state));
+                    }
+                }
 
-                    // Short-circuit the common case (no watches installed)
-                    // via the branch hint before paying for the hashmap
-                    // lookup. Measurable on `StoreVar`-heavy workloads
-                    // (every variable assignment hits this path).
-                    if unlikely(!self.watched_vars.is_empty())
-                        && self.watched_vars.contains_key(&local_var_index)
-                    {
-                        let watched_node = NodeId::LocalVar(local_var_index);
-                        self.update_watched_node(
-                            watched_node,
-                            watch::Path::Binding,
-                            old_value,
-                            value,
-                        );
-                        if let Some(state) = self.watch.root_state_mut(watched_node) {
-                            state.value = value;
-                        }
-                        let notifications = self.process_notifications(watched_node)?;
-                        if !notifications.is_empty() {
-                            return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
-                                notifications,
-                            ))));
-                        }
+                OpCode::StoreVarLoadVar => {
+                    let slot = { read_u32_unchecked(code, pc) as usize };
+                    let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                        unreachable!()
+                    };
+                    let local_var_index = Self::local_slot_stack_index(bf.locals_offset, slot);
+                    let value_slot = self.stack.ensure_slot_from_top(0);
+                    let value = self.stack[value_slot];
+                    if let Some(state) = self.store_local_value(local_var_index, value)? {
+                        return Ok(Some(state));
                     }
                 }
 
@@ -2924,7 +3258,7 @@ impl BexVm {
                         }
                         .into());
                     };
-                    let value = instance.fields[idx];
+                    let value = instance.load_field(idx);
                     self.stack.push(value);
                 }
 
@@ -2942,7 +3276,7 @@ impl BexVm {
                             }
                             .into());
                         };
-                        instance.fields[idx]
+                        instance.load_field(idx)
                     };
 
                     let watched_node = NodeId::HeapObject(obj_ptr);
@@ -2953,10 +3287,10 @@ impl BexVm {
                         new_value,
                     );
                     self.heap.write_barrier(obj_ptr, new_value);
-                    let Object::Instance(instance) = self.get_object_mut(obj_ptr) else {
+                    let Object::Instance(instance) = self.get_object(obj_ptr) else {
                         unreachable!("already type-checked above");
                     };
-                    instance.fields[idx] = new_value;
+                    instance.store_field(idx, new_value);
 
                     let notifications = self.process_notifications(watched_node)?;
                     if !notifications.is_empty() {
@@ -2972,15 +3306,29 @@ impl BexVm {
                     let instance_value = self.stack.ensure_pop();
                     let obj_ptr = self.as_object_ptr(instance_value, ObjectType::Instance)?;
                     self.heap.write_barrier(obj_ptr, new_value);
-                    let Object::Instance(instance) = self.get_object_mut(obj_ptr) else {
+                    let Object::Instance(instance) = self.get_object(obj_ptr) else {
                         return Err(VmInternalError::TypeError {
                             expected: ObjectType::Instance.into(),
                             got: ObjectType::of(self.get_object(obj_ptr)).into(),
                         }
                         .into());
                     };
-                    instance.fields[idx] = new_value;
+                    instance.store_field(idx, new_value);
                     self.stack.push(instance_value);
+                }
+
+                OpCode::InitSpread => {
+                    let idx = { read_u32_unchecked(code, pc) as usize };
+                    let source_value = self.stack.ensure_pop();
+                    let dest_slot = self.stack.ensure_slot_from_top(0);
+                    let dest_value = self.stack[dest_slot];
+                    if let Some(state) = self.init_spread(
+                        dest_value,
+                        source_value,
+                        &function.bytecode.field_copy_sets[idx],
+                    )? {
+                        return Ok(Some(state));
+                    }
                 }
 
                 // ── Pop / Copy ────────────────────────────────────────────────
@@ -3027,7 +3375,7 @@ impl BexVm {
                     } else {
                         IndexMap::new()
                     };
-                    let obj_index = self.tlab.alloc(Object::Map(Box::new(map.into())));
+                    let obj_index = self.tlab.alloc(Object::Map(map.into()));
                     self.stack.push(Value::object(obj_index));
                 }
 
@@ -3072,12 +3420,20 @@ impl BexVm {
                     fields.resize(class.fields.len(), Value::NULL);
                     let instance_ptr =
                         self.tlab
-                            .alloc(Object::Instance(bex_vm_types::types::Instance {
-                                class: class_ptr,
+                            .alloc(Object::Instance(bex_vm_types::types::Instance::new(
+                                class_ptr,
                                 class_type_args,
                                 fields,
-                            }));
+                            )));
                     self.stack.push(Value::object(instance_ptr));
+                }
+
+                OpCode::InitInstance => {
+                    let plan_idx = { read_u32_unchecked(code, pc) as usize };
+                    let instance = self.alloc_initialized_instance(
+                        &function.bytecode.class_init_plans[plan_idx],
+                    )?;
+                    self.stack.push(instance);
                 }
 
                 OpCode::AllocVariant => {
@@ -3789,7 +4145,7 @@ impl BexVm {
                 // ── MakeCell ──────────────────────────────────────────────────
                 OpCode::MakeCell => {
                     let value = self.stack.ensure_pop();
-                    let cell = Object::Cell(bex_vm_types::types::Cell { value });
+                    let cell = Object::Cell(bex_vm_types::types::Cell::new(value));
                     let ptr = self.tlab.alloc(cell);
                     self.stack.push(Value::object(ptr));
                 }
@@ -3903,7 +4259,7 @@ impl BexVm {
                         }
                         .into());
                     };
-                    self.stack.push(cell.value);
+                    self.stack.push(cell.load());
                 }
 
                 OpCode::StoreDeref => {
@@ -3922,7 +4278,7 @@ impl BexVm {
                         .into());
                     };
                     self.heap.write_barrier(cell_ptr, value);
-                    let obj = unsafe { cell_ptr.get_mut() };
+                    let obj = unsafe { cell_ptr.get() };
                     let Object::Cell(cell) = obj else {
                         return Err(VmInternalError::TypeError {
                             expected: ObjectType::Cell.into(),
@@ -3930,7 +4286,7 @@ impl BexVm {
                         }
                         .into());
                     };
-                    cell.value = value;
+                    cell.store(value);
                 }
 
                 // ── LoadCapture / StoreCapture / CaptureRef ───────────────────
@@ -3964,7 +4320,7 @@ impl BexVm {
                         }
                         .into());
                     };
-                    self.stack.push(cell.value);
+                    self.stack.push(cell.load());
                 }
 
                 OpCode::StoreCapture => {
@@ -3991,7 +4347,7 @@ impl BexVm {
                         .into());
                     };
                     self.heap.write_barrier(cell_ptr, value);
-                    let cell_obj = unsafe { cell_ptr.get_mut() };
+                    let cell_obj = unsafe { cell_ptr.get() };
                     let Object::Cell(cell) = cell_obj else {
                         return Err(VmInternalError::TypeError {
                             expected: ObjectType::Cell.into(),
@@ -3999,7 +4355,7 @@ impl BexVm {
                         }
                         .into());
                     };
-                    cell.value = value;
+                    cell.store(value);
                 }
 
                 OpCode::CaptureRef => {
@@ -4049,10 +4405,12 @@ impl BexVm {
                                 }
                             }
                             Object::Uint8Array(bytes) => {
-                                if i < 0 || (i as usize) >= bytes.len() {
-                                    Err((i, bytes.len()))
+                                let guard = bytes.lock();
+                                let len = guard.len();
+                                if i < 0 || (i as usize) >= len {
+                                    Err((i, len))
                                 } else {
-                                    Ok(Value::int(i64::from(bytes[i as usize])))
+                                    Ok(Value::int(i64::from(guard[i as usize])))
                                 }
                             }
                             other => {
@@ -4132,7 +4490,7 @@ impl BexVm {
                     // inner scope before any `&mut self` ops.
                     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
                     let store_result: Result<Value, (i64, usize)> = {
-                        match self.get_object_mut(array_object_index) {
+                        match self.get_object(array_object_index) {
                             Object::Array(arr) => {
                                 let mut guard = arr.lock_mut();
                                 let len = guard.len();
@@ -4152,11 +4510,13 @@ impl BexVm {
                                     }
                                     .into());
                                 };
-                                if i < 0 || (i as usize) >= bytes.len() {
-                                    Err((i, bytes.len()))
+                                let mut guard = bytes.lock_mut();
+                                let len = guard.len();
+                                if i < 0 || (i as usize) >= len {
+                                    Err((i, len))
                                 } else {
-                                    let old = Value::int(i64::from(bytes[i as usize]));
-                                    bytes[i as usize] = byte_v;
+                                    let old = Value::int(i64::from(guard[i as usize]));
+                                    guard[i as usize] = byte_v;
                                     Ok(old)
                                 }
                             }
@@ -4208,7 +4568,7 @@ impl BexVm {
                     // Take the map's write lock for capture-old + insert-new
                     // atomically. Guard drops before any `&mut self` ops.
                     let store_result: Result<Value, ObjectType> = {
-                        match self.get_object_mut(map_index) {
+                        match self.get_object(map_index) {
                             Object::Map(map) => {
                                 let mut guard = map.lock_mut();
                                 let old = guard.get(&key).copied().unwrap_or(Value::NULL);

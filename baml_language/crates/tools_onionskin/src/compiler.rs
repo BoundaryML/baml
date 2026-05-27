@@ -599,6 +599,11 @@ fn expr_desc_spans<'db>(
             spans.extend(expr_desc_spans(*condition, body, inference));
             spans.push(DetailSpan::Code(") { ... }".into()));
         }
+        Expr::IfLet { scrutinee, .. } => {
+            spans.push(DetailSpan::Code("if let ... = ".into()));
+            spans.extend(expr_desc_spans(*scrutinee, body, inference));
+            spans.push(DetailSpan::Code(" { ... }".into()));
+        }
         Expr::Match { scrutinee, .. } => {
             spans.push(DetailSpan::Code("match (".into()));
             spans.extend(expr_desc_spans(*scrutinee, body, inference));
@@ -2054,6 +2059,7 @@ impl CompilerRunner {
                     .collect::<Vec<_>>()
                     .join("."),
                 Expr::If { .. } => "if ...".into(),
+                Expr::IfLet { .. } => "if let ...".into(),
                 Expr::Match { .. } => "match ...".into(),
                 Expr::Is { scrutinee, .. } => {
                     format!("{} is <pattern>", expr_desc(*scrutinee, body))
@@ -5067,7 +5073,9 @@ fn format_vm_value(value: &bex_vm_types::Value, vm: &bex_vm::BexVm) -> String {
                             .fields
                             .iter()
                             .zip(inst.fields.iter())
-                            .map(|(f, val)| format!("{}: {}", f.name, format_vm_value(val, vm)))
+                            .map(|(f, val)| {
+                                format!("{}: {}", f.name, format_vm_value(&val.load(), vm))
+                            })
                             .collect();
                         format!("{}{{ {} }}", class.name, fields.join(", "))
                     } else {
@@ -5096,7 +5104,7 @@ fn format_vm_value(value: &bex_vm_types::Value, vm: &bex_vm::BexVm) -> String {
                 Object::Closure(c) => format!("<closure captures={}>", c.captures.len()),
                 Object::BoundMethod(_) => "<bound_method>".to_string(),
                 Object::HostClosure(_) => "<host_closure>".to_string(),
-                Object::Cell(c) => format!("<cell {}>", format_vm_value(&c.value, vm)),
+                Object::Cell(c) => format!("<cell {}>", format_vm_value(&c.load(), vm)),
                 Object::Uint8Array(bytes) => format!("<uint8array len={}>", bytes.len()),
                 Object::RustData(_) => "<rust_data>".to_string(),
                 #[cfg(feature = "heap_debug")]
