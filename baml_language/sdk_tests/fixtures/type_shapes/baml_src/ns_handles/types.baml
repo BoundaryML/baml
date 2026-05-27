@@ -34,3 +34,32 @@ function image_from_base64(data: string, mime: string?) -> image {
 function open_file_read(path: string) -> baml.fs.File {
   baml.fs.open(path, "r")
 }
+
+// `File`/`Response` instance methods bodied with `$rust_io_function`
+// lower to SysOps, which the host can't invoke as entry points
+// (`call_function_sync("baml.fs.File.read", …)` → "not invokable as an
+// entry point"). These thin wrappers invoke the method inside a BAML
+// body — where sysop dispatch works — and take the handle as a normal
+// parameter, so Python can drive a File/Response across multiple calls.
+// Passing the same handle into successive wrapper calls is what proves
+// the engine-side cursor state survives the FFI round trip.
+function file_read(f: baml.fs.File, n: int) -> string {
+  f.read(n)
+}
+
+function file_text(f: baml.fs.File) -> string {
+  f.text()
+}
+
+function file_seek(f: baml.fs.File, whence: "start" | "current" | "end", offset: int) -> int {
+  f.seek_from(whence, offset)
+}
+
+function file_close(f: baml.fs.File) -> null {
+  f.close()
+}
+
+// HTTP Response body read — also a SysOp, so wrapped the same way.
+function response_text(r: baml.http.Response) -> string {
+  r.text()
+}

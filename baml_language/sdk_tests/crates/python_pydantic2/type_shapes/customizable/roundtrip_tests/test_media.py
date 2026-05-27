@@ -2,20 +2,17 @@
 
 Media values can't be hand-built as plain dicts, so each value is sourced
 from the matching `return_*` function (which builds it engine-side via
-`image.from_url(...)` etc.). The *decode* path works — `return_*` yields a
-`BamlImage`/`BamlAudio`/… PyO3 object. The *encode* path is broken (see
-35b, "Bug B: media values can't be re-encoded as arguments"): passing one
-of those values back into a function fails with
+`image.from_url(...)` etc.). The *decode* path yields a
+`BamlImage`/`BamlAudio`/… PyO3 object; the *encode* path passes that value
+back into a `round_trip_*` function.
 
-    BamlClientError: Type mismatch: Unknown class `` in external Instance value
-
-because the typemap reverse-map seed is keyed on
-`("baml_core.baml_py", "BamlImage")` while the PyO3 type's actual
-`__module__` is `"builtins"`, so `py_type_to_baml_type` returns "". The
-`round_trip_*` cases are `xfail`-marked until that's fixed.
+Both directions work since 35c: the media PyO3 types are declared
+`#[pyclass(module = "baml_core.baml_py")]`, so `type(value).__module__`
+matches the typemap reverse-map seed `("baml_core.baml_py", "BamlImage")`
+and `py_type_to_baml_type` resolves the engine FQN on encode. (Before
+that fix PyO3 reported `__module__ == "builtins"`, the seed missed, and
+re-encode failed with `Unknown class ``— 35b "Bug B".)
 """
-
-import pytest
 
 import baml_sdk  # noqa: F401  — initializes the BAML runtime
 from baml_sdk.media import (
@@ -32,12 +29,6 @@ from baml_sdk.media import (
 )
 
 URL = "https://example.com/asset"
-
-_ENCODE_BUG = (
-    "Bug B (35b): media value re-encode fails — typemap reverse seed is "
-    "keyed ('baml_core.baml_py', 'BamlImage') but the PyO3 type's "
-    "__module__ is 'builtins', so py_type_to_baml_type returns ''."
-)
 
 
 # --- decode path (return_*) works -----------------------------------------
@@ -59,34 +50,29 @@ def test_return_pdf():
     assert return_pdf(url=URL, mime=None) is not None
 
 
-# --- encode path (round_trip_*) is broken: Bug B --------------------------
+# --- encode path (round_trip_*) ------------------------------------------
 
 
-@pytest.mark.xfail(reason=_ENCODE_BUG, strict=True)
 def test_round_trip_image():
     img = return_image(url=URL, mime=None)
     assert round_trip_image(x=img) is not None
 
 
-@pytest.mark.xfail(reason=_ENCODE_BUG, strict=True)
 def test_round_trip_audio():
     aud = return_audio(url=URL, mime=None)
     assert round_trip_audio(x=aud) is not None
 
 
-@pytest.mark.xfail(reason=_ENCODE_BUG, strict=True)
 def test_round_trip_video():
     vid = return_video(url=URL, mime=None)
     assert round_trip_video(x=vid) is not None
 
 
-@pytest.mark.xfail(reason=_ENCODE_BUG, strict=True)
 def test_round_trip_pdf():
     pdf = return_pdf(url=URL, mime=None)
     assert round_trip_pdf(x=pdf) is not None
 
 
-@pytest.mark.xfail(reason=_ENCODE_BUG, strict=True)
 def test_round_trip_media():
     m = Media(
         image_field=return_image(url=URL, mime=None),
