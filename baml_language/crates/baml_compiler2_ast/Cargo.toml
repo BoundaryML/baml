@@ -11,6 +11,7 @@ baml_base = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_compiler_syntax = { workspace = true }
 la-arena = { workspace = true }
+num-bigint = { workspace = true }
 rowan = { workspace = true }
 rustc-hash = { workspace = true }
 smol_str = { workspace = true }

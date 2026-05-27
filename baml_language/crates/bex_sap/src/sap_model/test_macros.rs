@@ -114,6 +114,9 @@ macro_rules! baml_ty {
     (int) => {
         $crate::sap_model::Ty::Resolved($crate::sap_model::TyResolved::Int($crate::sap_model::IntTy))
     };
+    (bigint) => {
+        $crate::sap_model::Ty::Resolved($crate::sap_model::TyResolved::Bigint($crate::sap_model::BigintTy))
+    };
     (float) => {
         $crate::sap_model::Ty::Resolved($crate::sap_model::TyResolved::Float($crate::sap_model::FloatTy))
     };
@@ -259,6 +262,9 @@ macro_rules! __parse_attr_literal_or_default {
 macro_rules! baml_tyresolved {
     (int) => {
         $crate::sap_model::TyResolved::Int($crate::sap_model::IntTy)
+    };
+    (bigint) => {
+        $crate::sap_model::TyResolved::Bigint($crate::sap_model::BigintTy)
     };
     (float) => {
         $crate::sap_model::TyResolved::Float($crate::sap_model::FloatTy)

@@ -58,7 +58,7 @@ class BamlHandle(_message.Message):
     def __init__(self, key: _Optional[int] = ..., handle_type: _Optional[_Union[BamlHandleType, str]] = ...) -> None: ...
 
 class InboundValue(_message.Message):
-    __slots__ = ("string_value", "int_value", "float_value", "bool_value", "list_value", "map_value", "class_value", "enum_value", "handle", "uint8array_value")
+    __slots__ = ("string_value", "int_value", "float_value", "bool_value", "list_value", "map_value", "class_value", "enum_value", "handle", "uint8array_value", "bigint_value")
     STRING_VALUE_FIELD_NUMBER: _ClassVar[int]
     INT_VALUE_FIELD_NUMBER: _ClassVar[int]
     FLOAT_VALUE_FIELD_NUMBER: _ClassVar[int]
@@ -69,6 +69,7 @@ class InboundValue(_message.Message):
     ENUM_VALUE_FIELD_NUMBER: _ClassVar[int]
     HANDLE_FIELD_NUMBER: _ClassVar[int]
     UINT8ARRAY_VALUE_FIELD_NUMBER: _ClassVar[int]
+    BIGINT_VALUE_FIELD_NUMBER: _ClassVar[int]
     string_value: str
     int_value: int
     float_value: float
@@ -79,7 +80,8 @@ class InboundValue(_message.Message):
     enum_value: InboundEnumValue
     handle: BamlHandle
     uint8array_value: bytes
-    def __init__(self, string_value: _Optional[str] = ..., int_value: _Optional[int] = ..., float_value: _Optional[float] = ..., bool_value: bool = ..., list_value: _Optional[_Union[InboundListValue, _Mapping]] = ..., map_value: _Optional[_Union[InboundMapValue, _Mapping]] = ..., class_value: _Optional[_Union[InboundClassValue, _Mapping]] = ..., enum_value: _Optional[_Union[InboundEnumValue, _Mapping]] = ..., handle: _Optional[_Union[BamlHandle, _Mapping]] = ..., uint8array_value: _Optional[bytes] = ...) -> None: ...
+    bigint_value: str
+    def __init__(self, string_value: _Optional[str] = ..., int_value: _Optional[int] = ..., float_value: _Optional[float] = ..., bool_value: bool = ..., list_value: _Optional[_Union[InboundListValue, _Mapping]] = ..., map_value: _Optional[_Union[InboundMapValue, _Mapping]] = ..., class_value: _Optional[_Union[InboundClassValue, _Mapping]] = ..., enum_value: _Optional[_Union[InboundEnumValue, _Mapping]] = ..., handle: _Optional[_Union[BamlHandle, _Mapping]] = ..., uint8array_value: _Optional[bytes] = ..., bigint_value: _Optional[str] = ...) -> None: ...
 
 class InboundListValue(_message.Message):
     __slots__ = ("values",)

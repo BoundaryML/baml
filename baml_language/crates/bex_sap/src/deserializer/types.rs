@@ -62,6 +62,10 @@ impl<N: TypeIdent> std::fmt::Debug for BamlValueWithFlags<'_, '_, '_, N> {
         match &self.value {
             BamlValue::String(s) => f.debug_tuple("String").field(&s.value).finish(),
             BamlValue::Int(i) => f.debug_tuple("Int").field(&i.value).finish(),
+            BamlValue::Bigint(bi) => f
+                .debug_tuple("Bigint")
+                .field(&bi.value.to_string())
+                .finish(),
             BamlValue::Float(fl) => f.debug_tuple("Float").field(&fl.value).finish(),
             BamlValue::Bool(b) => f.debug_tuple("Bool").field(&b.value).finish(),
             BamlValue::Array(arr) => f
@@ -180,6 +184,7 @@ impl<N: TypeIdent> BamlValueWithFlags<'_, '_, '_, N> {
             let reason = match &self.value {
                 BamlValue::String(_) => "error while parsing string".to_string(),
                 BamlValue::Int(_) => "error while parsing int".to_string(),
+                BamlValue::Bigint(_) => "error while parsing bigint".to_string(),
                 BamlValue::Float(_) => "error while parsing float".to_string(),
                 BamlValue::Bool(_) => "error while parsing bool".to_string(),
                 BamlValue::Array(_) => "error while parsing list".to_string(),
@@ -257,6 +262,7 @@ impl<N: TypeIdent> BamlValueWithFlags<'_, '_, '_, N> {
         match &self.value {
             BamlValue::String(..) => Cow::Borrowed("String"),
             BamlValue::Int(..) => Cow::Borrowed("Int"),
+            BamlValue::Bigint(..) => Cow::Borrowed("Bigint"),
             BamlValue::Float(..) => Cow::Borrowed("Float"),
             BamlValue::Bool(..) => Cow::Borrowed("Bool"),
             BamlValue::Array(arr) => {
@@ -290,6 +296,9 @@ impl<N: TypeIdent> std::fmt::Display for BamlValueWithFlags<'_, '_, '_, N> {
             }
             BamlValue::Int(i) => {
                 write!(f, "{}", i.value)?;
+            }
+            BamlValue::Bigint(bi) => {
+                write!(f, "{}", bi.value)?;
             }
             BamlValue::Float(fl) => {
                 write!(f, "{}", bex_vm_types::format_float(fl.value))?;

@@ -17,6 +17,12 @@ pub enum CtypesError {
     #[error("Map entry missing key")]
     MapEntryMissingKey,
 
+    /// Carries only the input length, not the input itself — untrusted hex
+    /// blobs can be up to the FFI decode cap (~67M chars), and embedding
+    /// them in error messages bloats logs and exposes payload contents.
+    #[error("Invalid bigint hex string ({len} bytes)")]
+    InvalidBigint { len: usize },
+
     #[error("Internal error: {0}")]
     InternalError(String),
 }

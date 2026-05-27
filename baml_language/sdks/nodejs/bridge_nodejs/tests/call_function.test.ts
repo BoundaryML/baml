@@ -113,6 +113,12 @@ class Tagged {
 function MakeTagged(label: string) -> Tagged {
     Tagged { label: label, scores: [10, 20, 30] }
 }
+
+// ── Bigint round-trip ──
+
+function EchoBigint(x: bigint) -> bigint {
+    x
+}
 `;
 
 // ============================================================================
@@ -243,6 +249,30 @@ describe('callFunctionSync', () => {
         });
     });
 
+    // ── Bigint round-trip ──
+
+    it('EchoBigint round-trips a small bigint', () => {
+        const result = callFunctionSync(rt, 'EchoBigint', { x: 42n });
+        const value = result.result();
+        expect(typeof value).toBe('bigint');
+        expect(value).toBe(42n);
+    });
+
+    it('EchoBigint round-trips a large positive bigint', () => {
+        const huge = 99999999999999999999n;
+        const result = callFunctionSync(rt, 'EchoBigint', { x: huge });
+        const value = result.result();
+        expect(typeof value).toBe('bigint');
+        expect(value).toBe(huge);
+    });
+
+    it('EchoBigint round-trips a negative bigint', () => {
+        const result = callFunctionSync(rt, 'EchoBigint', { x: -42n });
+        const value = result.result();
+        expect(typeof value).toBe('bigint');
+        expect(value).toBe(-42n);
+    });
+
     // ── Error case ──
 
     it('throws for unknown function', () => {
@@ -364,6 +394,30 @@ describe('callFunction (async)', () => {
             label: 'test',
             scores: [10, 20, 30],
         });
+    });
+
+    // ── Bigint round-trip ──
+
+    it('EchoBigint round-trips a small bigint', async () => {
+        const result = await callFunction(rt, 'EchoBigint', { x: 42n });
+        const value = result.result();
+        expect(typeof value).toBe('bigint');
+        expect(value).toBe(42n);
+    });
+
+    it('EchoBigint round-trips a large positive bigint', async () => {
+        const huge = 99999999999999999999n;
+        const result = await callFunction(rt, 'EchoBigint', { x: huge });
+        const value = result.result();
+        expect(typeof value).toBe('bigint');
+        expect(value).toBe(huge);
+    });
+
+    it('EchoBigint round-trips a negative bigint', async () => {
+        const result = await callFunction(rt, 'EchoBigint', { x: -42n });
+        const value = result.result();
+        expect(typeof value).toBe('bigint');
+        expect(value).toBe(-42n);
     });
 
     // ── Error case ──

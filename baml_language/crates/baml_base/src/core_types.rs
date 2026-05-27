@@ -241,6 +241,7 @@ impl fmt::Display for MediaKind {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Literal {
     Int(i64),
+    Bigint(num_bigint::BigInt),
     Float(String),
     String(String),
     Bool(bool),
@@ -251,6 +252,7 @@ impl fmt::Display for Literal {
         match self {
             Literal::String(s) => write!(f, "{s:?}"),
             Literal::Int(i) => write!(f, "{i}"),
+            Literal::Bigint(n) => write!(f, "{n}n"),
             Literal::Float(s) => write!(f, "{s}"),
             Literal::Bool(b) => write!(f, "{b}"),
         }

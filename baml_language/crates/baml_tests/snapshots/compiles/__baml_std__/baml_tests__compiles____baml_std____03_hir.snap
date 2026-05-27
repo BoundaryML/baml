@@ -5,6 +5,23 @@ source: crates/baml_tests/src/generated_tests.rs
 
 === HIR2 (package baml) ===
 
+--- <builtin>/baml/bigint.baml ---
+class baml.Bigint {
+}
+function baml.abs(self: ?) -> bigint  [builtin]
+function baml.clamp(self: ?, min: bigint, max: bigint) -> bigint  [builtin]
+function baml.from_json(j: baml.json.json) -> baml.Bigint  [expr] {
+  baml.Bigint {  }
+}
+function baml.ilog(self: ?, base: bigint) -> bigint  [builtin]
+function baml.isqrt(self: ?) -> bigint  [builtin]
+function baml.max(self: ?, other: bigint) -> bigint  [builtin]
+function baml.min(self: ?, other: bigint) -> bigint  [builtin]
+function baml.parse(text: string) -> bigint  [builtin]
+function baml.pow(self: ?, exp: bigint) -> bigint  [builtin]
+function baml.random(lower: bigint, upper: bigint) -> bigint  [builtin]
+function baml.to_json(self: ?) -> baml.json.json  [builtin]
+
 --- <builtin>/baml/bool.baml ---
 class baml.Bool {
 }
@@ -898,6 +915,9 @@ class baml.panics.IndexOutOfBounds {
 class baml.panics.MapKeyNotFound {
   key: string
 }
+class baml.panics.NegativeBitShift {
+  message: string
+}
 class baml.panics.StackOverflow {
   message: string
 }
@@ -907,9 +927,12 @@ class baml.panics.Unreachable {
 class baml.panics.UserPanic {
   message: string
 }
-type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.Cancelled | baml.panics.UserPanic | baml.panics.Exit | baml.panics.AllocFailure | baml.panics.HostUnavailable
+type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.Cancelled | baml.panics.UserPanic | baml.panics.Exit | baml.panics.AllocFailure | baml.panics.HostUnavailable | baml.panics.NegativeBitShift
 function baml.panics.from_json(j: baml.json.json) -> baml.panics.DivisionByZero  [expr] {
   baml.panics.DivisionByZero { dividend: baml.json.from_json(baml.json.field(j, "dividend")) }
+}
+function baml.panics.from_json(j: baml.json.json) -> baml.panics.NegativeBitShift  [expr] {
+  baml.panics.NegativeBitShift { message: baml.json.from_json(baml.json.field(j, "message")) }
 }
 function baml.panics.from_json(j: baml.json.json) -> baml.panics.StackOverflow  [expr] {
   baml.panics.StackOverflow { message: baml.json.from_json(baml.json.field(j, "message")) }
@@ -946,6 +969,9 @@ function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
   map { "dividend": self.dividend.to_json() }
+}
+function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "message": self.message.to_json() }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
   map { "message": self.message.to_json() }

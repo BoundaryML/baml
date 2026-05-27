@@ -97,9 +97,20 @@ fn collect_from_stmt<C: ThrowsAnalysisContext>(
 ) {
     match &body.stmts[stmt_id] {
         Stmt::Expr(expr_id) => collect_from_expr(context, *expr_id, body, out),
-        Stmt::Let { initializer, .. } => {
+        Stmt::Let {
+            initializer,
+            else_branch,
+            ..
+        } => {
             if let Some(init) = initializer {
                 collect_from_expr(context, *init, body, out);
+            }
+            if let Some(else_expr) = else_branch {
+                // Throws from a `let … else` else block escape the
+                // enclosing function unless caught — they're part of the
+                // function's effect set just like throws from anywhere else
+                // in the body.
+                collect_from_expr(context, *else_expr, body, out);
             }
         }
         Stmt::While {

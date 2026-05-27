@@ -33,6 +33,31 @@ pub use lower_cst::{
 pub use lower_expr_body::EnvVarRef;
 pub use lowering_diagnostic::LoweringDiagnostic;
 
+/// Parse the digit body of a `bigint` literal into a [`num_bigint::BigInt`].
+///
+/// The lexer (`baml_compiler_lexer`) guarantees one-or-more ASCII decimal
+/// digits, so a parse failure here indicates the CST has been corrupted.
+/// Callers should pass the digit-only string (with the trailing `n` suffix
+/// already stripped).
+pub fn parse_bigint_literal_digits(digits: &str) -> num_bigint::BigInt {
+    num_bigint::BigInt::parse_bytes(digits.as_bytes(), 10).unwrap_or_else(|| {
+        unreachable!("CST bigint_literal returned non-decimal digits: {digits:?}")
+    })
+}
+
+/// Parse the raw text of a `BIGINT_LITERAL` token (digits plus trailing
+/// lowercase `n` suffix) into a [`num_bigint::BigInt`]. The lexer guarantees
+/// the suffix is present, so its absence panics with `unreachable!`.
+pub fn parse_bigint_literal_token(text: &str) -> num_bigint::BigInt {
+    let digits = text
+        .strip_suffix('n')
+        .unwrap_or_else(|| unreachable!("BIGINT_LITERAL missing 'n' suffix: {text:?}"));
+    parse_bigint_literal_digits(digits)
+}
+
+// `unescape_string_literal` lives in `baml_base::escape` and is re-exported
+// above. The pre-merge canary copy was dropped here in favor of the shared
+// implementation introduced by BEP-049 M1.
 #[cfg(test)]
 mod tests {
     use baml_base::FileId;
@@ -94,6 +119,7 @@ mod tests {
 
         // ── Leaves ──
         (Int $(, Attr($a:expr))*) => { TypeExpr::Int { attrs: type_expr!(@attrs $(, Attr($a))*) } };
+        (Bigint $(, Attr($a:expr))*) => { TypeExpr::Bigint { attrs: type_expr!(@attrs $(, Attr($a))*) } };
         (Float $(, Attr($a:expr))*) => { TypeExpr::Float { attrs: type_expr!(@attrs $(, Attr($a))*) } };
         (String $(, Attr($a:expr))*) => { TypeExpr::String { attrs: type_expr!(@attrs $(, Attr($a))*) } };
         (Bool $(, Attr($a:expr))*) => { TypeExpr::Bool { attrs: type_expr!(@attrs $(, Attr($a))*) } };
@@ -171,6 +197,9 @@ mod tests {
 
         match expr {
             TypeExpr::Int { attrs } => TypeExpr::Int {
+                attrs: strip_attrs(attrs),
+            },
+            TypeExpr::Bigint { attrs } => TypeExpr::Bigint {
                 attrs: strip_attrs(attrs),
             },
             TypeExpr::Float { attrs } => TypeExpr::Float {

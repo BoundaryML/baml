@@ -25,6 +25,18 @@ use bex_vm_types::{
     },
 };
 
+/// Coarse arithmetic-type classification used by [`try_specialize_binary_op`].
+///
+/// Collapses `Ty::Int { .. }` / `Ty::Literal(Int(_))` (and similar) into a
+/// single tag so specialization works regardless of whether TIR preserved a
+/// literal type after constant-folding.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ArithTyClass {
+    Int,
+    Float,
+    Bigint,
+}
+
 // ============================================================================
 // Switch Strategy Analysis
 // ============================================================================
@@ -436,6 +448,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         match operand {
             Operand::Constant(c) => match c {
                 Constant::Int(_) => Some(Ty::int()),
+                Constant::Bigint(_) => Some(Ty::bigint()),
                 Constant::Float(_) => Some(Ty::float()),
                 Constant::String(_) => Some(Ty::string()),
                 Constant::Bool(_) => Some(Ty::bool()),
@@ -444,6 +457,25 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 _ => None,
             },
             Operand::Copy(place) | Operand::Move(place) => self.resolve_place_type(place),
+        }
+    }
+
+    /// Classify a type for binary-op specialization. Returns `None` if the
+    /// type isn't one of the primitive numeric forms we can specialize on.
+    ///
+    /// Both `Ty::Int { .. }` and `Ty::Literal(Literal::Int(_), _)` map to
+    /// `Int`, and similarly for `Float`/`Bigint`. This lets us specialize
+    /// expressions like `(-1n) & 255n` where the lhs operand carries a
+    /// `Ty::Literal(Bigint(-1))` after constant-folding in TIR.
+    fn classify_arith_ty(ty: &Ty) -> Option<ArithTyClass> {
+        match ty {
+            Ty::Int { .. } => Some(ArithTyClass::Int),
+            Ty::Float { .. } => Some(ArithTyClass::Float),
+            Ty::Bigint { .. } => Some(ArithTyClass::Bigint),
+            Ty::Literal(baml_type::Literal::Int(_), _) => Some(ArithTyClass::Int),
+            Ty::Literal(baml_type::Literal::Float(_), _) => Some(ArithTyClass::Float),
+            Ty::Literal(baml_type::Literal::Bigint(_), _) => Some(ArithTyClass::Bigint),
+            _ => None,
         }
     }
 
@@ -459,8 +491,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         let left_ty = self.resolve_operand_type(left)?;
         let right_ty = self.resolve_operand_type(right)?;
 
-        match (&left_ty, &right_ty) {
-            (Ty::Int { .. }, Ty::Int { .. }) => match op {
+        let left_class = Self::classify_arith_ty(&left_ty)?;
+        let right_class = Self::classify_arith_ty(&right_ty)?;
+
+        match (left_class, right_class) {
+            (ArithTyClass::Int, ArithTyClass::Int) => match op {
                 BinOp::Add => Some(Instruction::AddInt),
                 BinOp::Sub => Some(Instruction::SubInt),
                 BinOp::Mul => Some(Instruction::MulInt),
@@ -474,7 +509,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 BinOp::Ge => Some(Instruction::CmpIntOp(CmpOp::GtEq)),
                 _ => None, // bitwise ops stay generic
             },
-            (Ty::Float { .. }, Ty::Float { .. }) => match op {
+            (ArithTyClass::Float, ArithTyClass::Float) => match op {
                 BinOp::Add => Some(Instruction::AddFloat),
                 BinOp::Sub => Some(Instruction::SubFloat),
                 BinOp::Mul => Some(Instruction::MulFloat),
@@ -486,6 +521,28 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 BinOp::Gt => Some(Instruction::CmpFloatOp(CmpOp::Gt)),
                 BinOp::Ge => Some(Instruction::CmpFloatOp(CmpOp::GtEq)),
                 _ => None,
+            },
+            // A mixed `bigint`/`int` pair routes to the same specialized
+            // opcodes: the VM resolves the lone `int` operand to a small local
+            // `BigInt` without allocating a heap bigint for it.
+            (ArithTyClass::Bigint | ArithTyClass::Int, ArithTyClass::Bigint)
+            | (ArithTyClass::Bigint, ArithTyClass::Int) => match op {
+                BinOp::Add => Some(Instruction::AddBigint),
+                BinOp::Sub => Some(Instruction::SubBigint),
+                BinOp::Mul => Some(Instruction::MulBigint),
+                BinOp::Div => Some(Instruction::DivBigint),
+                BinOp::Mod => Some(Instruction::ModBigint),
+                BinOp::BitAnd => Some(Instruction::BitAndBigint),
+                BinOp::BitOr => Some(Instruction::BitOrBigint),
+                BinOp::BitXor => Some(Instruction::BitXorBigint),
+                BinOp::Shl => Some(Instruction::ShlBigint),
+                BinOp::Shr => Some(Instruction::ShrBigint),
+                BinOp::Eq => Some(Instruction::CmpBigintOp(CmpOp::Eq)),
+                BinOp::Ne => Some(Instruction::CmpBigintOp(CmpOp::NotEq)),
+                BinOp::Lt => Some(Instruction::CmpBigintOp(CmpOp::Lt)),
+                BinOp::Le => Some(Instruction::CmpBigintOp(CmpOp::LtEq)),
+                BinOp::Gt => Some(Instruction::CmpBigintOp(CmpOp::Gt)),
+                BinOp::Ge => Some(Instruction::CmpBigintOp(CmpOp::GtEq)),
             },
             _ => None,
         }
@@ -1486,6 +1543,20 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let inst = self.emit(Instruction::LoadConst(idx));
                 self.set_operand(inst, OperandMeta::Const(v.to_string()));
             }
+            Constant::Bigint(v) => {
+                // Bigints are heap-allocated objects like strings.
+                // Push an Object::Bigint into the compile-time objects pool and
+                // reference it via ConstValue::Object so that `to_value()` can
+                // resolve it to a HeapPtr at load time.
+                let operand_str = format!("{v}n");
+                let obj_idx = self.objects.len();
+                self.objects
+                    .push(Object::Bigint(std::sync::Arc::new(v.clone())));
+                let const_idx =
+                    self.add_constant(ConstValue::Object(ObjectIndex::from_raw(obj_idx)));
+                let inst = self.emit(Instruction::LoadConst(const_idx));
+                self.set_operand(inst, OperandMeta::Const(operand_str));
+            }
             Constant::Float(v) => {
                 let idx = self.add_constant(ConstValue::Float(*v));
                 let inst = self.emit(Instruction::LoadConst(idx));
@@ -2455,12 +2526,16 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 // is called rather than the generic `walk_rvalue_pull` inlining path.
                 // MakeBoundMethod must also be handled specially: it is not handled by
                 // `walk_rvalue_pull` (which panics on it), so route through `emit_rvalue_pull`.
+                // BinaryOp must be routed through `emit_rvalue_pull` so that the
+                // type-aware specialization in `try_specialize_binary_op` can fire
+                // (e.g. emitting `CmpBigintOp` instead of the generic `CmpOp`).
                 // Class aggregates may use emitter-only spread helpers, so they
                 // also need to flow through `emit_rvalue_pull` when inlined.
                 if matches!(
                     rvalue,
                     Rvalue::MakeClosure { .. }
                         | Rvalue::MakeBoundMethod { .. }
+                        | Rvalue::BinaryOp { .. }
                         | Rvalue::Aggregate {
                             kind: baml_compiler2_mir::AggregateKind::Class { .. },
                             ..
@@ -2741,6 +2816,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 // ── Primitive type tags ───────────────────────────────────────
                 let type_tag = match ty {
                     Ty::Int { .. } => Some(baml_type::typetag::INT),
+                    Ty::Bigint { .. } => Some(baml_type::typetag::BIGINT),
                     Ty::String { .. } => Some(baml_type::typetag::STRING),
                     Ty::Bool { .. } => Some(baml_type::typetag::BOOL),
                     Ty::Null { .. } => Some(baml_type::typetag::NULL),
@@ -2752,6 +2828,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
                     Ty::Uint8Array { .. } => Some(baml_type::typetag::UINT8ARRAY),
                     Ty::Literal(lit, _) => Some(match lit {
                         baml_base::Literal::Int(_) => baml_type::typetag::INT,
+                        baml_base::Literal::Bigint(_) => baml_type::typetag::BIGINT,
                         baml_base::Literal::Float(_) => baml_type::typetag::FLOAT,
                         baml_base::Literal::String(_) => baml_type::typetag::STRING,
                         baml_base::Literal::Bool(_) => baml_type::typetag::BOOL,

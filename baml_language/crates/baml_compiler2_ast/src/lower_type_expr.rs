@@ -215,6 +215,14 @@ fn lower_base_type(type_expr: &CstTypeExpr) -> TypeExpr {
         };
     }
 
+    if let Some(digits_str) = type_expr.bigint_literal() {
+        let value = crate::parse_bigint_literal_digits(&digits_str);
+        return TypeExpr::Literal {
+            value: baml_base::Literal::Bigint(value),
+            attrs: vec![],
+        };
+    }
+
     if let Some(i) = type_expr.integer_literal() {
         return TypeExpr::Literal {
             value: baml_base::Literal::Int(i),
@@ -300,6 +308,14 @@ fn lower_union_member_base(parts: &baml_compiler_syntax::ast::UnionMemberParts) 
         };
     }
 
+    if let Some(digits_str) = parts.bigint_literal() {
+        let value = crate::parse_bigint_literal_digits(&digits_str);
+        return TypeExpr::Literal {
+            value: baml_base::Literal::Bigint(value),
+            attrs: vec![],
+        };
+    }
+
     if let Some(i) = parts.integer_literal() {
         return TypeExpr::Literal {
             value: baml_base::Literal::Int(i),
@@ -367,6 +383,7 @@ fn lower_union_member_base(parts: &baml_compiler_syntax::ast::UnionMemberParts) 
 fn lower_from_type_name_with_generic_args(name: &str, generic_args: Vec<TypeExpr>) -> TypeExpr {
     match name {
         "int" => TypeExpr::Int { attrs: vec![] },
+        "bigint" => TypeExpr::Bigint { attrs: vec![] },
         "float" => TypeExpr::Float { attrs: vec![] },
         "string" => TypeExpr::String { attrs: vec![] },
         "bool" => TypeExpr::Bool { attrs: vec![] },

@@ -311,6 +311,9 @@ fn write_literal_identity(out: &mut String, lit: &Literal) {
         Literal::Int(v) => {
             let _ = write!(out, "i{v}");
         }
+        Literal::Bigint(v) => {
+            let _ = write!(out, "i{v}n");
+        }
         Literal::Bool(v) => {
             out.push_str(if *v { "bT" } else { "bF" });
         }
@@ -510,6 +513,7 @@ fn write_single_witness(f: &mut fmt::Formatter<'_>, ty: &Ty) -> fmt::Result {
     match ty {
         Ty::Literal(lit, _, _) => match lit {
             Literal::Int(v) => write!(f, "{v}"),
+            Literal::Bigint(v) => write!(f, "{v}n"),
             Literal::Bool(v) => write!(f, "{v}"),
             Literal::String(v) => write!(f, "{v:?}"),
             Literal::Float(s) => write!(f, "{s}"),

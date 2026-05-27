@@ -106,6 +106,8 @@ fn deep_copy_value_recursive(
                     placeholder_ptr
                 }
 
+                // Bigint is behind Arc — clone() is cheap (increments refcount).
+                Object::Bigint(arc) => vm.tlab.alloc(Object::Bigint(std::sync::Arc::clone(&arc))),
                 Object::Function(f) => vm.tlab.alloc(Object::Function(f)),
                 Object::Class(c) => vm.tlab.alloc(Object::Class(c)),
                 Object::Enum(e) => vm.tlab.alloc(Object::Enum(e)),
@@ -175,6 +177,9 @@ fn deep_equals_recursive(
                     let b_snap = b.to_vec();
                     a_snap == b_snap
                 }
+
+                // Different `Arc`s with the same numeric value must compare equal.
+                (Object::Bigint(a), Object::Bigint(b)) => a == b,
 
                 (Object::Array(a_values), Object::Array(b_values)) => {
                     // Snapshot under each lock before recursing; deep_equals

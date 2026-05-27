@@ -211,8 +211,19 @@ pub(crate) fn display_instruction(
         | Instruction::SubFloat
         | Instruction::MulFloat
         | Instruction::DivFloat
+        | Instruction::AddBigint
+        | Instruction::SubBigint
+        | Instruction::MulBigint
+        | Instruction::DivBigint
+        | Instruction::ModBigint
+        | Instruction::BitAndBigint
+        | Instruction::BitOrBigint
+        | Instruction::BitXorBigint
+        | Instruction::ShlBigint
+        | Instruction::ShrBigint
         | Instruction::CmpIntOp(_)
         | Instruction::CmpFloatOp(_)
+        | Instruction::CmpBigintOp(_)
         | Instruction::UnaryOp(_)
         | Instruction::AllocArray(_)
         | Instruction::AllocMap(_)
@@ -367,8 +378,19 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::SubFloat
         | Instruction::MulFloat
         | Instruction::DivFloat
+        | Instruction::AddBigint
+        | Instruction::SubBigint
+        | Instruction::MulBigint
+        | Instruction::DivBigint
+        | Instruction::ModBigint
+        | Instruction::BitAndBigint
+        | Instruction::BitOrBigint
+        | Instruction::BitXorBigint
+        | Instruction::ShlBigint
+        | Instruction::ShrBigint
         | Instruction::CmpIntOp(_)
         | Instruction::CmpFloatOp(_)
+        | Instruction::CmpBigintOp(_)
         | Instruction::UnaryOp(_) => Style::new().blue().bright(),
         Instruction::Jump(_)
         | Instruction::PopJumpIfFalse(_)
@@ -793,8 +815,19 @@ fn display_instruction_textual(
         Instruction::SubFloat => "sub_float".to_string(),
         Instruction::MulFloat => "mul_float".to_string(),
         Instruction::DivFloat => "div_float".to_string(),
+        Instruction::AddBigint => "add_bigint".to_string(),
+        Instruction::SubBigint => "sub_bigint".to_string(),
+        Instruction::MulBigint => "mul_bigint".to_string(),
+        Instruction::DivBigint => "div_bigint".to_string(),
+        Instruction::ModBigint => "mod_bigint".to_string(),
+        Instruction::BitAndBigint => "bit_and_bigint".to_string(),
+        Instruction::BitOrBigint => "bit_or_bigint".to_string(),
+        Instruction::BitXorBigint => "bit_xor_bigint".to_string(),
+        Instruction::ShlBigint => "shl_bigint".to_string(),
+        Instruction::ShrBigint => "shr_bigint".to_string(),
         Instruction::CmpIntOp(op) => format!("cmp_int_op {op}"),
         Instruction::CmpFloatOp(op) => format!("cmp_float_op {op}"),
+        Instruction::CmpBigintOp(op) => format!("cmp_bigint_op {op}"),
         Instruction::UnaryOp(op) => format!("unary_op {op}"),
 
         // --- Allocation ---
@@ -1218,6 +1251,16 @@ pub fn display_compact_bytecode(
             | OpCode::SubFloat
             | OpCode::MulFloat
             | OpCode::DivFloat
+            | OpCode::AddBigint
+            | OpCode::SubBigint
+            | OpCode::MulBigint
+            | OpCode::DivBigint
+            | OpCode::ModBigint
+            | OpCode::BitAndBigint
+            | OpCode::BitOrBigint
+            | OpCode::BitXorBigint
+            | OpCode::ShlBigint
+            | OpCode::ShrBigint
             | OpCode::CmpIntEq
             | OpCode::CmpIntNotEq
             | OpCode::CmpIntLt
@@ -1230,6 +1273,12 @@ pub fn display_compact_bytecode(
             | OpCode::CmpFloatLtEq
             | OpCode::CmpFloatGt
             | OpCode::CmpFloatGtEq
+            | OpCode::CmpBigintEq
+            | OpCode::CmpBigintNotEq
+            | OpCode::CmpBigintLt
+            | OpCode::CmpBigintLtEq
+            | OpCode::CmpBigintGt
+            | OpCode::CmpBigintGtEq
             | OpCode::Not
             | OpCode::Neg
             | OpCode::LoadNull
