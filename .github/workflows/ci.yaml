@@ -471,80 +471,6 @@ jobs:
           fi
           echo "All generated proto files are in sync."
 
-  benchmarks-instrumented:
-    name: "benchmarks instrumented (baml)"
-    # Must stay on the same runner family as the `linux-cargo` saver
-    # (cargo-test-linux). Swatinem/rust-cache hashes every installed rustup
-    # toolchain into the env-hash, and GitHub-hosted `ubuntu-latest` ships a
-    # different pre-installed stable than the Blacksmith ubuntu-2404 image,
-    # which used to flip the cache prefix and force a cold build.
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    needs: determine_changes
-    # Run benchmarks when any Rust code changes, on manual opt-in, or on push to main/canary.
-    # Skip merge_group since they already ran in the PR.
-    if: |
-      github.event_name != 'merge_group' &&
-      (
-        needs.determine_changes.outputs.code == 'true' ||
-        github.ref == 'refs/heads/main' ||
-        github.ref == 'refs/heads/canary' ||
-        contains(github.event.pull_request.body, 'RUN_CODSPEED=1')
-      )
-    timeout-minutes: 30
-    steps:
-      - name: "Checkout Branch"
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
-      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
-      - name: "Install Rust toolchain"
-        run: rustup show
-        working-directory: baml_language
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          # See the cache strategy explanation at the top of cargo-tests.reusable.yaml.
-          save-if: false
-          shared-key: "linux-cargo"
-
-      - name: "Install codspeed"
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-codspeed
-
-      - name: "Build benchmarks"
-        run: cargo codspeed build -p baml_tests -m walltime
-        working-directory: baml_language
-
-      # CodSpeed's walltime runner auto-installs `linux-tools-$(uname -r)` so
-      # its bundled `perf` matches the running kernel. Blacksmith's ubuntu-2404
-      # image runs a kernel Ubuntu's apt repos don't ship a matching
-      # `linux-tools-*` package for, so that step bails with
-      # `Unable to locate package linux-tools-<kernel>`. Pre-install
-      # `linux-tools-common` + `linux-tools-generic` instead: the generic meta
-      # package pulls in a perf binary at `/usr/lib/linux-tools-*/perf`, which
-      # CodSpeed's `get_working_perf_executable()` falls back to via
-      # `find /usr/lib -path "/usr/lib/linux-tools-*/perf"` when `which perf`
-      # fails — at which point CodSpeed's own apt install short-circuits.
-      # Source: https://github.com/CodSpeedHQ/runner/blob/main/src/executor/wall_time/profiler/perf/{setup,perf_executable}.rs
-      - name: "Pre-install perf for CodSpeed (Blacksmith image)"
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends linux-tools-common linux-tools-generic
-          # Smoke-test: at least one of these must succeed, otherwise CodSpeed
-          # will silently fall through to its own broken apt install path.
-          perf --version || ls /usr/lib/linux-tools-*/perf
-
-      - name: "Run benchmarks"
-        uses: CodSpeedHQ/action@v4
-        continue-on-error: true
-        with:
-          mode: walltime
-          run: cd baml_language && cargo codspeed run
-          token: ${{ secrets.CODSPEED_TOKEN }}
-
   # CI Failure Alert - Required status check using "skipped = success" pattern
   # See: https://devopsdirective.com/posts/2025/08/github-actions-required-checks-for-conditional-jobs/
   #
@@ -566,7 +492,6 @@ jobs:
       - webview-tests
       # - miri-tests  # TEMPORARILY DISABLED: miri tests timing out
       - proto-sync
-      - benchmarks-instrumented
     # Only run if something failed or was cancelled (otherwise skip → success)
     if: ${{ failure() || cancelled() }}
     steps:
@@ -587,7 +512,6 @@ jobs:
           echo "| webview-tests | ${{ needs.webview-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           # echo "| miri-tests | ${{ needs.miri-tests.result }} |" >> $GITHUB_STEP_SUMMARY  # TEMPORARILY DISABLED
           echo "| proto-sync | ${{ needs.proto-sync.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| benchmarks-instrumented | ${{ needs.benchmarks-instrumented.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "::error::One or more CI jobs failed!"
           exit 1

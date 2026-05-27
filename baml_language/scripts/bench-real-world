@@ -821,6 +821,11 @@ def fmt_ratio(a, b):
         return f"{r:.2f}x"
 
 
+def baml_run_cmd(binary, baml_file):
+    """Run the benchmark's main() from a standalone BAML source file."""
+    return [binary, "run", "--file", baml_file, "main"]
+
+
 def main():
     parser = argparse.ArgumentParser(description="Real-world BAML benchmarks")
     parser.add_argument("--baseline", help="Path to baseline baml-cli binary for A/B comparison")
@@ -897,7 +902,7 @@ def main():
                 return None
             return r.stdout.strip().split("\n")[-1].strip()
 
-        expected = get_output([baml_cli, "run", "--file", baml_file, "-f", "main", "--", "main"])
+        expected = get_output(baml_run_cmd(baml_cli, baml_file))
         if expected is None:
             if is_tty:
                 sys.stderr.write(f"       SKIP (baml failed to run)\n")
@@ -906,7 +911,7 @@ def main():
         mismatches = []
         checks = []
         if has_baseline:
-            checks.append(("baseline", [args.baseline, "run", "--file", baml_file, "-f", "main", "--", "main"]))
+            checks.append(("baseline", baml_run_cmd(args.baseline, baml_file)))
         if has_python:
             checks.append(("python3", ["python3", "-S", py_file]))
         if has_node:
@@ -943,10 +948,10 @@ def main():
                     sys.stderr.write("FAIL\n")
                 return None
 
-        row["baml"] = run_one("baml", [baml_cli, "run", "--file", baml_file, "-f", "main", "--", "main"])
+        row["baml"] = run_one("baml", baml_run_cmd(baml_cli, baml_file))
 
         if has_baseline:
-            row["baseline"] = run_one("baseline", [args.baseline, "run", "--file", baml_file, "-f", "main", "--", "main"])
+            row["baseline"] = run_one("baseline", baml_run_cmd(args.baseline, baml_file))
 
         if has_python:
             row["python"] = run_one("python3", ["python3", "-S", py_file])

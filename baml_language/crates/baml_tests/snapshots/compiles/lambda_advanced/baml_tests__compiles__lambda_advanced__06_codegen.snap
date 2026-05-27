@@ -395,8 +395,7 @@ function user.test_void_lambda_inferred() -> int {
     store_deref ?1
     load_var count
     make_closure .<lambda(test_void_lambda_inferred, 0)>, 1
-    store_var inc
-    load_var inc
+    store_var_load_var inc
     call_indirect
     pop 1
     load_var inc
