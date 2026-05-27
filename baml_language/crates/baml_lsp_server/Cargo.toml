@@ -54,7 +54,7 @@ rustls = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = [ "sync", "rt-multi-thread", "fs", "net", "time", "macros" ] }
+tokio = { workspace = true, features = [ "sync", "rt-multi-thread", "net", "time", "macros" ] }
 tokio-tungstenite = { workspace = true }
 tower-http = { workspace = true }
 tracing = { workspace = true }

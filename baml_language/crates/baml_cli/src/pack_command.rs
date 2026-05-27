@@ -517,14 +517,20 @@ fn download_host_binary_from_release(target: &str, host_name: &str) -> Result<Ve
 }
 
 fn download_release_asset(url: &str) -> Result<Vec<u8>> {
-    let response = reqwest::blocking::get(url)
-        .with_context(|| format!("Failed to download BAML release asset from {url}"))?
-        .error_for_status()
-        .with_context(|| format!("Failed to download BAML release asset from {url}"))?;
-    let bytes = response
-        .bytes()
-        .with_context(|| format!("Failed to read BAML release asset from {url}"))?;
-    Ok(bytes.to_vec())
+    let rt = tokio::runtime::Runtime::new()
+        .context("Failed to create tokio runtime for release asset download")?;
+    rt.block_on(async {
+        let response = reqwest::get(url)
+            .await
+            .with_context(|| format!("Failed to download BAML release asset from {url}"))?
+            .error_for_status()
+            .with_context(|| format!("Failed to download BAML release asset from {url}"))?;
+        let bytes = response
+            .bytes()
+            .await
+            .with_context(|| format!("Failed to read BAML release asset from {url}"))?;
+        Ok(bytes.to_vec())
+    })
 }
 
 fn verify_release_archive_checksum(archive_bytes: &[u8], archive_url: &str) -> Result<()> {
