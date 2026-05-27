@@ -15,12 +15,12 @@ function ThrowsMixed(x: int) -> string throws string | Errors {
 
 //----
 //- diagnostics
-// error: throws contract violation: `string | user.Errors` is missing user.Errors.AuthError
+// error: declared throws is `string | Errors`, but this function may also throw `user.Errors.AuthError`
 //    ╭─[ throw_throws_mixed.baml:9:46 ]
 //    │
 //  9 │ function ThrowsMixed(x: int) -> string throws string | Errors {
 //    │                                              ────────┬───────  
-//    │                                                      ╰───────── throws contract violation: `string | user.Errors` is missing user.Errors.AuthError
+//    │                                                      ╰───────── declared throws is `string | Errors`, but this function may also throw `user.Errors.AuthError`
 //    │ 
 //    │ Note: Error code: E0096
 // ───╯

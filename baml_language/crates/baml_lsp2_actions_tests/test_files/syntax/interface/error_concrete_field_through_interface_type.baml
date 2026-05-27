@@ -21,12 +21,12 @@ function bad(a: Animal) -> string {
 
 //----
 //- diagnostics
-// error: type `user.Animal` has no member `breed`
+// error: type `Animal` has no member `breed`
 //     ╭─[ interface_error_concrete_field_through_interface_type.baml:19:12 ]
 //     │
 //  19 │   return a.breed
 //     │            ──┬──  
-//     │              ╰──── type `user.Animal` has no member `breed`
+//     │              ╰──── type `Animal` has no member `breed`
 //     │ 
 //     │ Note: Error code: E0007
 // ────╯

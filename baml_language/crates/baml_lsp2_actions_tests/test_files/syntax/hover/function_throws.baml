@@ -9,12 +9,12 @@ function MayFail<[CURSOR](x: int) -> string throws Errors {
 
 //----
 //- diagnostics
-// error: throws contract violation: `user.Errors` is missing user.Errors.AuthError
+// error: declared throws is `Errors`, but this function may also throw `user.Errors.AuthError`
 //    ╭─[ hover_function_throws.baml:6:42 ]
 //    │
 //  6 │ function MayFail(x: int) -> string throws Errors {
 //    │                                          ───┬───  
-//    │                                             ╰───── throws contract violation: `user.Errors` is missing user.Errors.AuthError
+//    │                                             ╰───── declared throws is `Errors`, but this function may also throw `user.Errors.AuthError`
 //    │ 
 //    │ Note: Error code: E0096
 // ───╯

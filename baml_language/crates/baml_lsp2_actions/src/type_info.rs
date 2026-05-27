@@ -301,17 +301,17 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
                         .as_ref()
                         .map(|name| name.as_str().to_string())
                         .unwrap_or_else(|| "_".to_string()),
-                    ty: display_surface_ty(&param.ty),
+                    ty: display_surface_ty(db, file, &param.ty),
                     optional: param.is_optional(),
                 })
                 .collect();
-            let return_type = Some(display_surface_ty(&exported.return_type));
+            let return_type = Some(display_surface_ty(db, file, &exported.return_type));
             let throws = if exported.declared_throws.is_some()
                 || !matches!(
                     exported.callable_throws,
                     baml_compiler2_tir::ty::Ty::Never { .. }
                 ) {
-                Some(display_surface_ty(&exported.callable_throws))
+                Some(display_surface_ty(db, file, &exported.callable_throws))
             } else {
                 None
             };
@@ -335,7 +335,10 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
                 .fields
                 .iter()
                 .map(|(field_name, ty, _attrs)| {
-                    (field_name.as_str().to_string(), utils::display_ty(ty))
+                    (
+                        field_name.as_str().to_string(),
+                        utils::display_ty_for_file(db, class_loc.file(db), ty),
+                    )
                 })
                 .collect();
             let implements = class_data
@@ -381,7 +384,7 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
 
             // Use the resolved (lowered) type for display.
             let resolved = baml_compiler2_tir::inference::resolve_type_alias(db, alias_loc);
-            let expansion = utils::display_ty(&resolved.ty);
+            let expansion = utils::display_ty_for_file(db, alias_loc.file(db), &resolved.ty);
 
             TypeInfo::TypeAlias {
                 name: alias_name,
@@ -449,12 +452,20 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
     }
 }
 
-fn display_surface_ty(ty: &baml_compiler2_tir::ty::Ty) -> String {
-    utils::display_ty(ty)
+fn display_surface_ty(
+    db: &dyn Db,
+    file: SourceFile,
+    ty: &baml_compiler2_tir::ty::Ty,
+) -> String {
+    utils::display_ty_for_file(db, file, ty)
 }
 
-fn display_local_binding_ty(ty: &baml_compiler2_tir::ty::Ty) -> String {
-    utils::display_ty(ty)
+fn display_local_binding_ty(
+    db: &dyn Db,
+    file: SourceFile,
+    ty: &baml_compiler2_tir::ty::Ty,
+) -> String {
+    utils::display_ty_for_file(db, file, ty)
 }
 
 fn is_synthetic_effect_param_name(name: &Name) -> bool {
@@ -593,7 +604,7 @@ fn local_type_info(
             let inference = baml_compiler2_tir::inference::infer_scope_types(db, func_scope_id);
             let ty_str = inference
                 .binding_type(pat_id)
-                .map(display_local_binding_ty)
+                .map(|ty| display_local_binding_ty(db, file, ty))
                 .unwrap_or_else(|| {
                     // Try the use-site's ancestor scope chain — restricts the
                     // lookup to inferences for bodies that share the
@@ -602,7 +613,7 @@ fn local_type_info(
                     // ExprBodies (e.g. two lambdas with the same arena
                     // index), surface the wrong type for hover/inlay hints.
                     find_binding_ty_in_scopes(db, index, scope_id, pat_id)
-                        .map(|ty| display_local_binding_ty(&ty))
+                        .map(|ty| display_local_binding_ty(db, file, &ty))
                         .unwrap_or_else(|| "unknown".to_string())
                 });
 

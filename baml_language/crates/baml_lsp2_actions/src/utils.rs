@@ -20,12 +20,12 @@
 //!   `TypeExpr` as a source-level string. Used for function parameter types
 //!   in hover output.
 
-use baml_base::SourceFile;
+use baml_base::{Name, SourceFile};
 use baml_compiler_syntax::{SyntaxToken, TokenAtOffset};
 use baml_compiler2_ast::TypeExpr;
-use baml_compiler2_hir::contributions::Definition;
+use baml_compiler2_hir::{contributions::Definition, package::PackageItems};
 use baml_compiler2_tir::{
-    ty::{FunctionParamTy, Ty},
+    ty::{FunctionParamTy, QualifiedTypeName, Ty},
     user_facing::humanize_type_string,
 };
 use text_size::{TextRange, TextSize};
@@ -113,6 +113,184 @@ fn ty_needs_postfix_parens(ty: &Ty) -> bool {
     matches!(ty, Ty::Union(..) | Ty::Function { .. })
 }
 
+struct TyDisplayContext<'db> {
+    current_package: Name,
+    current_namespace: Vec<Name>,
+    package_items: &'db PackageItems<'db>,
+}
+
+impl TyDisplayContext<'_> {
+    fn display_qtn(&self, qtn: &QualifiedTypeName) -> String {
+        if qtn.package() != &self.current_package {
+            return qtn.to_string();
+        }
+
+        if self.can_use_bare_name(qtn) {
+            return qtn.name().to_string();
+        }
+
+        let path = qtn
+            .namespace()
+            .iter()
+            .chain(std::iter::once(qtn.name()))
+            .map(Name::as_str)
+            .collect::<Vec<_>>()
+            .join(".");
+        format!("root.{path}")
+    }
+
+    fn can_use_bare_name(&self, qtn: &QualifiedTypeName) -> bool {
+        if qtn.namespace() == &self.current_namespace {
+            return true;
+        }
+
+        if qtn.namespace().is_empty() {
+            return self
+                .package_items
+                .lookup_type(&self.current_namespace, qtn.name())
+                .is_none();
+        }
+
+        false
+    }
+
+    fn display_ty_as_postfix_base(&self, ty: &Ty) -> String {
+        let rendered = self.display_ty(ty);
+        if ty_needs_postfix_parens(ty) {
+            format!("({rendered})")
+        } else {
+            rendered
+        }
+    }
+
+    fn display_ty_as_function_result(&self, ty: &Ty) -> String {
+        let rendered = self.display_ty(ty);
+        if matches!(ty, Ty::Function { .. }) {
+            format!("({rendered})")
+        } else {
+            rendered
+        }
+    }
+
+    fn display_function_param_ty(&self, param: &FunctionParamTy) -> String {
+        param
+            .name
+            .as_ref()
+            .map(|name| {
+                let optional = if param.is_optional() { "?" } else { "" };
+                format!("{}{}: {}", name, optional, self.display_ty(&param.ty))
+            })
+            .unwrap_or_else(|| self.display_ty(&param.ty))
+    }
+
+    fn display_ty(&self, ty: &Ty) -> String {
+        humanize_type_string(&self.display_ty_raw(ty))
+    }
+
+    fn display_ty_raw(&self, ty: &Ty) -> String {
+        use baml_compiler2_tir::ty::PrimitiveType;
+        match ty {
+            Ty::Class(qn, type_args, _) | Ty::Interface(qn, type_args, _) => {
+                let name = self.display_qtn(qn);
+                if type_args.is_empty() {
+                    name
+                } else {
+                    let args: Vec<String> = type_args.iter().map(|ty| self.display_ty(ty)).collect();
+                    format!("{}<{}>", name, args.join(", "))
+                }
+            }
+            Ty::Enum(qn, _) | Ty::TypeAlias(qn, _) => self.display_qtn(qn),
+            Ty::EnumVariant(qn, v, _) => format!("{}.{v}", self.display_qtn(qn)),
+            Ty::Primitive(p, _) => match p {
+                PrimitiveType::Int => "int".to_string(),
+                PrimitiveType::Float => "float".to_string(),
+                PrimitiveType::String => "string".to_string(),
+                PrimitiveType::Bool => "bool".to_string(),
+                PrimitiveType::Null => "null".to_string(),
+                PrimitiveType::Image => "image".to_string(),
+                PrimitiveType::Audio => "audio".to_string(),
+                PrimitiveType::Video => "video".to_string(),
+                PrimitiveType::Pdf => "pdf".to_string(),
+                PrimitiveType::Uint8Array => "uint8array".to_string(),
+            },
+            Ty::List(inner, _) => format!("{}[]", self.display_ty_as_postfix_base(inner)),
+            Ty::Map(k, v, _) => format!("map<{}, {}>", self.display_ty(k), self.display_ty(v)),
+            Ty::EvolvingList(inner, _) => {
+                if matches!(**inner, Ty::Never { .. }) {
+                    "_[]".to_string()
+                } else {
+                    format!("{}[]", self.display_ty_as_postfix_base(inner))
+                }
+            }
+            Ty::EvolvingMap(k, v, _) => {
+                if matches!(**k, Ty::Never { .. }) && matches!(**v, Ty::Never { .. }) {
+                    "map<_, _>".to_string()
+                } else {
+                    format!("map<{}, {}>", self.display_ty(k), self.display_ty(v))
+                }
+            }
+            Ty::Union(members, _) => {
+                let parts: Vec<_> = members.iter().map(|ty| self.display_ty(ty)).collect();
+                parts.join(" | ")
+            }
+            Ty::Optional(inner, _) => format!("{}?", self.display_ty_as_postfix_base(inner)),
+            Ty::Literal(lit, _freshness, _) => lit.to_string(),
+            Ty::Function {
+                generic_params,
+                generic_param_bounds,
+                params,
+                ret,
+                throws,
+                ..
+            } => {
+                let generics = if generic_params.is_empty() {
+                    String::new()
+                } else {
+                    let params = generic_params
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, param)| {
+                            if let Some(bound) =
+                                generic_param_bounds.get(idx).and_then(Option::as_ref)
+                            {
+                                format!("{param} extends {}", self.display_ty(bound))
+                            } else {
+                                param.to_string()
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    format!("<{params}>")
+                };
+                let ps: Vec<String> = params
+                    .iter()
+                    .map(|param| self.display_function_param_ty(param))
+                    .collect();
+                format!(
+                    "{generics}({}) -> {} throws {}",
+                    ps.join(", "),
+                    self.display_ty_as_function_result(ret),
+                    self.display_ty(throws)
+                )
+            }
+            Ty::TypeVar(name, _) => name.to_string(),
+            Ty::Never { .. } => "never".to_string(),
+            Ty::Void { .. } => "void".to_string(),
+            Ty::BuiltinUnknown { .. } | Ty::Unknown { .. } => "unknown".to_string(),
+            Ty::RustType { .. } => "$rust_type".to_string(),
+            Ty::Type { .. } => "type".to_string(),
+            Ty::Error { .. } => "!error".to_string(),
+            Ty::Future(value, error, _) => {
+                format!(
+                    "Future<{}, {}>",
+                    self.display_ty(value),
+                    self.display_ty(error)
+                )
+            }
+        }
+    }
+}
+
 fn display_ty_as_postfix_base(ty: &Ty) -> String {
     let rendered = display_ty(ty);
     if ty_needs_postfix_parens(ty) {
@@ -140,6 +318,18 @@ pub fn display_function_param_ty(param: &FunctionParamTy) -> String {
             format!("{}{}: {}", name, optional, display_ty(&param.ty))
         })
         .unwrap_or_else(|| display_ty(&param.ty))
+}
+
+pub fn display_ty_for_file(db: &dyn Db, file: SourceFile, ty: &Ty) -> String {
+    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
+    let package_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    let ctx = TyDisplayContext {
+        current_package: pkg_info.package,
+        current_namespace: pkg_info.namespace_path,
+        package_items,
+    };
+    ctx.display_ty(ty)
 }
 
 /// Format a resolved `Ty` as a user-friendly string.

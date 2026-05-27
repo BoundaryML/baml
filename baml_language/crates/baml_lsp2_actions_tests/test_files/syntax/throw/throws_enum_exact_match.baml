@@ -16,12 +16,12 @@ function ThrowsEnumExact(x: int) -> string throws Errors {
 
 //----
 //- diagnostics
-// error: throws contract violation: `user.Errors` is missing user.Errors.AuthError, user.Errors.InternalError, user.Errors.NotFoundError
+// error: declared throws is `Errors`, but this function may also throw `user.Errors.AuthError | user.Errors.InternalError | user.Errors.NotFoundError`
 //    ╭─[ throw_throws_enum_exact_match.baml:9:50 ]
 //    │
 //  9 │ function ThrowsEnumExact(x: int) -> string throws Errors {
 //    │                                                  ───┬───  
-//    │                                                     ╰───── throws contract violation: `user.Errors` is missing user.Errors.AuthError, user.Errors.InternalError, user.Errors.NotFoundError
+//    │                                                     ╰───── declared throws is `Errors`, but this function may also throw `user.Errors.AuthError | user.Errors.InternalError | user.Errors.NotFoundError`
 //    │ 
 //    │ Note: Error code: E0096
 // ───╯

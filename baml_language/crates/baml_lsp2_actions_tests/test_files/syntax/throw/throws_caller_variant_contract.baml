@@ -23,12 +23,12 @@ function CallerGood(x: int) -> string {
 
 //----
 //- diagnostics
-// error: throws contract violation: `user.Errors` is missing user.Errors.AuthError, user.Errors.NotFoundError
+// error: declared throws is `Errors`, but this function may also throw `user.Errors.AuthError | user.Errors.NotFoundError`
 //     ╭─[ throw_throws_caller_variant_contract.baml:10:42 ]
 //     │
 //  10 │ function MayFail(x: int) -> string throws Errors {
 //     │                                          ───┬───  
-//     │                                             ╰───── throws contract violation: `user.Errors` is missing user.Errors.AuthError, user.Errors.NotFoundError
+//     │                                             ╰───── declared throws is `Errors`, but this function may also throw `user.Errors.AuthError | user.Errors.NotFoundError`
 //     │ 
 //     │ Note: Error code: E0096
 // ────╯

@@ -21,12 +21,12 @@ function dunk(d: Dog) -> string {
 
 //----
 //- diagnostics
-// error: type mismatch: expected user.Swimmer, got user.Dog
+// error: type mismatch: expected Swimmer, got Dog
 //     ╭─[ interface_error_qualified_call_non_implementor.baml:19:10 ]
 //     │
 //  19 │   return d.as<Swimmer>.swim()
 //     │          ──────┬──────  
-//     │                ╰──────── type mismatch: expected user.Swimmer, got user.Dog
+//     │                ╰──────── type mismatch: expected Swimmer, got Dog
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

@@ -20,12 +20,12 @@ function Caller(x: int) -> string {
 
 //----
 //- diagnostics
-// error: throws contract violation: `user.Errors` is missing user.Errors.AuthError
+// error: declared throws is `Errors`, but this function may also throw `user.Errors.AuthError`
 //    ╭─[ throw_throws_caller_sees_contract.baml:9:42 ]
 //    │
 //  9 │ function MayFail(x: int) -> string throws Errors {
 //    │                                          ───┬───  
-//    │                                             ╰───── throws contract violation: `user.Errors` is missing user.Errors.AuthError
+//    │                                             ╰───── declared throws is `Errors`, but this function may also throw `user.Errors.AuthError`
 //    │ 
 //    │ Note: Error code: E0096
 // ───╯

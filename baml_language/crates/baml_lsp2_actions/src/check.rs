@@ -79,7 +79,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     for scope_id in &index.scope_ids {
         let rendered = render_scope_diagnostics(db, *scope_id);
         for r in rendered {
-            diagnostics.push(tir_rendered_to_diagnostic(r, file_id));
+            diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, r));
         }
     }
 
@@ -98,7 +98,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                     diagnostics.push(
                         Diagnostic::error(
                             tir_type_error_to_diagnostic_id(error),
-                            error.to_string(),
+                            source_aware_tir_type_error_message(db, file, error),
                         )
                         .with_primary_span(Span {
                             file_id,
@@ -114,7 +114,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                     diagnostics.push(
                         Diagnostic::error(
                             tir_type_error_to_diagnostic_id(error),
-                            error.to_string(),
+                            source_aware_tir_type_error_message(db, file, error),
                         )
                         .with_primary_span(Span {
                             file_id,
@@ -323,9 +323,10 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                 if !is_function_default_signature_diagnostic(&tir_diag) {
                     continue;
                 }
-                diagnostics.push(tir_rendered_to_diagnostic(
+                diagnostics.push(tir_rendered_to_diagnostic_for_file(
+                    db,
+                    file,
                     tir_diag.render(db, file, None),
-                    file_id,
                 ));
             }
         }
@@ -2670,6 +2671,110 @@ fn tir_rendered_to_diagnostic(
             )
         })
         .with_phase(DiagnosticPhase::Type)
+}
+
+fn tir_rendered_to_diagnostic_for_file(
+    db: &dyn Db,
+    file: SourceFile,
+    mut rendered: baml_compiler2_tir::infer_context::RenderedTirDiagnostic,
+) -> Diagnostic {
+    rendered.message = source_aware_tir_type_error_message(db, file, &rendered.error);
+    tir_rendered_to_diagnostic(rendered, file.file_id(db))
+}
+
+fn source_aware_tir_type_error_message(
+    db: &dyn Db,
+    file: SourceFile,
+    error: &TirTypeError,
+) -> String {
+    let ty = |ty: &Ty| crate::utils::display_ty_for_file(db, file, ty);
+    match error {
+        TirTypeError::TypeMismatch { expected, got } => {
+            format!("type mismatch: expected {}, got {}", ty(expected), ty(got))
+        }
+        TirTypeError::UnresolvedMember { base_type, member } => {
+            format!("type `{}` has no member `{member}`", ty(base_type))
+        }
+        TirTypeError::NotCallable { ty: callee_ty } => {
+            format!("`{}` is not a function — it cannot be called", ty(callee_ty))
+        }
+        TirTypeError::NotIterable { ty: iter_ty } => {
+            format!("cannot iterate over type `{}`", ty(iter_ty))
+        }
+        TirTypeError::NotIndexable { ty: index_ty } => {
+            format!("type `{}` is not indexable", ty(index_ty))
+        }
+        TirTypeError::InvalidBinaryOp { op, lhs, rhs } => {
+            format!(
+                "operator `{op:?}` cannot be applied to `{}` and `{}`",
+                ty(lhs),
+                ty(rhs)
+            )
+        }
+        TirTypeError::InvalidUnaryOp { op, operand } => {
+            format!("operator `{op:?}` cannot be applied to `{}`", ty(operand))
+        }
+        TirTypeError::MissingReturn { expected } => {
+            format!("missing return value of type {}", ty(expected))
+        }
+        TirTypeError::NonExhaustiveMatch {
+            scrutinee_type,
+            missing_cases,
+        } => {
+            if missing_cases.is_empty() {
+                format!("non-exhaustive match on type {}", ty(scrutinee_type))
+            } else {
+                format!(
+                    "non-exhaustive match on type {}; missing: {}",
+                    ty(scrutinee_type),
+                    missing_cases.join(", ")
+                )
+            }
+        }
+        TirTypeError::OrPatternBindingTypeMismatch {
+            name,
+            first_type,
+            other_type,
+        } => {
+            format!(
+                "or-pattern binding `{name}` has conflicting types: {} and {}",
+                ty(first_type),
+                ty(other_type)
+            )
+        }
+        TirTypeError::ThrowsContractViolation {
+            declared,
+            extra_types,
+        } => {
+            format!(
+                "throws contract violation: `{}` is missing {}",
+                ty(declared),
+                extra_types.join(", ")
+            )
+        }
+        TirTypeError::CallbackThrowsContractViolation {
+            callback_name,
+            declared,
+            concrete_throws,
+        } => {
+            if let Some(concrete_throws) = concrete_throws {
+                format!(
+                    "this body may throw through callback `{callback_name}`, but declared throws is `{}`. Add `throws {}` to the callback, catch the call, or make the callback non-throwing.",
+                    ty(declared),
+                    ty(concrete_throws)
+                )
+            } else {
+                format!(
+                    "this body may throw through callback `{callback_name}`, but declared throws is `{}`. Add an explicit `throws` to the callback, catch the call, or make the callback non-throwing.",
+                    ty(declared)
+                )
+            }
+        }
+        TirTypeError::InvalidInterfaceUpcastTarget { target } => {
+            format!("`.as<T>` requires an interface target, got {}", ty(target))
+        }
+        _ => error.to_string(),
+    }
 }
 
 /// Map a `TirTypeError` to an approximate `DiagnosticId` for structural items.

@@ -26,14 +26,14 @@ function describe(a: Animal) -> string {
 
 //----
 //- diagnostics
-// error: non-exhaustive match on `user.Animal`; missing: _
+// error: non-exhaustive match on type Animal; missing: _
 //     ╭─[ interface_error_match_without_wildcard.baml:21:9 ]
 //     │
 //  21 │ ╭─▶   return match (a) {
 //     ┆ ┆   
 //  24 │ ├─▶   }
 //     │ │         
-//     │ ╰───────── non-exhaustive match on `user.Animal`; missing: _
+//     │ ╰───────── non-exhaustive match on type Animal; missing: _
 //     │     
 //     │     Note: Error code: E0062
 // ────╯

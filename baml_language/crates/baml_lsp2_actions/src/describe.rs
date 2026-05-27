@@ -810,7 +810,7 @@ fn resolve_member_type(db: &dyn Db, file: SourceFile, sym: &SymbolInfo) -> Optio
                 .fields
                 .iter()
                 .find(|(field_name, _, _)| field_name.as_str() == sym.name)
-                .map(|(_, ty, _)| crate::utils::display_ty(ty))
+                .map(|(_, ty, _)| crate::utils::display_ty_for_file(db, file, ty))
         }
         (DefinitionKind::Variant, baml_compiler2_hir::contributions::Definition::Enum(_)) => {
             // Enum variants don't have a meaningful type beyond the enum itself.

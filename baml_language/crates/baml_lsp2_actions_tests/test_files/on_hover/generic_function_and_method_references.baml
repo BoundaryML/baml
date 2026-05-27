@@ -51,15 +51,15 @@ function example() -> void {
 // ```
 // hover at generic_function_and_method_references.baml:30:18
 // ```baml
-// classMethod: (self: user.MyClass) -> int throws never
+// classMethod: (self: MyClass) -> int throws never
 // ```
 // hover at generic_function_and_method_references.baml:31:22
 // ```baml
-// interfaceMethod: <T extends user.MyInterface>(T) -> int throws never
+// interfaceMethod: <T extends MyInterface>(T) -> int throws never
 // ```
 // hover at generic_function_and_method_references.baml:32:30
 // ```baml
-// inferredInterfaceMethod: <T extends user.MyInterface>(self: T) -> int throws never
+// inferredInterfaceMethod: <T extends MyInterface>(self: T) -> int throws never
 // ```
 // hover at generic_function_and_method_references.baml:35:21
 // ```baml

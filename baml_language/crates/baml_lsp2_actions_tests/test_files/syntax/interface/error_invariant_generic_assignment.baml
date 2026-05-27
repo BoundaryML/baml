@@ -32,12 +32,12 @@ function bad() -> null {
 
 //----
 //- diagnostics
-// error: type mismatch: expected user.Container<user.Animal>, got user.DogBag
+// error: type mismatch: expected Container<Animal>, got DogBag
 //     ╭─[ interface_error_invariant_generic_assignment.baml:30:33 ]
 //     │
 //  30 │   return takes_animal_container(bag)
 //     │                                 ─┬─  
-//     │                                  ╰─── type mismatch: expected user.Container<user.Animal>, got user.DogBag
+//     │                                  ╰─── type mismatch: expected Container<Animal>, got DogBag
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

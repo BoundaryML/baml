@@ -12,14 +12,14 @@ class Thing {
 
 //----
 //- diagnostics
-// error: non-exhaustive match on `bool`; missing: false
+// error: non-exhaustive match on type bool; missing: false
 //    ╭─[ interface_error_default_method_non_exhaustive.baml:3:11 ]
 //    │
 //  3 │ ╭─▶     return match (value) {
 //    ┆ ┆   
 //  5 │ ├─▶     }
 //    │ │           
-//    │ ╰─────────── non-exhaustive match on `bool`; missing: false
+//    │ ╰─────────── non-exhaustive match on type bool; missing: false
 //    │     
 //    │     Note: Error code: E0062
 // ───╯
