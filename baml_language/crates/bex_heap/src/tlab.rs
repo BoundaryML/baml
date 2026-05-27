@@ -195,6 +195,13 @@ impl Tlab {
         self.alloc(Object::Uint8Array(data.into()))
     }
 
+    /// Allocate an arbitrary-precision integer on the heap. Wraps the value in
+    /// an `Arc` so the digit slice can be shared by clones without a deep copy.
+    #[inline]
+    pub fn alloc_bigint(&mut self, value: num_bigint::BigInt) -> HeapPtr {
+        self.alloc(Object::Bigint(Arc::new(value)))
+    }
+
     /// Allocate opaque Rust data on the heap.
     #[inline]
     pub fn alloc_rust_data(&mut self, data: Arc<dyn std::any::Any + Send + Sync>) -> HeapPtr {

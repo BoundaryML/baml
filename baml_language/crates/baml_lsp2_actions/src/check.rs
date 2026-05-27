@@ -563,6 +563,7 @@ fn jinja_type_from_type_expr_inner(
 
     match type_expr {
         TypeExpr::Int { .. } => Type::Int,
+        TypeExpr::Bigint { .. } => Type::Bigint,
         TypeExpr::Float { .. } => Type::Float,
         TypeExpr::String { .. } => Type::String,
         TypeExpr::Bool { .. } => Type::Bool,

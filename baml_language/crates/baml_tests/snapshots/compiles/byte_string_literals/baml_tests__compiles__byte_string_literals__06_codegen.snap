@@ -44,7 +44,7 @@ function user.ByteStringInCondition() -> int {
     call baml.deep_copy
     call baml.Uint8Array.length
     load_const 0
-    cmp_op >
+    cmp_int_op >
     pop_jump_if_false L0
     jump L1
 

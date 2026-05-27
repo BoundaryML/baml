@@ -102,6 +102,7 @@ impl TryFrom<BexExternalValue> for CffiHandleTableEntry {
             BexExternalValue::HostValue(_)
             | BexExternalValue::Null
             | BexExternalValue::Int(_)
+            | BexExternalValue::Bigint(_)
             | BexExternalValue::Float(_)
             | BexExternalValue::Bool(_)
             | BexExternalValue::String(_)

@@ -165,15 +165,15 @@ def _set_inbound_value(
         inbound_value.bool_value = value
         return
     if isinstance(value, int):
-        # BAML encodes integers as a protobuf int64. Range-check here so an
-        # out-of-range Python int reports the offending kwarg instead of the
-        # low-level protobuf "Value out of range" error.
-        if not -(2**63) <= value < 2**63:
-            raise ValueError(
-                f"integer for {kwarg_name!r} is outside the signed 64-bit range "
-                f"BAML supports for integers: {value}"
-            )
-        inbound_value.int_value = value
+        # Python's `int` is arbitrary-precision, but the wire `int_value`
+        # field is `int64`. Values outside i64 range overflow protobuf
+        # serialization, so route them through `bigint_value` instead.
+        # Hex / base sixteen on the wire; `format(value, "x")` preserves a
+        # leading minus for negatives.
+        if -(1 << 63) <= value < (1 << 63):
+            inbound_value.int_value = value
+        else:
+            inbound_value.bigint_value = format(value, "x")
         return
     if isinstance(value, float):
         inbound_value.float_value = value
@@ -395,6 +395,11 @@ def _baml_ty_to_python_type(baml_ty: baml_outbound_pb2.BamlTy, type_map: BamlTyp
         return str
     if which == "int_type":
         return int
+    if which == "bigint_type":
+        # Python's `int` is arbitrary-precision; BAML's `bigint` shares the
+        # same surface, distinguished only by the proto type tag for
+        # round-trips (mirrors `translate_ty.rs` for codegen-time).
+        return int
     if which == "float_type":
         return float
     if which == "bool_type":
@@ -574,6 +579,32 @@ def _decode_handle(handle, type_map: BamlTypeMap) -> Any:
     return pyhandle
 
 
+# Workspace bigint cap = 2^28 bits ⇒ at most (2^28)/4 hex digits (plus a
+# small slack), matching the Rust-side `MAX_BIGINT_HEX_LEN` in
+# `bridge_ctypes/src/value_decode.rs`. Reject longer inputs before calling
+# `int(..., 16)` so a malicious wire payload can't drive an unbounded
+# Python `int` allocation.
+_MAX_BIGINT_HEX_LEN = (1 << 28) // 4 + 2
+
+
+def _parse_hex_bigint(s: str) -> int:
+    # Strip exactly one leading minus (matching the other bridges).
+    negative = s.startswith("-")
+    magnitude = s[1:] if negative else s
+    if len(magnitude) > _MAX_BIGINT_HEX_LEN:
+        raise ValueError(
+            f"bigint hex exceeds the workspace cap ({len(magnitude)} chars, "
+            f"limit {_MAX_BIGINT_HEX_LEN})"
+        )
+    # Strict hex: reject the `0x` prefixes, underscores, and surrounding
+    # whitespace that `int(s, 16)` would otherwise silently accept, matching
+    # the encoders' output and the Rust/JS bridges.
+    if not magnitude or not all(c in "0123456789abcdefABCDEF" for c in magnitude):
+        raise ValueError(f"invalid bigint hex string: {s!r}")
+    value = int(magnitude, base=16)
+    return -value if negative else value
+
+
 def _decode_literal(literal) -> Any:
     which = literal.WhichOneof("literal")
     if which == "string_literal":
@@ -582,6 +613,10 @@ def _decode_literal(literal) -> Any:
         return literal.int_literal.value
     if which == "bool_literal":
         return literal.bool_literal.value
+    if which == "bigint_literal":
+        # Hex / base sixteen on the wire, matching `bigint_value`. The
+        # helper guards against megabyte-scale payloads before parsing.
+        return _parse_hex_bigint(literal.bigint_literal.value)
     return None
 
 
@@ -600,6 +635,10 @@ def decode_value(holder, type_map: BamlTypeMap) -> Any:
         return holder.string_value
     if which == "int_value":
         return holder.int_value
+    if which == "bigint_value":
+        # Hex / base sixteen on the wire; the helper guards against
+        # megabyte-scale payloads before parsing.
+        return _parse_hex_bigint(holder.bigint_value)
     if which == "float_value":
         return holder.float_value
     if which == "bool_value":

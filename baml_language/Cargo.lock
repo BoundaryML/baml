@@ -977,6 +977,7 @@ name = "baml_base"
 version = "0.0.0-beta"
 dependencies = [
  "ariadne",
+ "num-bigint",
  "salsa",
  "serde",
  "smol_str 0.3.6",
@@ -1107,6 +1108,7 @@ dependencies = [
  "baml_compiler_parser",
  "baml_compiler_syntax",
  "la-arena",
+ "num-bigint",
  "rowan 0.16.1",
  "rustc-hash 2.1.2",
  "smol_str 0.3.6",
@@ -1158,6 +1160,7 @@ dependencies = [
  "baml_type",
  "indexmap 2.14.0",
  "log",
+ "num-bigint",
  "rustc-hash 2.1.2",
  "salsa",
  "smol_str 0.3.6",
@@ -1188,9 +1191,11 @@ dependencies = [
  "baml_compiler2_hir",
  "baml_compiler2_ppir",
  "baml_compiler_diagnostics",
+ "baml_type",
  "baml_workspace",
  "indexmap 2.14.0",
  "la-arena",
+ "num-bigint",
  "rustc-hash 2.1.2",
  "salsa",
  "smol_str 0.3.6",
@@ -1470,6 +1475,7 @@ dependencies = [
  "indexmap 2.14.0",
  "insta",
  "la-arena",
+ "num-bigint",
  "prettyplease",
  "proc-macro2",
  "quote",
@@ -1491,6 +1497,7 @@ name = "baml_type"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
+ "num-bigint",
  "serde",
 ]
 
@@ -1561,6 +1568,7 @@ dependencies = [
  "indexmap 2.14.0",
  "insta",
  "log",
+ "num-bigint",
  "prost",
  "serde_json",
  "sys_llm",
@@ -1615,6 +1623,7 @@ dependencies = [
  "bex_resource_types",
  "bex_vm_types",
  "indexmap 2.14.0",
+ "num-bigint",
  "once_cell",
 ]
 
@@ -1628,6 +1637,7 @@ dependencies = [
  "bex_resource_types",
  "bex_vm_types",
  "indexmap 2.14.0",
+ "num-bigint",
  "parking_lot",
  "thiserror 2.0.18",
  "tokio",
@@ -1691,6 +1701,7 @@ dependencies = [
  "derive_more",
  "indexmap 2.14.0",
  "log",
+ "num-bigint",
  "ouroboros",
  "regex",
  "rowan 0.16.1",
@@ -1722,6 +1733,7 @@ dependencies = [
  "getrandom 0.2.17",
  "indexmap 2.14.0",
  "log",
+ "num-bigint",
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
@@ -1740,6 +1752,7 @@ dependencies = [
  "bex_resource_types",
  "codspeed-divan-compat",
  "indexmap 2.14.0",
+ "num-bigint",
  "serde",
  "serde_json",
  "tokio",
@@ -1900,6 +1913,7 @@ dependencies = [
  "bex_project",
  "bex_resource_types",
  "indexmap 2.14.0",
+ "num-bigint",
  "prost",
  "prost-build",
  "protoc-bin-vendored",
@@ -5222,6 +5236,8 @@ checksum = "a5e44f723f1133c9deac646763579fdb3ac745e418f2a7af9cd0c431da1f20b9"
 dependencies = [
  "num-integer",
  "num-traits",
+ "rand 0.8.6",
+ "serde",
 ]
 
 [[package]]

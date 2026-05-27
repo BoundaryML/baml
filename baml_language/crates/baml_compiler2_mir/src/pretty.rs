@@ -483,6 +483,7 @@ fn write_operand(f: &mut impl Write, operand: &Operand) -> fmt::Result {
 fn write_constant(f: &mut impl Write, constant: &Constant) -> fmt::Result {
     match constant {
         Constant::Int(n) => write!(f, "const {n}_i64"),
+        Constant::Bigint(n) => write!(f, "const {n}n"),
         Constant::Float(n) => write!(f, "const {n}_f64"),
         Constant::String(s) => write!(f, "const {s:?}"),
         Constant::Bool(b) => write!(f, "const {b}"),

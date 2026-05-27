@@ -1245,6 +1245,11 @@ impl<'db> TypeInferenceBuilder<'db> {
         let expanded_expected = self.expand_alias_chains(expected.clone());
         let expanded_got = self.expand_alias_chains(got.clone());
 
+        // The arms below bridge between the builtin `Class<Array, [T]>` /
+        // `Class<Map, [K, V]>` wrapper types and their raw `List<T>` /
+        // `Map<K, V>` shapes, recursing structurally on the element types.
+        // `List`/`Map` are invariant, so an `int[]` argument does not satisfy
+        // an `(int | string)[]` slot.
         match (&expanded_expected, &expanded_got) {
             (Ty::Class(class_name, expected_args, _), Ty::List(actual_inner, _))
                 if class_name.is_builtin_root_type("Array") && expected_args.len() == 1 =>
@@ -3233,6 +3238,9 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     /// Checking mode: verify an expression against an expected type.
     pub fn check_expr(&mut self, expr_id: ExprId, body: &ExprBody, expected: &Ty) -> Ty {
+        // Fix the element type of an empty evolving container the first time
+        // it is used in a typed context (see `retype_evolving_empty`).
+        self.retype_evolving_empty(expr_id, body, expected);
         let expr = &body.exprs[expr_id];
         match expr {
             // Block: check the tail expression against expected type
@@ -3367,6 +3375,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             // Object: if expected is Class(name), check fields against declared types.
+            //
+            // Class fields are invariant, like `Array`/`Map` elements. Checking
+            // each field against its declared type rejects a mismatched value
+            // (e.g. an `int` field expression against a `bigint` field — `int`
+            // is not a subtype of `bigint`, and the runtime does no field-level
+            // widening, so it must be written `1n`).
             Expr::Object { fields, .. } => {
                 if let Ty::Class(class_name, type_args, _) = expected {
                     let field_types = self.lookup_class_fields(class_name, type_args);
@@ -5728,6 +5742,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         "pdf" => &["media", "Pdf"],
                         "string" => &["String"],
                         "int" => &["Int"],
+                        "bigint" => &["Bigint"],
                         "float" => &["Float"],
                         _ => &[],
                     };
@@ -6509,6 +6524,22 @@ impl<'db> TypeInferenceBuilder<'db> {
                         attr: TyAttr::default(),
                     }
                 }),
+            // bigint literal / bigint → Bigint companion class
+            Ty::Primitive(PrimitiveType::Bigint, _)
+            | Ty::Literal(baml_base::Literal::Bigint(_), _, _) => self
+                .resolve_builtin_member(&["Bigint"], &[], member, at)
+                .unwrap_or_else(|| {
+                    self.context.report_at_member_simple(
+                        TirTypeError::UnresolvedMember {
+                            base_type: base_ty.clone(),
+                            member: member.clone(),
+                        },
+                        at,
+                    );
+                    Ty::Unknown {
+                        attr: TyAttr::default(),
+                    }
+                }),
             // float literal / float → Float companion class
             Ty::Primitive(PrimitiveType::Float, _)
             | Ty::Literal(baml_base::Literal::Float(_), _, _) => self
@@ -6888,6 +6919,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             Ty::Primitive(PrimitiveType::Int, _)
             | Ty::Literal(baml_base::Literal::Int(_), _, _) => self
                 .resolve_builtin_method(&["Int"], &[], member)
+                .map(BuiltinResolution::into_ty),
+            Ty::Primitive(PrimitiveType::Bigint, _)
+            | Ty::Literal(baml_base::Literal::Bigint(_), _, _) => self
+                .resolve_builtin_method(&["Bigint"], &[], member)
                 .map(BuiltinResolution::into_ty),
             Ty::Primitive(PrimitiveType::Float, _)
             | Ty::Literal(baml_base::Literal::Float(_), _, _) => self
@@ -7340,6 +7375,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             "pdf" => &["media", "Pdf"],
             "string" => &["String"],
             "int" => &["Int"],
+            "bigint" => &["Bigint"],
             "float" => &["Float"],
             _ => return None,
         };
@@ -7643,6 +7679,39 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             _ => None,
         }
+    }
+
+    /// An unannotated `let a = []` produces an `EvolvingList(Never)` whose
+    /// element type is meant to be fixed by usage — the same way `.push`
+    /// evolves it. When such an *empty* evolving container is read in a
+    /// context that expects a concrete `List`/`Map`, adopt that element type
+    /// so the binding (and any later mutation) stays consistent with the use.
+    ///
+    /// A later, conflicting typed use no longer matches the `Never` guard, so
+    /// it falls through to a normal invariance mismatch.
+    fn retype_evolving_empty(&mut self, expr_id: ExprId, body: &ExprBody, expected: &Ty) {
+        let Some(name) = self.expr_local_name(expr_id, body) else {
+            return;
+        };
+        let Some(binding) = self.locals.get(&name) else {
+            return;
+        };
+        let new_ty = match (&binding.current_ty, expected) {
+            (Ty::EvolvingList(inner, attr), Ty::List(exp, _) | Ty::EvolvingList(exp, _))
+                if matches!(**inner, Ty::Never { .. }) =>
+            {
+                Ty::EvolvingList(exp.clone(), attr.clone())
+            }
+            (
+                Ty::EvolvingMap(k, v, attr),
+                Ty::Map(exp_k, exp_v, _) | Ty::EvolvingMap(exp_k, exp_v, _),
+            ) if matches!(**k, Ty::Never { .. }) && matches!(**v, Ty::Never { .. }) => {
+                Ty::EvolvingMap(exp_k.clone(), exp_v.clone(), attr.clone())
+            }
+            _ => return,
+        };
+        self.assign_local(name.clone(), new_ty.clone());
+        self.sync_let_binding_type(&name, new_ty);
     }
 
     /// Try to handle a container mutation method call: `x.push(val)` or `x?.push?.(val)`.
@@ -8031,14 +8100,63 @@ impl<'db> TypeInferenceBuilder<'db> {
         if let Some(folded) = Self::try_fold_binary(op, lhs, rhs) {
             return folded;
         }
+        // Peel type aliases once at the entry so downstream classifiers
+        // (`infer_arithmetic`, `infer_bitwise`, `is_float_bigint_mix`) only
+        // need to recognise the underlying primitive shapes. Mirrors how
+        // `is_subtype` and other type-aware sites expand at their entry.
+        let expanded_lhs = self.expand_alias_chains(lhs.clone());
+        let expanded_rhs = self.expand_alias_chains(rhs.clone());
+        let lhs = &expanded_lhs;
+        let rhs = &expanded_rhs;
         match op {
-            // Comparison / equality → bool
-            BinaryOp::Eq
-            | BinaryOp::Ne
-            | BinaryOp::Lt
-            | BinaryOp::Le
-            | BinaryOp::Gt
-            | BinaryOp::Ge => Ty::Primitive(PrimitiveType::Bool, TyAttr::default()),
+            // Equality (`==`, `!=`): permissive — any two operands are
+            // accepted and the result is `bool`. This intentionally allows
+            // `x == null` (the canonical null check), `int? == int`
+            // (nullable equality), and numeric cross-type comparisons like
+            // `int == float`. The only rejected pairing is float-vs-bigint:
+            // a `bigint` beyond f64's exactly-representable range cannot be
+            // compared to a `float` without precision loss, so
+            // `is_float_bigint_mix` flags it (matching arithmetic/ordering).
+            BinaryOp::Eq | BinaryOp::Ne => {
+                if Self::is_float_bigint_mix(lhs, rhs)
+                    && !matches!(lhs, Ty::Unknown { .. } | Ty::Error { .. })
+                    && !matches!(rhs, Ty::Unknown { .. } | Ty::Error { .. })
+                {
+                    self.context.report_simple(
+                        TirTypeError::InvalidBinaryOp {
+                            op,
+                            lhs: lhs.clone(),
+                            rhs: rhs.clone(),
+                        },
+                        at,
+                    );
+                }
+                Ty::Primitive(PrimitiveType::Bool, TyAttr::default())
+            }
+
+            // Ordering (`<`, `<=`, `>`, `>=`): unlike equality, there is no
+            // meaningful ordering between `null` and a real value. Reject
+            // any operand that could be null (Optional / Union containing
+            // `null` / bare `null`) before the float-bigint mix check.
+            BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
+                let invalid_null = (Self::may_be_null(lhs) || Self::may_be_null(rhs))
+                    && !matches!(lhs, Ty::Unknown { .. } | Ty::Error { .. })
+                    && !matches!(rhs, Ty::Unknown { .. } | Ty::Error { .. });
+                let invalid_mix = Self::is_float_bigint_mix(lhs, rhs)
+                    && !matches!(lhs, Ty::Unknown { .. } | Ty::Error { .. })
+                    && !matches!(rhs, Ty::Unknown { .. } | Ty::Error { .. });
+                if invalid_null || invalid_mix {
+                    self.context.report_simple(
+                        TirTypeError::InvalidBinaryOp {
+                            op,
+                            lhs: lhs.clone(),
+                            rhs: rhs.clone(),
+                        },
+                        at,
+                    );
+                }
+                Ty::Primitive(PrimitiveType::Bool, TyAttr::default())
+            }
 
             // Logical → bool
             BinaryOp::And | BinaryOp::Or => Ty::Primitive(PrimitiveType::Bool, TyAttr::default()),
@@ -8062,12 +8180,28 @@ impl<'db> TypeInferenceBuilder<'db> {
                 result
             }
 
-            // Bitwise → int
+            // Bitwise: result type depends on operands (int or bigint).
             BinaryOp::BitAnd
             | BinaryOp::BitOr
             | BinaryOp::BitXor
             | BinaryOp::Shl
-            | BinaryOp::Shr => Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
+            | BinaryOp::Shr => {
+                let result = Self::infer_bitwise(lhs, rhs);
+                if matches!(result, Ty::Unknown { .. })
+                    && !matches!(lhs, Ty::Unknown { .. } | Ty::Error { .. })
+                    && !matches!(rhs, Ty::Unknown { .. } | Ty::Error { .. })
+                {
+                    self.context.report_simple(
+                        TirTypeError::InvalidBinaryOp {
+                            op,
+                            lhs: lhs.clone(),
+                            rhs: rhs.clone(),
+                        },
+                        at,
+                    );
+                }
+                result
+            }
 
             // Null coalescing: a ?? b
             // If a: T?, result is T | typeof(b).
@@ -8099,14 +8233,27 @@ impl<'db> TypeInferenceBuilder<'db> {
             match (&a, &b) {
                 (PrimitiveType::Int, PrimitiveType::Float)
                 | (PrimitiveType::Float, PrimitiveType::Int) => Some(PrimitiveType::Float),
+                (PrimitiveType::Int, PrimitiveType::Bigint)
+                | (PrimitiveType::Bigint, PrimitiveType::Int) => Some(PrimitiveType::Bigint),
                 _ => None,
             }
         }
 
         fn base_ty(ty: &Ty) -> Option<PrimitiveType> {
+            // Enumerate the specific primitives this op accepts (Int, Bigint,
+            // Float, String). Anything else returns `None`, which makes the
+            // outer match fall through to `Ty::Unknown` and surface as an
+            // `InvalidBinaryOp` diagnostic. Adding a new `PrimitiveType` or
+            // `Literal` variant forces a deliberate opt-in here.
             match ty {
-                Ty::Primitive(p, _) => Some(p.clone()),
-                Ty::Literal(lit, _, _) => Some(PrimitiveType::from_literal(lit)),
+                Ty::Primitive(PrimitiveType::Int, _) => Some(PrimitiveType::Int),
+                Ty::Primitive(PrimitiveType::Bigint, _) => Some(PrimitiveType::Bigint),
+                Ty::Primitive(PrimitiveType::Float, _) => Some(PrimitiveType::Float),
+                Ty::Primitive(PrimitiveType::String, _) => Some(PrimitiveType::String),
+                Ty::Literal(baml_base::Literal::Int(_), _, _) => Some(PrimitiveType::Int),
+                Ty::Literal(baml_base::Literal::Bigint(_), _, _) => Some(PrimitiveType::Bigint),
+                Ty::Literal(baml_base::Literal::Float(_), _, _) => Some(PrimitiveType::Float),
+                Ty::Literal(baml_base::Literal::String(_), _, _) => Some(PrimitiveType::String),
                 Ty::Union(members, _) => {
                     let mut result: Option<PrimitiveType> = None;
                     for m in members {
@@ -8123,8 +8270,18 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
 
         match (base_ty(lhs), base_ty(rhs)) {
+            // Float / bigint mixing is rejected — bigint values past 2^53 don't
+            // round-trip through f64. Users must explicitly convert.
+            (Some(PrimitiveType::Float), Some(PrimitiveType::Bigint))
+            | (Some(PrimitiveType::Bigint), Some(PrimitiveType::Float)) => Ty::Unknown {
+                attr: TyAttr::default(),
+            },
             (Some(PrimitiveType::Float), _) | (_, Some(PrimitiveType::Float)) => {
                 Ty::Primitive(PrimitiveType::Float, TyAttr::default())
+            }
+            (Some(PrimitiveType::Bigint | PrimitiveType::Int), Some(PrimitiveType::Bigint))
+            | (Some(PrimitiveType::Bigint), Some(PrimitiveType::Int)) => {
+                Ty::Primitive(PrimitiveType::Bigint, TyAttr::default())
             }
             (Some(PrimitiveType::Int), Some(PrimitiveType::Int)) => {
                 Ty::Primitive(PrimitiveType::Int, TyAttr::default())
@@ -8138,6 +8295,120 @@ impl<'db> TypeInferenceBuilder<'db> {
                         attr: TyAttr::default(),
                     }
                 }
+            }
+            _ => Ty::Unknown {
+                attr: TyAttr::default(),
+            },
+        }
+    }
+
+    /// Returns true if any runtime value of `ty` could be `null` — i.e. the
+    /// type is `Optional<_>`, the bare `null` primitive, or a union that
+    /// contains either.
+    ///
+    /// Used by the ordering arms of [`infer_binary_op`] to reject operands
+    /// whose runtime value might be `null`. Arithmetic / bitwise rely on
+    /// their respective `base_ty` classifiers (which return `None` for
+    /// `Optional`/`null` and short-circuit via the catch-all to `Unknown`),
+    /// so they do not need this helper.
+    fn may_be_null(ty: &Ty) -> bool {
+        match ty {
+            Ty::Optional(_, _) => true,
+            Ty::Primitive(PrimitiveType::Null, _) => true,
+            Ty::Union(members, _) => members.iter().any(Self::may_be_null),
+            _ => false,
+        }
+    }
+
+    /// Returns true if the common upcast of `lhs` and `rhs` would contain
+    /// both `float` and `bigint`, which has no sound comparison (bigint
+    /// values past 2^53 don't round-trip through f64).
+    ///
+    /// Models the "is there a valid common type for these two values?"
+    /// question used by the equality and ordering arms of
+    /// [`infer_binary_op`]. `int? == int` upcasts both sides to `int?` and
+    /// is fine; `float? == bigint` upcasts to `float | null | bigint`,
+    /// which still pairs float with bigint inside the upcast — so even
+    /// though only one runtime branch realizes the bad pairing, the type
+    /// itself is unsound.
+    ///
+    /// Note this is conservative for a single union that already contains
+    /// both: `(float | bigint) == (float | bigint)` (and even `x == x` for
+    /// such an `x`) is rejected, because the type admits a float-vs-bigint
+    /// pairing even though any one concrete value is only ever one
+    /// representation. Narrow the operand first if you hit this.
+    fn is_float_bigint_mix(lhs: &Ty, rhs: &Ty) -> bool {
+        /// `(could_be_float, could_be_bigint)` for a primitive/literal/union/
+        /// optional type — i.e. the set of primitive shapes any runtime branch
+        /// could carry. Optional **is** unwrapped here because this helper
+        /// asks about the *upcast* type, not about whether the operand itself
+        /// is a valid scalar (the latter check belongs at the operator's arm
+        /// entry, e.g. ordering rejecting nullable operands via `may_be_null`).
+        fn shape(ty: &Ty) -> (bool, bool) {
+            match ty {
+                Ty::Primitive(PrimitiveType::Float, _)
+                | Ty::Literal(baml_base::Literal::Float(_), _, _) => (true, false),
+                Ty::Primitive(PrimitiveType::Bigint, _)
+                | Ty::Literal(baml_base::Literal::Bigint(_), _, _) => (false, true),
+                Ty::Union(members, _) => members.iter().fold((false, false), |(f, b), m| {
+                    let (mf, mb) = shape(m);
+                    (f || mf, b || mb)
+                }),
+                Ty::Optional(inner, _) => shape(inner),
+                _ => (false, false),
+            }
+        }
+        let (lhs_float, lhs_bigint) = shape(lhs);
+        let (rhs_float, rhs_bigint) = shape(rhs);
+        // The upcast of the two operands contains both `float` and `bigint`
+        // iff either side could be float **and** either side could be bigint.
+        // (A single side containing both — e.g. `float | bigint` — is just as
+        // unsound as the classic cross-side case `float vs bigint`.)
+        (lhs_float || rhs_float) && (lhs_bigint || rhs_bigint)
+    }
+
+    /// Determine the result type of a bitwise operation.
+    ///
+    /// `(int, int) -> int`, `(bigint, bigint) -> bigint`, `(int, bigint) -> bigint`.
+    fn infer_bitwise(lhs: &Ty, rhs: &Ty) -> Ty {
+        fn base_ty(ty: &Ty) -> Option<PrimitiveType> {
+            // Bitwise only accepts Int and Bigint. Float / String / Bool
+            // return `None` so the outer match falls through to `Unknown`
+            // (which surfaces as `InvalidBinaryOp`).
+            match ty {
+                Ty::Primitive(PrimitiveType::Int, _) => Some(PrimitiveType::Int),
+                Ty::Primitive(PrimitiveType::Bigint, _) => Some(PrimitiveType::Bigint),
+                Ty::Literal(baml_base::Literal::Int(_), _, _) => Some(PrimitiveType::Int),
+                Ty::Literal(baml_base::Literal::Bigint(_), _, _) => Some(PrimitiveType::Bigint),
+                Ty::Union(members, _) => {
+                    let mut result: Option<PrimitiveType> = None;
+                    for m in members {
+                        let p = base_ty(m)?;
+                        result = Some(match (result, p) {
+                            (None, p) => p,
+                            (Some(a), b) if a == b => a,
+                            // `int | bigint` members widen to `bigint`, matching
+                            // the mixed-operand rule in the outer match below.
+                            (Some(PrimitiveType::Int), PrimitiveType::Bigint)
+                            | (Some(PrimitiveType::Bigint), PrimitiveType::Int) => {
+                                PrimitiveType::Bigint
+                            }
+                            _ => return None,
+                        });
+                    }
+                    result
+                }
+                _ => None,
+            }
+        }
+
+        match (base_ty(lhs), base_ty(rhs)) {
+            (Some(PrimitiveType::Int), Some(PrimitiveType::Int)) => {
+                Ty::Primitive(PrimitiveType::Int, TyAttr::default())
+            }
+            (Some(PrimitiveType::Bigint | PrimitiveType::Int), Some(PrimitiveType::Bigint))
+            | (Some(PrimitiveType::Bigint), Some(PrimitiveType::Int)) => {
+                Ty::Primitive(PrimitiveType::Bigint, TyAttr::default())
             }
             _ => Ty::Unknown {
                 attr: TyAttr::default(),
@@ -8159,6 +8430,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
                 Ty::Primitive(PrimitiveType::Float, attr) => {
                     Ty::Primitive(PrimitiveType::Float, attr.clone())
+                }
+                Ty::Primitive(PrimitiveType::Bigint, attr) => {
+                    Ty::Primitive(PrimitiveType::Bigint, attr.clone())
                 }
                 Ty::Unknown { attr } | Ty::Error { attr } => Ty::Unknown { attr: attr.clone() },
                 _ => {
@@ -8207,6 +8481,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                         TyAttr::default(),
                     ))
                 }
+                LiteralValue::Bigint(n) => Some(Ty::Literal(
+                    LiteralValue::Bigint(-n.clone()),
+                    f,
+                    TyAttr::default(),
+                )),
                 _ => None,
             },
             baml_compiler2_ast::UnaryOp::Not => match lit {
@@ -8312,6 +8591,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                 )),
                 _ => None,
             };
+        }
+
+        // Bigint × Bigint
+        if let (LiteralValue::Bigint(a), LiteralValue::Bigint(b)) = (lhs_lit, rhs_lit) {
+            return Self::try_fold_bigint_binary(op, a, b, f);
         }
 
         // Float × Float
@@ -8435,6 +8719,110 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
 
         None
+    }
+
+    /// Fold a `Bigint × Bigint` binary operation at the literal-type level.
+    ///
+    /// Returns `None` when the operation would not survive at runtime — division
+    /// or modulo by zero, negative shift counts, or a result whose bit-length
+    /// exceeds `baml_type::MAX_BIGINT_BITS` (the VM's allocation cap). Treating
+    /// those as non-foldable matches the runtime behavior: the user-visible
+    /// effect is the same as if the literal types had never been narrowed,
+    /// rather than producing a literal type the VM could not actually
+    /// materialize.
+    fn try_fold_bigint_binary(
+        op: baml_compiler2_ast::BinaryOp,
+        a: &num_bigint::BigInt,
+        b: &num_bigint::BigInt,
+        f: crate::ty::Freshness,
+    ) -> Option<Ty> {
+        use baml_compiler2_ast::BinaryOp;
+        use num_bigint::Sign;
+
+        use crate::ty::LiteralValue;
+
+        // Reject if the bit-length of `n` would trip the VM's allocation cap.
+        let within_cap =
+            |n: &num_bigint::BigInt| -> bool { n.bits() <= baml_type::MAX_BIGINT_BITS };
+
+        let lit_bigint = |n: num_bigint::BigInt| -> Option<Ty> {
+            if !within_cap(&n) {
+                return None;
+            }
+            Some(Ty::Literal(LiteralValue::Bigint(n), f, TyAttr::default()))
+        };
+        let lit_bool = |v: bool| -> Option<Ty> {
+            Some(Ty::Literal(LiteralValue::Bool(v), f, TyAttr::default()))
+        };
+
+        match op {
+            BinaryOp::Add => lit_bigint(a + b),
+            BinaryOp::Sub => lit_bigint(a - b),
+            BinaryOp::Mul => {
+                // Pre-flight check matching `Instruction::MulBigint`.
+                if a.bits().saturating_add(b.bits()) > baml_type::MAX_BIGINT_BITS {
+                    return None;
+                }
+                lit_bigint(a * b)
+            }
+            BinaryOp::Div => {
+                if b.sign() == Sign::NoSign {
+                    return None;
+                }
+                lit_bigint(a / b)
+            }
+            BinaryOp::Mod => {
+                if b.sign() == Sign::NoSign {
+                    return None;
+                }
+                lit_bigint(a % b)
+            }
+            BinaryOp::BitAnd => lit_bigint(a & b),
+            BinaryOp::BitOr => lit_bigint(a | b),
+            BinaryOp::BitXor => lit_bigint(a ^ b),
+            BinaryOp::Shl => {
+                if b.sign() == Sign::Minus {
+                    return None;
+                }
+                // Shl and Shr handle huge counts asymmetrically *on purpose*.
+                // Shl growth is bounded by `MAX_BIGINT_BITS`; if the count
+                // overflows `usize` (or would push the result past the cap)
+                // we refuse to fold, deferring to the runtime which raises
+                // `AllocFailure` rather than producing a value the VM
+                // couldn't materialise. Shr cannot grow the value, so a
+                // count past `usize::MAX` simply saturates to `0n` / `-1n`
+                // — see the comment in the `Shr` arm.
+                let shift = usize::try_from(b).ok()?;
+                let shift_u64 = u64::try_from(shift).ok()?;
+                if a.bits().saturating_add(shift_u64) > baml_type::MAX_BIGINT_BITS {
+                    return None;
+                }
+                lit_bigint(a << shift)
+            }
+            BinaryOp::Shr => {
+                if b.sign() == Sign::Minus {
+                    return None;
+                }
+                // Mirror `Instruction::ShrBigint`: counts that don't fit in
+                // `usize` saturate to 0n (or -1n for negative operands).
+                // (The asymmetry with `Shl` is intentional — see that arm.)
+                match usize::try_from(b) {
+                    Ok(shift) => lit_bigint(a >> shift),
+                    Err(_) => lit_bigint(if a.sign() == Sign::Minus {
+                        num_bigint::BigInt::from(-1)
+                    } else {
+                        num_bigint::BigInt::ZERO
+                    }),
+                }
+            }
+            BinaryOp::Eq => lit_bool(a == b),
+            BinaryOp::Ne => lit_bool(a != b),
+            BinaryOp::Lt => lit_bool(a < b),
+            BinaryOp::Le => lit_bool(a <= b),
+            BinaryOp::Gt => lit_bool(a > b),
+            BinaryOp::Ge => lit_bool(a >= b),
+            _ => None,
+        }
     }
 
     fn assign_op_to_binary_op(op: baml_compiler2_ast::AssignOp) -> baml_compiler2_ast::BinaryOp {
@@ -9984,6 +10372,7 @@ impl TypeInferenceBuilder<'_> {
 fn bare_type_sugar_to_ty(name: &Name) -> Option<Ty> {
     match name.as_str() {
         "int" => Some(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
+        "bigint" => Some(Ty::Primitive(PrimitiveType::Bigint, TyAttr::default())),
         "float" => Some(Ty::Primitive(PrimitiveType::Float, TyAttr::default())),
         "string" => Some(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
         "bool" => Some(Ty::Primitive(PrimitiveType::Bool, TyAttr::default())),

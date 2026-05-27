@@ -20,7 +20,7 @@ function combine(x: int, a: int, b: int) -> int {
   L1:
     load_var x
     load_var a
-    bin_op +
+    add_int
     load_var b
     add_int
     return

@@ -275,6 +275,32 @@ impl<'a> BexValue<'a> {
         }
     }
 
+    /// Extract an `Arc<BigInt>` from a bigint value. External bigints are
+    /// stored as `BigInt` by value; heap bigints share an `Arc<BigInt>` —
+    /// in both cases the caller gets an owned `Arc` (cheap clone for the
+    /// heap case, fresh allocation for the external case).
+    pub fn as_bigint(
+        self,
+        heap: &BexHeap,
+        permit: PermitProof<'a>,
+    ) -> Result<std::sync::Arc<num_bigint::BigInt>, AccessError> {
+        match self {
+            BexValue::ExternalValue(BexExternalValue::Bigint(bi)) => {
+                Ok(std::sync::Arc::new(bi.clone()))
+            }
+            other => other.as_object("bigint", heap, permit, |ptr| {
+                let obj = unsafe { ptr.get() };
+                let Object::Bigint(arc) = obj else {
+                    return Err(AccessError::TypeMismatch {
+                        expected: "bigint",
+                        actual: obj.to_string(),
+                    });
+                };
+                Ok(std::sync::Arc::clone(arc))
+            }),
+        }
+    }
+
     pub fn as_array(
         self,
         heap: &BexHeap,
@@ -585,6 +611,7 @@ fn owned_inner(
             BexExternalValue::FunctionRef { .. } => unconvertible("function"),
             BexExternalValue::Null => Ok(BexExternalValue::Null),
             BexExternalValue::Int(i) => Ok(BexExternalValue::Int(*i)),
+            BexExternalValue::Bigint(b) => Ok(BexExternalValue::Bigint(b.clone())),
             BexExternalValue::Float(f) => Ok(BexExternalValue::Float(*f)),
             BexExternalValue::Bool(b) => Ok(BexExternalValue::Bool(*b)),
             BexExternalValue::String(s) => Ok(BexExternalValue::String(s.clone())),
@@ -765,6 +792,7 @@ fn convert_object(
         }
         Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
         Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type((**ty).clone()))),
+        Object::Bigint(bi) => Ok(BexExternalValue::Bigint((**bi).clone())),
         Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.to_vec())),
         Object::RustData(data) => Ok(bex_external_types::try_convert_rust_data(data)
             .unwrap_or_else(|| BexExternalValue::RustData(data.clone()))),

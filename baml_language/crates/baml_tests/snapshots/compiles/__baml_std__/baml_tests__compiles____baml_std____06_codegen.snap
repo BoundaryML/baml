@@ -85,6 +85,41 @@ function baml.Array.to_json(self: null) -> baml.json.json {
 function baml.Array.unshift(self: null, item: void) -> int {
 }
 
+function baml.Bigint.abs(self: null) -> bigint {
+}
+
+function baml.Bigint.clamp(self: null, min: bigint, max: bigint) -> bigint {
+}
+
+function baml.Bigint.from_json(j: baml.json.json) -> baml.Bigint {
+    alloc_instance baml.Bigint
+    return
+}
+
+function baml.Bigint.ilog(self: null, base: bigint) -> bigint {
+}
+
+function baml.Bigint.isqrt(self: null) -> bigint {
+}
+
+function baml.Bigint.max(self: null, other: bigint) -> bigint {
+}
+
+function baml.Bigint.min(self: null, other: bigint) -> bigint {
+}
+
+function baml.Bigint.parse(text: string) -> bigint {
+}
+
+function baml.Bigint.pow(self: null, exp: bigint) -> bigint {
+}
+
+function baml.Bigint.random(lower: bigint, upper: bigint) -> bigint {
+}
+
+function baml.Bigint.to_json(self: null) -> baml.json.json {
+}
+
 function baml.Bool.from_json(j: baml.json.json) -> baml.Bool {
     alloc_instance baml.Bool
     return
@@ -233,7 +268,7 @@ function baml.Float.to_degrees(self: null) -> float {
     load_const 180.0
     bin_op *
     load_var _3
-    bin_op /
+    div_float
     return
 }
 
@@ -247,7 +282,7 @@ function baml.Float.to_radians(self: null) -> float {
     load_var _3
     bin_op *
     load_const 180.0
-    bin_op /
+    div_float
     return
 }
 
@@ -1478,7 +1513,7 @@ function baml.http.Response.ok(self: null) -> bool {
     load_var self
     load_field .status_code
     load_const 200
-    cmp_op >=
+    cmp_int_op >=
     jump_if_false L0
     pop 1
     load_var self
@@ -2195,7 +2230,7 @@ function baml.llm.Client.build_attempt_with_state(self: null, planner_state: bam
     load_field .sub_clients
     call baml.Array.length
     load_const 0
-    cmp_op ==
+    cmp_int_op ==
     pop_jump_if_false L2
     jump L3
 
@@ -2241,7 +2276,7 @@ function baml.llm.Client.build_attempt_with_state(self: null, planner_state: bam
     load_var __for_idx
     load_var _9
     call baml.Array.length
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L6
     jump L7
 
@@ -2263,7 +2298,7 @@ function baml.llm.Client.build_attempt_with_state(self: null, planner_state: bam
     load_var __for_idx_1
     load_var _15
     call baml.Array.length
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L9
     jump L10
 
@@ -2339,7 +2374,7 @@ function baml.llm.Client.build_plan_with_state(self: null, planner_state: baml.l
     load_var attempt
     load_var r
     load_field .max_retries
-    cmp_op <=
+    cmp_int_op <=
     pop_jump_if_false L3
     jump L5
 
@@ -2354,7 +2389,7 @@ function baml.llm.Client.build_plan_with_state(self: null, planner_state: baml.l
     store_var delay
     load_var attempt
     load_const 0
-    cmp_op >
+    cmp_int_op >
     pop_jump_if_false L8
     load_var current_delay
     call baml.math.trunc
@@ -2368,7 +2403,7 @@ function baml.llm.Client.build_plan_with_state(self: null, planner_state: baml.l
     load_field .max_delay_ms
     load_const 0.0
     bin_op +
-    cmp_op >
+    cmp_float_op >
     pop_jump_if_false L6
     jump L7
 
@@ -2396,7 +2431,7 @@ function baml.llm.Client.build_plan_with_state(self: null, planner_state: baml.l
     load_var __for_idx
     load_var _26
     call baml.Array.length
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L10
     jump L11
 
@@ -2447,7 +2482,7 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: baml.llm.Exec
     load_field .sub_clients
     call baml.Array.length
     load_const 0
-    cmp_op ==
+    cmp_int_op ==
     pop_jump_if_false L2
     jump L3
 
@@ -2483,7 +2518,7 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: baml.llm.Exec
     load_var __for_idx
     load_var _35
     call baml.Array.length
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L6
     jump L7
 
@@ -2554,7 +2589,7 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: baml.llm.Exec
   L11:
     load_var active_delay_ms
     load_const 0
-    cmp_op >
+    cmp_int_op >
     pop_jump_if_false L12
     load_var active_delay_ms
     sys_op baml.sys.sleep
@@ -2580,7 +2615,7 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: baml.llm.Exec
     throw_if_panic
     load_var active_delay_ms
     load_const 0
-    cmp_op >
+    cmp_int_op >
     pop_jump_if_false L14
     load_var active_delay_ms
     sys_op baml.sys.sleep
@@ -2620,7 +2655,7 @@ function baml.llm.Client.execute_once_stream(self: null, context: baml.llm.Execu
     load_field .sub_clients
     call baml.Array.length
     load_const 0
-    cmp_op ==
+    cmp_int_op ==
     pop_jump_if_false L2
     jump L3
 
@@ -2656,7 +2691,7 @@ function baml.llm.Client.execute_once_stream(self: null, context: baml.llm.Execu
     load_var __for_idx
     load_var _22
     call baml.Array.length
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L6
     jump L7
 
@@ -2753,7 +2788,7 @@ function baml.llm.Client.execute_oneshot(self: null, context: baml.llm.Execution
     load_var attempt
     load_var r
     load_field .max_retries
-    cmp_op <=
+    cmp_int_op <=
     pop_jump_if_false L3
     jump L4
 
@@ -2767,7 +2802,7 @@ function baml.llm.Client.execute_oneshot(self: null, context: baml.llm.Execution
     store_var attempt_delay
     load_var attempt
     load_const 0
-    cmp_op >
+    cmp_int_op >
     pop_jump_if_false L7
     load_var current_delay
     call baml.math.trunc
@@ -2781,7 +2816,7 @@ function baml.llm.Client.execute_oneshot(self: null, context: baml.llm.Execution
     load_field .max_delay_ms
     load_const 0.0
     bin_op +
-    cmp_op >
+    cmp_float_op >
     pop_jump_if_false L5
     jump L6
 
@@ -2801,7 +2836,7 @@ function baml.llm.Client.execute_oneshot(self: null, context: baml.llm.Execution
     load_var attempt
     load_var r
     load_field .max_retries
-    cmp_op ==
+    cmp_int_op ==
     pop_jump_if_false L8
     load_var inherited_delay_ms
     store_var attempt_delay
@@ -2856,7 +2891,7 @@ function baml.llm.Client.execute_stream(self: null, context: baml.llm.ExecutionC
     load_var attempt
     load_var r
     load_field .max_retries
-    cmp_op <=
+    cmp_int_op <=
     pop_jump_if_false L3
     jump L4
 
@@ -2870,7 +2905,7 @@ function baml.llm.Client.execute_stream(self: null, context: baml.llm.ExecutionC
     store_var attempt_delay
     load_var attempt
     load_const 0
-    cmp_op >
+    cmp_int_op >
     pop_jump_if_false L7
     load_var current_delay
     call baml.math.trunc
@@ -2884,7 +2919,7 @@ function baml.llm.Client.execute_stream(self: null, context: baml.llm.ExecutionC
     load_field .max_delay_ms
     load_const 0.0
     bin_op +
-    cmp_op >
+    cmp_float_op >
     pop_jump_if_false L5
     jump L6
 
@@ -2904,7 +2939,7 @@ function baml.llm.Client.execute_stream(self: null, context: baml.llm.ExecutionC
     load_var attempt
     load_var r
     load_field .max_retries
-    cmp_op ==
+    cmp_int_op ==
     pop_jump_if_false L8
     load_var inherited_delay_ms
     store_var attempt_delay
@@ -3249,7 +3284,7 @@ function baml.llm.PlannerState.rr_local_offset(self: null, client_name: string) 
     load_var __for_idx
     load_var _4
     call baml.Array.length
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L1
     jump L2
 
@@ -3289,9 +3324,9 @@ function baml.llm.PlannerState.rr_pick_index(self: null, client_name: string, co
     pop 1
     load_var counter
     load_var local_offset
-    bin_op +
+    add_int
     load_var sub_client_count
-    bin_op %
+    mod_int
     return
 }
 
@@ -4351,6 +4386,27 @@ function baml.panics.MapKeyNotFound.to_json(self: null) -> baml.json.json {
     return
 }
 
+function baml.panics.NegativeBitShift.from_json(j: baml.json.json) -> baml.panics.NegativeBitShift {
+    load_var j
+    load_const "message"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    init_instance baml.panics.NegativeBitShift .message
+    return
+}
+
+function baml.panics.NegativeBitShift.to_json(self: null) -> baml.json.json {
+    load_var self
+    load_field .message
+    call baml.String.to_json
+    load_const "message"
+    alloc_map 1
+    return
+}
+
 function baml.panics.StackOverflow.from_json(j: baml.json.json) -> baml.panics.StackOverflow {
     load_var j
     load_const "message"
@@ -4590,7 +4646,7 @@ function baml.sys.ShellOutput.ok(self: null) -> bool {
     load_var self
     load_field .exit_code
     load_const 0
-    cmp_op ==
+    cmp_int_op ==
     return
 }
 

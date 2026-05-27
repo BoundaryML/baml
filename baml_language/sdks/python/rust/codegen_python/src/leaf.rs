@@ -471,6 +471,7 @@ fn collect_root_imports(ty: &Ty, current: &LeafPath, out: &mut RootImportSets) {
             });
         }
         Ty::Int
+        | Ty::Bigint
         | Ty::Float
         | Ty::String
         | Ty::Bool
@@ -1483,6 +1484,7 @@ fn render_default_pyi(default: &FunctionArgumentDefault) -> String {
 fn render_literal_default(lit: &Literal) -> String {
     match lit {
         Literal::Int(value) => value.to_string(),
+        Literal::Bigint(value) => value.to_string(),
         Literal::Float(value) => value.clone(),
         Literal::String(value) => py_string(value),
         Literal::Bool(true) => "True".to_string(),

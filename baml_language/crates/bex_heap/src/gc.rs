@@ -394,6 +394,7 @@ impl BexHeap {
             // stub, not a heap object) and a `Box<Ty>` (no `HeapPtr`s).
             Object::HostClosure(_) => {}
             Object::String(_)
+            | Object::Bigint(_)
             | Object::Uint8Array(_)
             | Object::Class(_)
             | Object::Enum(_)
@@ -533,6 +534,7 @@ impl BexHeap {
             // `add_references_to_worklist`.
             Object::HostClosure(_) => {}
             Object::String(_)
+            | Object::Bigint(_)
             | Object::Uint8Array(_)
             | Object::Class(_)
             | Object::Enum(_)
@@ -792,6 +794,7 @@ impl BexHeap {
             // `HostClosure` carries no heap references.
             Object::HostClosure(_) => {}
             Object::String(_)
+            | Object::Bigint(_)
             | Object::Uint8Array(_)
             | Object::Class(_)
             | Object::Enum(_)

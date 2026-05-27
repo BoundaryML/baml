@@ -80,6 +80,7 @@ pub enum CodegenFunctionParamMode {
 pub enum Ty {
     // Primitive types
     Int,
+    Bigint,
     Float,
     String,
     Bool,
@@ -147,6 +148,7 @@ impl Ty {
         match self {
             Ty::BamlOptions => Ok(()),
             Ty::Int
+            | Ty::Bigint
             | Ty::Float
             | Ty::String
             | Ty::Bool
@@ -221,6 +223,7 @@ impl fmt::Display for Ty {
         match self {
             Ty::BamlOptions => write!(f, "baml.Options"),
             Ty::Int => write!(f, "int"),
+            Ty::Bigint => write!(f, "bigint"),
             Ty::Float => write!(f, "float"),
             Ty::String => write!(f, "string"),
             Ty::Bool => write!(f, "bool"),
@@ -249,6 +252,7 @@ impl fmt::Display for Ty {
             Ty::RustType => write!(f, "$rust_type"),
             Ty::Literal(lit) => match lit {
                 baml_base::Literal::Int(v) => write!(f, "int({v})"),
+                baml_base::Literal::Bigint(n) => write!(f, "bigint({n})"),
                 baml_base::Literal::Float(s) => write!(f, "float({s})"),
                 baml_base::Literal::String(v) => write!(f, "string({v:?})"),
                 baml_base::Literal::Bool(v) => write!(f, "bool({v})"),

@@ -232,6 +232,7 @@ impl BexEngine {
             Object::UnscheduledFuture(_) => Err(EngineError::CannotConvert {
                 type_name: "unscheduled_future".to_string(),
             }),
+            Object::Bigint(bi) => Ok(BexExternalValue::Bigint((**bi).clone())),
             Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
             Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type((**ty).clone()))),
             Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.to_vec())),
@@ -304,7 +305,40 @@ impl BexEngine {
                     .expect("Handle should be valid - object was returned to external code"),
             ),
             BexExternalValue::Null => Value::NULL,
-            BexExternalValue::Int(i) => Value::int(i),
+            // The host integer is an `i64`, but the VM integer is `i63` (`Value`
+            // reserves the low bit as a tag). Reject values outside the i63
+            // range here rather than letting `Value::int` wrap them — a
+            // release-build silent truncation, a debug-build panic. This also
+            // gates the `bigint → int` FFI narrowing, whose `i64::try_from` only
+            // bounds to the full i64 range.
+            BexExternalValue::Int(i) => {
+                Value::try_int(i).ok_or_else(|| EngineError::TypeMismatch {
+                    message: format!(
+                        "integer {i} is outside the BAML integer range [{}, {}]",
+                        Value::INT_MIN,
+                        Value::INT_MAX
+                    ),
+                })?
+            }
+            BexExternalValue::Bigint(bi) => {
+                // Defense-in-depth: every upstream decoder (FFI hex,
+                // SAP, Node.js/Python bridges) already caps oversized
+                // bigints, but `Tlab::alloc_bigint` itself is the raw
+                // allocator with no bound check. Guard here so any
+                // future entry point that bypasses an upstream cap
+                // still surfaces a graceful error instead of allocating
+                // hundreds of MB on the VM heap.
+                let bits = bi.bits();
+                if bits > baml_type::MAX_BIGINT_BITS {
+                    return Err(EngineError::TypeMismatch {
+                        message: format!(
+                            "bigint value requires {bits} bits (limit: {})",
+                            baml_type::MAX_BIGINT_BITS
+                        ),
+                    });
+                }
+                Value::object(holder.holder_mut().tlab_mut().alloc_bigint(bi))
+            }
             BexExternalValue::Float(f) => {
                 Value::object(holder.holder_mut().tlab_mut().alloc(Object::Float(f)))
             }
@@ -760,11 +794,13 @@ fn value_matches_type(value: &BexExternalValue, ty: &Ty) -> bool {
         (_, Ty::BuiltinUnknown { .. }) => true,
         (BexExternalValue::Null, Ty::Null { .. }) => true,
         (BexExternalValue::Int(_), Ty::Int { .. }) => true,
+        (BexExternalValue::Bigint(_), Ty::Bigint { .. }) => true,
         (BexExternalValue::Float(_), Ty::Float { .. }) => true,
         (BexExternalValue::Bool(_), Ty::Bool { .. }) => true,
         (BexExternalValue::String(_), Ty::String { .. }) => true,
         // Literal types match their corresponding runtime values
         (BexExternalValue::Int(_), Ty::Literal(Literal::Int(_), _)) => true,
+        (BexExternalValue::Bigint(_), Ty::Literal(Literal::Bigint(_), _)) => true,
         (BexExternalValue::Float(_), Ty::Literal(Literal::Float(_), _)) => true,
         (BexExternalValue::Uint8Array(_), Ty::Uint8Array { .. }) => true,
         (BexExternalValue::String(_), Ty::Literal(Literal::String(_), _)) => true,
@@ -1091,6 +1127,9 @@ fn find_matching_union_member(value: Value, members: &[Ty]) -> Option<&Ty> {
                 Object::Uint8Array(_) => {
                     members.iter().find(|m| matches!(m, Ty::Uint8Array { .. }))
                 }
+                Object::Bigint(_) => members
+                    .iter()
+                    .find(|m| matches!(m, Ty::Bigint { .. } | Ty::Literal(Literal::Bigint(_), _))),
                 // Types that don't participate in union discrimination.
                 Object::Function(_)
                 | Object::Closure(_)
@@ -1182,6 +1221,7 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
 
                     BexExternalValue::Instance { class_name, fields }
                 }
+                Object::Bigint(bi) => BexExternalValue::Bigint((**bi).clone()),
                 Object::Uint8Array(bytes) => BexExternalValue::Uint8Array(bytes.to_vec()),
                 Object::Variant(variant) => {
                     let enum_obj = vm.get_object(variant.enm);
@@ -1222,6 +1262,133 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
                 }
             }
         }
+    }
+}
+
+/// Coerce a host-encoded **incoming** value to match the declared param type.
+///
+/// Handles two layers of bridge mismatch:
+///
+/// 1. **Class / enum naming:** host encoders carry an informational class or
+///    variant name (e.g. `root.lorem.MyLorem`); rewrite it to the
+///    engine-registered FQN (`user.lorem.MyLorem`) so VM heap lookups hit. A
+///    plain `Map` arriving at a class slot is also promoted to `Instance`.
+/// 2. **Numeric / optional / union coercion:** see `coerce_numeric_to_declared_type`.
+///
+/// Nested container types (arrays/maps with mismatched element types) are not
+/// walked; host-side schema-aware encoders own that shaping.
+pub(crate) fn coerce_arg_to_declared_type(
+    value: BexExternalValue,
+    ty: &Ty,
+) -> Result<BexExternalValue, EngineError> {
+    match (value, ty) {
+        // ── Class / enum naming (incoming only) ──────────────────────────
+        (BexExternalValue::Map { entries, .. }, Ty::Class(type_name, _, _)) => {
+            Ok(BexExternalValue::Instance {
+                class_name: type_name.to_string(),
+                fields: entries,
+            })
+        }
+        (BexExternalValue::Instance { fields, .. }, Ty::Class(type_name, _, _)) => {
+            Ok(BexExternalValue::Instance {
+                class_name: type_name.to_string(),
+                fields,
+            })
+        }
+        (BexExternalValue::Variant { variant_name, .. }, Ty::Enum(type_name, _)) => {
+            Ok(BexExternalValue::Variant {
+                enum_name: type_name.to_string(),
+                variant_name,
+            })
+        }
+
+        // ── Numeric / optional / union ───────────────────────────────────
+        (v, ty) => coerce_numeric_to_declared_type(v, ty),
+    }
+}
+
+/// Coerce an **outgoing** return value to match the declared return type.
+///
+/// Handles int↔bigint conversion at the FFI boundary. These conversions exist
+/// **only** at the host boundary — the type system is purely structural and
+/// does not relate `int` and `bigint` (see
+/// `baml_compiler2_tir::normalize::is_subtype_of`). `int → bigint` widens
+/// unconditionally; `bigint → int` succeeds when the value fits in i64,
+/// erroring on overflow rather than silently truncating. Also performs optional
+/// unwrap and numeric-singleton union routing.
+///
+/// Class / enum naming is intentionally *not* rewritten here — the
+/// engine-side FQN (e.g. `user.lorem.MyLorem`) is the authoritative
+/// output and stripping it back to the bare display name would break
+/// host-side type lookups.
+pub(crate) fn coerce_return_to_declared_type(
+    value: BexExternalValue,
+    ty: &Ty,
+) -> Result<BexExternalValue, EngineError> {
+    coerce_numeric_to_declared_type(value, ty)
+}
+
+/// Shared numeric / optional / union coercion used by both arg and return
+/// paths.
+///
+/// These conversions exist only at the FFI boundary. The compile-time subtype
+/// relation (`baml_compiler2_tir::normalize::is_subtype_of`,
+/// `baml_type::Ty::is_subtype_of`) is purely structural and does **not** widen
+/// `int` to `bigint`; the arms below add that widening (plus a checked
+/// `bigint → int` narrowing) only when crossing the host boundary.
+fn coerce_numeric_to_declared_type(
+    value: BexExternalValue,
+    ty: &Ty,
+) -> Result<BexExternalValue, EngineError> {
+    match (value, ty) {
+        // Int → Bigint widening (FFI boundary only — `int` is not a subtype of
+        // `bigint` in the type system).
+        (BexExternalValue::Int(i), Ty::Bigint { .. } | Ty::Literal(Literal::Bigint(_), _)) => {
+            Ok(BexExternalValue::Bigint(num_bigint::BigInt::from(i)))
+        }
+
+        // Bigint → Int narrowing: host-supplied bigint must fit in i64, otherwise
+        // there is no safe representation in the `int` slot and we reject the
+        // call rather than silently truncate.
+        (BexExternalValue::Bigint(bi), Ty::Int { .. } | Ty::Literal(Literal::Int(_), _)) => {
+            i64::try_from(&bi)
+                .map(BexExternalValue::Int)
+                .map_err(|_| EngineError::TypeMismatch {
+                    message: format!("bigint value {bi} does not fit in i64"),
+                })
+        }
+
+        // Optional<inner>: null short-circuits; otherwise unwrap and recurse.
+        (BexExternalValue::Null, Ty::Optional(_, _)) => Ok(BexExternalValue::Null),
+        (v, Ty::Optional(inner, _)) => coerce_numeric_to_declared_type(v, inner),
+
+        // Union with exactly one of {Int, Bigint}: route to that member.
+        // Unions containing both are left alone; `find_matching_union_member`
+        // picks by value shape at the VM boundary.
+        (v, Ty::Union(members, _)) => {
+            let has_int = members
+                .iter()
+                .any(|m| matches!(m, Ty::Int { .. } | Ty::Literal(Literal::Int(_), _)));
+            let has_bigint = members
+                .iter()
+                .any(|m| matches!(m, Ty::Bigint { .. } | Ty::Literal(Literal::Bigint(_), _)));
+            if has_int == has_bigint {
+                Ok(v)
+            } else if let Some(target) = members.iter().find(|m| {
+                matches!(
+                    m,
+                    Ty::Int { .. }
+                        | Ty::Bigint { .. }
+                        | Ty::Literal(Literal::Int(_) | Literal::Bigint(_), _)
+                )
+            }) {
+                coerce_numeric_to_declared_type(v, target)
+            } else {
+                Ok(v)
+            }
+        }
+
+        (v, _) => Ok(v),
     }
 }
 

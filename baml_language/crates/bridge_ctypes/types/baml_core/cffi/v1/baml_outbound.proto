@@ -35,6 +35,7 @@ message BamlOutboundValue {
     BamlValueMedia media_value = 17;
     BamlValuePromptAst prompt_ast_value = 18;
     bytes uint8array_value = 19;
+    string bigint_value = 20;
   }
 }
 
@@ -180,6 +181,7 @@ message BamlTy {
     BamlTyAny any_type = 18;
     BamlTyUint8Array uint8array_type = 19;
     BamlTyUnknown unknown_type = 20;
+    BamlTyBigint bigint_type = 21;
   }
 }
 
@@ -192,6 +194,7 @@ message BamlTyNull {}
 message BamlTyUint8Array {}
 message BamlTyAny {}
 message BamlTyUnknown {}
+message BamlTyBigint {}
 
 // Literal: wraps a literal oneof.
 message BamlLiteralString {
@@ -206,11 +209,19 @@ message BamlLiteralBool {
   bool value = 1;
 }
 
+// `value` is a base-sixteen hex string with an optional leading minus sign
+// (matches the wire format used for runtime bigint values via
+// `BamlOutboundValue.bigint_value`).
+message BamlLiteralBigint {
+  string value = 1;
+}
+
 message BamlTyLiteral {
   oneof literal {
     BamlLiteralString string_literal = 1;
     BamlLiteralInt int_literal = 2;
     BamlLiteralBool bool_literal = 3;
+    BamlLiteralBigint bigint_literal = 4;
   }
 }
 

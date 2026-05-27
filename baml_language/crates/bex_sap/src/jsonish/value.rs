@@ -374,6 +374,32 @@ impl<'de> serde::de::Visitor<'de> for ValueVisitor {
         while let Some((key, value)) = map.next_entry::<Cow<'de, str>, Value<'de>>()? {
             object.push((key, value));
         }
+        // serde_json's `arbitrary_precision` feature represents out-of-i64/u64
+        // numbers as a single-entry map keyed by `$serde_json::private::Number`
+        // whose value is the source-text decimal as a String. Recognize that
+        // shape and produce a real `Value::Number` so downstream coercers
+        // (notably the bigint path) can see the original digits.
+        //
+        // Pre-flight cap: if the decimal text is grossly larger than any
+        // bigint-representable number (see `baml_type::MAX_BIGINT_DECIMAL_DIGITS`,
+        // the same bound used by `coerce_primitive::parse_bigint_decimal_bounded`),
+        // skip the `serde_json::Number` parse — downstream bigint coercion
+        // would reject it anyway, and we don't want to do the megabyte-scale
+        // intermediate allocation in the meantime. Falling through to the
+        // object representation surfaces the same overall "not a valid
+        // bigint" outcome.
+        if object.len() == 1 {
+            let (key, value) = &object[0];
+            if key.as_ref() == "$serde_json::private::Number" {
+                if let Value::String(s, _) = value {
+                    if s.len() <= baml_type::MAX_BIGINT_DECIMAL_DIGITS {
+                        if let Ok(num) = s.parse::<serde_json::Number>() {
+                            return Ok(Value::Number(num, CompletionState::Complete));
+                        }
+                    }
+                }
+            }
+        }
         Ok(Value::Object(object, CompletionState::Complete))
     }
 }

@@ -55,6 +55,9 @@ pub enum PpirTy {
     Int {
         attrs: PpirTypeAttrs,
     },
+    Bigint {
+        attrs: PpirTypeAttrs,
+    },
     Float {
         attrs: PpirTypeAttrs,
     },
@@ -105,6 +108,7 @@ impl PpirTy {
         match self {
             Self::Named { attrs, .. }
             | Self::Int { attrs }
+            | Self::Bigint { attrs }
             | Self::Float { attrs }
             | Self::String { attrs }
             | Self::Bool { attrs }
@@ -123,6 +127,7 @@ impl PpirTy {
         match self {
             Self::Named { attrs, .. }
             | Self::Int { attrs }
+            | Self::Bigint { attrs }
             | Self::Float { attrs }
             | Self::String { attrs }
             | Self::Bool { attrs }
@@ -150,6 +155,7 @@ impl PpirTy {
                 attrs: d,
             },
             Self::Int { .. } => Self::Int { attrs: d },
+            Self::Bigint { .. } => Self::Bigint { attrs: d },
             Self::Float { .. } => Self::Float { attrs: d },
             Self::String { .. } => Self::String { attrs: d },
             Self::Bool { .. } => Self::Bool { attrs: d },
@@ -241,6 +247,7 @@ impl PpirTy {
         let attrs = Self::extract_type_attrs(type_expr.attrs());
         match type_expr {
             TypeExpr::Int { .. } => PpirTy::Int { attrs },
+            TypeExpr::Bigint { .. } => PpirTy::Bigint { attrs },
             TypeExpr::Float { .. } => PpirTy::Float { attrs },
             TypeExpr::String { .. } => PpirTy::String { attrs },
             TypeExpr::Bool { .. } => PpirTy::Bool { attrs },
@@ -320,6 +327,7 @@ impl PpirTy {
                 attrs: vec![],
             },
             PpirTy::Int { .. } => TypeExpr::Int { attrs: vec![] },
+            PpirTy::Bigint { .. } => TypeExpr::Bigint { attrs: vec![] },
             PpirTy::Float { .. } => TypeExpr::Float { attrs: vec![] },
             PpirTy::String { .. } => TypeExpr::String { attrs: vec![] },
             PpirTy::Bool { .. } => TypeExpr::Bool { attrs: vec![] },

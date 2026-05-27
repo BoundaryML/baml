@@ -107,6 +107,7 @@ impl ReceiverType {
 pub enum BamlType {
     String,
     Int,
+    Bigint,
     Float,
     Bool,
     Null,
