@@ -3,7 +3,9 @@
 //! Single source of truth for escape sequences across the BAML compiler. Used
 //! by both regular `"..."` literals and BEP-049 backtick `` `...` `` literals.
 //!
-//! Recognized escapes (always): `\n`, `\t`, `\r`, `\0`, `\\`, `\"`.
+//! Recognized escapes (always): `\n`, `\t`, `\r`, `\0`, `\b`, `\v`, `\f`,
+//! `\\`, `\"`. The C-style control trio (`\b`, `\v`, `\f`) is included for
+//! TypeScript parity (BEP-049 §BB); see `typescript-go` scanner.go:1721-1736.
 //!
 //! Backtick-literal-only escapes: `` \` `` and `\$` (covers the `\${`
 //! disambiguation from §8 of BEP-049 — backslash before `$` always produces a

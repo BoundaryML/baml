@@ -1111,6 +1111,22 @@ impl<'a> Parser<'a> {
         self.bump_impl(false);
     }
 
+    /// Consume exactly the token at `self.current` and emit it, regardless
+    /// of whether it's basic trivia. Unlike `bump_raw`, does NOT first walk
+    /// past whitespace/newlines. Used for the second half of a `\\<char>`
+    /// escape in backtick content, where the next single raw token IS the
+    /// escape target and must not be conflated with leading trivia.
+    fn bump_one_token_raw(&mut self) {
+        if let Some(token) = self.tokens.get(self.current) {
+            let kind = token_kind_to_syntax_kind(token.kind);
+            self.events.push(Event::Token {
+                kind,
+                text: token.text.clone(),
+            });
+            self.current += 1;
+        }
+    }
+
     /// Internal: Consume current token with optional comment pattern recognition
     fn bump_impl(&mut self, recognize_comments: bool) {
         // Emit all trivia before the token
@@ -1850,9 +1866,15 @@ impl<'a> Parser<'a> {
     }
 
     /// Is there a maximal run of ≥ `n` consecutive `Backtick` tokens somewhere
-    /// from `start` onward? An anchored close exists iff such a run exists,
-    /// because the run is maximal (the token after is not a backtick) and
-    /// `run_len >= n` lets the trailing `n` ticks form the close.
+    /// from `start` onward, within the CURRENT top-level item, ignoring
+    /// backticks inside `//` and `/* */` comments?
+    ///
+    /// The scope and comment-skip both matter: without them, an unrelated
+    /// backtick literal later in the file (or a backtick run inside a doc
+    /// comment showing a markdown code fence) silently satisfies the
+    /// empty-multi-tick guard, suppressing the targeted diagnostic and
+    /// letting `parse_backtick_content` consume across function boundaries.
+    /// Ultrareview bugs 008 and 002.
     ///
     /// Over-approximation: doesn't account for backslash-escape sequences
     /// inside content (e.g. an escaped backtick), so this can return `true`
@@ -1863,6 +1885,36 @@ impl<'a> Parser<'a> {
     fn has_backtick_close_ahead_from(&self, start: usize, n: usize) -> bool {
         let mut i = start;
         while i < self.tokens.len() {
+            // Stop at the next top-level item — keywords like `function`,
+            // `class`, etc. that always start a fresh item at module scope.
+            // A backtick literal lives inside one item; close runs from
+            // other items don't count.
+            if matches!(
+                self.tokens[i].kind,
+                TokenKind::Class
+                    | TokenKind::Enum
+                    | TokenKind::Function
+                    | TokenKind::Client
+                    | TokenKind::Generator
+                    | TokenKind::Test
+                    | TokenKind::TestSet
+                    | TokenKind::RetryPolicy
+                    | TokenKind::TemplateString
+                    | TokenKind::TypeBuilder
+            ) {
+                return false;
+            }
+
+            // Skip over comment patterns (the lexer doesn't emit comment
+            // tokens; `//` is two `Slash` tokens, `/* */` is `Slash Star
+            // ... Star Slash`). Without skipping, backticks inside a
+            // markdown code fence in a doc comment defeat the guard.
+            let after_comment = self.skip_comment_at(i);
+            if after_comment != i {
+                i = after_comment;
+                continue;
+            }
+
             if self.tokens[i].kind == TokenKind::Backtick {
                 let run_start = i;
                 while i < self.tokens.len() && self.tokens[i].kind == TokenKind::Backtick {
@@ -1916,13 +1968,20 @@ impl<'a> Parser<'a> {
                 return;
             }
 
-            // Backslash escape: consume the `\` and the next token as content
-            // so a `\\\`` does not look like a closing delimiter and `\\${` does
-            // not look like an interpolation start.
+            // Backslash escape: consume the `\` and the next raw token as
+            // content so a `\\\`` does not look like a closing delimiter and
+            // `\\${` does not look like an interpolation start.
+            //
+            // The second consume must take EXACTLY one token — not whatever
+            // `bump_raw` happens to land on after skipping trivia. Otherwise
+            // `` `\<space>` `` (backslash, space, closing backtick) overshoots:
+            // `bump_raw` eats the space as leading trivia and then takes the
+            // closing backtick as the escape target, leaving the literal
+            // unclosed (ultrareview bug_011).
             if self.at_raw(TokenKind::Backslash) {
                 self.bump_raw();
                 if self.current < self.tokens.len() {
-                    self.bump_raw();
+                    self.bump_one_token_raw();
                 }
                 continue;
             }
@@ -7829,6 +7888,169 @@ function Demo() -> string {
 ";
         let (_root, errors) = parse_source(source);
         assert_no_errors(&errors);
+    }
+
+    #[test]
+    fn backtick_segments_handle_u_f8ff_in_user_content() {
+        // Ultrareview bug_006: segments() used U+F8FF (Apple-logo PUA) as
+        // an in-band placeholder for interpolations during dedent. If user
+        // content also contained U+F8FF and the literal was multi-line
+        // with at least one ${...}, split() returned more pieces than
+        // expected → the user's U+F8FF was silently dropped and
+        // interpolations landed at the wrong positions. Fix: pick a
+        // placeholder codepoint that doesn't appear in the joined content.
+        use baml_compiler_syntax::{BacktickSegment, BacktickStringLiteral};
+        use rowan::ast::AstNode;
+
+        let source = "
+function Demo(x: string) -> string {
+    let s = `
+  before\u{F8FF}between
+  ${x}
+  after`
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let lit = BacktickStringLiteral::cast(
+            root.descendants()
+                .find(|n| n.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
+                .unwrap(),
+        )
+        .unwrap();
+        let segs = lit.segments();
+        // The interpolation must remain BETWEEN the "between" and "after"
+        // text — not migrated forward — and the user's U+F8FF must survive.
+        let text_parts: Vec<&str> = segs
+            .iter()
+            .filter_map(|s| match s {
+                BacktickSegment::Text(t) => Some(t.as_str()),
+                BacktickSegment::Interp(_) => None,
+            })
+            .collect();
+        let combined = text_parts.join("|");
+        assert!(
+            combined.contains('\u{F8FF}'),
+            "user's U+F8FF was dropped; text parts: {text_parts:?}"
+        );
+        let interp_count = segs
+            .iter()
+            .filter(|s| matches!(s, BacktickSegment::Interp(_)))
+            .count();
+        assert_eq!(interp_count, 1, "expected exactly one Interp segment");
+    }
+
+    #[test]
+    fn backtick_empty_multi_tick_diagnoses_with_later_real_backtick() {
+        // Ultrareview bug_008: `has_backtick_close_ahead_from` walked to
+        // EOF, so any unrelated backtick literal later in the file
+        // satisfied the look-ahead and disabled the empty-multi-tick
+        // guard. Result: the bad opener silently consumed cross-function
+        // content, replacing the clean targeted diagnostic with cascading
+        // errors.
+        //
+        // Test uses `` ` `` + word + `` ` `` later to make a 2+ tick
+        // adjacent run elsewhere — sufficient to trip the unscoped look-
+        // ahead but not a real 2-tick literal.
+        let source = "
+function Bad() -> string {
+    ``
+}
+
+function OK() -> string {
+    ``twotick``
+}
+";
+        let (_root, errors) = parse_source(source);
+        // The diagnostic must point at Bad's `` (around bytes 32-34),
+        // NOT at some downstream remnant. If the guard is defeated, Bad's
+        // opener silently consumes cross-function content and the empty-
+        // multi-tick diagnostic only fires later from leftover backticks.
+        let bad_opener_diag = errors.iter().find(|e| {
+            let s = format!("{e:?}");
+            s.contains("Empty multi-tick backtick string") && {
+                // Bad's `` is in the first 50 bytes of source; any
+                // diagnostic past that is from a downstream remnant.
+                if let Some(range_start) = s.find("range: ") {
+                    let tail = &s[range_start + 7..];
+                    let end = tail.find('.').unwrap_or(tail.len());
+                    tail[..end].parse::<usize>().is_ok_and(|b| b < 50)
+                } else {
+                    false
+                }
+            }
+        });
+        assert!(
+            bad_opener_diag.is_some(),
+            "expected empty-multi-tick diagnostic AT Bad's `` (bytes <50), got: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn backtick_empty_multi_tick_diagnoses_with_later_comment_backticks() {
+        // Ultrareview bug_002: backticks inside a `// ... ``` ...`
+        // line-comment payload also satisfied the look-ahead (the lexer
+        // emits them as plain Backtick tokens; only the parser layer
+        // assembles `//` into a comment).
+        let source = "
+function Bad() -> string {
+    ``
+}
+
+// markdown sample: ```code```
+function After() -> string { 1 }
+";
+        let (_root, errors) = parse_source(source);
+        // Same location-based check as bug_008 test: the diagnostic must
+        // point at Bad's `` near the top of the file, not at some downstream
+        // backtick that the unscoped look-ahead happened to find inside
+        // the comment payload.
+        let bad_opener_diag = errors.iter().find(|e| {
+            let s = format!("{e:?}");
+            s.contains("Empty multi-tick backtick string") && {
+                if let Some(range_start) = s.find("range: ") {
+                    let tail = &s[range_start + 7..];
+                    let end = tail.find('.').unwrap_or(tail.len());
+                    tail[..end].parse::<usize>().is_ok_and(|b| b < 50)
+                } else {
+                    false
+                }
+            }
+        });
+        assert!(
+            bad_opener_diag.is_some(),
+            "expected empty-multi-tick diagnostic AT Bad's `` (bytes <50), got: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn backtick_backslash_followed_by_whitespace_does_not_eat_closer() {
+        // Ultrareview bug_011: after a `\\`, the second `bump_raw()` in
+        // `parse_backtick_content` skipped trivia before consuming the
+        // escape target. So `` `\ ` `` (backslash + space + close) had its
+        // closing backtick silently swallowed as the escaped char, and the
+        // parser emitted a misleading "Unclosed backtick string" error
+        // for a literal that was actually closed.
+        let source = "
+function Demo() -> string {
+    let s = `\\ `
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let lit = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
+            .expect("expected backtick literal");
+        // Two backticks total: opener and closer.
+        assert_eq!(
+            lit.text().to_string().matches('`').count(),
+            2,
+            "literal should contain opener+closer only, got: {:?}",
+            lit.text().to_string()
+        );
     }
 
     #[test]

@@ -1098,11 +1098,6 @@ impl BacktickStringLiteral {
             Interp(SyntaxNode),
         }
 
-        // U+F8FF (Apple-logo PUA codepoint) is a safe sentinel — single
-        // codepoint, never appears in real source, doesn't affect indent
-        // calculation since it's a non-whitespace content character.
-        const PLACEHOLDER: char = '\u{F8FF}';
-
         let n = self.delimiter_count();
         if n == 0 {
             return Vec::new();
@@ -1180,6 +1175,26 @@ impl BacktickStringLiteral {
                 .collect();
         }
 
+        // Pick an in-band placeholder that we KNOW isn't in user content
+        // (ultrareview bug_006). U+F8FF was previously hardcoded but is a
+        // legitimate PUA codepoint (Apple logo on macOS) that users can
+        // type or paste. Walk the PUA range [U+E000..U+F8FF] and use the
+        // first codepoint that doesn't appear in any text segment. With
+        // 6400 candidates and typical text never containing any PUA char,
+        // the first probe terminates immediately.
+        let content_chars: String = decoded
+            .iter()
+            .filter_map(|p| match p {
+                RawPart::Text(s) => Some(s.as_str()),
+                RawPart::Interp(_) => None,
+            })
+            .collect::<Vec<_>>()
+            .join("");
+        let placeholder: char = (0xE000u32..=0xF8FFu32)
+            .filter_map(char::from_u32)
+            .find(|c| !content_chars.contains(*c))
+            .unwrap_or('\u{F8FF}');
+
         let mut joined = String::new();
         let mut interps: Vec<SyntaxNode> = Vec::new();
         for p in decoded {
@@ -1187,7 +1202,7 @@ impl BacktickStringLiteral {
                 RawPart::Text(s) => joined.push_str(&s),
                 RawPart::Interp(node) => {
                     interps.push(node);
-                    joined.push(PLACEHOLDER);
+                    joined.push(placeholder);
                 }
             }
         }
@@ -1204,7 +1219,7 @@ impl BacktickStringLiteral {
         // advancing the piece iterator for Text parts left the leading
         // empty piece on the iterator when decoded started with Interp,
         // shifting every subsequent Text by one position.
-        let pieces: Vec<&str> = dedented.split(PLACEHOLDER).collect();
+        let pieces: Vec<&str> = dedented.split(placeholder).collect();
         let mut out: Vec<BacktickSegment> = Vec::with_capacity(pieces.len() + interps.len());
         let mut interp_iter = interps.into_iter();
         for (i, piece) in pieces.iter().enumerate() {
