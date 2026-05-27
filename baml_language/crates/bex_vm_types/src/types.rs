@@ -554,8 +554,27 @@ impl Instance {
     }
 
     #[inline]
+    pub fn field_len(&self) -> usize {
+        self.fields.len()
+    }
+
+    #[inline]
+    pub fn try_load_field(&self, idx: usize) -> Option<Value> {
+        self.fields.get(idx).map(AtomicValueSlot::load)
+    }
+
+    #[inline]
     pub fn load_field(&self, idx: usize) -> Value {
         self.fields[idx].load()
+    }
+
+    #[inline]
+    pub fn try_store_field(&self, idx: usize, value: Value) -> Result<(), usize> {
+        let Some(field) = self.fields.get(idx) else {
+            return Err(self.fields.len());
+        };
+        field.store(value);
+        Ok(())
     }
 
     #[inline]

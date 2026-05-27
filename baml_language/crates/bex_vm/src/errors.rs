@@ -14,6 +14,12 @@ pub enum VmPanic {
     #[error("array index out of bounds: {index} of {length}")]
     IndexOutOfBounds { index: i64, length: usize },
 
+    #[error("invalid field access: field {field_index} of {field_count}")]
+    InvalidFieldAccess {
+        field_index: usize,
+        field_count: usize,
+    },
+
     #[error("key not found in map")]
     MapKeyNotFound,
 
