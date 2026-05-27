@@ -328,27 +328,33 @@ fn extraction_rhs_expr(
             }
         }
         "i64" => quote! {
-            match #value_expr {
-                Value::Int(i) => *i,
-                _ => return Err(VmInternalError::TypeError {
+            match (#value_expr).as_int() {
+                Some(i) => i,
+                None => return Err(VmInternalError::TypeError {
                     expected: Type::Int,
                     got: vm.type_of(#value_expr),
                 }.into()),
             }
         },
         "f64" => quote! {
-            match #value_expr {
-                Value::Float(f) => *f,
-                _ => return Err(VmInternalError::TypeError {
+            match (#value_expr).as_object_ptr() {
+                Some(ptr) => match unsafe { ptr.get() } {
+                    bex_vm_types::Object::Float(f) => *f,
+                    _ => return Err(VmInternalError::TypeError {
+                        expected: Type::Float,
+                        got: vm.type_of(#value_expr),
+                    }.into()),
+                },
+                None => return Err(VmInternalError::TypeError {
                     expected: Type::Float,
                     got: vm.type_of(#value_expr),
                 }.into()),
             }
         },
         "bool" => quote! {
-            match #value_expr {
-                Value::Bool(b) => *b,
-                _ => return Err(VmInternalError::TypeError {
+            match (#value_expr).as_bool() {
+                Some(b) => b,
+                None => return Err(VmInternalError::TypeError {
                     expected: Type::Bool,
                     got: vm.type_of(#value_expr),
                 }.into()),
@@ -398,9 +404,11 @@ fn extraction_rhs_expr(
             let other_expr = quote!(other);
             let inner_expr = extraction_rhs_expr(&other_expr, inner, false, false);
             quote! {
-                match #value_expr {
-                    Value::Null => None,
-                    other => Some(#inner_expr),
+                if (#value_expr).is_null() {
+                    None
+                } else {
+                    let other = #value_expr;
+                    Some(#inner_expr)
                 }
             }
         }
@@ -428,9 +436,11 @@ fn generate_single_extraction(
         let other_expr = quote!(other);
         let inner_rhs = extraction_rhs_expr(&other_expr, inner, false, false);
         return quote! {
-            let #var_name = match #value_expr {
-                Value::Null => None,
-                ref other => Some(#inner_rhs),
+            let #var_name = if (#value_expr).is_null() {
+                None
+            } else {
+                let other = #value_expr;
+                Some(#inner_rhs)
             };
         };
     }
@@ -530,20 +540,20 @@ fn generate_result_conversion(d: &NativeFnDef) -> TokenStream2 {
 
     match type_name.as_str() {
         "String" => quote!(Ok(vm.alloc_string(result))),
-        "i64" => quote!(Ok(Value::Int(result))),
-        "f64" => quote!(Ok(Value::Float(result))),
-        "bool" => quote!(Ok(Value::Bool(result))),
-        "()" => quote!(Ok(Value::Null)),
+        "i64" => quote!(Ok(Value::int(result))),
+        "f64" => quote!(Ok(vm.alloc_float(result))),
+        "bool" => quote!(Ok(Value::bool(result))),
+        "()" => quote!(Ok(Value::NULL)),
         t if t.starts_with("Option<String>") => quote! {
             Ok(match result {
                 Some(s) => vm.alloc_string(s),
-                None => Value::Null,
+                None => Value::NULL,
             })
         },
         t if t.starts_with("Option<") => quote! {
             Ok(match result {
                 Some(v) => v.into_value(vm),
-                None => Value::Null,
+                None => Value::NULL,
             })
         },
         t if t.starts_with("Array") => quote!(Ok(vm.alloc_array(result))),

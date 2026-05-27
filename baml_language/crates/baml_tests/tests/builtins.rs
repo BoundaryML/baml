@@ -88,27 +88,20 @@ async fn any_value_to_string() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
-        alloc_instance user.Person
         load_const "Alice"
-        init_field .name
         load_const 25
-        init_field .age
-        alloc_instance user.Point
         load_const 10
-        init_field .x
         load_const 20
-        init_field .y
-        init_field .location
+        init_instance user.Point .x, .y
         load_const "reading"
         load_const "coding"
         alloc_array 2
-        init_field .hobbies
         load_const 95
         load_const 88
         load_const "math"
         load_const "english"
         alloc_map 2
-        init_field .scores
+        init_instance user.Person .name, .age, .location, .hobbies, .scores
         call baml.unstable.string
         return
     }

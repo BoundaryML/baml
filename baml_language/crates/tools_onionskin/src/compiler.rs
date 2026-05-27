@@ -603,6 +603,11 @@ fn expr_desc_spans<'db>(
             spans.extend(expr_desc_spans(*condition, body, inference));
             spans.push(DetailSpan::Code(") { ... }".into()));
         }
+        Expr::IfLet { scrutinee, .. } => {
+            spans.push(DetailSpan::Code("if let ... = ".into()));
+            spans.extend(expr_desc_spans(*scrutinee, body, inference));
+            spans.push(DetailSpan::Code(" { ... }".into()));
+        }
         Expr::Match { scrutinee, .. } => {
             spans.push(DetailSpan::Code("match (".into()));
             spans.extend(expr_desc_spans(*scrutinee, body, inference));
@@ -2058,6 +2063,7 @@ impl CompilerRunner {
                     .collect::<Vec<_>>()
                     .join("."),
                 Expr::If { .. } => "if ...".into(),
+                Expr::IfLet { .. } => "if let ...".into(),
                 Expr::Match { .. } => "match ...".into(),
                 Expr::Is { scrutinee, .. } => {
                     format!("{} is <pattern>", expr_desc(*scrutinee, body))
@@ -3982,11 +3988,11 @@ impl CompilerRunner {
                 }
                 Ok(VmExecState::SpanNotify(_)) => {
                     // Span notifications are ignored — push null and continue.
-                    vm.stack.push(Value::Null);
+                    vm.stack.push(Value::NULL);
                 }
                 Ok(VmExecState::Event { .. }) => {
                     // Custom events are not surfaced — push null and continue.
-                    vm.stack.push(Value::Null);
+                    vm.stack.push(Value::NULL);
                 }
                 Ok(VmExecState::EarlyYield) => {
                     // No GC coordinator is wired into the VM runner, so an early
@@ -5173,24 +5179,26 @@ pub(crate) fn normalize_files_to_virtual_root(
 
 /// Format a VM value for display
 fn format_vm_value(value: &bex_vm_types::Value, vm: &bex_vm::BexVm) -> String {
-    use bex_vm_types::{Object, Value};
+    use bex_vm_types::{Object, ValueKind};
 
-    match value {
-        Value::OmittedArg => "<omitted>".to_string(),
-        Value::Null => "null".to_string(),
-        Value::Int(i) => i.to_string(),
-        Value::Float(f) => bex_vm_types::format_float(*f),
-        Value::Bool(b) => b.to_string(),
-        Value::Object(idx) => {
-            let obj = vm.get_object(*idx);
+    match value.kind() {
+        ValueKind::OmittedArg => "<omitted>".to_string(),
+        ValueKind::Null => "null".to_string(),
+        ValueKind::Int(i) => i.to_string(),
+        ValueKind::Bool(b) => b.to_string(),
+        ValueKind::Object(idx) => {
+            let obj = vm.get_object(idx);
             match obj {
+                Object::Float(f) => bex_vm_types::format_float(*f),
                 Object::String(s) => format!("\"{}\"", s),
                 Object::Array(arr) => {
-                    let items: Vec<String> = arr.iter().map(|v| format_vm_value(v, vm)).collect();
+                    let snap = arr.to_vec();
+                    let items: Vec<String> = snap.iter().map(|v| format_vm_value(v, vm)).collect();
                     format!("[{}]", items.join(", "))
                 }
                 Object::Map(map) => {
-                    let items: Vec<String> = map
+                    let snap = map.to_index_map();
+                    let items: Vec<String> = snap
                         .iter()
                         .map(|(k, v)| format!("\"{}\": {}", k, format_vm_value(v, vm)))
                         .collect();
@@ -5231,6 +5239,7 @@ fn format_vm_value(value: &bex_vm_types::Value, vm: &bex_vm::BexVm) -> String {
                 Object::Type(ty) => format!("<type: {ty}>"),
                 Object::Closure(c) => format!("<closure captures={}>", c.captures.len()),
                 Object::BoundMethod(_) => "<bound_method>".to_string(),
+                Object::HostClosure(_) => "<host_closure>".to_string(),
                 Object::Cell(c) => format!("<cell {}>", format_vm_value(&c.value, vm)),
                 Object::Uint8Array(bytes) => format!("<uint8array len={}>", bytes.len()),
                 Object::RustData(_) => "<rust_data>".to_string(),

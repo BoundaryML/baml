@@ -10,10 +10,7 @@ function user.A.from_json(j: baml.json.json) -> A {
     load_type B
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance user.A
-    load_var _2
-    init_field .b
+    init_instance user.A .b
     return
 }
 
@@ -34,10 +31,7 @@ function user.B.from_json(j: baml.json.json) -> B {
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance user.B
-    load_var _2
-    init_field .label
+    init_instance user.B .label
     return
 }
 

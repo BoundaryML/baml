@@ -3,9 +3,8 @@ source: crates/baml_tests/src/generated_tests.rs
 assertion_line: 9950
 ---
 function user.MakeWrapper() -> Wrapper {
-    alloc_instance user.Wrapper
     load_const null
-    init_field .data
+    init_instance user.Wrapper .data
     return
 }
 
@@ -96,10 +95,7 @@ function user.Wrapper.from_json(j: baml.json.json) -> Wrapper {
     load_type baml.json.json
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance user.Wrapper
-    load_var _2
-    init_field .data
+    init_instance user.Wrapper .data
     return
 }
 

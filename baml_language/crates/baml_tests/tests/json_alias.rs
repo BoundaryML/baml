@@ -24,11 +24,10 @@ async fn field_of_type_json_lowers_cleanly() {
         }
     "#;
     let output = baml_test!(source);
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> Foo {
-        alloc_instance user.Foo
         load_const null
-        init_field .data
+        init_instance user.Foo .data
         return
     }
     ");

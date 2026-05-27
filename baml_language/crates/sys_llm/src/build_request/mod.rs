@@ -168,6 +168,7 @@ pub(crate) fn bex_value_to_json(value: &BexExternalValue) -> Option<serde_json::
         | BexExternalValue::Handle(_)
         | BexExternalValue::FunctionRef { .. }
         | BexExternalValue::Adt(_)
+        | BexExternalValue::HostValue(_)
         | BexExternalValue::Instance { .. }
         | BexExternalValue::Variant { .. }
         | BexExternalValue::Union { .. } => None,

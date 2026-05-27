@@ -10,10 +10,7 @@ function user.AppError.from_json(j: baml.json.json) -> AppError {
     load_type int
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance user.AppError
-    load_var _2
-    init_field .code
+    init_instance user.AppError .code
     return
 }
 
@@ -34,10 +31,7 @@ function user.PatternBucket.from_json(j: baml.json.json) -> PatternBucket {
     load_type int[]
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance user.PatternBucket
-    load_var _2
-    init_field .values
+    init_instance user.PatternBucket .values
     return
 }
 
@@ -58,10 +52,7 @@ function user.PatternMatrix.from_json(j: baml.json.json) -> PatternMatrix {
     load_type int[][]
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance user.PatternMatrix
-    load_var _2
-    init_field .rows
+    init_instance user.PatternMatrix .rows
     return
 }
 
@@ -357,9 +348,7 @@ function user.for_let_fn_narrow(items: ((int) -> int throws never)[]) -> int {
     load_var __for_idx
     load_array_element
     call_indirect
-    store_var _9
     load_var total
-    load_var _9
     add_int
     store_var total
     load_var __for_idx
@@ -528,9 +517,8 @@ function user.risky_error(mode: int) -> int {
     throw
 
   L1:
-    alloc_instance user.AppError
     load_const 1
-    init_field .code
+    init_instance user.AppError .code
     throw
 }
 

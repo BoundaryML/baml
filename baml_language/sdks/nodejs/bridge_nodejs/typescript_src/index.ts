@@ -92,7 +92,11 @@ export function callFunctionSync(
     collectors?: Collector[],
     abortController?: AbortController,
 ): FunctionResult {
-    const argsProto = encodeCallArgs(kwargs);
+    // Encode in sync mode so a host callable in the kwargs fast-fails
+    // with a clear error instead of registering a tsfn and then hanging —
+    // the sync path blocks the Node main thread on a tokio `block_on`,
+    // starving libuv so the dispatch could never run.
+    const argsProto = encodeCallArgs(kwargs, /* syncMode */ true);
     const nativeCollectors = collectors?.map(c => c._native()) ?? null;
     try {
         const resultBytes = rt.callFunctionSync(functionName, argsProto, ctx ?? null, nativeCollectors, abortController ?? null);

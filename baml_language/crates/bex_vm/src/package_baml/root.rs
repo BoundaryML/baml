@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use bex_vm_types::{
-    FutureRead, HeapPtr,
+    FutureRead, HeapPtr, ValueKind,
     types::{Instance, Object, Value},
 };
 use indexmap::IndexMap;
@@ -26,12 +26,12 @@ fn deep_copy_value_recursive(
     value: Value,
     copied_objects: &mut HashMap<HeapPtr, HeapPtr>,
 ) -> Value {
-    match value {
-        Value::OmittedArg | Value::Null | Value::Int(_) | Value::Float(_) | Value::Bool(_) => value,
+    match value.kind() {
+        ValueKind::OmittedArg | ValueKind::Null | ValueKind::Int(_) | ValueKind::Bool(_) => value,
 
-        Value::Object(ptr) => {
+        ValueKind::Object(ptr) => {
             if let Some(&new_ptr) = copied_objects.get(&ptr) {
-                return Value::Object(new_ptr);
+                return Value::object(new_ptr);
             }
 
             // Futures are *handles*, not values: a `Future` is the user-
@@ -43,41 +43,47 @@ fn deep_copy_value_recursive(
             // (which would otherwise clone the `Future` struct uselessly).
             if matches!(vm.get_object(ptr), Object::Future(_)) {
                 copied_objects.insert(ptr, ptr);
-                return Value::Object(ptr);
+                return Value::object(ptr);
             }
 
             let object = vm.get_object(ptr).clone();
 
             let new_ptr = match object {
+                Object::Float(f) => vm.tlab.alloc(Object::Float(f)),
                 Object::String(s) => vm.tlab.alloc(Object::String(s)),
                 Object::Uint8Array(bytes) => vm.tlab.alloc(Object::Uint8Array(bytes)),
 
                 Object::Array(values) => {
-                    let placeholder_ptr = vm.tlab.alloc(Object::Array(Vec::new()));
+                    let placeholder_ptr = vm.tlab.alloc(Object::Array(Vec::new().into()));
                     copied_objects.insert(ptr, placeholder_ptr);
 
-                    let mut new_values = Vec::with_capacity(values.len());
-                    for value in values {
+                    // Snapshot under the source's lock; the recursive call
+                    // re-enters the VM and may take other container locks.
+                    let snapshot = values.to_vec();
+                    let mut new_values = Vec::with_capacity(snapshot.len());
+                    for value in snapshot {
                         new_values.push(deep_copy_value_recursive(vm, value, copied_objects));
                     }
 
                     // no GC write barrier because it is all in gen0
-                    *vm.get_object_mut(placeholder_ptr) = Object::Array(new_values);
+                    *vm.get_object_mut(placeholder_ptr) = Object::Array(new_values.into());
                     placeholder_ptr
                 }
 
                 Object::Map(map) => {
-                    let placeholder_ptr = vm.tlab.alloc(Object::Map(IndexMap::new()));
+                    let placeholder_ptr =
+                        vm.tlab.alloc(Object::Map(Box::new(IndexMap::new().into())));
                     copied_objects.insert(ptr, placeholder_ptr);
 
+                    let snapshot = map.to_index_map();
                     let mut new_map = IndexMap::new();
-                    for (key, value) in &map {
+                    for (key, value) in &snapshot {
                         let new_value = deep_copy_value_recursive(vm, *value, copied_objects);
                         new_map.insert(key.clone(), new_value);
                     }
 
                     // no GC write barrier because it is all in gen0
-                    *vm.get_object_mut(placeholder_ptr) = Object::Map(new_map);
+                    *vm.get_object_mut(placeholder_ptr) = Object::Map(Box::new(new_map.into()));
                     placeholder_ptr
                 }
 
@@ -119,6 +125,10 @@ fn deep_copy_value_recursive(
                 // state is shared by design (mutation semantics).
                 Object::Closure(c) => vm.tlab.alloc(Object::Closure(c)),
                 Object::BoundMethod(bm) => vm.tlab.alloc(Object::BoundMethod(bm)),
+                // `HostClosure` is a value-type wrapper around an
+                // `Arc<HostValueArc>`; cloning the Arc is cheap and matches
+                // the closure semantics (shared handle).
+                Object::HostClosure(hc) => vm.tlab.alloc(Object::HostClosure(hc)),
                 Object::Cell(cell) => vm.tlab.alloc(Object::Cell(cell)),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(kind) => vm.tlab.alloc(Object::Sentinel(kind)),
@@ -126,7 +136,7 @@ fn deep_copy_value_recursive(
 
             copied_objects.entry(ptr).or_insert(new_ptr);
 
-            Value::Object(new_ptr)
+            Value::object(new_ptr)
         }
     }
 }
@@ -138,14 +148,13 @@ fn deep_equals_recursive(
     b: Value,
     visited: &mut HashMap<(HeapPtr, HeapPtr), bool>,
 ) -> bool {
-    match (a, b) {
-        (Value::OmittedArg, Value::OmittedArg) => true,
-        (Value::Null, Value::Null) => true,
-        (Value::Int(a), Value::Int(b)) => a == b,
-        (Value::Float(a), Value::Float(b)) => (a.is_nan() && b.is_nan()) || a == b,
-        (Value::Bool(a), Value::Bool(b)) => a == b,
+    match (a.kind(), b.kind()) {
+        (ValueKind::OmittedArg, ValueKind::OmittedArg) => true,
+        (ValueKind::Null, ValueKind::Null) => true,
+        (ValueKind::Int(a), ValueKind::Int(b)) => a == b,
+        (ValueKind::Bool(a), ValueKind::Bool(b)) => a == b,
 
-        (Value::Object(a_ptr), Value::Object(b_ptr)) => {
+        (ValueKind::Object(a_ptr), ValueKind::Object(b_ptr)) => {
             if a_ptr == b_ptr {
                 return true;
             }
@@ -163,21 +172,29 @@ fn deep_equals_recursive(
             visited.insert(key, true);
 
             let result = match (vm.get_object(a_ptr), vm.get_object(b_ptr)) {
+                (Object::Float(a), Object::Float(b)) => (a.is_nan() && b.is_nan()) || a == b,
                 (Object::String(a), Object::String(b)) => a == b,
                 (Object::Uint8Array(a), Object::Uint8Array(b)) => a == b,
 
                 (Object::Array(a_values), Object::Array(b_values)) => {
-                    a_values.len() == b_values.len()
-                        && a_values
+                    // Snapshot under each lock before recursing; deep_equals
+                    // is mutator code so we cannot hold the lock across
+                    // recursive lookups that may also lock containers.
+                    let a_snap = a_values.to_vec();
+                    let b_snap = b_values.to_vec();
+                    a_snap.len() == b_snap.len()
+                        && a_snap
                             .iter()
-                            .zip(b_values.iter())
+                            .zip(b_snap.iter())
                             .all(|(a, b)| deep_equals_recursive(vm, *a, *b, visited))
                 }
 
                 (Object::Map(a_map), Object::Map(b_map)) => {
-                    a_map.len() == b_map.len()
-                        && a_map.iter().all(|(key, a_val)| {
-                            b_map.get(key).is_some_and(|b_val| {
+                    let a_snap = a_map.to_index_map();
+                    let b_snap = b_map.to_index_map();
+                    a_snap.len() == b_snap.len()
+                        && a_snap.iter().all(|(key, a_val)| {
+                            b_snap.get(key).is_some_and(|b_val| {
                                 deep_equals_recursive(vm, *a_val, *b_val, visited)
                             })
                         })

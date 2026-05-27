@@ -142,13 +142,12 @@ async fn mutable_variables() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 3
         store_var y
         load_const 5
-        store_var y
-        load_var y
+        store_var_load_var y
         return
     }
     ");
@@ -374,9 +373,7 @@ async fn recursion() {
         load_const 2
         bin_op -
         call user.fib
-        store_var _5
         load_var _3
-        load_var _5
         add_int
         jump L2
 

@@ -126,7 +126,7 @@ fn load_type_concrete_int() {
         vec![ConstValue::Type(template)],
     );
 
-    let Value::Object(ptr) = result else {
+    let Some(ptr) = result.as_object_ptr() else {
         panic!("expected Object, got {result:?}");
     };
     match vm.get_object(ptr) {
@@ -151,10 +151,10 @@ fn load_type_concrete_string_different_from_int() {
         vec![ConstValue::Type(TyTemplate::Concrete(Ty::string()))],
     );
 
-    let Value::Object(p_int) = r_int else {
+    let Some(p_int) = r_int.as_object_ptr() else {
         panic!("expected Object for int, got {r_int:?}");
     };
-    let Value::Object(p_str) = r_str else {
+    let Some(p_str) = r_str.as_object_ptr() else {
         panic!("expected Object for string, got {r_str:?}");
     };
 
@@ -223,7 +223,7 @@ fn load_type_type_arg_ref_substitutes_from_frame() {
     };
 
     // The result must be an Object::Type wrapping Ty::string()
-    let Value::Object(ptr) = result else {
+    let Some(ptr) = result.as_object_ptr() else {
         panic!("expected Object, got {result:?}");
     };
     let obj = vm.get_object(ptr);
@@ -279,7 +279,7 @@ fn load_type_array_of_type_arg_ref() {
         }
     };
 
-    let Value::Object(ptr) = result else {
+    let Some(ptr) = result.as_object_ptr() else {
         panic!("expected Object, got {result:?}");
     };
     let obj = vm.get_object(ptr);
@@ -362,7 +362,7 @@ fn call_ntypeargs_threads_type_arg_into_callee() {
         }
     };
 
-    let Value::Object(ptr) = result else {
+    let Some(ptr) = result.as_object_ptr() else {
         panic!("expected Object, got {result:?}");
     };
     let obj = vm.get_object(ptr);

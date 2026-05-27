@@ -33,8 +33,7 @@ async fn bytecode_1d_array_write_local() {
         load_const "b"
         load_const "c"
         alloc_array 3
-        store_var arr
-        load_var arr
+        store_var_load_var arr
         load_const 1
         load_const "z"
         store_array_element
@@ -81,12 +80,11 @@ async fn bytecode_1d_array_write_through_field() {
     }
 
     function main() -> null {
-        alloc_instance user.Container
         load_const "a"
         load_const "b"
         load_const "c"
         alloc_array 3
-        init_field .items
+        init_instance user.Container .items
         load_const 1
         load_const "z"
         call user.Container.set
@@ -126,12 +124,11 @@ async fn bytecode_1d_array_read_through_field() {
     }
 
     function main() -> string {
-        alloc_instance user.Container
         load_const "a"
         load_const "b"
         load_const "c"
         alloc_array 3
-        init_field .items
+        init_instance user.Container .items
         load_const 1
         call user.Container.get
         return
@@ -161,8 +158,7 @@ async fn bytecode_2d_array_write_local() {
         load_const "d"
         alloc_array 2
         alloc_array 2
-        store_var cells
-        load_var cells
+        store_var_load_var cells
         load_const 1
         load_array_element
         load_const 0
@@ -214,7 +210,6 @@ async fn bytecode_2d_array_write_through_field() {
     }
 
     function main() -> null {
-        alloc_instance user.Grid
         load_const "a"
         load_const "b"
         alloc_array 2
@@ -222,7 +217,7 @@ async fn bytecode_2d_array_write_through_field() {
         load_const "d"
         alloc_array 2
         alloc_array 2
-        init_field .cells
+        init_instance user.Grid .cells
         load_const 1
         load_const 0
         load_const "x"
@@ -267,9 +262,8 @@ async fn bytecode_map_write_through_field() {
     }
 
     function main() -> null {
-        alloc_instance user.Scores
         alloc_map 0
-        init_field .data
+        init_instance user.Scores .data
         load_const "alice"
         load_const 100
         call user.Scores.set
@@ -295,8 +289,7 @@ async fn bytecode_map_write_local() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
         alloc_map 0
-        store_var scores
-        load_var scores
+        store_var_load_var scores
         load_const "alice"
         load_const 100
         store_map_element
@@ -332,12 +325,11 @@ async fn bytecode_non_self_param_array_write() {
     );
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> null {
-        alloc_instance user.Container
         load_const "a"
         load_const "b"
         load_const "c"
         alloc_array 3
-        init_field .items
+        init_instance user.Container .items
         load_const 1
         load_const "z"
         call user.set_item

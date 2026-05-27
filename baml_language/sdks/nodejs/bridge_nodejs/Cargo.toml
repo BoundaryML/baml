@@ -8,6 +8,12 @@ license.workspace = true
 [lib]
 name = "baml_node"
 crate-type = [ "cdylib" ]
+# Rust unit/doc tests cannot link standalone: the test binary references the
+# napi C-API symbols, which are provided by Node at addon-load time and are
+# undefined at link time (`cargo test` would fail with unresolved `napi_*`).
+# All testing is done via jest (`pnpm test`). Mirrors bridge_python.
+test = false
+doctest = false
 
 [features]
 default = [ "bundle-http", "aws-crypto" ]

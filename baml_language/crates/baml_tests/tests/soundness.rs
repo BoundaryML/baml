@@ -100,11 +100,9 @@ async fn cross_block_field_mutation() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        alloc_instance user.Box
         load_const 1
-        init_field .v
-        store_var b
-        load_var b
+        init_instance user.Box .v
+        store_var_load_var b
         load_field .v
         store_var t
         load_const 1
@@ -139,11 +137,10 @@ async fn cross_block_let_mutation() {
         args: { "c" => BexExternalValue::Bool(true) },
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main(c: bool) -> int {
         load_const 1
-        store_var a
-        load_var a
+        store_var_load_var a
         store_var b
         load_var c
         pop_jump_if_false L0
@@ -290,7 +287,7 @@ async fn multiple_defs_preserve_side_effects() {
         "#,
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function fail() -> int {
         load_const false
         call assert.is_true
@@ -303,8 +300,7 @@ async fn multiple_defs_preserve_side_effects() {
         call user.fail
         store_var x
         load_const 2
-        store_var x
-        load_var x
+        store_var_load_var x
         return
     }
     ");

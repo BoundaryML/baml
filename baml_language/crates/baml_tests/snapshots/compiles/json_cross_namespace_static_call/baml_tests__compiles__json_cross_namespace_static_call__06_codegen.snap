@@ -24,11 +24,8 @@ function user.pkg.inner.AutoBox.from_json(j: baml.json.json) -> pkg.inner.AutoBo
     load_type #0
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_type #0
-    alloc_instance<1> user.pkg.inner.AutoBox
-    load_var _2
-    init_field .value
+    init_instance<1> user.pkg.inner.AutoBox .value
     return
 }
 
@@ -49,11 +46,8 @@ function user.pkg.inner.Box.from_json(j: baml.json.json) -> pkg.inner.Box<void> 
     load_type #0
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_type #0
-    alloc_instance<1> user.pkg.inner.Box
-    load_var _2
-    init_field .value
+    init_instance<1> user.pkg.inner.Box .value
     return
 }
 

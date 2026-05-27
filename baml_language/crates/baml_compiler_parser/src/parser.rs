@@ -201,6 +201,14 @@ pub(crate) struct Parser<'a> {
     /// available to `parse_spawn_expr`. Counter so nested spawns nest
     /// correctly.
     suppress_object_literal_depth: u32,
+    /// Suppresses destructure patterns (`Class { fields }`) in pattern
+    /// position, mirroring Rust's `Restrictions::NO_STRUCT_LITERAL` for
+    /// struct literals in `if` / `while` condition expressions. Bumped
+    /// around `parse_expr` calls in those condition positions; reset
+    /// (`mem::take` + restore) when entering a `PAREN_PATTERN` or
+    /// `ARRAY_PATTERN` so nested patterns regain normal destructure
+    /// parsing. Counter so nested conditions nest correctly.
+    suppress_destructure_pattern_depth: u32,
 }
 
 impl<'a> Parser<'a> {
@@ -215,6 +223,7 @@ impl<'a> Parser<'a> {
             suppress_catch_depth: 0,
             testset_body_depth: 0,
             suppress_object_literal_depth: 0,
+            suppress_destructure_pattern_depth: 0,
         }
     }
 
@@ -3654,11 +3663,26 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_if_expr(&mut self) {
+        // `if let PATTERN = SCRUTINEE { ... }` is a distinct refutable form.
+        // Decided here by peeking past `if` for a `let` token — patterns
+        // always start with `let` (BAML's binding marker), and no normal
+        // expression starts with `let`, so this is unambiguous.
+        if self.peek(1).map(|t| t.kind) == Some(TokenKind::Let) {
+            self.parse_if_let_expr();
+            return;
+        }
+
         self.with_node(SyntaxKind::IF_EXPR, |p| {
             p.expect(TokenKind::If);
 
-            // Condition
+            // Condition: suppress destructure patterns (`Class { … }`) so
+            // they don't eat the then-block. Mirrors Rust's
+            // `NO_STRUCT_LITERAL` restriction. Users who want a
+            // destructure here must wrap it in parens — parens reset the
+            // suppression in `parse_pattern_atom`.
+            p.suppress_destructure_pattern_depth += 1;
             p.parse_expr();
+            p.suppress_destructure_pattern_depth -= 1;
 
             // Then block
             if p.at(TokenKind::LBrace) {
@@ -3676,6 +3700,60 @@ impl<'a> Parser<'a> {
                     p.parse_if_expr();
                 } else if p.at(TokenKind::LBrace) {
                     // else block
+                    p.parse_block_expr();
+                } else {
+                    p.error_unexpected_token("'if' or block after 'else'".to_string());
+                }
+            }
+        });
+    }
+
+    /// Parse `if let PATTERN = SCRUTINEE { ... } else { ... }`.
+    ///
+    /// Caller has already verified the token sequence starts with `if let`.
+    /// The `let` itself is consumed by `parse_pattern` (BAML patterns carry
+    /// their own leading `let` binding marker), matching how `let` statements
+    /// parse.
+    fn parse_if_let_expr(&mut self) {
+        self.with_node(SyntaxKind::IF_LET_EXPR, |p| {
+            p.expect(TokenKind::If);
+            // Pattern. For top-level array patterns (`let [a, b]`), the
+            // `let` keyword has to be consumed at the statement level
+            // because `parse_let_pattern` only handles binding /
+            // destructure shapes after `let`. Mirrors `parse_let_stmt`.
+            if p.peek(1).map(|t| t.kind) == Some(TokenKind::LBracket) {
+                p.bump(); // statement `let`
+                p.parse_pattern();
+            } else {
+                // `let` is consumed inside parse_pattern → parse_let_pattern.
+                p.parse_pattern();
+            }
+
+            if !p.eat(TokenKind::Equals) {
+                p.error_unexpected_token("'=' after if-let pattern".to_string());
+            }
+
+            // Scrutinee — exclude assignment operators (same as let-stmt),
+            // and apply condition-position destructure suppression so a
+            // trailing `is Class { ... }` doesn't eat the then-block.
+            p.suppress_destructure_pattern_depth += 1;
+            p.parse_expr_bp(3);
+            p.suppress_destructure_pattern_depth -= 1;
+
+            // Then block
+            if p.at(TokenKind::LBrace) {
+                p.parse_block_expr();
+            } else {
+                p.error_unexpected_token("block after if-let scrutinee".to_string());
+            }
+
+            // Optional else, with `else if` / `else if let` chaining.
+            if p.at(TokenKind::Else) {
+                p.bump(); // else
+
+                if p.at(TokenKind::If) {
+                    p.parse_if_expr();
+                } else if p.at(TokenKind::LBrace) {
                     p.parse_block_expr();
                 } else {
                     p.error_unexpected_token("'if' or block after 'else'".to_string());
@@ -3846,7 +3924,11 @@ impl<'a> Parser<'a> {
             } else {
                 self.with_node(SyntaxKind::PAREN_PATTERN, |p| {
                     p.bump(); // (
+                    // Parens reset destructure suppression: `if (x is Foo
+                    // { f })` should still allow the destructure.
+                    let saved = std::mem::take(&mut p.suppress_destructure_pattern_depth);
                     p.parse_pattern();
+                    p.suppress_destructure_pattern_depth = saved;
                     p.expect(TokenKind::RParen);
                 });
             }
@@ -3859,7 +3941,12 @@ impl<'a> Parser<'a> {
         }
 
         if self.at(TokenKind::LBracket) {
+            // Arrays use `[` / `]` so the closing bracket terminates the
+            // atom cleanly — sub-patterns inside should regain normal
+            // destructure parsing.
+            let saved = std::mem::take(&mut self.suppress_destructure_pattern_depth);
             self.parse_array_pattern();
+            self.suppress_destructure_pattern_depth = saved;
             return;
         }
 
@@ -3876,7 +3963,13 @@ impl<'a> Parser<'a> {
         // A bare WORD may start a destructure (`Class { ... }`,
         // `Class<int> { ... }`) or a type/path pattern. Look ahead through
         // dotted segments and optional trailing generic args for a `{`.
-        if self.at(TokenKind::Word) && self.looks_like_destructure_pattern() {
+        // In condition position (`if x is Class { … }`) we suppress this
+        // so the `{` stays available for the outer block; users can still
+        // write destructure via `(x is Class { f })`.
+        if self.at(TokenKind::Word)
+            && self.suppress_destructure_pattern_depth == 0
+            && self.looks_like_destructure_pattern()
+        {
             self.parse_destructure_pattern(false);
             return;
         }
@@ -4112,7 +4205,9 @@ impl<'a> Parser<'a> {
 
         // Decide between simple binding (`let x`) and destructure
         // (`let Class { ... }`) by peeking past dotted segments for `{`.
-        if self.looks_like_destructure_pattern() {
+        // Same condition-position suppression as `parse_pattern_atom` —
+        // `if x is let Class { f }` would otherwise eat the then-block.
+        if self.suppress_destructure_pattern_depth == 0 && self.looks_like_destructure_pattern() {
             self.parse_path();
             if self.at(TokenKind::Less) && self.looks_like_generic_args() {
                 self.parse_generic_args();
@@ -4441,8 +4536,11 @@ impl<'a> Parser<'a> {
         self.with_node(SyntaxKind::WHILE_STMT, |p| {
             p.expect(TokenKind::While);
 
-            // Condition
+            // Condition: same destructure suppression as `if` — see
+            // `parse_if_expr` for rationale.
+            p.suppress_destructure_pattern_depth += 1;
             p.parse_expr();
+            p.suppress_destructure_pattern_depth -= 1;
 
             // Body
             if p.at(TokenKind::LBrace) {
@@ -5057,10 +5155,15 @@ impl<'a> Parser<'a> {
             // Lambda expression: (params) -> [RetType] { body }
             self.parse_lambda_expr();
         } else if self.at(TokenKind::LParen) {
-            // Parenthesized expression
+            // Parenthesized expression. Parens reset the destructure
+            // suppression: `if (x is Foo { f })` lets the user opt back
+            // into a destructure that condition-position would otherwise
+            // forbid.
             self.with_node(SyntaxKind::PAREN_EXPR, |p| {
                 p.bump(); // (
+                let saved = std::mem::take(&mut p.suppress_destructure_pattern_depth);
                 p.parse_expr();
+                p.suppress_destructure_pattern_depth = saved;
                 p.expect(TokenKind::RParen);
             });
         } else if self.at(TokenKind::LBracket) {
@@ -6497,6 +6600,228 @@ mod tests {
         assert!(
             errors.is_empty(),
             "expected no parse errors, got: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn is_class_in_condition_does_not_eat_then_block() {
+        // Regression: `if x is Class { body }` used to be parsed as
+        // `if x is Class { body }` where `{ body }` was the destructure
+        // pattern's body — the if-block was eaten. We follow Rust's
+        // approach for struct literals in condition position: in
+        // `if`/`while` conditions, `Path {` is parsed as just the path,
+        // leaving `{` for the outer block.
+        let source = r#"
+function f(x: int | string) -> string {
+  if x is string {
+    "str"
+  } else {
+    "other"
+  }
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        // The IF_EXPR should have a BLOCK_EXPR child (the then-block).
+        let if_expr = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::IF_EXPR)
+            .expect("expected IF_EXPR node");
+        let block_count = if_expr
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
+            .count();
+        assert_eq!(
+            block_count, 2,
+            "IF_EXPR should have two BLOCK_EXPR children (then + else); destructure must not consume the then-block"
+        );
+    }
+
+    #[test]
+    fn is_class_destructure_in_condition_with_user_class() {
+        // Same as above but with a user class, which is the case the
+        // chained if-let test originally tripped over.
+        let source = r#"
+class Empty {}
+
+function f(r: int | Empty) -> string {
+  if r is Empty {
+    "empty"
+  } else {
+    "other"
+  }
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let if_expr = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::IF_EXPR)
+            .expect("expected IF_EXPR node");
+        let block_count = if_expr
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
+            .count();
+        assert_eq!(block_count, 2);
+
+        // The IS_EXPR's pattern is just the type `Empty`, no destructure.
+        let dest_count = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::DESTRUCTURE_PATTERN)
+            .count();
+        assert_eq!(
+            dest_count, 0,
+            "no destructure pattern should be produced in condition position"
+        );
+    }
+
+    #[test]
+    fn is_class_destructure_with_parens_in_condition_still_works() {
+        // Escape hatch: parens reset the destructure suppression. The
+        // user can still write a destructure inside `is` by wrapping the
+        // whole pattern in parens (even though `is`-bindings don't
+        // escape, the parser must not reject this form).
+        let source = r#"
+class User { name string }
+
+function f(r: int | User) -> string {
+  if (r is User { name }) {
+    "user"
+  } else {
+    "other"
+  }
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let dest_count = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::DESTRUCTURE_PATTERN)
+            .count();
+        assert_eq!(
+            dest_count, 1,
+            "parens-wrapped destructure in condition should still parse as DESTRUCTURE_PATTERN"
+        );
+    }
+
+    #[test]
+    fn if_let_scrutinee_suppresses_destructure() {
+        // Regression (CodeRabbit on #3579): the if-let scrutinee is in
+        // condition position; a trailing `is Class { ... }` in the
+        // scrutinee must not consume the then-block as a destructure
+        // pattern body.
+        let source = r#"
+class Empty {}
+
+function f(b: bool, r: int | Empty) -> string {
+  if let v: bool = r is Empty {
+    "yes"
+  } else {
+    "no"
+  }
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        // The if-let must have two BLOCK_EXPR children (then + else); no
+        // DESTRUCTURE_PATTERN should be produced.
+        let if_let = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::IF_LET_EXPR)
+            .expect("expected IF_LET_EXPR");
+        let block_count = if_let
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
+            .count();
+        assert_eq!(
+            block_count, 2,
+            "IF_LET_EXPR should have two BLOCK_EXPR children (scrutinee's `is Empty {{ ... }}` must not eat the then-block)"
+        );
+        let dest_count = if_let
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::DESTRUCTURE_PATTERN)
+            .count();
+        assert_eq!(dest_count, 0);
+    }
+
+    #[test]
+    fn if_let_accepts_top_level_array_pattern() {
+        // Regression (CodeRabbit on #3579): `if let [a, b] = xs { ... }`
+        // used to error because `parse_let_pattern` demanded an identifier
+        // after `let`. Mirror the let-stmt handling — when `let` is
+        // followed by `[`, consume the keyword and parse an array pattern.
+        let source = r#"
+function f(xs: int[]) -> int {
+  if let [a, b] = xs {
+    a + b
+  } else {
+    0
+  }
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        // We should have exactly one IF_LET_EXPR with an ARRAY_PATTERN
+        // somewhere inside it (under the PATTERN wrapper).
+        let if_let = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::IF_LET_EXPR)
+            .expect("expected IF_LET_EXPR");
+        let array_count = if_let
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::ARRAY_PATTERN)
+            .count();
+        assert_eq!(
+            array_count, 1,
+            "expected exactly one ARRAY_PATTERN in the if-let"
+        );
+    }
+
+    #[test]
+    fn if_let_expr_parses() {
+        // `if let PATTERN = SCRUTINEE { ... } else { ... }` produces an
+        // IF_LET_EXPR node (distinct from IF_EXPR), with PATTERN as a child.
+        let source = r#"
+function f(r: int | string) -> string {
+  if let v: int = r {
+    "int"
+  } else {
+    "other"
+  }
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let if_let_count = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::IF_LET_EXPR)
+            .count();
+        assert_eq!(if_let_count, 1, "expected one IF_LET_EXPR node");
+
+        // No plain IF_EXPR should sneak in.
+        let if_count = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::IF_EXPR)
+            .count();
+        assert_eq!(if_count, 0, "expected no IF_EXPR nodes for if-let form");
+
+        // The IF_LET_EXPR should have a PATTERN child.
+        let if_let = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::IF_LET_EXPR)
+            .unwrap();
+        let pat_count = if_let
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::PATTERN)
+            .count();
+        assert_eq!(
+            pat_count, 1,
+            "IF_LET_EXPR should have exactly one PATTERN child"
         );
     }
 

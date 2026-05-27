@@ -22,6 +22,7 @@ pub enum Expression {
     Is(IsExpr),
     Unary(UnaryExpr),
     If(IfExpr),
+    IfLet(IfLetExpr),
     Match(MatchExpr),
     Call(CallExpr),
     Index(IndexExpr),
@@ -46,6 +47,7 @@ impl Expression {
         !matches!(
             self,
             Expression::If(_)
+                | Expression::IfLet(_)
                 | Expression::Match(_)
                 | Expression::Lambda(_)
                 | Expression::Unknown(_)
@@ -73,6 +75,7 @@ impl FromCST for Expression {
             SyntaxKind::IS_EXPR => IsExpr::from_cst(elem).map(Expression::Is)?,
             SyntaxKind::UNARY_EXPR => UnaryExpr::from_cst(elem).map(Expression::Unary)?,
             SyntaxKind::IF_EXPR => IfExpr::from_cst(elem).map(Expression::If)?,
+            SyntaxKind::IF_LET_EXPR => IfLetExpr::from_cst(elem).map(Expression::IfLet)?,
             SyntaxKind::MATCH_EXPR => MatchExpr::from_cst(elem).map(Expression::Match)?,
             SyntaxKind::CALL_EXPR => CallExpr::from_cst(elem).map(Expression::Call)?,
             SyntaxKind::INDEX_EXPR => IndexExpr::from_cst(elem).map(Expression::Index)?,
@@ -126,6 +129,7 @@ impl Expression {
             Expression::Is(is) => is.single_line_width(input),
             Expression::Unary(unary) => unary.single_line_width(input),
             Expression::If(_) => None,
+            Expression::IfLet(_) => None,
             Expression::Match(_) => None,
             Expression::Call(call) => call.single_line_width(input),
             Expression::Index(index) => index.single_line_width(input),
@@ -172,6 +176,7 @@ impl Printable for Expression {
             Expression::Is(is) => is.print(shape, printer),
             Expression::Unary(unary) => unary.print(shape, printer),
             Expression::If(if_expr) => if_expr.print(shape, printer),
+            Expression::IfLet(if_let_expr) => if_let_expr.print(shape, printer),
             Expression::Match(match_expr) => match_expr.print(shape, printer),
             Expression::EnvAccess(env) => env.print(shape, printer),
             Expression::Block(block) => block.print(shape, printer),
@@ -196,6 +201,7 @@ impl Printable for Expression {
             Expression::Is(is) => is.leftmost_token(),
             Expression::Unary(unary) => unary.leftmost_token(),
             Expression::If(if_expr) => if_expr.leftmost_token(),
+            Expression::IfLet(if_let_expr) => if_let_expr.leftmost_token(),
             Expression::Match(match_expr) => match_expr.leftmost_token(),
             Expression::Call(call) => call.leftmost_token(),
             Expression::Index(index) => index.leftmost_token(),
@@ -223,6 +229,7 @@ impl Printable for Expression {
             Expression::Is(is) => is.rightmost_token(),
             Expression::Unary(unary) => unary.rightmost_token(),
             Expression::If(if_expr) => if_expr.rightmost_token(),
+            Expression::IfLet(if_let_expr) => if_let_expr.rightmost_token(),
             Expression::Match(match_expr) => match_expr.rightmost_token(),
             Expression::Call(call) => call.rightmost_token(),
             Expression::Index(index) => index.rightmost_token(),
@@ -1057,9 +1064,12 @@ impl FromCST for IfExpr {
         let else_branch = if let Some(elem) = it.next() {
             let else_token = t::Else::from_cst(elem)?;
 
-            let else_body_node = it.expect_node("else body (if or block)")?;
+            let else_body_node = it.expect_node("else body (if, if-let, or block)")?;
             let else_body = match else_body_node.kind() {
                 SyntaxKind::IF_EXPR => ElseExpr::If(Box::new(IfExpr::from_cst(
+                    SyntaxElement::Node(else_body_node),
+                )?)),
+                SyntaxKind::IF_LET_EXPR => ElseExpr::IfLet(Box::new(IfLetExpr::from_cst(
                     SyntaxElement::Node(else_body_node),
                 )?)),
                 SyntaxKind::BLOCK_EXPR => ElseExpr::Block(Box::new(BlockExpr::from_cst(
@@ -1067,7 +1077,7 @@ impl FromCST for IfExpr {
                 )?)),
                 _ => {
                     return Err(StrongAstError::UnexpectedKindDesc {
-                        expected_desc: "IF_EXPR or BLOCK_EXPR".into(),
+                        expected_desc: "IF_EXPR, IF_LET_EXPR, or BLOCK_EXPR".into(),
                         found: else_body_node.kind(),
                         at: else_body_node.text_range(),
                     });
@@ -1145,11 +1155,13 @@ impl Printable for IfExpr {
     }
 }
 
-/// Used in [`IfExpr`] to represent the else/else-if branch.
+/// Used in [`IfExpr`] / [`IfLetExpr`] to represent the else/else-if branch.
 #[derive(Debug)]
 pub enum ElseExpr {
     /// else if
     If(Box<IfExpr>),
+    /// else if let
+    IfLet(Box<IfLetExpr>),
     /// final else block
     Block(Box<BlockExpr>),
 }
@@ -1158,19 +1170,144 @@ impl Printable for ElseExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
             ElseExpr::If(if_expr) => if_expr.print(shape, printer),
+            ElseExpr::IfLet(if_let_expr) => if_let_expr.print(shape, printer),
             ElseExpr::Block(block) => block.print(shape, printer),
         }
     }
     fn leftmost_token(&self) -> TextRange {
         match self {
             ElseExpr::If(if_expr) => if_expr.leftmost_token(),
+            ElseExpr::IfLet(if_let_expr) => if_let_expr.leftmost_token(),
             ElseExpr::Block(block) => block.leftmost_token(),
         }
     }
     fn rightmost_token(&self) -> TextRange {
         match self {
             ElseExpr::If(if_expr) => if_expr.rightmost_token(),
+            ElseExpr::IfLet(if_let_expr) => if_let_expr.rightmost_token(),
             ElseExpr::Block(block) => block.rightmost_token(),
+        }
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::IF_LET_EXPR`] node.
+///
+/// `if let PATTERN = SCRUTINEE BLOCK (else (BLOCK | IF_EXPR | IF_LET_EXPR))?`
+#[derive(Debug)]
+pub struct IfLetExpr {
+    pub keyword: t::If,
+    /// `let PATTERN` — the leading `let` is part of the pattern grammar
+    /// (`parse_let_pattern`), so it's stored inside `pattern` rather than
+    /// as a separate token.
+    pub pattern: MatchPattern,
+    pub equals: t::Equals,
+    pub scrutinee: Box<Expression>,
+    pub block: BlockExpr,
+    pub else_branch: Option<(t::Else, ElseExpr)>,
+}
+
+impl FromCST for IfLetExpr {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::IF_LET_EXPR)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+
+        // KW_IF
+        let keyword = it.expect_parse()?;
+
+        // PATTERN (consumes its own leading `let` token)
+        let pattern = it.expect_parse()?;
+
+        // `=` separator between pattern and scrutinee
+        let equals = it.expect_parse()?;
+
+        // Scrutinee: any expression
+        let scrutinee_elem = it.expect_next("if-let scrutinee expression")?;
+        let scrutinee = Box::new(Expression::from_cst(scrutinee_elem)?);
+
+        // Then block
+        let block: BlockExpr = it.expect_parse()?;
+
+        // Optional else / else-if / else-if-let
+        let else_branch = if let Some(elem) = it.next() {
+            let else_token = t::Else::from_cst(elem)?;
+            let else_body_node = it.expect_node("else body (if, if-let, or block)")?;
+            let else_body = match else_body_node.kind() {
+                SyntaxKind::IF_EXPR => ElseExpr::If(Box::new(IfExpr::from_cst(
+                    SyntaxElement::Node(else_body_node),
+                )?)),
+                SyntaxKind::IF_LET_EXPR => ElseExpr::IfLet(Box::new(IfLetExpr::from_cst(
+                    SyntaxElement::Node(else_body_node),
+                )?)),
+                SyntaxKind::BLOCK_EXPR => ElseExpr::Block(Box::new(BlockExpr::from_cst(
+                    SyntaxElement::Node(else_body_node),
+                )?)),
+                _ => {
+                    return Err(StrongAstError::UnexpectedKindDesc {
+                        expected_desc: "IF_EXPR, IF_LET_EXPR, or BLOCK_EXPR".into(),
+                        found: else_body_node.kind(),
+                        at: else_body_node.text_range(),
+                    });
+                }
+            };
+            Some((else_token, else_body))
+        } else {
+            None
+        };
+
+        it.expect_end()?;
+
+        Ok(IfLetExpr {
+            keyword,
+            pattern,
+            equals,
+            scrutinee,
+            block,
+            else_branch,
+        })
+    }
+}
+
+impl KnownKind for IfLetExpr {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::IF_LET_EXPR
+    }
+}
+
+impl Printable for IfLetExpr {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.keyword);
+        printer.print_str(" ");
+        // `if let PATTERN = SCRUTINEE { ... }` — pattern carries its own
+        // leading `let`. No surrounding parens around the pattern or
+        // scrutinee (unlike plain `if`, where parens are canonicalised
+        // around the condition).
+        printer.print(&self.pattern, shape.clone());
+        printer.print_str(" ");
+        printer.print_raw_token(&self.equals);
+        printer.print_str(" ");
+        printer.print(&*self.scrutinee, shape.clone());
+        printer.print_str(" ");
+        printer.print(&self.block, shape.clone());
+
+        if let Some((else_kw, else_expr)) = &self.else_branch {
+            printer.print_str(" ");
+            printer.print_raw_token(else_kw);
+            printer.print_str(" ");
+            printer.print(else_expr, shape);
+        }
+
+        PrintInfo::default_multi_lined()
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        if let Some((_, else_expr)) = &self.else_branch {
+            else_expr.rightmost_token()
+        } else {
+            self.block.rightmost_token()
         }
     }
 }

@@ -329,7 +329,7 @@ fn render_root_init(top_children: &BTreeSet<String>) -> String {
     out.push_str("from . import _inlinedbaml\n");
     out.push_str("from ._typemap import _TYPE_MAP\n\n");
     out.push_str("BamlRuntime.initialize_runtime(\n");
-    out.push_str("    \"baml_src\", _inlinedbaml.FILES, sdk_root=\"baml_sdk\"\n");
+    out.push_str("    \"baml_src\", _inlinedbaml.FILES\n");
     out.push_str(")\n\n");
     out.push_str("set_type_map(_TYPE_MAP)\n");
     if !top_children.is_empty() {
@@ -3182,16 +3182,22 @@ mod tests {
     // ── 25b Phase 2: ClassVar + _register_* trailer emission ──────────────
 
     #[test]
-    fn root_init_passes_sdk_root_for_runtime_compatibility() {
+    fn root_init_no_longer_passes_sdk_root() {
+        // sdk_root is deleted in Phase 5; codegen drops the kwarg now (no
+        // runtime consumer, no diagnostic value worth a separate argument).
         let pool: SymbolPool = HashMap::new();
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let root = &out[&PathBuf::from("__init__.py")];
         assert!(
             root.contains(
                 "BamlRuntime.initialize_runtime(\n    \
-                 \"baml_src\", _inlinedbaml.FILES, sdk_root=\"baml_sdk\"\n)"
+                 \"baml_src\", _inlinedbaml.FILES\n)"
             ),
             "root was:\n{root}"
+        );
+        assert!(
+            !root.contains("sdk_root="),
+            "root still passes sdk_root: {root}"
         );
     }
 }

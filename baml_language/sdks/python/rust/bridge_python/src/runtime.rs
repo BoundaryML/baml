@@ -41,16 +41,11 @@ impl BamlRuntime {
     /// # Arguments
     /// * `root_path` - Root path for BAML files
     /// * `files` - Map of filename to file content
-    /// * `sdk_root` - Generated SDK root package name, accepted for
-    ///   compatibility with older generated SDKs.
     #[staticmethod]
-    #[pyo3(signature = (root_path, files, *, sdk_root = None))]
     fn initialize_runtime(
         root_path: String,
         files: std::collections::HashMap<String, String>,
-        sdk_root: Option<String>,
     ) -> PyResult<Self> {
-        let _ = sdk_root;
         match bridge_cffi::engine::initialize_runtime(&root_path, files) {
             Ok(bex) => Ok(BamlRuntime { bex }),
             Err(e) => Err(bridge_error_to_py(e)),

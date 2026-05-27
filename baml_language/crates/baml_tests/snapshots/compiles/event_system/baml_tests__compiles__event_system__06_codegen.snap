@@ -10,7 +10,6 @@ function user.User.from_json(j: baml.json.json) -> User {
     load_type int
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_var j
     load_const "name"
     call baml.json.field
@@ -18,7 +17,6 @@ function user.User.from_json(j: baml.json.json) -> User {
     load_type string
     load_var _6
     call baml.json.from_json
-    store_var _5
     load_var j
     load_const "email"
     call baml.json.field
@@ -26,14 +24,7 @@ function user.User.from_json(j: baml.json.json) -> User {
     load_type string
     load_var _9
     call baml.json.from_json
-    store_var _8
-    alloc_instance user.User
-    load_var _2
-    init_field .id
-    load_var _5
-    init_field .name
-    load_var _8
-    init_field .email
+    init_instance user.User .id, .name, .email
     return
 }
 
@@ -41,18 +32,12 @@ function user.User.to_json(self: User) -> baml.json.json {
     load_var self
     load_field .id
     call baml.Int.to_json
-    store_var _2
     load_var self
     load_field .name
     call baml.String.to_json
-    store_var _5
     load_var self
     load_field .email
     call baml.String.to_json
-    store_var _8
-    load_var _2
-    load_var _5
-    load_var _8
     load_const "id"
     load_const "name"
     load_const "email"
@@ -157,13 +142,10 @@ function user.simple_function() -> int {
 }
 
 function user.test_logging() -> void {
-    alloc_instance user.User
     load_const 123
-    init_field .id
     load_const "Alice"
-    init_field .name
     load_const "alice@example.com"
-    init_field .email
+    init_instance user.User .id, .name, .email
     store_var user
     load_const "$baml_log"
     load_const "debug"

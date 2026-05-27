@@ -173,12 +173,12 @@ impl BamlNamespaceJson for PackageBamlImpl {
     }
 
     fn field(vm: &mut BexVm, j: &Value, key: &str) -> Value {
-        match j {
-            Value::Object(ptr) => match vm.get_object(*ptr) {
-                Object::Map(m) => m.get(key).copied().unwrap_or(Value::Null),
-                _ => Value::Null,
+        match j.as_object_ptr() {
+            Some(ptr) => match vm.get_object(ptr) {
+                Object::Map(m) => m.get(key).unwrap_or(Value::NULL),
+                _ => Value::NULL,
             },
-            _ => Value::Null,
+            None => Value::NULL,
         }
     }
 }
@@ -188,14 +188,15 @@ impl BamlNamespaceJson for PackageBamlImpl {
 /// Parse a JSON string and return a `json`-typed VM value.
 ///
 /// The `json` type alias is `null | bool | int | float | string | json[] | map<string, json>`,
-/// which maps directly onto VM value types:
-/// - JSON `null`   → `Value::Null`
-/// - JSON `bool`   → `Value::Bool`
-/// - JSON integer  → `Value::Int`
-/// - JSON float    → `Value::Float`
-/// - JSON `string` → `Value::Object(String)`
-/// - JSON array    → `Value::Object(Array)`
-/// - JSON object   → `Value::Object(Map)`
+/// which maps directly onto VM value kinds:
+/// - JSON `null`   → `Value::NULL`
+/// - JSON `bool`   → tagged Bool
+/// - JSON integer  → tagged i63 (out-of-range falls through to float, see
+///   [`serde_to_value`])
+/// - JSON float    → heap-boxed `Object::Float`
+/// - JSON `string` → heap-boxed `Object::String`
+/// - JSON array    → heap-boxed `Object::Array`
+/// - JSON object   → heap-boxed `Object::Map`
 ///
 /// On failure, throws a `baml.json.JsonParseError { message }` instance.
 pub fn json_parse(vm: &mut BexVm, s: &str) -> Result<Value, VmRustFnError> {
@@ -292,32 +293,41 @@ pub fn raise_serialize_no_path(
 
 /// Convert a `serde_json::Value` into a VM `Value`.
 ///
-/// JSON numbers: integer-representable numbers become `Value::Int`; all others
-/// become `Value::Float`.  This matches SAP's disambiguation behaviour.
+/// JSON numbers: i63-representable integers become integers; anything that
+/// overflows the i63 range (or doesn't parse as `i64` to begin with) falls
+/// through to a heap-boxed float, with the usual f64 precision loss above
+/// 2^53. Matches SAP's disambiguation behaviour.
 pub fn serde_to_value(vm: &mut BexVm, v: &serde_json::Value) -> Value {
     match v {
-        serde_json::Value::Null => Value::Null,
-        serde_json::Value::Bool(b) => Value::Bool(*b),
+        serde_json::Value::Null => Value::NULL,
+        serde_json::Value::Bool(b) => Value::bool(*b),
         serde_json::Value::Number(n) => {
-            if let Some(i) = n.as_i64() {
-                Value::Int(i)
+            if let Some(i) = n.as_i64()
+                && let Some(v) = Value::try_int(i)
+            {
+                v
             } else if let Some(f) = n.as_f64() {
-                Value::Float(f)
+                vm.alloc_float(f)
             } else {
-                Value::Float(n.as_f64().unwrap_or(f64::NAN))
+                // Only reachable with serde_json's `arbitrary_precision`
+                // feature (not enabled here). NaN is a sentinel for "we
+                // were handed a number we can't represent at all"; if you
+                // hit this in practice, refuse arbitrary-precision input
+                // upstream rather than relying on this fallback.
+                vm.alloc_float(f64::NAN)
             }
         }
         serde_json::Value::String(s) => vm.alloc_string(s.clone()),
         serde_json::Value::Array(arr) => {
             let items: Vec<Value> = arr.iter().map(|elem| serde_to_value(vm, elem)).collect();
-            Value::Object(vm.tlab.alloc(Object::Array(items)))
+            Value::object(vm.tlab.alloc(Object::Array(items.into())))
         }
         serde_json::Value::Object(map) => {
             let entries: IndexMap<String, Value> = map
                 .iter()
                 .map(|(k, v)| (k.clone(), serde_to_value(vm, v)))
                 .collect();
-            Value::Object(vm.tlab.alloc(Object::Map(entries)))
+            Value::object(vm.tlab.alloc(Object::Map(Box::new(entries.into()))))
         }
     }
 }
@@ -327,22 +337,23 @@ pub fn serde_to_value(vm: &mut BexVm, v: &serde_json::Value) -> Value {
 /// Used for `Ty::TypeAlias(BAML_JSON_JSON)` and as a fallback for class fields
 /// whose runtime `field_type` was erased (generic params lower to `Ty::Void`).
 pub fn value_to_serde(vm: &BexVm, v: Value) -> serde_json::Value {
-    match v {
-        Value::Null => serde_json::Value::Null,
-        Value::Bool(b) => serde_json::Value::Bool(b),
-        Value::Int(i) => serde_json::Value::Number(i.into()),
-        Value::Float(f) => serde_json::Number::from_f64(f)
-            .map(serde_json::Value::Number)
-            .unwrap_or(serde_json::Value::Null),
-        Value::OmittedArg => serde_json::Value::Null,
-        Value::Object(ptr) => match vm.get_object(ptr) {
+    use bex_vm_types::ValueKind;
+    match v.kind() {
+        ValueKind::Null => serde_json::Value::Null,
+        ValueKind::Bool(b) => serde_json::Value::Bool(b),
+        ValueKind::Int(i) => serde_json::Value::Number(i.into()),
+        ValueKind::OmittedArg => serde_json::Value::Null,
+        ValueKind::Object(ptr) => match vm.get_object(ptr) {
+            Object::Float(f) => serde_json::Number::from_f64(*f)
+                .map(serde_json::Value::Number)
+                .unwrap_or(serde_json::Value::Null),
             Object::String(s) => serde_json::Value::String(s.clone()),
             Object::Array(arr) => {
-                let arr = arr.clone();
+                let arr = arr.to_vec();
                 serde_json::Value::Array(arr.iter().map(|el| value_to_serde(vm, *el)).collect())
             }
             Object::Map(map) => {
-                let map = map.clone();
+                let map = map.to_index_map();
                 let entries: serde_json::Map<String, serde_json::Value> = map
                     .iter()
                     .map(|(k, v)| (k.clone(), value_to_serde(vm, *v)))
@@ -362,6 +373,7 @@ pub fn value_to_serde(vm: &BexVm, v: Value) -> serde_json::Value {
             | Object::RustData(_)
             | Object::Closure(_)
             | Object::BoundMethod(_)
+            | Object::HostClosure(_)
             | Object::Cell(_) => serde_json::Value::Null,
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => serde_json::Value::Null,
@@ -411,7 +423,7 @@ fn ty_value_to_serde(
         Ty::Literal(_, _) => Ok(value_to_serde(vm, value)),
 
         Ty::Optional(inner, _) => {
-            if matches!(value, Value::Null) {
+            if value.is_null() {
                 Ok(serde_json::Value::Null)
             } else {
                 ty_value_to_serde(vm, value, inner, path)
@@ -419,12 +431,12 @@ fn ty_value_to_serde(
         }
 
         Ty::List(elem, _) => {
-            let items = match value {
-                Value::Object(ptr) => match vm.get_object(ptr) {
-                    Object::Array(arr) => arr.clone(),
+            let items = match value.as_object_ptr() {
+                Some(ptr) => match vm.get_object(ptr) {
+                    Object::Array(arr) => arr.to_vec(),
                     _ => return Err(raise_serialize(vm, "expected array", path, "list")),
                 },
-                _ => return Err(raise_serialize(vm, "expected array", path, "list")),
+                None => return Err(raise_serialize(vm, "expected array", path, "list")),
             };
             let mut out = Vec::with_capacity(items.len());
             for (i, item) in items.into_iter().enumerate() {
@@ -437,12 +449,12 @@ fn ty_value_to_serde(
         }
 
         Ty::Map { value: vty, .. } => {
-            let entries = match value {
-                Value::Object(ptr) => match vm.get_object(ptr) {
-                    Object::Map(m) => m.clone(),
+            let entries = match value.as_object_ptr() {
+                Some(ptr) => match vm.get_object(ptr) {
+                    Object::Map(m) => m.to_index_map(),
                     _ => return Err(raise_serialize(vm, "expected map", path, "map")),
                 },
-                _ => return Err(raise_serialize(vm, "expected map", path, "map")),
+                None => return Err(raise_serialize(vm, "expected map", path, "map")),
             };
             let mut out = serde_json::Map::with_capacity(entries.len());
             for (k, v) in entries {
@@ -465,8 +477,8 @@ fn ty_value_to_serde(
 
         Ty::Class(qtn, _type_args, _) => serialize_class_instance(vm, value, qtn, path),
 
-        Ty::Enum(_, _) => match value {
-            Value::Object(ptr) => match vm.get_object(ptr) {
+        Ty::Enum(_, _) => match value.as_object_ptr() {
+            Some(ptr) => match vm.get_object(ptr) {
                 Object::Variant(var) => {
                     let enm_ptr = var.enm;
                     let idx = var.index;
@@ -485,7 +497,7 @@ fn ty_value_to_serde(
                 }
                 _ => Err(raise_serialize(vm, "expected enum variant", path, "enum")),
             },
-            _ => Err(raise_serialize(vm, "expected enum variant", path, "enum")),
+            None => Err(raise_serialize(vm, "expected enum variant", path, "enum")),
         },
 
         Ty::EnumVariant(_, name, _) => Ok(serde_json::Value::String(name.to_string())),
@@ -560,9 +572,9 @@ fn serialize_class_instance(
     qtn: &TypeName,
     path: &mut String,
 ) -> Result<serde_json::Value, VmRustFnError> {
-    let inst_ptr = match value {
-        Value::Object(ptr) => ptr,
-        _ => {
+    let inst_ptr = match value.as_object_ptr() {
+        Some(ptr) => ptr,
+        None => {
             return Err(raise_serialize(
                 vm,
                 format!("expected class instance for `{qtn}`"),
@@ -679,20 +691,14 @@ fn serialize_media(
 }
 
 fn read_media_value(vm: &BexVm, value: Value) -> Option<Arc<baml_builtins2::MediaValue>> {
-    let ptr = match value {
-        Value::Object(p) => p,
-        _ => return None,
-    };
+    let ptr = value.as_object_ptr()?;
     let inst = match vm.get_object(ptr) {
         Object::Instance(inst) => inst,
         _ => return None,
     };
     // Media classes have a single `_data: $rust_type` field.
     let data_value = *inst.fields.first()?;
-    let data_ptr = match data_value {
-        Value::Object(p) => p,
-        _ => return None,
-    };
+    let data_ptr = data_value.as_object_ptr()?;
     match vm.get_object(data_ptr) {
         Object::RustData(arc) => arc.clone().downcast::<baml_builtins2::MediaValue>().ok(),
         _ => None,
@@ -728,27 +734,30 @@ fn ty_serde_to_value(
 ) -> Result<Value, VmRustFnError> {
     match ty {
         Ty::Null { .. } => match json {
-            serde_json::Value::Null => Ok(Value::Null),
+            serde_json::Value::Null => Ok(Value::NULL),
             _ => Err(raise_decode(vm, "expected null", path)),
         },
 
         Ty::Bool { .. } => match json {
-            serde_json::Value::Bool(b) => Ok(Value::Bool(*b)),
+            serde_json::Value::Bool(b) => Ok(Value::bool(*b)),
             _ => Err(raise_decode(vm, "expected boolean", path)),
         },
 
         Ty::Int { .. } => match json {
-            serde_json::Value::Number(n) => n
-                .as_i64()
-                .map(Value::Int)
-                .ok_or_else(|| raise_decode(vm, "expected integer", path)),
+            serde_json::Value::Number(n) => n.as_i64().and_then(Value::try_int).ok_or_else(|| {
+                raise_decode(
+                    vm,
+                    "expected integer in the BAML int range [-2^62, 2^62 - 1]",
+                    path,
+                )
+            }),
             _ => Err(raise_decode(vm, "expected integer", path)),
         },
 
         Ty::Float { .. } => match json {
             serde_json::Value::Number(n) => {
                 if let Some(f) = n.as_f64() {
-                    Ok(Value::Float(f))
+                    Ok(vm.alloc_float(f))
                 } else {
                     Err(raise_decode(vm, "expected number", path))
                 }
@@ -762,7 +771,7 @@ fn ty_serde_to_value(
         },
 
         Ty::Optional(inner, _) => match json {
-            serde_json::Value::Null => Ok(Value::Null),
+            serde_json::Value::Null => Ok(Value::NULL),
             _ => ty_serde_to_value(vm, json, inner, path),
         },
 
@@ -775,7 +784,7 @@ fn ty_serde_to_value(
                     })?;
                     items.push(v);
                 }
-                Ok(Value::Object(vm.tlab.alloc(Object::Array(items))))
+                Ok(Value::object(vm.tlab.alloc(Object::Array(items.into()))))
             }
             _ => Err(raise_decode(vm, "expected array", path)),
         },
@@ -789,7 +798,9 @@ fn ty_serde_to_value(
                     })?;
                     entries.insert(k.clone(), v);
                 }
-                Ok(Value::Object(vm.tlab.alloc(Object::Map(entries))))
+                Ok(Value::object(
+                    vm.tlab.alloc(Object::Map(Box::new(entries.into()))),
+                ))
             }
             _ => Err(raise_decode(vm, "expected object", path)),
         },
@@ -847,7 +858,7 @@ fn ty_serde_to_value(
 
         Ty::Literal(lit, _) => match (lit, json) {
             (baml_type::Literal::Bool(b), serde_json::Value::Bool(jb)) if b == jb => {
-                Ok(Value::Bool(*jb))
+                Ok(Value::bool(*jb))
             }
             (baml_type::Literal::String(s), serde_json::Value::String(js)) if s == js => {
                 Ok(vm.alloc_string(js.clone()))
@@ -855,7 +866,7 @@ fn ty_serde_to_value(
             (baml_type::Literal::Int(expected), serde_json::Value::Number(n)) => {
                 if let Some(actual) = n.as_i64() {
                     if *expected == actual {
-                        return Ok(Value::Int(actual));
+                        return Ok(Value::int(actual));
                     }
                 }
                 Err(raise_decode(vm, "literal int mismatch", path))
@@ -863,7 +874,7 @@ fn ty_serde_to_value(
             (baml_type::Literal::Float(s), serde_json::Value::Number(n)) => {
                 if let (Ok(expected), Some(actual)) = (s.parse::<f64>(), n.as_f64()) {
                     if (expected - actual).abs() < f64::EPSILON {
-                        return Ok(Value::Float(actual));
+                        return Ok(vm.alloc_float(actual));
                     }
                 }
                 Err(raise_decode(vm, "literal float mismatch", path))
@@ -951,7 +962,7 @@ fn deserialize_class_instance(
         field_values.push(v);
     }
 
-    Ok(Value::Object(vm.tlab.alloc(Object::Instance(Instance {
+    Ok(Value::object(vm.tlab.alloc(Object::Instance(Instance {
         class: class_ptr,
         class_type_args: type_args.to_vec(),
         fields: field_values,
@@ -1078,8 +1089,8 @@ fn deserialize_media(
 pub fn json_from_json_dispatch(vm: &mut BexVm, j: Value, ty: &Ty) -> NativeCallResult {
     match ty {
         Ty::Optional(inner, _) => {
-            if matches!(j, Value::Null) {
-                NativeCallResult::Done(Value::Null)
+            if j.is_null() {
+                NativeCallResult::Done(Value::NULL)
             } else {
                 json_from_json_dispatch(vm, j, inner)
             }
@@ -1146,14 +1157,14 @@ impl Continuation for IdentityFromJsonCont {
 // ── List dispatch ─────────────────────────────────────────────────────────────
 
 fn list_from_json_start(vm: &mut BexVm, j: Value, elem_ty: &Ty) -> NativeCallResult {
-    let array = match j {
-        Value::Object(p) => match vm.get_object(p) {
-            Object::Array(a) => a.clone(),
+    let array = match j.as_object_ptr() {
+        Some(p) => match vm.get_object(p) {
+            Object::Array(a) => a.to_vec(),
             _ => {
                 return NativeCallResult::Error(raise_decode(vm, "expected JSON array", ""));
             }
         },
-        _ => {
+        None => {
             return NativeCallResult::Error(raise_decode(vm, "expected JSON array", ""));
         }
     };
@@ -1190,7 +1201,7 @@ fn list_drive(
             Err(e) => return NativeCallResult::Error(e),
         }
     }
-    let arr_val = Value::Object(vm.tlab.alloc(Object::Array(results)));
+    let arr_val = Value::object(vm.tlab.alloc(Object::Array(results.into())));
     NativeCallResult::Done(arr_val)
 }
 
@@ -1239,17 +1250,17 @@ impl Continuation for ListFromJsonCont {
     fn gc_roots(&self) -> Vec<HeapPtr> {
         let mut roots = Vec::new();
         for v in self.array.iter().chain(self.results.iter()) {
-            if let Value::Object(p) = v {
-                roots.push(*p);
+            if let Some(p) = v.as_object_ptr() {
+                roots.push(p);
             }
         }
         roots
     }
     fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
         for v in self.array.iter_mut().chain(self.results.iter_mut()) {
-            if let Value::Object(p) = v {
-                if let Some(&new) = forwarding.get(p) {
-                    *p = new;
+            if let Some(p) = v.as_object_ptr() {
+                if let Some(&new) = forwarding.get(&p) {
+                    *v = Value::object(new);
                 }
             }
         }
@@ -1259,14 +1270,14 @@ impl Continuation for ListFromJsonCont {
 // ── Map dispatch ──────────────────────────────────────────────────────────────
 
 fn map_from_json_start(vm: &mut BexVm, j: Value, val_ty: &Ty) -> NativeCallResult {
-    let entries: Vec<(String, Value)> = match j {
-        Value::Object(p) => match vm.get_object(p) {
-            Object::Map(m) => m.iter().map(|(k, v)| (k.clone(), *v)).collect(),
+    let entries: Vec<(String, Value)> = match j.as_object_ptr() {
+        Some(p) => match vm.get_object(p) {
+            Object::Map(m) => m.lock().iter().map(|(k, v)| (k.clone(), *v)).collect(),
             _ => {
                 return NativeCallResult::Error(raise_decode(vm, "expected JSON object", ""));
             }
         },
-        _ => {
+        None => {
             return NativeCallResult::Error(raise_decode(vm, "expected JSON object", ""));
         }
     };
@@ -1300,7 +1311,7 @@ fn map_drive(
             Err(e) => return NativeCallResult::Error(e),
         }
     }
-    let map_val = Value::Object(vm.tlab.alloc(Object::Map(results)));
+    let map_val = Value::object(vm.tlab.alloc(Object::Map(Box::new(results.into()))));
     NativeCallResult::Done(map_val)
 }
 
@@ -1350,29 +1361,29 @@ impl Continuation for MapFromJsonCont {
     fn gc_roots(&self) -> Vec<HeapPtr> {
         let mut roots = Vec::new();
         for (_, v) in &self.entries {
-            if let Value::Object(p) = v {
-                roots.push(*p);
+            if let Some(p) = v.as_object_ptr() {
+                roots.push(p);
             }
         }
         for v in self.results.values() {
-            if let Value::Object(p) = v {
-                roots.push(*p);
+            if let Some(p) = v.as_object_ptr() {
+                roots.push(p);
             }
         }
         roots
     }
     fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
         for (_, v) in &mut self.entries {
-            if let Value::Object(p) = v {
-                if let Some(&new) = forwarding.get(p) {
-                    *p = new;
+            if let Some(p) = v.as_object_ptr() {
+                if let Some(&new) = forwarding.get(&p) {
+                    *v = Value::object(new);
                 }
             }
         }
         for v in self.results.values_mut() {
-            if let Value::Object(p) = v {
-                if let Some(&new) = forwarding.get(p) {
-                    *p = new;
+            if let Some(p) = v.as_object_ptr() {
+                if let Some(&new) = forwarding.get(&p) {
+                    *v = Value::object(new);
                 }
             }
         }
@@ -1385,7 +1396,7 @@ impl Continuation for MapFromJsonCont {
 /// Otherwise `None` — caller should dispatch on the inner (non-optional) type.
 fn optional_null_short_circuit(v: Value, ty: &Ty) -> Option<Value> {
     match ty {
-        Ty::Optional(_, _) if matches!(v, Value::Null) => Some(Value::Null),
+        Ty::Optional(_, _) if v.is_null() => Some(Value::NULL),
         _ => None,
     }
 }

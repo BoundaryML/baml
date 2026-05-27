@@ -10,10 +10,7 @@ function user.Resume.from_json(j: baml.json.json) -> Resume {
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance user.Resume
-    load_var _2
-    init_field .name
+    init_instance user.Resume .name
     return
 }
 
@@ -28,18 +25,13 @@ function user.Resume.to_json(self: Resume) -> baml.json.json {
 
 function user.TypeBuilderFn(from_text: string) -> Resume {
     load_type Resume
-    alloc_instance baml.llm.Client
     load_const "openai/gpt-4o-mini"
-    init_field .name
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
-    init_field .client_type
     alloc_array 0
-    init_field .sub_clients
     load_const null
-    init_field .retry
     load_const 0
-    init_field .counter
+    init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
     load_const "TypeBuilderFn"
     load_var from_text
     load_const "from_text"
@@ -49,18 +41,13 @@ function user.TypeBuilderFn(from_text: string) -> Resume {
 }
 
 function user.TypeBuilderFn$build_request(from_text: string) -> baml.http.Request {
-    alloc_instance baml.llm.Client
     load_const "openai/gpt-4o-mini"
-    init_field .name
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
-    init_field .client_type
     alloc_array 0
-    init_field .sub_clients
     load_const null
-    init_field .retry
     load_const 0
-    init_field .counter
+    init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
     load_const "TypeBuilderFn"
     load_var from_text
     load_const "from_text"
@@ -70,18 +57,13 @@ function user.TypeBuilderFn$build_request(from_text: string) -> baml.http.Reques
 }
 
 function user.TypeBuilderFn$build_request_stream(from_text: string) -> baml.http.Request {
-    alloc_instance baml.llm.Client
     load_const "openai/gpt-4o-mini"
-    init_field .name
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
-    init_field .client_type
     alloc_array 0
-    init_field .sub_clients
     load_const null
-    init_field .retry
     load_const 0
-    init_field .counter
+    init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
     load_const "TypeBuilderFn"
     load_var from_text
     load_const "from_text"
@@ -98,18 +80,13 @@ function user.TypeBuilderFn$parse(json: string) -> Resume {
 }
 
 function user.TypeBuilderFn$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<null | Resume$stream, Resume> {
-    alloc_instance baml.llm.Client
     load_const "openai/gpt-4o-mini"
-    init_field .name
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
-    init_field .client_type
     alloc_array 0
-    init_field .sub_clients
     load_const null
-    init_field .retry
     load_const 0
-    init_field .counter
+    init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
     load_var sse
     load_const "TypeBuilderFn"
     call baml.llm.Client.__make_stream
@@ -117,18 +94,13 @@ function user.TypeBuilderFn$parse_stream(sse: baml.http.SseStream) -> baml.llm.S
 }
 
 function user.TypeBuilderFn$render_prompt(from_text: string) -> baml.llm.PromptAst {
-    alloc_instance baml.llm.Client
     load_const "openai/gpt-4o-mini"
-    init_field .name
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
-    init_field .client_type
     alloc_array 0
-    init_field .sub_clients
     load_const null
-    init_field .retry
     load_const 0
-    init_field .counter
+    init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
     load_const "TypeBuilderFn"
     load_var from_text
     load_const "from_text"
@@ -138,18 +110,13 @@ function user.TypeBuilderFn$render_prompt(from_text: string) -> baml.llm.PromptA
 }
 
 function user.TypeBuilderFn$stream(from_text: string) -> baml.llm.Stream<null | Resume$stream, Resume> {
-    alloc_instance baml.llm.Client
     load_const "openai/gpt-4o-mini"
-    init_field .name
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
-    init_field .client_type
     alloc_array 0
-    init_field .sub_clients
     load_const null
-    init_field .retry
     load_const 0
-    init_field .counter
+    init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
     load_const "TypeBuilderFn"
     load_var from_text
     load_const "from_text"

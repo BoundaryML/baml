@@ -205,6 +205,18 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
                 collect_from_expr(context, *else_expr, body, out);
             }
         }
+        Expr::IfLet {
+            scrutinee,
+            then_branch,
+            else_branch,
+            ..
+        } => {
+            collect_from_expr(context, *scrutinee, body, out);
+            collect_from_expr(context, *then_branch, body, out);
+            if let Some(else_expr) = else_branch {
+                collect_from_expr(context, *else_expr, body, out);
+            }
+        }
         Expr::Match {
             scrutinee, arms, ..
         } => {

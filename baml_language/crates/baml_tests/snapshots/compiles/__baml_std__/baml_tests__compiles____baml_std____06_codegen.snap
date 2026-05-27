@@ -288,7 +288,7 @@ function baml.Int.max(self: baml.Int, other: int) -> int {
 }
 
 function baml.Int.max_value() -> int {
-    load_const 9223372036854775807
+    load_const 4611686018427387903
     return
 }
 
@@ -296,7 +296,7 @@ function baml.Int.min(self: baml.Int, other: int) -> int {
 }
 
 function baml.Int.min_value() -> int {
-    load_const -9223372036854775808
+    load_const -4611686018427387904
     return
 }
 
@@ -607,10 +607,7 @@ function baml.errors.AccessError.from_json(j: baml.json.json) -> baml.errors.Acc
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance baml.errors.AccessError
-    load_var _2
-    init_field .message
+    init_instance baml.errors.AccessError .message
     return
 }
 
@@ -631,10 +628,7 @@ function baml.errors.DevOther.from_json(j: baml.json.json) -> baml.errors.DevOth
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance baml.errors.DevOther
-    load_var _2
-    init_field .message
+    init_instance baml.errors.DevOther .message
     return
 }
 
@@ -647,6 +641,97 @@ function baml.errors.DevOther.to_json(self: baml.errors.DevOther) -> baml.json.j
     return
 }
 
+function baml.errors.HostCallable.from_json(j: baml.json.json) -> baml.errors.HostCallable {
+    load_var j
+    load_const "message"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    load_var j
+    load_const "class_name"
+    call baml.json.field
+    store_var _6
+    load_type string
+    load_var _6
+    call baml.json.from_json
+    load_var j
+    load_const "language"
+    call baml.json.field
+    store_var _9
+    load_type string
+    load_var _9
+    call baml.json.from_json
+    load_var j
+    load_const "traceback"
+    call baml.json.field
+    store_var _12
+    load_type string?
+    load_var _12
+    call baml.json.from_json
+    load_var j
+    load_const "category"
+    call baml.json.field
+    store_var _15
+    load_type int
+    load_var _15
+    call baml.json.from_json
+    init_instance baml.errors.HostCallable .message, .class_name, .language, .traceback, .category
+    return
+}
+
+function baml.errors.HostCallable.to_json(self: null) -> baml.json.json {
+    load_var self
+    load_field .message
+    call baml.String.to_json
+    store_var _2
+    load_var self
+    load_field .class_name
+    call baml.String.to_json
+    store_var _5
+    load_var self
+    load_field .language
+    call baml.String.to_json
+    store_var _8
+    load_var self
+    load_field .traceback
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var self
+    load_field .traceback
+    make_bound_method baml.String.to_json
+    call_indirect
+    store_var _11
+    jump L2
+
+  L1:
+    load_const null
+    store_var _11
+
+  L2:
+    load_var self
+    load_field .category
+    call baml.Int.to_json
+    store_var _18
+    load_var _2
+    load_var _5
+    load_var _8
+    load_var _11
+    load_var _18
+    load_const "message"
+    load_const "class_name"
+    load_const "language"
+    load_const "traceback"
+    load_const "category"
+    alloc_map 5
+    return
+}
+
 function baml.errors.HostPanic.from_json(j: baml.json.json) -> baml.errors.HostPanic {
     load_var j
     load_const "message"
@@ -655,10 +740,7 @@ function baml.errors.HostPanic.from_json(j: baml.json.json) -> baml.errors.HostP
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance baml.errors.HostPanic
-    load_var _2
-    init_field .message
+    init_instance baml.errors.HostPanic .message
     return
 }
 
@@ -679,10 +761,7 @@ function baml.errors.InvalidArgument.from_json(j: baml.json.json) -> baml.errors
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance baml.errors.InvalidArgument
-    load_var _2
-    init_field .message
+    init_instance baml.errors.InvalidArgument .message
     return
 }
 
@@ -703,10 +782,7 @@ function baml.errors.Io.from_json(j: baml.json.json) -> baml.errors.Io {
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance baml.errors.Io
-    load_var _2
-    init_field .message
+    init_instance baml.errors.Io .message
     return
 }
 
@@ -727,10 +803,7 @@ function baml.errors.LlmClient.from_json(j: baml.json.json) -> baml.errors.LlmCl
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance baml.errors.LlmClient
-    load_var _2
-    init_field .message
+    init_instance baml.errors.LlmClient .message
     return
 }
 
@@ -751,10 +824,7 @@ function baml.errors.NotImplemented.from_json(j: baml.json.json) -> baml.errors.
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance baml.errors.NotImplemented
-    load_var _2
-    init_field .message
+    init_instance baml.errors.NotImplemented .message
     return
 }
 
@@ -775,10 +845,7 @@ function baml.errors.ParseError.from_json(j: baml.json.json) -> baml.errors.Pars
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance baml.errors.ParseError
-    load_var _2
-    init_field .message
+    init_instance baml.errors.ParseError .message
     return
 }
 
@@ -799,10 +866,7 @@ function baml.errors.RenderPrompt.from_json(j: baml.json.json) -> baml.errors.Re
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance baml.errors.RenderPrompt
-    load_var _2
-    init_field .message
+    init_instance baml.errors.RenderPrompt .message
     return
 }
 
@@ -823,7 +887,6 @@ function baml.errors.StackFrame.from_json(j: baml.json.json) -> baml.errors.Stac
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_var j
     load_const "line"
     call baml.json.field
@@ -831,7 +894,6 @@ function baml.errors.StackFrame.from_json(j: baml.json.json) -> baml.errors.Stac
     load_type int
     load_var _6
     call baml.json.from_json
-    store_var _5
     load_var j
     load_const "function_name"
     call baml.json.field
@@ -839,14 +901,7 @@ function baml.errors.StackFrame.from_json(j: baml.json.json) -> baml.errors.Stac
     load_type string
     load_var _9
     call baml.json.from_json
-    store_var _8
-    alloc_instance baml.errors.StackFrame
-    load_var _2
-    init_field .file
-    load_var _5
-    init_field .line
-    load_var _8
-    init_field .function_name
+    init_instance baml.errors.StackFrame .file, .line, .function_name
     return
 }
 
@@ -854,18 +909,12 @@ function baml.errors.StackFrame.to_json(self: baml.errors.StackFrame) -> baml.js
     load_var self
     load_field .file
     call baml.String.to_json
-    store_var _2
     load_var self
     load_field .line
     call baml.Int.to_json
-    store_var _5
     load_var self
     load_field .function_name
     call baml.String.to_json
-    store_var _8
-    load_var _2
-    load_var _5
-    load_var _8
     load_const "file"
     load_const "line"
     load_const "function_name"
@@ -881,10 +930,7 @@ function baml.errors.StackTrace.from_json(j: baml.json.json) -> baml.errors.Stac
     load_type baml.errors.StackFrame[]
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance baml.errors.StackTrace
-    load_var _2
-    init_field .frames
+    init_instance baml.errors.StackTrace .frames
     return
 }
 
@@ -908,7 +954,6 @@ function baml.errors.Timeout.from_json(j: baml.json.json) -> baml.errors.Timeout
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_var j
     load_const "duration_ms"
     call baml.json.field
@@ -916,12 +961,7 @@ function baml.errors.Timeout.from_json(j: baml.json.json) -> baml.errors.Timeout
     load_type int?
     load_var _6
     call baml.json.from_json
-    store_var _5
-    alloc_instance baml.errors.Timeout
-    load_var _2
-    init_field .message
-    load_var _5
-    init_field .duration_ms
+    init_instance baml.errors.Timeout .message, .duration_ms
     return
 }
 
@@ -966,10 +1006,7 @@ function baml.errors.Unsupported.from_json(j: baml.json.json) -> baml.errors.Uns
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance baml.errors.Unsupported
-    load_var _2
-    init_field .message
+    init_instance baml.errors.Unsupported .message
     return
 }
 
@@ -990,7 +1027,6 @@ function baml.fs.DirEntry.from_json(j: baml.json.json) -> baml.fs.DirEntry {
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_var j
     load_const "is_dir"
     call baml.json.field
@@ -998,7 +1034,6 @@ function baml.fs.DirEntry.from_json(j: baml.json.json) -> baml.fs.DirEntry {
     load_type bool
     load_var _6
     call baml.json.from_json
-    store_var _5
     load_var j
     load_const "is_file"
     call baml.json.field
@@ -1006,7 +1041,6 @@ function baml.fs.DirEntry.from_json(j: baml.json.json) -> baml.fs.DirEntry {
     load_type bool
     load_var _9
     call baml.json.from_json
-    store_var _8
     load_var j
     load_const "is_symlink"
     call baml.json.field
@@ -1014,16 +1048,7 @@ function baml.fs.DirEntry.from_json(j: baml.json.json) -> baml.fs.DirEntry {
     load_type bool
     load_var _12
     call baml.json.from_json
-    store_var _11
-    alloc_instance baml.fs.DirEntry
-    load_var _2
-    init_field .name
-    load_var _5
-    init_field .is_dir
-    load_var _8
-    init_field .is_file
-    load_var _11
-    init_field .is_symlink
+    init_instance baml.fs.DirEntry .name, .is_dir, .is_file, .is_symlink
     return
 }
 
@@ -1031,23 +1056,15 @@ function baml.fs.DirEntry.to_json(self: baml.fs.DirEntry) -> baml.json.json {
     load_var self
     load_field .name
     call baml.String.to_json
-    store_var _2
     load_var self
     load_field .is_dir
     call baml.Bool.to_json
-    store_var _5
     load_var self
     load_field .is_file
     call baml.Bool.to_json
-    store_var _8
     load_var self
     load_field .is_symlink
     call baml.Bool.to_json
-    store_var _11
-    load_var _2
-    load_var _5
-    load_var _8
-    load_var _11
     load_const "name"
     load_const "is_dir"
     load_const "is_file"
@@ -1106,10 +1123,7 @@ function baml.fs.MkdirOptions.from_json(j: baml.json.json) -> baml.fs.MkdirOptio
     load_type bool
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance baml.fs.MkdirOptions
-    load_var _2
-    init_field .recursive
+    init_instance baml.fs.MkdirOptions .recursive
     return
 }
 
@@ -1211,7 +1225,6 @@ function baml.glob.ScanOptions.from_json(j: baml.json.json) -> baml.glob.ScanOpt
     load_type string?
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_var j
     load_const "dot"
     call baml.json.field
@@ -1219,7 +1232,6 @@ function baml.glob.ScanOptions.from_json(j: baml.json.json) -> baml.glob.ScanOpt
     load_type bool?
     load_var _6
     call baml.json.from_json
-    store_var _5
     load_var j
     load_const "absolute"
     call baml.json.field
@@ -1227,7 +1239,6 @@ function baml.glob.ScanOptions.from_json(j: baml.json.json) -> baml.glob.ScanOpt
     load_type bool?
     load_var _9
     call baml.json.from_json
-    store_var _8
     load_var j
     load_const "follow_symlinks"
     call baml.json.field
@@ -1235,7 +1246,6 @@ function baml.glob.ScanOptions.from_json(j: baml.json.json) -> baml.glob.ScanOpt
     load_type bool?
     load_var _12
     call baml.json.from_json
-    store_var _11
     load_var j
     load_const "throw_error_on_broken_symlink"
     call baml.json.field
@@ -1243,7 +1253,6 @@ function baml.glob.ScanOptions.from_json(j: baml.json.json) -> baml.glob.ScanOpt
     load_type bool?
     load_var _15
     call baml.json.from_json
-    store_var _14
     load_var j
     load_const "only_files"
     call baml.json.field
@@ -1251,20 +1260,7 @@ function baml.glob.ScanOptions.from_json(j: baml.json.json) -> baml.glob.ScanOpt
     load_type bool?
     load_var _18
     call baml.json.from_json
-    store_var _17
-    alloc_instance baml.glob.ScanOptions
-    load_var _2
-    init_field .cwd
-    load_var _5
-    init_field .dot
-    load_var _8
-    init_field .absolute
-    load_var _11
-    init_field .follow_symlinks
-    load_var _14
-    init_field .throw_error_on_broken_symlink
-    load_var _17
-    init_field .only_files
+    init_instance baml.glob.ScanOptions .cwd, .dot, .absolute, .follow_symlinks, .throw_error_on_broken_symlink, .only_files
     return
 }
 
@@ -1408,6 +1404,19 @@ function baml.glob.ScanOptions.to_json(self: baml.glob.ScanOptions) -> baml.json
 function baml.glob.new(pattern: string) -> baml.glob.Glob {
 }
 
+function baml.host.HostValue.from_json(j: baml.json.json) -> baml.host.HostValue {
+    alloc_instance baml.host.HostValue
+    return
+}
+
+function baml.host.HostValue.to_json(self: null) -> baml.json.json {
+    alloc_map 0
+    return
+}
+
+function baml.host.call_host_value(handle: baml.host.HostValue, args: unknown[]) -> void {
+}
+
 function baml.http.Request.from_json(j: baml.json.json) -> baml.http.Request {
     load_var j
     load_const "method"
@@ -1416,7 +1425,6 @@ function baml.http.Request.from_json(j: baml.json.json) -> baml.http.Request {
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_var j
     load_const "url"
     call baml.json.field
@@ -1424,7 +1432,6 @@ function baml.http.Request.from_json(j: baml.json.json) -> baml.http.Request {
     load_type string
     load_var _6
     call baml.json.from_json
-    store_var _5
     load_var j
     load_const "headers"
     call baml.json.field
@@ -1432,7 +1439,6 @@ function baml.http.Request.from_json(j: baml.json.json) -> baml.http.Request {
     load_type map<string, string>
     load_var _9
     call baml.json.from_json
-    store_var _8
     load_var j
     load_const "body"
     call baml.json.field
@@ -1440,16 +1446,7 @@ function baml.http.Request.from_json(j: baml.json.json) -> baml.http.Request {
     load_type string
     load_var _12
     call baml.json.from_json
-    store_var _11
-    alloc_instance baml.http.Request
-    load_var _2
-    init_field .method
-    load_var _5
-    init_field .url
-    load_var _8
-    init_field .headers
-    load_var _11
-    init_field .body
+    init_instance baml.http.Request .method, .url, .headers, .body
     return
 }
 
@@ -1457,23 +1454,15 @@ function baml.http.Request.to_json(self: baml.http.Request) -> baml.json.json {
     load_var self
     load_field .method
     call baml.String.to_json
-    store_var _2
     load_var self
     load_field .url
     call baml.String.to_json
-    store_var _5
     load_var self
     load_field .headers
     call baml.Map.to_json
-    store_var _8
     load_var self
     load_field .body
     call baml.String.to_json
-    store_var _11
-    load_var _2
-    load_var _5
-    load_var _8
-    load_var _11
     load_const "method"
     load_const "url"
     load_const "headers"
@@ -1578,7 +1567,6 @@ function baml.json.JsonDecodeError.from_json(j: baml.json.json) -> baml.json.Jso
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_var j
     load_const "path"
     call baml.json.field
@@ -1586,12 +1574,7 @@ function baml.json.JsonDecodeError.from_json(j: baml.json.json) -> baml.json.Jso
     load_type string
     load_var _6
     call baml.json.from_json
-    store_var _5
-    alloc_instance baml.json.JsonDecodeError
-    load_var _2
-    init_field .message
-    load_var _5
-    init_field .path
+    init_instance baml.json.JsonDecodeError .message, .path
     return
 }
 
@@ -1599,13 +1582,9 @@ function baml.json.JsonDecodeError.to_json(self: baml.json.JsonDecodeError) -> b
     load_var self
     load_field .message
     call baml.String.to_json
-    store_var _2
     load_var self
     load_field .path
     call baml.String.to_json
-    store_var _5
-    load_var _2
-    load_var _5
     load_const "message"
     load_const "path"
     alloc_map 2
@@ -1620,10 +1599,7 @@ function baml.json.JsonParseError.from_json(j: baml.json.json) -> baml.json.Json
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance baml.json.JsonParseError
-    load_var _2
-    init_field .message
+    init_instance baml.json.JsonParseError .message
     return
 }
 
@@ -1644,7 +1620,6 @@ function baml.json.JsonSerializationError.from_json(j: baml.json.json) -> baml.j
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_var j
     load_const "path"
     call baml.json.field
@@ -1652,7 +1627,6 @@ function baml.json.JsonSerializationError.from_json(j: baml.json.json) -> baml.j
     load_type string
     load_var _6
     call baml.json.from_json
-    store_var _5
     load_var j
     load_const "reason"
     call baml.json.field
@@ -1660,14 +1634,7 @@ function baml.json.JsonSerializationError.from_json(j: baml.json.json) -> baml.j
     load_type string
     load_var _9
     call baml.json.from_json
-    store_var _8
-    alloc_instance baml.json.JsonSerializationError
-    load_var _2
-    init_field .message
-    load_var _5
-    init_field .path
-    load_var _8
-    init_field .reason
+    init_instance baml.json.JsonSerializationError .message, .path, .reason
     return
 }
 
@@ -1675,18 +1642,12 @@ function baml.json.JsonSerializationError.to_json(self: baml.json.JsonSerializat
     load_var self
     load_field .message
     call baml.String.to_json
-    store_var _2
     load_var self
     load_field .path
     call baml.String.to_json
-    store_var _5
     load_var self
     load_field .reason
     call baml.String.to_json
-    store_var _8
-    load_var _2
-    load_var _5
-    load_var _8
     load_const "message"
     load_const "path"
     load_const "reason"
@@ -1744,10 +1705,7 @@ function baml.llm.AnthropicOptions.from_json(j: baml.json.json) -> baml.llm.Anth
     load_type int | null
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance baml.llm.AnthropicOptions
-    load_var _2
-    init_field .max_tokens
+    init_instance baml.llm.AnthropicOptions .max_tokens
     return
 }
 
@@ -1786,7 +1744,6 @@ function baml.llm.AzureOpenAiOptions.from_json(j: baml.json.json) -> baml.llm.Az
     load_type string | null
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_var j
     load_const "deployment_id"
     call baml.json.field
@@ -1794,7 +1751,6 @@ function baml.llm.AzureOpenAiOptions.from_json(j: baml.json.json) -> baml.llm.Az
     load_type string | null
     load_var _6
     call baml.json.from_json
-    store_var _5
     load_var j
     load_const "api_version"
     call baml.json.field
@@ -1802,7 +1758,6 @@ function baml.llm.AzureOpenAiOptions.from_json(j: baml.json.json) -> baml.llm.Az
     load_type string
     load_var _9
     call baml.json.from_json
-    store_var _8
     load_var j
     load_const "max_tokens"
     call baml.json.field
@@ -1810,16 +1765,7 @@ function baml.llm.AzureOpenAiOptions.from_json(j: baml.json.json) -> baml.llm.Az
     load_type int | null
     load_var _12
     call baml.json.from_json
-    store_var _11
-    alloc_instance baml.llm.AzureOpenAiOptions
-    load_var _2
-    init_field .resource_name
-    load_var _5
-    init_field .deployment_id
-    load_var _8
-    init_field .api_version
-    load_var _11
-    init_field .max_tokens
+    init_instance baml.llm.AzureOpenAiOptions .resource_name, .deployment_id, .api_version, .max_tokens
     return
 }
 
@@ -1908,7 +1854,6 @@ function baml.llm.BedrockOptions.from_json(j: baml.json.json) -> baml.llm.Bedroc
     load_type string | null
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_var j
     load_const "endpoint_url"
     call baml.json.field
@@ -1916,7 +1861,6 @@ function baml.llm.BedrockOptions.from_json(j: baml.json.json) -> baml.llm.Bedroc
     load_type string | null
     load_var _6
     call baml.json.from_json
-    store_var _5
     load_var j
     load_const "access_key_id"
     call baml.json.field
@@ -1924,7 +1868,6 @@ function baml.llm.BedrockOptions.from_json(j: baml.json.json) -> baml.llm.Bedroc
     load_type string | null
     load_var _9
     call baml.json.from_json
-    store_var _8
     load_var j
     load_const "secret_access_key"
     call baml.json.field
@@ -1932,7 +1875,6 @@ function baml.llm.BedrockOptions.from_json(j: baml.json.json) -> baml.llm.Bedroc
     load_type string | null
     load_var _12
     call baml.json.from_json
-    store_var _11
     load_var j
     load_const "session_token"
     call baml.json.field
@@ -1940,7 +1882,6 @@ function baml.llm.BedrockOptions.from_json(j: baml.json.json) -> baml.llm.Bedroc
     load_type string | null
     load_var _15
     call baml.json.from_json
-    store_var _14
     load_var j
     load_const "profile"
     call baml.json.field
@@ -1948,7 +1889,6 @@ function baml.llm.BedrockOptions.from_json(j: baml.json.json) -> baml.llm.Bedroc
     load_type string | null
     load_var _18
     call baml.json.from_json
-    store_var _17
     load_var j
     load_const "stop_sequences"
     call baml.json.field
@@ -1956,7 +1896,6 @@ function baml.llm.BedrockOptions.from_json(j: baml.json.json) -> baml.llm.Bedroc
     load_type string[] | null
     load_var _21
     call baml.json.from_json
-    store_var _20
     load_var j
     load_const "max_tokens"
     call baml.json.field
@@ -1964,7 +1903,6 @@ function baml.llm.BedrockOptions.from_json(j: baml.json.json) -> baml.llm.Bedroc
     load_type int | null
     load_var _24
     call baml.json.from_json
-    store_var _23
     load_var j
     load_const "temperature"
     call baml.json.field
@@ -1972,7 +1910,6 @@ function baml.llm.BedrockOptions.from_json(j: baml.json.json) -> baml.llm.Bedroc
     load_type float | null
     load_var _27
     call baml.json.from_json
-    store_var _26
     load_var j
     load_const "top_p"
     call baml.json.field
@@ -1980,28 +1917,7 @@ function baml.llm.BedrockOptions.from_json(j: baml.json.json) -> baml.llm.Bedroc
     load_type float | null
     load_var _30
     call baml.json.from_json
-    store_var _29
-    alloc_instance baml.llm.BedrockOptions
-    load_var _2
-    init_field .region
-    load_var _5
-    init_field .endpoint_url
-    load_var _8
-    init_field .access_key_id
-    load_var _11
-    init_field .secret_access_key
-    load_var _14
-    init_field .session_token
-    load_var _17
-    init_field .profile
-    load_var _20
-    init_field .stop_sequences
-    load_var _23
-    init_field .max_tokens
-    load_var _26
-    init_field .temperature
-    load_var _29
-    init_field .top_p
+    init_instance baml.llm.BedrockOptions .region, .endpoint_url, .access_key_id, .secret_access_key, .session_token, .profile, .stop_sequences, .max_tokens, .temperature, .top_p
     return
 }
 
@@ -2248,25 +2164,20 @@ function baml.llm.Client.__make_stream(self: baml.llm.Client, sse: baml.http.Sse
     load_var stream_return_type
     sys_op baml.llm.StreamCache.new
     store_var cache
+    load_var primitive
+    load_var acc
+    load_var sse
+    load_var cache
     load_type #0
     load_type #1
-    alloc_instance<2> baml.llm.Stream
-    load_var primitive
-    init_field ._client
-    load_var acc
-    init_field ._acc
-    load_var sse
-    init_field ._sse
-    load_var cache
-    init_field ._cache
+    init_instance<2> baml.llm.Stream ._client, ._acc, ._sse, ._cache
     return
 }
 
 function baml.llm.Client.build_attempt(self: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
     load_var self
-    alloc_instance baml.llm.PlannerState
     alloc_array 0
-    init_field .rr_client_names
+    init_instance baml.llm.PlannerState .rr_client_names
     call baml.llm.Client.build_attempt_with_state
     return
 }
@@ -2390,11 +2301,9 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
     load_var self
     call baml.llm.Client.to_primitive_client
     store_var primitive
-    alloc_instance baml.llm.OrchestrationStep
     load_var primitive
-    init_field .primitive_client
     load_const 0
-    init_field .delay_ms
+    init_instance baml.llm.OrchestrationStep .primitive_client, .delay_ms
     alloc_array 1
 
   L12:
@@ -2403,9 +2312,8 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
 
 function baml.llm.Client.build_plan(self: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
     load_var self
-    alloc_instance baml.llm.PlannerState
     alloc_array 0
-    init_field .rr_client_names
+    init_instance baml.llm.PlannerState .rr_client_names
     call baml.llm.Client.build_plan_with_state
     return
 }
@@ -2413,8 +2321,7 @@ function baml.llm.Client.build_plan(self: baml.llm.Client) -> baml.llm.Orchestra
 function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] {
     load_var self
     load_field .retry
-    store_var _3
-    load_var _3
+    store_var_load_var _3
     is_type baml.llm.RetryPolicy
     pop_jump_if_false L0
     jump L1
@@ -2466,8 +2373,7 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
     load_var r
     load_field .multiplier
     mul_float
-    store_var next
-    load_var next
+    store_var_load_var next
     load_var r
     load_field .max_delay_ms
     load_const 0.0
@@ -2513,14 +2419,12 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
 
   L11:
     load_var result
-    alloc_instance baml.llm.OrchestrationStep
     load_var _26
     load_var __for_idx
     load_array_element
     load_field .primitive_client
-    init_field .primitive_client
     load_var delay
-    init_field .delay_ms
+    init_instance baml.llm.OrchestrationStep .primitive_client, .delay_ms
     call baml.Array.push
     pop 1
     load_var __for_idx
@@ -2563,7 +2467,7 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
     call baml.Array.length
     pop 1
     load_var self
-    load_var self
+    copy 0
     load_field .counter
     load_const 1
     bin_op +
@@ -2574,9 +2478,8 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
     jump L16
 
   L3:
-    alloc_instance baml.errors.DevOther
     load_const "RoundRobin client has no sub-clients"
-    init_field .message
+    init_instance baml.errors.DevOther .message
     throw
 
   L4:
@@ -2595,9 +2498,8 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
     jump L7
 
   L6:
-    alloc_instance baml.errors.DevOther
     load_const "All orchestration steps failed"
-    init_field .message
+    init_instance baml.errors.DevOther .message
     throw
 
   L7:
@@ -2669,11 +2571,10 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
     pop 1
 
   L12:
-    alloc_instance baml.errors.DevOther
     load_const "HTTP request failed: "
     load_var error_body
     bin_op +
-    init_field .message
+    init_instance baml.errors.DevOther .message
     throw
 
   L13:
@@ -2739,7 +2640,7 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
     call baml.Array.length
     pop 1
     load_var self
-    load_var self
+    copy 0
     load_field .counter
     load_const 1
     bin_op +
@@ -2750,9 +2651,8 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
     jump L11
 
   L3:
-    alloc_instance baml.errors.DevOther
     load_const "RoundRobin client has no sub-clients"
-    init_field .message
+    init_instance baml.errors.DevOther .message
     throw
 
   L4:
@@ -2771,9 +2671,8 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
     jump L7
 
   L6:
-    alloc_instance baml.errors.DevOther
     load_const "All orchestration steps failed"
-    init_field .message
+    init_instance baml.errors.DevOther .message
     throw
 
   L7:
@@ -2837,8 +2736,7 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
 function baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> void {
     load_var self
     load_field .retry
-    store_var _4
-    load_var _4
+    store_var_load_var _4
     is_type baml.llm.RetryPolicy
     pop_jump_if_false L0
     jump L1
@@ -2853,8 +2751,7 @@ function baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.ll
 
   L1:
     load_var _4
-    store_var r
-    load_var r
+    store_var_load_var r
     load_field .initial_delay_ms
     load_const 0.0
     bin_op +
@@ -2871,9 +2768,8 @@ function baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.ll
     jump L4
 
   L3:
-    alloc_instance baml.errors.DevOther
     load_const "All orchestration steps failed"
-    init_field .message
+    init_instance baml.errors.DevOther .message
     throw
 
   L4:
@@ -2890,8 +2786,7 @@ function baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.ll
     load_var r
     load_field .multiplier
     mul_float
-    store_var next
-    load_var next
+    store_var_load_var next
     load_var r
     load_field .max_delay_ms
     load_const 0.0
@@ -2943,8 +2838,7 @@ function baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.ll
 function baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> baml.llm.Stream<unknown, unknown> {
     load_var self
     load_field .retry
-    store_var _4
-    load_var _4
+    store_var_load_var _4
     is_type baml.llm.RetryPolicy
     pop_jump_if_false L0
     jump L1
@@ -2960,8 +2854,7 @@ function baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm
 
   L1:
     load_var _4
-    store_var r
-    load_var r
+    store_var_load_var r
     load_field .initial_delay_ms
     load_const 0.0
     bin_op +
@@ -2978,9 +2871,8 @@ function baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm
     jump L4
 
   L3:
-    alloc_instance baml.errors.DevOther
     load_const "All orchestration steps failed"
-    init_field .message
+    init_instance baml.errors.DevOther .message
     throw
 
   L4:
@@ -2997,8 +2889,7 @@ function baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm
     load_var r
     load_field .multiplier
     mul_float
-    store_var next
-    load_var next
+    store_var_load_var next
     load_var r
     load_field .max_delay_ms
     load_const 0.0
@@ -3056,7 +2947,6 @@ function baml.llm.Client.from_json(j: baml.json.json) -> baml.llm.Client {
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_var j
     load_const "client_type"
     call baml.json.field
@@ -3064,7 +2954,6 @@ function baml.llm.Client.from_json(j: baml.json.json) -> baml.llm.Client {
     load_type baml.llm.ClientType
     load_var _6
     call baml.json.from_json
-    store_var _5
     load_var j
     load_const "sub_clients"
     call baml.json.field
@@ -3072,7 +2961,6 @@ function baml.llm.Client.from_json(j: baml.json.json) -> baml.llm.Client {
     load_type baml.llm.Client[]
     load_var _9
     call baml.json.from_json
-    store_var _8
     load_var j
     load_const "retry"
     call baml.json.field
@@ -3080,7 +2968,6 @@ function baml.llm.Client.from_json(j: baml.json.json) -> baml.llm.Client {
     load_type baml.llm.RetryPolicy?
     load_var _12
     call baml.json.from_json
-    store_var _11
     load_var j
     load_const "counter"
     call baml.json.field
@@ -3088,18 +2975,7 @@ function baml.llm.Client.from_json(j: baml.json.json) -> baml.llm.Client {
     load_type int
     load_var _15
     call baml.json.from_json
-    store_var _14
-    alloc_instance baml.llm.Client
-    load_var _2
-    init_field .name
-    load_var _5
-    init_field .client_type
-    load_var _8
-    init_field .sub_clients
-    load_var _11
-    init_field .retry
-    load_var _14
-    init_field .counter
+    init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
     return
 }
 
@@ -3208,7 +3084,6 @@ function baml.llm.MediaUrlHandler.from_json(j: baml.json.json) -> baml.llm.Media
     load_type string | null
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_var j
     load_const "audio"
     call baml.json.field
@@ -3216,7 +3091,6 @@ function baml.llm.MediaUrlHandler.from_json(j: baml.json.json) -> baml.llm.Media
     load_type string | null
     load_var _6
     call baml.json.from_json
-    store_var _5
     load_var j
     load_const "video"
     call baml.json.field
@@ -3224,7 +3098,6 @@ function baml.llm.MediaUrlHandler.from_json(j: baml.json.json) -> baml.llm.Media
     load_type string | null
     load_var _9
     call baml.json.from_json
-    store_var _8
     load_var j
     load_const "pdf"
     call baml.json.field
@@ -3232,16 +3105,7 @@ function baml.llm.MediaUrlHandler.from_json(j: baml.json.json) -> baml.llm.Media
     load_type string | null
     load_var _12
     call baml.json.from_json
-    store_var _11
-    alloc_instance baml.llm.MediaUrlHandler
-    load_var _2
-    init_field .image
-    load_var _5
-    init_field .audio
-    load_var _8
-    init_field .video
-    load_var _11
-    init_field .pdf
+    init_instance baml.llm.MediaUrlHandler .image, .audio, .video, .pdf
     return
 }
 
@@ -3346,7 +3210,6 @@ function baml.llm.OrchestrationStep.from_json(j: baml.json.json) -> baml.llm.Orc
     load_type baml.llm.PrimitiveClient
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_var j
     load_const "delay_ms"
     call baml.json.field
@@ -3354,12 +3217,7 @@ function baml.llm.OrchestrationStep.from_json(j: baml.json.json) -> baml.llm.Orc
     load_type int
     load_var _6
     call baml.json.from_json
-    store_var _5
-    alloc_instance baml.llm.OrchestrationStep
-    load_var _2
-    init_field .primitive_client
-    load_var _5
-    init_field .delay_ms
+    init_instance baml.llm.OrchestrationStep .primitive_client, .delay_ms
     return
 }
 
@@ -3367,13 +3225,9 @@ function baml.llm.OrchestrationStep.to_json(self: baml.llm.OrchestrationStep) ->
     load_var self
     load_field .primitive_client
     call baml.llm.PrimitiveClient.to_json
-    store_var _2
     load_var self
     load_field .delay_ms
     call baml.Int.to_json
-    store_var _5
-    load_var _2
-    load_var _5
     load_const "primitive_client"
     load_const "delay_ms"
     alloc_map 2
@@ -3388,10 +3242,7 @@ function baml.llm.PlannerState.from_json(j: baml.json.json) -> baml.llm.PlannerS
     load_type string[]
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance baml.llm.PlannerState
-    load_var _2
-    init_field .rr_client_names
+    init_instance baml.llm.PlannerState .rr_client_names
     return
 }
 
@@ -3477,7 +3328,6 @@ function baml.llm.PrimitiveClient.from_json(j: baml.json.json) -> baml.llm.Primi
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_var j
     load_const "provider"
     call baml.json.field
@@ -3485,7 +3335,6 @@ function baml.llm.PrimitiveClient.from_json(j: baml.json.json) -> baml.llm.Primi
     load_type string
     load_var _6
     call baml.json.from_json
-    store_var _5
     load_var j
     load_const "options"
     call baml.json.field
@@ -3493,14 +3342,7 @@ function baml.llm.PrimitiveClient.from_json(j: baml.json.json) -> baml.llm.Primi
     load_type baml.llm.PrimitiveClientOptions
     load_var _9
     call baml.json.from_json
-    store_var _8
-    alloc_instance baml.llm.PrimitiveClient
-    load_var _2
-    init_field .name
-    load_var _5
-    init_field .provider
-    load_var _8
-    init_field .options
+    init_instance baml.llm.PrimitiveClient .name, .provider, .options
     return
 }
 
@@ -3520,18 +3362,12 @@ function baml.llm.PrimitiveClient.to_json(self: baml.llm.PrimitiveClient) -> bam
     load_var self
     load_field .name
     call baml.String.to_json
-    store_var _2
     load_var self
     load_field .provider
     call baml.String.to_json
-    store_var _5
     load_var self
     load_field .options
     call baml.llm.PrimitiveClientOptions.to_json
-    store_var _8
-    load_var _2
-    load_var _5
-    load_var _8
     load_const "name"
     load_const "provider"
     load_const "options"
@@ -3586,7 +3422,6 @@ function baml.llm.RetryPolicy.from_json(j: baml.json.json) -> baml.llm.RetryPoli
     load_type int
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_var j
     load_const "initial_delay_ms"
     call baml.json.field
@@ -3594,7 +3429,6 @@ function baml.llm.RetryPolicy.from_json(j: baml.json.json) -> baml.llm.RetryPoli
     load_type int
     load_var _6
     call baml.json.from_json
-    store_var _5
     load_var j
     load_const "multiplier"
     call baml.json.field
@@ -3602,7 +3436,6 @@ function baml.llm.RetryPolicy.from_json(j: baml.json.json) -> baml.llm.RetryPoli
     load_type float
     load_var _9
     call baml.json.from_json
-    store_var _8
     load_var j
     load_const "max_delay_ms"
     call baml.json.field
@@ -3610,16 +3443,7 @@ function baml.llm.RetryPolicy.from_json(j: baml.json.json) -> baml.llm.RetryPoli
     load_type int
     load_var _12
     call baml.json.from_json
-    store_var _11
-    alloc_instance baml.llm.RetryPolicy
-    load_var _2
-    init_field .max_retries
-    load_var _5
-    init_field .initial_delay_ms
-    load_var _8
-    init_field .multiplier
-    load_var _11
-    init_field .max_delay_ms
+    init_instance baml.llm.RetryPolicy .max_retries, .initial_delay_ms, .multiplier, .max_delay_ms
     return
 }
 
@@ -3627,23 +3451,15 @@ function baml.llm.RetryPolicy.to_json(self: baml.llm.RetryPolicy) -> baml.json.j
     load_var self
     load_field .max_retries
     call baml.Int.to_json
-    store_var _2
     load_var self
     load_field .initial_delay_ms
     call baml.Int.to_json
-    store_var _5
     load_var self
     load_field .multiplier
     call baml.Float.to_json
-    store_var _8
     load_var self
     load_field .max_delay_ms
     call baml.Int.to_json
-    store_var _11
-    load_var _2
-    load_var _5
-    load_var _8
-    load_var _11
     load_const "max_retries"
     load_const "initial_delay_ms"
     load_const "multiplier"
@@ -3712,9 +3528,9 @@ function baml.llm.Stream.final(self: baml.llm.Stream) -> unknown {
     return
 
   L4:
-    load_const null /* unknown class: root.errors.LlmClientError */
     load_const "Streaming finished without finish_reason"
-    init_field .0
+    pop 1
+    load_const null /* unknown class: root.errors.LlmClientError */
     throw
 }
 
@@ -3726,7 +3542,6 @@ function baml.llm.Stream.from_json(j: baml.json.json) -> baml.llm.Stream<unknown
     load_type baml.llm.PrimitiveClient
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_var j
     load_const "_acc"
     call baml.json.field
@@ -3734,7 +3549,6 @@ function baml.llm.Stream.from_json(j: baml.json.json) -> baml.llm.Stream<unknown
     load_type baml.llm.StreamAccumulator
     load_var _6
     call baml.json.from_json
-    store_var _5
     load_var j
     load_const "_sse"
     call baml.json.field
@@ -3742,7 +3556,6 @@ function baml.llm.Stream.from_json(j: baml.json.json) -> baml.llm.Stream<unknown
     load_type baml.http.SseStream
     load_var _9
     call baml.json.from_json
-    store_var _8
     load_var j
     load_const "_cache"
     call baml.json.field
@@ -3750,18 +3563,9 @@ function baml.llm.Stream.from_json(j: baml.json.json) -> baml.llm.Stream<unknown
     load_type baml.llm.StreamCache<#0, #1>
     load_var _12
     call baml.json.from_json
-    store_var _11
     load_type #0
     load_type #1
-    alloc_instance<2> baml.llm.Stream
-    load_var _2
-    init_field ._client
-    load_var _5
-    init_field ._acc
-    load_var _8
-    init_field ._sse
-    load_var _11
-    init_field ._cache
+    init_instance<2> baml.llm.Stream ._client, ._acc, ._sse, ._cache
     return
 }
 
@@ -3837,25 +3641,17 @@ function baml.llm.Stream.to_json(self: baml.llm.Stream) -> baml.json.json {
     load_var self
     load_field ._client
     call baml.llm.PrimitiveClient.to_json
-    store_var _2
     load_var self
     load_field ._acc
     call baml.llm.StreamAccumulator.to_json
-    store_var _5
     load_var self
     load_field ._sse
     call baml.http.SseStream.to_json
-    store_var _8
     load_type #0
     load_type #1
     load_var self
     load_field ._cache
     call baml.llm.StreamCache.to_json
-    store_var _11
-    load_var _2
-    load_var _5
-    load_var _8
-    load_var _11
     load_const "_client"
     load_const "_acc"
     load_const "_sse"
@@ -3932,7 +3728,6 @@ function baml.llm.VertexAiOptions.from_json(j: baml.json.json) -> baml.llm.Verte
     load_type string | null
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_var j
     load_const "credentials_content"
     call baml.json.field
@@ -3940,7 +3735,6 @@ function baml.llm.VertexAiOptions.from_json(j: baml.json.json) -> baml.llm.Verte
     load_type string | null
     load_var _6
     call baml.json.from_json
-    store_var _5
     load_var j
     load_const "location"
     call baml.json.field
@@ -3948,7 +3742,6 @@ function baml.llm.VertexAiOptions.from_json(j: baml.json.json) -> baml.llm.Verte
     load_type string | null
     load_var _9
     call baml.json.from_json
-    store_var _8
     load_var j
     load_const "project_id"
     call baml.json.field
@@ -3956,16 +3749,7 @@ function baml.llm.VertexAiOptions.from_json(j: baml.json.json) -> baml.llm.Verte
     load_type string | null
     load_var _12
     call baml.json.from_json
-    store_var _11
-    alloc_instance baml.llm.VertexAiOptions
-    load_var _2
-    init_field .credentials
-    load_var _5
-    init_field .credentials_content
-    load_var _8
-    init_field .location
-    load_var _11
-    init_field .project_id
+    init_instance baml.llm.VertexAiOptions .credentials, .credentials_content, .location, .project_id
     return
 }
 
@@ -4112,13 +3896,10 @@ function baml.llm.call_llm_function(client: baml.llm.Client, function_name: stri
     store_var jinja_string
     load_type #0
     load_var client
-    alloc_instance baml.llm.ExecutionContext
     load_var jinja_string
-    init_field .jinja_string
     load_var args
-    init_field .args
     load_var function_name
-    init_field .function_name
+    init_instance baml.llm.ExecutionContext .jinja_string, .args, .function_name
     load_const 0
     call baml.llm.Client.execute_oneshot
     return
@@ -4185,13 +3966,10 @@ function baml.llm.stream_llm_function(client: baml.llm.Client, function_name: st
     load_type #0
     load_type #1
     load_var client
-    alloc_instance baml.llm.ExecutionContext
     load_var jinja_string
-    init_field .jinja_string
     load_var args
-    init_field .args
     load_var function_name
-    init_field .function_name
+    init_instance baml.llm.ExecutionContext .jinja_string, .args, .function_name
     load_const 0
     call baml.llm.Client.execute_stream
     return
@@ -4401,10 +4179,7 @@ function baml.panics.AllocFailure.from_json(j: baml.json.json) -> baml.panics.Al
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance baml.panics.AllocFailure
-    load_var _2
-    init_field .message
+    init_instance baml.panics.AllocFailure .message
     return
 }
 
@@ -4425,10 +4200,7 @@ function baml.panics.AssertionFailed.from_json(j: baml.json.json) -> baml.panics
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance baml.panics.AssertionFailed
-    load_var _2
-    init_field .message
+    init_instance baml.panics.AssertionFailed .message
     return
 }
 
@@ -4449,10 +4221,7 @@ function baml.panics.Cancelled.from_json(j: baml.json.json) -> baml.panics.Cance
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance baml.panics.Cancelled
-    load_var _2
-    init_field .message
+    init_instance baml.panics.Cancelled .message
     return
 }
 
@@ -4473,10 +4242,7 @@ function baml.panics.DivisionByZero.from_json(j: baml.json.json) -> baml.panics.
     load_type int
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance baml.panics.DivisionByZero
-    load_var _2
-    init_field .dividend
+    init_instance baml.panics.DivisionByZero .dividend
     return
 }
 
@@ -4497,10 +4263,7 @@ function baml.panics.Exit.from_json(j: baml.json.json) -> baml.panics.Exit {
     load_type int
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance baml.panics.Exit
-    load_var _2
-    init_field .code
+    init_instance baml.panics.Exit .code
     return
 }
 
@@ -4521,7 +4284,6 @@ function baml.panics.HostUnavailable.from_json(j: baml.json.json) -> baml.panics
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_var j
     load_const "message"
     call baml.json.field
@@ -4529,12 +4291,7 @@ function baml.panics.HostUnavailable.from_json(j: baml.json.json) -> baml.panics
     load_type string
     load_var _6
     call baml.json.from_json
-    store_var _5
-    alloc_instance baml.panics.HostUnavailable
-    load_var _2
-    init_field .resource
-    load_var _5
-    init_field .message
+    init_instance baml.panics.HostUnavailable .resource, .message
     return
 }
 
@@ -4542,13 +4299,9 @@ function baml.panics.HostUnavailable.to_json(self: baml.panics.HostUnavailable) 
     load_var self
     load_field .resource
     call baml.String.to_json
-    store_var _2
     load_var self
     load_field .message
     call baml.String.to_json
-    store_var _5
-    load_var _2
-    load_var _5
     load_const "resource"
     load_const "message"
     alloc_map 2
@@ -4563,7 +4316,6 @@ function baml.panics.IndexOutOfBounds.from_json(j: baml.json.json) -> baml.panic
     load_type int
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_var j
     load_const "length"
     call baml.json.field
@@ -4571,12 +4323,7 @@ function baml.panics.IndexOutOfBounds.from_json(j: baml.json.json) -> baml.panic
     load_type int
     load_var _6
     call baml.json.from_json
-    store_var _5
-    alloc_instance baml.panics.IndexOutOfBounds
-    load_var _2
-    init_field .index
-    load_var _5
-    init_field .length
+    init_instance baml.panics.IndexOutOfBounds .index, .length
     return
 }
 
@@ -4584,13 +4331,9 @@ function baml.panics.IndexOutOfBounds.to_json(self: baml.panics.IndexOutOfBounds
     load_var self
     load_field .index
     call baml.Int.to_json
-    store_var _2
     load_var self
     load_field .length
     call baml.Int.to_json
-    store_var _5
-    load_var _2
-    load_var _5
     load_const "index"
     load_const "length"
     alloc_map 2
@@ -4605,10 +4348,7 @@ function baml.panics.MapKeyNotFound.from_json(j: baml.json.json) -> baml.panics.
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance baml.panics.MapKeyNotFound
-    load_var _2
-    init_field .key
+    init_instance baml.panics.MapKeyNotFound .key
     return
 }
 
@@ -4629,10 +4369,7 @@ function baml.panics.StackOverflow.from_json(j: baml.json.json) -> baml.panics.S
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance baml.panics.StackOverflow
-    load_var _2
-    init_field .message
+    init_instance baml.panics.StackOverflow .message
     return
 }
 
@@ -4653,10 +4390,7 @@ function baml.panics.Unreachable.from_json(j: baml.json.json) -> baml.panics.Unr
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance baml.panics.Unreachable
-    load_var _2
-    init_field .message
+    init_instance baml.panics.Unreachable .message
     return
 }
 
@@ -4677,10 +4411,7 @@ function baml.panics.UserPanic.from_json(j: baml.json.json) -> baml.panics.UserP
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance baml.panics.UserPanic
-    load_var _2
-    init_field .message
+    init_instance baml.panics.UserPanic .message
     return
 }
 
@@ -4721,7 +4452,6 @@ function baml.sys.ProcessOptions.from_json(j: baml.json.json) -> baml.sys.Proces
     load_type string?
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_var j
     load_const "env"
     call baml.json.field
@@ -4729,7 +4459,6 @@ function baml.sys.ProcessOptions.from_json(j: baml.json.json) -> baml.sys.Proces
     load_type map<string, string>?
     load_var _6
     call baml.json.from_json
-    store_var _5
     load_var j
     load_const "timeout_ms"
     call baml.json.field
@@ -4737,7 +4466,6 @@ function baml.sys.ProcessOptions.from_json(j: baml.json.json) -> baml.sys.Proces
     load_type int?
     load_var _9
     call baml.json.from_json
-    store_var _8
     load_var j
     load_const "stdin"
     call baml.json.field
@@ -4745,16 +4473,7 @@ function baml.sys.ProcessOptions.from_json(j: baml.json.json) -> baml.sys.Proces
     load_type string?
     load_var _12
     call baml.json.from_json
-    store_var _11
-    alloc_instance baml.sys.ProcessOptions
-    load_var _2
-    init_field .cwd
-    load_var _5
-    init_field .env
-    load_var _8
-    init_field .timeout_ms
-    load_var _11
-    init_field .stdin
+    init_instance baml.sys.ProcessOptions .cwd, .env, .timeout_ms, .stdin
     return
 }
 
@@ -4859,7 +4578,6 @@ function baml.sys.ShellOutput.from_json(j: baml.json.json) -> baml.sys.ShellOutp
     load_type uint8array
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_var j
     load_const "stderr"
     call baml.json.field
@@ -4867,7 +4585,6 @@ function baml.sys.ShellOutput.from_json(j: baml.json.json) -> baml.sys.ShellOutp
     load_type uint8array
     load_var _6
     call baml.json.from_json
-    store_var _5
     load_var j
     load_const "exit_code"
     call baml.json.field
@@ -4875,14 +4592,7 @@ function baml.sys.ShellOutput.from_json(j: baml.json.json) -> baml.sys.ShellOutp
     load_type int
     load_var _9
     call baml.json.from_json
-    store_var _8
-    alloc_instance baml.sys.ShellOutput
-    load_var _2
-    init_field .stdout
-    load_var _5
-    init_field .stderr
-    load_var _8
-    init_field .exit_code
+    init_instance baml.sys.ShellOutput .stdout, .stderr, .exit_code
     return
 }
 
@@ -4898,18 +4608,12 @@ function baml.sys.ShellOutput.to_json(self: baml.sys.ShellOutput) -> baml.json.j
     load_var self
     load_field .stdout
     call baml.Uint8Array.to_json
-    store_var _2
     load_var self
     load_field .stderr
     call baml.Uint8Array.to_json
-    store_var _5
     load_var self
     load_field .exit_code
     call baml.Int.to_json
-    store_var _8
-    load_var _2
-    load_var _5
-    load_var _8
     load_const "stdout"
     load_const "stderr"
     load_const "exit_code"

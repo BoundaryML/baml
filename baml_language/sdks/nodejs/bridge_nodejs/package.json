@@ -43,6 +43,7 @@
     "testEnvironment": "node",
     "testMatch": [
       "**/tests/**/*.test.ts"
-    ]
+    ],
+    "forceExit": true
   }
 }

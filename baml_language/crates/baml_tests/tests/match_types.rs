@@ -96,11 +96,9 @@ async fn match_typed_pattern_second_arm() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
-        alloc_instance user.Failure
         load_const "error"
-        init_field .reason
-        store_var result
-        load_var result
+        init_instance user.Failure .reason
+        store_var_load_var result
         is_type Success
         pop_jump_if_false L0
         jump L1
@@ -155,39 +153,28 @@ async fn match_typed_pattern_with_field_access() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        alloc_instance Point
-        copy 0
         load_const 10
-        store_field .x
-        copy 0
         load_const 20
-        store_field .y
-        store_var shape
-        load_var shape
-        load_const Point
-        cmp_op instanceof
+        init_instance user.Point .x, .y
+        store_var_load_var shape
+        is_type Point
         pop_jump_if_false L0
         jump L1
 
       L0:
-        load_var shape
-        load_const Circle
-        cmp_op instanceof
-        pop_jump_if_false L2
         load_var shape
         load_field .radius
         jump L2
 
       L1:
         load_var shape
-        store_var p
-        load_var p
+        store_var_load_var p
         load_field .x
         load_var p
         load_field .y
-        bin_op +
+        add_int
 
       L2:
         return
@@ -279,11 +266,9 @@ async fn match_guard_true() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
-        alloc_instance user.Score
         load_const 95
-        init_field .value
-        store_var s
-        load_var s
+        init_instance user.Score .value
+        store_var_load_var s
         is_type Score
         pop_jump_if_false L0
         load_var s
@@ -347,11 +332,9 @@ async fn match_guard_fallthrough() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
-        alloc_instance user.Score
         load_const 75
-        init_field .value
-        store_var s
-        load_var s
+        init_instance user.Score .value
+        store_var_load_var s
         is_type Score
         pop_jump_if_false L0
         load_var s
@@ -415,11 +398,9 @@ async fn match_guard_all_fail() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
-        alloc_instance user.Score
         load_const 50
-        init_field .value
-        store_var s
-        load_var s
+        init_instance user.Score .value
+        store_var_load_var s
         is_type Score
         pop_jump_if_false L0
         load_var s
@@ -886,9 +867,8 @@ async fn match_guard_on_typed_pattern_field_access() {
     }
 
     function main() -> string {
-        alloc_instance user.Success
         load_const "hello"
-        init_field .data
+        init_instance user.Success .data
         call user.classify
         return
     }
@@ -955,9 +935,8 @@ async fn match_guard_on_typed_pattern_field_access_fails() {
     }
 
     function main() -> string {
-        alloc_instance user.Success
         load_const ""
-        init_field .data
+        init_instance user.Success .data
         call user.classify
         return
     }
@@ -1384,9 +1363,8 @@ async fn match_class_types_exhaustive_first() {
     }
 
     function main() -> string {
-        alloc_instance user.Cat
         load_const "Whiskers"
-        init_field .name
+        init_instance user.Cat .name
         call user.classify
         return
     }
@@ -1457,9 +1435,8 @@ async fn match_class_types_exhaustive_last() {
     }
 
     function main() -> string {
-        alloc_instance user.Bird
         load_const "Tweety"
-        init_field .name
+        init_instance user.Bird .name
         call user.classify
         return
     }
@@ -1527,9 +1504,8 @@ async fn match_class_types_non_exhaustive_wildcard() {
     }
 
     function main() -> string {
-        alloc_instance user.Bird
         load_const "Tweety"
-        init_field .name
+        init_instance user.Bird .name
         call user.classify
         return
     }
@@ -1597,9 +1573,8 @@ async fn match_class_types_non_exhaustive_matched() {
     }
 
     function main() -> string {
-        alloc_instance user.Dog
         load_const "Rex"
-        init_field .name
+        init_instance user.Dog .name
         call user.classify
         return
     }
@@ -1740,9 +1715,8 @@ async fn match_multiple_typed_patterns_with_guards() {
     }
 
     function main() -> string {
-        alloc_instance user.Success
         load_const 301
-        init_field .code
+        init_instance user.Success .code
         load_const false
         call user.classify
         return
@@ -1829,9 +1803,8 @@ async fn match_class_type_tag_jump_table() {
     }
 
     function main() -> string {
-        alloc_instance user.Dog
         load_const "Rex"
-        init_field .name
+        init_instance user.Dog .name
         call user.describe
         return
     }
@@ -1882,9 +1855,8 @@ async fn match_class_type_is_type_chain() {
     }
 
     function main() -> string {
-        alloc_instance user.Cat
         load_const "Whiskers"
-        init_field .name
+        init_instance user.Cat .name
         call user.describe
         return
     }
@@ -1947,9 +1919,8 @@ async fn match_mixed_class_primitive_type_tag_switch() {
     }
 
     function main() -> string {
-        alloc_instance user.MyClass
         load_const 42
-        init_field .value
+        init_instance user.MyClass .value
         call user.classify
         return
     }

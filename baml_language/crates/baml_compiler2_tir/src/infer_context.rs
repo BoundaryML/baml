@@ -134,6 +134,9 @@ pub enum TirTypeError {
     RefutablePatternInLet {
         context: crate::builder::IrrefutableContextKind,
     },
+    /// An `if let` pattern that covers every value of the scrutinee — the
+    /// `else` branch is unreachable. Suggests using a plain `let` instead.
+    IrrefutablePatternInIfLet,
     /// Catch binding cannot be typed as `any` or `unknown`.
     InvalidCatchBindingType { type_name: String },
     /// Inferred escaping throws are not covered by the declared throws contract.
@@ -439,6 +442,10 @@ impl fmt::Display for TirTypeError {
                 f,
                 "refutable pattern in {} binding; refutable patterns belong in `match`",
                 context.as_str()
+            ),
+            TirTypeError::IrrefutablePatternInIfLet => write!(
+                f,
+                "irrefutable `if let` pattern; the `else` branch is unreachable — use a plain `let` binding instead"
             ),
             TirTypeError::InvalidCatchBindingType { type_name } => write!(
                 f,

@@ -33,8 +33,7 @@ async fn watch_primitive() {
         load_const null
         watch value
         load_const 1
-        store_var value
-        load_var value
+        store_var_load_var value
         unwatch value
         return
     }
@@ -98,11 +97,9 @@ async fn watch_class_destructure_initializes_and_unwatches_binding() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
-        alloc_instance user.Point
         load_const 1
-        init_field .x
         load_const 2
-        init_field .y
+        init_instance user.Point .x, .y
         load_field .x
         store_var x
         load_const "x"
@@ -142,8 +139,7 @@ async fn watch_default_filter() {
         load_const 0
         store_var value
         load_const 6
-        store_var value
-        load_var value
+        store_var_load_var value
         unwatch value
         return
     }
@@ -271,11 +267,9 @@ async fn watch_alias() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
-        alloc_instance user.Point
         load_const 0
-        init_field .x
         load_const 0
-        init_field .y
+        init_instance user.Point .x, .y
         store_var point
         load_const "point"
         load_const null
@@ -313,11 +307,9 @@ async fn watch_alias_nested_scope() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
-        alloc_instance user.Point
         load_const 0
-        init_field .x
         load_const 0
-        init_field .y
+        init_instance user.Point .x, .y
         store_var point
         load_const "point"
         load_const null
@@ -361,11 +353,9 @@ async fn watch_scope_exit() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
-        alloc_instance user.Point
         load_const 0
-        init_field .x
         load_const 0
-        init_field .y
+        init_instance user.Point .x, .y
         store_var point
         load_const "point"
         load_const null
@@ -608,8 +598,7 @@ async fn watch_early_return_unwatches() {
 
       L0:
         load_const 99
-        store_var x
-        load_var x
+        store_var_load_var x
         unwatch x
         jump L2
 
@@ -1130,8 +1119,7 @@ async fn watch_match_arm_fallthrough_unwatches() {
         load_const null
         watch x
         load_const 5
-        store_var x
-        load_var x
+        store_var_load_var x
         store_var result
         unwatch x
 
@@ -1217,8 +1205,7 @@ async fn watch_switch_arm_fallthrough_unwatches() {
         load_const null
         watch x
         load_const 5
-        store_var x
-        load_var x
+        store_var_load_var x
         store_var result
         unwatch x
         jump L5
@@ -1287,8 +1274,7 @@ async fn watch_catch_arm_fallthrough_unwatches() {
         load_const null
         watch x
         load_const 5
-        store_var x
-        load_var x
+        store_var_load_var x
         store_var result
         unwatch x
 
@@ -1345,11 +1331,9 @@ async fn watch_function_call_modifications() {
     }
 
     function main() -> int {
-        alloc_instance user.Point
         load_const 0
-        init_field .x
         load_const 0
-        init_field .y
+        init_instance user.Point .x, .y
         store_var point
         load_const "point"
         load_const null
@@ -1397,40 +1381,26 @@ async fn watch_nested_object_added() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
-        alloc_instance user.Vec2D
-        alloc_instance user.Point
-        alloc_instance user.Value
         load_const 0
-        init_field .value
-        init_field .x
-        alloc_instance user.Value
+        init_instance user.Value .value
         load_const 0
-        init_field .value
-        init_field .y
-        init_field .p
-        alloc_instance user.Point
-        alloc_instance user.Value
+        init_instance user.Value .value
+        init_instance user.Point .x, .y
         load_const 0
-        init_field .value
-        init_field .x
-        alloc_instance user.Value
+        init_instance user.Value .value
         load_const 0
-        init_field .value
-        init_field .y
-        init_field .q
+        init_instance user.Value .value
+        init_instance user.Point .x, .y
+        init_instance user.Vec2D .p, .q
         store_var vec
         load_const "vec"
         load_const null
         watch vec
-        alloc_instance user.Point
-        alloc_instance user.Value
         load_const 1
-        init_field .value
-        init_field .x
-        alloc_instance user.Value
+        init_instance user.Value .value
         load_const 1
-        init_field .value
-        init_field .y
+        init_instance user.Value .value
+        init_instance user.Point .x, .y
         store_var p
         load_var vec
         load_var p
@@ -1477,27 +1447,17 @@ async fn watch_nested_object_removed() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
-        alloc_instance user.Vec2D
-        alloc_instance user.Point
-        alloc_instance user.Value
         load_const 0
-        init_field .value
-        init_field .x
-        alloc_instance user.Value
+        init_instance user.Value .value
         load_const 0
-        init_field .value
-        init_field .y
-        init_field .p
-        alloc_instance user.Point
-        alloc_instance user.Value
+        init_instance user.Value .value
+        init_instance user.Point .x, .y
         load_const 0
-        init_field .value
-        init_field .x
-        alloc_instance user.Value
+        init_instance user.Value .value
         load_const 0
-        init_field .value
-        init_field .y
-        init_field .q
+        init_instance user.Value .value
+        init_instance user.Point .x, .y
+        init_instance user.Vec2D .p, .q
         store_var vec
         load_const "vec"
         load_const null
@@ -1506,15 +1466,11 @@ async fn watch_nested_object_removed() {
         load_field .p
         store_var p
         load_var vec
-        alloc_instance user.Point
-        alloc_instance user.Value
         load_const 1
-        init_field .value
-        init_field .x
-        alloc_instance user.Value
+        init_instance user.Value .value
         load_const 1
-        init_field .value
-        init_field .y
+        init_instance user.Value .value
+        init_instance user.Point .x, .y
         store_field .p
         load_var p
         load_field .x
@@ -1574,32 +1530,24 @@ async fn watch_cyclic_graph() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
-        alloc_instance user.Vertex
         alloc_array 0
-        init_field .edges
         load_const 1
-        init_field .value
+        init_instance user.Vertex .edges, .value
         store_var v1
-        alloc_instance user.Vertex
         alloc_array 0
-        init_field .edges
         load_const 2
-        init_field .value
+        init_instance user.Vertex .edges, .value
         store_var v2
         load_const "v2"
         load_const null
         watch v2
-        alloc_instance user.Vertex
         alloc_array 0
-        init_field .edges
         load_const 3
-        init_field .value
+        init_instance user.Vertex .edges, .value
         store_var v3
-        alloc_instance user.Vertex
         alloc_array 0
-        init_field .edges
         load_const 4
-        init_field .value
+        init_instance user.Vertex .edges, .value
         store_var v4
         load_const "v4"
         load_const null

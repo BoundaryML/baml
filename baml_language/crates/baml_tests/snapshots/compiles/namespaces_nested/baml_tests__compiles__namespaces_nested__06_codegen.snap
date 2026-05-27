@@ -10,10 +10,7 @@ function user.AppConfig.from_json(j: baml.json.json) -> AppConfig {
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance user.AppConfig
-    load_var _2
-    init_field .api_key
+    init_instance user.AppConfig .api_key
     return
 }
 
@@ -27,11 +24,9 @@ function user.AppConfig.to_json(self: AppConfig) -> baml.json.json {
 }
 
 function user.CallOpenAI(cfg: AppConfig) -> llm.openai.OpenAIResponse {
-    alloc_instance user.llm.openai.OpenAIResponse
     load_const "response"
-    init_field .text
     load_const "gpt-4"
-    init_field .model
+    init_instance user.llm.openai.OpenAIResponse .text, .model
     return
 }
 
@@ -43,7 +38,6 @@ function user.llm.openai.OpenAIResponse.from_json(j: baml.json.json) -> llm.open
     load_type string
     load_var _3
     call baml.json.from_json
-    store_var _2
     load_var j
     load_const "model"
     call baml.json.field
@@ -51,12 +45,7 @@ function user.llm.openai.OpenAIResponse.from_json(j: baml.json.json) -> llm.open
     load_type string
     load_var _6
     call baml.json.from_json
-    store_var _5
-    alloc_instance user.llm.openai.OpenAIResponse
-    load_var _2
-    init_field .text
-    load_var _5
-    init_field .model
+    init_instance user.llm.openai.OpenAIResponse .text, .model
     return
 }
 
@@ -64,13 +53,9 @@ function user.llm.openai.OpenAIResponse.to_json(self: llm.openai.OpenAIResponse)
     load_var self
     load_field .text
     call baml.String.to_json
-    store_var _2
     load_var self
     load_field .model
     call baml.String.to_json
-    store_var _5
-    load_var _2
-    load_var _5
     load_const "text"
     load_const "model"
     alloc_map 2

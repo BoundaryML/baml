@@ -122,5 +122,9 @@ pub(crate) fn external_value_to_jinja(
         BexExternalValue::FunctionRef { .. } => Err(RenderPromptError::ConversionError {
             reason: "FunctionRef should not be passed to Jinja templates".to_string(),
         }),
+
+        BexExternalValue::HostValue(_) => Err(RenderPromptError::ConversionError {
+            reason: "HostValue should not be passed to Jinja templates".to_string(),
+        }),
     }
 }

@@ -26,6 +26,8 @@ __all__ = [
     "get_runtime",
     "get_version",
     "put_pyhandle_into_table",
+    "register_host_callable",
+    "release_host_callable",
     "take_pyhandle_from_table",
 ]
 
@@ -160,7 +162,7 @@ class BamlRuntime:
     The main BAML runtime, wrapping a `dyn Bex` instance.
     """
     @staticmethod
-    def initialize_runtime(root_path: builtins.str, files: typing.Mapping[builtins.str, builtins.str], *, sdk_root: typing.Optional[builtins.str] = None) -> BamlRuntime:
+    def initialize_runtime(root_path: builtins.str, files: typing.Mapping[builtins.str, builtins.str]) -> BamlRuntime:
         r"""
         Initialize the process-global runtime from in-memory BAML source files.
         
@@ -171,8 +173,6 @@ class BamlRuntime:
         # Arguments
         * `root_path` - Root path for BAML files
         * `files` - Map of filename to file content
-        * `sdk_root` - Generated SDK root package name, accepted for
-          compatibility with older generated SDKs.
         """
     def call_function(self, function_name: str, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None, collectors: typing.Optional[typing.Sequence["Collector"]] = None, abort_controller: typing.Optional["AbortController"] = None) -> typing.Any:
         r"""
@@ -449,6 +449,29 @@ def put_pyhandle_into_table(pyhandle: BamlPyHandle) -> tuple[builtins.int, built
     `pyhandle.handle_key`, return `(new_key, handle_type)`. The original
     `BamlPyHandle` keeps its key and stays usable — Python may pass the
     same handle to multiple calls.
+    """
+
+def register_host_callable(callable: typing.Any) -> builtins.int:
+    r"""
+    Insert a Python callable into the registry and return its key.
+
+    Exposed to Python as `baml_py.register_host_callable(callable) -> int`.
+    Called from the inbound encoder in `baml_core.proto` whenever a Python
+    callable appears as a kwarg.
+    """
+
+def release_host_callable(host_value_key: builtins.int) -> None:
+    r"""
+    Release a host callable the inbound encoder registered but never handed to
+    the engine — the encode-error rollback path.
+
+    Exposed to Python as `baml_py.release_host_callable(key)`. When
+    `encode_call_args` registers a callable for an early kwarg and then a
+    later kwarg fails to encode, the `CallFunctionArgs` is never sent, so the
+    engine never decodes — and so never releases — that key. Without this the
+    registry entry (holding a strong ref to the user callable) would leak for
+    the life of the process. The encoder calls this for every key it
+    registered during a failed encode.
     """
 
 def take_pyhandle_from_table(key: builtins.int, handle_type: builtins.int) -> BamlPyHandle:

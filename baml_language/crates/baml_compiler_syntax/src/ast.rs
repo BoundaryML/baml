@@ -2639,6 +2639,7 @@ impl LetStmt {
                     | SyntaxKind::OPTIONAL_INDEX_EXPR
                     | SyntaxKind::OPTIONAL_CALL_EXPR
                     | SyntaxKind::IF_EXPR
+                    | SyntaxKind::IF_LET_EXPR
                     | SyntaxKind::MATCH_EXPR
                     | SyntaxKind::CATCH_EXPR
                     | SyntaxKind::THROW_EXPR
@@ -2817,6 +2818,7 @@ impl BlockExpr {
                         | SyntaxKind::UNARY_EXPR
                         | SyntaxKind::CALL_EXPR
                         | SyntaxKind::IF_EXPR
+                        | SyntaxKind::IF_LET_EXPR
                         | SyntaxKind::MATCH_EXPR
                         | SyntaxKind::CATCH_EXPR
                         | SyntaxKind::THROW_EXPR

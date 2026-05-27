@@ -272,7 +272,7 @@ pub type ObjectPool = Pool<Object, ObjectKind>;
 /// The frozen globals pool shared by every post-`$init` VM.
 ///
 /// Wraps an `Arc<UnsafeCell<Box<[Value]>>>` so every VM holds a cheap
-/// refcounted view, and so the GC can rewrite `Value::Object(HeapPtr)`
+/// refcounted view, and so the GC can rewrite `Value::object(HeapPtr)`
 /// entries in place after an object move (via `RootHaver::forward_roots`)
 /// without re-broadcasting a new `Arc` to every VM.
 ///
@@ -280,7 +280,7 @@ pub type ObjectPool = Pool<Object, ObjectKind>;
 ///
 /// Pre-fix, the engine stored `globals: Arc<[Value]>`. The frozen `Arc<[Value]>`
 /// was *not* registered with [`HeapPermitManager`](crate)
-/// (it isn't a `RootHaver`), so any `Value::Object(HeapPtr)` populated during
+/// (it isn't a `RootHaver`), so any `Value::object(HeapPtr)` populated during
 /// `$init` (e.g. a top-level `let` bound to a heap-allocated literal) was
 /// invisible to GC — the object could be reclaimed and the stale pointer left
 /// in the globals pool. `SharedGlobals` fixes this: the engine wraps the
@@ -423,8 +423,8 @@ impl RootHaver for SharedGlobals {
         // reader is observing the slice concurrently.
         let slice = unsafe { &*self.inner.values.get() };
         for value in slice {
-            if let Value::Object(ptr) = value {
-                roots.push(*ptr);
+            if let Some(ptr) = value.as_object_ptr() {
+                roots.push(ptr);
             }
         }
     }
@@ -435,10 +435,10 @@ impl RootHaver for SharedGlobals {
         // `SharedGlobals` permit-cell value on this thread.
         let slice = unsafe { &mut *self.inner.values.get() };
         for value in slice.iter_mut() {
-            if let Value::Object(ptr) = value
-                && let Some(&new) = roots.get(ptr)
+            if let Some(ptr) = value.as_object_ptr()
+                && let Some(&new) = roots.get(&ptr)
             {
-                *ptr = new;
+                *value = Value::object(new);
             }
         }
     }
@@ -640,12 +640,14 @@ mod shared_globals_tests {
     fn collect_roots_returns_only_object_values() {
         let p1 = fake_ptr(0x1000);
         let p2 = fake_ptr(0x2000);
+        // Float is now Object-boxed; substitute another non-object scalar (Int)
+        // to keep the test's intent ("non-Object values are NOT collected as roots").
         let globals = SharedGlobals::from_vec(vec![
-            Value::Int(1),
-            Value::Object(p1),
-            Value::Float(1.234),
-            Value::Object(p2),
-            Value::Null,
+            Value::int(1),
+            Value::object(p1),
+            Value::int(99),
+            Value::object(p2),
+            Value::NULL,
         ]);
 
         let mut roots = Vec::new();
@@ -667,10 +669,10 @@ mod shared_globals_tests {
         let stable = fake_ptr(0x3000);
 
         let mut globals = SharedGlobals::from_vec(vec![
-            Value::Object(old1),
-            Value::Int(42),
-            Value::Object(old2),
-            Value::Object(stable),
+            Value::object(old1),
+            Value::int(42),
+            Value::object(old2),
+            Value::object(stable),
         ]);
 
         let mut forwarding = HashMap::new();
@@ -686,10 +688,10 @@ mod shared_globals_tests {
         #[allow(unsafe_code, reason = "test mock proof")]
         let proof = unsafe { PermitProof::new() };
         let slice = globals.as_slice(proof);
-        assert_eq!(slice[0], Value::Object(new1));
-        assert_eq!(slice[1], Value::Int(42));
-        assert_eq!(slice[2], Value::Object(new2));
-        assert_eq!(slice[3], Value::Object(stable));
+        assert_eq!(slice[0], Value::object(new1));
+        assert_eq!(slice[1], Value::int(42));
+        assert_eq!(slice[2], Value::object(new2));
+        assert_eq!(slice[3], Value::object(stable));
     }
 
     #[test]
@@ -700,7 +702,7 @@ mod shared_globals_tests {
         // observes a `forward_roots` mutation made through another clone.
         let old = fake_ptr(0x1000);
         let new = fake_ptr(0x9000);
-        let original = SharedGlobals::from_vec(vec![Value::Object(old)]);
+        let original = SharedGlobals::from_vec(vec![Value::object(old)]);
         let mut held_by_holder = original.clone();
 
         let mut forwarding = HashMap::new();
@@ -712,6 +714,6 @@ mod shared_globals_tests {
         #[allow(unsafe_code, reason = "test mock proof")]
         let proof = unsafe { PermitProof::new() };
         let v = original.get(proof, GlobalIndex::from_raw(0));
-        assert_eq!(v, Value::Object(new));
+        assert_eq!(v, Value::object(new));
     }
 }

@@ -13,10 +13,10 @@ impl BamlClassTypeValue for PackageBamlImpl {
     /// `map<string, V>` until generic-K interfaces enable a real
     /// `map<type, V>`.
     fn to_string(vm: &BexVm, self_value: &Value) -> String {
-        let Value::Object(ptr) = self_value else {
+        let Some(ptr) = self_value.as_object_ptr() else {
             return "<type: ?>".to_string();
         };
-        match vm.get_object(*ptr) {
+        match vm.get_object(ptr) {
             Object::Type(ty) => ty.to_string(),
             _ => "<type: ?>".to_string(),
         }
@@ -66,7 +66,7 @@ impl BamlClassTypeValue for PackageBamlImpl {
             .into_iter()
             .map(|name| {
                 let ty = baml_type::Ty::Class(name, Vec::new(), baml_type::TyAttr::default());
-                Value::Object(vm.tlab.alloc(Object::Type(Box::new(ty))))
+                Value::object(vm.tlab.alloc(Object::Type(Box::new(ty))))
             })
             .collect()
     }
@@ -78,10 +78,8 @@ impl BamlClassTypeValue for PackageBamlImpl {
 /// `baml_compiler2_mir/src/lower.rs`). Returns `None` for primitive types,
 /// containers, and anything else without a stable name.
 fn ty_name(vm: &BexVm, value: &Value) -> Option<baml_type::TypeName> {
-    let Value::Object(ptr) = value else {
-        return None;
-    };
-    let Object::Type(ty) = vm.get_object(*ptr) else {
+    let ptr = value.as_object_ptr()?;
+    let Object::Type(ty) = vm.get_object(ptr) else {
         return None;
     };
     match ty.as_ref() {
