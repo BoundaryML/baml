@@ -245,6 +245,10 @@ fn format_internal_error(err: &VmInternalError, trace: &[StackFrame]) -> String 
 /// ```
 ///
 /// Returns an empty string when `frames` is empty.
+///
+/// The per-frame format is intentionally mirrored by `bridge_ctypes`'s
+/// `format_traceback_lines` (the per-frame wire form for the host); keep the
+/// two in sync.
 pub fn format_traceback<'a>(frames: impl Iterator<Item = (&'a str, usize, &'a str)>) -> String {
     use std::fmt::Write;
     let mut out = String::new();
@@ -255,21 +259,4 @@ pub fn format_traceback<'a>(frames: impl Iterator<Item = (&'a str, usize, &'a st
         writeln!(out, "  File \"{file}\", line {line}, in {function_name}").unwrap();
     }
     out
-}
-
-/// Render a traceback as one string per frame, most-recent-call-last, for
-/// carrying structured onto the wire (`repeated string trace`). Each line
-/// uses the same per-frame format as [`format_traceback`] —
-/// `File "<file>", line N, in <function_name>` — but without the
-/// `Traceback (most recent call last):` header and without `\n`-joining, so
-/// the host can map each frame 1:1 onto a synthesized Python traceback frame
-/// (see 31g-phase6). Returns an empty `Vec` when `frames` is empty.
-pub fn format_traceback_lines<'a>(
-    frames: impl Iterator<Item = (&'a str, usize, &'a str)>,
-) -> Vec<String> {
-    frames
-        .map(|(file, line, function_name)| {
-            format!("File \"{file}\", line {line}, in {function_name}")
-        })
-        .collect()
 }

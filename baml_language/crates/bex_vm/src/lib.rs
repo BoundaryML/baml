@@ -18,7 +18,7 @@ pub mod types;
 pub mod vm;
 pub mod watch;
 
-pub use errors::{StackFrame, VmPanic, format_traceback, format_traceback_lines};
+pub use errors::{StackFrame, VmPanic, format_traceback};
 pub use indexable::EvalStack;
 pub use package_baml::NativeFunction;
 pub use vm::{

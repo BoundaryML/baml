@@ -97,7 +97,11 @@ fn sdk_panic_arm(
 /// Encode a synthesized `baml.errors.*` infra value as the `error` arm
 /// (empty trace — these never entered the VM). Falls back to an `SdkPanic` if
 /// the value somehow fails to encode.
-fn error_arm(
+///
+/// Fed by host-originated failures that never reached the VM as a throw:
+/// [`RuntimeError`] direct arms and pre-call [`BridgeError`]s, each mapped to a
+/// `baml.errors.*` class by its caller.
+fn infra_error_arm(
     value: BexExternalValue,
     options: &CffiHandleTableOptions,
 ) -> baml_outbound_result::Result {
@@ -167,7 +171,7 @@ pub fn result_to_outbound(
         // 🟩 user/stdlib throws and the 🟦 `Cancelled` class-tag — the value is
         // already a `BexExternalValue`; route by namespace, carry the trace.
         Err(RuntimeError::Engine(EngineError::UnhandledThrow { value, trace })) => {
-            let lines = bex_vm::format_traceback_lines(
+            let lines = bridge_ctypes::format_traceback_lines(
                 trace
                     .iter()
                     .map(|f| (f.file_path.as_str(), f.error_line, f.function_name.as_str())),
@@ -181,16 +185,16 @@ pub fn result_to_outbound(
 
         // 🟥 `RuntimeError` direct arms → fine-grained `baml.errors.*`.
         Err(RuntimeError::Other(s)) => {
-            error_arm(message_instance(GENERIC_SDK_ERROR_CLASS, s), options)
+            infra_error_arm(message_instance(GENERIC_SDK_ERROR_CLASS, s), options)
         }
-        Err(err @ RuntimeError::InvalidArgument { .. }) => error_arm(
+        Err(err @ RuntimeError::InvalidArgument { .. }) => infra_error_arm(
             message_instance(INVALID_ARGUMENT_CLASS, err.to_string()),
             options,
         ),
         Err(RuntimeError::Compilation { message }) => {
-            error_arm(message_instance(COMPILATION_ERROR_CLASS, message), options)
+            infra_error_arm(message_instance(COMPILATION_ERROR_CLASS, message), options)
         }
-        Err(RuntimeError::Access(inner)) => error_arm(
+        Err(RuntimeError::Access(inner)) => infra_error_arm(
             message_instance(ACCESS_ERROR_CLASS, inner.to_string()),
             options,
         ),
@@ -224,7 +228,7 @@ pub fn error_to_outbound(err: BridgeError) -> Vec<u8> {
         err @ (BridgeError::NullFunctionName
         | BridgeError::InvalidFunctionName(_)
         | BridgeError::FunctionNotFound { .. }
-        | BridgeError::MissingArgument { .. }) => error_arm(
+        | BridgeError::MissingArgument { .. }) => infra_error_arm(
             message_instance(INVALID_ARGUMENT_CLASS, err.to_string()),
             &options,
         ),
@@ -232,7 +236,7 @@ pub fn error_to_outbound(err: BridgeError) -> Vec<u8> {
         // Setup / internal host failures (Ctypes, NotInitialized,
         // ProjectNotInitialized, LockPoisoned, NotImplemented, DuplicateCallId,
         // Internal) → GenericSdkError.
-        err => error_arm(
+        err => infra_error_arm(
             message_instance(GENERIC_SDK_ERROR_CLASS, err.to_string()),
             &options,
         ),

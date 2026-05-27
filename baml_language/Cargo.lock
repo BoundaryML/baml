@@ -1877,7 +1877,6 @@ dependencies = [
  "bex_events",
  "bex_events_native",
  "bex_project",
- "bex_vm",
  "bridge_ctypes",
  "cbindgen",
  "futures",
