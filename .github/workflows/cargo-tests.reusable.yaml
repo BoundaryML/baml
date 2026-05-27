@@ -37,11 +37,13 @@
 # | --------------- | --------------------- | ----------------------------------------------- |
 # | `linux-cargo`   | `cargo-test-linux`    | `sdk-tests/linux`, `cargo-doc`,                 |
 # |                 |                       | `snapshot-tests`, `ci.yaml::prek`,              |
-# |                 |                       | `ci.yaml::proto-sync`                           |
-# | `linux-wasm`    | `cargo-test-wasm`     | —                                               |
+# |                 |                       | `ci.yaml::proto-sync`, `size-gate::linux`,      |
+# |                 |                       | `size-gate::report`                             |
+# | `linux-wasm`    | `cargo-test-wasm`     | `size-gate::wasm`, `wasm-pack-tests`,           |
+# |                 |                       | `webview-tests` (browser/unit/typecheck)        |
 # | `linux-msrv`    | `cargo-build-msrv`    | —                                               |
-# | `macos-cargo`   | `cargo-test-macos`    | `sdk-tests/macos`                               |
-# | `windows-cargo` | `cargo-test-windows`  | `sdk-tests/windows`                             |
+# | `macos-cargo`   | `cargo-test-macos`    | `sdk-tests/macos`, `size-gate::macos`           |
+# | `windows-cargo` | `cargo-test-windows`  | `sdk-tests/windows`, `size-gate::windows`       |
 #
 # `cargo-test-linux` is the saver for `linux-cargo` because it builds
 # the broadest target/ tree (`cargo test --no-run --all-features`
