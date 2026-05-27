@@ -982,12 +982,15 @@ impl BexVm {
         self.get_object(ptr).as_string()
     }
 
-    /// Get uint8array from a Value.
-    pub fn as_uint8array(&self, value: &Value) -> Result<&Vec<u8>, VmInternalError> {
+    /// Get uint8array from a Value. Acquires the container's mutex.
+    pub fn as_uint8array(
+        &self,
+        value: &Value,
+    ) -> Result<bex_vm_types::Uint8ArrayReadGuard<'_>, VmInternalError> {
         let ptr = self.as_object_ptr(*value, ObjectType::Uint8Array)?;
         let obj = self.get_object(ptr);
         match obj {
-            Object::Uint8Array(bytes) => Ok(bytes),
+            Object::Uint8Array(bytes) => Ok(bytes.lock()),
             _ => Err(VmInternalError::TypeError {
                 expected: ObjectType::Uint8Array.into(),
                 got: ObjectType::of(obj).into(),
@@ -995,11 +998,14 @@ impl BexVm {
         }
     }
 
-    /// Get mutable uint8array from a Value.
-    pub fn as_uint8array_mut(&mut self, value: &Value) -> Result<&mut Vec<u8>, VmInternalError> {
+    /// Get mutable uint8array from a Value. Acquires the container's mutex.
+    pub fn as_uint8array_mut(
+        &mut self,
+        value: &Value,
+    ) -> Result<bex_vm_types::Uint8ArrayWriteGuard<'_>, VmInternalError> {
         let ptr = self.as_object_ptr(*value, ObjectType::Uint8Array)?;
-        match self.get_object_mut(ptr) {
-            Object::Uint8Array(bytes) => Ok(bytes),
+        match self.get_object(ptr) {
+            Object::Uint8Array(bytes) => Ok(bytes.lock_mut()),
             other => Err(VmInternalError::TypeError {
                 expected: ObjectType::Uint8Array.into(),
                 got: ObjectType::of(other).into(),
@@ -1293,7 +1299,7 @@ impl BexVm {
     }
 
     pub fn alloc_map(&mut self, values: IndexMap<String, Value>) -> Value {
-        Value::object(self.tlab.alloc(Object::Map(Box::new(values.into()))))
+        Value::object(self.tlab.alloc(Object::Map(values.into())))
     }
 
     pub fn alloc_string(&mut self, s: String) -> Value {
@@ -2704,8 +2710,8 @@ impl BexVm {
                     })
                 }
                 (Object::Uint8Array(_), Object::Uint8Array(_)) => {
-                    let la = self.as_uint8array(&left)?;
-                    let ra = self.as_uint8array(&right)?;
+                    let la = self.as_uint8array(&left)?.to_vec();
+                    let ra = self.as_uint8array(&right)?.to_vec();
                     Value::bool(match op {
                         CmpOp::Eq => la == ra,
                         CmpOp::NotEq => la != ra,
@@ -3369,7 +3375,7 @@ impl BexVm {
                     } else {
                         IndexMap::new()
                     };
-                    let obj_index = self.tlab.alloc(Object::Map(Box::new(map.into())));
+                    let obj_index = self.tlab.alloc(Object::Map(map.into()));
                     self.stack.push(Value::object(obj_index));
                 }
 
@@ -4399,10 +4405,12 @@ impl BexVm {
                                 }
                             }
                             Object::Uint8Array(bytes) => {
-                                if i < 0 || (i as usize) >= bytes.len() {
-                                    Err((i, bytes.len()))
+                                let guard = bytes.lock();
+                                let len = guard.len();
+                                if i < 0 || (i as usize) >= len {
+                                    Err((i, len))
                                 } else {
-                                    Ok(Value::int(i64::from(bytes[i as usize])))
+                                    Ok(Value::int(i64::from(guard[i as usize])))
                                 }
                             }
                             other => {
@@ -4482,7 +4490,7 @@ impl BexVm {
                     // inner scope before any `&mut self` ops.
                     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
                     let store_result: Result<Value, (i64, usize)> = {
-                        match self.get_object_mut(array_object_index) {
+                        match self.get_object(array_object_index) {
                             Object::Array(arr) => {
                                 let mut guard = arr.lock_mut();
                                 let len = guard.len();
@@ -4502,11 +4510,13 @@ impl BexVm {
                                     }
                                     .into());
                                 };
-                                if i < 0 || (i as usize) >= bytes.len() {
-                                    Err((i, bytes.len()))
+                                let mut guard = bytes.lock_mut();
+                                let len = guard.len();
+                                if i < 0 || (i as usize) >= len {
+                                    Err((i, len))
                                 } else {
-                                    let old = Value::int(i64::from(bytes[i as usize]));
-                                    bytes[i as usize] = byte_v;
+                                    let old = Value::int(i64::from(guard[i as usize]));
+                                    guard[i as usize] = byte_v;
                                     Ok(old)
                                 }
                             }

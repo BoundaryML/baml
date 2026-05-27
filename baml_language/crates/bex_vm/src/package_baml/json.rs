@@ -327,7 +327,7 @@ pub fn serde_to_value(vm: &mut BexVm, v: &serde_json::Value) -> Value {
                 .iter()
                 .map(|(k, v)| (k.clone(), serde_to_value(vm, v)))
                 .collect();
-            Value::object(vm.tlab.alloc(Object::Map(Box::new(entries.into()))))
+            Value::object(vm.tlab.alloc(Object::Map(entries.into())))
         }
     }
 }
@@ -798,9 +798,7 @@ fn ty_serde_to_value(
                     })?;
                     entries.insert(k.clone(), v);
                 }
-                Ok(Value::object(
-                    vm.tlab.alloc(Object::Map(Box::new(entries.into()))),
-                ))
+                Ok(Value::object(vm.tlab.alloc(Object::Map(entries.into()))))
             }
             _ => Err(raise_decode(vm, "expected object", path)),
         },
@@ -1311,7 +1309,7 @@ fn map_drive(
             Err(e) => return NativeCallResult::Error(e),
         }
     }
-    let map_val = Value::object(vm.tlab.alloc(Object::Map(Box::new(results.into()))));
+    let map_val = Value::object(vm.tlab.alloc(Object::Map(results.into())));
     NativeCallResult::Done(map_val)
 }
 

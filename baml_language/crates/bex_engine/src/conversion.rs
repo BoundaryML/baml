@@ -233,7 +233,7 @@ impl BexEngine {
             }),
             Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
             Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type((**ty).clone()))),
-            Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.clone())),
+            Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.to_vec())),
             Object::RustData(arc) => Ok(bex_external_types::try_convert_rust_data(arc)
                 .unwrap_or_else(|| BexExternalValue::RustData(arc.clone()))),
             Object::Closure(_) => Err(EngineError::CannotConvert {
@@ -1178,7 +1178,7 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
 
                     BexExternalValue::Instance { class_name, fields }
                 }
-                Object::Uint8Array(bytes) => BexExternalValue::Uint8Array(bytes.clone()),
+                Object::Uint8Array(bytes) => BexExternalValue::Uint8Array(bytes.to_vec()),
                 Object::Variant(variant) => {
                     let enum_obj = vm.get_object(variant.enm);
                     let Object::Enum(enm) = enum_obj else {

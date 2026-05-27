@@ -71,8 +71,7 @@ fn deep_copy_value_recursive(
                 }
 
                 Object::Map(map) => {
-                    let placeholder_ptr =
-                        vm.tlab.alloc(Object::Map(Box::new(IndexMap::new().into())));
+                    let placeholder_ptr = vm.tlab.alloc(Object::Map(IndexMap::new().into()));
                     copied_objects.insert(ptr, placeholder_ptr);
 
                     let snapshot = map.to_index_map();
@@ -83,7 +82,7 @@ fn deep_copy_value_recursive(
                     }
 
                     // no GC write barrier because it is all in gen0
-                    *vm.get_object_mut(placeholder_ptr) = Object::Map(Box::new(new_map.into()));
+                    *vm.get_object_mut(placeholder_ptr) = Object::Map(new_map.into());
                     placeholder_ptr
                 }
 
@@ -174,7 +173,11 @@ fn deep_equals_recursive(
             let result = match (vm.get_object(a_ptr), vm.get_object(b_ptr)) {
                 (Object::Float(a), Object::Float(b)) => (a.is_nan() && b.is_nan()) || a == b,
                 (Object::String(a), Object::String(b)) => a == b,
-                (Object::Uint8Array(a), Object::Uint8Array(b)) => a == b,
+                (Object::Uint8Array(a), Object::Uint8Array(b)) => {
+                    let a_snap = a.to_vec();
+                    let b_snap = b.to_vec();
+                    a_snap == b_snap
+                }
 
                 (Object::Array(a_values), Object::Array(b_values)) => {
                     // Snapshot under each lock before recursing; deep_equals

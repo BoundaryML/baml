@@ -286,3 +286,251 @@ async fn racing_map_set_delete_does_not_crash() {
         other => panic!("expected Int result, got {other:?}"),
     }
 }
+
+/// Racing byte-array pushes have the same structural risk as normal arrays:
+/// `Vec<u8>` can reallocate while another fiber is reading or mutating it.
+#[tokio::test]
+async fn racing_uint8array_push_does_not_crash() {
+    let program = compile_source_with_opt(
+        r#"
+        function push_n(data: uint8array, n: int) -> int {
+            let i = 0;
+            while i < n {
+                data.push(i);
+                i = i + 1;
+            };
+            data.length()
+        }
+
+        function main() -> int {
+            let data = b"";
+            let a = spawn { push_n(data, 200) };
+            let b = spawn { push_n(data, 200) };
+            let c = spawn { push_n(data, 200) };
+            let d = spawn { push_n(data, 200) };
+            (await a) + (await b) + (await c) + (await d);
+            data.length()
+        }
+        "#,
+        OptLevel::One,
+    );
+    let engine = Arc::new(
+        BexEngine::new(
+            program,
+            Arc::new(sys_ops::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("engine"),
+    );
+
+    let result = engine
+        .call_function_bound_args(
+            "user.main",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    match result {
+        Ok(BexExternalValue::Int(len)) => {
+            assert!(
+                (0..=800).contains(&len),
+                "expected uint8array length in 0..=800, got {len}"
+            );
+        }
+        other => panic!("expected Int result, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn racing_uint8array_push_pop_does_not_crash() {
+    let program = compile_source_with_opt(
+        r#"
+        function push_n(data: uint8array, n: int) -> int {
+            let i = 0;
+            while i < n {
+                data.push(i);
+                i = i + 1;
+            };
+            0
+        }
+
+        function pop_n(data: uint8array, n: int) -> int {
+            let i = 0;
+            while i < n {
+                data.pop();
+                i = i + 1;
+            };
+            0
+        }
+
+        function main() -> int {
+            let data = b"\x01\x02\x03\x04\x05";
+            let p = spawn { push_n(data, 500) };
+            let q = spawn { pop_n(data, 500) };
+            (await p) + (await q);
+            data.length()
+        }
+        "#,
+        OptLevel::One,
+    );
+    let engine = Arc::new(
+        BexEngine::new(
+            program,
+            Arc::new(sys_ops::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("engine"),
+    );
+
+    let result = engine
+        .call_function_bound_args(
+            "user.main",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    match result {
+        Ok(BexExternalValue::Int(len)) => {
+            assert!(
+                (0..=505).contains(&len),
+                "expected uint8array length in 0..=505, got {len}"
+            );
+        }
+        other => panic!("expected Int result, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn racing_uint8array_index_read_vs_grow_does_not_crash() {
+    let program = compile_source_with_opt(
+        r#"
+        function grow_n(data: uint8array, n: int) -> int {
+            let i = 0;
+            while i < n {
+                data.push(i);
+                i = i + 1;
+            };
+            0
+        }
+
+        function read_n(data: uint8array, n: int) -> int {
+            let i = 0;
+            let acc = 0;
+            while i < n {
+                let len = data.length();
+                if len > 0 {
+                    acc = acc + data[0];
+                };
+                i = i + 1;
+            };
+            acc
+        }
+
+        function main() -> int {
+            let data = b"\x01";
+            let g = spawn { grow_n(data, 1000) };
+            let r1 = spawn { read_n(data, 500) };
+            let r2 = spawn { read_n(data, 500) };
+            (await g) + (await r1) + (await r2);
+            data.length()
+        }
+        "#,
+        OptLevel::One,
+    );
+    let engine = Arc::new(
+        BexEngine::new(
+            program,
+            Arc::new(sys_ops::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("engine"),
+    );
+
+    let result = engine
+        .call_function_bound_args(
+            "user.main",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    match result {
+        Ok(BexExternalValue::Int(len)) => {
+            assert!(
+                (1..=1001).contains(&len),
+                "expected uint8array length in 1..=1001, got {len}"
+            );
+        }
+        other => panic!("expected Int result, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn racing_uint8array_sort_vs_grow_does_not_crash() {
+    let program = compile_source_with_opt(
+        r#"
+        function push_n(data: uint8array, n: int) -> int {
+            let i = 0;
+            while i < n {
+                data.push(i);
+                i = i + 1;
+            };
+            0
+        }
+
+        function sort_n(data: uint8array, n: int) -> int {
+            let i = 0;
+            while i < n {
+                data.sort();
+                i = i + 1;
+            };
+            0
+        }
+
+        function main() -> int {
+            let data = b"\x03\x02\x01";
+            let p = spawn { push_n(data, 300) };
+            let s = spawn { sort_n(data, 100) };
+            (await p) + (await s);
+            data.length()
+        }
+        "#,
+        OptLevel::One,
+    );
+    let engine = Arc::new(
+        BexEngine::new(
+            program,
+            Arc::new(sys_ops::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("engine"),
+    );
+
+    let result = engine
+        .call_function_bound_args(
+            "user.main",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    match result {
+        Ok(BexExternalValue::Int(len)) => {
+            assert!(
+                (3..=303).contains(&len),
+                "expected uint8array length in 3..=303, got {len}"
+            );
+        }
+        other => panic!("expected Int result, got {other:?}"),
+    }
+}

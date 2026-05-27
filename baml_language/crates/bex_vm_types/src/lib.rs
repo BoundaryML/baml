@@ -29,10 +29,12 @@ pub use roots::{PermitProof, RootHaver, WriteBarrier};
 pub use types::{
     ArrayContainer, ArrayReadGuard, ArrayWriteGuard, Class, ClassField, ClientBuildMeta,
     ClientBuildType, CollectorRef, ConstValue, Enum, EnumVariant, Function, FunctionKind,
-    FunctionMeta, FunctionOrigin, Future, FutureRead, HostClosure, Instance, MapContainer,
-    MapReadGuard, MapWriteGuard, MediaValue, Object, ObjectType, PanicClass, Program, PromptAst,
-    RetryPolicyMeta, SysOp, SysOpErrorCategory, SysOpPanicCategory, TestArgValue, TestCase,
-    UnscheduledFuture, Value, ValueKind, Variant, format_float, sys_op_for_path, type_tags,
+    FunctionMeta, FunctionOrigin, Future, FutureRead, HostClosure, Instance, LockedContainer,
+    LockedReadGuard, LockedWriteGuard, MapContainer, MapReadGuard, MapWriteGuard, MediaValue,
+    Object, ObjectType, PanicClass, Program, PromptAst, RetryPolicyMeta, SysOp, SysOpErrorCategory,
+    SysOpPanicCategory, TestArgValue, TestCase, Uint8ArrayContainer, Uint8ArrayReadGuard,
+    Uint8ArrayWriteGuard, UnscheduledFuture, Value, ValueKind, Variant, format_float,
+    sys_op_for_path, type_tags,
 };
 
 /// Used to check if the VM should yield early.

@@ -1975,13 +1975,13 @@ mod tests {
     fn test_gc_leaf_uint8array_preserved() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
-        let ptr = tlab.alloc(Object::Uint8Array(vec![1, 2, 3, 255]));
+        let ptr = tlab.alloc(Object::Uint8Array(vec![1, 2, 3, 255].into()));
 
         let (_, new_roots, _) = unsafe { heap.collect_garbage(&[ptr]) };
         let Object::Uint8Array(v) = (unsafe { new_roots[0].get() }) else {
             panic!("not uint8array")
         };
-        assert_eq!(v, &[1u8, 2, 3, 255]);
+        assert_eq!(v.lock().as_slice(), &[1u8, 2, 3, 255]);
     }
 
     #[test]

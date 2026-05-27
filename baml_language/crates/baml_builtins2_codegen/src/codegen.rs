@@ -919,10 +919,10 @@ fn emit_glue_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
         .as_ref()
         .is_some_and(|r| r.receiver_type.is_mut());
     let needs_owned = matches!(b.vm_usage, VmUsage::MutRef) || b.may_yield || receiver_is_mut_self;
-    // Array/Map extractions return read/write guards that borrow `vm`. If
+    // Container extractions return read/write guards that borrow `vm`. If
     // the glue function's result conversion needs `&mut vm` (alloc_string /
     // alloc_array / alloc_map / alloc_uint8array), the guard's borrow would
-    // conflict — so clone the Array/Map up front in those cases. This is a
+    // conflict — so clone the container up front in those cases. This is a
     // separate flag from `needs_owned` because it must NOT propagate to
     // other extraction paths (the media-class path uses `needs_owned` for
     // its own reasons and switching it on here would break the receiver
@@ -1153,11 +1153,11 @@ fn emit_mut_receiver_extraction_indented(
         "Uint8Array" => "vm.as_uint8array_mut(&args[0])?".to_string(),
         _ => "vm.as_value_mut(&args[0])?".to_string(),
     };
-    // Array/Map now return a guard rather than `&mut Vec/IndexMap`. Bind
-    // mutably so the call site can take `&mut name` and let the
-    // DerefMut impl coerce to the underlying container.
+    // Container receivers now return a guard rather than `&mut Vec/IndexMap`.
+    // Bind mutably so the call site can take `&mut name` and let the DerefMut
+    // impl coerce to the underlying container.
     let mut_kw = match recv.class_name.as_str() {
-        "Array" | "Map" => "mut ",
+        "Array" | "Map" | "Uint8Array" => "mut ",
         _ => "",
     };
     writeln!(out, "{indent}let {mut_kw}{name} = {expr};").unwrap();
@@ -1251,7 +1251,7 @@ fn receiver_immut_extraction_expr(
     arraymap_needs_owned: bool,
 ) -> String {
     match recv.class_name.as_str() {
-        // Clone for Array/Map read receivers when the glue function would
+        // Clone for container read receivers when the glue function would
         // later need `&mut vm` after extraction (per `arraymap_needs_owned`).
         // Otherwise `vm.as_array(...)?` returns a guard whose lock is
         // released on drop — the cheap path.
@@ -1264,7 +1264,7 @@ fn receiver_immut_extraction_expr(
         }
         "Map" => {
             if arraymap_needs_owned {
-                format!("vm.as_map({val})?.clone()")
+                format!("vm.as_map({val})?.to_index_map()")
             } else {
                 format!("vm.as_map({val})?")
             }
@@ -1277,7 +1277,7 @@ fn receiver_immut_extraction_expr(
             }
         }
         "Uint8Array" => {
-            if needs_owned {
+            if arraymap_needs_owned {
                 format!("vm.as_uint8array({val})?.clone()")
             } else {
                 format!("vm.as_uint8array({val})?")
@@ -1392,7 +1392,7 @@ fn extraction_expr(
             if is_mut {
                 format!("vm.as_map_mut({val})?")
             } else if arraymap_needs_owned {
-                format!("vm.as_map({val})?.clone()")
+                format!("vm.as_map({val})?.to_index_map()")
             } else {
                 format!("vm.as_map({val})?")
             }
@@ -1409,7 +1409,7 @@ fn extraction_expr(
         BamlType::Uint8Array => {
             if is_mut {
                 format!("vm.as_uint8array_mut({val})?")
-            } else if needs_owned {
+            } else if arraymap_needs_owned {
                 format!("vm.as_uint8array({val})?.clone()")
             } else {
                 format!("vm.as_uint8array({val})?")
@@ -1430,8 +1430,8 @@ fn extraction_expr(
 
 fn call_arg_list(b: &NativeBuiltin, needs_owned: bool, arraymap_needs_owned: bool) -> String {
     let mut args: Vec<String> = Vec::new();
-    // For Array/Map we use the dedicated flag — these may be owned (cloned
-    // Vec/IndexMap) even when other types are passed by reference, because
+    // For guarded containers we use the dedicated flag — these may be owned
+    // (cloned Vec/IndexMap) even when other types are passed by reference, because
     // the guard's vm borrow forced an early clone.
     let is_ref = !needs_owned;
     let arraymap_is_ref = !arraymap_needs_owned;
@@ -1440,10 +1440,10 @@ fn call_arg_list(b: &NativeBuiltin, needs_owned: bool, arraymap_needs_owned: boo
         if !recv.receiver_type.is_static() {
             let name = receiver_param_name(recv);
             if recv.receiver_type.is_mut() {
-                // Array/Map mut receivers are now guards; take &mut name so
-                // DerefMut coerces to &mut Vec<Value> / &mut IndexMap.
+                // Container mut receivers are guards; take &mut name so
+                // DerefMut coerces to the underlying mutable reference.
                 let arg = match recv.class_name.as_str() {
-                    "Array" | "Map" => format!("&mut {name}"),
+                    "Array" | "Map" | "Uint8Array" => format!("&mut {name}"),
                     _ => name,
                 };
                 args.push(arg);
@@ -1454,7 +1454,7 @@ fn call_arg_list(b: &NativeBuiltin, needs_owned: bool, arraymap_needs_owned: boo
                 args.push(name);
             } else {
                 let recv_is_ref = match recv.class_name.as_str() {
-                    "Array" | "Map" => arraymap_is_ref,
+                    "Array" | "Map" | "Uint8Array" => arraymap_is_ref,
                     _ => is_ref,
                 };
                 args.push(call_arg_for_type(
@@ -1467,7 +1467,7 @@ fn call_arg_list(b: &NativeBuiltin, needs_owned: bool, arraymap_needs_owned: boo
     }
     for p in &b.params {
         let p_is_ref = match &p.ty {
-            BamlType::List(_) | BamlType::Map(_, _) => arraymap_is_ref,
+            BamlType::List(_) | BamlType::Map(_, _) | BamlType::Uint8Array => arraymap_is_ref,
             _ => is_ref,
         };
         args.push(call_arg_for_type(&p.name, &p.ty, p_is_ref));
@@ -1478,18 +1478,13 @@ fn call_arg_list(b: &NativeBuiltin, needs_owned: bool, arraymap_needs_owned: boo
 
 fn call_arg_for_type(name: &str, ty: &BamlType, is_ref: bool) -> String {
     match ty {
-        BamlType::List(_) | BamlType::Map(_, _) => {
-            if is_ref {
-                // Extraction returns an `Array/MapReadGuard`; take `&name` so
-                // its `Deref` impl coerces through `Vec<Value>` /
-                // `IndexMap<..>` to the slice / map reference the trait
-                // method signature expects.
-                format!("&{name}")
-            } else {
-                format!("&{name}")
-            }
+        BamlType::List(_) | BamlType::Map(_, _) | BamlType::Uint8Array => {
+            // Extraction returns a container guard on the borrowed path and an
+            // owned container on the cloned path. In both cases `&name` lets
+            // Deref/DerefMut coerce to the trait method's slice/map reference.
+            format!("&{name}")
         }
-        BamlType::String | BamlType::Uint8Array | BamlType::Media(_) => {
+        BamlType::String | BamlType::Media(_) => {
             if is_ref {
                 // Extraction already returned a reference — don't double-ref
                 name.to_string()
@@ -1502,8 +1497,10 @@ fn call_arg_for_type(name: &str, ty: &BamlType, is_ref: bool) -> String {
                 // Extraction returned Option<&T> — convert to match clean method signature
                 match inner.as_ref() {
                     BamlType::String => format!("{name}.map(String::as_str)"),
-                    BamlType::Uint8Array => format!("{name}.map(Vec::as_slice)"),
-                    // Option<&[Value]>, Option<&IndexMap>, Option<&MediaValue> — already correct
+                    BamlType::Uint8Array => format!("{name}.as_deref().map(Vec::as_slice)"),
+                    BamlType::List(_) => format!("{name}.as_deref().map(Vec::as_slice)"),
+                    BamlType::Map(_, _) => format!("{name}.as_deref().map(Box::as_ref)"),
+                    // Option<&MediaValue> — already correct
                     _ => name.to_string(),
                 }
             } else {
@@ -1511,6 +1508,7 @@ fn call_arg_for_type(name: &str, ty: &BamlType, is_ref: bool) -> String {
                 match inner.as_ref() {
                     BamlType::String => format!("{name}.as_deref()"),
                     BamlType::List(_) => format!("{name}.as_deref()"),
+                    BamlType::Uint8Array => format!("{name}.as_deref()"),
                     _ => {
                         if call_arg_needs_ref(inner) {
                             format!("{name}.as_ref()")

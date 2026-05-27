@@ -174,7 +174,7 @@ impl Tlab {
     /// Allocate a map object.
     #[inline]
     pub fn alloc_map(&mut self, values: IndexMap<String, Value>) -> HeapPtr {
-        self.alloc(Object::Map(Box::new(values.into())))
+        self.alloc(Object::Map(values.into()))
     }
 
     /// Allocate an instance object.
@@ -196,7 +196,7 @@ impl Tlab {
     /// Allocate a uint8 array object.
     #[inline]
     pub fn alloc_uint8array(&mut self, data: Vec<u8>) -> HeapPtr {
-        self.alloc(Object::Uint8Array(data))
+        self.alloc(Object::Uint8Array(data.into()))
     }
 
     /// Allocate opaque Rust data on the heap.

@@ -1236,54 +1236,54 @@ impl PartialEq for CollectorRef {
     }
 }
 
-/// Heap-mutable array container. Pairs a `Vec<Value>` with a
-/// [`LazyBiasedMutex`] so cross-fiber `spawn`-racing mutations don't
-/// corrupt the Vec's internal `(ptr, len, cap)` triple.
-///
-/// Held inline by `Object::Array`. Size: 24 (Vec) + 1 (mutex) + padding = 32 bytes.
+/// Heap-mutable structural container. Pairs a dynamic backing store with a
+/// [`LazyBiasedMutex`] so cross-fiber `spawn`-racing mutations don't corrupt
+/// internal container state such as a `Vec`'s `(ptr, len, cap)` triple or an
+/// `IndexMap`'s hash table.
 ///
 /// # Soundness
 ///
-/// The inner `Vec<Value>` is wrapped in [`UnsafeCell`] so that both
+/// The inner value is wrapped in [`UnsafeCell`] so that both
 /// [`Self::lock`] and [`Self::lock_mut`] can take `&self`. Without this,
-/// the mutator-side `BexVm::as_array_mut` would have to call
+/// the mutator-side `BexVm::as_array_mut` / `as_map_mut` would have to call
 /// `get_object_mut`, which fabricates `&'static mut Object` for slots
 /// that — by design — are shared across `spawn` fibers, violating
 /// Rust's aliasing rules even though the [`LazyBiasedMutex`] provides
 /// actual mutual exclusion at the memory level.
 ///
-/// All access to `data` happens through the lock guards, which is the
-/// only place we materialize `&Vec<Value>` / `&mut Vec<Value>`.
+/// All mutator access to `data` happens through the lock guards, which is the
+/// only place we materialize shared or mutable references to the backing store.
 #[derive(Debug)]
-pub struct ArrayContainer {
+pub struct LockedContainer<T> {
     mutex: LazyBiasedMutex,
-    data: UnsafeCell<Vec<Value>>,
+    data: UnsafeCell<T>,
 }
 
-// SAFETY: cross-thread access is serialized by `mutex`. The `UnsafeCell`
-// is necessary so callers can take the lock via `&self` (the only sound
-// option when the container is reachable through aliased `&Object` from
-// the shared heap).
-unsafe impl Sync for ArrayContainer {}
+// SAFETY: cross-thread access is serialized by `mutex`. The `UnsafeCell` is
+// necessary so callers can take the lock via `&self` (the only sound option
+// when the container is reachable through aliased `&Object` from the shared
+// heap). `T: Send` is required because the protected backing store can move
+// between threads behind the lock.
+unsafe impl<T: Send> Sync for LockedContainer<T> {}
 
-impl ArrayContainer {
-    pub fn new(data: Vec<Value>) -> Self {
+impl<T> LockedContainer<T> {
+    pub fn new(data: T) -> Self {
         Self {
             mutex: LazyBiasedMutex::new(),
             data: UnsafeCell::new(data),
         }
     }
 
-    /// Acquire the container's mutex and return a read guard. The lock
-    /// is released when the guard is dropped.
-    pub fn lock(&self) -> ArrayReadGuard<'_> {
+    /// Acquire the container's mutex and return a read guard. The lock is
+    /// released when the guard is dropped.
+    pub fn lock(&self) -> LockedReadGuard<'_, T> {
         let access = self.mutex.enter();
         // SAFETY: we just acquired the lock; no other thread can hold a
         // `&mut` to `data` (the only place `&mut data` is materialized
         // is `lock_mut`, which also takes the lock). Lifetime is tied
         // to `&self`, which is tied to the access guard.
         let data = unsafe { &*self.data.get() };
-        ArrayReadGuard {
+        LockedReadGuard {
             data,
             _access: access,
         }
@@ -1294,13 +1294,13 @@ impl ArrayContainer {
     /// `&mut self`) so callers can lock through a shared reference
     /// obtained from the shared heap (`get_object`, not the unsound
     /// `get_object_mut`).
-    pub fn lock_mut(&self) -> ArrayWriteGuard<'_> {
+    pub fn lock_mut(&self) -> LockedWriteGuard<'_, T> {
         let access = self.mutex.enter();
         // SAFETY: the access guard provides mutual exclusion against
         // all other lock holders for this container. The returned
-        // `&mut Vec<Value>` lifetime is bounded by the guard's lifetime.
+        // `&mut T` lifetime is bounded by the guard's lifetime.
         let data = unsafe { &mut *self.data.get() };
-        ArrayWriteGuard {
+        LockedWriteGuard {
             data,
             _access: access,
         }
@@ -1321,7 +1321,7 @@ impl ArrayContainer {
     /// For any path where a `spawn`ed fiber may be running, use
     /// [`Self::lock`] instead.
     #[allow(clippy::missing_safety_doc)]
-    pub unsafe fn data_unchecked(&self) -> &Vec<Value> {
+    pub unsafe fn data_unchecked(&self) -> &T {
         // SAFETY: caller upholds the no-concurrent-writer contract.
         unsafe { &*self.data.get() }
     }
@@ -1335,36 +1335,14 @@ impl ArrayContainer {
     /// must hold the only `&mut ArrayContainer` (or otherwise
     /// guarantee no other readers).
     #[allow(clippy::missing_safety_doc, clippy::mut_from_ref)]
-    pub unsafe fn data_unchecked_mut(&self) -> &mut Vec<Value> {
+    pub unsafe fn data_unchecked_mut(&self) -> &mut T {
         // SAFETY: caller upholds the contract.
         unsafe { &mut *self.data.get() }
     }
-
-    /// Locked convenience: number of elements.
-    pub fn len(&self) -> usize {
-        self.lock().len()
-    }
-
-    /// Locked convenience: whether the array is empty.
-    pub fn is_empty(&self) -> bool {
-        self.lock().is_empty()
-    }
-
-    /// Locked convenience: copy the element at `idx`, or `None` if out
-    /// of bounds. `Value` is `Copy`, so no borrow is held past the
-    /// lock release.
-    pub fn get(&self, idx: usize) -> Option<Value> {
-        self.lock().get(idx).copied()
-    }
-
-    /// Locked convenience: snapshot the underlying `Vec<Value>`.
-    pub fn to_vec(&self) -> Vec<Value> {
-        self.lock().clone()
-    }
 }
 
-impl From<Vec<Value>> for ArrayContainer {
-    fn from(data: Vec<Value>) -> Self {
+impl<T> From<T> for LockedContainer<T> {
+    fn from(data: T) -> Self {
         Self::new(data)
     }
 }
@@ -1372,111 +1350,105 @@ impl From<Vec<Value>> for ArrayContainer {
 // Cloning takes the lock so a concurrent writer can't tear `data` mid-clone.
 // The contention state (the in-flight access counter) is not part of the
 // logical value of the source.
-impl Clone for ArrayContainer {
+impl<T: Clone> Clone for LockedContainer<T> {
     fn clone(&self) -> Self {
         let guard = self.lock();
         Self::new(guard.clone())
     }
 }
 
-/// Read guard for an [`ArrayContainer`]. Holds the container's
+impl<T> LockedContainer<Vec<T>> {
+    /// Locked convenience: number of elements.
+    pub fn len(&self) -> usize {
+        self.lock().len()
+    }
+
+    /// Locked convenience: whether the container is empty.
+    pub fn is_empty(&self) -> bool {
+        self.lock().is_empty()
+    }
+}
+
+impl<T: Copy> LockedContainer<Vec<T>> {
+    /// Locked convenience: copy the element at `idx`, or `None` if out of bounds.
+    pub fn get(&self, idx: usize) -> Option<T> {
+        self.lock().get(idx).copied()
+    }
+}
+
+impl<T: Clone> LockedContainer<Vec<T>> {
+    /// Locked convenience: snapshot the underlying `Vec<T>`.
+    pub fn to_vec(&self) -> Vec<T> {
+        self.lock().clone()
+    }
+}
+
+/// Read guard for a [`LockedContainer`]. Holds the container's
 /// [`LazyBiasedMutex`] for the duration of the guard's lifetime.
-pub struct ArrayReadGuard<'a> {
-    data: &'a Vec<Value>,
+pub struct LockedReadGuard<'a, T> {
+    data: &'a T,
     _access: crate::lazy_biased_mutex::AccessGuard<'a>,
 }
 
-impl std::ops::Deref for ArrayReadGuard<'_> {
-    type Target = Vec<Value>;
-    fn deref(&self) -> &Vec<Value> {
+impl<T> std::ops::Deref for LockedReadGuard<'_, T> {
+    type Target = T;
+    fn deref(&self) -> &T {
         self.data
     }
 }
 
-/// Write guard for an [`ArrayContainer`]. Holds the container's
+/// Write guard for a [`LockedContainer`]. Holds the container's
 /// [`LazyBiasedMutex`] for the duration of the guard's lifetime.
-pub struct ArrayWriteGuard<'a> {
-    data: &'a mut Vec<Value>,
+pub struct LockedWriteGuard<'a, T> {
+    data: &'a mut T,
     _access: crate::lazy_biased_mutex::AccessGuard<'a>,
 }
 
-impl std::ops::Deref for ArrayWriteGuard<'_> {
-    type Target = Vec<Value>;
-    fn deref(&self) -> &Vec<Value> {
+impl<T> std::ops::Deref for LockedWriteGuard<'_, T> {
+    type Target = T;
+    fn deref(&self) -> &T {
         self.data
     }
 }
 
-impl std::ops::DerefMut for ArrayWriteGuard<'_> {
-    fn deref_mut(&mut self) -> &mut Vec<Value> {
+impl<T> std::ops::DerefMut for LockedWriteGuard<'_, T> {
+    fn deref_mut(&mut self) -> &mut T {
         self.data
     }
 }
 
-/// Heap-mutable map container. Pairs an `IndexMap<String, Value>` with a
-/// [`LazyBiasedMutex`]. Boxed by `Object::Map` because `IndexMap` is
-/// already 72 bytes — inlining the mutex would push the Object variant
-/// past the 80-byte size cap.
+/// Heap-mutable array container.
 ///
-/// See [`ArrayContainer`] for the soundness rationale around `UnsafeCell`
-/// and `&self`-based locking.
-#[derive(Debug)]
-pub struct MapContainer {
-    mutex: LazyBiasedMutex,
-    data: UnsafeCell<IndexMap<String, Value>>,
+/// Held inline by `Object::Array`. Size: 24 (Vec) + 1 (mutex) + padding = 32 bytes.
+pub type ArrayContainer = LockedContainer<Vec<Value>>;
+pub type ArrayReadGuard<'a> = LockedReadGuard<'a, Vec<Value>>;
+pub type ArrayWriteGuard<'a> = LockedWriteGuard<'a, Vec<Value>>;
+
+/// Heap-mutable byte-array container. Same synchronization strategy as
+/// [`ArrayContainer`], but over a `Vec<u8>` backing store.
+pub type Uint8ArrayContainer = LockedContainer<Vec<u8>>;
+pub type Uint8ArrayReadGuard<'a> = LockedReadGuard<'a, Vec<u8>>;
+pub type Uint8ArrayWriteGuard<'a> = LockedWriteGuard<'a, Vec<u8>>;
+
+/// Heap-mutable map container. Pairs a boxed `IndexMap<String, Value>` with
+/// the generic [`LockedContainer`] lock/guard machinery.
+///
+/// `IndexMap` is 72 bytes before the lock, so storing it inline would push
+/// `Object` past its size cap. Storing only the backing map behind `Box<_>`
+/// keeps the container itself small while avoiding an extra indirection around
+/// the lock.
+pub type MapContainer = LockedContainer<Box<IndexMap<String, Value>>>;
+pub type MapReadGuard<'a> = LockedReadGuard<'a, Box<IndexMap<String, Value>>>;
+pub type MapWriteGuard<'a> = LockedWriteGuard<'a, Box<IndexMap<String, Value>>>;
+
+impl MapReadGuard<'_> {
+    /// Snapshot the underlying `IndexMap`.
+    pub fn to_index_map(&self) -> IndexMap<String, Value> {
+        self.as_ref().clone()
+    }
 }
 
-// SAFETY: as for `ArrayContainer` — cross-thread access is serialized by
-// `mutex`, and the `UnsafeCell` allows locking through `&self`.
-unsafe impl Sync for MapContainer {}
-
-impl MapContainer {
-    pub fn new(data: IndexMap<String, Value>) -> Self {
-        Self {
-            mutex: LazyBiasedMutex::new(),
-            data: UnsafeCell::new(data),
-        }
-    }
-
-    pub fn lock(&self) -> MapReadGuard<'_> {
-        let access = self.mutex.enter();
-        // SAFETY: lock acquired; see `ArrayContainer::lock`.
-        let data = unsafe { &*self.data.get() };
-        MapReadGuard {
-            data,
-            _access: access,
-        }
-    }
-
-    pub fn lock_mut(&self) -> MapWriteGuard<'_> {
-        let access = self.mutex.enter();
-        // SAFETY: lock acquired; see `ArrayContainer::lock_mut`.
-        let data = unsafe { &mut *self.data.get() };
-        MapWriteGuard {
-            data,
-            _access: access,
-        }
-    }
-
-    /// Unlocked accessor; same safety contract as
-    /// [`ArrayContainer::data_unchecked`].
-    ///
-    /// # Safety
-    /// See [`ArrayContainer::data_unchecked`].
-    #[allow(clippy::missing_safety_doc)]
-    pub unsafe fn data_unchecked(&self) -> &IndexMap<String, Value> {
-        // SAFETY: caller upholds the no-concurrent-writer contract.
-        unsafe { &*self.data.get() }
-    }
-
-    /// # Safety
-    /// See [`ArrayContainer::data_unchecked_mut`].
-    #[allow(clippy::missing_safety_doc, clippy::mut_from_ref)]
-    pub unsafe fn data_unchecked_mut(&self) -> &mut IndexMap<String, Value> {
-        // SAFETY: caller upholds the contract.
-        unsafe { &mut *self.data.get() }
-    }
-
+impl LockedContainer<Box<IndexMap<String, Value>>> {
     /// Locked convenience: number of entries.
     pub fn len(&self) -> usize {
         self.lock().len()
@@ -1494,50 +1466,13 @@ impl MapContainer {
 
     /// Locked convenience: snapshot the underlying `IndexMap`.
     pub fn to_index_map(&self) -> IndexMap<String, Value> {
-        self.lock().clone()
+        self.lock().to_index_map()
     }
 }
 
-impl From<IndexMap<String, Value>> for MapContainer {
+impl From<IndexMap<String, Value>> for LockedContainer<Box<IndexMap<String, Value>>> {
     fn from(data: IndexMap<String, Value>) -> Self {
-        Self::new(data)
-    }
-}
-
-impl Clone for MapContainer {
-    fn clone(&self) -> Self {
-        let guard = self.lock();
-        Self::new(guard.clone())
-    }
-}
-
-pub struct MapReadGuard<'a> {
-    data: &'a IndexMap<String, Value>,
-    _access: crate::lazy_biased_mutex::AccessGuard<'a>,
-}
-
-impl std::ops::Deref for MapReadGuard<'_> {
-    type Target = IndexMap<String, Value>;
-    fn deref(&self) -> &IndexMap<String, Value> {
-        self.data
-    }
-}
-
-pub struct MapWriteGuard<'a> {
-    data: &'a mut IndexMap<String, Value>,
-    _access: crate::lazy_biased_mutex::AccessGuard<'a>,
-}
-
-impl std::ops::Deref for MapWriteGuard<'_> {
-    type Target = IndexMap<String, Value>;
-    fn deref(&self) -> &IndexMap<String, Value> {
-        self.data
-    }
-}
-
-impl std::ops::DerefMut for MapWriteGuard<'_> {
-    fn deref_mut(&mut self) -> &mut IndexMap<String, Value> {
-        self.data
+        Self::new(Box::new(data))
     }
 }
 
@@ -1596,18 +1531,20 @@ pub enum Object {
     /// otherwise.
     String(String),
 
-    /// Byte array (uint8array).
-    Uint8Array(Vec<u8>),
+    /// Byte array (uint8array). Wrapped in [`Uint8ArrayContainer`] so the
+    /// underlying `Vec<u8>` is protected by a [`LazyBiasedMutex`] against
+    /// racing mutation under `spawn`.
+    Uint8Array(Uint8ArrayContainer),
 
     /// List of values. Wrapped in [`ArrayContainer`] so the underlying
     /// `Vec<Value>` is protected by a [`LazyBiasedMutex`] against racing
     /// mutation under `spawn`.
     Array(ArrayContainer),
 
-    /// Map of values. Boxed because `MapContainer` is heavy (`IndexMap` +
-    /// mutex) and Map ops are less hot than Array ops; the indirection
-    /// keeps `Object` total size under 80 bytes.
-    Map(Box<MapContainer>),
+    /// Map of values. Wrapped in [`MapContainer`] so the underlying
+    /// `IndexMap` is protected by a [`LazyBiasedMutex`] against racing
+    /// mutation under `spawn`.
+    Map(MapContainer),
 
     /// Boxed 64-bit float. Floats are heap-allocated because `Value`
     /// itself is a single tagged 64-bit word with no inline encoding
@@ -1672,9 +1609,9 @@ impl Serialize for Object {
             Self::BoundMethod(v) => ObjectSerde::BoundMethod(v.clone()),
             Self::Cell(v) => ObjectSerde::Cell(v.clone()),
             Self::String(v) => ObjectSerde::String(v.clone()),
-            Self::Uint8Array(v) => ObjectSerde::Uint8Array(v.clone()),
+            Self::Uint8Array(v) => ObjectSerde::Uint8Array(v.lock().clone()),
             Self::Array(v) => ObjectSerde::Array(v.lock().clone()),
-            Self::Map(v) => ObjectSerde::Map(v.lock().clone()),
+            Self::Map(v) => ObjectSerde::Map(v.to_index_map()),
             Self::Float(v) => ObjectSerde::Float(*v),
             Self::Future(v) => ObjectSerde::Future(v.clone()),
             Self::UnscheduledFuture(v) => ObjectSerde::UnscheduledFuture(v.clone()),
@@ -1712,9 +1649,9 @@ impl<'de> Deserialize<'de> for Object {
             ObjectSerde::BoundMethod(v) => Self::BoundMethod(v),
             ObjectSerde::Cell(v) => Self::Cell(v),
             ObjectSerde::String(v) => Self::String(v),
-            ObjectSerde::Uint8Array(v) => Self::Uint8Array(v),
+            ObjectSerde::Uint8Array(v) => Self::Uint8Array(Uint8ArrayContainer::new(v)),
             ObjectSerde::Array(v) => Self::Array(ArrayContainer::new(v)),
-            ObjectSerde::Map(v) => Self::Map(Box::new(MapContainer::new(v))),
+            ObjectSerde::Map(v) => Self::Map(v.into()),
             ObjectSerde::Float(v) => Self::Float(v),
             ObjectSerde::Future(v) => Self::Future(v),
             ObjectSerde::UnscheduledFuture(v) => Self::UnscheduledFuture(v),
