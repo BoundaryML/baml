@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 """Run real-world benchmarks comparing baml-cli against Python and Bun.
 
+Each BAML workload is first compiled into a standalone packed binary via
+`baml pack`, then that binary is invoked `--runs` times to time only the
+runtime (VM, GC, builtins). Compile/parse cost is paid once per workload,
+not once per run. For A/B comparison, the baseline's `baml pack` is used
+to embed the baseline runtime into a separate packed binary.
+
 Usage:
     ./scripts/bench-real-world                          # compare current build
     ./scripts/bench-real-world --baseline /path/to/other/baml-cli  # A/B compare
@@ -10,13 +16,66 @@ Produces a markdown table with median wall-clock times and ratios.
 """
 
 import argparse
+import json
 import os
 import subprocess
 import sys
 import tempfile
 import time
 from pathlib import Path
-from statistics import median
+from statistics import median, stdev
+
+# ── Pre-assembled string fixtures for string benchmarks ──────────────────────
+# Build these once in Python so the timed code is pure operation, no assembly.
+# Each fixture is embedded as a string LITERAL in the generated workload, so
+# the source program never spends time concatenating chunks at runtime.
+#
+# Short string: 27 bytes, splits into 6 tiny (~5 byte) segments.
+# Exercises BexStr Inline path (≤ 54 bytes both source and segments).
+_SHORT_SRC = "hello world foo bar baz qux"
+_SHORT_DELIM = " "
+# Medium string: ~575 bytes, splits into 8 medium (~71 byte) segments.
+# Each segment exceeds the 54-byte inline threshold → uses BexStr::Slice
+# (zero-copy view into the Flat parent).
+_MED_CHUNK = "the quick brown fox jumps over the lazy dog and runs through the meadow"
+_MED_SRC = "|".join([_MED_CHUNK] * 8)
+_MED_DELIM = "|"
+# Long string: ~5KB, splits into 10 long (~500 byte) segments.
+# Heavy zero-copy Slice path — segments far exceed inline threshold.
+_LONG_CHUNK = (
+    "the quick brown fox jumps over the lazy dog and runs through the meadow "
+    "while the sun sets behind the distant mountains casting long shadows "
+    "across the rolling hills and the gentle breeze carries the scent of "
+    "wildflowers and freshly cut grass through the warm summer air as birds "
+    "sing in the trees and the world feels at peace with itself in this "
+    "perfect moment of stillness and beauty that seems to stretch on forever "
+    "without end or care for the troubles of yesterday or tomorrow only the "
+    "present moment matters now"
+)
+_LONG_SRC = "###".join([_LONG_CHUNK] * 10)
+_LONG_DELIM = "###"
+# String with leading/trailing whitespace, for the trim benchmark. ~210 bytes
+# overall, ~150 bytes of content + 30 spaces on each side. Trimmed body > 54
+# bytes so the BexStr::Slice path is exercised (not just Inline).
+_TRIM_SRC = (
+    " " * 30
+    + "the quick brown fox jumps over the lazy dog and runs through the meadow with great enthusiasm"
+    + " " * 30
+)
+
+
+def _baml_lit(s):
+    """Embed a string as a BAML string literal (C-style escapes via JSON)."""
+    return json.dumps(s)
+
+
+def _js_lit(s):
+    return json.dumps(s)
+
+
+def _py_lit(s):
+    return repr(s)
+
 
 # ── Workload definitions ──────────────────────────────────────────────────────
 
@@ -231,6 +290,224 @@ print(c)
 let c=0;for(let i=0;i<100000;i++){c+="hello world foo bar baz qux".split(" ").length}console.log(c)
 """,
     },
+
+    # ── String operation workloads with pre-built fixtures ────────────────────
+    # Fixtures are embedded as string LITERALS in each generated program.
+    # No runtime concat/repeat — the timed code measures only the operation.
+    # Source and delimiter are hoisted out of the loop, so we measure the op,
+    # not literal allocation per iteration.
+
+    # F1: split short Inline fixture → 6 inline segments. Tests Inline path.
+    "split short literal 100k": {
+        "baml": f"""
+function main() -> int {{
+  let s = {_baml_lit(_SHORT_SRC)};
+  let delim = {_baml_lit(_SHORT_DELIM)};
+  let count = 0;
+  for (let i = 0; i < 100000; i += 1) {{
+    let parts = s.split(delim);
+    count += parts.length();
+  }};
+  return count;
+}}
+""",
+        "python": f"""
+s = {_py_lit(_SHORT_SRC)}
+delim = {_py_lit(_SHORT_DELIM)}
+c = 0
+for _ in range(100000):
+    c += len(s.split(delim))
+print(c)
+""",
+        "js": f"""
+const s = {_js_lit(_SHORT_SRC)};
+const delim = {_js_lit(_SHORT_DELIM)};
+let c = 0;
+for(let i=0;i<100000;i++) c += s.split(delim).length;
+console.log(c);
+""",
+    },
+
+    # F2: split medium Flat fixture → 8 Slice segments (each > 54B → zero-copy).
+    # This is the workload BexStr Slice should excel at vs std String clone.
+    "split medium literal 10k": {
+        "baml": f"""
+function main() -> int {{
+  let s = {_baml_lit(_MED_SRC)};
+  let delim = {_baml_lit(_MED_DELIM)};
+  let count = 0;
+  for (let i = 0; i < 10000; i += 1) {{
+    let parts = s.split(delim);
+    count += parts.length();
+  }};
+  return count;
+}}
+""",
+        "python": f"""
+s = {_py_lit(_MED_SRC)}
+delim = {_py_lit(_MED_DELIM)}
+c = 0
+for _ in range(10000):
+    c += len(s.split(delim))
+print(c)
+""",
+        "js": f"""
+const s = {_js_lit(_MED_SRC)};
+const delim = {_js_lit(_MED_DELIM)};
+let c = 0;
+for(let i=0;i<10000;i++) c += s.split(delim).length;
+console.log(c);
+""",
+    },
+
+    # F3: split long Flat fixture → 10 long Slice segments (~500B each).
+    # Heaviest zero-copy scenario — std String would copy 5KB per iteration.
+    "split long literal 1k": {
+        "baml": f"""
+function main() -> int {{
+  let s = {_baml_lit(_LONG_SRC)};
+  let delim = {_baml_lit(_LONG_DELIM)};
+  let count = 0;
+  for (let i = 0; i < 1000; i += 1) {{
+    let parts = s.split(delim);
+    count += parts.length();
+  }};
+  return count;
+}}
+""",
+        "python": f"""
+s = {_py_lit(_LONG_SRC)}
+delim = {_py_lit(_LONG_DELIM)}
+c = 0
+for _ in range(1000):
+    c += len(s.split(delim))
+print(c)
+""",
+        "js": f"""
+const s = {_js_lit(_LONG_SRC)};
+const delim = {_js_lit(_LONG_DELIM)};
+let c = 0;
+for(let i=0;i<1000;i++) c += s.split(delim).length;
+console.log(c);
+""",
+    },
+
+    # F4: substring against the long Flat fixture. Pure zero-copy Slice creation.
+    # BAML should be ~free here (Arc bump + Slice struct); Python/JS allocate.
+    "substring slice long 100k": {
+        "baml": f"""
+function main() -> int {{
+  let s = {_baml_lit(_LONG_SRC)};
+  let total = 0;
+  for (let i = 0; i < 100000; i += 1) {{
+    let sub = s.substring(100, 400);
+    total += sub.length();
+  }};
+  return total;
+}}
+""",
+        "python": f"""
+s = {_py_lit(_LONG_SRC)}
+t = 0
+for _ in range(100000):
+    t += len(s[100:400])
+print(t)
+""",
+        "js": f"""
+const s = {_js_lit(_LONG_SRC)};
+let t = 0;
+for(let i=0;i<100000;i++) t += s.substring(100, 400).length;
+console.log(t);
+""",
+    },
+
+    # F5: trim a padded string → returns Slice into the padded source.
+    # BAML zero-copy trim returns a Slice into the original; std String copies.
+    "trim padded literal 100k": {
+        "baml": f"""
+function main() -> int {{
+  let s = {_baml_lit(_TRIM_SRC)};
+  let total = 0;
+  for (let i = 0; i < 100000; i += 1) {{
+    let t = s.trim();
+    total += t.length();
+  }};
+  return total;
+}}
+""",
+        "python": f"""
+s = {_py_lit(_TRIM_SRC)}
+t = 0
+for _ in range(100000):
+    t += len(s.strip())
+print(t)
+""",
+        "js": f"""
+const s = {_js_lit(_TRIM_SRC)};
+let t = 0;
+for(let i=0;i<100000;i++) t += s.trim().length;
+console.log(t);
+""",
+    },
+
+    # F6: contains/includes — read-only scan, no allocation. Baseline check
+    # that BexStr's Deref<str> coercion doesn't cost anything vs String.
+    "contains medium literal 100k": {
+        "baml": f"""
+function main() -> int {{
+  let s = {_baml_lit(_MED_SRC)};
+  let needle = {_baml_lit("meadow")};
+  let count = 0;
+  for (let i = 0; i < 100000; i += 1) {{
+    if s.includes(needle) {{ count += 1; }};
+  }};
+  return count;
+}}
+""",
+        "python": f"""
+s = {_py_lit(_MED_SRC)}
+n = {_py_lit("meadow")}
+c = 0
+for _ in range(100000):
+    if n in s: c += 1
+print(c)
+""",
+        "js": f"""
+const s = {_js_lit(_MED_SRC)};
+const n = "meadow";
+let c = 0;
+for(let i=0;i<100000;i++) if(s.includes(n)) c += 1;
+console.log(c);
+""",
+    },
+
+    # F7: marquee concat-loop win — BexStr makes `s = s + "x"` O(1) per
+    # iteration (Concat node) instead of O(n) (clone+push_str). Total goes
+    # from O(n²) → O(n). 10k iterations would be ~100M ops vs 10k ops.
+    # Python is O(n²) (str is immutable, naïve concat); JS may optimize via
+    # ropes internally so its numbers are not directly comparable.
+    "concat loop 10k": {
+        "baml": """
+function main() -> int {
+  let s = "";
+  for (let i = 0; i < 10000; i += 1) {
+    s = s + "x";
+  };
+  return s.length();
+}
+""",
+        "python": """
+s = ""
+for _ in range(10000):
+    s = s + "x"
+print(len(s))
+""",
+        "js": """
+let s="";for(let i=0;i<10000;i++) s = s + "x";
+console.log(s.length);
+""",
+    },
+
     "call chain 100x10k": {
         "baml": "GENERATE_CHAIN",
         "python": "GENERATE_CHAIN",
@@ -808,6 +1085,22 @@ def fmt_ms(seconds):
         return f"{ms:.2f}ms"
 
 
+def fmt_ms_sd(med, sd):
+    """Format median ± relative-stddev percentage.
+
+    Lets the reader tell at a glance whether a 5% delta is signal or noise.
+    Values < 10% stddev get one decimal place; ≥ 10% rounds for compactness."""
+    if med is None:
+        return "FAIL"
+    if sd is None or sd <= 0 or med <= 0:
+        return fmt_ms(med)
+    rel = (sd / med) * 100
+    if rel >= 10:
+        return f"{fmt_ms(med)} ±{rel:.0f}%"
+    else:
+        return f"{fmt_ms(med)} ±{rel:.1f}%"
+
+
 def fmt_ratio(a, b):
     """Format ratio a/b as string."""
     if b == 0:
@@ -821,9 +1114,31 @@ def fmt_ratio(a, b):
         return f"{r:.2f}x"
 
 
-def baml_run_cmd(binary, baml_file):
-    """Run the benchmark's main() from a standalone BAML source file."""
-    return [binary, "run", "--file", baml_file, "main"]
+def baml_run_cmd(packed_binary):
+    """Run a pre-packed BAML benchmark binary.
+
+    The compile/parse cost has already been paid by `baml pack`, so each
+    invocation measures just the runtime (VM execution + GC + builtins).
+    """
+    return [packed_binary]
+
+
+def pack_baml(binary, baml_file, output_path):
+    """Build a standalone packed binary for the workload's `main` function.
+
+    Returns True on success, False on pack failure. On failure, stderr from
+    the pack invocation is printed so the operator can diagnose."""
+    result = subprocess.run(
+        [binary, "pack", "main", "--file", baml_file, "-o", output_path],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        sys.stderr.write(
+            f"       baml pack failed (binary={binary}): "
+            f"{result.stderr.strip().splitlines()[-1] if result.stderr.strip() else 'no stderr'}\n"
+        )
+        return False
+    return True
 
 
 def main():
@@ -895,6 +1210,23 @@ def main():
             sys.stderr.write(f"\n[{idx}/{total}] {name}\n")
             sys.stderr.flush()
 
+        # ── Pack BAML sources into standalone binaries (once per workload) ──
+        # `baml pack` embeds the compiled program inside a pack-host executable.
+        # We pack once per (binary, workload), then run the result `runs` times,
+        # which isolates the timing measurement from compile/parse cost.
+        slug = name.replace(' ', '_')
+        packed_baml = os.path.join(tmpdir, f"{slug}.baml.packed")
+        if not pack_baml(baml_cli, baml_file, packed_baml):
+            if is_tty:
+                sys.stderr.write(f"       SKIP (baml pack failed)\n")
+            continue
+
+        packed_baseline = None
+        if has_baseline:
+            packed_baseline = os.path.join(tmpdir, f"{slug}.baseline.packed")
+            if not pack_baml(args.baseline, baml_file, packed_baseline):
+                packed_baseline = None  # skip baseline for this workload
+
         # ── Verify outputs match before timing ──
         def get_output(cmd):
             r = subprocess.run(cmd, capture_output=True, text=True)
@@ -902,16 +1234,16 @@ def main():
                 return None
             return r.stdout.strip().split("\n")[-1].strip()
 
-        expected = get_output(baml_run_cmd(baml_cli, baml_file))
+        expected = get_output(baml_run_cmd(packed_baml))
         if expected is None:
             if is_tty:
-                sys.stderr.write(f"       SKIP (baml failed to run)\n")
+                sys.stderr.write(f"       SKIP (packed baml failed to run)\n")
             continue
 
         mismatches = []
         checks = []
-        if has_baseline:
-            checks.append(("baseline", baml_run_cmd(args.baseline, baml_file)))
+        if packed_baseline:
+            checks.append(("baseline", baml_run_cmd(packed_baseline)))
         if has_python:
             checks.append(("python3", ["python3", "-S", py_file]))
         if has_node:
@@ -940,18 +1272,22 @@ def main():
             t = time_command(cmd, runs=runs)
             if t:
                 med = median(t)
+                sd = stdev(t) if len(t) > 1 else 0.0
                 if is_tty:
-                    sys.stderr.write(f"{fmt_ms(med):>8s}  (min={fmt_ms(min(t))}, max={fmt_ms(max(t))})\n")
-                return med
+                    sys.stderr.write(
+                        f"{fmt_ms_sd(med, sd):>14s}  "
+                        f"(min={fmt_ms(min(t))}, max={fmt_ms(max(t))})\n"
+                    )
+                return {"med": med, "sd": sd}
             else:
                 if is_tty:
                     sys.stderr.write("FAIL\n")
                 return None
 
-        row["baml"] = run_one("baml", baml_run_cmd(baml_cli, baml_file))
+        row["baml"] = run_one("baml", baml_run_cmd(packed_baml))
 
-        if has_baseline:
-            row["baseline"] = run_one("baseline", baml_run_cmd(args.baseline, baml_file))
+        if packed_baseline:
+            row["baseline"] = run_one("baseline", baml_run_cmd(packed_baseline))
 
         if has_python:
             row["python"] = run_one("python3", ["python3", "-S", py_file])
@@ -983,9 +1319,30 @@ def main():
         cols.append("bun")
         cols.append("baml/bun")
 
+    # Wider columns for "100ms ±2.3%" format. Benchmark column gets extra room
+    # because the new string workloads have long names.
+    NAME_W = 30
+    NUM_W = 16
+
+    def med_of(entry):
+        return entry["med"] if entry else None
+
     # Header
-    print("| " + " | ".join(f"{c:>20s}" for c in cols) + " |")
-    print("| " + " | ".join("-" * 20 for _ in cols) + " |")
+    header_cells = [f"{cols[0]:>{NAME_W}s}"] + [f"{c:>{NUM_W}s}" for c in cols[1:]]
+    print("| " + " | ".join(header_cells) + " |")
+    sep_cells = ["-" * NAME_W] + ["-" * NUM_W for _ in cols[1:]]
+    print("| " + " | ".join(sep_cells) + " |")
+
+    def cell_timing(entry):
+        if entry is None:
+            return f"{'FAIL':>{NUM_W}s}"
+        return f"{fmt_ms_sd(entry['med'], entry['sd']):>{NUM_W}s}"
+
+    def cell_ratio(a, b):
+        # a/b ratio (e.g. baseline/baml = speedup, or baml/py)
+        if a is None or b is None or b == 0:
+            return f"{'—':>{NUM_W}s}"
+        return f"{fmt_ratio(a, b):>{NUM_W}s}"
 
     for name in WORKLOADS:
         row = results.get(name)
@@ -993,42 +1350,30 @@ def main():
             continue
 
         flag = " (!)" if row.get("mismatch") else ""
-        cells = [f"{name + flag:>20s}"]
+        cells = [f"{(name + flag):>{NAME_W}s}"]
 
-        baml_ms = row.get("baml")
-        cells.append(f"{fmt_ms(baml_ms):>20s}" if baml_ms else f"{'FAIL':>20s}")
+        baml = row.get("baml")
+        cells.append(cell_timing(baml))
 
         if has_baseline:
-            base_ms = row.get("baseline")
-            cells.append(f"{fmt_ms(base_ms):>20s}" if base_ms else f"{'FAIL':>20s}")
-            if baml_ms and base_ms:
-                cells.append(f"{fmt_ratio(base_ms, baml_ms):>20s}")
-            else:
-                cells.append(f"{'—':>20s}")
+            base = row.get("baseline")
+            cells.append(cell_timing(base))
+            cells.append(cell_ratio(med_of(base), med_of(baml)))
 
         if has_python:
-            py_ms = row.get("python")
-            cells.append(f"{fmt_ms(py_ms):>20s}" if py_ms else f"{'—':>20s}")
-            if baml_ms and py_ms:
-                cells.append(f"{fmt_ratio(baml_ms, py_ms):>20s}")
-            else:
-                cells.append(f"{'—':>20s}")
+            py = row.get("python")
+            cells.append(cell_timing(py))
+            cells.append(cell_ratio(med_of(baml), med_of(py)))
 
         if has_node:
-            node_ms = row.get("node")
-            cells.append(f"{fmt_ms(node_ms):>20s}" if node_ms else f"{'—':>20s}")
-            if baml_ms and node_ms:
-                cells.append(f"{fmt_ratio(baml_ms, node_ms):>20s}")
-            else:
-                cells.append(f"{'—':>20s}")
+            nd = row.get("node")
+            cells.append(cell_timing(nd))
+            cells.append(cell_ratio(med_of(baml), med_of(nd)))
 
         if has_bun:
-            bun_ms = row.get("bun")
-            cells.append(f"{fmt_ms(bun_ms):>20s}" if bun_ms else f"{'—':>20s}")
-            if baml_ms and bun_ms:
-                cells.append(f"{fmt_ratio(baml_ms, bun_ms):>20s}")
-            else:
-                cells.append(f"{'—':>20s}")
+            bn = row.get("bun")
+            cells.append(cell_timing(bn))
+            cells.append(cell_ratio(med_of(baml), med_of(bn)))
 
         print("| " + " | ".join(cells) + " |")
 
