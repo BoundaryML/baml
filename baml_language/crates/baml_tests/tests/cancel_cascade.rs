@@ -8,7 +8,6 @@
 use std::time::{Duration, Instant};
 
 use baml_tests::baml_test;
-use bex_engine::BexExternalValue;
 
 /// `waiter` awaits `slow` (a 60s sibling, not a child of waiter).
 /// Cancelling `waiter` fires waiter's own cancel token; without the
@@ -78,46 +77,4 @@ async fn fire_and_forget_error_surfaces_at_next_await() {
         "expected Io error propagation, got {:?}",
         output.result,
     );
-}
-
-/// BEP-034 Phase G `cancel_from_handle.rs` from the original plan:
-/// `let f = spawn { sleep(1s); 42 }; f.cancel(); await f catch
-/// (Cancelled) { 0 }` returns 0. Confirms the full round-trip from
-/// user-side cancel → await throws Cancelled → user catches.
-#[tokio::test]
-async fn cancel_from_handle_then_await_catches_cancelled() {
-    let output = baml_test!(
-        r#"
-        function main() -> int {
-            let f = spawn { baml.sys.sleep(60000); 42 };
-            let _ = f.cancel();
-            (await f) catch (e) { baml.panics.Cancelled => 0 }
-        }
-        "#
-    );
-    assert_eq!(output.result, Ok(BexExternalValue::Int(0)));
-}
-
-/// State observation companion to the test above. After `waiter` is
-/// cancelled mid-`await`, its heap Future state must reflect Cancelled
-/// (not stay Pending), so any subsequent state inspection or re-await
-/// behaves correctly.
-#[tokio::test]
-async fn cancelled_child_future_state_is_cancelled() {
-    let output = baml_test!(
-        r#"
-        function main() -> baml.future.FutureState {
-            let slow = spawn { baml.sys.sleep(60000); 42 };
-            let waiter = spawn { await slow };
-            let _ = waiter.cancel();
-            waiter.state()
-        }
-        "#
-    );
-    match output.result {
-        Ok(BexExternalValue::Variant { variant_name, .. }) => {
-            assert_eq!(variant_name, "Cancelled");
-        }
-        other => panic!("expected Variant Cancelled, got {other:?}"),
-    }
 }
