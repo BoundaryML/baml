@@ -429,3 +429,132 @@ async fn if_let_statement_form_with_return_in_then() -> anyhow::Result<()> {
     })
     .await
 }
+
+#[tokio::test]
+async fn let_else_binds_when_pattern_matches() -> anyhow::Result<()> {
+    // Pattern matches → bindings flow into the enclosing scope; the rest
+    // of the function body can use them.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            class Ok { value string }
+            class Err { message string }
+
+            function get_value(r: Ok | Err) -> string {
+                let o: Ok = r else { return "fallback"; };
+                o.value
+            }
+
+            function main() -> string {
+                get_value(Ok { value: "hit" })
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("hit".to_string())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn let_else_takes_else_branch_when_pattern_does_not_match() -> anyhow::Result<()> {
+    // Pattern fails → else branch runs and diverges (here via `return`),
+    // so the tail expression past the binding never executes.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            class Ok { value string }
+            class Err { message string }
+
+            function get_value(r: Ok | Err) -> string {
+                let o: Ok = r else { return "fallback"; };
+                o.value
+            }
+
+            function main() -> string {
+                get_value(Err { message: "ignored" })
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("fallback".to_string())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn let_else_destructure_binds_fields_at_runtime() -> anyhow::Result<()> {
+    // Destructure binding: the matched class's fields are bound into the
+    // enclosing scope, available to all later statements.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            class User { name string, age int }
+            class Admin { handle string }
+
+            function greet(u: User | Admin) -> string {
+                let User { name, age } = u else { return "admin"; };
+                name
+            }
+
+            function main() -> string {
+                greet(User { name: "alice", age: 30 })
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("alice".to_string())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn let_else_or_pattern_matches_either_alternative() -> anyhow::Result<()> {
+    // Or-pattern: either alternative produces a binding of the joined
+    // type. Here both Ok and Warn carry `value: string`.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            class Ok { value string }
+            class Warn { value string }
+            class Err { message string }
+
+            function pick(r: Ok | Warn | Err) -> string {
+                let s: Ok | Warn = r else { return "err"; };
+                s.value
+            }
+
+            function main() -> string {
+                pick(Warn { value: "warn-val" })
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("warn-val".to_string())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn let_else_throw_in_else_propagates_when_uncaught() -> anyhow::Result<()> {
+    // `throw` in the else branch is a diverging form. When uncaught, the
+    // thrown value escapes the function and the engine reports the error.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            class Ok { value string }
+            class Err { message string }
+            class NoMatch {}
+
+            function get_or_throw(r: Ok | Err) -> string throws NoMatch {
+                let o: Ok = r else { throw NoMatch {}; };
+                o.value
+            }
+
+            function main() -> string throws NoMatch {
+                get_or_throw(Err { message: "boom" })
+            }
+        "#,
+        entry: "main",
+        // Uncaught NoMatch throw escapes — the engine reports a runtime
+        // error rather than producing a value.
+        expected: Err("NoMatch"),
+        ..Default::default()
+    })
+    .await
+}

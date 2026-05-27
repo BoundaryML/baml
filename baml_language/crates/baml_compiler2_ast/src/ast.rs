@@ -754,6 +754,12 @@ pub enum Stmt {
         initializer: Option<ExprId>,
         is_watched: bool,
         origin: LetOrigin,
+        /// `let PATTERN = init else { … };` — refutable binding with a
+        /// diverging else clause. `Some` activates let-else semantics:
+        /// the pattern may be refutable, and the else expression is
+        /// required to have type `Ty::Never`. Pattern bindings flow into
+        /// the enclosing scope on a successful match.
+        else_branch: Option<ExprId>,
     },
     While {
         condition: ExprId,

@@ -5032,6 +5032,85 @@ impl LoweringContext<'_> {
                 self.lower_expr(expr_id, Place::local(temp));
             }
 
+            // `let PATTERN = init else { … };` — refutable binding lowered
+            // as a two-way pattern test. On match: bind into the current
+            // scope (locals survive past the statement); on miss: lower the
+            // else expression (guaranteed `Ty::Never` by TIR, so no
+            // successor edge is needed). Handled before the structural
+            // arms below because a refutable destructure ends up here too.
+            AstStmt::Let {
+                pattern,
+                initializer,
+                is_watched,
+                else_branch: Some(else_expr),
+                ..
+            } => {
+                // Materialize the scrutinee into a local once. The
+                // scrutinee carries the BROAD initializer type (e.g.
+                // `int | string`), not the pattern's narrowed match type —
+                // narrowing only kicks in on the match arm, after the
+                // refutable test.
+                let scrutinee_ty = initializer
+                    .map(|init| self.expr_ty(init))
+                    .unwrap_or_else(|| self.pat_ty(pattern));
+                let scrutinee = self.builder.temp(scrutinee_ty);
+                if let Some(init) = initializer {
+                    self.lower_expr(init, Place::local(scrutinee));
+                } else {
+                    self.builder.assign(
+                        Place::local(scrutinee),
+                        Rvalue::Use(Operand::Constant(Constant::Null)),
+                    );
+                }
+
+                let bb_match = self.builder.create_block();
+                let bb_fail = self.builder.create_block();
+                self.lower_pattern_test(scrutinee, pattern, bb_match, bb_fail);
+
+                // Fail path: lower the else expression. TIR enforced that
+                // the else has type `!`, so this block has no successor and
+                // we don't emit a join edge. Use a throwaway temp as dest
+                // because diverging expressions don't write through it.
+                self.builder.set_current_block(bb_fail);
+                let else_ty = self.expr_ty(else_expr);
+                let else_dest = self.builder.temp(else_ty);
+                self.lower_expr(else_expr, Place::local(else_dest));
+                // If for any reason lowering produced a fall-through (e.g.
+                // recovery state with an Unknown-typed else), terminate the
+                // block with an unreachable so the CFG stays valid.
+                if !self.builder.is_current_terminated() {
+                    self.builder.unreachable();
+                }
+
+                // Match path: bind pattern names into the enclosing scope.
+                // No saved/restored locals — these flow forward like a
+                // plain `let`.
+                self.builder.set_current_block(bb_match);
+                self.bind_pattern_inner(scrutinee, pattern, pattern, pattern, false, is_watched);
+
+                let names: Vec<Name> = self.body.patterns[pattern]
+                    .bound_names(&self.body.patterns)
+                    .into_iter()
+                    .cloned()
+                    .collect();
+                for name in names {
+                    if let Some(&local) = self.locals.get(&name)
+                        && let Some(binding_id) =
+                            self.binding_id_for_statement_name(stmt_id, pattern, &name)
+                    {
+                        self.binding_locals.insert(binding_id, local);
+                    }
+                }
+
+                if is_watched {
+                    for name in self.body.patterns[pattern].bound_names(&self.body.patterns) {
+                        if let Some(&local) = self.locals.get(name) {
+                            self.watched_locals_stack.push(local);
+                        }
+                    }
+                }
+            }
+
             AstStmt::Let {
                 pattern,
                 initializer,

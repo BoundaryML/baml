@@ -2115,6 +2115,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             Stmt::Let {
                 pattern,
                 initializer,
+                else_branch,
                 ..
             } => {
                 if let Some(expr) = initializer {
@@ -2125,6 +2126,20 @@ impl<'db> TypeInferenceBuilder<'db> {
                         shadowed,
                         refs,
                     );
+                }
+                if let Some(else_expr) = else_branch {
+                    // The else branch runs before the pattern's bindings
+                    // exist, so it can't see them — recurse with the
+                    // pre-binding `shadowed` set, then re-truncate after.
+                    let saved_len = shadowed.len();
+                    Self::collect_default_expr_forward_references(
+                        *else_expr,
+                        body,
+                        later_params,
+                        shadowed,
+                        refs,
+                    );
+                    shadowed.truncate(saved_len);
                 }
                 Self::push_pattern_bindings(*pattern, body, shadowed);
             }
@@ -3746,14 +3761,26 @@ impl<'db> TypeInferenceBuilder<'db> {
             Stmt::Let {
                 pattern,
                 initializer,
+                else_branch,
                 ..
             } => {
-                let (init_result_ty, pattern_subject_ty, declared_for_scope) =
-                    if let Some(init) = *initializer {
-                        let expected = self.pattern_expected_ty(*pattern, body);
-                        let is_structural_pattern =
-                            Self::pattern_contains_structural_syntax(*pattern, body);
-                        let expected_for_check = match expected {
+                let (init_result_ty, pattern_subject_ty, declared_for_scope) = if let Some(init) =
+                    *initializer
+                {
+                    let expected = self.pattern_expected_ty(*pattern, body);
+                    let is_structural_pattern =
+                        Self::pattern_contains_structural_syntax(*pattern, body);
+                    // For `let … else`, the pattern is refutable: the
+                    // declared type narrows the binding ON A MATCH, but
+                    // the initializer is allowed to be wider (the else
+                    // branch handles the residual). Don't push the
+                    // pattern's expected type into the init — infer it
+                    // freely instead so the refutability matrix sees
+                    // the full scrutinee type.
+                    let expected_for_check = if else_branch.is_some() {
+                        None
+                    } else {
+                        match expected {
                             Some(PatternExpectedTy::Full(ty)) if !is_structural_pattern => Some(ty),
                             Some(PatternExpectedTy::Partial(ty))
                                 if Self::expr_accepts_partial_pattern_expected(init, body) =>
@@ -3762,49 +3789,96 @@ impl<'db> TypeInferenceBuilder<'db> {
                             }
                             Some(PatternExpectedTy::Full(_) | PatternExpectedTy::Partial(_))
                             | None => None,
-                        };
-                        let ty = if let Some(expected) = expected_for_check.as_ref()
-                            && !matches!(expected, Ty::Void { .. })
-                        {
-                            self.check_expr(init, body, expected)
-                        } else {
-                            self.infer_expr(init, body)
-                        };
-                        if matches!(ty, Ty::Void { .. }) {
-                            let err = if matches!(
-                                body.exprs[init],
-                                Expr::Call { .. } | Expr::OptionalCall { .. }
-                            ) {
-                                TirTypeError::VoidFunctionResultUsed
-                            } else {
-                                TirTypeError::VoidUsedAsValue
-                            };
-                            self.context.report_simple(err, init);
                         }
-                        if let Some(expected) = expected_for_check {
-                            (Some(ty), Some(expected.clone()), Some(expected))
-                        } else {
-                            let flow_ty = ty.clone().widen_fresh().make_evolving();
-                            (Some(ty), Some(flow_ty), None)
-                        }
-                    } else {
-                        (None, None, None)
                     };
+                    let ty = if let Some(expected) = expected_for_check.as_ref()
+                        && !matches!(expected, Ty::Void { .. })
+                    {
+                        self.check_expr(init, body, expected)
+                    } else {
+                        self.infer_expr(init, body)
+                    };
+                    if matches!(ty, Ty::Void { .. }) {
+                        let err = if matches!(
+                            body.exprs[init],
+                            Expr::Call { .. } | Expr::OptionalCall { .. }
+                        ) {
+                            TirTypeError::VoidFunctionResultUsed
+                        } else {
+                            TirTypeError::VoidUsedAsValue
+                        };
+                        self.context.report_simple(err, init);
+                    }
+                    if let Some(expected) = expected_for_check {
+                        (Some(ty), Some(expected.clone()), Some(expected))
+                    } else {
+                        let flow_ty = ty.clone().widen_fresh().make_evolving();
+                        (Some(ty), Some(flow_ty), None)
+                    }
+                } else {
+                    (None, None, None)
+                };
 
                 let diverges = matches!(init_result_ty, Some(Ty::Never { .. }));
                 if !diverges && let Some(flow_ty) = pattern_subject_ty {
+                    // For `let … else`, check the else branch FIRST, in the
+                    // scope before pattern bindings are introduced. The else
+                    // path runs when the pattern did not match, so it must
+                    // not see the names the pattern would bind. We snapshot
+                    // scoped locals and restore so any inner let-bindings in
+                    // the else block don't leak into the enclosing scope.
+                    if let Some(else_expr) = else_branch {
+                        let snapshot = self.snapshot_scoped_locals();
+                        let else_ty = self.infer_expr(*else_expr, body);
+                        self.restore_scoped_locals(&snapshot);
+                        if !matches!(else_ty, Ty::Never { .. } | Ty::Unknown { .. }) {
+                            let err = TirTypeError::LetElseMustDiverge { got: else_ty };
+                            self.context.report_simple(err, *else_expr);
+                        }
+                    }
+
                     let result =
                         self.analyze_and_lower(*pattern, &flow_ty, body, initializer.unwrap());
+                    // Irrefutable-pattern check differs by binding form:
+                    //   - plain `let`: refutable patterns are an error
+                    //     (RefutablePatternInLet) — they'd fail at runtime
+                    //     with nowhere to go.
+                    //   - `let … else`: refutable is the whole point, but an
+                    //     irrefutable pattern makes the else branch dead, so
+                    //     warn (IrrefutablePatternInLetElse) and suggest
+                    //     dropping the else.
+                    let irrefutable_ctx = if else_branch.is_some() {
+                        None
+                    } else {
+                        Some(IrrefutablePatternContext {
+                            context: IrrefutableContextKind::Let,
+                            fallback_expr: *initializer,
+                        })
+                    };
                     self.finalize_pattern_lowering(
                         *pattern,
                         &result,
                         declared_for_scope.as_ref(),
-                        Some(IrrefutablePatternContext {
-                            context: IrrefutableContextKind::Let,
-                            fallback_expr: *initializer,
-                        }),
+                        irrefutable_ctx,
                         &flow_ty,
                     );
+                    if else_branch.is_some() {
+                        let scrut_for_matrix = self.matrix_normalize_scrut(&flow_ty);
+                        let report = crate::pattern_lowering::compute_match_usefulness(
+                            self,
+                            std::slice::from_ref(&result.dpat),
+                            scrut_for_matrix,
+                        );
+                        if report.missing.is_empty() {
+                            let err = TirTypeError::IrrefutablePatternInLetElse;
+                            if let Some(sm) = self.body_source_map.as_ref() {
+                                self.context
+                                    .report_warning_at_span(err, sm.pattern_span(*pattern));
+                            } else if let Some(init) = *initializer {
+                                self.context.report_warning_simple(err, init);
+                            }
+                        }
+                    }
                 }
                 diverges
             }
@@ -5551,9 +5625,16 @@ impl<'db> TypeInferenceBuilder<'db> {
     ) {
         match &body.stmts[stmt_id] {
             Stmt::Expr(expr_id) => self.collect_throw_facts_from_expr(*expr_id, body, out),
-            Stmt::Let { initializer, .. } => {
+            Stmt::Let {
+                initializer,
+                else_branch,
+                ..
+            } => {
                 if let Some(init) = initializer {
                     self.collect_throw_facts_from_expr(*init, body, out);
+                }
+                if let Some(else_expr) = else_branch {
+                    self.collect_throw_facts_from_expr(*else_expr, body, out);
                 }
             }
             Stmt::While {

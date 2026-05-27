@@ -12,7 +12,13 @@ use crate::{
 };
 
 /// Does not correspond to a specific [`SyntaxKind`], but contains all possible statements.
+//
+// `For(ForStmt)` is the largest variant (~720 bytes); the next-largest sits
+// well below it. The size difference is acknowledged here rather than
+// boxed because `Statement` is constructed transiently during formatting,
+// not stored at scale.
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum Statement {
     /// Assignment operations are parsed as binary expressions.
     ///
@@ -171,16 +177,23 @@ impl Printable for ExpressionStmt {
 
 /// Corresponds to a [`SyntaxKind::LET_STMT`] node or a [`SyntaxKind::WATCH_LET`] node.
 ///
-/// Post-pattern-rewrite shape: `KW_WATCH? KW_LET? PATTERN EQUALS? <expr>? SEMICOLON?`.
+/// Post-pattern-rewrite shape: `KW_WATCH? KW_LET? PATTERN EQUALS? <expr>? (KW_ELSE BLOCK_EXPR)? SEMICOLON?`.
 /// Simple bindings carry `let` inside the [`super::MatchPattern`] (e.g.
 /// `let x: int` parses as a `Chain([Bind, Type])`). Array destructuring uses
-/// the statement-level `let` before an `ARRAY_PATTERN`.
+/// the statement-level `let` before an `ARRAY_PATTERN`. The optional
+/// `else BLOCK_EXPR` tail is the `let … else` form: a refutable binding
+/// whose else branch must diverge.
 #[derive(Debug)]
 pub struct LetStmt {
     pub watch: Option<t::Watch>,
     pub let_keyword: Option<t::Let>,
     pub pattern: super::MatchPattern,
     pub initializer: Option<(t::Equals, Expression)>,
+    /// `else { … }` tail for `let … else`. None for plain `let`. Boxed
+    /// to keep `LetStmt` (and the enclosing `Statement` enum) small — the
+    /// else branch is rare and a `BlockExpr` carries a full statement
+    /// vector.
+    pub else_branch: Option<Box<(t::Else, super::BlockExpr)>>,
     /// Not required in some contexts like for-let loops
     pub semicolon: Option<t::Semicolon>,
 }
@@ -218,6 +231,16 @@ impl FromCST for LetStmt {
             None
         };
 
+        let else_branch = if let Some(else_kw) = it.next_if_kind(SyntaxKind::KW_ELSE) {
+            let block_elem = it.expect_next("block after `else`")?;
+            Some(Box::new((
+                t::Else::from_cst(else_kw)?,
+                super::BlockExpr::from_cst(block_elem)?,
+            )))
+        } else {
+            None
+        };
+
         let semicolon = it.next().map(t::Semicolon::from_cst).transpose()?;
         it.expect_end()?;
 
@@ -226,6 +249,7 @@ impl FromCST for LetStmt {
             let_keyword,
             pattern,
             initializer,
+            else_branch,
             semicolon,
         })
     }
@@ -260,11 +284,19 @@ impl Printable for LetStmt {
             printer.print_trivia_squished(equals_trailing);
             let expr_leading = printer.trivia.get_leading_for_element(expr);
             printer.print_trivia_squished(expr_leading);
-            multi_lined |= printer.print(expr, shape).multi_lined;
-            if self.semicolon.is_some() {
+            multi_lined |= printer.print(expr, shape.clone()).multi_lined;
+            if self.else_branch.is_none() && self.semicolon.is_some() {
                 let expr_trailing = printer.trivia.get_trailing_for_element(expr);
                 printer.print_trivia_squished(expr_trailing);
             }
+        }
+
+        if let Some(else_branch) = self.else_branch.as_deref() {
+            let (else_kw, block) = else_branch;
+            printer.print_str(" ");
+            printer.print_raw_token(else_kw);
+            printer.print_str(" ");
+            multi_lined |= printer.print(block, shape).multi_lined;
         }
 
         if let Some(semicolon) = &self.semicolon {
@@ -288,6 +320,9 @@ impl Printable for LetStmt {
     fn rightmost_token(&self) -> TextRange {
         if let Some(semicolon) = &self.semicolon {
             return semicolon.span();
+        }
+        if let Some(else_branch) = self.else_branch.as_deref() {
+            return else_branch.1.rightmost_token();
         }
         if let Some((_, expr)) = &self.initializer {
             return expr.rightmost_token();

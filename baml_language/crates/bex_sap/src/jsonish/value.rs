@@ -97,7 +97,7 @@ impl<'s> Value<'s> {
                 match items.len() {
                     0 => as_simple_str(s),
                     1 => match items.pop().expect("Expected 1 item") {
-                        Value::String(content, completion_state) if content == s => {
+                        Value::String(content, _completion_state) if content == s => {
                             as_simple_str(s)
                         }
                         other => Value::AnyOf(vec![other], s),

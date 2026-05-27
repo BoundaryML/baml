@@ -2734,19 +2734,23 @@ impl LoweringContext {
 
     fn lower_let_stmt(&mut self, node: &SyntaxNode, is_watched: bool) -> StmtId {
         // LET_STMT shape (post-pattern-rewrite):
-        //   KW_WATCH? KW_LET? PATTERN EQUALS <init-expr> SEMICOLON?
+        //   KW_WATCH? KW_LET? PATTERN EQUALS <init-expr> (KW_ELSE BLOCK_EXPR)? SEMICOLON?
         //
         // The pattern carries its own `: T` narrow as a Chain link, so all we
-        // do here is locate the PATTERN child and the initialiser child.
+        // do here is locate the PATTERN child, the initialiser child, and an
+        // optional trailing `else { … }` block for let-else.
         let mut pattern_id = None;
         let mut initializer = None;
+        let mut else_branch = None;
         let mut seen_equals = false;
+        let mut seen_else = false;
 
         for elem in node.children_with_tokens() {
             match elem {
                 rowan::NodeOrToken::Token(token) => match token.kind() {
                     SyntaxKind::EQUALS => seen_equals = true,
-                    _ if seen_equals && initializer.is_none() => {
+                    SyntaxKind::KW_ELSE => seen_else = true,
+                    _ if seen_equals && !seen_else && initializer.is_none() => {
                         if let Some(id) = self.try_lower_bare_token(&token) {
                             initializer = Some(id);
                         }
@@ -2758,8 +2762,10 @@ impl LoweringContext {
                         if child.kind() == SyntaxKind::PATTERN && pattern_id.is_none() {
                             pattern_id = Some(self.lower_pattern(&child));
                         }
-                    } else if initializer.is_none() {
+                    } else if !seen_else && initializer.is_none() {
                         initializer = Some(self.lower_expr(&child));
+                    } else if seen_else && else_branch.is_none() {
+                        else_branch = Some(self.lower_expr(&child));
                     }
                 }
             }
@@ -2783,6 +2789,7 @@ impl LoweringContext {
                 initializer,
                 is_watched,
                 origin,
+                else_branch,
             },
             node.text_range(),
         )
