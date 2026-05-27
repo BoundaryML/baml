@@ -1,24 +1,26 @@
-//! BamlRuntime napi class — wraps `Arc<dyn Bex>`.
+//! BamlRuntime napi class.
+//!
+//! A zero-sized handle: the single source of truth for the `Arc<dyn Bex>`
+//! singleton is `bridge_cffi`, fetched via `bridge_cffi::engine::get_runtime()`
+//! at each call site (mirrors `bridge_python` after 31e-phase4), so this no
+//! longer caches its own clone.
 
 use std::sync::Arc;
 
-use bex_project::Bex;
-use bridge_ctypes::{HANDLE_TABLE, external_to_outbound, kwargs_to_bex_values};
+use bridge_ctypes::{HANDLE_TABLE, kwargs_to_bex_values};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use prost::Message;
 
 use crate::{
     abort_controller::AbortController,
-    errors::{bridge_error_to_napi, invalid_argument_error, runtime_error_to_napi},
+    errors::{bridge_error_to_napi, invalid_argument_error},
     types::{HostSpanManager, collector::Collector},
 };
 
-/// The main BAML runtime, wrapping a `dyn Bex` instance.
+/// The main BAML runtime. A zero-sized handle (see module docs).
 #[napi]
-pub struct BamlRuntime {
-    bex: Arc<dyn Bex>,
-}
+pub struct BamlRuntime {}
 
 #[napi]
 impl BamlRuntime {
@@ -28,8 +30,10 @@ impl BamlRuntime {
         root_path: String,
         files: std::collections::HashMap<String, String>,
     ) -> napi::Result<Self> {
+        // `initialize_runtime` stores the `Arc<dyn Bex>` in bridge_cffi's
+        // singleton; we don't keep our own copy.
         match bridge_cffi::engine::initialize_runtime(&root_path, files) {
-            Ok(bex) => Ok(BamlRuntime { bex }),
+            Ok(_bex) => Ok(BamlRuntime {}),
             Err(e) => Err(bridge_error_to_napi(e)),
         }
     }
@@ -44,7 +48,7 @@ impl BamlRuntime {
         collectors: Option<Vec<&Collector>>,
         abort_controller: Option<&AbortController>,
     ) -> napi::Result<Buffer> {
-        let bex = self.bex.clone();
+        let runtime = bridge_cffi::engine::get_runtime().map_err(bridge_error_to_napi)?;
         let kwargs = decode_args(args_proto.as_ref(), &function_name)?;
         let host_ctx = ctx.and_then(|c| c.host_span_context());
         let cancel = abort_controller
@@ -68,19 +72,18 @@ impl BamlRuntime {
 
         let rt = bridge_cffi::engine::get_tokio_runtime().map_err(bridge_error_to_napi)?;
 
-        let result = rt
-            .block_on(bex.call_function(&function_name, kwargs, call_ctx))
-            .map_err(runtime_error_to_napi)?;
+        // The whole Result -> BamlOutboundResult translation (incl. the
+        // catch_unwind -> SdkPanic boundary and error/panic routing) lives in
+        // bridge_cffi; we just return the encoded envelope bytes for the TS
+        // decoder to surface.
+        let bytes = rt.block_on(bridge_cffi::call_and_encode(
+            runtime,
+            function_name,
+            kwargs,
+            call_ctx,
+        ));
 
-        // FIXME: Uses invalid_argument_error for a post-execution serialization failure, which
-        // surfaces as BamlInvalidArgumentError to JS callers. Legacy engine/ had no equivalent
-        // (returned NAPI classes directly, no encode step). bridge_python has the same
-        // misclassification. Leaving as-is for parity; fix in both bridges together.
-        let handle_options = bridge_ctypes::CffiHandleTableOptions::for_in_process();
-        let baml_value = external_to_outbound(&result, &handle_options)
-            .map_err(|e| invalid_argument_error(format!("Failed to encode result: {e}")))?;
-
-        Ok(Buffer::from(baml_value.encode_to_vec()))
+        Ok(Buffer::from(bytes))
     }
 
     /// Call a BAML function asynchronously.
@@ -94,7 +97,7 @@ impl BamlRuntime {
         collectors: Option<Vec<&Collector>>,
         abort_controller: Option<&AbortController>,
     ) -> napi::Result<PromiseRaw<'e, Buffer>> {
-        let bex = self.bex.clone();
+        let runtime = bridge_cffi::engine::get_runtime().map_err(bridge_error_to_napi)?;
         let kwargs = decode_args(args_proto.as_ref(), &function_name)?;
         let host_ctx = ctx.and_then(|c| c.host_span_context());
         let cancel = abort_controller
@@ -116,18 +119,12 @@ impl BamlRuntime {
 
         let call_ctx = call_ctx.build();
 
+        // Same shared call_and_encode as the sync + C-ABI paths — returns the
+        // encoded BamlOutboundResult envelope bytes for the TS decoder.
         env.spawn_future(async move {
-            let result = bex
-                .call_function(&function_name, kwargs, call_ctx)
-                .await
-                .map_err(runtime_error_to_napi)?;
-
-            // FIXME: Same misclassification as the sync path above.
-            let handle_options = bridge_ctypes::CffiHandleTableOptions::for_in_process();
-            let baml_value = external_to_outbound(&result, &handle_options)
-                .map_err(|e| invalid_argument_error(format!("Failed to encode result: {e}")))?;
-
-            Ok(Buffer::from(baml_value.encode_to_vec()))
+            let bytes =
+                bridge_cffi::call_and_encode(runtime, function_name, kwargs, call_ctx).await;
+            Ok(Buffer::from(bytes))
         })
     }
 }

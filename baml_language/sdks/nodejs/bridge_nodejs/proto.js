@@ -9,15 +9,18 @@
 // proto.ts — mirrors bridge_python/python_src/baml_py/proto.py
 //
 // Encodes TS objects → CallFunctionArgs protobuf bytes (for sending to Rust)
-// Decodes BamlOutboundValue protobuf bytes → TS objects (for receiving from Rust)
+// Decodes the BamlOutboundResult envelope → TS objects (call results), and
+// bare BamlOutboundValue bytes → TS objects (host-callable args).
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.HostCallableSyncError = void 0;
 exports.encodeCallArgs = encodeCallArgs;
+exports.decodeOutboundValue = decodeOutboundValue;
 exports.decodeCallResult = decodeCallResult;
 const baml_cffi_1 = require("./proto/baml_cffi");
 const native_1 = require("./native");
 const CallFunctionArgs = baml_cffi_1.baml_core.cffi.v1.CallFunctionArgs;
 const BamlOutboundValue = baml_cffi_1.baml_core.cffi.v1.BamlOutboundValue;
+const BamlOutboundResult = baml_cffi_1.baml_core.cffi.v1.BamlOutboundResult;
 const InboundValue = baml_cffi_1.baml_core.cffi.v1.InboundValue;
 const HostCallableError = baml_cffi_1.baml_core.cffi.v1.HostCallableError;
 const HostCallableErrorCategory = baml_cffi_1.baml_core.cffi.v1.HostCallableErrorCategory;
@@ -268,9 +271,72 @@ function decodeValueHolder(holder) {
     // for parity with bridge_python; fix both together if this becomes a forward-compat issue.
     return null;
 }
-function decodeCallResult(data) {
+/**
+ * Decode a bare `BamlOutboundValue` to a JS value. Used for the host-callable
+ * args path, where the engine sends a list-shaped `BamlOutboundValue` rather
+ * than the call-result `BamlOutboundResult` envelope.
+ */
+function decodeOutboundValue(data) {
     const msg = BamlOutboundValue.decode(data instanceof Buffer ? data : Buffer.from(data));
     return decodeValueHolder(msg);
+}
+/**
+ * Read the thrown value's class FQN (e.g. `baml.errors.GenericSdkError`) and
+ * its `message` field off the wire holder. 32b surfaces error/panic arms as a
+ * generic `Error` carrying these, with no structured Node type mapping.
+ */
+function describeThrown(holder) {
+    let className = '';
+    let message = '';
+    if (holder?.classValue) {
+        className = holder.classValue.name?.name ?? '';
+        for (const entry of holder.classValue.fields || []) {
+            if (entry.key === 'message' && entry.value?.stringValue != null) {
+                message = entry.value.stringValue;
+            }
+        }
+    }
+    return { className, message };
+}
+function makeThrownError(kind, className, message, trace) {
+    const label = className || `baml.${kind}`;
+    let text = `baml ${kind}: ${label}`;
+    if (message)
+        text += `: ${message}`;
+    if (trace.length)
+        text += '\n' + trace.map(l => '    ' + l).join('\n');
+    return new Error(text);
+}
+/**
+ * Decode a `BamlOutboundResult` envelope (the engine's call-result wire shape
+ * after 31c/31e). The `ok` arm returns the decoded value as before; the
+ * `error`/`panic` arms **throw** a generic `Error` carrying the thrown value's
+ * class name + message + BAML trace (32b: no structured Node error types). An
+ * `is_exit_panic` (clean `baml.sys.exit`) also throws rather than terminating
+ * the process — exact exit semantics are out of scope.
+ */
+function decodeCallResult(data) {
+    const buf = data instanceof Buffer ? data : Buffer.from(data);
+    const result = BamlOutboundResult.decode(buf);
+    switch (result.result) {
+        case 'error': {
+            const { className, message } = describeThrown(result.error?.value);
+            throw makeThrownError('error', className, message, result.error?.trace ?? []);
+        }
+        case 'panic': {
+            const panic = result.panic;
+            if (panic?.isExitPanic) {
+                const code = Number(panic.exitCode ?? 0);
+                throw new Error(`baml: clean exit requested with code ${code}`);
+            }
+            const { className, message } = describeThrown(panic?.value);
+            throw makeThrownError('panic', className, message, panic?.trace ?? []);
+        }
+        case 'ok':
+        default:
+            // `ok` (or an absent oneof — an all-default envelope is a null `ok`).
+            return result.ok ? decodeValueHolder(result.ok) : null;
+    }
 }
 // ─── Host-callable dispatch (BAML → JS) ───
 //
@@ -298,7 +364,9 @@ function makeHostCallableDispatch(userFn) {
         try {
             let args;
             try {
-                const decoded = decodeCallResult(argsBytes);
+                // Host-callable args arrive as a bare list-shaped
+                // BamlOutboundValue, not the call-result envelope.
+                const decoded = decodeOutboundValue(argsBytes);
                 if (!Array.isArray(decoded)) {
                     throw new TypeError(`host-callable args decoded to a non-list value (got ${typeof decoded})`);
                 }

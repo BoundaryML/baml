@@ -3,6 +3,7 @@ package pkg
 import (
 	"fmt"
 	"reflect"
+	"strings"
 
 	pb "bridge_go/cffi/proto/baml_core/cffi/v1"
 
@@ -167,13 +168,68 @@ func goToInboundValueTracking(v any, registered *[]uint64) (*pb.InboundValue, er
 	}
 }
 
-// decodeResult converts BamlOutboundValue protobuf bytes to a Go value.
+// decodeResult converts BamlOutboundResult envelope bytes to a Go value.
+//
+// The engine emits a BamlOutboundResult envelope (31c/31e): the `ok` arm
+// carries the return value, decoded exactly as before; the `error`/`panic`
+// arms carry a thrown value. 32b does not map those to structured Go error
+// types — it surfaces them as a generic Go error carrying the thrown value's
+// class name, `message` field (when present), and the BAML traceback. An
+// `is_exit_panic` (clean `baml.sys.exit`) also surfaces as an error rather
+// than terminating the process (exact exit semantics are out of scope).
 func decodeResult(data []byte) (any, error) {
-	var val pb.BamlOutboundValue
-	if err := proto.Unmarshal(data, &val); err != nil {
-		return nil, fmt.Errorf("decoding BamlOutboundValue: %w", err)
+	var res pb.BamlOutboundResult
+	if err := proto.Unmarshal(data, &res); err != nil {
+		return nil, fmt.Errorf("decoding BamlOutboundResult: %w", err)
 	}
-	return outboundToGo(&val)
+	switch r := res.Result.(type) {
+	case *pb.BamlOutboundResult_Ok:
+		return outboundToGo(r.Ok)
+	case *pb.BamlOutboundResult_Error:
+		return nil, thrownError("error", r.Error.GetValue(), r.Error.GetTrace())
+	case *pb.BamlOutboundResult_Panic:
+		p := r.Panic
+		if p.GetIsExitPanic() {
+			return nil, fmt.Errorf("baml: clean exit requested with code %d", p.GetExitCode())
+		}
+		return nil, thrownError("panic", p.GetValue(), p.GetTrace())
+	case nil:
+		// An all-default envelope (oneof unset) is a null `ok`.
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("unknown BamlOutboundResult arm: %T", res.Result)
+	}
+}
+
+// thrownError builds a generic Go error from an `error`/`panic` envelope arm.
+// It reads the thrown value's class name and `message` field (the shape of the
+// synthesized baml.errors.* / baml.panics.* infra classes and most user error
+// types) plus the pre-rendered BAML traceback — no structured type mapping.
+func thrownError(kind string, value *pb.BamlOutboundValue, trace []string) error {
+	className := ""
+	message := ""
+	if cv := value.GetClassValue(); cv != nil {
+		className = cv.GetName().GetName()
+		for _, f := range cv.GetFields() {
+			if f.GetKey() == "message" {
+				message = f.GetValue().GetStringValue()
+			}
+		}
+	}
+	if className == "" {
+		className = "baml." + kind
+	}
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "baml %s: %s", kind, className)
+	if message != "" {
+		fmt.Fprintf(&b, ": %s", message)
+	}
+	for _, line := range trace {
+		b.WriteString("\n    ")
+		b.WriteString(line)
+	}
+	return &BamlError{Message: b.String()}
 }
 
 func outboundToGo(val *pb.BamlOutboundValue) (any, error) {

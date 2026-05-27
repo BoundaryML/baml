@@ -52,7 +52,8 @@ func safeClose(ch chan ResultCallback) {
 }
 
 // baml_callback is the single unified callback from Rust.
-// is_error=0: content is protobuf-encoded BamlOutboundValue (success)
+// is_error=0: content is a protobuf-encoded BamlOutboundResult envelope
+//             (ok/error/panic — decoded by decodeResult, 31c/31e)
 // is_error=1: content is UTF-8 error string
 //
 //export baml_callback
