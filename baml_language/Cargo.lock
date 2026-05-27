@@ -1732,6 +1732,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "bex_str"
+version = "0.1.0"
+dependencies = [
+ "ahash",
+ "codspeed-divan-compat",
+]
+
+[[package]]
 name = "bex_vm"
 version = "0.0.0-beta"
 dependencies = [

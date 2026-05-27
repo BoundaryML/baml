@@ -45,6 +45,8 @@ version = "0.0.0-beta"
 
 [workspace.dependencies]
 #  Internal dependencies (baml_*)
+bex_str = { path = "crates/bex_str" }
+ahash = "0.8"
 baml_base = { path = "crates/baml_base" }
 baml_type = { path = "crates/baml_type" }
 baml_builtins = { path = "crates/baml_builtins" }
