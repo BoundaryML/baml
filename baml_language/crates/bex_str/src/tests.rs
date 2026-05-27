@@ -4,6 +4,8 @@ use std::{
     sync::Arc,
 };
 
+use indexmap::IndexMap;
+
 use super::bex_str::BexStr;
 
 fn hash_of<T: Hash>(t: &T) -> u64 {
@@ -110,4 +112,57 @@ fn from_empty_string() {
     let e = BexStr::from("");
     assert!(matches!(e, BexStr::Inline { len: 0, .. }));
     assert_eq!(e.as_str(), "");
+}
+
+#[test]
+#[allow(clippy::mutable_key_type)]
+fn borrow_str_indexmap_lookup() {
+    let mut map: IndexMap<BexStr, i32> = IndexMap::new();
+    map.insert(BexStr::from("key"), 42);
+    // Lookup via &str — exercises Borrow<str> contract on IndexMap
+    assert_eq!(map.get("key"), Some(&42));
+}
+
+#[test]
+fn hash_consistency_bexstr_vs_str() {
+    // BexStr and &str must produce identical hashes via std Hasher
+    // — required by the Borrow<str> contract.
+    let text = "hello world";
+    assert_eq!(hash_of(&BexStr::from(text)), hash_of(&text));
+}
+
+#[test]
+fn concat_flatten_idempotent() {
+    let a = BexStr::from("hello ");
+    let b = BexStr::from("world");
+    let c = BexStr::concat(a, b);
+    // First access flattens the Concat node.
+    let s1 = c.as_str().to_owned();
+    // Second access must return the same content (flatten is cached).
+    let s2 = c.as_str().to_owned();
+    assert_eq!(s1, s2);
+    assert_eq!(s1, "hello world");
+}
+
+#[test]
+fn empty_concat_variants() {
+    let e = BexStr::empty();
+    let a = BexStr::from("hello");
+    // empty + non-empty → identity (returns the non-empty side directly)
+    assert_eq!(BexStr::concat(e.clone(), a.clone()).as_str(), "hello");
+    // non-empty + empty → identity
+    assert_eq!(BexStr::concat(a.clone(), e.clone()).as_str(), "hello");
+    // empty + empty → empty
+    assert_eq!(BexStr::concat(e.clone(), e.clone()).as_str(), "");
+}
+
+#[test]
+fn mixed_variant_concat() {
+    let inline = BexStr::from("hi"); // Inline (2 bytes)
+    let flat = BexStr::from("a".repeat(100)); // Flat
+    let slice = flat.substring(10, 50); // Slice (40 bytes)
+    let c = BexStr::concat(inline, slice);
+    assert_eq!(c.len(), 2 + 40);
+    assert_eq!(&c.as_str()[..2], "hi");
+    assert_eq!(&c.as_str()[2..], &"a".repeat(40));
 }

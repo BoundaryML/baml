@@ -1740,6 +1740,7 @@ version = "0.1.0"
 dependencies = [
  "ahash",
  "codspeed-divan-compat",
+ "indexmap 2.14.0",
 ]
 
 [[package]]

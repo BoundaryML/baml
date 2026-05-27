@@ -9,6 +9,7 @@ ahash = { workspace = true }
 
 [dev-dependencies]
 divan = { workspace = true }
+indexmap = { workspace = true }
 
 [[bench]]
 name = "bexstr_bench"
