@@ -160,7 +160,7 @@ class BamlRuntime:
     The main BAML runtime, wrapping a `dyn Bex` instance.
     """
     @staticmethod
-    def initialize_runtime(root_path: builtins.str, files: typing.Mapping[builtins.str, builtins.str]) -> BamlRuntime:
+    def initialize_runtime(root_path: builtins.str, files: typing.Mapping[builtins.str, builtins.str], *, sdk_root: typing.Optional[builtins.str] = None) -> BamlRuntime:
         r"""
         Initialize the process-global runtime from in-memory BAML source files.
         
@@ -171,6 +171,8 @@ class BamlRuntime:
         # Arguments
         * `root_path` - Root path for BAML files
         * `files` - Map of filename to file content
+        * `sdk_root` - Generated SDK root package name, accepted for
+          compatibility with older generated SDKs.
         """
     def call_function(self, function_name: str, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None, collectors: typing.Optional[typing.Sequence["Collector"]] = None, abort_controller: typing.Optional["AbortController"] = None) -> typing.Any:
         r"""
@@ -457,4 +459,3 @@ def take_pyhandle_from_table(key: builtins.int, handle_type: builtins.int) -> Ba
     key exists so a malformed wire payload errors here rather than on
     later use.
     """
-

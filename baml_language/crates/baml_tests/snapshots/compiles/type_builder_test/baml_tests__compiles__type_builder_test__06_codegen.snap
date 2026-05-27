@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 30572
 ---
 function user.Fn() -> string {
     load_type string
@@ -138,7 +139,7 @@ function user.TopLevelClass.from_json(j: baml.json.json) -> TopLevelClass {
     return
 }
 
-function user.TopLevelClass.to_json(self: null) -> baml.json.json {
+function user.TopLevelClass.to_json(self: TopLevelClass) -> baml.json.json {
     load_var self
     load_field .a
     call baml.String.to_json

@@ -833,7 +833,7 @@ async fn method_call() {
     );
 
     insta::assert_snapshot!(output.bytecode, @"
-    function Number.add(self: null, other: Number) -> Number {
+    function Number.add(self: Number, other: Number) -> Number {
         alloc_instance user.Number
         load_var self
         load_field .value
@@ -883,7 +883,7 @@ async fn mutable_self_method() {
     );
 
     insta::assert_snapshot!(output.bytecode, @"
-    function Number.add(self: null, other: Number) -> bool {
+    function Number.add(self: Number, other: Number) -> bool {
         load_var self
         load_var self
         load_field .value

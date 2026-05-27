@@ -70,7 +70,7 @@ async fn bytecode_1d_array_write_through_field() {
     "#
     );
     insta::assert_snapshot!(output.bytecode, @r#"
-    function Container.set(self: null, idx: int, val: string) -> null {
+    function Container.set(self: Container, idx: int, val: string) -> null {
         load_var self
         load_field .items
         load_var idx
@@ -117,7 +117,7 @@ async fn bytecode_1d_array_read_through_field() {
     "#
     );
     insta::assert_snapshot!(output.bytecode, @r#"
-    function Container.get(self: null, idx: int) -> string {
+    function Container.get(self: Container, idx: int) -> string {
         load_var self
         load_field .items
         load_var idx
@@ -201,7 +201,7 @@ async fn bytecode_2d_array_write_through_field() {
     "#
     );
     insta::assert_snapshot!(output.bytecode, @r#"
-    function Grid.set(self: null, row: int, col: int, val: string) -> null {
+    function Grid.set(self: Grid, row: int, col: int, val: string) -> null {
         load_var self
         load_field .cells
         load_var row
@@ -256,7 +256,7 @@ async fn bytecode_map_write_through_field() {
     "#
     );
     insta::assert_snapshot!(output.bytecode, @r#"
-    function Scores.set(self: null, key: string, val: int) -> null {
+    function Scores.set(self: Scores, key: string, val: int) -> null {
         load_var self
         load_field .data
         load_var key

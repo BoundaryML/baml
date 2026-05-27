@@ -1333,7 +1333,7 @@ async fn watch_function_call_modifications() {
     );
 
     insta::assert_snapshot!(output.bytecode, @r#"
-    function Point.set(self: null, x: int, y: int) -> Point {
+    function Point.set(self: Point, x: int, y: int) -> Point {
         load_var self
         load_var x
         store_field .x

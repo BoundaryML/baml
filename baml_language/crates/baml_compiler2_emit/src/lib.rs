@@ -1300,7 +1300,7 @@ fn compute_function_metadata_from_item_tree(
                         .then(|| {
                             self_replacement
                                 .as_ref()
-                                .map(|replacement| resolve(replacement))
+                                .map(&resolve)
                         })
                         .flatten()
                 })

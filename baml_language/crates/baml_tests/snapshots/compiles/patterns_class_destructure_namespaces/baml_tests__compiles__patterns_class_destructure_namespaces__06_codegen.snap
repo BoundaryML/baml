@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 22315
 ---
 function user.DeepGenericDestructureNamespaceQualifiedLet() -> int {
     load_type string
@@ -219,7 +220,7 @@ function user.llm.openai.Box.from_json(j: baml.json.json) -> llm.openai.Box<void
     return
 }
 
-function user.llm.openai.Box.to_json(self: null) -> baml.json.json {
+function user.llm.openai.Box.to_json(self: llm.openai.Box) -> baml.json.json {
     load_var self
     load_field .value
     call baml.json.to_json
@@ -250,7 +251,7 @@ function user.llm.openai.Outer.from_json(j: baml.json.json) -> llm.openai.Outer<
     return
 }
 
-function user.llm.openai.Outer.to_json(self: null) -> baml.json.json {
+function user.llm.openai.Outer.to_json(self: llm.openai.Outer) -> baml.json.json {
     load_type #0
     load_var self
     load_field .inner
@@ -285,7 +286,7 @@ function user.llm.openai.Response.from_json(j: baml.json.json) -> llm.openai.Res
     return
 }
 
-function user.llm.openai.Response.to_json(self: null) -> baml.json.json {
+function user.llm.openai.Response.to_json(self: llm.openai.Response) -> baml.json.json {
     load_var self
     load_field .text
     call baml.String.to_json

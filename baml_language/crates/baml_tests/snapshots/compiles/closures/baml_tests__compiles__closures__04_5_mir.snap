@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 6208
 ---
 === MIR2 ===
 fn user.apply(f: (int, int) -> int throws never, a: int, b: int) -> int {
@@ -532,12 +533,12 @@ fn user.test_field_chain_bind(cfg: Config) -> string {
 fn user.test_generic_bind() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: Box // b
-    let _2: () -> void throws never // get
-    let _3: () -> void throws never
+    let _1: Box<int> // b
+    let _2: () -> int throws never // get
+    let _3: () -> int throws never
 
     bb0: {
-        _1 = user.Box { const 42_i64 };
+        _1 = user.Box<Concrete(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } })> { const 42_i64 };
         _2 = make_bound_method user.Box.unwrap(copy _1);
         _3 = copy _2;
         _0 = call copy _3() -> [bb1];

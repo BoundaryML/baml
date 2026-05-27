@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 28035
 ---
 function $init() -> null {
     call $init_let_0
@@ -343,7 +344,7 @@ function user.Sentiment.from_json(j: baml.json.json) -> Sentiment {
     return
 }
 
-function user.Sentiment.to_json(self: null) -> baml.json.json {
+function user.Sentiment.to_json(self: Sentiment) -> baml.json.json {
     load_var self
     load_field .feeling
     call baml.String.to_json

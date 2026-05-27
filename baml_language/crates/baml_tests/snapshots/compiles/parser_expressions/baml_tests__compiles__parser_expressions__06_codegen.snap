@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 20190
 ---
 function user.Calculate() -> int {
     load_const 3
@@ -69,7 +70,7 @@ function user.IndexUser.from_json(j: baml.json.json) -> IndexUser {
     return
 }
 
-function user.IndexUser.to_json(self: null) -> baml.json.json {
+function user.IndexUser.to_json(self: IndexUser) -> baml.json.json {
     load_var self
     load_field .name
     call baml.String.to_json
@@ -117,7 +118,7 @@ function user.Profile.from_json(j: baml.json.json) -> Profile {
     return
 }
 
-function user.Profile.to_json(self: null) -> baml.json.json {
+function user.Profile.to_json(self: Profile) -> baml.json.json {
     load_var self
     load_field .bio
     call baml.String.to_json
@@ -149,7 +150,7 @@ function user.Settings.from_json(j: baml.json.json) -> Settings {
     return
 }
 
-function user.Settings.to_json(self: null) -> baml.json.json {
+function user.Settings.to_json(self: Settings) -> baml.json.json {
     load_var self
     load_field .theme
     call baml.String.to_json
@@ -209,7 +210,7 @@ function user.User.from_json(j: baml.json.json) -> User {
     return
 }
 
-function user.User.to_json(self: null) -> baml.json.json {
+function user.User.to_json(self: User) -> baml.json.json {
     load_var self
     load_field .name
     call baml.String.to_json

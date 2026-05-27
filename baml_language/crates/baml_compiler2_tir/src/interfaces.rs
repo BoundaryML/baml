@@ -967,8 +967,14 @@ mod tests {
         let bad = class(&[], "Pair", vec![int(), string()]);
         let params = vec![Name::new("T")];
 
-        assert!(match_ty_pattern(&pattern, &good, &params, &Default::default()).is_some());
-        assert!(match_ty_pattern(&pattern, &bad, &params, &Default::default()).is_none());
+        assert!(
+            match_ty_pattern(&pattern, &good, &params, &std::collections::HashMap::default())
+                .is_some()
+        );
+        assert!(
+            match_ty_pattern(&pattern, &bad, &params, &std::collections::HashMap::default())
+                .is_none()
+        );
     }
 
     #[test]
@@ -983,8 +989,13 @@ mod tests {
         );
         let params = vec![Name::new("T")];
 
-        let bindings = match_ty_pattern(&pattern, &actual, &params, &Default::default())
-            .expect("nested list arg should bind T");
+        let bindings = match_ty_pattern(
+            &pattern,
+            &actual,
+            &params,
+            &std::collections::HashMap::default(),
+        )
+        .expect("nested list arg should bind T");
         assert_eq!(bindings.get(&Name::new("T")), Some(&int()));
     }
 
@@ -994,7 +1005,13 @@ mod tests {
         let same_short_name = class(&["beta"], "Thing", vec![]);
 
         assert!(
-            match_ty_pattern(&pattern, &same_short_name, &[], &Default::default()).is_none(),
+            match_ty_pattern(
+                &pattern,
+                &same_short_name,
+                &[],
+                &std::collections::HashMap::default()
+            )
+            .is_none(),
             "same short name in different namespaces must not match"
         );
     }
@@ -1005,8 +1022,13 @@ mod tests {
         let actual = Ty::Union(vec![string(), int()], TyAttr::default());
         let params = vec![Name::new("T")];
 
-        let bindings = match_ty_pattern(&pattern, &actual, &params, &Default::default())
-            .expect("union members should be matched by type, not position");
+        let bindings = match_ty_pattern(
+            &pattern,
+            &actual,
+            &params,
+            &std::collections::HashMap::default(),
+        )
+        .expect("union members should be matched by type, not position");
         assert_eq!(bindings.get(&Name::new("T")), Some(&int()));
     }
 
@@ -1014,12 +1036,12 @@ mod tests {
     fn rule_matches_actual_rejects_conflicting_interface_binding() {
         let registry = ImplementsRegistry {
             interface_impl_rules: Vec::new(),
-            class_implements: Default::default(),
-            type_implements: Default::default(),
+            class_implements: FxHashMap::default(),
+            type_implements: FxHashMap::default(),
             blanket_class_implements: Vec::new(),
-            implements_type_args: Default::default(),
-            type_implements_type_args: Default::default(),
-            interface_requires: Default::default(),
+            implements_type_args: FxHashMap::default(),
+            type_implements_type_args: FxHashMap::default(),
+            interface_requires: FxHashMap::default(),
         };
         let rule = InterfaceImplRule {
             generic_params: vec![Name::new("T")],
@@ -1033,7 +1055,13 @@ mod tests {
 
         assert!(
             registry
-                .rule_matches_actual(&rule, &actual, &requested, &Default::default(), |_, _| true)
+                .rule_matches_actual(
+                    &rule,
+                    &actual,
+                    &requested,
+                    &std::collections::HashMap::default(),
+                    |_, _| true,
+                )
                 .is_none()
         );
     }

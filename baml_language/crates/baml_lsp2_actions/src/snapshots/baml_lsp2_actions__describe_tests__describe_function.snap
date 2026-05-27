@@ -4,5 +4,5 @@ expression: "project.format_description(&descs[0])"
 ---
 function ExtractPoint  funcs.baml:3
 /// Extract a point from text.
-shape: function ExtractPoint(text: string) -> Point
+shape: function ExtractPoint(text: string) -> user.Point
 deps: Point

@@ -753,13 +753,13 @@ async fn array_element_method_field_assignment() {
     );
 
     insta::assert_snapshot!(output.bytecode, @"
-    function Container.get_data(self: null) -> Data {
+    function Container.get_data(self: Container) -> Data {
         load_var self
         load_field .data
         return
     }
 
-    function Data.get_self(self: null) -> Data {
+    function Data.get_self(self: Data) -> Data {
         load_var self
         return
     }
@@ -839,7 +839,7 @@ async fn method_call_then_array_access_assignment() {
     );
 
     insta::assert_snapshot!(output.bytecode, @"
-    function Container.get_nested(self: null) -> Item[] {
+    function Container.get_nested(self: Container) -> Item[] {
         load_var self
         load_field .data
         return
@@ -909,7 +909,7 @@ async fn method_call_field_assignment() {
     );
 
     insta::assert_snapshot!(output.bytecode, @"
-    function Factory.get_counter(self: null) -> Counter {
+    function Factory.get_counter(self: Factory) -> Counter {
         load_var self
         load_field .counter
         return
@@ -967,7 +967,7 @@ async fn method_call_field_assignment_with_copy() {
     );
 
     insta::assert_snapshot!(output.bytecode, @"
-    function Factory.get_counter(self: null) -> Counter {
+    function Factory.get_counter(self: Factory) -> Counter {
         load_var self
         load_field .counter
         return

@@ -1146,6 +1146,7 @@ struct ImplOverlapEntry {
     for_ty: Ty,
     generic_params: Vec<Name>,
     span: TextRange,
+    in_body_class: Option<QualifiedTypeName>,
 }
 
 fn validate_overlapping_implements<'db>(
@@ -1161,6 +1162,16 @@ fn validate_overlapping_implements<'db>(
     for (idx, lhs) in entries.iter().enumerate() {
         for rhs in entries.iter().skip(idx + 1) {
             if lhs.iface_qtn != rhs.iface_qtn {
+                continue;
+            }
+            if lhs.in_body_class.is_some()
+                && lhs.in_body_class == rhs.in_body_class
+                && baml_compiler2_tir::normalize::is_same_normalized_type(
+                    &lhs.iface_ty,
+                    &rhs.iface_ty,
+                    aliases,
+                )
+            {
                 continue;
             }
             if !impl_patterns_overlap(lhs, rhs, aliases) {
@@ -1211,7 +1222,7 @@ fn collect_impl_overlap_entries<'db>(
                     &class.name,
                 );
                 let for_ty = Ty::Class(
-                    class_qtn,
+                    class_qtn.clone(),
                     class
                         .generic_params
                         .iter()
@@ -1239,6 +1250,7 @@ fn collect_impl_overlap_entries<'db>(
                         for_ty: for_ty.clone(),
                         generic_params: class.generic_params.clone(),
                         span: block.target.span,
+                        in_body_class: Some(class_qtn.clone()),
                     });
                 }
             }
@@ -1282,6 +1294,7 @@ fn collect_impl_overlap_entries<'db>(
                     for_ty,
                     generic_params,
                     span: imp.span,
+                    in_body_class: None,
                 });
             }
             _ => {}

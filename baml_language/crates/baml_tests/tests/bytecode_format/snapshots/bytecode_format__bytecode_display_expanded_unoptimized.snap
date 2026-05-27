@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/tests/bytecode_format/main.rs
+assertion_line: 43
 ---
 function assert.contains(haystack: string, needle: string) -> null {
   32   0    load_var 1             (haystack)
@@ -99,7 +100,7 @@ function testing.RunReport.from_json(j: baml.json.json) -> testing.RunReport {
       23   return                           
 }
 
-function testing.RunReport.to_json(self: null) -> baml.json.json {
+function testing.RunReport.to_json(self: testing.RunReport) -> baml.json.json {
   7   0    load_var 1            (self)
       1    load_field 0          (outcome)
       2    load_const 0          ("to_json")
@@ -147,7 +148,7 @@ function testing.SerializedTest.from_json(j: baml.json.json) -> testing.Serializ
        23   return                           
 }
 
-function testing.SerializedTest.to_json(self: null) -> baml.json.json {
+function testing.SerializedTest.to_json(self: testing.SerializedTest) -> baml.json.json {
   78   0    load_var 1             (self)
        1    load_field 0           (type)
        2    call 140 ntypeargs=0   (baml.String.to_json)
@@ -203,7 +204,7 @@ function testing.SerializedTestSet.from_json(j: baml.json.json) -> testing.Seria
        33   return                           
 }
 
-function testing.SerializedTestSet.to_json(self: null) -> baml.json.json {
+function testing.SerializedTestSet.to_json(self: testing.SerializedTestSet) -> baml.json.json {
   83   0    load_var 1             (self)
        1    load_field 0           (name)
        2    call 140 ntypeargs=0   (baml.String.to_json)
@@ -228,7 +229,7 @@ function testing.SerializedTestSet.to_json(self: null) -> baml.json.json {
        21   return                 
 }
 
-function testing.TestCollector.find_testset(self: null, name: string) -> testing.TestSetRegistration {
+function testing.TestCollector.find_testset(self: testing.TestCollector, name: string) -> testing.TestSetRegistration {
   61   0    load_var 1             (self)
        1    load_field 2           (testsets)
        2    store_var 4            (_3)
@@ -320,7 +321,7 @@ function testing.TestCollector.new(prefix: string) -> testing.TestCollector {
        9   return                           
 }
 
-function testing.TestCollector.register_test(self: null, name: string, body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> void {
+function testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> void {
   39   0    load_var 1                       (self)
        1    load_field 0                     (prefix)
        2    load_const 0                     ("")
@@ -426,7 +427,7 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
        93   jump -66                         (to 27)
 }
 
-function testing.TestCollector.register_test_set(self: null, name: string, collector: (testing.TestCollector) -> void throws unknown, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)?) -> void {
+function testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> void throws unknown, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)?) -> void {
   50   0    load_var 1                       (self)
        1    load_field 0                     (prefix)
        2    load_const 0                     ("")
@@ -532,7 +533,7 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
        93   jump -66                         (to 27)
 }
 
-function testing.TestCollector.to_json(self: null) -> baml.json.json {
+function testing.TestCollector.to_json(self: testing.TestCollector) -> baml.json.json {
   29   0    load_var 1             (self)
        1    load_field 0           (prefix)
        2    call 140 ntypeargs=0   (baml.String.to_json)
@@ -594,7 +595,7 @@ function testing.TestRegistration.from_json(j: baml.json.json) -> testing.TestRe
       33   return                           
 }
 
-function testing.TestRegistration.to_json(self: null) -> baml.json.json {
+function testing.TestRegistration.to_json(self: testing.TestRegistration) -> baml.json.json {
   13   0   load_type 0            
        1   load_var 1             (self)
        2   call 356 ntypeargs=1   (baml.json.to_string)
@@ -602,7 +603,7 @@ function testing.TestRegistration.to_json(self: null) -> baml.json.json {
        4   return                 
 }
 
-function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.SerializedTest | testing.SerializedTestSet)[] {
+function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> (testing.SerializedTest | testing.SerializedTestSet)[] {
   157   0     load_var 1                       (self)
         1     load_field 0                     (collector)
         2     load_field 2                     (testsets)
@@ -782,7 +783,7 @@ function testing.TestRegistry.new(collector: testing.TestCollector) -> testing.T
         9   return                           
 }
 
-function testing.TestRegistry.run_test(self: null, name: string) -> testing.TestReport {
+function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> testing.TestReport {
   137   0    load_var 1             (self)
         1    load_field 0           (collector)
         2    load_field 1           (tests)
@@ -873,7 +874,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
         73   return                 
 }
 
-function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest | testing.SerializedTestSet)[] {
+function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.SerializedTest | testing.SerializedTestSet)[] {
   112   0    alloc_array 0                    
         1    store_var 3                      (items)
 
@@ -988,7 +989,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
         95   jump -87                         (to 8)
 }
 
-function testing.TestRegistry.to_json(self: null) -> baml.json.json {
+function testing.TestRegistry.to_json(self: testing.TestRegistry) -> baml.json.json {
   93   0    load_var 1             (self)
        1    load_field 0           (collector)
        2    call 467 ntypeargs=0   (testing.TestCollector.to_json)
@@ -1040,7 +1041,7 @@ function testing.TestReport.from_json(j: baml.json.json) -> testing.TestReport {
        23   return                           
 }
 
-function testing.TestReport.to_json(self: null) -> baml.json.json {
+function testing.TestReport.to_json(self: testing.TestReport) -> baml.json.json {
   18   0    load_var 1            (self)
        1    load_field 0          (outcome)
        2    load_const 0          ("to_json")
@@ -1098,7 +1099,7 @@ function testing.TestSetRegistration.from_json(j: baml.json.json) -> testing.Tes
        33   return                           
 }
 
-function testing.TestSetRegistration.to_json(self: null) -> baml.json.json {
+function testing.TestSetRegistration.to_json(self: testing.TestSetRegistration) -> baml.json.json {
   25   0   load_type 0            
        1   load_var 1             (self)
        2   call 356 ntypeargs=1   (baml.json.to_string)
@@ -1163,7 +1164,7 @@ function testing.TestSetReport.from_json(j: baml.json.json) -> testing.TestSetRe
        53   return                           
 }
 
-function testing.TestSetReport.to_json(self: null) -> baml.json.json {
+function testing.TestSetReport.to_json(self: testing.TestSetReport) -> baml.json.json {
   25   0    load_var 1            (self)
        1    load_field 0          (outcome)
        2    load_const 0          ("to_json")
@@ -1279,7 +1280,7 @@ function user.ErrorInfo.from_json(j: baml.json.json) -> ErrorInfo {
        23   return                         
 }
 
-function user.ErrorInfo.to_json(self: null) -> baml.json.json {
+function user.ErrorInfo.to_json(self: ErrorInfo) -> baml.json.json {
   26   0    load_var 1             (self)
        1    load_field 0           (code)
        2    call 52 ntypeargs=0    (baml.Int.to_json)
@@ -1335,7 +1336,7 @@ function user.Report.from_json(j: baml.json.json) -> Report {
        33   return                         
 }
 
-function user.Report.to_json(self: null) -> baml.json.json {
+function user.Report.to_json(self: Report) -> baml.json.json {
   20   0    load_var 1             (self)
        1    load_field 0           (score)
        2    call 52 ntypeargs=0    (baml.Int.to_json)
@@ -1397,7 +1398,7 @@ function user.User.from_json(j: baml.json.json) -> User {
       33   return                         
 }
 
-function user.User.promote(self: null, bonus: int) -> Report {
+function user.User.promote(self: User, bonus: int) -> Report {
   9    0    load_var 1                     (self)
        1    load_var 1                     (self)
        2    load_field 1                   (age)
@@ -1433,7 +1434,7 @@ function user.User.promote(self: null, bonus: int) -> Report {
        26   return                         
 }
 
-function user.User.to_json(self: null) -> baml.json.json {
+function user.User.to_json(self: User) -> baml.json.json {
   3   0    load_var 1             (self)
       1    load_field 0           (name)
       2    call 140 ntypeargs=0   (baml.String.to_json)

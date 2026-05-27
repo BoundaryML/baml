@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 22719
 ---
 function user.AppError.from_json(j: baml.json.json) -> AppError {
     load_var j
@@ -16,7 +17,7 @@ function user.AppError.from_json(j: baml.json.json) -> AppError {
     return
 }
 
-function user.AppError.to_json(self: null) -> baml.json.json {
+function user.AppError.to_json(self: AppError) -> baml.json.json {
     load_var self
     load_field .code
     call baml.Int.to_json
@@ -40,7 +41,7 @@ function user.PatternBucket.from_json(j: baml.json.json) -> PatternBucket {
     return
 }
 
-function user.PatternBucket.to_json(self: null) -> baml.json.json {
+function user.PatternBucket.to_json(self: PatternBucket) -> baml.json.json {
     load_var self
     load_field .values
     call baml.Array.to_json
@@ -64,7 +65,7 @@ function user.PatternMatrix.from_json(j: baml.json.json) -> PatternMatrix {
     return
 }
 
-function user.PatternMatrix.to_json(self: null) -> baml.json.json {
+function user.PatternMatrix.to_json(self: PatternMatrix) -> baml.json.json {
     load_var self
     load_field .rows
     call baml.Array.to_json

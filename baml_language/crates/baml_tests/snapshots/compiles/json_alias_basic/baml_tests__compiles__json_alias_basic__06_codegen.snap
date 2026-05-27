@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 9950
 ---
 function user.MakeWrapper() -> Wrapper {
     alloc_instance user.Wrapper
@@ -102,7 +103,7 @@ function user.Wrapper.from_json(j: baml.json.json) -> Wrapper {
     return
 }
 
-function user.Wrapper.to_json(self: null) -> baml.json.json {
+function user.Wrapper.to_json(self: Wrapper) -> baml.json.json {
     load_var self
     load_field .data
     load_const "to_json"

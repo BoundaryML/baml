@@ -162,7 +162,7 @@ function f() -> int {
         tir.contains("let b = Box { value: 42 } : user.Box"),
         "{tir}"
     );
-    assert!(tir.contains("get<T>() : int"), "{tir}");
+    assert!(tir.contains("get() : int"), "{tir}");
     assert!(!tir.contains("!!"), "unexpected diagnostics:\n{tir}");
 }
 

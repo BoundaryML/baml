@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 19199
 ---
 function $init() -> null {
     call $init_let_0
@@ -267,7 +268,7 @@ function user.SearchDocs(query: string, max_results: int, filter: string?, chunk
     return
 }
 
-function user.SearchService.Docs(self: null, query: string, filter: string?) -> string[] {
+function user.SearchService.Docs(self: SearchService, query: string, filter: string?) -> string[] {
     load_var filter
     load_const <omitted>
     cmp_op ==
@@ -284,7 +285,7 @@ function user.SearchService.Docs(self: null, query: string, filter: string?) -> 
     return
 }
 
-function user.SearchService.Run(self: null, query: string, limit: int) -> int {
+function user.SearchService.Run(self: SearchService, query: string, limit: int) -> int {
     load_var limit
     load_const <omitted>
     cmp_op ==
@@ -316,7 +317,7 @@ function user.SearchService.from_json(j: baml.json.json) -> SearchService {
     return
 }
 
-function user.SearchService.to_json(self: null) -> baml.json.json {
+function user.SearchService.to_json(self: SearchService) -> baml.json.json {
     load_var self
     load_field .base
     call baml.String.to_json

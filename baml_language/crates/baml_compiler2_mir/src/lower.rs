@@ -873,7 +873,7 @@ fn lower_interface_target_args<'db>(
 fn class_type_name_from_qtn(db: &dyn crate::Db, class_qtn: &QualifiedTypeName) -> Option<TypeName> {
     let class_pkg_id = baml_compiler2_hir::package::PackageId::new(db, class_qtn.package().clone());
     let class_pkg_items = baml_compiler2_hir::package::package_items(db, class_pkg_id);
-    let class_ns: Vec<Name> = class_qtn.namespace().to_vec();
+    let class_ns: Vec<Name> = class_qtn.namespace().clone();
     let Some(baml_compiler2_hir::contributions::Definition::Class(class_loc)) =
         class_pkg_items.lookup_type(&class_ns, class_qtn.name())
     else {
