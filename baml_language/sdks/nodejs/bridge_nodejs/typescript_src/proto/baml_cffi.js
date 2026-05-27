@@ -1,3 +1,10 @@
+/**
+ * THIS FILE IS AUTO-GENERATED — DO NOT EDIT BY HAND.
+ *
+ * Source: baml_language/crates/bridge_nodejs/typescript_src/
+ * Proto:  baml_language/crates/bridge_ctypes/types/baml_core/cffi/v1/*.proto
+ * Build:  cd baml_language/crates/bridge_nodejs && pnpm build:debug
+ */
 /*eslint-disable block-scoped-var, id-length, no-control-regex, no-magic-numbers, no-prototype-builtins, no-redeclare, no-shadow, no-var, sort-vars*/
 "use strict";
 

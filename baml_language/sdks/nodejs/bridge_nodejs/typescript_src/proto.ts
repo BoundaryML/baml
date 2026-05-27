@@ -318,8 +318,8 @@ function makeThrownError(kind: string, className: string, message: string, trace
  * after 31c/31e). The `ok` arm returns the decoded value as before; the
  * `error`/`panic` arms **throw** a generic `Error` carrying the thrown value's
  * class name + message + BAML trace (32b: no structured Node error types). An
- * `is_exit_panic` (clean `baml.sys.exit`) also throws rather than terminating
- * the process — exact exit semantics are out of scope.
+ * `is_exit_panic` (clean `baml.sys.exit`) terminates the process via
+ * `process.exit(code)` rather than throwing.
  */
 export function decodeCallResult(data: Buffer | Uint8Array): unknown {
     const buf = data instanceof Buffer ? data : Buffer.from(data);
@@ -333,7 +333,7 @@ export function decodeCallResult(data: Buffer | Uint8Array): unknown {
             const panic = result.panic;
             if (panic?.isExitPanic) {
                 const code = Number(panic.exitCode ?? 0);
-                throw new Error(`baml: clean exit requested with code ${code}`);
+                process.exit(code);
             }
             const { className, message } = describeThrown(panic?.value);
             throw makeThrownError('panic', className, message, panic?.trace ?? []);

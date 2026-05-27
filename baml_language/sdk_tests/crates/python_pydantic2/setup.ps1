@@ -9,7 +9,10 @@
 # See setup.sh for the full rationale. In short: `uv sync` per fixture
 # creates each venv + editable-links baml_core, then a single
 # `maturin develop` against a pinned build venv rebuilds the shared
-# extension module incrementally (~7s steady state). The old
+# extension module incrementally (~7s steady state). The build venv is
+# populated from `sdks/python/pyproject.toml`'s dev tools so the maturin
+# version constraint lives in TOML, not in an error-prone shell argument.
+# The old
 # `uv sync --reinstall-package baml_core` was strictly slower (~70s
 # every run): uv's isolated build used an ephemeral interpreter whose
 # path moved each run, busting pyo3's fingerprint and forcing a full
@@ -56,26 +59,26 @@ Get-ChildItem -Directory | ForEach-Object {
 #    moves (see setup.sh for why that matters for the cargo cache).
 #    abi3 wheels are interpreter-version-agnostic, so any >=3.10 works.
 #
-#    Windows deviation from setup.sh: install maturin via the ACTIVE-venv
-#    mechanism ($env:VIRTUAL_ENV) instead of setup.sh's
-#    `uv pip install --python <venv>/bin/python`. On the Windows runner
-#    the `--python <path>` form fails with "The system cannot find the
-#    file specified" even though `uv venv` reports success; the
-#    active-venv form is how the per-fixture `uv sync` calls above
-#    succeed on the same runner. setup.sh keeps the --python form (works
-#    on Unix). The Test-Path line below is a diagnostic: if the venv
-#    interpreter is missing, the failure is `uv venv`, not the install.
+#    `sdks/python/pyproject.toml` owns the maturin version constraint.
+#    `uv sync --group dev --no-install-project` installs the dev tools
+#    into the pinned build venv without installing/building baml_core
+#    during environment preparation.
 $BuildVenv = Join-Path $WorkspaceRoot 'target\maturin-build-venv'
 $MaturinExe = Join-Path $BuildVenv 'Scripts\maturin.exe'
-if (-not (Test-Path $MaturinExe)) {
-    Write-Host "==> creating maturin build venv at $BuildVenv"
-    & $UvBin venv $BuildVenv
+Write-Host "==> syncing maturin build venv at $BuildVenv"
+Push-Location $SdkPy
+try {
+    $OldProjectEnvironment = $env:UV_PROJECT_ENVIRONMENT
+    $env:UV_PROJECT_ENVIRONMENT = $BuildVenv
+    & $UvBin sync --group dev --no-install-project
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    $VenvPy = Join-Path $BuildVenv 'Scripts\python.exe'
-    Write-Host "==> venv interpreter $VenvPy exists=$(Test-Path -LiteralPath $VenvPy)"
-    $env:VIRTUAL_ENV = $BuildVenv
-    & $UvBin pip install 'maturin>=1.0,<2.0'
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+} finally {
+    if ($null -eq $OldProjectEnvironment) {
+        Remove-Item Env:\UV_PROJECT_ENVIRONMENT -ErrorAction SilentlyContinue
+    } else {
+        $env:UV_PROJECT_ENVIRONMENT = $OldProjectEnvironment
+    }
+    Pop-Location
 }
 Write-Host '==> maturin develop (shared baml_core extension)'
 Push-Location $SdkPy

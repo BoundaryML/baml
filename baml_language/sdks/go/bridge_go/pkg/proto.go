@@ -2,6 +2,7 @@ package pkg
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 
@@ -175,8 +176,8 @@ func goToInboundValueTracking(v any, registered *[]uint64) (*pb.InboundValue, er
 // arms carry a thrown value. 32b does not map those to structured Go error
 // types — it surfaces them as a generic Go error carrying the thrown value's
 // class name, `message` field (when present), and the BAML traceback. An
-// `is_exit_panic` (clean `baml.sys.exit`) also surfaces as an error rather
-// than terminating the process (exact exit semantics are out of scope).
+// `is_exit_panic` (clean `baml.sys.exit`) terminates the process via
+// `os.Exit(code)` rather than surfacing as an error.
 func decodeResult(data []byte) (any, error) {
 	var res pb.BamlOutboundResult
 	if err := proto.Unmarshal(data, &res); err != nil {
@@ -190,7 +191,7 @@ func decodeResult(data []byte) (any, error) {
 	case *pb.BamlOutboundResult_Panic:
 		p := r.Panic
 		if p.GetIsExitPanic() {
-			return nil, fmt.Errorf("baml: clean exit requested with code %d", p.GetExitCode())
+			os.Exit(int(p.GetExitCode()))
 		}
 		return nil, thrownError("panic", p.GetValue(), p.GetTrace())
 	case nil:

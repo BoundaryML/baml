@@ -15,10 +15,11 @@
 #      same shared `sdks/python/src/baml_core/baml_py.abi3.so`.
 #
 #   2. `maturin develop` (once) rebuilds that shared `.so` from the
-#      current Rust sources. We use a STABLE build venv under target/
-#      so maturin always sees the same interpreter path — that keeps
-#      pyo3's build-config fingerprint valid, so cargo's incremental
-#      cache hits and steady-state rebuilds are ~7s.
+#      current Rust sources. We use the `sdks/python` pyproject to sync
+#      its dev tools into a STABLE build venv under target/ so maturin
+#      always sees the same interpreter path — that keeps pyo3's
+#      build-config fingerprint valid, so cargo's incremental cache hits
+#      and steady-state rebuilds are ~7s.
 #
 # Why not `uv sync --reinstall-package baml_core` (the old approach)?
 # That was strictly slower, ~70s EVERY run even when nothing changed.
@@ -75,12 +76,11 @@ done
 #    The build venv is pinned at a fixed path so its interpreter never
 #    moves (see the --reinstall-package note above for why that matters).
 #    abi3 wheels are interpreter-version-agnostic, so any >=3.10 works.
+#    `sdks/python/pyproject.toml` owns the maturin version constraint; the
+#    sync below installs dev tools without installing/building baml_core.
 BUILD_VENV="$WORKSPACE_ROOT/target/maturin-build-venv"
-if [[ ! -x "$BUILD_VENV/bin/maturin" ]]; then
-    echo "==> creating maturin build venv at $BUILD_VENV"
-    "$uv_bin" venv "$BUILD_VENV"
-    "$uv_bin" pip install --python "$BUILD_VENV/bin/python" 'maturin>=1.0,<2.0'
-fi
+echo "==> syncing maturin build venv at $BUILD_VENV"
+(cd "$SDK_PY" && UV_PROJECT_ENVIRONMENT="$BUILD_VENV" "$uv_bin" sync --group dev --no-install-project)
 echo "==> maturin develop (shared baml_core extension)"
 (cd "$SDK_PY" && VIRTUAL_ENV="$BUILD_VENV" "$BUILD_VENV/bin/maturin" develop)
 

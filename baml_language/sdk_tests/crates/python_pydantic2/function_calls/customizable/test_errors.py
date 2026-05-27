@@ -33,12 +33,12 @@ import pytest
 
 import baml_sdk  # noqa: F401  — importing initializes the BAML runtime
 from baml_core import AbortController, call_function, get_runtime
-from baml_sdk import MakeFoo
+from baml_sdk import hello_world
 from baml_sdk.baml import BamlError, BamlPanic
 from baml_sdk.baml.errors import InvalidArgument
 from baml_sdk.baml.json import JsonParseError
 from baml_sdk.baml.panics import Cancelled, UserPanic
-from baml_sdk.throws import MyError, ParseJson, SleepMs, ThrowMyError
+from baml_sdk.throws_test import MyError, ParseJson, SleepMs, ThrowMyError
 
 # stdlib native builtins (`baml.json.parse`, `baml.sys.*`) can't be called as
 # top-level entry points, so the fixture wraps each in a bytecode function
@@ -69,7 +69,7 @@ def test_host_invalid_argument_wraps_baml_errors_invalid_argument():
     declare) → `BamlError` wrapping `baml.errors.InvalidArgument`,
     synthesized host-side rather than thrown from the VM."""
     with pytest.raises(BamlError) as exc_info:
-        MakeFoo(v=1, not_a_param=2)  # type: ignore[call-arg]
+        hello_world(not_a_param=2)  # type: ignore[call-arg]
     assert isinstance(exc_info.value.value, InvalidArgument)
 
 
@@ -77,7 +77,7 @@ def test_user_panic_surfaces_as_baml_panic():
     """A user-initiated panic via `baml.sys.panic` → `BamlPanic` whose
     `.value` is a `baml.panics.UserPanic` (routed by the namespace check,
     distinct from a host-synthesized `SdkPanic`)."""
-    from baml_sdk.throws import DoPanic
+    from baml_sdk.throws_test import DoPanic
 
     with pytest.raises(BamlPanic) as exc_info:
         DoPanic("user-initiated boom")
@@ -97,7 +97,7 @@ async def test_cancellation_surfaces_as_baml_panic():
     with pytest.raises(BamlPanic) as exc_info:
         await asyncio.gather(
             call_function(
-                rt, "user.throws.SleepMs", {"ms": 2000}, abort_controller=controller
+                rt, "user.throws_test.SleepMs", {"ms": 2000}, abort_controller=controller
             ),
             _abort_soon(),
         )
@@ -135,7 +135,7 @@ def test_baml_error_carries_baml_trace():
     m = re.fullmatch(_TRACE_LINE, trace[-1])
     assert m is not None, f"trace line not in `File ..., line N, in fn` form: {trace[-1]!r}"
     assert m["file"].endswith("types.baml"), m["file"]
-    assert m["func"] == "user.throws.ThrowMyError", m["func"]
+    assert m["func"] == "user.throws_test.ThrowMyError", m["func"]
     assert int(m["line"]) >= 1
 
 
@@ -157,7 +157,7 @@ def test_baml_trace_spliced_into_python_traceback():
         assert line in rendered, f"{line!r} not spliced into:\n{rendered}"
     # ...and the splice must name the throwing BAML function + its source.
     assert re.search(
-        r'File "[^"]*types\.baml", line \d+, in user\.throws\.ParseJson',
+        r'File "[^"]*types\.baml", line \d+, in user\.throws_test\.ParseJson',
         rendered,
     ), rendered
 
@@ -173,7 +173,7 @@ def test_baml_trace_spliced_into_python_traceback():
 _EXIT_SNIPPET = textwrap.dedent(
     """
     import baml_sdk  # initializes the runtime
-    from baml_sdk.throws import DoExit
+    from baml_sdk.throws_test import DoExit
     DoExit({code})
     print("UNREACHABLE")  # os._exit must fire before this
     """

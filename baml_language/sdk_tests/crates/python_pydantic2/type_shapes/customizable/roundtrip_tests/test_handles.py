@@ -83,6 +83,7 @@ def http_server():
     finally:
         srv.shutdown()
         thread.join()
+        srv.server_close()
 
 
 def test_http_get_response_fields_and_methods(http_server):
