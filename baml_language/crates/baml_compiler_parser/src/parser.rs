@@ -3097,15 +3097,28 @@ impl<'a> Parser<'a> {
     fn parse_if_let_expr(&mut self) {
         self.with_node(SyntaxKind::IF_LET_EXPR, |p| {
             p.expect(TokenKind::If);
-            // `let` is consumed inside parse_pattern → parse_let_pattern.
-            p.parse_pattern();
+            // Pattern. For top-level array patterns (`let [a, b]`), the
+            // `let` keyword has to be consumed at the statement level
+            // because `parse_let_pattern` only handles binding /
+            // destructure shapes after `let`. Mirrors `parse_let_stmt`.
+            if p.peek(1).map(|t| t.kind) == Some(TokenKind::LBracket) {
+                p.bump(); // statement `let`
+                p.parse_pattern();
+            } else {
+                // `let` is consumed inside parse_pattern → parse_let_pattern.
+                p.parse_pattern();
+            }
 
             if !p.eat(TokenKind::Equals) {
                 p.error_unexpected_token("'=' after if-let pattern".to_string());
             }
 
-            // Scrutinee — exclude assignment operators (same as let-stmt).
+            // Scrutinee — exclude assignment operators (same as let-stmt),
+            // and apply condition-position destructure suppression so a
+            // trailing `is Class { ... }` doesn't eat the then-block.
+            p.suppress_destructure_pattern_depth += 1;
             p.parse_expr_bp(3);
+            p.suppress_destructure_pattern_depth -= 1;
 
             // Then block
             if p.at(TokenKind::LBrace) {
@@ -6031,6 +6044,81 @@ function f(r: int | User) -> string {
         assert_eq!(
             dest_count, 1,
             "parens-wrapped destructure in condition should still parse as DESTRUCTURE_PATTERN"
+        );
+    }
+
+    #[test]
+    fn if_let_scrutinee_suppresses_destructure() {
+        // Regression (CodeRabbit on #3579): the if-let scrutinee is in
+        // condition position; a trailing `is Class { ... }` in the
+        // scrutinee must not consume the then-block as a destructure
+        // pattern body.
+        let source = r#"
+class Empty {}
+
+function f(b: bool, r: int | Empty) -> string {
+  if let v: bool = r is Empty {
+    "yes"
+  } else {
+    "no"
+  }
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        // The if-let must have two BLOCK_EXPR children (then + else); no
+        // DESTRUCTURE_PATTERN should be produced.
+        let if_let = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::IF_LET_EXPR)
+            .expect("expected IF_LET_EXPR");
+        let block_count = if_let
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
+            .count();
+        assert_eq!(
+            block_count, 2,
+            "IF_LET_EXPR should have two BLOCK_EXPR children (scrutinee's `is Empty {{ ... }}` must not eat the then-block)"
+        );
+        let dest_count = if_let
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::DESTRUCTURE_PATTERN)
+            .count();
+        assert_eq!(dest_count, 0);
+    }
+
+    #[test]
+    fn if_let_accepts_top_level_array_pattern() {
+        // Regression (CodeRabbit on #3579): `if let [a, b] = xs { ... }`
+        // used to error because `parse_let_pattern` demanded an identifier
+        // after `let`. Mirror the let-stmt handling — when `let` is
+        // followed by `[`, consume the keyword and parse an array pattern.
+        let source = r#"
+function f(xs: int[]) -> int {
+  if let [a, b] = xs {
+    a + b
+  } else {
+    0
+  }
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        // We should have exactly one IF_LET_EXPR with an ARRAY_PATTERN
+        // somewhere inside it (under the PATTERN wrapper).
+        let if_let = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::IF_LET_EXPR)
+            .expect("expected IF_LET_EXPR");
+        let array_count = if_let
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::ARRAY_PATTERN)
+            .count();
+        assert_eq!(
+            array_count, 1,
+            "expected exactly one ARRAY_PATTERN in the if-let"
         );
     }
 

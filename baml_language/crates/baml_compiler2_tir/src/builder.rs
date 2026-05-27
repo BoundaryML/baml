@@ -4027,6 +4027,57 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn check_stmt_with_early_return_narrowing(&mut self, stmt_id: StmtId, body: &ExprBody) -> bool {
         let stmt = &body.stmts[stmt_id];
 
+        // `Stmt::Expr(Expr::IfLet { ... })` — same shape as the `Expr::If`
+        // case below, but the narrowing is implicit in the pattern rather
+        // than explicit in a boolean condition. When the then-branch
+        // diverges and execution can continue past the statement, the
+        // scrutinee narrows to the complement of the matched type for the
+        // rest of the enclosing block.
+        if let baml_compiler2_ast::Stmt::Expr(if_let_expr_id) = stmt {
+            let if_let_expr = &body.exprs[*if_let_expr_id];
+            if let Expr::IfLet {
+                pattern,
+                scrutinee,
+                then_branch,
+                ..
+            } = if_let_expr
+            {
+                let pattern = *pattern;
+                let scrutinee = *scrutinee;
+                let then_branch = *then_branch;
+
+                // Resolve the scrutinee name + matched type *before*
+                // running check_stmt so we can apply the residual
+                // narrowing afterward without re-walking the if-let.
+                let scrutinee_ty = self.infer_expr(scrutinee, body);
+                let scrutinee_name = match &body.exprs[scrutinee] {
+                    Expr::Path(segments) if segments.len() == 1 => Some(segments[0].clone()),
+                    _ => None,
+                };
+
+                let stmt_diverges = self.check_stmt(stmt_id, body);
+
+                if let Some(name) = scrutinee_name {
+                    let then_ty = self.expressions.get(&then_branch);
+                    let then_diverged = matches!(then_ty, Some(Ty::Never { .. }));
+                    if then_diverged && !stmt_diverges {
+                        // Look up the matched type recorded by
+                        // `analyze_and_lower_no_subtype_check` keyed on the
+                        // pattern's PatId. The if-let's inference already
+                        // populated this; we just subtract to get the
+                        // complement.
+                        if let Some(matched_ty) = self.pattern_types.get(&pattern).cloned() {
+                            let complement =
+                                crate::narrowing::subtract_pattern_type(&scrutinee_ty, &matched_ty);
+                            self.narrow_local(name, complement);
+                        }
+                    }
+                }
+
+                return stmt_diverges;
+            }
+        }
+
         // Only special-case `Stmt::Expr(Expr::If { ... })`
         if let baml_compiler2_ast::Stmt::Expr(if_expr_id) = stmt {
             let if_expr = &body.exprs[*if_expr_id];
@@ -4307,6 +4358,14 @@ impl<'db> TypeInferenceBuilder<'db> {
             body,
             Some(expected),
         );
+        // Without an else, the if-let evaluates to `Void`. Using it in
+        // value position is the same error as `if cond { ... }` without
+        // an else — `Expr::If`'s check arm reports `VoidUsedAsValue`
+        // here, and we match that.
+        if else_branch.is_none() && !matches!(expected, Ty::Void { .. } | Ty::Unknown { .. }) {
+            self.context
+                .report_simple(TirTypeError::VoidUsedAsValue, if_let_expr_id);
+        }
         self.record_expr_type(if_let_expr_id, ty.clone());
         ty
     }
