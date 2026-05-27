@@ -159,8 +159,7 @@ async fn while_with_break() {
         load_var a
         load_const 1
         add_int
-        store_var a
-        load_var a
+        store_var_load_var a
         load_const 2
         cmp_int_op ==
         pop_jump_if_false L0
@@ -366,8 +365,7 @@ async fn while_with_conditional_break() {
         load_var n
         load_const 1
         sub_int
-        store_var n
-        load_var n
+        store_var_load_var n
         load_const 0
         cmp_int_op ==
         pop_jump_if_false L0
@@ -435,8 +433,7 @@ async fn continue_factorial() {
         load_var limit
         load_const 1
         sub_int
-        store_var limit
-        load_var limit
+        store_var_load_var limit
         load_const 0
         cmp_int_op !=
         pop_jump_if_false L3

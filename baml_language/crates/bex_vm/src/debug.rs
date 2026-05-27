@@ -56,7 +56,7 @@ fn display_global_ref(
 ) -> String {
     // Prefer runtime globals.
     if index.raw() < globals.len() {
-        return format!("({})", display_value(&globals[index.raw()]));
+        return format!("({})", display_value(globals[index.raw()]));
     }
 
     // At compile time, resolve from compile-time globals/object pool.
@@ -135,7 +135,7 @@ pub(crate) fn display_instruction(
         Instruction::LoadConst(index) => {
             // Prefer resolved_constants (runtime), fall back to constants (compile-time)
             if let Some(value) = function.bytecode.resolved_constants.get(*index) {
-                format!("({})", display_value(value))
+                format!("({})", display_value(*value))
             } else if let Some(const_value) = function.bytecode.constants.get(*index) {
                 format!("({})", display_const_value(const_value, objects))
             } else {
@@ -150,17 +150,20 @@ pub(crate) fn display_instruction(
         }
         Instruction::LoadVar(index)
         | Instruction::StoreVar(index)
+        | Instruction::StoreVarLoadVar(index)
         | Instruction::Watch(index)
         | Instruction::Unwatch(index)
         | Instruction::Notify(index) => match function.local_names.get(*index) {
             Some(name) => format!("({name})"),
             None => "(?)".to_string(),
         },
-        Instruction::LoadField(_) | Instruction::StoreField(_) | Instruction::InitField(_) => {
-            operand_meta
-                .map(|m| format!("({})", m.as_str()))
-                .unwrap_or_default()
-        }
+        Instruction::LoadField(_)
+        | Instruction::StoreField(_)
+        | Instruction::InitField(_)
+        | Instruction::InitSpread(_)
+        | Instruction::InitInstance(_) => operand_meta
+            .map(|m| format!("({})", m.as_str()))
+            .unwrap_or_default(),
         Instruction::Jump(offset)
         | Instruction::PopJumpIfFalse(offset)
         | Instruction::JumpIfFalse(offset) => {
@@ -259,10 +262,10 @@ pub(crate) fn display_instruction(
 /// The default display for objects is just a reference number. If we want
 /// all the information, we have to dereference the object and call it's
 /// `to_string` implementation.
-pub(crate) fn display_value(value: &Value) -> String {
-    match value {
-        Value::Object(ptr) => display_object_ptr(*ptr),
-        other => other.to_string(),
+pub(crate) fn display_value(value: Value) -> String {
+    match value.as_object_ptr() {
+        Some(ptr) => display_object_ptr(ptr),
+        None => value.to_string(),
     }
 }
 
@@ -358,9 +361,11 @@ fn instruction_color(instruction: &Instruction) -> Color {
         | Instruction::LoadArrayElement
         | Instruction::LoadMapElement => Color::Blue,
         Instruction::StoreVar(_)
+        | Instruction::StoreVarLoadVar(_)
         | Instruction::StoreGlobal(_)
         | Instruction::StoreField(_)
         | Instruction::InitField(_)
+        | Instruction::InitSpread(_)
         | Instruction::StoreArrayElement
         | Instruction::StoreMapElement => Color::Green,
         Instruction::BinOp(_)
@@ -400,6 +405,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
         }
         Instruction::AllocMap(_)
         | Instruction::AllocInstance { .. }
+        | Instruction::InitInstance(_)
         | Instruction::AllocVariant(_)
         | Instruction::AllocArray(_) => Color::Cyan,
         Instruction::SysOp(_) | Instruction::Spawn | Instruction::Await => Color::BrightGreen,
@@ -712,6 +718,7 @@ fn display_instruction_textual(
         // --- Variables ---
         Instruction::LoadVar(idx) => format!("load_var {}", meta_str(idx)),
         Instruction::StoreVar(idx) => format!("store_var {}", meta_str(idx)),
+        Instruction::StoreVarLoadVar(idx) => format!("store_var_load_var {}", meta_str(idx)),
 
         // --- Globals ---
         Instruction::LoadGlobal(idx) => format!("load_global {}", meta_str(&idx.raw())),
@@ -730,6 +737,7 @@ fn display_instruction_textual(
             let name = meta_str(idx);
             format!("init_field .{name}")
         }
+        Instruction::InitSpread(idx) => format!("init_spread {}", meta_str(idx)),
 
         // --- Stack ---
         Instruction::Pop(n) => format!("pop {n}"),
@@ -837,6 +845,19 @@ fn display_instruction_textual(
                 format!("alloc_instance<{ntypeargs}> {name}")
             } else {
                 format!("alloc_instance {name}")
+            }
+        }
+        Instruction::InitInstance(plan_idx) => {
+            let name = meta_str(&"");
+            let ntypeargs = function
+                .bytecode
+                .class_init_plans
+                .get(*plan_idx)
+                .map_or(0, |plan| plan.ntypeargs);
+            if ntypeargs > 0 {
+                format!("init_instance<{ntypeargs}> {name}")
+            } else {
+                format!("init_instance {name}")
             }
         }
         Instruction::AllocVariant(_) => format!("alloc_variant {}", meta_str(&"")),
@@ -1090,14 +1111,17 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         Instruction::LoadConst(_)
         | Instruction::LoadVar(_)
         | Instruction::StoreVar(_)
+        | Instruction::StoreVarLoadVar(_)
         | Instruction::LoadGlobal(_)
         | Instruction::StoreGlobal(_)
         | Instruction::LoadField(_)
         | Instruction::StoreField(_)
         | Instruction::InitField(_)
+        | Instruction::InitSpread(_)
         | Instruction::Call { .. }
         | Instruction::SysOp(_)
         | Instruction::AllocInstance { .. }
+        | Instruction::InitInstance(_)
         | Instruction::AllocVariant(_)
         | Instruction::Watch(_)
         | Instruction::Unwatch(_)
@@ -1285,15 +1309,18 @@ pub fn display_compact_bytecode(
             // Single u32 operand (index/slot)
             OpCode::LoadVar
             | OpCode::StoreVar
+            | OpCode::StoreVarLoadVar
             | OpCode::LoadGlobal
             | OpCode::StoreGlobal
             | OpCode::LoadField
             | OpCode::StoreField
             | OpCode::InitField
+            | OpCode::InitSpread
             | OpCode::Pop
             | OpCode::Copy
             | OpCode::AllocArray
             | OpCode::AllocMap
+            | OpCode::InitInstance
             | OpCode::AllocVariant
             | OpCode::SysOp
             | OpCode::Watch

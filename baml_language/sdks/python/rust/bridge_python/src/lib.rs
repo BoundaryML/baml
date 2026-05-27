@@ -5,6 +5,7 @@
 
 mod abort_controller;
 mod errors;
+pub mod host_value;
 mod media;
 mod py_handle;
 pub mod runtime;
@@ -51,7 +52,16 @@ fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(get_version))?;
     m.add_wrapped(wrap_pyfunction!(flush_events))?;
     m.add_wrapped(wrap_pyfunction!(runtime::get_runtime))?;
+    m.add_wrapped(wrap_pyfunction!(host_value::register_host_callable))?;
+    m.add_wrapped(wrap_pyfunction!(host_value::release_host_callable))?;
     errors::register_errors(m)?;
+
+    // Wire the bridge_cffi C entry points to this bridge's per-process
+    // Python host-value registry. First-call-wins inside bridge_cffi, so
+    // repeated module loads (e.g. via importlib.reload) are harmless.
+    bridge_cffi::register_host_dispatch_callback(host_value::host_dispatch_callback);
+    bridge_cffi::register_host_release_callback(host_value::host_release_callback);
+
     Ok(())
 }
 

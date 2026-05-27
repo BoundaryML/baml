@@ -22,7 +22,7 @@ fn make_vm() -> BexVm {
 fn alloc_bigint(vm: &mut BexVm, value: BigInt) -> Value {
     let arc = Arc::new(value);
     let ptr = vm.tlab.alloc(Object::Bigint(arc));
-    Value::Object(ptr)
+    Value::object(ptr)
 }
 
 #[test]
@@ -33,8 +33,12 @@ fn deep_equals_bigint_distinct_arcs_same_value() {
     let b = alloc_bigint(&mut vm, BigInt::from(42));
     // Distinct heap pointers (so they exercise the by-value comparison path),
     // same numeric value.
-    let Value::Object(pa) = a else { unreachable!() };
-    let Value::Object(pb) = b else { unreachable!() };
+    let Some(pa) = a.as_object_ptr() else {
+        unreachable!()
+    };
+    let Some(pb) = b.as_object_ptr() else {
+        unreachable!()
+    };
     assert_ne!(pa, pb, "test setup must allocate distinct objects");
     assert!(
         PackageBamlImpl::deep_equals(&vm, &a, &b),

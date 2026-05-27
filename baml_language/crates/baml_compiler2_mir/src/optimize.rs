@@ -7,6 +7,7 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
+#[cfg(debug_assertions)]
 use baml_base::Name;
 
 use crate::{

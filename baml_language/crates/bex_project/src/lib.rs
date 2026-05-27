@@ -16,7 +16,9 @@ pub use bex_engine::{
 };
 pub use bex_events::EventSink;
 pub use bex_external_types::{
-    BexExternalAdt, BexExternalValue, Handle, MediaKind, Ty, TyAttr, try_convert_rust_data,
+    BexExternalAdt, BexExternalValue, Handle, HostReleaseFn, HostReturnTypeError, HostValueArc,
+    HostValueKind, MediaKind, Ty, TyAttr, host_release_dispatch, try_convert_rust_data,
+    validate_host_return,
 };
 pub use sys_ops::SysOps;
 pub use sys_types::{CallId, CancellationToken};

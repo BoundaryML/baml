@@ -1284,8 +1284,7 @@ async fn nested_block_with_if() {
         load_const 2
         load_const 3
         add_int
-        store_var a
-        load_var a
+        store_var_load_var a
         load_const 5
         cmp_int_op ==
         pop_jump_if_false L0

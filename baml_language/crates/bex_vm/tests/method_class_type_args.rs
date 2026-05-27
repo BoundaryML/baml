@@ -129,7 +129,7 @@ fn alloc_instance_ntypeargs_stores_class_type_args() {
 
     let (result, vm) = run_fn(program, fn_name);
 
-    let Value::Object(inst_ptr) = result else {
+    let Some(inst_ptr) = result.as_object_ptr() else {
         panic!("expected Object, got {result:?}");
     };
     match vm.get_object(inst_ptr) {
@@ -174,7 +174,7 @@ fn alloc_instance_ntypeargs_zero_gives_empty_class_type_args() {
     );
 
     let (result, vm) = run_fn(program, fn_name);
-    let Value::Object(inst_ptr) = result else {
+    let Some(inst_ptr) = result.as_object_ptr() else {
         panic!("expected Object, got {result:?}");
     };
     match vm.get_object(inst_ptr) {
@@ -234,7 +234,7 @@ fn method_frame_type_args_seeded_with_class_type_args() {
         }
     };
 
-    let Value::Object(ptr) = result else {
+    let Some(ptr) = result.as_object_ptr() else {
         panic!("expected Object, got {result:?}");
     };
     match vm.get_object(ptr) {
@@ -284,7 +284,7 @@ fn method_frame_type_args_seeded_string() {
         }
     };
 
-    let Value::Object(ptr) = result else {
+    let Some(ptr) = result.as_object_ptr() else {
         panic!("expected Object")
     };
     match vm.get_object(ptr) {

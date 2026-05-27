@@ -476,11 +476,11 @@ async fn float_itrunc_basic() {
 }
 
 #[tokio::test]
-async fn float_iround_at_i64_min_is_ok() {
-    // -2^63 is exactly representable as f64.
+async fn float_iround_at_i63_min_is_ok() {
+    // -2^62 (BAML int.min_value()) is exactly representable as f64.
     assert_eq!(
-        run_int("function main() -> int { (-9223372036854775808.0).iround() }").await,
-        i64::MIN
+        run_int("function main() -> int { (-4611686018427387904.0).iround() }").await,
+        -4_611_686_018_427_387_904
     );
 }
 

@@ -27,7 +27,7 @@
 
 use std::{cell::UnsafeCell, collections::HashMap};
 
-use bex_vm_types::{HeapPtr, Object, Value};
+use bex_vm_types::{HeapPtr, Object, Value, types::Future};
 
 use crate::{
     BexHeap,
@@ -35,6 +35,21 @@ use crate::{
     chunked_vec::ChunkedVec,
     heap::Generation,
 };
+
+/// Extract the inner `HeapPtr` held by a settled future (Ready / Error), if
+/// the held value is an object reference. Pending / Cancelled / InternalError
+/// futures hold no reachable outgoing references; this returns `None` for
+/// those, and for settled futures whose payload is a non-object `Value`.
+///
+/// Centralizes the GC's view of "what does a Future point at?" so the worklist
+/// and young-generation walks can't drift apart.
+fn future_object_ref(fut: &Future) -> Option<HeapPtr> {
+    use bex_vm_types::FutureRead;
+    match fut.read() {
+        FutureRead::Ready(v) | FutureRead::Error(v) => v.as_object_ptr(),
+        FutureRead::Pending(_) | FutureRead::Cancelled | FutureRead::InternalError(_) => None,
+    }
+}
 
 /// Which generation level to collect.
 ///
@@ -312,62 +327,58 @@ impl BexHeap {
     /// Add object references to the worklist for tracing.
     fn add_references_to_worklist(&self, obj: &Object, worklist: &mut Vec<HeapPtr>) {
         match obj {
+            // SAFETY (this match arm): GC traversal runs under STW; all
+            // mutator fibers are parked, so no concurrent writer can race
+            // with these reads. Same for the other Array/Map arms below.
             Object::Array(arr) => {
-                for value in arr {
-                    if let Value::Object(ptr) = value {
-                        worklist.push(*ptr);
+                let data = unsafe { arr.data_unchecked() };
+                for value in data.iter() {
+                    if let Some(ptr) = value.as_object_ptr() {
+                        worklist.push(ptr);
                     }
                 }
             }
             Object::Map(map) => {
-                for value in map.values() {
-                    if let Value::Object(ptr) = value {
-                        worklist.push(*ptr);
+                let data = unsafe { map.data_unchecked() };
+                for value in data.values() {
+                    if let Some(ptr) = value.as_object_ptr() {
+                        worklist.push(ptr);
                     }
                 }
             }
             Object::Instance(inst) => {
                 worklist.push(inst.class);
                 for value in &inst.fields {
-                    if let Value::Object(ptr) = value {
-                        worklist.push(*ptr);
+                    if let Some(ptr) = value.as_object_ptr() {
+                        worklist.push(ptr);
                     }
                 }
             }
             Object::Closure(closure) => {
                 worklist.push(closure.function);
                 for value in &closure.captures {
-                    if let Value::Object(ptr) = value {
-                        worklist.push(*ptr);
+                    if let Some(ptr) = value.as_object_ptr() {
+                        worklist.push(ptr);
                     }
                 }
             }
             Object::BoundMethod(bm) => {
                 worklist.push(bm.function);
-                if let Value::Object(ptr) = &bm.receiver {
-                    worklist.push(*ptr);
+                if let Some(ptr) = bm.receiver.as_object_ptr() {
+                    worklist.push(ptr);
                 }
             }
             Object::Cell(cell) => {
-                if let Value::Object(ptr) = &cell.value {
-                    worklist.push(*ptr);
+                if let Some(ptr) = cell.value.as_object_ptr() {
+                    worklist.push(ptr);
                 }
             }
             Object::Variant(var) => {
                 worklist.push(var.enm);
             }
             Object::Future(fut) => {
-                use bex_vm_types::FutureRead;
-                match fut.read() {
-                    FutureRead::Ready(Value::Object(ptr))
-                    | FutureRead::Error(Value::Object(ptr)) => {
-                        worklist.push(ptr);
-                    }
-                    FutureRead::Pending(_)
-                    | FutureRead::Ready(_)
-                    | FutureRead::Error(_)
-                    | FutureRead::Cancelled
-                    | FutureRead::InternalError(_) => {}
+                if let Some(ptr) = future_object_ref(fut) {
+                    worklist.push(ptr);
                 }
             }
             Object::UnscheduledFuture(future) => {
@@ -379,6 +390,9 @@ impl BexHeap {
             // Primitives have no references
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
+            // `HostClosure` carries only an `Arc<HostValueArc>` (Rust-side
+            // stub, not a heap object) and a `Box<Ty>` (no `HeapPtr`s).
+            Object::HostClosure(_) => {}
             Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
@@ -387,6 +401,7 @@ impl BexHeap {
             | Object::Function(_)
             | Object::RustData(_)
             | Object::Collector(_)
+            | Object::Float(_)
             | Object::Type(_) => {}
         }
     }
@@ -443,13 +458,17 @@ impl BexHeap {
     /// Fix up references within a single object.
     fn fixup_object_references(&self, obj: &mut Object, forwarding: &HashMap<HeapPtr, HeapPtr>) {
         match obj {
+            // SAFETY: GC post-compaction fixup runs under STW with all
+            // mutators parked; no concurrent reader/writer can race.
             Object::Array(arr) => {
-                for value in arr.iter_mut() {
+                let data = unsafe { arr.data_unchecked_mut() };
+                for value in data.iter_mut() {
                     self.fixup_value(value, forwarding);
                 }
             }
             Object::Map(map) => {
-                for value in map.values_mut() {
+                let data = unsafe { map.data_unchecked_mut() };
+                for value in data.values_mut() {
                     self.fixup_value(value, forwarding);
                 }
             }
@@ -507,6 +526,9 @@ impl BexHeap {
             // Primitives have no references
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
+            // `HostClosure` carries no heap references; see
+            // `add_references_to_worklist`.
+            Object::HostClosure(_) => {}
             Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
@@ -515,16 +537,17 @@ impl BexHeap {
             | Object::Function(_)
             | Object::RustData(_)
             | Object::Collector(_)
+            | Object::Float(_)
             | Object::Type(_) => {}
         }
     }
 
     /// Fix up a single Value reference.
     fn fixup_value(&self, value: &mut Value, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        if let Value::Object(ptr) = value
-            && let Some(&new_ptr) = forwarding.get(ptr)
+        if let Some(ptr) = value.as_object_ptr()
+            && let Some(&new_ptr) = forwarding.get(&ptr)
         {
-            *ptr = new_ptr;
+            *value = Value::object(new_ptr);
         }
     }
 
@@ -682,16 +705,19 @@ impl BexHeap {
     /// generation is one of [`Generation::Gen0`] or [`Generation::Gen1`].
     fn collect_young_references(&self, obj: &Object, worklist: &mut Vec<HeapPtr>) {
         match obj {
+            // SAFETY: GC traversal under STW; no mutator can race.
             Object::Array(arr) => {
+                let data = unsafe { arr.data_unchecked() };
                 worklist.extend(
-                    arr.iter()
+                    data.iter()
                         .filter_map(Value::as_object_ptr)
                         .filter(|ptr| self.generation_of(*ptr).is_young()),
                 );
             }
             Object::Map(map) => {
+                let data = unsafe { map.data_unchecked() };
                 worklist.extend(
-                    map.values()
+                    data.values()
                         .filter_map(Value::as_object_ptr)
                         .filter(|ptr| self.generation_of(*ptr).is_young()),
                 );
@@ -723,14 +749,14 @@ impl BexHeap {
                 if self.generation_of(method.function).is_young() {
                     worklist.push(method.function);
                 }
-                if let Value::Object(ptr) = method.receiver
+                if let Some(ptr) = method.receiver.as_object_ptr()
                     && self.generation_of(ptr).is_young()
                 {
                     worklist.push(ptr);
                 }
             }
             Object::Cell(cell) => {
-                if let Value::Object(ptr) = cell.value
+                if let Some(ptr) = cell.value.as_object_ptr()
                     && self.generation_of(ptr).is_young()
                 {
                     worklist.push(ptr);
@@ -742,19 +768,10 @@ impl BexHeap {
                 }
             }
             Object::Future(fut) => {
-                use bex_vm_types::FutureRead;
-                match fut.read() {
-                    FutureRead::Ready(Value::Object(ptr))
-                    | FutureRead::Error(Value::Object(ptr))
-                        if self.generation_of(ptr).is_young() =>
-                    {
-                        worklist.push(ptr);
-                    }
-                    FutureRead::Pending(_)
-                    | FutureRead::Ready(_)
-                    | FutureRead::Error(_)
-                    | FutureRead::Cancelled
-                    | FutureRead::InternalError(_) => {}
+                if let Some(ptr) = future_object_ref(fut)
+                    && self.generation_of(ptr).is_young()
+                {
+                    worklist.push(ptr);
                 }
             }
             Object::UnscheduledFuture(future) => {
@@ -770,6 +787,8 @@ impl BexHeap {
             // Primitives/leaf variants have no heap references.
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
+            // `HostClosure` carries no heap references.
+            Object::HostClosure(_) => {}
             Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
@@ -778,6 +797,7 @@ impl BexHeap {
             | Object::Function(_)
             | Object::RustData(_)
             | Object::Collector(_)
+            | Object::Float(_)
             | Object::Type(_) => {}
         }
     }
@@ -1113,7 +1133,7 @@ mod tests {
         let _bad_instance = tlab.alloc(Object::Instance(bex_vm_types::types::Instance {
             class: class_ptr,
             class_type_args: vec![],
-            fields: vec![Value::Int(1), Value::Int(2), Value::Int(3)],
+            fields: vec![Value::int(1), Value::int(2), Value::int(3)],
         }));
 
         let result = catch_unwind(AssertUnwindSafe(|| {
@@ -1156,7 +1176,7 @@ mod tests {
         let str_obj = tlab.alloc_string("referenced".to_string());
 
         // Allocate an array that references the string
-        let arr = tlab.alloc_array(vec![Value::Object(str_obj)]);
+        let arr = tlab.alloc_array(vec![Value::object(str_obj)]);
 
         // Allocate another unreferenced string
         let _unreferenced = tlab.alloc_string("unreferenced".to_string());
@@ -1173,7 +1193,7 @@ mod tests {
         let arr_obj = unsafe { new_arr_ptr.get() };
         if let Object::Array(elements) = arr_obj {
             // The string reference should have been updated
-            if let Value::Object(str_ptr) = &elements[0] {
+            if let Some(str_ptr) = elements.get(0).and_then(|__v| __v.as_object_ptr()) {
                 // Verify the referenced string is valid
                 let str_obj = unsafe { str_ptr.get() };
                 if let Object::String(s) = str_obj {
@@ -1308,7 +1328,7 @@ mod tests {
 
         // Allocate a map that references the string
         let mut map = indexmap::IndexMap::new();
-        map.insert("key".to_string(), Value::Object(str_obj));
+        map.insert("key".to_string(), Value::object(str_obj));
         let map_obj = tlab.alloc_map(map);
 
         // Allocate unreferenced garbage
@@ -1325,7 +1345,7 @@ mod tests {
         let new_map_ptr = remapped[0];
         let map_result = unsafe { new_map_ptr.get() };
         if let Object::Map(m) = map_result {
-            if let Some(Value::Object(str_ptr)) = m.get("key") {
+            if let Some(str_ptr) = m.get("key").and_then(|v| v.as_object_ptr()) {
                 let str_result = unsafe { str_ptr.get() };
                 if let Object::String(s) = str_result {
                     assert_eq!(s, "value");
@@ -1366,11 +1386,11 @@ mod tests {
         let obj2 = tlab.alloc_string("stack_value_2".to_string());
         let obj3 = tlab.alloc_string("stack_value_3".to_string());
 
-        simulated_stack.push(Value::Object(obj1));
-        simulated_stack.push(Value::Int(42)); // Non-object value
-        simulated_stack.push(Value::Object(obj2));
-        simulated_stack.push(Value::Null);
-        simulated_stack.push(Value::Object(obj3));
+        simulated_stack.push(Value::object(obj1));
+        simulated_stack.push(Value::int(42)); // Non-object value
+        simulated_stack.push(Value::object(obj2));
+        simulated_stack.push(Value::NULL);
+        simulated_stack.push(Value::object(obj3));
 
         // Also allocate some garbage that won't be rooted
         let _garbage1 = tlab.alloc_string("garbage1".to_string());
@@ -1379,10 +1399,7 @@ mod tests {
         // Collect roots from the simulated stack (like collect_vm_roots does)
         let roots: Vec<HeapPtr> = simulated_stack
             .iter()
-            .filter_map(|v| match v {
-                Value::Object(ptr) => Some(*ptr),
-                _ => None,
-            })
+            .filter_map(Value::as_object_ptr)
             .collect();
 
         assert_eq!(roots.len(), 3);
@@ -1397,17 +1414,17 @@ mod tests {
         // Update the simulated stack with forwarding pointers
         // (This is what bex_engine does at lib.rs:780-786)
         for value in &mut simulated_stack {
-            if let Value::Object(ptr) = value
-                && let Some(&new_ptr) = forwarding.get(ptr)
+            if let Some(ptr) = value.as_object_ptr()
+                && let Some(&new_ptr) = forwarding.get(&ptr)
             {
-                *ptr = new_ptr;
+                *value = Value::object(new_ptr);
             }
         }
 
         // Verify all stack values are still accessible and correct
         for value in &simulated_stack {
-            match value {
-                Value::Object(ptr) => {
+            match value.kind() {
+                bex_vm_types::ValueKind::Object(ptr) => {
                     let obj = unsafe { ptr.get() };
                     match obj {
                         Object::String(s) => {
@@ -1416,8 +1433,8 @@ mod tests {
                         _ => panic!("Expected String object"),
                     }
                 }
-                Value::Int(n) => assert_eq!(*n, 42),
-                Value::Null => {}
+                bex_vm_types::ValueKind::Int(n) => assert_eq!(n, 42),
+                bex_vm_types::ValueKind::Null => {}
                 _ => panic!("Unexpected value type"),
             }
         }
@@ -1433,13 +1450,13 @@ mod tests {
         // Create a chain: array -> map -> array -> string
         let leaf_str = tlab.alloc_string("leaf".to_string());
 
-        let inner_array = tlab.alloc_array(vec![Value::Object(leaf_str)]);
+        let inner_array = tlab.alloc_array(vec![Value::object(leaf_str)]);
 
         let mut map = indexmap::IndexMap::new();
-        map.insert("nested".to_string(), Value::Object(inner_array));
+        map.insert("nested".to_string(), Value::object(inner_array));
         let middle_map = tlab.alloc_map(map);
 
-        let outer_array = tlab.alloc_array(vec![Value::Object(middle_map)]);
+        let outer_array = tlab.alloc_array(vec![Value::object(middle_map)]);
 
         // Allocate garbage between the chain objects
         let _g1 = tlab.alloc_string("garbage".to_string());
@@ -1457,15 +1474,15 @@ mod tests {
         let outer_obj = unsafe { new_outer.get() };
 
         if let Object::Array(arr) = outer_obj
-            && let Value::Object(map_ptr) = &arr[0]
+            && let Some(map_ptr) = arr.get(0).and_then(|v| v.as_object_ptr())
         {
             let map_obj = unsafe { map_ptr.get() };
             if let Object::Map(m) = map_obj
-                && let Some(Value::Object(inner_arr_ptr)) = m.get("nested")
+                && let Some(inner_arr_ptr) = m.get("nested").and_then(|v| v.as_object_ptr())
             {
                 let inner_arr_obj = unsafe { inner_arr_ptr.get() };
                 if let Object::Array(inner_arr) = inner_arr_obj
-                    && let Value::Object(str_ptr) = &inner_arr[0]
+                    && let Some(str_ptr) = inner_arr.get(0).and_then(|__v| __v.as_object_ptr())
                 {
                     let str_obj = unsafe { str_ptr.get() };
                     if let Object::String(s) = str_obj {
@@ -1724,7 +1741,7 @@ mod tests {
         })));
         let field_str = tlab.alloc_string("field_value".to_string());
         let inst_ptr =
-            tlab.alloc_instance(class_ptr, vec![Value::Object(field_str), Value::Int(42)]);
+            tlab.alloc_instance(class_ptr, vec![Value::object(field_str), Value::int(42)]);
 
         let roots = vec![inst_ptr];
         let (stats, new_roots, _fwd) = unsafe { heap.collect_garbage(&roots) };
@@ -1737,8 +1754,8 @@ mod tests {
             panic!("not instance")
         };
         assert_eq!(inst.fields.len(), 2);
-        assert!(matches!(inst.fields[0], Value::Object(_)));
-        assert_eq!(inst.fields[1], Value::Int(42));
+        assert!(inst.fields[0].is_object());
+        assert_eq!(inst.fields[1], Value::int(42));
 
         // Verify class is accessible through the instance
         let Object::Class(c) = (unsafe { inst.class.get() }) else {
@@ -1791,7 +1808,7 @@ mod tests {
         let captured = tlab.alloc_string("captured_value".to_string());
         let closure_ptr = tlab.alloc(Object::Closure(Closure {
             function: func_ptr,
-            captures: vec![Value::Object(captured), Value::Int(7)],
+            captures: vec![Value::object(captured), Value::int(7)],
             captured_type_args: vec![],
         }));
 
@@ -1804,8 +1821,8 @@ mod tests {
             panic!("not closure")
         };
         assert_eq!(c.captures.len(), 2);
-        assert!(matches!(c.captures[0], Value::Object(_)));
-        assert_eq!(c.captures[1], Value::Int(7));
+        assert!(c.captures[0].is_object());
+        assert_eq!(c.captures[1], Value::int(7));
     }
 
     #[test]
@@ -1817,7 +1834,7 @@ mod tests {
 
         let inner = tlab.alloc_string("cell_content".to_string());
         let cell_ptr = tlab.alloc(Object::Cell(Cell {
-            value: Value::Object(inner),
+            value: Value::object(inner),
         }));
 
         let roots = vec![cell_ptr];
@@ -1827,7 +1844,7 @@ mod tests {
         let Object::Cell(c) = (unsafe { new_roots[0].get() }) else {
             panic!("not cell")
         };
-        let Value::Object(inner_ptr) = c.value else {
+        let Some(inner_ptr) = c.value.as_object_ptr() else {
             panic!("not object value")
         };
         let Object::String(s) = (unsafe { inner_ptr.get() }) else {
@@ -1844,7 +1861,7 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         let cell_ptr = tlab.alloc(Object::Cell(Cell {
-            value: Value::Int(42),
+            value: Value::int(42),
         }));
         let roots = vec![cell_ptr];
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&roots) };
@@ -1853,7 +1870,7 @@ mod tests {
         let Object::Cell(c) = (unsafe { new_roots[0].get() }) else {
             panic!("not cell")
         };
-        assert_eq!(c.value, Value::Int(42));
+        assert_eq!(c.value, Value::int(42));
     }
 
     #[test]
@@ -1897,7 +1914,7 @@ mod tests {
             panic!("expected Object::Future");
         };
         // SAFETY: this Future is local and not yet visible; CAS will win.
-        let ok = unsafe { future.settle_ready(heap.as_ref(), future_ptr, Value::Object(result)) };
+        let ok = unsafe { future.settle_ready(heap.as_ref(), future_ptr, Value::object(result)) };
         assert!(ok);
 
         let roots = vec![future_ptr];
@@ -1907,7 +1924,10 @@ mod tests {
         let Object::Future(fut) = (unsafe { new_roots[0].get() }) else {
             panic!("not Future")
         };
-        let FutureRead::Ready(Value::Object(r)) = fut.read() else {
+        let FutureRead::Ready(v) = fut.read() else {
+            panic!("not Future::Ready")
+        };
+        let Some(r) = v.as_object_ptr() else {
             panic!("not Future::Ready(Object)")
         };
         let Object::String(s) = (unsafe { r.get() }) else {
@@ -1931,7 +1951,7 @@ mod tests {
             panic!("expected Object::Future");
         };
         // SAFETY: this Future is local and not yet visible; CAS will win.
-        let ok = unsafe { future.settle_ready(heap.as_ref(), future_ptr, Value::Int(99)) };
+        let ok = unsafe { future.settle_ready(heap.as_ref(), future_ptr, Value::int(99)) };
         assert!(ok);
         let roots = vec![future_ptr];
         let (stats, _, _) = unsafe { heap.collect_garbage(&roots) };
@@ -2061,9 +2081,9 @@ mod tests {
 
         // D -> C -> B -> A (leaf string wrapped in nested arrays)
         let a = tlab.alloc_string("a".to_string());
-        let b = tlab.alloc_array(vec![Value::Object(a)]);
-        let c = tlab.alloc_array(vec![Value::Object(b)]);
-        let d = tlab.alloc_array(vec![Value::Object(c)]);
+        let b = tlab.alloc_array(vec![Value::object(a)]);
+        let c = tlab.alloc_array(vec![Value::object(b)]);
+        let d = tlab.alloc_array(vec![Value::object(c)]);
 
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&[d]) };
         assert_eq!(stats.live_count, 4);
@@ -2072,19 +2092,19 @@ mod tests {
         let Object::Array(d_arr) = (unsafe { new_roots[0].get() }) else {
             panic!("not array at d")
         };
-        let Value::Object(c_ptr) = d_arr[0] else {
+        let Some(c_ptr) = d_arr.get(0).and_then(|__v| __v.as_object_ptr()) else {
             panic!("d[0] not object")
         };
         let Object::Array(c_arr) = (unsafe { c_ptr.get() }) else {
             panic!("not array at c")
         };
-        let Value::Object(b_ptr) = c_arr[0] else {
+        let Some(b_ptr) = c_arr.get(0).and_then(|__v| __v.as_object_ptr()) else {
             panic!("c[0] not object")
         };
         let Object::Array(b_arr) = (unsafe { b_ptr.get() }) else {
             panic!("not array at b")
         };
-        let Value::Object(a_ptr) = b_arr[0] else {
+        let Some(a_ptr) = b_arr.get(0).and_then(|__v| __v.as_object_ptr()) else {
             panic!("b[0] not object")
         };
         let Object::String(s) = (unsafe { a_ptr.get() }) else {
@@ -2099,7 +2119,7 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         let children: Vec<Value> = (0..5)
-            .map(|i| Value::Object(tlab.alloc_string(format!("child_{i}"))))
+            .map(|i| Value::object(tlab.alloc_string(format!("child_{i}"))))
             .collect();
         let parent = tlab.alloc_array(children);
 
@@ -2118,8 +2138,8 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         let shared = tlab.alloc_string("shared".to_string());
-        let parent_a = tlab.alloc_array(vec![Value::Object(shared)]);
-        let parent_b = tlab.alloc_array(vec![Value::Object(shared)]);
+        let parent_a = tlab.alloc_array(vec![Value::object(shared)]);
+        let parent_b = tlab.alloc_array(vec![Value::object(shared)]);
 
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&[parent_a, parent_b]) };
         // 2 parents + 1 shared child (not 4 — shared object copied only once)
@@ -2132,10 +2152,10 @@ mod tests {
         let Object::Array(b) = (unsafe { new_roots[1].get() }) else {
             panic!("not array b")
         };
-        let Value::Object(a_child) = a[0] else {
+        let Some(a_child) = a.get(0).and_then(|__v| __v.as_object_ptr()) else {
             panic!("a[0] not object")
         };
-        let Value::Object(b_child) = b[0] else {
+        let Some(b_child) = b.get(0).and_then(|__v| __v.as_object_ptr()) else {
             panic!("b[0] not object")
         };
         // Forwarding deduplication: both must point to the same new location
@@ -2152,9 +2172,9 @@ mod tests {
 
         // root -> [B, C], B -> [D], C -> [D]
         let d = tlab.alloc_string("diamond_bottom".to_string());
-        let b = tlab.alloc_array(vec![Value::Object(d)]);
-        let c = tlab.alloc_array(vec![Value::Object(d)]);
-        let root = tlab.alloc_array(vec![Value::Object(b), Value::Object(c)]);
+        let b = tlab.alloc_array(vec![Value::object(d)]);
+        let c = tlab.alloc_array(vec![Value::object(d)]);
+        let root = tlab.alloc_array(vec![Value::object(b), Value::object(c)]);
 
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&[root]) };
         // root + B + C + D (D is shared between B and C — copied only once)
@@ -2164,10 +2184,10 @@ mod tests {
         let Object::Array(root_arr) = (unsafe { new_roots[0].get() }) else {
             panic!("not array root")
         };
-        let Value::Object(b_ptr) = root_arr[0] else {
+        let Some(b_ptr) = root_arr.get(0).and_then(|__v| __v.as_object_ptr()) else {
             panic!("root[0] not object")
         };
-        let Value::Object(c_ptr) = root_arr[1] else {
+        let Some(c_ptr) = root_arr.get(1).and_then(|__v| __v.as_object_ptr()) else {
             panic!("root[1] not object")
         };
         let Object::Array(b_arr) = (unsafe { b_ptr.get() }) else {
@@ -2176,10 +2196,10 @@ mod tests {
         let Object::Array(c_arr) = (unsafe { c_ptr.get() }) else {
             panic!("not array c")
         };
-        let Value::Object(d_from_b) = b_arr[0] else {
+        let Some(d_from_b) = b_arr.get(0).and_then(|__v| __v.as_object_ptr()) else {
             panic!("b[0] not object")
         };
-        let Value::Object(d_from_c) = c_arr[0] else {
+        let Some(d_from_c) = c_arr.get(0).and_then(|__v| __v.as_object_ptr()) else {
             panic!("c[0] not object")
         };
         // D copied only once — both paths reach the same pointer
@@ -2197,11 +2217,11 @@ mod tests {
         // Create A (array placeholder) and B (cell pointing to A), then patch A -> B
         let a = tlab.alloc_array(vec![]); // placeholder, will be patched
         let b = tlab.alloc(Object::Cell(bex_vm_types::types::Cell {
-            value: Value::Object(a),
+            value: Value::object(a),
         }));
         // Patch A to reference B, forming a cycle
         unsafe {
-            *a.get_mut() = Object::Array(vec![Value::Object(b)]);
+            *a.get_mut() = Object::Array(vec![Value::object(b)].into());
         }
 
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&[a]) };
@@ -2211,13 +2231,13 @@ mod tests {
         let Object::Array(a_arr) = (unsafe { new_roots[0].get() }) else {
             panic!("not array a")
         };
-        let Value::Object(b_ptr) = a_arr[0] else {
+        let Some(b_ptr) = a_arr.get(0).and_then(|__v| __v.as_object_ptr()) else {
             panic!("a[0] not object")
         };
         let Object::Cell(cell) = (unsafe { b_ptr.get() }) else {
             panic!("not cell b")
         };
-        let Value::Object(a_back) = cell.value else {
+        let Some(a_back) = cell.value.as_object_ptr() else {
             panic!("cell.value not object")
         };
         // The back-pointer from B should point to the new location of A
@@ -2234,10 +2254,10 @@ mod tests {
 
         // Island: three mutually-referencing objects, none reachable from roots
         let x = tlab.alloc_array(vec![]); // placeholder
-        let y = tlab.alloc_array(vec![Value::Object(x)]);
-        let z = tlab.alloc_array(vec![Value::Object(y)]);
+        let y = tlab.alloc_array(vec![Value::object(x)]);
+        let z = tlab.alloc_array(vec![Value::object(y)]);
         unsafe {
-            *x.get_mut() = Object::Array(vec![Value::Object(z)]);
+            *x.get_mut() = Object::Array(vec![Value::object(z)].into());
         }
 
         // Separate rooted survivor
@@ -2257,7 +2277,7 @@ mod tests {
         // Build a 100-deep chain: root -> array -> array -> ... -> leaf string
         let mut current = tlab.alloc_string("leaf".to_string());
         for _ in 0..99 {
-            current = tlab.alloc_array(vec![Value::Object(current)]);
+            current = tlab.alloc_array(vec![Value::object(current)]);
         }
 
         let (stats, _, _) = unsafe { heap.collect_garbage(&[current]) };
@@ -2360,23 +2380,23 @@ mod tests {
         let leaf_func = tlab.alloc_string("func_placeholder".to_string());
 
         // --- Container: Object::Array ---
-        let array_container = tlab.alloc_array(vec![Value::Object(leaf_for_array)]);
+        let array_container = tlab.alloc_array(vec![Value::object(leaf_for_array)]);
 
         // --- Container: Object::Map ---
         let mut map_data = indexmap::IndexMap::new();
-        map_data.insert("k".to_string(), Value::Object(leaf_for_map));
+        map_data.insert("k".to_string(), Value::object(leaf_for_map));
         let map_container = tlab.alloc_map(map_data);
 
         // --- Container: Object::Closure ---
         let closure_container = tlab.alloc(Object::Closure(Closure {
             function: leaf_func,
-            captures: vec![Value::Object(leaf_for_closure_cap), Value::Int(7)],
+            captures: vec![Value::object(leaf_for_closure_cap), Value::int(7)],
             captured_type_args: vec![],
         }));
 
         // --- Container: Object::Cell ---
         let cell_container = tlab.alloc(Object::Cell(Cell {
-            value: Value::Object(leaf_for_cell),
+            value: Value::object(leaf_for_cell),
         }));
 
         // --- Container: Object::UnscheduledFuture ---
@@ -2400,7 +2420,7 @@ mod tests {
         let instance_container = tlab.alloc(Object::Instance(Instance {
             class: class_ptr,
             class_type_args: vec![],
-            fields: vec![Value::Object(leaf_string)],
+            fields: vec![Value::object(leaf_string)],
         }));
 
         // --- Container: Object::Variant ---
@@ -2448,7 +2468,7 @@ mod tests {
         let Object::Array(arr) = (unsafe { new_roots[0].get() }) else {
             panic!("new_roots[0] not Array")
         };
-        let Value::Object(arr_leaf) = arr[0] else {
+        let Some(arr_leaf) = arr.get(0).and_then(|__v| __v.as_object_ptr()) else {
             panic!("arr[0] not Object")
         };
         let Object::String(s) = (unsafe { arr_leaf.get() }) else {
@@ -2460,7 +2480,7 @@ mod tests {
         let Object::Map(m) = (unsafe { new_roots[1].get() }) else {
             panic!("new_roots[1] not Map")
         };
-        let Value::Object(map_leaf) = m["k"] else {
+        let Some(map_leaf) = m.get("k").and_then(|v| v.as_object_ptr()) else {
             panic!("map[\"k\"] not Object")
         };
         let Object::String(s) = (unsafe { map_leaf.get() }) else {
@@ -2472,7 +2492,7 @@ mod tests {
         let Object::Closure(clo) = (unsafe { new_roots[2].get() }) else {
             panic!("new_roots[2] not Closure")
         };
-        let Value::Object(cap_leaf) = clo.captures[0] else {
+        let Some(cap_leaf) = clo.captures.first().and_then(|v| v.as_object_ptr()) else {
             panic!("capture[0] not Object")
         };
         let Object::String(s) = (unsafe { cap_leaf.get() }) else {
@@ -2484,7 +2504,7 @@ mod tests {
         let Object::Cell(cell) = (unsafe { new_roots[3].get() }) else {
             panic!("new_roots[3] not Cell")
         };
-        let Value::Object(cell_leaf) = cell.value else {
+        let Some(cell_leaf) = cell.value.as_object_ptr() else {
             panic!("cell.value not Object")
         };
         let Object::String(s) = (unsafe { cell_leaf.get() }) else {
@@ -2506,7 +2526,7 @@ mod tests {
         let Object::Instance(inst) = (unsafe { new_roots[5].get() }) else {
             panic!("new_roots[5] not Instance")
         };
-        let Value::Object(inst_leaf) = inst.fields[0] else {
+        let Some(inst_leaf) = inst.fields.first().and_then(|v| v.as_object_ptr()) else {
             panic!("instance.fields[0] not Object")
         };
         let Object::String(s) = (unsafe { inst_leaf.get() }) else {

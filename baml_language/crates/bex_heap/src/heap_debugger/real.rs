@@ -290,13 +290,18 @@ impl BexHeap {
 
     fn verify_object_invariants(&self, idx: HeapPtr, obj: &Object, _ct_len: usize) {
         match obj {
+            // SAFETY: heap-debugger verification runs under STW (it's
+            // called from the GC verifier path); no mutator is concurrently
+            // active.
             Object::Array(values) => {
-                for value in values {
+                let data = unsafe { values.data_unchecked() };
+                for value in data.iter() {
                     self.debug_assert_valid_value(value);
                 }
             }
             Object::Map(values) => {
-                for value in values.values() {
+                let data = unsafe { values.data_unchecked() };
+                for value in data.values() {
                     self.debug_assert_valid_value(value);
                 }
             }
@@ -364,15 +369,18 @@ impl BexHeap {
             | Object::Uint8Array(_)
             | Object::RustData(_)
             | Object::Collector(_)
-            | Object::Type(_) => {}
+            | Object::Type(_)
+            | Object::Float(_)
+            // `HostClosure` carries no heap references.
+            | Object::HostClosure(_) => {}
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
         }
     }
 
     fn debug_assert_valid_value(&self, value: &Value) {
-        if let Value::Object(idx) = value {
-            let _ = unsafe { self.get_object(*idx) };
+        if let Some(idx) = value.as_object_ptr() {
+            let _ = unsafe { self.get_object(idx) };
         }
     }
 

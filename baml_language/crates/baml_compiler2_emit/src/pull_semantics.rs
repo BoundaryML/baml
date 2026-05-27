@@ -45,6 +45,12 @@ pub(crate) trait PullSink {
 
     fn alloc_class_instance(&mut self, class_name: &str, ntypeargs: u16)
     -> Result<(), Self::Error>;
+    fn init_class_instance(
+        &mut self,
+        class_name: &str,
+        ntypeargs: u16,
+        field_count: usize,
+    ) -> Result<(), Self::Error>;
     fn init_field(&mut self, field_idx: usize, name: &str) -> Result<(), Self::Error>;
 
     fn alloc_enum_variant(&mut self, enum_name: &str, variant: &str) -> Result<(), Self::Error>;
@@ -140,7 +146,8 @@ pub(crate) fn local_assign_behavior(class: LocalClassification) -> LocalAssignBe
         }
         LocalClassification::Parameter
         | LocalClassification::Real
-        | LocalClassification::CallResultImmediate => LocalAssignBehavior::EvalAndStore,
+        | LocalClassification::CallResultImmediate
+        | LocalClassification::AggregateOperand => LocalAssignBehavior::EvalAndStore,
     }
 }
 
@@ -150,7 +157,8 @@ pub(crate) fn local_store_behavior(class: LocalClassification) -> LocalStoreBeha
         LocalClassification::Parameter | LocalClassification::Real => LocalStoreBehavior::StoreSlot,
         LocalClassification::PhiLike
         | LocalClassification::ReturnPhi
-        | LocalClassification::CallResultImmediate => LocalStoreBehavior::KeepOnStack,
+        | LocalClassification::CallResultImmediate
+        | LocalClassification::AggregateOperand => LocalStoreBehavior::KeepOnStack,
         LocalClassification::Virtual | LocalClassification::CopyOf | LocalClassification::Dead => {
             LocalStoreBehavior::PopValue
         }
@@ -376,20 +384,24 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
                 name: class_name,
                 type_arg_templates,
             } => {
-                // Emit one LoadType per class-level type arg (before AllocInstance
-                // so the VM can pop them from the stack).
                 let ntypeargs = u16::try_from(type_arg_templates.len())
                     .expect("type_arg_templates count fits in u16");
+
+                if fields.is_empty() {
+                    // Empty class construction has no field values to fuse.
+                    for template in type_arg_templates {
+                        sink.load_type(template)?;
+                    }
+                    return sink.alloc_class_instance(class_name, ntypeargs);
+                }
+
+                for field_operand in fields {
+                    walk_operand_pull(sink, field_operand)?;
+                }
                 for template in type_arg_templates {
                     sink.load_type(template)?;
                 }
-                sink.alloc_class_instance(class_name, ntypeargs)?;
-                for (field_idx, field_operand) in fields.iter().enumerate() {
-                    let name = sink.class_field_name(class_name, field_idx);
-                    walk_operand_pull(sink, field_operand)?;
-                    sink.init_field(field_idx, &name)?;
-                }
-                Ok(())
+                sink.init_class_instance(class_name, ntypeargs, fields.len())
             }
             AggregateKind::EnumVariant { enum_name, variant } => {
                 sink.alloc_enum_variant(enum_name, variant)

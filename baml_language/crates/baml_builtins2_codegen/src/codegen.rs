@@ -258,31 +258,40 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 writeln!(out, "{inner}pub fn {field_name}(&self) -> i64 {{").unwrap();
                 writeln!(
                     out,
-                    "{inner2}match self.instance.fields[{}] {{",
+                    "{inner2}self.instance.fields[{}].as_int()",
                     field.index
                 )
                 .unwrap();
-                writeln!(out, "{inner2}    Value::Int(i) => i,").unwrap();
                 writeln!(
                     out,
-                    "{inner2}    _ => panic!(\"{class_name}.{field_name}: expected Int\"),"
+                    "{inner2}    .unwrap_or_else(|| panic!(\"{class_name}.{field_name}: expected Int\"))"
                 )
                 .unwrap();
-                writeln!(out, "{inner2}}}").unwrap();
                 writeln!(out, "{inner}}}\n").unwrap();
             }
             BamlType::Float => {
                 writeln!(out, "{inner}pub fn {field_name}(&self) -> f64 {{").unwrap();
                 writeln!(
                     out,
-                    "{inner2}match self.instance.fields[{}] {{",
+                    "{inner2}match self.instance.fields[{}].as_object_ptr() {{",
                     field.index
                 )
                 .unwrap();
-                writeln!(out, "{inner2}    Value::Float(f) => f,").unwrap();
                 writeln!(
                     out,
-                    "{inner2}    _ => panic!(\"{class_name}.{field_name}: expected Float\"),"
+                    "{inner2}    Some(ptr) => match unsafe {{ ptr.get() }} {{"
+                )
+                .unwrap();
+                writeln!(out, "{inner2}        bex_vm_types::Object::Float(f) => *f,").unwrap();
+                writeln!(
+                    out,
+                    "{inner2}        _ => panic!(\"{class_name}.{field_name}: expected Float\"),"
+                )
+                .unwrap();
+                writeln!(out, "{inner2}    }},").unwrap();
+                writeln!(
+                    out,
+                    "{inner2}    None => panic!(\"{class_name}.{field_name}: expected Float\"),"
                 )
                 .unwrap();
                 writeln!(out, "{inner2}}}").unwrap();
@@ -292,17 +301,15 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 writeln!(out, "{inner}pub fn {field_name}(&self) -> bool {{").unwrap();
                 writeln!(
                     out,
-                    "{inner2}match self.instance.fields[{}] {{",
+                    "{inner2}self.instance.fields[{}].as_bool()",
                     field.index
                 )
                 .unwrap();
-                writeln!(out, "{inner2}    Value::Bool(b) => b,").unwrap();
                 writeln!(
                     out,
-                    "{inner2}    _ => panic!(\"{class_name}.{field_name}: expected Bool\"),"
+                    "{inner2}    .unwrap_or_else(|| panic!(\"{class_name}.{field_name}: expected Bool\"))"
                 )
                 .unwrap();
-                writeln!(out, "{inner2}}}").unwrap();
                 writeln!(out, "{inner}}}\n").unwrap();
             }
             BamlType::String => {
@@ -328,7 +335,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
             BamlType::List(_) => {
                 writeln!(
                     out,
-                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> &'v [Value] {{"
+                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> ArrayReadGuard<'v> {{"
                 )
                 .unwrap();
                 writeln!(
@@ -345,9 +352,11 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 writeln!(out, "{inner}}}\n").unwrap();
             }
             BamlType::Map(_, _) => {
-                writeln!(out,
-                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> &'v IndexMap<String, Value> {{"
-                ).unwrap();
+                writeln!(
+                    out,
+                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> MapReadGuard<'v> {{"
+                )
+                .unwrap();
                 writeln!(
                     out,
                     "{inner2}vm.as_map(&self.instance.fields[{}])",
@@ -372,12 +381,13 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}match self.instance.fields[{}] {{",
+                    "{inner2}if self.instance.fields[{}].is_null() {{",
                     field.index
                 )
                 .unwrap();
-                writeln!(out, "{inner2}    Value::Null => None,").unwrap();
-                writeln!(out, "{inner2}    _ => Some({some_expr}),").unwrap();
+                writeln!(out, "{inner2}    None").unwrap();
+                writeln!(out, "{inner2}}} else {{").unwrap();
+                writeln!(out, "{inner2}    Some({some_expr})").unwrap();
                 writeln!(out, "{inner2}}}").unwrap();
                 writeln!(out, "{inner}}}\n").unwrap();
             }
@@ -404,19 +414,25 @@ fn view_optional_type_and_expr(
         BamlType::Int => (
             "Option<i64>".to_string(),
             format!(
-                "match self.instance.fields[{field_index}] {{ Value::Int(i) => i, _ => panic!(\"{class_name}.{field_name}: expected Int\") }}"
+                "self.instance.fields[{field_index}].as_int().unwrap_or_else(|| panic!(\"{class_name}.{field_name}: expected Int\"))"
             ),
         ),
         BamlType::Float => (
             "Option<f64>".to_string(),
             format!(
-                "match self.instance.fields[{field_index}] {{ Value::Float(f) => f, _ => panic!(\"{class_name}.{field_name}: expected Float\") }}"
+                "{{ \
+                    let Some(ptr) = self.instance.fields[{field_index}].as_object_ptr() \
+                        else {{ panic!(\"{class_name}.{field_name}: expected Float\") }}; \
+                    let bex_vm_types::Object::Float(f) = (unsafe {{ ptr.get() }}) \
+                        else {{ panic!(\"{class_name}.{field_name}: expected Float\") }}; \
+                    *f \
+                }}"
             ),
         ),
         BamlType::Bool => (
             "Option<bool>".to_string(),
             format!(
-                "match self.instance.fields[{field_index}] {{ Value::Bool(b) => b, _ => panic!(\"{class_name}.{field_name}: expected Bool\") }}"
+                "self.instance.fields[{field_index}].as_bool().unwrap_or_else(|| panic!(\"{class_name}.{field_name}: expected Bool\"))"
             ),
         ),
         BamlType::String => (
@@ -531,10 +547,19 @@ fn copy_field_type(ty: &BamlType) -> String {
 fn copy_field_to_value(field_name: &str, ty: &BamlType) -> String {
     match ty {
         BamlType::RustType => format!("vm.alloc_rust_data(self.{field_name})"),
-        BamlType::Int => format!("Value::Int(self.{field_name})"),
-        BamlType::Float => format!("Value::Float(self.{field_name})"),
-        BamlType::Bool => format!("Value::Bool(self.{field_name})"),
-        BamlType::Null => "Value::Null".to_string(),
+        // `to_value` has no error channel (`fn to_value(self, vm) -> Value`),
+        // so an out-of-i63 native i64 reaches this path only when caller-side
+        // Rust constructed a struct field that violates the i63 BAML
+        // contract. Fail loudly in *both* debug and release rather than
+        // truncating silently via `Value::int`'s `debug_assert`.
+        BamlType::Int => format!(
+            "Value::try_int(self.{field_name}).unwrap_or_else(|| panic!(\
+                \"`{field_name}: int` is outside BAML int range [{{}}, {{}}], got {{}}\", \
+                Value::INT_MIN, Value::INT_MAX, self.{field_name}))"
+        ),
+        BamlType::Float => format!("vm.alloc_float(self.{field_name})"),
+        BamlType::Bool => format!("Value::bool(self.{field_name})"),
+        BamlType::Null => "Value::NULL".to_string(),
         // String, List, Map, Optional, Generic, Named, Media — already a Value
         _ => format!("self.{field_name}"),
     }
@@ -898,6 +923,15 @@ fn emit_glue_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
         .as_ref()
         .is_some_and(|r| r.receiver_type.is_mut());
     let needs_owned = matches!(b.vm_usage, VmUsage::MutRef) || b.may_yield || receiver_is_mut_self;
+    // Array/Map extractions return read/write guards that borrow `vm`. If
+    // the glue function's result conversion needs `&mut vm` (alloc_string /
+    // alloc_array / alloc_map / alloc_uint8array), the guard's borrow would
+    // conflict — so clone the Array/Map up front in those cases. This is a
+    // separate flag from `needs_owned` because it must NOT propagate to
+    // other extraction paths (the media-class path uses `needs_owned` for
+    // its own reasons and switching it on here would break the receiver
+    // shape).
+    let arraymap_needs_owned = needs_owned || return_type_needs_alloc(&b.return_type);
 
     writeln!(
         out,
@@ -911,8 +945,8 @@ fn emit_glue_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
         // operators in arg extractions work (VmInternalError -> VmRustFnError via From),
         // then flatten the result.
         out.push_str("        let __result: Result<NativeCallResult, VmRustFnError> = (|| {\n");
-        emit_arg_extractions_indented(out, b, "            ", needs_owned);
-        let call_args = call_arg_list(b, needs_owned);
+        emit_arg_extractions_indented(out, b, "            ", needs_owned, arraymap_needs_owned);
+        let call_args = call_arg_list(b, needs_owned, arraymap_needs_owned);
         writeln!(out, "            Ok(Self::{method_name}(vm, {call_args}))").unwrap();
         out.push_str("        })();\n");
         out.push_str("        match __result {\n");
@@ -928,9 +962,9 @@ fn emit_glue_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
     // Use a closure returning NativeFunctionResult so `?` operators work inside.
     out.push_str("        let __result: NativeFunctionResult = (|| {\n");
 
-    emit_arg_extractions_indented(out, b, "            ", needs_owned);
+    emit_arg_extractions_indented(out, b, "            ", needs_owned, arraymap_needs_owned);
 
-    let call_args = call_arg_list(b, needs_owned);
+    let call_args = call_arg_list(b, needs_owned, arraymap_needs_owned);
     let returns_null = matches!(b.return_type, BamlType::Null);
 
     let binding = if returns_null {
@@ -1056,8 +1090,15 @@ fn emit_single_extraction_indented(
     ty: &BamlType,
     indent: &str,
     needs_owned: bool,
+    arraymap_needs_owned: bool,
 ) {
-    let rhs = extraction_expr(&format!("&args[{idx}]"), ty, false, needs_owned);
+    let rhs = extraction_expr(
+        &format!("&args[{idx}]"),
+        ty,
+        false,
+        needs_owned,
+        arraymap_needs_owned,
+    );
     writeln!(out, "{indent}let {name} = {rhs};").unwrap();
 }
 
@@ -1068,6 +1109,7 @@ fn emit_immut_receiver_extraction_indented(
     recv: &Receiver,
     indent: &str,
     needs_owned: bool,
+    arraymap_needs_owned: bool,
 ) {
     match recv.class_name.as_str() {
         cls if is_media_class(cls) => {
@@ -1091,7 +1133,12 @@ fn emit_immut_receiver_extraction_indented(
             }
         }
         _ => {
-            let rhs = receiver_immut_extraction_expr(&format!("&args[{idx}]"), recv, needs_owned);
+            let rhs = receiver_immut_extraction_expr(
+                &format!("&args[{idx}]"),
+                recv,
+                needs_owned,
+                arraymap_needs_owned,
+            );
             writeln!(out, "{indent}let {name} = {rhs};").unwrap();
         }
     }
@@ -1110,7 +1157,14 @@ fn emit_mut_receiver_extraction_indented(
         "Uint8Array" => "vm.as_uint8array_mut(&args[0])?".to_string(),
         _ => "vm.as_value_mut(&args[0])?".to_string(),
     };
-    writeln!(out, "{indent}let {name} = {expr};").unwrap();
+    // Array/Map now return a guard rather than `&mut Vec/IndexMap`. Bind
+    // mutably so the call site can take `&mut name` and let the
+    // DerefMut impl coerce to the underlying container.
+    let mut_kw = match recv.class_name.as_str() {
+        "Array" | "Map" => "mut ",
+        _ => "",
+    };
+    writeln!(out, "{indent}let {mut_kw}{name} = {expr};").unwrap();
 }
 
 /// Like `emit_arg_extractions` but uses `indent` for each line.
@@ -1119,32 +1173,73 @@ fn emit_arg_extractions_indented(
     b: &NativeBuiltin,
     indent: &str,
     needs_owned: bool,
+    arraymap_needs_owned: bool,
 ) {
     if let Some(recv) = &b.receiver {
         if recv.receiver_type.is_static() {
             // Static methods: no receiver
             for (i, p) in b.params.iter().enumerate() {
                 let arg_idx = i;
-                emit_single_extraction_indented(out, &p.name, arg_idx, &p.ty, indent, needs_owned);
+                emit_single_extraction_indented(
+                    out,
+                    &p.name,
+                    arg_idx,
+                    &p.ty,
+                    indent,
+                    needs_owned,
+                    arraymap_needs_owned,
+                );
             }
         } else if recv.receiver_type.is_mut() {
             for (i, p) in b.params.iter().enumerate() {
                 let arg_idx = i + 1;
-                emit_single_extraction_indented(out, &p.name, arg_idx, &p.ty, indent, needs_owned);
+                emit_single_extraction_indented(
+                    out,
+                    &p.name,
+                    arg_idx,
+                    &p.ty,
+                    indent,
+                    needs_owned,
+                    arraymap_needs_owned,
+                );
             }
             let recv_name = receiver_param_name(recv);
             emit_mut_receiver_extraction_indented(out, &recv_name, recv, indent);
         } else {
             let recv_name = receiver_param_name(recv);
-            emit_immut_receiver_extraction_indented(out, &recv_name, 0, recv, indent, needs_owned);
+            emit_immut_receiver_extraction_indented(
+                out,
+                &recv_name,
+                0,
+                recv,
+                indent,
+                needs_owned,
+                arraymap_needs_owned,
+            );
             for (i, p) in b.params.iter().enumerate() {
                 let arg_idx = i + 1;
-                emit_single_extraction_indented(out, &p.name, arg_idx, &p.ty, indent, needs_owned);
+                emit_single_extraction_indented(
+                    out,
+                    &p.name,
+                    arg_idx,
+                    &p.ty,
+                    indent,
+                    needs_owned,
+                    arraymap_needs_owned,
+                );
             }
         }
     } else {
         for (i, p) in b.params.iter().enumerate() {
-            emit_single_extraction_indented(out, &p.name, i, &p.ty, indent, needs_owned);
+            emit_single_extraction_indented(
+                out,
+                &p.name,
+                i,
+                &p.ty,
+                indent,
+                needs_owned,
+                arraymap_needs_owned,
+            );
         }
     }
 }
@@ -1153,17 +1248,26 @@ fn emit_arg_extractions_indented(
 // Extraction expressions
 // ============================================================================
 
-fn receiver_immut_extraction_expr(val: &str, recv: &Receiver, needs_owned: bool) -> String {
+fn receiver_immut_extraction_expr(
+    val: &str,
+    recv: &Receiver,
+    needs_owned: bool,
+    arraymap_needs_owned: bool,
+) -> String {
     match recv.class_name.as_str() {
+        // Clone for Array/Map read receivers when the glue function would
+        // later need `&mut vm` after extraction (per `arraymap_needs_owned`).
+        // Otherwise `vm.as_array(...)?` returns a guard whose lock is
+        // released on drop — the cheap path.
         "Array" => {
-            if needs_owned {
+            if arraymap_needs_owned {
                 format!("vm.as_array({val})?.to_vec()")
             } else {
                 format!("vm.as_array({val})?")
             }
         }
         "Map" => {
-            if needs_owned {
+            if arraymap_needs_owned {
                 format!("vm.as_map({val})?.clone()")
             } else {
                 format!("vm.as_map({val})?")
@@ -1185,12 +1289,26 @@ fn receiver_immut_extraction_expr(val: &str, recv: &Receiver, needs_owned: bool)
         }
         // Primitive value receivers: extract the underlying scalar. `int` is
         // backed by `i64`, `float` by `f64` — both `Copy`, so `needs_owned` is
-        // irrelevant.
+        // irrelevant. The local `__v: &Value` binding lets `.as_int()` /
+        // `.as_object_ptr()` (which take `&self`) resolve without the explicit
+        // borrow that would trip `clippy::needless_borrow`.
         "Int" => format!(
-            "match {val} {{ Value::Int(i) => *i, other => return Err(VmInternalError::TypeError {{ expected: Type::Int, got: vm.type_of(other) }}.into()) }}"
+            "{{ \
+                let __v = {val}; \
+                let Some(i) = __v.as_int() \
+                    else {{ return Err(VmInternalError::TypeError {{ expected: Type::Int, got: vm.type_of(__v) }}.into()); }}; \
+                i \
+            }}"
         ),
         "Float" => format!(
-            "match {val} {{ Value::Float(f) => *f, other => return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of(other) }}.into()) }}"
+            "{{ \
+                let __v = {val}; \
+                let Some(ptr) = __v.as_object_ptr() \
+                    else {{ return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of(__v) }}.into()); }}; \
+                let bex_vm_types::Object::Float(f) = (unsafe {{ ptr.get() }}) \
+                    else {{ return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of(__v) }}.into()); }}; \
+                *f \
+            }}"
         ),
         // Bigint is heap-allocated behind an Arc; always clone the Arc so the
         // trait method receives an owned `Arc<BigInt>` regardless of needs_owned.
@@ -1213,7 +1331,13 @@ fn receiver_immut_extraction_expr(val: &str, recv: &Receiver, needs_owned: bool)
     }
 }
 
-fn extraction_expr(val: &str, ty: &BamlType, is_mut: bool, needs_owned: bool) -> String {
+fn extraction_expr(
+    val: &str,
+    ty: &BamlType,
+    is_mut: bool,
+    needs_owned: bool,
+    arraymap_needs_owned: bool,
+) -> String {
     match ty {
         BamlType::String => {
             if is_mut {
@@ -1224,37 +1348,71 @@ fn extraction_expr(val: &str, ty: &BamlType, is_mut: bool, needs_owned: bool) ->
                 format!("vm.as_string({val})?")
             }
         }
+        // The local `__v: &Value` binding lets the `Value::as_*` methods
+        // (which take `&self`) resolve without an explicit borrow that
+        // would trip `clippy::needless_borrow`.
         BamlType::Int => format!(
-            "match {val} {{ Value::Int(i) => *i, other => return Err(VmInternalError::TypeError {{ expected: Type::Int, got: vm.type_of(other) }}.into()) }}"
+            "{{ \
+                let __v = {val}; \
+                let Some(i) = __v.as_int() \
+                    else {{ return Err(VmInternalError::TypeError {{ expected: Type::Int, got: vm.type_of(__v) }}.into()); }}; \
+                i \
+            }}"
         ),
         BamlType::Bigint => format!("vm.as_bigint({val})?.clone()"),
         BamlType::Float => format!(
-            "match {val} {{ Value::Float(f) => *f, other => return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of(other) }}.into()) }}"
+            "{{ \
+                let __v = {val}; \
+                let Some(ptr) = __v.as_object_ptr() \
+                    else {{ return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of(__v) }}.into()); }}; \
+                let bex_vm_types::Object::Float(f) = (unsafe {{ ptr.get() }}) \
+                    else {{ return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of(__v) }}.into()); }}; \
+                *f \
+            }}"
         ),
         BamlType::Bool => format!(
-            "match {val} {{ Value::Bool(b) => *b, other => return Err(VmInternalError::TypeError {{ expected: Type::Bool, got: vm.type_of(other) }}.into()) }}"
+            "{{ \
+                let __v = {val}; \
+                let Some(b) = __v.as_bool() \
+                    else {{ return Err(VmInternalError::TypeError {{ expected: Type::Bool, got: vm.type_of(__v) }}.into()); }}; \
+                b \
+            }}"
         ),
         BamlType::List(_) => {
             if is_mut {
                 format!("vm.as_array_mut({val})?")
-            } else if needs_owned {
+            } else if arraymap_needs_owned {
+                // `as_array` returns an `ArrayReadGuard` that holds a borrow
+                // on `vm` via the container's lazy biased mutex. When the
+                // glue function later needs `&mut vm` (e.g. for
+                // `vm.alloc_array(result)`), the guard's lifetime would
+                // conflict. `arraymap_needs_owned` flags those cases; we
+                // then clone into an owned `Vec<Value>` and let the guard
+                // drop immediately.
                 format!("vm.as_array({val})?.to_vec()")
             } else {
+                // No `&mut vm` access after extraction — keep the guard
+                // alive (cheap fetch_add/fetch_sub pair, no allocation).
                 format!("vm.as_array({val})?")
             }
         }
         BamlType::Map(_, _) => {
             if is_mut {
                 format!("vm.as_map_mut({val})?")
-            } else if needs_owned {
+            } else if arraymap_needs_owned {
                 format!("vm.as_map({val})?.clone()")
             } else {
                 format!("vm.as_map({val})?")
             }
         }
         BamlType::Optional(inner) => {
-            let inner_expr = extraction_expr("other", inner, false, needs_owned);
-            format!("match {val} {{ Value::Null => None, other => Some({inner_expr}) }}")
+            let inner_expr =
+                extraction_expr("other", inner, false, needs_owned, arraymap_needs_owned);
+            // Bind `other` so `.is_null()` (Value method) resolves through
+            // the `&Value` without triggering `clippy::needless_borrow`.
+            format!(
+                "{{ let other = {val}; if other.is_null() {{ None }} else {{ Some({inner_expr}) }} }}"
+            )
         }
         BamlType::Uint8Array => {
             if is_mut {
@@ -1278,27 +1436,49 @@ fn extraction_expr(val: &str, ty: &BamlType, is_mut: bool, needs_owned: bool) ->
     }
 }
 
-fn call_arg_list(b: &NativeBuiltin, needs_owned: bool) -> String {
+fn call_arg_list(b: &NativeBuiltin, needs_owned: bool, arraymap_needs_owned: bool) -> String {
     let mut args: Vec<String> = Vec::new();
+    // For Array/Map we use the dedicated flag — these may be owned (cloned
+    // Vec/IndexMap) even when other types are passed by reference, because
+    // the guard's vm borrow forced an early clone.
     let is_ref = !needs_owned;
+    let arraymap_is_ref = !arraymap_needs_owned;
 
     if let Some(recv) = &b.receiver {
         if !recv.receiver_type.is_static() {
             let name = receiver_param_name(recv);
             if recv.receiver_type.is_mut() {
-                args.push(name);
+                // Array/Map mut receivers are now guards; take &mut name so
+                // DerefMut coerces to &mut Vec<Value> / &mut IndexMap.
+                let arg = match recv.class_name.as_str() {
+                    "Array" | "Map" => format!("&mut {name}"),
+                    _ => name,
+                };
+                args.push(arg);
             } else if needs_owned && is_media_class(recv.class_name.as_str()) {
                 // For `//baml:mut_vm` media methods the extraction emits
                 // `let pdf = &args[0];` (a `&Value` copy).  Pass `name` directly —
                 // it is already the `&Value` the trait method expects.
                 args.push(name);
             } else {
-                args.push(call_arg_for_type(&name, &receiver_baml_type(recv), is_ref));
+                let recv_is_ref = match recv.class_name.as_str() {
+                    "Array" | "Map" => arraymap_is_ref,
+                    _ => is_ref,
+                };
+                args.push(call_arg_for_type(
+                    &name,
+                    &receiver_baml_type(recv),
+                    recv_is_ref,
+                ));
             }
         }
     }
     for p in &b.params {
-        args.push(call_arg_for_type(&p.name, &p.ty, is_ref));
+        let p_is_ref = match &p.ty {
+            BamlType::List(_) | BamlType::Map(_, _) => arraymap_is_ref,
+            _ => is_ref,
+        };
+        args.push(call_arg_for_type(&p.name, &p.ty, p_is_ref));
     }
 
     args.join(", ")
@@ -1306,11 +1486,18 @@ fn call_arg_list(b: &NativeBuiltin, needs_owned: bool) -> String {
 
 fn call_arg_for_type(name: &str, ty: &BamlType, is_ref: bool) -> String {
     match ty {
-        BamlType::String
-        | BamlType::Uint8Array
-        | BamlType::List(_)
-        | BamlType::Map(_, _)
-        | BamlType::Media(_) => {
+        BamlType::List(_) | BamlType::Map(_, _) => {
+            if is_ref {
+                // Extraction returns an `Array/MapReadGuard`; take `&name` so
+                // its `Deref` impl coerces through `Vec<Value>` /
+                // `IndexMap<..>` to the slice / map reference the trait
+                // method signature expects.
+                format!("&{name}")
+            } else {
+                format!("&{name}")
+            }
+        }
+        BamlType::String | BamlType::Uint8Array | BamlType::Media(_) => {
             if is_ref {
                 // Extraction already returned a reference — don't double-ref
                 name.to_string()
@@ -1393,6 +1580,30 @@ fn emit_result_conversion_ok(out: &mut String, b: &NativeBuiltin, indent: &str) 
     writeln!(out, "{indent}Ok({conversion})").unwrap();
 }
 
+/// Returns `true` if `result_conversion_expr` for this return type emits
+/// a `vm.alloc_*` call (which requires `&mut vm`). Used by the glue
+/// emitter to decide whether Array/Map parameter extractions must be
+/// cloned to release the read-guard's borrow before the result
+/// conversion runs.
+fn return_type_needs_alloc(ty: &BamlType) -> bool {
+    match ty {
+        BamlType::String
+        | BamlType::Uint8Array
+        | BamlType::Bigint
+        | BamlType::List(_)
+        | BamlType::Map(_, _) => true,
+        BamlType::Optional(inner) => return_type_needs_alloc(inner),
+        BamlType::Int
+        | BamlType::Float
+        | BamlType::Bool
+        | BamlType::Null
+        | BamlType::Generic(_)
+        | BamlType::Named(_)
+        | BamlType::Media(_)
+        | BamlType::RustType => false,
+    }
+}
+
 /// Emit a Rust expression that converts a native method's return value into a
 /// `Value` for the surrounding `Ok({conversion})` line in the glue closure.
 ///
@@ -1407,16 +1618,24 @@ fn result_conversion_expr(name: &str, ty: &BamlType) -> String {
     match ty {
         BamlType::String => format!("vm.alloc_string({name})"),
         BamlType::Uint8Array => format!("vm.alloc_uint8array({name})"),
-        BamlType::Int => format!("Value::Int({name})"),
+        // Surface out-of-i63 native returns as a normal VM error instead
+        // of silently truncating via the bare `Value::int` constructor's
+        // `debug_assert` (which is a no-op in release).
+        BamlType::Int => format!(
+            "Value::try_int({name}).ok_or_else(|| VmBamlError::InvalidArgument {{ \
+                message: format!(\"native int return value {{}} is outside the BAML int range [{{}}, {{}}]\", \
+                    {name}, Value::INT_MIN, Value::INT_MAX) \
+            }})?"
+        ),
         BamlType::Bigint => format!("vm.try_alloc_bigint({name})?"),
-        BamlType::Float => format!("Value::Float({name})"),
-        BamlType::Bool => format!("Value::Bool({name})"),
-        BamlType::Null => "Value::Null".to_string(),
+        BamlType::Float => format!("vm.alloc_float({name})"),
+        BamlType::Bool => format!("Value::bool({name})"),
+        BamlType::Null => "Value::NULL".to_string(),
         BamlType::List(_) => format!("vm.alloc_array({name})"),
         BamlType::Map(_, _) => format!("vm.alloc_map({name})"),
         BamlType::Optional(inner) => {
             let inner_conversion = result_conversion_expr("v", inner);
-            format!("match {name} {{ Some(v) => {inner_conversion}, None => Value::Null }}")
+            format!("match {name} {{ Some(v) => {inner_conversion}, None => Value::NULL }}")
         }
         BamlType::Generic(_) | BamlType::Named(_) | BamlType::Media(_) | BamlType::RustType => {
             name.to_string()

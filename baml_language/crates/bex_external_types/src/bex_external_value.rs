@@ -205,6 +205,12 @@ pub enum BexExternalValue {
     // and use instances of ADT variants directly similar to how we handle
     // builtin classes and enums.
     Adt(BexExternalAdt),
+
+    /// Reference to a value owned by the host language.
+    ///
+    /// `Drop` of the last clone fires the registered `HostReleaseFn`.
+    /// See [`bex_resource_types::HostValueArc`].
+    HostValue(std::sync::Arc<bex_resource_types::HostValueArc>),
 }
 
 impl std::fmt::Debug for BexExternalValue {
@@ -260,6 +266,11 @@ impl std::fmt::Debug for BexExternalValue {
                 .finish(),
             Self::Handle(v) => f.debug_tuple("Handle").field(v).finish(),
             Self::Adt(v) => f.debug_tuple("Adt").field(v).finish(),
+            Self::HostValue(v) => f
+                .debug_struct("HostValue")
+                .field("key", &v.key)
+                .field("kind", &v.kind)
+                .finish(),
         }
     }
 }
@@ -332,6 +343,7 @@ impl PartialEq for BexExternalValue {
             }
             (Self::Handle(a), Self::Handle(b)) => a == b,
             (Self::Adt(a), Self::Adt(b)) => a == b,
+            (Self::HostValue(a), Self::HostValue(b)) => a.key == b.key && a.kind == b.kind,
             _ => false,
         }
     }
@@ -424,6 +436,7 @@ impl BexExternalValue {
             BexExternalValue::Adt(adt) => adt.type_name(),
             BexExternalValue::FunctionRef { .. } => "function",
             BexExternalValue::Handle(_) => "handle",
+            BexExternalValue::HostValue(_) => "host_value",
         }
     }
 
@@ -451,6 +464,10 @@ impl BexExternalValue {
             BexExternalValue::Union { value, .. } => value.as_bool(),
             _ => None,
         }
+    }
+
+    pub fn is_host_value(&self) -> bool {
+        matches!(self, Self::HostValue(_))
     }
 }
 

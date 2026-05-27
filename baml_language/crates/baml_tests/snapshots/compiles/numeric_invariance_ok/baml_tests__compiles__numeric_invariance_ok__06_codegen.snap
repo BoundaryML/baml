@@ -9,10 +9,7 @@ function user.BigintCounter.from_json(j: baml.json.json) -> BigintCounter {
     load_type bigint
     load_var _3
     call baml.json.from_json
-    store_var _2
-    alloc_instance user.BigintCounter
-    load_var _2
-    init_field .count
+    init_instance user.BigintCounter .count
     return
 }
 
@@ -26,9 +23,8 @@ function user.BigintCounter.to_json(self: null) -> baml.json.json {
 }
 
 function user.BigintFieldOk() -> BigintCounter {
-    alloc_instance user.BigintCounter
     load_const 1n
-    init_field .count
+    init_instance user.BigintCounter .count
     return
 }
 

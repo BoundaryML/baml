@@ -14,21 +14,24 @@
 //! crate while the stub stays in place — see [`IGNORE_REASON`].
 //!
 //! **pnpm steps live in
-//! `sdk_tests/crates/nodejs_typescript/setup.sh`**, NOT in build.rs.
-//! `cargo nextest run` invokes setup.sh automatically via the
-//! setup-script binding in `baml_language/.config/nextest.toml`:
+//! `sdk_tests/crates/nodejs_typescript/setup.sh`** (Unix) or
+//! **`setup.ps1`** (Windows), NOT in build.rs. `cargo nextest run`
+//! invokes the right one automatically via two platform-filtered
+//! setup-script bindings (`cfg(unix)` / `cfg(windows)`) in
+//! `baml_language/.config/nextest.toml`:
 //!
 //! ```sh
 //! cd baml_language
 //! cargo nextest run -p sdk_test_nodejs_typescript
 //! ```
 //!
-//! For plain `cargo test` (no nextest), run setup.sh manually
-//! between `cargo test --no-run` and `cargo test`. Re-run setup.sh
-//! when bridge_nodejs's Rust source changes (the `.node` addon needs
-//! rebuilding) or when adding a new fixture. build.rs's job is just
-//! codegen + scaffold emit — it writes the per-fixture
-//! `package.json` / `tsconfig.json` that setup.sh consumes.
+//! For plain `cargo test` (no nextest), run setup.sh (or setup.ps1
+//! on Windows) manually between `cargo test --no-run` and
+//! `cargo test`. Re-run when bridge_nodejs's Rust source changes
+//! (the `.node` addon needs rebuilding) or when adding a new
+//! fixture. build.rs's job is just codegen + scaffold emit — it
+//! writes the per-fixture `package.json` / `tsconfig.json` that
+//! the setup script consumes.
 //!
 //! Auto-discovery story: build.rs emits
 //! `OUT_DIR/nodejs_typescript_tests.rs` (a sequence of

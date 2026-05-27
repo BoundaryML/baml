@@ -420,6 +420,10 @@ fn bex_value_to_json_impl(value: &BexExternalValue, depth: usize) -> serde_json:
             let meta = BamlMeta::rust_data();
             serde_json::json!({ "$baml": serde_json::to_value(&meta).unwrap_or(serde_json::Value::Null) })
         }
+        BexExternalValue::HostValue(_) => {
+            let meta = BamlMeta::handle();
+            serde_json::json!({ "$baml": serde_json::to_value(&meta).unwrap_or(serde_json::Value::Null) })
+        }
     }
 }
 
@@ -497,6 +501,7 @@ fn bex_value_to_debug_impl(value: &BexExternalValue, depth: usize) -> String {
         BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { ty, heap_handle }) => {
             format!("<tagged_heap_handle {ty} #{}>", heap_handle.slab_key())
         }
+        BexExternalValue::HostValue(hv) => format!("<host_value #{}>", hv.key),
     }
 }
 

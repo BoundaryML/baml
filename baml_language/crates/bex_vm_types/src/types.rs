@@ -23,7 +23,10 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 pub use tokio_util::sync::CancellationToken;
 
-use crate::{bytecode::Bytecode, heap_ptr::HeapPtr, indexable::ObjectPool};
+use crate::{
+    bytecode::Bytecode, heap_ptr::HeapPtr, indexable::ObjectPool,
+    lazy_biased_mutex::LazyBiasedMutex,
+};
 
 // ============================================================================
 // Type Tags for Jump Table Dispatch
@@ -172,6 +175,8 @@ pub enum SysOpErrorCategory {
     /// Wildcard for development convenience. Must be explicitly declared in
     /// `#[throws(DevOther)]` and should be migrated to named categories.
     DevOther,
+    /// A host-language callable raised an exception or invalid-argument error.
+    HostCallable,
 }
 
 impl std::fmt::Display for SysOpErrorCategory {
@@ -186,6 +191,7 @@ impl std::fmt::Display for SysOpErrorCategory {
             Self::RenderPrompt => write!(f, "RenderPrompt"),
             Self::LlmClient => write!(f, "LlmClient"),
             Self::DevOther => write!(f, "DevOther"),
+            Self::HostCallable => write!(f, "HostCallable"),
         }
     }
 }
@@ -606,58 +612,460 @@ pub enum SentinelKind {
     },
 }
 
-/// Runtime values.
+/// Runtime values — a single tagged 64-bit word.
 ///
-/// This struct should not contain allocated objects and should be [`Copy`].
-/// Read the documentation of `Vm::objects` (in `bex_vm` crate) to understand how allocated
-/// objects work in the virtual machine.
+/// This is a packed tagged-pointer representation. The low bit (or low
+/// 3 bits, depending on the category) carries a type tag; the upper
+/// bits carry the payload. Hardware-atomic on aligned 8-byte stores
+/// across all supported targets (x86-64, ARM64, `ARMv7`, RISC-V).
 ///
-/// # On `Hash`
-/// `Value` does not yet implement `Hash`, and should not implement `Eq`. Besides floating point which can be addressed,
-/// strings do not yet have referential equality, i.e "hello" can be represented with two different
-/// object indices. This makes comparisons nontrivial since they have to fetch the string. Same
-/// would happen with any other object type that we don't want to have referential equality for.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-pub enum Value {
-    /// Internal sentinel for an omitted defaulted argument.
-    ///
-    /// This value is only valid between call binding and a callee-entry default
-    /// prologue. It must not be serialized or exposed to host code.
-    OmittedArg,
-    Null,
-    Int(i64),
-    Float(f64),
-    Bool(bool),
+/// # Encoding (low 3 bits = tag category)
+///
+/// | Bit pattern                            | Meaning                                          |
+/// | -------------------------------------- | ------------------------------------------------ |
+/// | `0x0000_0000_0000_0000`                | `Null` — the only zero pointer                   |
+/// | `0x0000_0000_0000_0002`                | `Bool(false)` sentinel                           |
+/// | `0x0000_0000_0000_0004`                | `Bool(true)` sentinel                            |
+/// | `0x0000_0000_0000_0006`                | `OmittedArg` sentinel                            |
+/// | `xxxxx...xxx1` (low bit set)           | `Int(i63)` — sign-extend via `(v as i64) >> 1`   |
+/// | `0xxxxx...xxx0` (low 3 bits zero, ≠0)  | `Object(HeapPtr)` — heap pointer (8-byte align)  |
+///
+/// # On `Float`
+///
+/// `Float(f64)` does NOT have an inline encoding. Floats are heap-boxed
+/// as `Object::Float(f64)` and referenced via the pointer arm. This
+/// trades float-arithmetic cost (one heap alloc per result) for a
+/// uniform 8-byte `Value` representation, which is what makes every
+/// read/write hardware-atomic and gives ~50% cache footprint
+/// reduction. BAML programs are integer-and-object-heavy so the
+/// trade-off favors us.
+///
+/// # On range loss
+///
+/// Integers shrink from i64 to i63 (max ~4.6e18). Holds nanosecond
+/// timestamps until year ~2200 with margin. For larger integers,
+/// callers must allocate a heap-boxed integer (not yet implemented).
+///
+/// # `PartialEq` / `Hash`
+///
+/// Derived on the underlying u64. This gives bit-equality, which is
+/// reference equality for heap-allocated objects (including boxed
+/// floats — two `Value::float(3.14, ...)` calls produce different
+/// pointers and compare unequal). Content equality for strings,
+/// arrays, etc. is handled at the user-visible `==` operator in the
+/// VM dispatch, not here.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(transparent)]
+pub struct Value(u64);
 
-    /// Pointer to a heap-allocated object.
-    ///
-    /// This is a raw pointer (`HeapPtr`) that points directly into the heap.
-    /// Strings are also objects, don't add `Value::String`.
+/// Categorical view of a `Value` for pattern matching.
+///
+/// Returned by [`Value::kind`]. The optimizer typically inlines the
+/// match and folds the discrimination into a tight switch table.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ValueKind {
+    Null,
+    OmittedArg,
+    Int(i64),
+    Bool(bool),
     Object(HeapPtr),
 }
 
+// The tagged-pointer encoding *is* a hot path: every Value access
+// goes through `as_int`/`as_object_ptr`/`kind`, and the encoding round-trips
+// between `u64` and signed `i64` by design (shift-left/right with sign
+// extension is what gives us i63 ints in a u64). The explicit `bits & 0b111`
+// checks for "low 3 bits clear" are more idiomatic for tagged pointers than
+// the suggested `.trailing_zeros() >= 3`.
+#[allow(
+    clippy::inline_always,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::verbose_bit_mask
+)]
 impl Value {
-    /// Returns the [`HeapPtr`] if this is an [`Object`].
-    pub const fn as_object_ptr(&self) -> Option<HeapPtr> {
-        match self {
-            Value::OmittedArg => None,
-            Value::Object(ptr) => Some(*ptr),
+    // ── Singletons ────────────────────────────────────────────────────────
+    pub const NULL: Value = Value(0);
+    pub const FALSE: Value = Value(2);
+    pub const TRUE: Value = Value(4);
+    pub const OMITTED_ARG: Value = Value(6);
+
+    /// Largest representable BAML integer (`2^62 - 1 = 4_611_686_018_427_387_903`).
+    ///
+    /// Integers in BAML are i63 (low bit reserved for the tag). Values
+    /// outside `[INT_MIN, INT_MAX]` cannot round-trip through `Value::int`.
+    pub const INT_MAX: i64 = (i64::MAX >> 1);
+
+    /// Smallest representable BAML integer (`-2^62 = -4_611_686_018_427_387_904`).
+    pub const INT_MIN: i64 = !Self::INT_MAX;
+
+    // ── Tagged-int fast-path arithmetic ───────────────────────────────────
+    //
+    // Both operands' bit patterns are `(real << 1) | 1` (low bit = tag).
+    // We can do arithmetic directly on the tagged bits without the
+    // shift-right / shift-left / or sequence that goes through `as_int`
+    // and `Value::int`. The tag bit is preserved by these tricks.
+    //
+    // Add: (ra<<1|1) + (rb<<1|1) - 1 = ((ra+rb)<<1) | 1
+    // Sub: (ra<<1|1) - (rb<<1|1) + 1 = ((ra-rb)<<1) | 1
+    //
+    // Wrapping is correct: i63 ranges produce results that fit in i63
+    // (modulo wrap, same as the previous `l + r` on i64s).
+    //
+    // For comparison, `(ra<<1)|1` < `(rb<<1)|1` iff `ra < rb` (shift-left
+    // preserves signed ordering; the tag bit is the same in both so it
+    // doesn't affect the comparison). Bits interpreted as i64 yield the
+    // signed ordering of the underlying i63 values.
+
+    /// Sum of two `Int`-tagged Values, computed without untagging.
+    ///
+    /// # Safety contract
+    ///
+    /// Caller must guarantee both inputs are `Int`-tagged (caller has
+    /// already type-checked, e.g. via the `OpCode::AddInt` specialization).
+    /// Mis-tagged inputs produce nonsense results; the type system does
+    /// not enforce this — it's a perf shortcut for the hot path.
+    #[inline(always)]
+    pub const fn tagged_int_add(a: Value, b: Value) -> Value {
+        debug_assert!(
+            a.is_int() && b.is_int(),
+            "tagged_int_add: both inputs must be Int"
+        );
+        Value(a.0.wrapping_add(b.0).wrapping_sub(1))
+    }
+
+    /// Difference of two `Int`-tagged Values, computed without untagging.
+    ///
+    /// See [`Value::tagged_int_add`] for the safety contract.
+    #[inline(always)]
+    pub const fn tagged_int_sub(a: Value, b: Value) -> Value {
+        debug_assert!(
+            a.is_int() && b.is_int(),
+            "tagged_int_sub: both inputs must be Int"
+        );
+        Value(a.0.wrapping_sub(b.0).wrapping_add(1))
+    }
+
+    // The OpCode::CmpInt* path does signed comparison directly on the
+    // tagged bits (`(l.bits() as i64) < (r.bits() as i64)`); we don't
+    // need a separate `tagged_int_cmp` helper.
+
+    // ── Constructors ──────────────────────────────────────────────────────
+
+    /// Build a `Value` carrying an `i63` integer.
+    ///
+    /// Debug-asserts that `i` is in `[INT_MIN, INT_MAX]`. Values outside
+    /// that range are truncated by the encoding shift, so passing one
+    /// here is a caller bug. Code that ingests integers from outside the
+    /// VM (deserializers, JSON decoders, etc.) should range-check first
+    /// or use [`Value::try_int`].
+    #[inline(always)]
+    pub const fn int(i: i64) -> Self {
+        debug_assert!(
+            i >= Self::INT_MIN && i <= Self::INT_MAX,
+            "Value::int called with i64 outside the i63 range; use Value::try_int at boundaries"
+        );
+        // Cast is well-defined: `(i as u64) << 1` may technically
+        // overflow at the i64 boundary but the result is still a valid
+        // u64 bit pattern that decodes back via `as_int`'s arithmetic
+        // shift right.
+        Value(((i as u64) << 1) | 1)
+    }
+
+    /// Build a `Value` carrying an `i63` integer, or `None` if `i` is
+    /// outside the i63 range. Use this at boundaries that accept
+    /// arbitrary `i64`s (JSON decoders, `Deserialize`, FFI).
+    #[inline(always)]
+    pub const fn try_int(i: i64) -> Option<Self> {
+        if i >= Self::INT_MIN && i <= Self::INT_MAX {
+            Some(Value(((i as u64) << 1) | 1))
+        } else {
+            None
+        }
+    }
+
+    /// Build a `Value` carrying a boolean.
+    #[inline(always)]
+    pub const fn bool(b: bool) -> Self {
+        if b { Self::TRUE } else { Self::FALSE }
+    }
+
+    /// Build a `Value` from a non-null heap pointer.
+    ///
+    /// Debug-asserts that the pointer is 8-byte aligned (heap allocator
+    /// invariant) and non-null (call sites that legitimately have a
+    /// nullable pointer should use [`Value::NULL`] explicitly).
+    #[inline(always)]
+    pub fn object(ptr: HeapPtr) -> Self {
+        let bits = ptr.as_ptr() as u64;
+        debug_assert!(
+            bits != 0,
+            "Value::object called with null heap ptr; use Value::NULL"
+        );
+        debug_assert!(
+            bits & 0b111 == 0,
+            "Value::object called with mis-aligned heap ptr 0x{bits:x}"
+        );
+        Value(bits)
+    }
+
+    // ── Tag predicates (cheap fast-path discriminators) ───────────────────
+
+    #[inline(always)]
+    pub const fn is_null(self) -> bool {
+        self.0 == 0
+    }
+
+    #[inline(always)]
+    pub const fn is_int(self) -> bool {
+        self.0 & 1 != 0
+    }
+
+    #[inline(always)]
+    pub const fn is_bool(self) -> bool {
+        self.0 == Self::FALSE.0 || self.0 == Self::TRUE.0
+    }
+
+    /// True iff `self` is a non-null heap object pointer.
+    #[inline(always)]
+    pub const fn is_object(self) -> bool {
+        self.0 & 0b111 == 0 && self.0 != 0
+    }
+
+    // ── Typed accessors (return None on tag mismatch) ─────────────────────
+
+    /// Extract an `i64` if this is an `Int`. Sign-extends from the i63
+    /// stored encoding.
+    #[inline(always)]
+    pub const fn as_int(&self) -> Option<i64> {
+        if self.is_int() {
+            // Arithmetic shift right preserves sign.
+            Some((self.0 as i64) >> 1)
+        } else {
+            None
+        }
+    }
+
+    /// Extract a `bool` if this is a `Bool`.
+    #[inline(always)]
+    pub const fn as_bool(&self) -> Option<bool> {
+        match self.0 {
+            x if x == Self::FALSE.0 => Some(false),
+            x if x == Self::TRUE.0 => Some(true),
             _ => None,
+        }
+    }
+
+    /// Extract the `HeapPtr` if this is a non-null `Object`. Returns
+    /// `None` for `Null` (since the BAML Null is a "null pointer"
+    /// encoded as `Value(0)`).
+    ///
+    /// Takes `&self` so it can be used as a `fn(&Value) -> _` callback
+    /// in iterator combinators (`.filter_map(Value::as_object_ptr)`).
+    #[inline(always)]
+    pub fn as_object_ptr(&self) -> Option<HeapPtr> {
+        if self.is_object() {
+            // SAFETY: bit pattern was constructed from a valid HeapPtr
+            // via [`Value::object`] (which debug-asserts alignment +
+            // non-null). The pointer's GC liveness is the caller's
+            // concern (same as for the old enum variant). Under
+            // `heap_debug` we lose the original epoch (Value is a
+            // packed u64 with no room) and pass 0, matching the
+            // `resolve_function_constants` reconstruction path.
+            let ptr = self.0 as *mut Object;
+            #[cfg(feature = "heap_debug")]
+            let hp = unsafe { HeapPtr::from_ptr(ptr, 0) };
+            #[cfg(not(feature = "heap_debug"))]
+            let hp = unsafe { HeapPtr::from_ptr(ptr) };
+            Some(hp)
+        } else {
+            None
+        }
+    }
+
+    // ── Match on categorical view ─────────────────────────────────────────
+
+    /// Decode into the categorical `ValueKind` for pattern matching.
+    /// Use this when you need to branch on the type; use the typed
+    /// accessors (`as_int`, `as_bool`, etc.) on the hot path when you
+    /// only care about one variant.
+    #[inline]
+    pub fn kind(&self) -> ValueKind {
+        if self.is_int() {
+            return ValueKind::Int((self.0 as i64) >> 1);
+        }
+        match self.0 {
+            x if x == Self::NULL.0 => ValueKind::Null,
+            x if x == Self::FALSE.0 => ValueKind::Bool(false),
+            x if x == Self::TRUE.0 => ValueKind::Bool(true),
+            x if x == Self::OMITTED_ARG.0 => ValueKind::OmittedArg,
+            _ => {
+                // Must be a pointer — low 3 bits zero, non-zero, not a
+                // sentinel pattern.
+                debug_assert_eq!(self.0 & 0b111, 0, "malformed Value bits 0x{:x}", self.0);
+                // SAFETY: see [`Value::as_object_ptr`].
+                let ptr = self.0 as *mut Object;
+                #[cfg(feature = "heap_debug")]
+                let hp = unsafe { HeapPtr::from_ptr(ptr, 0) };
+                #[cfg(not(feature = "heap_debug"))]
+                let hp = unsafe { HeapPtr::from_ptr(ptr) };
+                ValueKind::Object(hp)
+            }
+        }
+    }
+
+    // ── Raw bit access for debugging / advanced use ──────────────────────
+
+    /// The raw `u64` bit pattern. Exposed for diagnostics, formatting,
+    /// and concurrency machinery (e.g. `AtomicU64` stores of `Value`).
+    /// Prefer the typed accessors for normal use.
+    #[inline(always)]
+    pub const fn bits(self) -> u64 {
+        self.0
+    }
+
+    // `from_bits` has no callers yet; the originally-planned atomic-load
+    // path will add one when it lands. Re-introduce as `pub(crate) const
+    // unsafe fn from_bits(bits: u64) -> Self` at that point so the
+    // invariant (bits came from `Value::bits` or a safe constructor) is
+    // upheld by callers via `unsafe`.
+}
+
+impl Default for Value {
+    #[inline(always)]
+    #[allow(clippy::inline_always)]
+    fn default() -> Self {
+        Self::NULL
+    }
+}
+
+impl std::fmt::Debug for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.kind() {
+            ValueKind::Null => write!(f, "Null"),
+            ValueKind::OmittedArg => write!(f, "OmittedArg"),
+            ValueKind::Int(i) => f.debug_tuple("Int").field(&i).finish(),
+            ValueKind::Bool(b) => f.debug_tuple("Bool").field(&b).finish(),
+            ValueKind::Object(p) => f.debug_tuple("Object").field(&p).finish(),
         }
     }
 }
 
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Value::OmittedArg => write!(f, "<omitted>"),
-            Value::Null => write!(f, "null"),
-            Value::Int(int) => write!(f, "{int}"),
-            Value::Float(float) => write!(f, "{}", format_float(*float)),
-            Value::Bool(bool) => write!(f, "{bool}"),
-            Value::Object(ptr) => write!(f, "{ptr}"),
+        match self.kind() {
+            ValueKind::OmittedArg => write!(f, "<omitted>"),
+            ValueKind::Null => write!(f, "null"),
+            ValueKind::Int(int) => write!(f, "{int}"),
+            ValueKind::Bool(bool) => write!(f, "{bool}"),
+            ValueKind::Object(ptr) => write!(f, "{ptr}"),
         }
     }
+}
+
+/// Serde proxy for `Value`. Mirrors the categorical shape of the old
+/// `enum Value { Null, Int, Bool, Object, OmittedArg }` so on-disk
+/// program payloads are wire-compatible with the pre-tagged-ptr
+/// encoding. `Object` round-trip will fail because `HeapPtr` itself
+/// refuses to serialize — that matches the prior behavior (heap
+/// pointers are runtime-only).
+#[derive(Serialize, Deserialize)]
+enum ValueSerde {
+    OmittedArg,
+    Null,
+    Int(i64),
+    Bool(bool),
+    Object(HeapPtr),
+}
+
+impl Serialize for Value {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let proxy = match self.kind() {
+            ValueKind::Null => ValueSerde::Null,
+            ValueKind::OmittedArg => ValueSerde::OmittedArg,
+            ValueKind::Int(i) => ValueSerde::Int(i),
+            ValueKind::Bool(b) => ValueSerde::Bool(b),
+            ValueKind::Object(ptr) => ValueSerde::Object(ptr),
+        };
+        proxy.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Value {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        use serde::de::Error;
+        let proxy = ValueSerde::deserialize(deserializer)?;
+        Ok(match proxy {
+            ValueSerde::Null => Value::NULL,
+            ValueSerde::OmittedArg => Value::OMITTED_ARG,
+            ValueSerde::Int(i) => Value::try_int(i).ok_or_else(|| {
+                D::Error::custom(format!(
+                    "Value::Int payload {i} is outside the i63 range [{}, {}]; \
+                     pre-tagged-pointer payloads with |value| >= 2^62 cannot be \
+                     loaded",
+                    Value::INT_MIN,
+                    Value::INT_MAX,
+                ))
+            })?,
+            ValueSerde::Bool(b) => Value::bool(b),
+            ValueSerde::Object(ptr) => Value::object(ptr),
+        })
+    }
+}
+
+/// Box every unique `ConstValue::Float` reachable from `compile_time_objects`
+/// (in `Object::Function` constants) and `globals` into a fresh
+/// `Object::Float` entry appended to `compile_time_objects`, and rewrite the
+/// function `ConstValue::Float` entries to `ConstValue::Object(idx)`. Returns
+/// the bit-pattern → object-index map so callers can rewrite their globals.
+///
+/// Required because the tagged-pointer `Value` encoding can no longer hold a
+/// float inline.
+///
+/// Globals are *not* rewritten in place — callers typically need to consume
+/// them by value (to convert `ConstValue` → `Value`) and rewrite during that
+/// pass.
+pub fn box_compile_time_floats(
+    compile_time_objects: &mut Vec<Object>,
+    globals: &[crate::ConstValue],
+) -> HashMap<u64, usize> {
+    let mut float_indices: HashMap<u64, usize> = HashMap::new();
+    // Pre-scan to discover unique floats.
+    for obj in &*compile_time_objects {
+        if let Object::Function(func) = obj {
+            for cv in &func.bytecode.constants {
+                if let ConstValue::Float(f) = cv {
+                    let next_idx = compile_time_objects.len() + float_indices.len();
+                    float_indices.entry(f.to_bits()).or_insert(next_idx);
+                }
+            }
+        }
+    }
+    for cv in globals {
+        if let ConstValue::Float(f) = cv {
+            let next_idx = compile_time_objects.len() + float_indices.len();
+            float_indices.entry(f.to_bits()).or_insert(next_idx);
+        }
+    }
+    // Append boxes in index order.
+    let mut float_entries: Vec<(u64, usize)> =
+        float_indices.iter().map(|(k, v)| (*k, *v)).collect();
+    float_entries.sort_by_key(|(_, idx)| *idx);
+    for (bits, _) in float_entries {
+        compile_time_objects.push(Object::Float(f64::from_bits(bits)));
+    }
+    // Rewrite each function-constant ConstValue::Float -> ConstValue::Object(idx).
+    for obj in compile_time_objects.iter_mut() {
+        if let Object::Function(func) = obj {
+            for cv in &mut func.bytecode.constants {
+                if let ConstValue::Float(f) = cv {
+                    let idx = float_indices[&f.to_bits()];
+                    *cv = ConstValue::Object(crate::indexable::ObjectIndex::from_raw(idx));
+                }
+            }
+        }
+    }
+    float_indices
 }
 
 /// Format an f64 to string, following JS/TS conventions for special values
@@ -781,12 +1189,15 @@ impl ConstValue {
         F: Fn(crate::ObjectIndex) -> HeapPtr,
     {
         match self {
-            ConstValue::OmittedArg => Value::OmittedArg,
-            ConstValue::Null => Value::Null,
-            ConstValue::Int(v) => Value::Int(*v),
-            ConstValue::Float(v) => Value::Float(*v),
-            ConstValue::Bool(v) => Value::Bool(*v),
-            ConstValue::Object(idx) => Value::Object(resolve(*idx)),
+            ConstValue::OmittedArg => Value::OMITTED_ARG,
+            ConstValue::Null => Value::NULL,
+            ConstValue::Int(v) => Value::int(*v),
+            ConstValue::Float(_) => panic!(
+                "ConstValue::Float must be heap-boxed at engine load time — \
+                 use the float-allocating conversion path, not to_value"
+            ),
+            ConstValue::Bool(v) => Value::bool(*v),
+            ConstValue::Object(idx) => Value::object(resolve(*idx)),
             ConstValue::Type(_) => {
                 panic!(
                     "ConstValue::Type must not be pre-resolved via to_value — \
@@ -825,6 +1236,311 @@ impl PartialEq for CollectorRef {
     }
 }
 
+/// Heap-mutable array container. Pairs a `Vec<Value>` with a
+/// [`LazyBiasedMutex`] so cross-fiber `spawn`-racing mutations don't
+/// corrupt the Vec's internal `(ptr, len, cap)` triple.
+///
+/// Held inline by `Object::Array`. Size: 24 (Vec) + 1 (mutex) + padding = 32 bytes.
+///
+/// # Soundness
+///
+/// The inner `Vec<Value>` is wrapped in [`UnsafeCell`] so that both
+/// [`Self::lock`] and [`Self::lock_mut`] can take `&self`. Without this,
+/// the mutator-side `BexVm::as_array_mut` would have to call
+/// `get_object_mut`, which fabricates `&'static mut Object` for slots
+/// that — by design — are shared across `spawn` fibers, violating
+/// Rust's aliasing rules even though the [`LazyBiasedMutex`] provides
+/// actual mutual exclusion at the memory level.
+///
+/// All access to `data` happens through the lock guards, which is the
+/// only place we materialize `&Vec<Value>` / `&mut Vec<Value>`.
+#[derive(Debug)]
+pub struct ArrayContainer {
+    mutex: LazyBiasedMutex,
+    data: UnsafeCell<Vec<Value>>,
+}
+
+// SAFETY: cross-thread access is serialized by `mutex`. The `UnsafeCell`
+// is necessary so callers can take the lock via `&self` (the only sound
+// option when the container is reachable through aliased `&Object` from
+// the shared heap).
+unsafe impl Sync for ArrayContainer {}
+
+impl ArrayContainer {
+    pub fn new(data: Vec<Value>) -> Self {
+        Self {
+            mutex: LazyBiasedMutex::new(),
+            data: UnsafeCell::new(data),
+        }
+    }
+
+    /// Acquire the container's mutex and return a read guard. The lock
+    /// is released when the guard is dropped.
+    pub fn lock(&self) -> ArrayReadGuard<'_> {
+        let access = self.mutex.enter();
+        // SAFETY: we just acquired the lock; no other thread can hold a
+        // `&mut` to `data` (the only place `&mut data` is materialized
+        // is `lock_mut`, which also takes the lock). Lifetime is tied
+        // to `&self`, which is tied to the access guard.
+        let data = unsafe { &*self.data.get() };
+        ArrayReadGuard {
+            data,
+            _access: access,
+        }
+    }
+
+    /// Acquire the container's mutex and return a write guard. The lock
+    /// is released when the guard is dropped. Takes `&self` (not
+    /// `&mut self`) so callers can lock through a shared reference
+    /// obtained from the shared heap (`get_object`, not the unsound
+    /// `get_object_mut`).
+    pub fn lock_mut(&self) -> ArrayWriteGuard<'_> {
+        let access = self.mutex.enter();
+        // SAFETY: the access guard provides mutual exclusion against
+        // all other lock holders for this container. The returned
+        // `&mut Vec<Value>` lifetime is bounded by the guard's lifetime.
+        let data = unsafe { &mut *self.data.get() };
+        ArrayWriteGuard {
+            data,
+            _access: access,
+        }
+    }
+
+    /// Get a reference to the underlying `Vec` WITHOUT acquiring the lock.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure no other thread is concurrently mutating
+    /// this container. Safe contexts:
+    ///
+    /// - GC traversal while the stop-the-world barrier is engaged
+    ///   (all mutator threads are parked).
+    /// - Host accessor invocations during a serialized FFI callback.
+    /// - Single-threaded engine setup / init.
+    ///
+    /// For any path where a `spawn`ed fiber may be running, use
+    /// [`Self::lock`] instead.
+    #[allow(clippy::missing_safety_doc)]
+    pub unsafe fn data_unchecked(&self) -> &Vec<Value> {
+        // SAFETY: caller upholds the no-concurrent-writer contract.
+        unsafe { &*self.data.get() }
+    }
+
+    /// Mutable counterpart of [`Self::data_unchecked`]. Same safety
+    /// contract.
+    ///
+    /// # Safety
+    ///
+    /// In addition to the no-concurrent-mutator contract, the caller
+    /// must hold the only `&mut ArrayContainer` (or otherwise
+    /// guarantee no other readers).
+    #[allow(clippy::missing_safety_doc, clippy::mut_from_ref)]
+    pub unsafe fn data_unchecked_mut(&self) -> &mut Vec<Value> {
+        // SAFETY: caller upholds the contract.
+        unsafe { &mut *self.data.get() }
+    }
+
+    /// Locked convenience: number of elements.
+    pub fn len(&self) -> usize {
+        self.lock().len()
+    }
+
+    /// Locked convenience: whether the array is empty.
+    pub fn is_empty(&self) -> bool {
+        self.lock().is_empty()
+    }
+
+    /// Locked convenience: copy the element at `idx`, or `None` if out
+    /// of bounds. `Value` is `Copy`, so no borrow is held past the
+    /// lock release.
+    pub fn get(&self, idx: usize) -> Option<Value> {
+        self.lock().get(idx).copied()
+    }
+
+    /// Locked convenience: snapshot the underlying `Vec<Value>`.
+    pub fn to_vec(&self) -> Vec<Value> {
+        self.lock().clone()
+    }
+}
+
+impl From<Vec<Value>> for ArrayContainer {
+    fn from(data: Vec<Value>) -> Self {
+        Self::new(data)
+    }
+}
+
+// Cloning takes the lock so a concurrent writer can't tear `data` mid-clone.
+// The contention state (the in-flight access counter) is not part of the
+// logical value of the source.
+impl Clone for ArrayContainer {
+    fn clone(&self) -> Self {
+        let guard = self.lock();
+        Self::new(guard.clone())
+    }
+}
+
+/// Read guard for an [`ArrayContainer`]. Holds the container's
+/// [`LazyBiasedMutex`] for the duration of the guard's lifetime.
+pub struct ArrayReadGuard<'a> {
+    data: &'a Vec<Value>,
+    _access: crate::lazy_biased_mutex::AccessGuard<'a>,
+}
+
+impl std::ops::Deref for ArrayReadGuard<'_> {
+    type Target = Vec<Value>;
+    fn deref(&self) -> &Vec<Value> {
+        self.data
+    }
+}
+
+/// Write guard for an [`ArrayContainer`]. Holds the container's
+/// [`LazyBiasedMutex`] for the duration of the guard's lifetime.
+pub struct ArrayWriteGuard<'a> {
+    data: &'a mut Vec<Value>,
+    _access: crate::lazy_biased_mutex::AccessGuard<'a>,
+}
+
+impl std::ops::Deref for ArrayWriteGuard<'_> {
+    type Target = Vec<Value>;
+    fn deref(&self) -> &Vec<Value> {
+        self.data
+    }
+}
+
+impl std::ops::DerefMut for ArrayWriteGuard<'_> {
+    fn deref_mut(&mut self) -> &mut Vec<Value> {
+        self.data
+    }
+}
+
+/// Heap-mutable map container. Pairs an `IndexMap<String, Value>` with a
+/// [`LazyBiasedMutex`]. Boxed by `Object::Map` because `IndexMap` is
+/// already 72 bytes — inlining the mutex would push the Object variant
+/// past the 80-byte size cap.
+///
+/// See [`ArrayContainer`] for the soundness rationale around `UnsafeCell`
+/// and `&self`-based locking.
+#[derive(Debug)]
+pub struct MapContainer {
+    mutex: LazyBiasedMutex,
+    data: UnsafeCell<IndexMap<String, Value>>,
+}
+
+// SAFETY: as for `ArrayContainer` — cross-thread access is serialized by
+// `mutex`, and the `UnsafeCell` allows locking through `&self`.
+unsafe impl Sync for MapContainer {}
+
+impl MapContainer {
+    pub fn new(data: IndexMap<String, Value>) -> Self {
+        Self {
+            mutex: LazyBiasedMutex::new(),
+            data: UnsafeCell::new(data),
+        }
+    }
+
+    pub fn lock(&self) -> MapReadGuard<'_> {
+        let access = self.mutex.enter();
+        // SAFETY: lock acquired; see `ArrayContainer::lock`.
+        let data = unsafe { &*self.data.get() };
+        MapReadGuard {
+            data,
+            _access: access,
+        }
+    }
+
+    pub fn lock_mut(&self) -> MapWriteGuard<'_> {
+        let access = self.mutex.enter();
+        // SAFETY: lock acquired; see `ArrayContainer::lock_mut`.
+        let data = unsafe { &mut *self.data.get() };
+        MapWriteGuard {
+            data,
+            _access: access,
+        }
+    }
+
+    /// Unlocked accessor; same safety contract as
+    /// [`ArrayContainer::data_unchecked`].
+    ///
+    /// # Safety
+    /// See [`ArrayContainer::data_unchecked`].
+    #[allow(clippy::missing_safety_doc)]
+    pub unsafe fn data_unchecked(&self) -> &IndexMap<String, Value> {
+        // SAFETY: caller upholds the no-concurrent-writer contract.
+        unsafe { &*self.data.get() }
+    }
+
+    /// # Safety
+    /// See [`ArrayContainer::data_unchecked_mut`].
+    #[allow(clippy::missing_safety_doc, clippy::mut_from_ref)]
+    pub unsafe fn data_unchecked_mut(&self) -> &mut IndexMap<String, Value> {
+        // SAFETY: caller upholds the contract.
+        unsafe { &mut *self.data.get() }
+    }
+
+    /// Locked convenience: number of entries.
+    pub fn len(&self) -> usize {
+        self.lock().len()
+    }
+
+    /// Locked convenience: whether the map is empty.
+    pub fn is_empty(&self) -> bool {
+        self.lock().is_empty()
+    }
+
+    /// Locked convenience: copy the value at `key`, or `None` if absent.
+    pub fn get(&self, key: &str) -> Option<Value> {
+        self.lock().get(key).copied()
+    }
+
+    /// Locked convenience: snapshot the underlying `IndexMap`.
+    pub fn to_index_map(&self) -> IndexMap<String, Value> {
+        self.lock().clone()
+    }
+}
+
+impl From<IndexMap<String, Value>> for MapContainer {
+    fn from(data: IndexMap<String, Value>) -> Self {
+        Self::new(data)
+    }
+}
+
+impl Clone for MapContainer {
+    fn clone(&self) -> Self {
+        let guard = self.lock();
+        Self::new(guard.clone())
+    }
+}
+
+pub struct MapReadGuard<'a> {
+    data: &'a IndexMap<String, Value>,
+    _access: crate::lazy_biased_mutex::AccessGuard<'a>,
+}
+
+impl std::ops::Deref for MapReadGuard<'_> {
+    type Target = IndexMap<String, Value>;
+    fn deref(&self) -> &IndexMap<String, Value> {
+        self.data
+    }
+}
+
+pub struct MapWriteGuard<'a> {
+    data: &'a mut IndexMap<String, Value>,
+    _access: crate::lazy_biased_mutex::AccessGuard<'a>,
+}
+
+impl std::ops::Deref for MapWriteGuard<'_> {
+    type Target = IndexMap<String, Value>;
+    fn deref(&self) -> &IndexMap<String, Value> {
+        self.data
+    }
+}
+
+impl std::ops::DerefMut for MapWriteGuard<'_> {
+    fn deref_mut(&mut self) -> &mut IndexMap<String, Value> {
+        self.data
+    }
+}
+
 /// Any data that the Baml program can reference and is allocated on heap.
 ///
 /// `Vm` (in `bex_vm` crate) should own objects and give references to them to the running Baml
@@ -858,6 +1574,14 @@ pub enum Object {
     /// at call time by `CallIndirect`.
     BoundMethod(BoundMethod),
 
+    /// A host-language callable bound to a BAML function type.
+    ///
+    /// Created at the FFI boundary when a `HostValue` is passed for a
+    /// `Ty::Function` parameter. Calling it (`CallIndirect`) dispatches
+    /// `SysOp::BamlHostCallHostValue`, which fires the bridge's
+    /// `HostDispatchFn` and awaits the host's response.
+    HostClosure(HostClosure),
+
     /// A mutable cell holding a single captured value.
     Cell(Cell),
 
@@ -882,11 +1606,21 @@ pub enum Object {
     /// Byte array (uint8array).
     Uint8Array(Vec<u8>),
 
-    /// List of values.
-    Array(Vec<Value>),
+    /// List of values. Wrapped in [`ArrayContainer`] so the underlying
+    /// `Vec<Value>` is protected by a [`LazyBiasedMutex`] against racing
+    /// mutation under `spawn`.
+    Array(ArrayContainer),
 
-    /// Map of values.
-    Map(IndexMap<String, Value>),
+    /// Map of values. Boxed because `MapContainer` is heavy (`IndexMap` +
+    /// mutex) and Map ops are less hot than Array ops; the indirection
+    /// keeps `Object` total size under 80 bytes.
+    Map(Box<MapContainer>),
+
+    /// Boxed 64-bit float. Floats are heap-allocated because `Value`
+    /// itself is a single tagged 64-bit word with no inline encoding
+    /// for full-precision f64. Allocation rate is low in practice —
+    /// BAML programs are integer-and-object-heavy.
+    Float(f64),
 
     Future(Future),
     /// Only used for requesting scheduling of a future, passed from VM to engine.
@@ -930,6 +1664,7 @@ enum ObjectSerde {
     Uint8Array(Vec<u8>),
     Array(Vec<Value>),
     Map(IndexMap<String, Value>),
+    Float(f64),
     Future(Future),
     UnscheduledFuture(UnscheduledFuture),
     Type(Box<baml_type::Ty>),
@@ -949,8 +1684,9 @@ impl Serialize for Object {
             Self::String(v) => ObjectSerde::String(v.clone()),
             Self::Bigint(v) => ObjectSerde::Bigint((**v).clone()),
             Self::Uint8Array(v) => ObjectSerde::Uint8Array(v.clone()),
-            Self::Array(v) => ObjectSerde::Array(v.clone()),
-            Self::Map(v) => ObjectSerde::Map(v.clone()),
+            Self::Array(v) => ObjectSerde::Array(v.lock().clone()),
+            Self::Map(v) => ObjectSerde::Map(v.lock().clone()),
+            Self::Float(v) => ObjectSerde::Float(*v),
             Self::Future(v) => ObjectSerde::Future(v.clone()),
             Self::UnscheduledFuture(v) => ObjectSerde::UnscheduledFuture(v.clone()),
             Self::Type(v) => ObjectSerde::Type(v.clone()),
@@ -959,6 +1695,11 @@ impl Serialize for Object {
             }
             Self::Collector(_) => {
                 return Err(serde::ser::Error::custom("Collector cannot be serialized"));
+            }
+            Self::HostClosure(_) => {
+                return Err(serde::ser::Error::custom(
+                    "HostClosure cannot be serialized",
+                ));
             }
             #[cfg(feature = "heap_debug")]
             Self::Sentinel(_) => {
@@ -984,8 +1725,9 @@ impl<'de> Deserialize<'de> for Object {
             ObjectSerde::String(v) => Self::String(v),
             ObjectSerde::Bigint(v) => Self::Bigint(std::sync::Arc::new(v)),
             ObjectSerde::Uint8Array(v) => Self::Uint8Array(v),
-            ObjectSerde::Array(v) => Self::Array(v),
-            ObjectSerde::Map(v) => Self::Map(v),
+            ObjectSerde::Array(v) => Self::Array(ArrayContainer::new(v)),
+            ObjectSerde::Map(v) => Self::Map(Box::new(MapContainer::new(v))),
+            ObjectSerde::Float(v) => Self::Float(v),
             ObjectSerde::Future(v) => Self::Future(v),
             ObjectSerde::UnscheduledFuture(v) => Self::UnscheduledFuture(v),
             ObjectSerde::Type(v) => Self::Type(v),
@@ -1023,6 +1765,33 @@ pub struct BoundMethod {
     pub receiver: Value,
 }
 
+/// A host-language callable bound to a BAML function type.
+///
+/// Created at the FFI boundary when a `HostValue` is passed for a
+/// `Ty::Function` parameter. Calling it (`CallIndirect`) dispatches
+/// `SysOp::BamlHostCallHostValue`, which fires the bridge's
+/// `HostDispatchFn` and awaits the host's response.
+///
+/// `Box<Ty>` keeps the `Object` enum within its `<= 80`-byte budget
+/// (see the `size_of::<Object>()` assertion below).
+#[derive(Clone, Debug)]
+pub struct HostClosure {
+    /// Opaque handle to the host-owned callable. `Drop` of the last clone
+    /// fires the registered `HostReleaseFn`; see
+    /// [`bex_resource_types::HostValueArc`].
+    pub handle: std::sync::Arc<bex_resource_types::HostValueArc>,
+    /// The declared return type of the host-callable, threaded through
+    /// `SysOp::BamlHostCallHostValue` as `type_arg_0` so the sysop impl
+    /// can validate the host's returned value against the BAML signature.
+    pub ret_ty: Box<baml_type::Ty>,
+    /// Number of value arguments the host callable expects.
+    ///
+    /// `CallIndirect` reads this to drain the right number of operand slots
+    /// off the eval stack — host closures don't wrap an `Object::Function`,
+    /// so there is no `arity` field to read from there.
+    pub arity: usize,
+}
+
 /// A mutable cell wrapping a single captured value.
 ///
 /// Variables that are closed over are heap-allocated as `Cell` objects so that
@@ -1045,12 +1814,13 @@ impl std::fmt::Display for Object {
                 write!(f, "<closure captures={captures_len}>")
             }
             Object::BoundMethod(_) => write!(f, "<bound_method>"),
+            Object::HostClosure(_) => write!(f, "<host_closure>"),
             Object::Cell(cell) => write!(f, "<cell {}>", cell.value),
             Object::String(string) => string.fmt(f),
             Object::Bigint(bi) => write!(f, "{bi}"),
             Object::Uint8Array(bytes) => write!(f, "<uint8array len={}>", bytes.len()),
-            Object::Array(array) => write!(f, "<array len={}>", array.len()),
-            Object::Map(map) => write!(f, "<map len={}>", map.len()),
+            Object::Array(array) => write!(f, "<array len={}>", array.lock().len()),
+            Object::Map(map) => write!(f, "<map len={}>", map.lock().len()),
             Object::RustData(_) => write!(f, "<rust_data>"),
             Object::Collector(_) => write!(f, "<collector>"),
             Object::Type(ty) => write!(f, "<type: {ty}>"),
@@ -1066,6 +1836,7 @@ impl std::fmt::Display for Object {
                 }
             },
             Object::UnscheduledFuture(_) => write!(f, "<unscheduled: spawn>"),
+            Object::Float(v) => write!(f, "{v}"),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(kind) => write!(f, "<sentinel {kind:?}>"),
             // Object::BamlType(type_ir) => write!(f, "<baml type: {type_ir}>"),
@@ -1325,8 +2096,8 @@ impl Future {
     /// Fires the generational write barrier on `heap` for `self_ptr`
     /// before the value write. This is required because a `Future` can
     /// survive across GCs (rooted by `FutureManagerInner::active_futures`)
-    /// and may end up in Gen2; if `value` is a `Value::Object` referring
-    /// to a younger-generation heap object, the next Minor GC's
+    /// and may end up in Gen2; if `value` carries a heap-object pointer
+    /// (`value.is_object()`) to a younger-generation object, the next Minor GC's
     /// dirty-card scan must find this reference. Without the barrier the
     /// young object would be reclaimed and the `Future`'s `value` left
     /// dangling.
@@ -1607,15 +2378,22 @@ impl<O: Into<ObjectType>> From<O> for Type {
 
 impl Type {
     /// Get the type of a value.
+    ///
+    /// Heap-boxed floats are normalised back to the top-level `Type::Float`
+    /// so callers comparing `expected` against `got` see the same variant
+    /// regardless of which side originated as an inline label vs. a
+    /// runtime heap deref.
     pub fn of(value: &Value, when_object: impl FnOnce(HeapPtr) -> ObjectType) -> Self {
-        match value {
-            Value::OmittedArg => Type::OmittedArg,
-            Value::Int(_) => Type::Int,
-            Value::Float(_) => Type::Float,
-            Value::Bool(_) => Type::Bool,
-            Value::Object(ptr) => Type::Object(when_object(*ptr)),
+        match value.kind() {
+            ValueKind::OmittedArg => Type::OmittedArg,
+            ValueKind::Int(_) => Type::Int,
+            ValueKind::Bool(_) => Type::Bool,
+            ValueKind::Object(ptr) => match when_object(ptr) {
+                ObjectType::Float => Type::Float,
+                other => Type::Object(other),
+            },
             // TODO: Actually?
-            Value::Null => Type::Object(ObjectType::Any),
+            ValueKind::Null => Type::Object(ObjectType::Any),
         }
     }
 }
@@ -1643,6 +2421,7 @@ pub enum ObjectType {
     Collector,
     Type,
     RustData,
+    Float,
 }
 
 impl ObjectType {
@@ -1651,6 +2430,8 @@ impl ObjectType {
             Object::Function(func) => Self::Function(FunctionType::from(&func.kind)),
             Object::Closure(_) => Self::Closure,
             Object::BoundMethod(_) => Self::Closure, // Treat as callable like closures
+            Object::HostClosure(_) => Self::Closure, // Callable like closures
+
             Object::Cell(_) => Self::Cell,
             Object::Class(_) => Self::Class,
             Object::Instance(_) => Self::Instance,
@@ -1666,6 +2447,7 @@ impl ObjectType {
             Object::Type(_) => Self::Type,
             Object::Future(fut) => Self::Future(fut.into()),
             Object::UnscheduledFuture(_) => Self::UnscheduledFuture,
+            Object::Float(_) => Self::Float,
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Self::Any,
             // Object::BamlType(_) => Self::Any, // TODO
@@ -1706,6 +2488,7 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Collector => write!(f, "collector"),
             ObjectType::Type => write!(f, "type"),
             ObjectType::RustData => write!(f, "rust_data"),
+            ObjectType::Float => write!(f, "float"),
         }
     }
 }
@@ -1808,7 +2591,7 @@ mod tests {
     fn omitted_arg_roundtrip_stays_in_sync() {
         let value = ConstValue::OmittedArg.to_value(|_| unreachable!("no object expected"));
 
-        assert_eq!(value, Value::OmittedArg);
+        assert_eq!(value, Value::OMITTED_ARG);
         assert_eq!(
             Type::of(&value, |_| unreachable!("omitted arg is not an object")),
             Type::OmittedArg

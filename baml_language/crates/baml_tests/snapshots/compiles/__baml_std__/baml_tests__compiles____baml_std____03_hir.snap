@@ -154,11 +154,11 @@ function baml.leading_ones(self: ?) -> int  [builtin]
 function baml.leading_zeros(self: ?) -> int  [builtin]
 function baml.max(self: ?, other: int) -> int  [builtin]
 function baml.max_value() -> int  [expr] {
-  {  } 9223372036854775807
+  {  } 4611686018427387903
 }
 function baml.min(self: ?, other: int) -> int  [builtin]
 function baml.min_value() -> int  [expr] {
-  {  } Neg 9223372036854775807 Sub 1
+  {  } Neg 4611686018427387903 Sub 1
 }
 function baml.parse(text: string) -> int  [builtin]
 function baml.pow(self: ?, exp: int) -> int  [builtin]
@@ -179,6 +179,13 @@ class baml.errors.AccessError {
 }
 class baml.errors.DevOther {
   message: string
+}
+class baml.errors.HostCallable {
+  message: string
+  class_name: string
+  language: string
+  traceback: string?
+  category: int
 }
 class baml.errors.HostPanic {
   message: string
@@ -210,6 +217,9 @@ class baml.errors.Unsupported {
 }
 function baml.errors.from_json(j: baml.json.json) -> baml.errors.InvalidArgument  [expr] {
   baml.errors.InvalidArgument { message: baml.json.from_json(baml.json.field(j, "message")) }
+}
+function baml.errors.from_json(j: baml.json.json) -> baml.errors.HostCallable  [expr] {
+  baml.errors.HostCallable { message: baml.json.from_json(baml.json.field(j, "message")), class_name: baml.json.from_json(baml.json.field(j, "class_name")), language: baml.json.from_json(baml.json.field(j, "language")), traceback: baml.json.from_json(baml.json.field(j, "traceback")), category: baml.json.from_json(baml.json.field(j, "category")) }
 }
 function baml.errors.from_json(j: baml.json.json) -> baml.errors.Timeout  [expr] {
   baml.errors.Timeout { message: baml.json.from_json(baml.json.field(j, "message")), duration_ms: baml.json.from_json(baml.json.field(j, "duration_ms")) }
@@ -246,6 +256,9 @@ function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
   map { "message": self.message.to_json() }
+}
+function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "message": self.message.to_json(), "class_name": self.class_name.to_json(), "language": self.language.to_json(), "traceback": self.traceback?.to_json(), "category": self.category.to_json() }
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
   map { "message": self.message.to_json(), "duration_ms": self.duration_ms?.to_json() }
@@ -393,6 +406,17 @@ function baml.glob.to_json(self: ?) -> baml.json.json  [expr] {
 }
 function baml.glob.to_json(self: ?) -> baml.json.json  [expr] {
   map { "cwd": self.cwd?.to_json(), "dot": self.dot?.to_json(), "absolute": self.absolute?.to_json(), "follow_symlinks": self.follow_symlinks?.to_json(), "throw_error_on_br...": self.throw_error_on_broken_symlink?.to_json(), "only_files": self.only_files?.to_json() }
+}
+
+--- <builtin>/baml/ns_host/host.baml ---
+class baml.host.HostValue {
+}
+function baml.host.call_host_value(handle: baml.host.HostValue, args: unknown[]) -> baml.host.T  [builtin]
+function baml.host.from_json(j: baml.json.json) -> baml.host.HostValue  [expr] {
+  baml.host.HostValue {  }
+}
+function baml.host.to_json(self: ?) -> baml.json.json  [expr] {
+  map {  }
 }
 
 --- <builtin>/baml/ns_http/http.baml ---

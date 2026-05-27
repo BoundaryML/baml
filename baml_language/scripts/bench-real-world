@@ -428,6 +428,300 @@ function md(a,b){return b===0?0:Math.trunc(a/b)}
 let s=0;for(let i=0;i<1000000;i++)s+=md(i,i+1);console.log(s)
 """,
     },
+
+    # ─── Concurrency workloads ────────────────────────────────────────────────
+    # Each measures something different about the spawn/lock subsystem; the
+    # Python and JS equivalents are the closest natural translation under
+    # each language's concurrency model (GIL-bound threads for Python,
+    # event-loop async for JS). We do NOT try to use multiprocessing or
+    # Workers — those have separate heaps and require message-passing, which
+    # is a different problem than what BAML `spawn` solves.
+
+    # A1: spawn primitive cost. Sequential await — no concurrency, just measures
+    # the raw cost of spawn+await per iteration.
+    "spawn await x10k": {
+        "baml": """
+function main() -> int {
+  let s = 0;
+  for (let i = 0; i < 10000; i += 1) {
+    s += await spawn { 1 };
+  };
+  s
+}
+""",
+        "python": """
+import threading
+s = 0
+def f(out, idx):
+    out[idx] = 1
+out = [0] * 10000
+for i in range(10000):
+    t = threading.Thread(target=f, args=(out, i))
+    t.start(); t.join()
+    s += out[i]
+print(s)
+""",
+        "js": """
+async function main(){
+  let s=0;
+  for(let i=0;i<10000;i++) s += await Promise.resolve(1);
+  console.log(s);
+}
+main();
+""",
+    },
+
+    # A2: spawn fan-out, await fan-in. 100 concurrent tasks.
+    # NOTE: closure-over-loop-variable doesn't snapshot in BAML, so we use
+    # explicit 100-way spawn via generated code.
+    "spawn fan-out 100": {
+        "baml": "GENERATE_FAN_BAML",
+        "python": """
+from concurrent.futures import ThreadPoolExecutor
+def task(i): return i * 2
+with ThreadPoolExecutor(max_workers=4) as ex:
+    futures = [ex.submit(task, i) for i in range(100)]
+    print(sum(f.result() for f in futures))
+""",
+        "js": """
+async function task(i){ return i * 2; }
+(async()=>{
+  const fs = [];
+  for(let i=0;i<100;i++) fs.push(task(i));
+  let s=0;
+  for(const f of fs) s += await f;
+  console.log(s);
+})();
+""",
+    },
+
+    # B1: Parallel CPU-bound work, 4-way. This is the HEADLINE multi-core demo.
+    # Total work = sum(0..1_000_000) split across 4 spawns.
+    "parallel sum 4x250k": {
+        "baml": """
+function sum_range(start: int, end: int) -> int {
+  let s = 0;
+  let i = start;
+  while i < end {
+    s += i;
+    i += 1;
+  };
+  s
+}
+function main() -> int {
+  let a = spawn { sum_range(0, 250000) };
+  let b = spawn { sum_range(250000, 500000) };
+  let c = spawn { sum_range(500000, 750000) };
+  let d = spawn { sum_range(750000, 1000000) };
+  (await a) + (await b) + (await c) + (await d)
+}
+""",
+        "python": """
+from concurrent.futures import ThreadPoolExecutor
+def sum_range(start, end):
+    s = 0
+    for i in range(start, end): s += i
+    return s
+with ThreadPoolExecutor(max_workers=4) as ex:
+    fs = [ex.submit(sum_range, s, e) for s, e in [(0,250000),(250000,500000),(500000,750000),(750000,1000000)]]
+    print(sum(f.result() for f in fs))
+""",
+        "js": """
+async function sumRange(start, end){
+  let s = 0;
+  for(let i=start;i<end;i++) s += i;
+  return s;
+}
+(async()=>{
+  const [a,b,c,d] = await Promise.all([
+    sumRange(0,250000),
+    sumRange(250000,500000),
+    sumRange(500000,750000),
+    sumRange(750000,1000000),
+  ]);
+  console.log(a+b+c+d);
+})();
+""",
+    },
+
+    # B1-baseline: same total work, single-threaded. Letting us compute
+    # the parallel speedup ratio in the analysis.
+    "parallel sum sequential 1m": {
+        "baml": """
+function main() -> int {
+  let s = 0;
+  let i = 0;
+  while i < 1000000 {
+    s += i;
+    i += 1;
+  };
+  s
+}
+""",
+        "python": """
+s = 0
+for i in range(1000000): s += i
+print(s)
+""",
+        "js": """
+let s = 0;
+for(let i=0;i<1000000;i++) s += i;
+console.log(s);
+""",
+    },
+
+    # C1: Contended shared array push. 4 spawns each push 25k into the same
+    # array. Stresses the spin-lock. Reads the final length.
+    "shared array push 4x25k": {
+        "baml": """
+function push_n(arr: int[], start: int, n: int) -> int {
+  let i = 0;
+  while i < n {
+    arr.push(start + i);
+    i += 1;
+  };
+  0
+}
+function main() -> int {
+  let arr = [];
+  let a = spawn { push_n(arr, 0, 25000) };
+  let b = spawn { push_n(arr, 25000, 25000) };
+  let c = spawn { push_n(arr, 50000, 25000) };
+  let d = spawn { push_n(arr, 75000, 25000) };
+  (await a) + (await b) + (await c) + (await d);
+  arr.length()
+}
+""",
+        "python": """
+import threading
+def push_n(arr, start, n):
+    for i in range(n): arr.append(start + i)
+arr = []
+ts = [threading.Thread(target=push_n, args=(arr, i*25000, 25000)) for i in range(4)]
+for t in ts: t.start()
+for t in ts: t.join()
+print(len(arr))
+""",
+        "js": """
+function pushN(arr, start, n){
+  for(let i=0;i<n;i++) arr.push(start + i);
+}
+const arr = [];
+pushN(arr, 0, 25000);
+pushN(arr, 25000, 25000);
+pushN(arr, 50000, 25000);
+pushN(arr, 75000, 25000);
+console.log(arr.length);
+""",
+    },
+
+    # C3: Mixed reader/writer. One writer pushing, four readers reading
+    # length+at(0). The whole point is that this never crashes; throughput
+    # is a secondary concern under the current spin-lock.
+    "shared array 1w 4r": {
+        "baml": """
+function write_n(arr: int[], n: int) -> int {
+  let i = 0;
+  while i < n { arr.push(i); i += 1; };
+  0
+}
+function read_n(arr: int[], n: int) -> int {
+  let i = 0;
+  let acc = 0;
+  while i < n {
+    let len = arr.length();
+    if len > 0 { acc = acc + arr[0]; };
+    i += 1;
+  };
+  acc
+}
+function main() -> int {
+  let arr = [0];
+  let w = spawn { write_n(arr, 50000) };
+  let r1 = spawn { read_n(arr, 12500) };
+  let r2 = spawn { read_n(arr, 12500) };
+  let r3 = spawn { read_n(arr, 12500) };
+  let r4 = spawn { read_n(arr, 12500) };
+  (await w) + (await r1) + (await r2) + (await r3) + (await r4);
+  arr.length()
+}
+""",
+        "python": """
+import threading
+def write_n(arr, n):
+    for i in range(n): arr.append(i)
+def read_n(arr, n, out, idx):
+    acc = 0
+    for _ in range(n):
+        if len(arr) > 0: acc += arr[0]
+    out[idx] = acc
+arr = [0]
+out = [0]*4
+w = threading.Thread(target=write_n, args=(arr, 50000))
+rs = [threading.Thread(target=read_n, args=(arr, 12500, out, i)) for i in range(4)]
+w.start()
+for r in rs: r.start()
+w.join()
+for r in rs: r.join()
+print(len(arr))
+""",
+        "js": """
+function writeN(arr,n){ for(let i=0;i<n;i++) arr.push(i); }
+function readN(arr,n){
+  let acc=0;
+  for(let i=0;i<n;i++){
+    if(arr.length>0) acc += arr[0];
+  }
+  return acc;
+}
+const arr = [0];
+writeN(arr, 50000);
+readN(arr, 12500); readN(arr, 12500); readN(arr, 12500); readN(arr, 12500);
+console.log(arr.length);
+""",
+    },
+
+    # D1: I/O-bound concurrent sleeps. Best-case for any async runtime —
+    # all three should be ~200ms total, not 600ms, if their concurrency
+    # works at all.
+    # NOTE: the sleep is wrapped in a helper `nap()` because spawning an
+    # inline block with `baml.sys.sleep(...)` had unexpected scheduling
+    # behavior — the inline form returned immediately without awaiting
+    # the sleep on the second+ spawn. Using a function call works.
+    "parallel sleep 3x200ms": {
+        "baml": """
+function nap() -> int {
+  baml.sys.sleep(200) catch (e) { let e => 0 };
+  1
+}
+function main() -> int {
+  let a = spawn { nap() };
+  let b = spawn { nap() };
+  let c = spawn { nap() };
+  (await a) + (await b) + (await c)
+}
+""",
+        "python": """
+import asyncio
+async def nap():
+    await asyncio.sleep(0.2)
+    return 1
+async def main():
+    a,b,c = await asyncio.gather(nap(), nap(), nap())
+    print(a+b+c)
+asyncio.run(main())
+""",
+        "js": """
+async function nap(){
+  await new Promise(r => setTimeout(r, 200));
+  return 1;
+}
+(async()=>{
+  const [a,b,c] = await Promise.all([nap(), nap(), nap()]);
+  console.log(a+b+c);
+})();
+""",
+    },
 }
 
 
@@ -462,6 +756,17 @@ def generate_chain_js():
         lines.append(f"function f{i}(n){{return f{i+1}(n+1)}}")
     lines.append("function f99(n){return n}")
     lines.append("let s=0;for(let i=0;i<10000;i++)s+=f0(0);console.log(s);")
+    return "\n".join(lines)
+
+
+def generate_fan_baml(n=100):
+    """100-way spawn fan-out, since BAML closure-over-loop doesn't snapshot."""
+    lines = ["function task(i: int) -> int { i * 2 }", "function main() -> int {"]
+    for i in range(n):
+        lines.append(f"  let f{i} = spawn {{ task({i}) }};")
+    expr = " + ".join([f"(await f{i})" for i in range(n)])
+    lines.append(f"  {expr}")
+    lines.append("}")
     return "\n".join(lines)
 
 
@@ -516,6 +821,11 @@ def fmt_ratio(a, b):
         return f"{r:.2f}x"
 
 
+def baml_run_cmd(binary, baml_file):
+    """Run the benchmark's main() from a standalone BAML source file."""
+    return [binary, "run", "--file", baml_file, "main"]
+
+
 def main():
     parser = argparse.ArgumentParser(description="Real-world BAML benchmarks")
     parser.add_argument("--baseline", help="Path to baseline baml-cli binary for A/B comparison")
@@ -560,6 +870,10 @@ def main():
             py_src = generate_chain_python()
             js_src = generate_chain_js()
 
+        # Handle 100-way spawn fan-out generation
+        if baml_src == "GENERATE_FAN_BAML":
+            baml_src = generate_fan_baml(100)
+
         # Write temp files
         baml_file = os.path.join(tmpdir, f"{name.replace(' ', '_')}.baml")
         py_file = os.path.join(tmpdir, f"{name.replace(' ', '_')}.py")
@@ -588,7 +902,7 @@ def main():
                 return None
             return r.stdout.strip().split("\n")[-1].strip()
 
-        expected = get_output([baml_cli, "run", baml_file])
+        expected = get_output(baml_run_cmd(baml_cli, baml_file))
         if expected is None:
             if is_tty:
                 sys.stderr.write(f"       SKIP (baml failed to run)\n")
@@ -597,7 +911,7 @@ def main():
         mismatches = []
         checks = []
         if has_baseline:
-            checks.append(("baseline", [args.baseline, "run", baml_file]))
+            checks.append(("baseline", baml_run_cmd(args.baseline, baml_file)))
         if has_python:
             checks.append(("python3", ["python3", "-S", py_file]))
         if has_node:
@@ -634,10 +948,10 @@ def main():
                     sys.stderr.write("FAIL\n")
                 return None
 
-        row["baml"] = run_one("baml", [baml_cli, "run", baml_file])
+        row["baml"] = run_one("baml", baml_run_cmd(baml_cli, baml_file))
 
         if has_baseline:
-            row["baseline"] = run_one("baseline", [args.baseline, "run", baml_file])
+            row["baseline"] = run_one("baseline", baml_run_cmd(args.baseline, baml_file))
 
         if has_python:
             row["python"] = run_one("python3", ["python3", "-S", py_file])

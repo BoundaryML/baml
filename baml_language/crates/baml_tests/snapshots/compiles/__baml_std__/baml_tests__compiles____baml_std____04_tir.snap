@@ -69,13 +69,13 @@ class baml.Float$stream {
 class baml.Int {
 }
 function baml.Int.max_value() -> int throws never {
-  { : 9223372036854775807
-    9223372036854775807 : 9223372036854775807
+  { : 4611686018427387903
+    4611686018427387903 : 4611686018427387903
   }
 }
 function baml.Int.min_value() -> int throws never {
-  { : -9223372036854775808
-    Neg 9223372036854775807 - 1 : -9223372036854775808
+  { : -4611686018427387904
+    Neg 4611686018427387903 - 1 : -4611686018427387904
   }
 }
 function baml.Int.from_json(j: baml.json.json) -> baml.Int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
@@ -192,6 +192,19 @@ function baml.errors.HostPanic.to_json(self: baml.errors.HostPanic) -> baml.json
 function baml.errors.HostPanic.from_json(j: baml.json.json) -> baml.errors.HostPanic throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   HostPanic { message: baml.json.from_json<string>(baml.json.field(j, "message")) } : baml.errors.HostPanic
 }
+class baml.errors.HostCallable {
+  message: string
+  class_name: string
+  language: string
+  traceback: string?
+  category: int
+}
+function baml.errors.HostCallable.to_json(self: baml.errors.HostCallable) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "message": self.message.to_json(), "class_name": self.class_name.to_json(), "language": self.language.to_json(), "traceback": self.traceback?.to_json(), "category": self.category.to_json() } : map<string, baml.json.json | baml.json.json?>
+}
+function baml.errors.HostCallable.from_json(j: baml.json.json) -> baml.errors.HostCallable throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  HostCallable { message: baml.json.from_json<string>(baml.json.field(j, "message")), class_name: baml.json.from_json<string>(baml.json.field(j, "class_name")), language: baml.json.from_json<string>(baml.json.field(j, "language")), traceback: baml.json.from_json<string?>(baml.json.field(j, "traceback")), category: baml.json.from_json<int>(baml.json.field(j, "category")) } : baml.errors.HostCallable
+}
 class baml.errors.InvalidArgument$stream {
   message: null | string
 }
@@ -225,6 +238,13 @@ class baml.errors.DevOther$stream {
 }
 class baml.errors.HostPanic$stream {
   message: null | string
+}
+class baml.errors.HostCallable$stream {
+  message: null | string
+  class_name: null | string
+  language: null | string
+  traceback: null | string
+  category: null | int
 }
 
 --- <builtin>/baml/ns_errors/stack_trace.baml ---
@@ -350,6 +370,18 @@ class baml.glob.ScanOptions$stream {
 }
 class baml.glob.Glob$stream {
   _handle: $rust_type
+}
+
+--- <builtin>/baml/ns_host/host.baml ---
+class baml.host.HostValue {
+}
+function baml.host.HostValue.to_json(self: baml.host.HostValue) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map {  } : map<never, never>
+}
+function baml.host.HostValue.from_json(j: baml.json.json) -> baml.host.HostValue throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  HostValue {  } : baml.host.HostValue
+}
+class baml.host.HostValue$stream {
 }
 
 --- <builtin>/baml/ns_http/http.baml ---

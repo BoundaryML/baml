@@ -37,8 +37,7 @@
 # | --------------- | --------------------- | ----------------------------------------------- |
 # | `linux-cargo`   | `cargo-test-linux`    | `sdk-tests/linux`, `cargo-doc`,                 |
 # |                 |                       | `snapshot-tests`, `ci.yaml::prek`,              |
-# |                 |                       | `ci.yaml::proto-sync`,                          |
-# |                 |                       | `ci.yaml::benchmarks-instrumented`              |
+# |                 |                       | `ci.yaml::proto-sync`                           |
 # | `linux-wasm`    | `cargo-test-wasm`     | —                                               |
 # | `linux-msrv`    | `cargo-build-msrv`    | —                                               |
 # | `macos-cargo`   | `cargo-test-macos`    | `sdk-tests/macos`                               |
@@ -48,7 +47,7 @@
 # the broadest target/ tree (`cargo test --no-run --all-features`
 # across the whole workspace) — that's the most useful seed for the
 # subcommand variants the readers run (`cargo doc`, narrower
-# snapshot tests, codspeed builds, the sdks/nodejs/bridge_nodejs build, prek's
+# snapshot tests, the sdks/nodejs/bridge_nodejs build, prek's
 # checks). Per-OS cargo-test jobs are the savers on macos/windows
 # for the same reason.
 #
@@ -296,18 +295,18 @@ jobs:
           save-if: false
           shared-key: ${{ matrix.rust-cache-key }}
 
-      - name: "Setup Python 3.10+"
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.10"
-
       - name: "Install cargo nextest"
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
 
-      - name: "Install uv"
-        uses: astral-sh/setup-uv@v8.1.0
+      # sdk_test_* crates shell out to `uv sync` against the generated
+      # Python project under target/uv-cache. python + uv are the only
+      # mise tools the matrix needs.
+      - name: "Install mise"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "python uv"
 
       - name: "Build tests with --timings"
         run: cargo test --no-run --all-features --timings
@@ -428,33 +427,6 @@ jobs:
           path: baml_language/target/cargo-timings/
           if-no-files-found: ignore
 
-  check-dependencies:
-    name: "check dependencies"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    # Advisory only — never gate the cargo-tests reusable workflow's result.
-    # The step below also has `continue-on-error: true`; this job-level flag
-    # is the belt to the step's suspenders so removing the step-level
-    # bypass later doesn't accidentally start blocking required CI.
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
-      - name: "Install Rust toolchain"
-        run: rustup show
-        working-directory: baml_language
-
-      - name: "Install cargo-deny"
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-deny
-
-      - name: "Check dependencies"
-        run: cargo deny check
-        working-directory: baml_language
-        continue-on-error: true # For now, just warn
-
   cargo-doc:
     name: "cargo doc"
     runs-on: blacksmith-4vcpu-ubuntu-2404
@@ -495,12 +467,6 @@ jobs:
     name: "snapshot tests"
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 30
-    env:
-      # Disable Python + pipx tools: mise 2025.12.12 downloads a broken
-      # freethreaded Python build that's missing a lib/ directory.
-      # Rig test scripts use system Python via uv (the standalone uv binary
-      # mise installs handles its own Python via `uv run`).
-      MISE_DISABLE_TOOLS: python,pipx:uv,pipx:ruff,pipx:maturin
     steps:
       - uses: actions/checkout@v6
         with:
@@ -525,12 +491,13 @@ jobs:
         with:
           tool: cargo-insta,cargo-nextest
 
+      # rig test scripts shell out to `uv run` (and bring their own
+      # Python via uv), so the only mise tools snapshot-tests needs are
+      # python + uv.
       - name: "Install mise"
-        uses: jdx/mise-action@v2
-        # Pinning to old version because newer versions time out on the npm backend,
-        # see https://github.com/jdx/mise/discussions/7630
+        uses: ./.github/actions/setup-mise
         with:
-          version: 2025.12.12
+          install_args: "python uv"
 
       - name: "Build tests with --timings"
         run: cargo test --no-run -p baml_tests -p baml_cli -p baml_lsp2_actions --all-features --timings

@@ -55,13 +55,13 @@ impl Continuation for MapToJsonContinuation {
     fn gc_roots(&self) -> Vec<HeapPtr> {
         let mut roots = Vec::new();
         for (_, v) in &self.entries {
-            if let Value::Object(ptr) = v {
-                roots.push(*ptr);
+            if let Some(ptr) = v.as_object_ptr() {
+                roots.push(ptr);
             }
         }
         for (_, v) in &self.results {
-            if let Value::Object(ptr) = v {
-                roots.push(*ptr);
+            if let Some(ptr) = v.as_object_ptr() {
+                roots.push(ptr);
             }
         }
         roots
@@ -69,16 +69,16 @@ impl Continuation for MapToJsonContinuation {
 
     fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
         for (_, v) in &mut self.entries {
-            if let Value::Object(ptr) = v {
-                if let Some(&new_ptr) = forwarding.get(ptr) {
-                    *ptr = new_ptr;
+            if let Some(ptr) = v.as_object_ptr() {
+                if let Some(&new_ptr) = forwarding.get(&ptr) {
+                    *v = Value::object(new_ptr);
                 }
             }
         }
         for (_, v) in &mut self.results {
-            if let Value::Object(ptr) = v {
-                if let Some(&new_ptr) = forwarding.get(ptr) {
-                    *ptr = new_ptr;
+            if let Some(ptr) = v.as_object_ptr() {
+                if let Some(&new_ptr) = forwarding.get(&ptr) {
+                    *v = Value::object(new_ptr);
                 }
             }
         }
@@ -120,12 +120,12 @@ impl BamlClassMap for PackageBamlImpl {
         let result: NativeFunctionResult = (|| {
             let key_as_string = vm.as_string(&args[1])?.clone();
             let value = args[2];
-            let map = vm.as_map_mut(&args[0])?;
+            let mut map = vm.as_map_mut(&args[0])?;
             // `IndexMap::insert` returns `Some(prev)` if the key already
             // existed, `None` otherwise — exactly the V? semantics we want.
             Ok(match map.insert(key_as_string, value) {
                 Some(prev) => prev,
-                None => Value::Null,
+                None => Value::NULL,
             })
         })();
         match result {
@@ -178,13 +178,13 @@ impl BamlClassMap for PackageBamlImpl {
     fn __glue_delete(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
         let result: NativeFunctionResult = (|| {
             let key_as_string = vm.as_string(&args[1])?.clone();
-            let map = vm.as_map_mut(&args[0])?;
+            let mut map = vm.as_map_mut(&args[0])?;
             // `shift_remove` preserves the order of remaining entries (matching
             // insertion order) — important since `keys()` / `values()` return
             // entries in insertion order.
             Ok(match map.shift_remove(&key_as_string) {
                 Some(prev) => prev,
-                None => Value::Null,
+                None => Value::NULL,
             })
         })();
         match result {
@@ -203,7 +203,7 @@ impl BamlClassMap for PackageBamlImpl {
         let result: NativeFunctionResult = (|| {
             let key_as_string = vm.as_string(&args[1])?.clone();
             let default = args[2];
-            let map = vm.as_map_mut(&args[0])?;
+            let mut map = vm.as_map_mut(&args[0])?;
             Ok(*map.entry(key_as_string).or_insert(default))
         })();
         match result {

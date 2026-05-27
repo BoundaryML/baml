@@ -18,6 +18,12 @@ typedef uint64_t (*CloneHandleFn)(uint64_t key);
 typedef void (*ReleaseHandleFn)(uint64_t key);
 typedef int32_t (*CancelFunctionCallFn)(uint32_t id);
 typedef void (*FlushEventsFn)(void);
+// Host-value callable support
+typedef void (*HostDispatchFn)(uint64_t host_value_key, uint32_t call_id, const uint8_t *args, size_t length);
+typedef void (*HostReleaseFn)(uint64_t host_value_key);
+typedef void (*RegisterHostDispatchCallbackFn)(HostDispatchFn cb);
+typedef void (*RegisterHostReleaseCallbackFn)(HostReleaseFn cb);
+typedef void (*CompleteHostCallFn)(uint32_t call_id, int32_t is_error, const int8_t *content, size_t length);
 
 // Static function pointers stored as void* to avoid type ambiguity
 static void *versionFnPtr = NULL;
@@ -30,6 +36,10 @@ static void *cloneHandleFnPtr = NULL;
 static void *releaseHandleFnPtr = NULL;
 static void *cancelFunctionCallFnPtr = NULL;
 static void *flushEventsFnPtr = NULL;
+// Host-value callable function pointers
+static void *registerHostDispatchCallbackFnPtr = NULL;
+static void *registerHostReleaseCallbackFnPtr = NULL;
+static void *completeHostCallFnPtr = NULL;
 
 // Setters
 static void setVersionFn(void *fn) { versionFnPtr = fn; }
@@ -42,6 +52,10 @@ static void setCloneHandleFn(void *fn) { cloneHandleFnPtr = fn; }
 static void setReleaseHandleFn(void *fn) { releaseHandleFnPtr = fn; }
 static void setCancelFunctionCallFn(void *fn) { cancelFunctionCallFnPtr = fn; }
 static void setFlushEventsFn(void *fn) { flushEventsFnPtr = fn; }
+// Host-value callable setters
+static void setRegisterHostDispatchCallbackFn(void *fn) { registerHostDispatchCallbackFnPtr = fn; }
+static void setRegisterHostReleaseCallbackFn(void *fn) { registerHostReleaseCallbackFnPtr = fn; }
+static void setCompleteHostCallFn(void *fn) { completeHostCallFnPtr = fn; }
 
 // Wrappers — cast the void* to the correct function pointer type at call time
 static Buffer wrapVersion(void) {
@@ -80,6 +94,19 @@ static int32_t wrapCancelFunctionCall(uint32_t id) {
 }
 static void wrapFlushEvents(void) {
     if (flushEventsFnPtr) ((FlushEventsFn)flushEventsFnPtr)();
+}
+// Host-value callable wrappers
+static void wrapRegisterHostDispatchCallback(HostDispatchFn cb) {
+    if (registerHostDispatchCallbackFnPtr)
+        ((RegisterHostDispatchCallbackFn)registerHostDispatchCallbackFnPtr)(cb);
+}
+static void wrapRegisterHostReleaseCallback(HostReleaseFn cb) {
+    if (registerHostReleaseCallbackFnPtr)
+        ((RegisterHostReleaseCallbackFn)registerHostReleaseCallbackFnPtr)(cb);
+}
+static void wrapCompleteHostCall(uint32_t call_id, int32_t is_error, const int8_t *content, size_t length) {
+    if (completeHostCallFnPtr)
+        ((CompleteHostCallFn)completeHostCallFnPtr)(call_id, is_error, content, length);
 }
 
 #endif // BRIDGE_GO_H
