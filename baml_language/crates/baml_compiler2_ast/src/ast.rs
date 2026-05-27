@@ -605,6 +605,17 @@ pub enum Expr {
         then_branch: ExprId,
         else_branch: Option<ExprId>,
     },
+    /// `if let PATTERN = SCRUTINEE { THEN } else { ELSE }` — refutable
+    /// pattern match in condition position. Bindings introduced by `pattern`
+    /// are in scope inside `then_branch` only (never in `else_branch` and
+    /// never after the `if let`). Unlike `Stmt::Let`, the pattern is
+    /// expected to be *refutable*; an irrefutable pattern earns a warning.
+    IfLet {
+        pattern: PatId,
+        scrutinee: ExprId,
+        then_branch: ExprId,
+        else_branch: Option<ExprId>,
+    },
     Match {
         scrutinee: ExprId,
         scrutinee_type: Option<TypeAnnotId>,

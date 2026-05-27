@@ -164,6 +164,22 @@ pub(crate) mod support {
                     None => format!("if ({cond}) {then_desc}"),
                 }
             }
+            Expr::IfLet {
+                scrutinee,
+                then_branch,
+                else_branch,
+                ..
+            } => {
+                let scrut = expr_desc(*scrutinee, body);
+                let then_desc = expr_desc(*then_branch, body);
+                match else_branch {
+                    Some(eb) => format!(
+                        "if let <pat> = {scrut} {then_desc} else {}",
+                        expr_desc(*eb, body)
+                    ),
+                    None => format!("if let <pat> = {scrut} {then_desc}"),
+                }
+            }
             Expr::Match {
                 scrutinee, arms, ..
             } => {
@@ -1464,6 +1480,23 @@ pub(crate) mod support {
                             expr_desc_hir(*eb, body, prefix, local_type_names)
                         ),
                         None => format!("if ({cond}) {then_desc}"),
+                    }
+                }
+                Expr::IfLet {
+                    pattern,
+                    scrutinee,
+                    then_branch,
+                    else_branch,
+                } => {
+                    let pat = pat_desc_hir(*pattern, body, prefix, local_type_names);
+                    let scrut = expr_desc_hir(*scrutinee, body, prefix, local_type_names);
+                    let then_desc = expr_desc_hir(*then_branch, body, prefix, local_type_names);
+                    match else_branch {
+                        Some(eb) => format!(
+                            "if let {pat} = {scrut} {then_desc} else {}",
+                            expr_desc_hir(*eb, body, prefix, local_type_names)
+                        ),
+                        None => format!("if let {pat} = {scrut} {then_desc}"),
                     }
                 }
                 Expr::Match {

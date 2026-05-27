@@ -128,7 +128,7 @@ aws-smithy-async = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev
 aws-smithy-runtime-api = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac", features = [ "client" ] }
 aws-smithy-types = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac" }
 aws-types = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac" }
-axum = { version = "0.8.4", features = [ "ws" ] }
+axum = { version = "0.8.4", default-features = false, features = [ "http1", "matched-path", "original-uri", "query", "tokio", "ws" ] }
 # `serde` mode rather than bitcode's native Encode/Decode: Program and its
 # transitive type graph (bex_vm_types + baml_type) are already serde-derived,
 # and Encode/Decode would require derives on ~60 types plus custom impls for
@@ -142,10 +142,9 @@ cargo_metadata = { version = "0.23.1" }
 cbindgen = "0.28.0"
 clap = { version = "4.4.6", features = [ "cargo", "derive" ] }
 clap-cargo = "0.14.1"
-colored = { version = "2.1.0" }
 console = "0.16"
 console_error_panic_hook = "0.1"
-crossbeam = { version = "0.8.4", features = [ "crossbeam-channel" ] }
+crossbeam-channel = { version = "0.5" }
 crossterm = "0.28"
 ctrlc = "3.4"
 derive_more = { version = "2.1.1", features = [ "from" ] }
@@ -169,7 +168,7 @@ lsp-types = "0.95.0"
 notify = "7.0"
 once_cell = "1.19"
 ouroboros = "0.18.5"
-parking_lot = { version = "0.12", features = [ "deadlock_detection" ] }
+parking_lot = { version = "0.12" }
 paste = "1.0"
 percent-encoding = "2.3"
 pretty_assertions = { version = "1.4" }
@@ -183,7 +182,6 @@ ratatui = "0.29"
 regex = { version = "1.10.2" }
 base64 = "0.22"
 reqwest = { version = "0.13.1", default-features = false, features = [
-  "json",
   "stream",
 ] }
 rowan = { version = "0.16" }
@@ -213,9 +211,9 @@ thiserror = { version = "2.0.0" }
 toml = { version = "0.8" }
 toml_edit = { version = "0.22" }
 tokio = { version = "1.36" }
-tokio-tungstenite = { version = "0.28.0" }
+tokio-tungstenite = { version = "0.29.0" }
 tokio-util = { version = "0.7" }
-tower-http = { version = "0.6.6", features = [ "fs", "cors" ] }
+tower-http = { version = "0.6.6", features = [ "fs" ] }
 tracing = { version = "0.1.40" }
 tracing-log = "0.2.0"
 tracing-subscriber = { version = "0.3.18", default-features = false, features = [

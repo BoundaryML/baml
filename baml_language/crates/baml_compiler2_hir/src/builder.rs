@@ -447,6 +447,35 @@ impl<'db> SemanticIndexBuilder<'db> {
                     self.walk_expr(*else_branch, body, source_map, true);
                 }
             }
+            ast::Expr::IfLet {
+                pattern,
+                scrutinee,
+                then_branch,
+                else_branch,
+            } => {
+                // Scrutinee is evaluated in the enclosing scope.
+                self.walk_expr(*scrutinee, body, source_map, true);
+
+                // Then-branch sees pattern bindings; push a fresh scope and
+                // register them before walking. Mirrors `walk_match_arm`.
+                let then_span = source_map.expr_span(*then_branch);
+                self.push_scope(ScopeKind::MatchArm, None, then_span);
+                let visible_from = source_map.pattern_span(*pattern).start();
+                self.register_local_pattern(
+                    *pattern,
+                    DefinitionSite::PatternBinding(*pattern),
+                    body,
+                    source_map,
+                    visible_from,
+                );
+                self.walk_expr(*then_branch, body, source_map, true);
+                self.pop_scope();
+
+                if let Some(else_branch) = else_branch {
+                    // Else-branch never sees pattern bindings.
+                    self.walk_expr(*else_branch, body, source_map, true);
+                }
+            }
             ast::Expr::Match {
                 scrutinee, arms, ..
             } => {

@@ -15,5 +15,3 @@ indexmap = { workspace = true }
 num-bigint = { workspace = true }
 once_cell = { workspace = true }
 
-[dev-dependencies]
-tokio = { workspace = true, features = [ "fs", "net", "rt" ] }
