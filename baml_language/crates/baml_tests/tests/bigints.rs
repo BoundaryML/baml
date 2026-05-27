@@ -158,6 +158,70 @@ async fn test_int_param_rejects_bigint_overflow() {
     );
 }
 
+#[tokio::test]
+async fn test_int_param_rejects_bigint_above_i63() {
+    // A bigint that fits in i64 but exceeds the VM's i63 integer range
+    // (INT_MAX = 2^62 - 1) must be rejected at the conversion boundary, not
+    // silently wrapped to a negative. `2^62` is the smallest such value.
+    let above = BigInt::from(4_611_686_018_427_387_904_i64); // 2^62 = INT_MAX + 1
+    let output = baml_test!(
+        baml: r#"
+        function Echo(x: int) -> int { x }
+    "#,
+        entry: "Echo",
+        args: { "x" => BexExternalValue::Bigint(above) },
+    );
+    let Err(err) = &output.result else {
+        panic!("expected out-of-range error, got: {:?}", output.result);
+    };
+    let msg = format!("{err:?}");
+    assert!(
+        msg.contains("outside the BAML integer range"),
+        "expected i63 range error, got: {msg}"
+    );
+}
+
+#[tokio::test]
+async fn test_int_param_rejects_host_int_above_i63() {
+    // A plain host i64 above the i63 range is likewise rejected rather than
+    // wrapping (release) or panicking (debug) inside `Value::int`.
+    let output = baml_test!(
+        baml: r#"
+        function Echo(x: int) -> int { x }
+    "#,
+        entry: "Echo",
+        args: { "x" => BexExternalValue::Int(4_611_686_018_427_387_904) }, // 2^62
+    );
+    let Err(err) = &output.result else {
+        panic!("expected out-of-range error, got: {:?}", output.result);
+    };
+    let msg = format!("{err:?}");
+    assert!(
+        msg.contains("outside the BAML integer range"),
+        "expected i63 range error, got: {msg}"
+    );
+}
+
+#[tokio::test]
+async fn test_int_param_accepts_max_i63() {
+    // The largest in-range integer (INT_MAX = 2^62 - 1) round-trips from both
+    // a host int and a host bigint.
+    let max_i63: i64 = 4_611_686_018_427_387_903; // 2^62 - 1
+    let from_int = baml_test!(
+        baml: r#"function Echo(x: int) -> int { x }"#,
+        entry: "Echo",
+        args: { "x" => BexExternalValue::Int(max_i63) },
+    );
+    assert_eq!(from_int.result, Ok(BexExternalValue::Int(max_i63)));
+
+    let from_bigint = baml_test!(
+        baml: r#"function Echo(x: int) -> int { x }"#,
+        entry: "Echo",
+        args: { "x" => BexExternalValue::Bigint(BigInt::from(max_i63)) },
+    );
+    assert_eq!(from_bigint.result, Ok(BexExternalValue::Int(max_i63)));
+}
+
 // ─── Bigint × Bigint constant folding (TIR `try_fold_binary`) ────────────────
 
 #[tokio::test]

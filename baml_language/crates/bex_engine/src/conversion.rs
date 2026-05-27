@@ -304,7 +304,21 @@ impl BexEngine {
                     .expect("Handle should be valid - object was returned to external code"),
             ),
             BexExternalValue::Null => Value::NULL,
-            BexExternalValue::Int(i) => Value::int(i),
+            // The host integer is an `i64`, but the VM integer is `i63` (`Value`
+            // reserves the low bit as a tag). Reject values outside the i63
+            // range here rather than letting `Value::int` wrap them — a
+            // release-build silent truncation, a debug-build panic. This also
+            // gates the `bigint → int` FFI narrowing, whose `i64::try_from` only
+            // bounds to the full i64 range.
+            BexExternalValue::Int(i) => {
+                Value::try_int(i).ok_or_else(|| EngineError::TypeMismatch {
+                    message: format!(
+                        "integer {i} is outside the BAML integer range [{}, {}]",
+                        Value::INT_MIN,
+                        Value::INT_MAX
+                    ),
+                })?
+            }
             BexExternalValue::Bigint(bi) => {
                 // Defense-in-depth: every upstream decoder (FFI hex,
                 // SAP, Node.js/Python bridges) already caps oversized
