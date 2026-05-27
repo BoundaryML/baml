@@ -496,6 +496,22 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.restore_scoped_locals_inner(snapshot);
     }
 
+    /// Hard rollback to a previous snapshot — discards EVERYTHING introduced
+    /// since the snapshot, including assignments to outer bindings.
+    ///
+    /// Use this only for branches whose effects are not observable in the
+    /// continuation (i.e. diverging branches like `let … else`'s else
+    /// block). The normal `restore_scoped_locals` is a join-style merge —
+    /// it preserves outer-binding writes for branches that *do* return
+    /// control to the surrounding scope (`if`, `if let`, match arms).
+    fn discard_scoped_locals(&mut self, snapshot: ScopedLocalsSnapshot) {
+        self.locals = snapshot.locals;
+        self.scoped_local_declarations
+            .truncate(snapshot.scoped_local_declarations_len);
+        self.scoped_local_assignments
+            .truncate(snapshot.scoped_local_assignments_len);
+    }
+
     fn restore_scoped_locals_inner(&mut self, snapshot: &ScopedLocalsSnapshot) {
         // Pull the new assignments and declarations introduced since the
         // snapshot. We filter assignments by binding identity below, so the
@@ -3830,7 +3846,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                     if let Some(else_expr) = else_branch {
                         let snapshot = self.snapshot_scoped_locals();
                         let else_ty = self.infer_expr(*else_expr, body);
-                        self.restore_scoped_locals(&snapshot);
+                        // The else branch diverges by construction, so its
+                        // writes — including assignments to outer bindings —
+                        // are not observable in the success continuation.
+                        // Use the hard-rollback path, not the join-style
+                        // `restore_scoped_locals` that an `if`/`if let`
+                        // branch would use.
+                        self.discard_scoped_locals(snapshot);
                         if !matches!(else_ty, Ty::Never { .. } | Ty::Unknown { .. }) {
                             let err = TirTypeError::LetElseMustDiverge { got: else_ty };
                             self.context.report_simple(err, *else_expr);

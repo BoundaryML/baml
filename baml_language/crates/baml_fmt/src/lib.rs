@@ -406,6 +406,18 @@ mod let_else_format_tests {
     }
 
     #[test]
+    fn test_let_else_preserves_trivia_around_else_keyword() {
+        // Trivia between the initializer and `else` (and between `else`
+        // and the block) must round-trip — pre-fix the formatter emitted
+        // hardcoded spaces and dropped any adjacent comments. The
+        // formatter squishes whitespace around the comments but keeps
+        // the comments themselves; the output is idempotent.
+        let source = "function f(r: int | string) -> int {\n    let v: int = r /* a */ else /* b */ {\n        return 0;\n    };\n    v\n}\n";
+        let expected = "function f(r: int | string) -> int {\n    let v: int = r/* a */ else /* b */{\n        return 0;\n    };\n    v\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    #[test]
     fn test_plain_let_unchanged() {
         // Regression: plain `let x = …;` without an else clause must still
         // format cleanly without picking up a stray `else { … }` tail.

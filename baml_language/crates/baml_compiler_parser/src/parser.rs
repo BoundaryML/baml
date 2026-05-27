@@ -2898,7 +2898,7 @@ impl<'a> Parser<'a> {
         if self.at(TokenKind::Watch) {
             self.parse_watch_let_stmt();
         } else if self.at(TokenKind::Let) {
-            self.parse_let_stmt(true);
+            self.parse_let_stmt();
         } else if self.at(TokenKind::Return) {
             self.parse_return_stmt();
         } else if self.at(TokenKind::While) {
@@ -2944,7 +2944,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_let_stmt(&mut self, allow_let_else: bool) {
+    fn parse_let_stmt(&mut self) {
         self.with_node(SyntaxKind::LET_STMT, |p| {
             // A let statement's pattern must start with `let`. parse_pattern
             // itself is permissive (it parses any pattern shape, including
@@ -2970,9 +2970,11 @@ impl<'a> Parser<'a> {
             }
 
             // Optional `let … else { … }` — refutable binding whose else
-            // branch must diverge. Suppressed inside C-style for-init, where
-            // `else` would clash with the condition slot.
-            if allow_let_else && p.at(TokenKind::Else) {
+            // branch must diverge. Allowed in every position `parse_let_stmt`
+            // is called from, including C-style for-init (a diverging init
+            // just makes the loop unreachable — same kind of dead code we
+            // already accept elsewhere, not a parse-time concern).
+            if p.at(TokenKind::Else) {
                 p.bump(); // else
                 if p.at(TokenKind::If) {
                     // `else if` after `let … else` has no value to chain
@@ -3983,10 +3985,11 @@ impl<'a> Parser<'a> {
                         p.expect(TokenKind::In);
                         p.parse_expr(); // iterator expression
                     } else {
-                        // C-style: for (let i = 0; cond; update).
-                        // `else` is suppressed here — a let-else would
-                        // collide with the for-loop's condition slot.
-                        p.parse_let_stmt(false);
+                        // C-style: for (let i = 0; cond; update). A
+                        // `let … else` here is unusual but legal — it
+                        // makes the loop unreachable, same as any other
+                        // diverging statement before the loop.
+                        p.parse_let_stmt();
                         // The let statement already consumed the semicolon
                         // Now parse condition
                         if !p.at(TokenKind::Semicolon) && !p.at(TokenKind::RParen) {
@@ -5921,7 +5924,7 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
         {
             parser.parse_type_alias();
         } else if parser.at(TokenKind::Let) {
-            parser.parse_let_stmt(true);
+            parser.parse_let_stmt();
         } else if parser.at_header_comment_start() {
             parser.consume_header_comment();
         } else if parser.try_recover_invalid_block() {
@@ -7880,6 +7883,37 @@ function f(u: User) -> string {
             |elem| matches!(elem, rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::KW_ELSE),
         );
         assert!(has_else, "LET_STMT should have a KW_ELSE token");
+    }
+
+    #[test]
+    fn let_else_accepted_in_c_style_for_init() {
+        // C-style `for (let i = 0; cond; update)` accepts a let-else in the
+        // init slot. Makes the loop unreachable (the else diverges), which
+        // is silly but not a parse error — same kind of dead code we
+        // already allow elsewhere.
+        let source = r#"
+function f() -> int {
+  for (let i: int = 0 else { return 0; }; i < 3; i += 1) {
+    let _ = i;
+  }
+  0
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let for_expr = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FOR_EXPR)
+            .expect("expected FOR_EXPR");
+        let let_stmt = for_expr
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::LET_STMT)
+            .expect("for-init should expose a LET_STMT");
+        let has_else = let_stmt.children_with_tokens().any(
+            |elem| matches!(elem, rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::KW_ELSE),
+        );
+        assert!(has_else, "for-init LET_STMT should carry the else branch");
     }
 
     #[test]

@@ -285,7 +285,12 @@ impl Printable for LetStmt {
             let expr_leading = printer.trivia.get_leading_for_element(expr);
             printer.print_trivia_squished(expr_leading);
             multi_lined |= printer.print(expr, shape.clone()).multi_lined;
-            if self.else_branch.is_none() && self.semicolon.is_some() {
+            // Trailing trivia between the initializer expression and what
+            // follows: a semicolon, or an `else { … }` tail. Either way,
+            // print it so inline comments aren't dropped.
+            if (self.else_branch.is_none() && self.semicolon.is_some())
+                || self.else_branch.is_some()
+            {
                 let expr_trailing = printer.trivia.get_trailing_for_element(expr);
                 printer.print_trivia_squished(expr_trailing);
             }
@@ -293,9 +298,16 @@ impl Printable for LetStmt {
 
         if let Some(else_branch) = self.else_branch.as_deref() {
             let (else_kw, block) = else_branch;
+            // Preserve trivia adjacent to the `else` keyword instead of
+            // hardcoding bare spaces — a `// note` between the init and
+            // `else`, or between `else` and the block, would otherwise be
+            // dropped.
+            let (else_leading, else_trailing) = printer.trivia.get_for_range_split(else_kw.span());
             printer.print_str(" ");
+            printer.print_trivia_squished(else_leading);
             printer.print_raw_token(else_kw);
             printer.print_str(" ");
+            printer.print_trivia_squished(else_trailing);
             multi_lined |= printer.print(block, shape).multi_lined;
         }
 
