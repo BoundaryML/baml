@@ -30,14 +30,17 @@ import textwrap
 import pytest
 
 import baml_sdk  # noqa: F401  — importing initializes the BAML runtime
-import baml_sdk.baml.json as baml_json
-import baml_sdk.baml.sys as baml_sys
 from baml_core import AbortController, call_function, get_runtime
 from baml_sdk import MakeFoo
 from baml_sdk.baml import BamlError, BamlPanic
 from baml_sdk.baml.errors import InvalidArgument
 from baml_sdk.baml.json import JsonParseError
-from baml_sdk.throws import MyError, ThrowMyError
+from baml_sdk.baml.panics import Cancelled, UserPanic
+from baml_sdk.throws import MyError, ParseJson, SleepMs, ThrowMyError
+
+# stdlib native builtins (`baml.json.parse`, `baml.sys.*`) can't be called as
+# top-level entry points, so the fixture wraps each in a bytecode function
+# (ParseJson / DoPanic / DoExit / SleepMs) that the host calls.
 
 _BAD_JSON = "{not valid json"
 
@@ -47,7 +50,7 @@ def test_stdlib_error_surfaces_as_baml_error():
     `JsonParseError` (a plain pydantic model). Proves stdlib error classes
     surface structured, independent of any `throws` clause."""
     with pytest.raises(BamlError) as exc_info:
-        baml_json.parse(_BAD_JSON)
+        ParseJson(_BAD_JSON)
     assert isinstance(exc_info.value.value, JsonParseError)
 
 
@@ -69,15 +72,19 @@ def test_host_invalid_argument_wraps_baml_errors_invalid_argument():
 
 
 def test_user_panic_surfaces_as_baml_panic():
-    """A user-initiated panic via `baml.sys.panic` → `BamlPanic` (the panic
-    enters the VM as a `baml.panics.*` value, routed by the namespace check)."""
-    with pytest.raises(BamlPanic):
-        baml_sys.panic("user-initiated boom")
+    """A user-initiated panic via `baml.sys.panic` → `BamlPanic` whose
+    `.value` is a `baml.panics.UserPanic` (routed by the namespace check,
+    distinct from a host-synthesized `SdkPanic`)."""
+    from baml_sdk.throws import DoPanic
+
+    with pytest.raises(BamlPanic) as exc_info:
+        DoPanic("user-initiated boom")
+    assert isinstance(exc_info.value.value, UserPanic)
 
 
 async def test_cancellation_surfaces_as_baml_panic():
-    """Cancelling an in-flight call → `BamlPanic` (cancellation is the
-    `baml.panics.Cancelled` class tag; panics subclass `BaseException`)."""
+    """Cancelling an in-flight call → `BamlPanic` whose `.value` is a
+    `baml.panics.Cancelled` (panics subclass `BaseException`)."""
     rt = get_runtime()
     controller = AbortController()
 
@@ -85,20 +92,21 @@ async def test_cancellation_surfaces_as_baml_panic():
         await asyncio.sleep(0.1)
         controller.abort()
 
-    with pytest.raises(BamlPanic):
+    with pytest.raises(BamlPanic) as exc_info:
         await asyncio.gather(
             call_function(
-                rt, "baml.sys.sleep", {"ms": 2000}, abort_controller=controller
+                rt, "user.throws.SleepMs", {"ms": 2000}, abort_controller=controller
             ),
             _abort_soon(),
         )
+    assert isinstance(exc_info.value.value, Cancelled)
 
 
 def test_str_is_non_empty():
     """`str(e)` is non-empty — guards the `@trace` / telemetry path, which
     records `str(e)`."""
     with pytest.raises(BamlError) as exc_info:
-        baml_json.parse(_BAD_JSON)
+        ParseJson(_BAD_JSON)
     assert str(exc_info.value)
 
 
@@ -113,8 +121,8 @@ def test_str_is_non_empty():
 _EXIT_SNIPPET = textwrap.dedent(
     """
     import baml_sdk  # initializes the runtime
-    import baml_sdk.baml.sys as baml_sys
-    baml_sys.exit({code})
+    from baml_sdk.throws import DoExit
+    DoExit({code})
     print("UNREACHABLE")  # os._exit must fire before this
     """
 )
