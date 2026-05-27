@@ -1,0 +1,53 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] error: `((self: baml.Int) -> string throws never)?` is not a function — it cannot be called
+    ╭─[ main.baml:20:11 ]
+    │
+ 20 │     `val: ${x}`
+    │           ──┬─  
+    │             ╰─── `((self: baml.Int) -> string throws never)?` is not a function — it cannot be called
+    │ 
+    │ Note: Error code: E0006
+────╯
+
+  [type] error: did you mean `...?.to_string`? `....to_string` does not handle the case when `...` is null
+    ╭─[ main.baml:20:11 ]
+    │
+ 20 │     `val: ${x}`
+    │           ──┬─  
+    │             ╰─── did you mean `...?.to_string`? `....to_string` does not handle the case when `...` is null
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] error: type `user.FooNoToString` has no member `to_string`
+    ╭─[ main.baml:30:11 ]
+    │
+ 30 │     `val: ${f}`
+    │           ──┬─  
+    │             ╰─── type `user.FooNoToString` has no member `to_string`
+    │ 
+    │ Note: Error code: E0007
+────╯
+
+  [type] error: `((self: baml.Int) -> string throws never)?` is not a function — it cannot be called
+    ╭─[ main.baml:41:13 ]
+    │
+ 41 │     `count: ${c}`
+    │             ──┬─  
+    │               ╰─── `((self: baml.Int) -> string throws never)?` is not a function — it cannot be called
+    │ 
+    │ Note: Error code: E0006
+────╯
+
+  [type] error: did you mean `...?.to_string`? `....to_string` does not handle the case when `...` is null
+    ╭─[ main.baml:41:13 ]
+    │
+ 41 │     `count: ${c}`
+    │             ──┬─  
+    │               ╰─── did you mean `...?.to_string`? `....to_string` does not handle the case when `...` is null
+    │ 
+    │ Note: Error code: E0001
+────╯

@@ -109,8 +109,13 @@ pub enum TokenKind {
     // ============ Identifiers and Literals ============
     /// Any identifier-like word (non-keyword)
     /// Also matches $-prefixed identifiers like $watch for special builtin methods
+    /// and `$`-separated names like `Foo$bar`. A *trailing* `$` is intentionally
+    /// rejected so that `${` inside a backtick string (BEP-049 interpolation
+    /// marker) doesn't get absorbed into a preceding identifier — e.g.
+    /// `before-${x}` must lex as `Word("before-"), Dollar, LBrace, ...`,
+    /// not `Word("before-$"), LBrace, ...`.
     #[regex(r"\$[a-zA-Z_][a-zA-Z0-9_]*")]
-    #[regex(r"[a-zA-Z_][a-zA-Z0-9_$-]*")]
+    #[regex(r"[a-zA-Z_][a-zA-Z0-9_-]*(\$[a-zA-Z_][a-zA-Z0-9_-]*)*")]
     Word,
 
     /// Quote symbol - used for string delimiters

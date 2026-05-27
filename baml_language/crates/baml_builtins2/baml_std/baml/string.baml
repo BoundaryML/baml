@@ -9,6 +9,13 @@ class String {
     $rust_function
   }
 
+  /// Returns `self` unchanged. Provided so BEP-049 backtick-string
+  /// interpolation (§11) can unconditionally wrap each `${...}` value
+  /// with `.to_string()` without special-casing strings.
+  function to_string(self) -> string {
+    $rust_function
+  }
+
   /// Returns the length of the string in **UTF-8 bytes**.
   ///
   /// This is `O(1)`. For ASCII text the byte length equals the character

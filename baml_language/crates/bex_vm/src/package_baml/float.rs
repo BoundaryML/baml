@@ -37,6 +37,15 @@ impl BamlClassFloat for PackageBamlImpl {
     fn to_json(vm: &mut BexVm, float: f64) -> Value {
         vm.alloc_float(float)
     }
+
+    fn to_string(float: f64) -> String {
+        // Rust's `f64::to_string` uses the shortest round-trip
+        // representation for finite values, and prints `NaN` / `inf` /
+        // `-inf` for non-finite values. Matches BEP-049's "display form"
+        // expectation for `${float}` in untagged backticks (§11).
+        float.to_string()
+    }
+
     // ── Predicates ────────────────────────────────────────────────────────────
 
     fn is_nan(float: f64) -> bool {

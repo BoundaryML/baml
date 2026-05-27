@@ -31,8 +31,19 @@ enum EscapeFlavor {
 
 fn unescape_with(input: &str, flavor: EscapeFlavor) -> String {
     let mut result = String::with_capacity(input.len());
-    let mut chars = input.chars();
+    let mut chars = input.chars().peekable();
     while let Some(c) = chars.next() {
+        // BEP-049 §AA (TS parity): normalize line endings in backtick
+        // literal text. `\r\n` → `\n`, lone `\r` → `\n`. Mirrors
+        // typescript-go's scanner (scanner.go:1650-1660).
+        if matches!(flavor, EscapeFlavor::Backtick) && c == '\r' {
+            // Consume an immediately-following `\n` (the CRLF case).
+            if chars.peek() == Some(&'\n') {
+                chars.next();
+            }
+            result.push('\n');
+            continue;
+        }
         if c != '\\' {
             result.push(c);
             continue;
@@ -42,6 +53,11 @@ fn unescape_with(input: &str, flavor: EscapeFlavor) -> String {
             Some('t') => result.push('\t'),
             Some('r') => result.push('\r'),
             Some('0') => result.push('\0'),
+            // BEP-049 §BB (TS parity): extended C-style escapes.
+            // ASCII control characters: BS (0x08), VT (0x0B), FF (0x0C).
+            Some('b') => result.push('\u{0008}'),
+            Some('v') => result.push('\u{000B}'),
+            Some('f') => result.push('\u{000C}'),
             Some('\\') => result.push('\\'),
             Some('"') => result.push('"'),
             Some('`') if matches!(flavor, EscapeFlavor::Backtick) => result.push('`'),
@@ -107,5 +123,56 @@ mod tests {
     #[test]
     fn backtick_preserves_unknown_sequences() {
         assert_eq!(unescape_backtick_string_literal(r"\x41"), "\\x41");
+    }
+
+    #[test]
+    fn backtick_extended_escapes_b_v_f() {
+        // BEP-049 §BB / TypeScript-go scanner.go:1721-1736
+        assert_eq!(unescape_backtick_string_literal(r"\b"), "\u{0008}");
+        assert_eq!(unescape_backtick_string_literal(r"\v"), "\u{000B}");
+        assert_eq!(unescape_backtick_string_literal(r"\f"), "\u{000C}");
+    }
+
+    #[test]
+    fn backtick_normalizes_crlf_to_lf() {
+        // BEP-049 §AA / TypeScript-go scanner.go:1650-1660: `\r\n` becomes `\n`.
+        assert_eq!(
+            unescape_backtick_string_literal("line1\r\nline2"),
+            "line1\nline2"
+        );
+    }
+
+    #[test]
+    fn backtick_normalizes_lone_cr_to_lf() {
+        // Bare CR (old Mac line endings) — also normalized.
+        assert_eq!(
+            unescape_backtick_string_literal("line1\rline2"),
+            "line1\nline2"
+        );
+    }
+
+    #[test]
+    fn backtick_normalizes_mixed_line_endings() {
+        // CRLF, CR, and LF in sequence all yield single LFs.
+        assert_eq!(
+            unescape_backtick_string_literal("a\r\nb\rc\nd"),
+            "a\nb\nc\nd"
+        );
+    }
+
+    #[test]
+    fn quote_flavor_does_not_normalize_cr() {
+        // The CR/CRLF normalization is backtick-specific (BEP-049 §12).
+        // Regular `"..."` literals keep CR as-is.
+        assert_eq!(unescape_string_literal("a\r\nb"), "a\r\nb");
+    }
+
+    #[test]
+    fn quote_flavor_also_gets_extended_escapes() {
+        // \b, \v, \f are universally valid C-style escapes — apply to both
+        // flavors so the canonical helper is consistent.
+        assert_eq!(unescape_string_literal(r"\b"), "\u{0008}");
+        assert_eq!(unescape_string_literal(r"\v"), "\u{000B}");
+        assert_eq!(unescape_string_literal(r"\f"), "\u{000C}");
     }
 }

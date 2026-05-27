@@ -1915,12 +1915,20 @@ impl<'a> Parser<'a> {
 
             // Backslash escape: consume the `\` and the next token as content
             // so a `\\\`` does not look like a closing delimiter and `\\${` does
-            // not look like an interpolation start (M2 forward).
+            // not look like an interpolation start.
             if self.at_raw(TokenKind::Backslash) {
                 self.bump_raw();
                 if self.current < self.tokens.len() {
                     self.bump_raw();
                 }
+                continue;
+            }
+
+            // BEP-049 §3: `${...}` opens an interpolation. Adjacency required —
+            // `$` followed immediately by `{` (no trivia between). A lone `$`
+            // or `$ {` is literal content.
+            if self.at_raw(TokenKind::Dollar) && self.dollar_immediately_followed_by_lbrace() {
+                self.parse_backtick_interpolation();
                 continue;
             }
 
@@ -1948,6 +1956,55 @@ impl<'a> Parser<'a> {
             // Plain content token (text, whitespace, newline, etc.).
             self.bump_raw();
         }
+    }
+
+    /// Inside a backtick string, is the current `$` token immediately
+    /// followed by `{` (no trivia between)? Required for `${...}` to start
+    /// an interpolation per BEP-049 §3.
+    ///
+    /// Uses raw token positions (no trivia/comment skipping) for the
+    /// adjacency check — `$ {` (space) is *not* an interpolation.
+    fn dollar_immediately_followed_by_lbrace(&self) -> bool {
+        // Find the raw position of the next non-basic-trivia token (do NOT
+        // skip comments — inside a backtick string the `//` pattern is
+        // literal text, not a comment).
+        let mut i = self.current;
+        while i < self.tokens.len() && self.is_basic_trivia(self.tokens[i].kind) {
+            i += 1;
+        }
+        if self.tokens.get(i).map(|t| t.kind) != Some(TokenKind::Dollar) {
+            return false;
+        }
+        self.tokens
+            .get(i + 1)
+            .is_some_and(|t| t.kind == TokenKind::LBrace)
+    }
+
+    /// Parse a `${...}` interpolation inside a backtick string.
+    ///
+    /// Per BEP §4 the body is a **block expression** — statements + optional
+    /// trailing expression. A unit-typed block renders `""` (lowering-side).
+    /// We reuse the host `parse_block_expr` so:
+    ///   - `${name}` parses as a block with no statements and `name` as the
+    ///     tail expression — what users expect for the common case.
+    ///   - `${ let x = expensive(); x.format() }` parses as a 2-statement
+    ///     block with `x.format()` as the tail.
+    ///   - `${ let x = 1 }` parses as a 1-statement block with no tail.
+    ///
+    /// Pre-condition: `self` is at `$` with `{` adjacent.
+    fn parse_backtick_interpolation(&mut self) {
+        // Any whitespace/newlines before `$` belong to the surrounding text,
+        // not the interpolation. Emit them into the parent BACKTICK_STRING_LITERAL
+        // before opening the inner node.
+        while self.eat_basic_trivia() {}
+
+        self.with_node(SyntaxKind::BACKTICK_INTERPOLATION, |p| {
+            p.bump_raw(); // $
+            // `parse_block_expr` consumes its own `{ ... }` and uses the
+            // normal trivia-skipping `at()`/`bump()` — exactly what we want
+            // once we're inside `${`: comments and whitespace work normally.
+            p.parse_block_expr();
+        });
     }
 
     // ============ Attribute Parsing ============
@@ -7695,6 +7752,243 @@ function Demo() -> string {
         assert_no_errors(&errors);
         let lit = find_backtick_literal(&root);
         assert_eq!(lit.text().to_string(), "```content````");
+    }
+
+    #[test]
+    fn backtick_simple_interpolation_emits_interp_node() {
+        let source = "
+function Demo() -> string {
+    let s = `Hello, ${name}!`
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let interp = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::BACKTICK_INTERPOLATION)
+            .expect("expected a BACKTICK_INTERPOLATION node");
+        assert_eq!(interp.text().to_string(), "${name}");
+    }
+
+    #[test]
+    fn backtick_interpolation_with_method_chain() {
+        let source = "
+function Demo() -> string {
+    let s = `${user.name.upper()}`
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let interp = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::BACKTICK_INTERPOLATION)
+            .expect("expected a BACKTICK_INTERPOLATION node");
+        assert_eq!(interp.text().to_string(), "${user.name.upper()}");
+    }
+
+    #[test]
+    fn backtick_interpolation_block_body_with_let_and_tail() {
+        // BEP §4: ${...} is a block expression — statements + optional tail.
+        let source = "
+function Demo() -> string {
+    let s = `result: ${ let x = 1; let y = 2; x + y }!`
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let interp = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::BACKTICK_INTERPOLATION)
+            .expect("expected BACKTICK_INTERPOLATION");
+        // Body is a nested BLOCK_EXPR (from parse_block_expr).
+        let block = interp
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
+            .expect("expected BLOCK_EXPR inside interpolation");
+        let let_count = block
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::LET_STMT)
+            .count();
+        assert_eq!(let_count, 2, "expected two let statements in block body");
+    }
+
+    #[test]
+    fn backtick_interpolation_block_body_no_tail_renders_empty() {
+        // Statement-only body is valid; the lowering will render it as "".
+        let source = "
+function Demo() -> string {
+    let s = `set: ${ let x = 1 }!`
+    s
+}
+";
+        let (_root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+    }
+
+    #[test]
+    fn backtick_segments_for_adjacent_interpolations() {
+        // Regression: `${a}${b}` previously returned 0 segments because
+        // `delimiter_count` used `filter_map(into_token).take_while(BACKTICK)`,
+        // which silently skipped past the BACKTICK_INTERPOLATION nodes and
+        // miscounted the closing backtick as part of the opener.
+        use baml_compiler_syntax::{BacktickSegment, BacktickStringLiteral};
+        use rowan::ast::AstNode;
+
+        let source = "
+function Demo() -> string {
+    let a = \"ab\"
+    let b = \"cd\"
+    `${a}${b}`
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let lit = BacktickStringLiteral::cast(
+            root.descendants()
+                .find(|n| n.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(lit.delimiter_count(), 1);
+        let segs = lit.segments();
+        assert_eq!(segs.len(), 2, "expected two Interp segments, got: {segs:?}");
+        assert!(matches!(segs[0], BacktickSegment::Interp(_)));
+        assert!(matches!(segs[1], BacktickSegment::Interp(_)));
+    }
+
+    #[test]
+    fn backtick_interpolation_with_string_literal_inside() {
+        // Regression: with the old lexer regex, `before-$` lexed as a single
+        // Word token (trailing `$` absorbed), masking the Dollar so
+        // interpolation never triggered. Fixed by tightening the Word regex
+        // to disallow trailing `$`.
+        let source = r#"
+function Demo() -> string {
+    `before-${"x"}`
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert!(
+            root.descendants()
+                .any(|n| n.kind() == SyntaxKind::BACKTICK_INTERPOLATION),
+            "expected BACKTICK_INTERPOLATION node for ${{\"x\"}}"
+        );
+    }
+
+    #[test]
+    fn backtick_segments_split_text_and_interpolation() {
+        use baml_compiler_syntax::{BacktickSegment, BacktickStringLiteral};
+        use rowan::ast::AstNode;
+
+        let source = "
+function Demo() -> string {
+    let s = `Hello, ${user.name}!`
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let lit_node = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
+            .expect("expected backtick string literal");
+        let lit = BacktickStringLiteral::cast(lit_node).expect("cast");
+
+        let segs = lit.segments();
+        assert_eq!(segs.len(), 3, "segments: {segs:?}");
+        match &segs[0] {
+            BacktickSegment::Text(s) => assert_eq!(s, "Hello, "),
+            other @ BacktickSegment::Interp(_) => panic!("expected Text, got {other:?}"),
+        }
+        match &segs[1] {
+            BacktickSegment::Interp(node) => {
+                assert_eq!(node.text().to_string(), "${user.name}");
+            }
+            other @ BacktickSegment::Text(_) => panic!("expected Interp, got {other:?}"),
+        }
+        match &segs[2] {
+            BacktickSegment::Text(s) => assert_eq!(s, "!"),
+            other @ BacktickSegment::Interp(_) => panic!("expected Text, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn backtick_segments_multiline_dedent_skips_interp() {
+        // BEP §12 rule 8: dedent operates on literal text only; interpolations
+        // are treated as opaque inline content and do not affect min-indent.
+        use baml_compiler_syntax::{BacktickSegment, BacktickStringLiteral};
+        use rowan::ast::AstNode;
+
+        let source = "
+function Demo() -> string {
+    let s = `
+        Hello, ${name}!
+        Welcome.
+    `
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let lit = BacktickStringLiteral::cast(
+            root.descendants()
+                .find(|n| n.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
+                .unwrap(),
+        )
+        .unwrap();
+        let segs = lit.segments();
+        // After dedent: leading "Hello, ", interp, "!\nWelcome." (trailing
+        // whitespace stripped by preprocess_template's .trim()).
+        let text_parts: Vec<&str> = segs
+            .iter()
+            .filter_map(|s| match s {
+                BacktickSegment::Text(t) => Some(t.as_str()),
+                BacktickSegment::Interp(_) => None,
+            })
+            .collect();
+        assert_eq!(
+            text_parts,
+            vec!["Hello, ", "!\nWelcome."],
+            "got: {text_parts:?}"
+        );
+    }
+
+    #[test]
+    fn backtick_lone_dollar_is_literal_text() {
+        // `$` not immediately followed by `{` is content, not interpolation.
+        let source = "
+function Demo() -> string {
+    `cost: $5 and $ {not interp}`
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert!(
+            root.descendants()
+                .all(|n| n.kind() != SyntaxKind::BACKTICK_INTERPOLATION),
+            "lone $ should not emit BACKTICK_INTERPOLATION"
+        );
+    }
+
+    #[test]
+    fn backtick_escaped_dollar_does_not_interpolate() {
+        // BEP §8: `\${...}` is literal text inside backticks.
+        let source = r#"
+function Demo() -> string {
+    `literal \${name}`
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert!(
+            root.descendants()
+                .all(|n| n.kind() != SyntaxKind::BACKTICK_INTERPOLATION),
+            "escaped \\${{...}} must not emit BACKTICK_INTERPOLATION"
+        );
     }
 
     #[test]

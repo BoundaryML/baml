@@ -16,6 +16,11 @@ function user.BacktickEscapedDollar() -> string {
     return
 }
 
+function user.BacktickEscapedInterpStaysLiteral() -> string {
+    load_const "literal: ${ignored}"
+    return
+}
+
 function user.BacktickInCondition() -> int {
     load_const "abc"
     call baml.String.length
@@ -32,6 +37,105 @@ function user.BacktickInCondition() -> int {
     load_const 1
 
   L2:
+    return
+}
+
+function user.BacktickInterpBlockBody(items: int[]) -> string {
+    load_var items
+    load_const 0
+    load_array_element
+    call baml.Int.to_string
+    store_var _2
+    load_const "head: "
+    load_var _2
+    bin_op +
+    return
+}
+
+function user.BacktickInterpBool(b: bool) -> string {
+    load_var b
+    call baml.Bool.to_string
+    store_var _2
+    load_const "flag: "
+    load_var _2
+    bin_op +
+    return
+}
+
+function user.BacktickInterpCallsFn() -> string {
+    load_const 3
+    call user.bangs
+    call baml.String.to_string
+    store_var _1
+    load_const "done"
+    load_var _1
+    bin_op +
+    return
+}
+
+function user.BacktickInterpFloat(x: float) -> string {
+    load_var x
+    call baml.Float.to_string
+    store_var _2
+    load_const "ratio: "
+    load_var _2
+    bin_op +
+    return
+}
+
+function user.BacktickInterpInt(n: int) -> string {
+    load_var n
+    call baml.Int.to_string
+    store_var _2
+    load_const "count: "
+    load_var _2
+    bin_op +
+    return
+}
+
+function user.BacktickInterpMultiline(name: string, count: int) -> string {
+    load_var name
+    call baml.String.to_string
+    store_var _6
+    load_var count
+    call baml.Int.to_string
+    store_var _7
+    load_const "name:  "
+    load_var _6
+    bin_op +
+    load_const "\ncount: "
+    bin_op +
+    load_var _7
+    bin_op +
+    load_const ""
+    bin_op +
+    return
+}
+
+function user.BacktickInterpMultiple(first: string, last: string) -> string {
+    load_var first
+    call baml.String.to_string
+    store_var _4
+    load_var last
+    call baml.String.to_string
+    store_var _5
+    load_var _4
+    load_const " "
+    bin_op +
+    load_var _5
+    bin_op +
+    return
+}
+
+function user.BacktickInterpSimple(name: string) -> string {
+    load_var name
+    call baml.String.to_string
+    store_var _3
+    load_const "Hello, "
+    load_var _3
+    bin_op +
+    load_const "!"
+    bin_op +
     return
 }
 
@@ -73,5 +177,30 @@ function user.BacktickPassThrough(s: string) -> string {
 
 function user.BacktickStandardEscapes() -> string {
     load_const "line\nbreak\twith\rcr\0nul"
+    return
+}
+
+function user.bangs(n: int) -> string {
+    load_var n
+    load_const 0
+    cmp_op <=
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var n
+    load_const 1
+    bin_op -
+    call user.bangs
+    store_var _3
+    load_const "!"
+    load_var _3
+    bin_op +
+    jump L2
+
+  L1:
+    load_const ""
+
+  L2:
     return
 }

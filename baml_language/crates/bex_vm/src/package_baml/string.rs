@@ -14,6 +14,13 @@ impl BamlClassString for PackageBamlImpl {
         vm.alloc_string(string.to_string())
     }
 
+    fn to_string(string: &str) -> String {
+        // No-op: `string.to_string()` returns the input unchanged. Exists
+        // so BEP-049 backtick interpolation can unconditionally wrap each
+        // `${...}` with `.to_string()` without special-casing strings.
+        string.to_string()
+    }
+
     #[allow(clippy::cast_possible_wrap)]
     fn length(string: &str) -> i64 {
         string.len() as i64

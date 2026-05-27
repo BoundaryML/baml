@@ -6,6 +6,15 @@ class Float {
   function to_json(self) -> baml.json.json {
     $rust_function
   }
+
+  /// Returns the standard floating-point string representation of `self`
+  /// (Rust's `f64::to_string`: `"NaN"`, `"inf"`/`"-inf"` for non-finite
+  /// values; finite values use the shortest round-trip representation).
+  /// Used by BEP-049 backtick-string interpolation (§11) to implicitly
+  /// convert float values appearing in `${...}`.
+  function to_string(self) -> string {
+    $rust_function
+  }
   // ─── Predicates ───────────────────────────────────────────────────────────
 
   /// Returns `true` if `self` is NaN (a "not a number" sentinel produced by

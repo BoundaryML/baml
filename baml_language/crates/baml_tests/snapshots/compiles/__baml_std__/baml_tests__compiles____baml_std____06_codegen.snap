@@ -93,6 +93,9 @@ function baml.Bool.from_json(j: baml.json.json) -> baml.Bool {
 function baml.Bool.to_json(self: null) -> baml.json.json {
 }
 
+function baml.Bool.to_string(self: null) -> string {
+}
+
 function baml.Float.abs(self: null) -> float {
 }
 
@@ -251,6 +254,9 @@ function baml.Float.to_radians(self: null) -> float {
     return
 }
 
+function baml.Float.to_string(self: null) -> string {
+}
+
 function baml.Float.trunc(self: null) -> float {
 }
 
@@ -309,6 +315,9 @@ function baml.Int.random(lower: int, upper: int) -> int {
 }
 
 function baml.Int.to_json(self: null) -> baml.json.json {
+}
+
+function baml.Int.to_string(self: null) -> string {
 }
 
 function baml.Int.trailing_ones(self: null) -> int {
@@ -473,6 +482,9 @@ function baml.String.to_json(self: null) -> baml.json.json {
 }
 
 function baml.String.to_lower_case(self: null) -> string {
+}
+
+function baml.String.to_string(self: null) -> string {
 }
 
 function baml.String.to_upper_case(self: null) -> string {

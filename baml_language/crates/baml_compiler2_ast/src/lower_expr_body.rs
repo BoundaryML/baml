@@ -2291,19 +2291,129 @@ impl LoweringContext {
 
     /// Lower a BEP-049 backtick string literal as a string-typed expression.
     ///
-    /// **M1 only:** content is treated as plain text. `${...}` sequences inside
-    /// are *not* interpolated yet — they appear in the decoded value as the
-    /// literal characters `$`, `{`, expression, `}`. M2 will replace this with
-    /// a segments-based lowering that builds a string from text + interpolated
-    /// expression fragments.
+    /// Walks the segments exposed by [`BacktickStringLiteral::segments`] and
+    /// builds a left-folded `+` concatenation chain. Text segments lower to
+    /// `Literal::String`; interpolation segments lower the inner block
+    /// expression (BEP §4 block-expression semantics — statements + optional
+    /// trailing expression).
+    ///
+    /// **M2 limitation (§11):** interpolated values must already be strings.
+    /// Implicit `.to_string()` for non-string types is task #13.
     fn lower_backtick_string_literal(&mut self, node: &SyntaxNode) -> ExprId {
-        use baml_compiler_syntax::BacktickStringLiteral;
+        use baml_compiler_syntax::{BacktickSegment, BacktickStringLiteral};
         use rowan::ast::AstNode;
 
-        let value = BacktickStringLiteral::cast(node.clone())
-            .map(|lit| lit.value())
-            .unwrap_or_default();
-        self.alloc_expr(Expr::Literal(Literal::String(value)), node.text_range())
+        let Some(lit) = BacktickStringLiteral::cast(node.clone()) else {
+            return self.alloc_expr(Expr::Missing, node.text_range());
+        };
+
+        let segments = lit.segments();
+        let span = node.text_range();
+
+        if segments.is_empty() {
+            return self.alloc_expr(Expr::Literal(Literal::String(String::new())), span);
+        }
+
+        let mut parts: Vec<ExprId> = Vec::with_capacity(segments.len());
+        for seg in segments {
+            match seg {
+                BacktickSegment::Text(s) => {
+                    parts.push(self.alloc_expr(Expr::Literal(Literal::String(s)), span));
+                }
+                BacktickSegment::Interp(interp_node) => {
+                    // BACKTICK_INTERPOLATION wraps `$` + a BLOCK_EXPR. Lower
+                    // the block; missing → Missing so the type-checker
+                    // surfaces it.
+                    let block = interp_node
+                        .children()
+                        .find(|c| c.kind() == SyntaxKind::BLOCK_EXPR);
+                    let inner = match block {
+                        Some(b) => self.lower_expr(&b),
+                        None => self.alloc_expr(Expr::Missing, interp_node.text_range()),
+                    };
+
+                    // BEP §4: an interp body whose block has no trailing
+                    // expression evaluates to unit; per §4 "renders as the
+                    // empty string." Detect this at lowering time and skip
+                    // the `.to_string()` wrap — `void.to_string()` doesn't
+                    // exist, so the wrap would fail type-check.
+                    let is_unit_block = matches!(
+                        &self.exprs[inner],
+                        Expr::Block {
+                            tail_expr: None,
+                            ..
+                        },
+                    );
+                    if is_unit_block {
+                        // Preserve the side-effecting statements in the block
+                        // by leaving `inner` in place; tack on an empty
+                        // string literal as the "value" to concat with.
+                        let empty = self.alloc_expr(
+                            Expr::Literal(Literal::String(String::new())),
+                            interp_node.text_range(),
+                        );
+                        // Sequence: { ...stmts...; "" } — re-emit as a block
+                        // whose tail is "".
+                        let new_block_id = if let Expr::Block { stmts, .. } = &self.exprs[inner] {
+                            let stmts = stmts.clone();
+                            self.alloc_expr(
+                                Expr::Block {
+                                    stmts,
+                                    tail_expr: Some(empty),
+                                },
+                                interp_node.text_range(),
+                            )
+                        } else {
+                            empty
+                        };
+                        parts.push(new_block_id);
+                        continue;
+                    }
+
+                    // BEP §11: implicit `.to_string()` on the interp value so
+                    // `${user.id}` (int) just works without explicit
+                    // conversion. For values that are already strings,
+                    // `to_string` returns self — no special-casing.
+                    //
+                    // Known limitations (documented in tests):
+                    //  - Inline if-expression: trips a pre-existing VM
+                    //    lowering issue; workaround is to bind via `let`.
+                    //  - Null / optional / never: `.to_string()` doesn't
+                    //    resolve on these types. Implicit null-coalescing
+                    //    coverage is deferred to a follow-up.
+                    let callee = self.alloc_expr(
+                        Expr::MemberAccess {
+                            base: inner,
+                            member: Name::new("to_string"),
+                        },
+                        interp_node.text_range(),
+                    );
+                    let to_string_call = self.alloc_expr(
+                        Expr::Call {
+                            callee,
+                            type_args: Vec::new(),
+                            args: Vec::new(),
+                        },
+                        interp_node.text_range(),
+                    );
+                    parts.push(to_string_call);
+                }
+            }
+        }
+
+        // Left-fold `+` so the runtime sees ((a + b) + c) + d.
+        let mut iter = parts.into_iter();
+        let first = iter.next().expect("non-empty by guard above");
+        iter.fold(first, |acc, next| {
+            self.alloc_expr(
+                Expr::Binary {
+                    op: BinaryOp::Add,
+                    lhs: acc,
+                    rhs: next,
+                },
+                span,
+            )
+        })
     }
 
     fn lower_byte_string_literal(&mut self, node: &SyntaxNode) -> ExprId {

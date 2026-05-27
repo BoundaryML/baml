@@ -1,0 +1,44 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+function user.case_a_null_interp() -> string throws never {
+  { : string
+    let x: int? = null : null -> int | null
+    "val: " + { 0 stmts + tail }.to_string() : string
+  }
+  !! 935..939: did you mean `...?.to_string`? `....to_string` does not handle the case when `...` is null
+  !! 935..939: `((self: baml.Int) -> string throws never)?` is not a function — it cannot be called
+}
+class user.FooNoToString {
+  x: int
+}
+function user.FooNoToString.to_json(self: user.FooNoToString) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "x": self.x.to_json() } : map<string, baml.json.json>
+}
+function user.FooNoToString.from_json(j: baml.json.json) -> user.FooNoToString throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  FooNoToString { x: baml.json.from_json<int>(baml.json.field(j, "x")) } : user.FooNoToString
+}
+function user.case_b_class_without_to_string() -> string throws never {
+  { : string
+    let f = FooNoToString { x: 1 } : user.FooNoToString
+    "val: " + { 0 stmts + tail }.to_string() : string
+  }
+  !! 1152..1156: type `user.FooNoToString` has no member `to_string`
+}
+function user.get_count() -> int? throws never {
+  { : 42
+    42 : 42
+  }
+}
+function user.case_e_optional_int_interp() -> string throws never {
+  { : string
+    let c = get_count() : int?
+    "count: " + { 0 stmts + tail }.to_string() : string
+  }
+  !! 1442..1446: did you mean `...?.to_string`? `....to_string` does not handle the case when `...` is null
+  !! 1442..1446: `((self: baml.Int) -> string throws never)?` is not a function — it cannot be called
+}
+class user.FooNoToString$stream {
+  x: null | int
+}

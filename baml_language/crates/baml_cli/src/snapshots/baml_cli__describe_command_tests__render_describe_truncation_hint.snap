@@ -15,10 +15,10 @@ class String {
     $rust_function
   }
 
-  /// Returns the length of the string in **UTF-8 bytes**.
-  ///
-  /// This is `O(1)`. For ASCII text the byte length equals the character
-  [... skipped 464 lines ...]
+  /// Returns `self` unchanged. Provided so BEP-049 backtick-string
+  /// interpolation (§11) can unconditionally wrap each `${...}` value
+  /// with `.to_string()` without special-casing strings.
+  [... skipped 471 lines ...]
   ///
   /// # Examples
   /// ```
@@ -33,6 +33,6 @@ class String {
   }
 }
 
-[INFO] Showing 28 of 491 lines. Use --budget 492 for full output.
+[INFO] Showing 28 of 498 lines. Use --budget 499 for full output.
 
 references (0):

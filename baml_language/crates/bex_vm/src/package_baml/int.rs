@@ -7,6 +7,10 @@ impl BamlClassInt for PackageBamlImpl {
     fn to_json(int: i64) -> Value {
         Value::int(int)
     }
+
+    fn to_string(int: i64) -> String {
+        int.to_string()
+    }
     // ── Comparisons / clamping ────────────────────────────────────────────────
 
     fn abs(int: i64) -> Result<i64, VmRustFnError> {

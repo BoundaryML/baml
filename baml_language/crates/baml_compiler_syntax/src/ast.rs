@@ -1021,11 +1021,22 @@ impl BacktickStringLiteral {
     ///
     /// Returns 0 if the syntax is malformed (no opening backtick).
     pub fn delimiter_count(&self) -> usize {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .take_while(|t| t.kind() == SyntaxKind::BACKTICK)
-            .count()
+        // Walk children_with_tokens and break on the first non-BACKTICK
+        // element — whether it's a token (content) or a node (e.g.
+        // BACKTICK_INTERPOLATION). `filter_map(into_token).take_while(...)`
+        // would skip past nodes silently, causing the *closing* backticks
+        // to be miscounted as part of the opener for inputs like
+        // `` `${a}${b}` `` (no text between two interpolations).
+        let mut count = 0;
+        for el in self.syntax.children_with_tokens() {
+            match el {
+                rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::BACKTICK => {
+                    count += 1;
+                }
+                _ => break,
+            }
+        }
+        count
     }
 
     /// Inner content between the opening and closing backtick runs, before any
@@ -1056,10 +1067,10 @@ impl BacktickStringLiteral {
     /// The decoded value of the backtick string, with escapes resolved and (if
     /// multi-line) dedented per `baml_base::dedent::preprocess_template`.
     ///
-    /// **M1 only:** treats the entire inner content as literal text. `${...}`
-    /// sequences appear verbatim because the parser does not yet split them
-    /// into interpolation segments. M2 replaces this with a segments-based
-    /// lowering.
+    /// **Treats `${...}` sequences as literal text** — this is the pre-interp
+    /// view, preserved as a fallback for callers that haven't migrated to
+    /// [`Self::segments`]. New code should prefer `segments()` so interpolated
+    /// expressions are surfaced as host AST nodes.
     pub fn value(&self) -> String {
         let Some(inner) = self.raw_inner() else {
             return String::new();
@@ -1071,6 +1082,142 @@ impl BacktickStringLiteral {
             decoded
         }
     }
+
+    /// Split the literal into the alternating text and interpolation segments
+    /// that downstream lowerers consume.
+    ///
+    /// For `` `Hello, ${user.name}!` `` returns:
+    /// `[Text("Hello, "), Interp(<${user.name}>), Text("!")]`.
+    ///
+    /// Text segments are escape-decoded; multi-line content is dedented per
+    /// BEP §12 (interpolations do not affect the min-indent calculation per
+    /// §12 rule 8 — "Whitespace inside `${...}` is preserved verbatim").
+    pub fn segments(&self) -> Vec<BacktickSegment> {
+        enum RawPart {
+            Text(String),
+            Interp(SyntaxNode),
+        }
+
+        let n = self.delimiter_count();
+        if n == 0 {
+            return Vec::new();
+        }
+
+        let elements: Vec<_> = self.syntax.children_with_tokens().collect();
+        let total_backticks = elements
+            .iter()
+            .filter(|el| el.kind() == SyntaxKind::BACKTICK)
+            .count();
+        if total_backticks < 2 * n {
+            return Vec::new();
+        }
+        let closing_start_index = total_backticks - n;
+        let mut parts: Vec<RawPart> = Vec::new();
+        let mut current_text = String::new();
+        let mut bt_seen = 0usize;
+
+        for el in &elements {
+            match el {
+                rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::BACKTICK => {
+                    if bt_seen >= n && bt_seen < closing_start_index {
+                        // Content backtick from a multi-tick ladder.
+                        current_text.push('`');
+                    }
+                    bt_seen += 1;
+                }
+                rowan::NodeOrToken::Token(t) => {
+                    if bt_seen >= n && bt_seen <= closing_start_index {
+                        current_text.push_str(t.text());
+                    }
+                }
+                rowan::NodeOrToken::Node(child)
+                    if child.kind() == SyntaxKind::BACKTICK_INTERPOLATION =>
+                {
+                    if !current_text.is_empty() {
+                        parts.push(RawPart::Text(std::mem::take(&mut current_text)));
+                    }
+                    parts.push(RawPart::Interp(child.clone()));
+                }
+                rowan::NodeOrToken::Node(child) => {
+                    if bt_seen >= n && bt_seen <= closing_start_index {
+                        current_text.push_str(&child.text().to_string());
+                    }
+                }
+            }
+        }
+        if !current_text.is_empty() {
+            parts.push(RawPart::Text(current_text));
+        }
+
+        // Decode escapes per text chunk.
+        let mut decoded: Vec<RawPart> = parts
+            .into_iter()
+            .map(|p| match p {
+                RawPart::Text(s) => RawPart::Text(unescape_backtick_string_literal(&s)),
+                RawPart::Interp(node) => RawPart::Interp(node),
+            })
+            .collect();
+
+        // Dedent across the whole literal if any text chunk contains a
+        // newline. Replace interpolations with a single-char placeholder so
+        // they don't influence min-indent, then split the dedented result
+        // back into text segments.
+        let needs_dedent = decoded
+            .iter()
+            .any(|p| matches!(p, RawPart::Text(s) if s.contains('\n')));
+        if needs_dedent {
+            // U+F8FF (Apple-logo PUA codepoint) is a safe sentinel — single
+            // codepoint, never appears in real source, doesn't affect indent
+            // calculation since it's a non-whitespace content character.
+            const PLACEHOLDER: char = '\u{F8FF}';
+            let mut joined = String::new();
+            for p in &decoded {
+                match p {
+                    RawPart::Text(s) => joined.push_str(s),
+                    RawPart::Interp(_) => joined.push(PLACEHOLDER),
+                }
+            }
+            let dedented = baml_base::dedent::preprocess_template(&joined);
+            let mut iter = dedented.split(PLACEHOLDER);
+            for p in &mut decoded {
+                if let RawPart::Text(s) = p {
+                    *s = iter.next().unwrap_or("").to_string();
+                }
+            }
+            if let Some(rest) = iter.next() {
+                if !rest.is_empty() {
+                    if let Some(RawPart::Text(s)) = decoded.last_mut() {
+                        s.push_str(rest);
+                    } else {
+                        decoded.push(RawPart::Text(rest.to_string()));
+                    }
+                }
+            }
+        }
+
+        decoded
+            .into_iter()
+            .map(|p| match p {
+                RawPart::Text(s) => BacktickSegment::Text(s),
+                RawPart::Interp(node) => BacktickSegment::Interp(node),
+            })
+            .collect()
+    }
+}
+
+/// A piece of a [`BacktickStringLiteral`] after splitting on interpolations.
+///
+/// Produced by [`BacktickStringLiteral::segments`]. The untagged lowering
+/// concatenates `text + interp.to_string()`; the M4 tagged-template lowering
+/// converts these into the BEP §10 `parts` / `values` shape.
+#[derive(Debug, Clone)]
+pub enum BacktickSegment {
+    /// Literal text content, escape-decoded and dedent-adjusted.
+    Text(String),
+    /// A `${...}` interpolation. The wrapped node is the `BACKTICK_INTERPOLATION`
+    /// CST node; downstream code lowers the inner block expression and
+    /// converts the result to a string.
+    Interp(SyntaxNode),
 }
 
 impl RawStringLiteral {

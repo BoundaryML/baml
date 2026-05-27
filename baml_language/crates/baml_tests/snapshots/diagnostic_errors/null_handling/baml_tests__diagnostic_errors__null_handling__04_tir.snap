@@ -92,8 +92,7 @@ function user.OptionalIndex(node: user.Node?, items: int[]?, lookup: map<string,
     return b1 ?? 0 : int
   }
   !! 3611..3634: did you mean `items?.[0]?.to_string`? `items?.[0].to_string` does not handle the case when `items?.[0]` is null
-  !! 3625..3634: type `int` has no member `to_string`
-  !! 3611..3636: `unknown?` is not a function — it cannot be called
+  !! 3611..3636: `((self: baml.Int) -> string throws never)?` is not a function — it cannot be called
   !! 3926..3943: did you mean `nonNullItems[0]`? `nonNullItems?.[0]` is unnecessary, because `nonNullItems` cannot be null
 }
 function user.OptionalCall(callback: (int) -> string? throws never, nonNullCb: (int) -> string throws never, name: string?) -> string throws never {
@@ -146,8 +145,7 @@ function user.Combined(user: user.User?, node: user.Node?, items: int[]?) -> str
     node?.children?.[node?.value ?? 0]?.next?.value = node?.value ?? 0 : int
     return e3 : string
   }
-  !! 8142..8151: type `int` has no member `to_string`
-  !! 8111..8153: `unknown?` is not a function — it cannot be called
+  !! 8111..8153: `((self: baml.Int) -> string throws never)?` is not a function — it cannot be called
   !! 8080..8175: did you mean `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string()`? `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string() ?? "fallback"` is unnecessary, because `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string()` cannot be null
 }
 class user.Address$stream {

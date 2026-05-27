@@ -21,6 +21,8 @@ fn baml.Bool.from_json(j: baml.json.json) -> baml.Bool {
 
 fn baml.Bool.to_json = builtin(vm)
 
+fn baml.Bool.to_string = builtin(vm)
+
 fn baml.Array.at = builtin(vm)
 
 fn baml.Map.clear = builtin(vm)
@@ -295,6 +297,8 @@ fn baml.Float.to_radians(self: baml.Float) -> float {
     }
 }
 
+fn baml.Float.to_string = builtin(vm)
+
 fn baml.Float.trunc = builtin(vm)
 
 fn baml.Int.abs = builtin(vm)
@@ -367,6 +371,8 @@ fn baml.Int.pow = builtin(vm)
 fn baml.Int.random = builtin(vm)
 
 fn baml.Int.to_json = builtin(vm)
+
+fn baml.Int.to_string = builtin(vm)
 
 fn baml.Int.trailing_ones = builtin(vm)
 
@@ -7323,6 +7329,8 @@ fn baml.String.substring = builtin(vm)
 fn baml.String.to_json = builtin(vm)
 
 fn baml.String.to_lower_case = builtin(vm)
+
+fn baml.String.to_string = builtin(vm)
 
 fn baml.String.to_upper_case = builtin(vm)
 

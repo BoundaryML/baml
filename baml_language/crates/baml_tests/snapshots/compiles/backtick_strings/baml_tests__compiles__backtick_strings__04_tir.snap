@@ -69,3 +69,60 @@ function user.BacktickLiteralAsArg() -> string throws never {
     BacktickPassThrough("forwarded") : string
   }
 }
+function user.BacktickInterpSimple(name: string) -> string throws never {
+  { : string
+    "Hello, " + { 0 stmts + tail }.to_string() + "!" : string
+  }
+}
+function user.BacktickInterpMultiple(first: string, last: string) -> string throws never {
+  { : string
+    { 0 stmts + tail }.to_string() + " " + { 0 stmts + tail }.to_string() : string
+  }
+}
+function user.BacktickInterpInt(n: int) -> string throws never {
+  { : string
+    "count: " + { 0 stmts + tail }.to_string() : string
+  }
+}
+function user.BacktickInterpBool(b: bool) -> string throws never {
+  { : string
+    "flag: " + { 0 stmts + tail }.to_string() : string
+  }
+}
+function user.BacktickInterpFloat(x: float) -> string throws never {
+  { : string
+    "ratio: " + { 0 stmts + tail }.to_string() : string
+  }
+}
+function user.BacktickInterpBlockBody(items: int[]) -> string throws never {
+  { : string
+    "head: " + { 1 stmts + tail }.to_string() : string
+  }
+}
+function user.bangs(n: int) -> string throws never {
+  { : "" | string
+    if (n <= 0 : bool) : "" | string
+      { : ""
+        "" : ""
+      }
+    else
+      { : string
+        "!" + bangs(n - 1) : string
+      }
+  }
+}
+function user.BacktickInterpCallsFn() -> string throws never {
+  { : string
+    "done" + { 0 stmts + tail }.to_string() : string
+  }
+}
+function user.BacktickInterpMultiline(name: string, count: int) -> string throws never {
+  { : string
+    "name:  " + { 0 stmts + tail }.to_string() + "\ncount: " + { 0 stmts + tail }.to_string() + "" : string
+  }
+}
+function user.BacktickEscapedInterpStaysLiteral() -> string throws never {
+  { : "literal: ${ignored}"
+    "literal: ${ignored}" : "literal: ${ignored}"
+  }
+}

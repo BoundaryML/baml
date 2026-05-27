@@ -11,8 +11,35 @@ function user.BacktickEscapedBacktick() -> string  [expr] {
 function user.BacktickEscapedDollar() -> string  [expr] {
   {  } "literal ${name}"
 }
+function user.BacktickEscapedInterpStaysLiteral() -> string  [expr] {
+  {  } "literal: ${ignored}"
+}
 function user.BacktickInCondition() -> int  [expr] {
   {  } if ("abc".length() Gt 0) {  } 1 else {  } 0
+}
+function user.BacktickInterpBlockBody(items: int[]) -> string  [expr] {
+  {  } "head: " Add { let first = items[0] } first.to_string()
+}
+function user.BacktickInterpBool(b: bool) -> string  [expr] {
+  {  } "flag: " Add {  } b.to_string()
+}
+function user.BacktickInterpCallsFn() -> string  [expr] {
+  {  } "done" Add {  } bangs(3).to_string()
+}
+function user.BacktickInterpFloat(x: float) -> string  [expr] {
+  {  } "ratio: " Add {  } x.to_string()
+}
+function user.BacktickInterpInt(n: int) -> string  [expr] {
+  {  } "count: " Add {  } n.to_string()
+}
+function user.BacktickInterpMultiline(name: string, count: int) -> string  [expr] {
+  {  } "name:  " Add {  } name.to_string() Add "\ncount: " Add {  } count.to_string() Add ""
+}
+function user.BacktickInterpMultiple(first: string, last: string) -> string  [expr] {
+  {  } {  } first.to_string() Add " " Add {  } last.to_string()
+}
+function user.BacktickInterpSimple(name: string) -> string  [expr] {
+  {  } "Hello, " Add {  } name.to_string() Add "!"
 }
 function user.BacktickLiteralAsArg() -> string  [expr] {
   {  } BacktickPassThrough("forwarded")
@@ -37,4 +64,7 @@ function user.BacktickPassThrough(s: string) -> string  [expr] {
 }
 function user.BacktickStandardEscapes() -> string  [expr] {
   {  } "line\nbreak\twith\rc..."
+}
+function user.bangs(n: int) -> string  [expr] {
+  {  } if (n Le 0) {  } "" else {  } "!" Add bangs(n Sub 1)
 }

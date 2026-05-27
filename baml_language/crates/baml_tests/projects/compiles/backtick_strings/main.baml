@@ -69,3 +69,54 @@ function BacktickPassThrough(s: string) -> string {
 function BacktickLiteralAsArg() -> string {
     BacktickPassThrough(`forwarded`)
 }
+
+// ─── M2: ${...} interpolation ──────────────────────────────────────────────
+
+function BacktickInterpSimple(name: string) -> string {
+    `Hello, ${name}!`
+}
+
+function BacktickInterpMultiple(first: string, last: string) -> string {
+    `${first} ${last}`
+}
+
+// BEP §11: implicit `.to_string()` for non-string interp values.
+function BacktickInterpInt(n: int) -> string {
+    `count: ${n}`
+}
+
+function BacktickInterpBool(b: bool) -> string {
+    `flag: ${b}`
+}
+
+function BacktickInterpFloat(x: float) -> string {
+    `ratio: ${x}`
+}
+
+// BEP §4: ${...} is a block expression — statements + optional trailing expr.
+function BacktickInterpBlockBody(items: int[]) -> string {
+    `head: ${ let first = items[0]; first }`
+}
+
+// Interpolation calling another function.
+function bangs(n: int) -> string {
+    if (n <= 0) { "" } else { "!" + bangs(n - 1) }
+}
+
+function BacktickInterpCallsFn() -> string {
+    `done${bangs(3)}`
+}
+
+// Multi-line backtick with multiple interpolations — exercises segments()
+// dedent (BEP §12) on a literal that has interp boundaries.
+function BacktickInterpMultiline(name: string, count: int) -> string {
+    `
+        name:  ${name}
+        count: ${count}
+    `
+}
+
+// Escaped `\${...}` stays literal even after M2 (BEP §8).
+function BacktickEscapedInterpStaysLiteral() -> string {
+    `literal: \${ignored}`
+}

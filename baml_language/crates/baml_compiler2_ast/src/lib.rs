@@ -1653,14 +1653,45 @@ function Demo() -> string {
     }
 
     #[test]
-    fn backtick_m1_leaves_interpolation_as_literal_text() {
-        // M1 only: ${...} is not yet interpreted. It survives as literal text.
+    fn backtick_interpolation_lowers_to_concat_chain() {
+        // M2: `Hello, ${name}!` lowers to ("Hello, " + name) + "!" — a
+        // left-folded Binary Add chain over text/interp segments.
         let source = "
-function Demo() -> string {
+function Demo(name: string) -> string {
     `Hello, ${name}!`
 }
 ";
         let items = parse_and_lower(source);
-        assert_eq!(extract_first_string_literal(items), "Hello, ${name}!");
+        let function = first_function(items);
+        let Some(FunctionBodyDef::Expr(body, _)) = &function.body else {
+            panic!("expected expression body");
+        };
+        let root = body.root_expr.expect("root");
+        let Expr::Block {
+            tail_expr: Some(tail),
+            ..
+        } = &body.exprs[root]
+        else {
+            panic!("expected Block at root, got {:?}", &body.exprs[root]);
+        };
+        let Expr::Binary { op, lhs, rhs } = &body.exprs[*tail] else {
+            panic!("expected Binary at tail, got {:?}", &body.exprs[*tail]);
+        };
+        assert!(matches!(op, crate::ast::BinaryOp::Add));
+        assert!(matches!(
+            &body.exprs[*rhs],
+            Expr::Literal(baml_base::Literal::String(s)) if s == "!"
+        ));
+        let Expr::Binary {
+            op: op2, lhs: lhs2, ..
+        } = &body.exprs[*lhs]
+        else {
+            panic!("expected nested Binary on lhs");
+        };
+        assert!(matches!(op2, crate::ast::BinaryOp::Add));
+        assert!(matches!(
+            &body.exprs[*lhs2],
+            Expr::Literal(baml_base::Literal::String(s)) if s == "Hello, "
+        ));
     }
 }

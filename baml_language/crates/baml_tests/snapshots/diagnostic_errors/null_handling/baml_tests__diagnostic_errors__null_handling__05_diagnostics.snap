@@ -22,12 +22,12 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0004
 ────╯
 
-  [type] error: `unknown?` is not a function — it cannot be called
+  [type] error: `((self: baml.Int) -> string throws never)?` is not a function — it cannot be called
      ╭─[ null_handling.baml:121:13 ]
      │
  121 │     let b9 = (items?.[0]).to_string();
      │             ────────────┬────────────  
-     │                         ╰────────────── `unknown?` is not a function — it cannot be called
+     │                         ╰────────────── `((self: baml.Int) -> string throws never)?` is not a function — it cannot be called
      │ 
      │ Note: Error code: E0006
 ─────╯
@@ -40,16 +40,6 @@ source: crates/baml_tests/src/generated_tests.rs
      │                        ╰───────────── did you mean `items?.[0]?.to_string`? `items?.[0].to_string` does not handle the case when `items?.[0]` is null
      │ 
      │ Note: Error code: E0001
-─────╯
-
-  [type] error: type `int` has no member `to_string`
-     ╭─[ null_handling.baml:121:27 ]
-     │
- 121 │     let b9 = (items?.[0]).to_string();
-     │                           ────┬────  
-     │                               ╰────── type `int` has no member `to_string`
-     │ 
-     │ Note: Error code: E0007
 ─────╯
 
   [type] error: did you mean `nonNullItems[0]`? `nonNullItems?.[0]` is unnecessary, because `nonNullItems` cannot be null
@@ -164,22 +154,12 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0004
 ─────╯
 
-  [type] error: `unknown?` is not a function — it cannot be called
+  [type] error: `((self: baml.Int) -> string throws never)?` is not a function — it cannot be called
      ╭─[ null_handling.baml:257:11 ]
      │
  257 │         ?? node?.labels?.["name"]?.value.to_string()
      │           ─────────────────────┬────────────────────  
-     │                                ╰────────────────────── `unknown?` is not a function — it cannot be called
+     │                                ╰────────────────────── `((self: baml.Int) -> string throws never)?` is not a function — it cannot be called
      │ 
      │ Note: Error code: E0006
-─────╯
-
-  [type] error: type `int` has no member `to_string`
-     ╭─[ null_handling.baml:257:42 ]
-     │
- 257 │         ?? node?.labels?.["name"]?.value.to_string()
-     │                                          ────┬────  
-     │                                              ╰────── type `int` has no member `to_string`
-     │ 
-     │ Note: Error code: E0007
 ─────╯

@@ -12,6 +12,7 @@ function baml.from_json(j: baml.json.json) -> baml.Bool  [expr] {
   baml.Bool {  }
 }
 function baml.to_json(self: ?) -> baml.json.json  [builtin]
+function baml.to_string(self: ?) -> string  [builtin]
 
 --- <builtin>/baml/containers.baml ---
 class baml.Array {
@@ -119,6 +120,7 @@ function baml.to_json(self: ?) -> baml.json.json  [builtin]
 function baml.to_radians(self: ?) -> float  [expr] {
   {  } self Mul float.pi() Div 180.0
 }
+function baml.to_string(self: ?) -> string  [builtin]
 function baml.trunc(self: ?) -> float  [builtin]
 
 --- <builtin>/baml/int.baml ---
@@ -147,6 +149,7 @@ function baml.parse(text: string) -> int  [builtin]
 function baml.pow(self: ?, exp: int) -> int  [builtin]
 function baml.random(lower: int, upper: int) -> int  [builtin]
 function baml.to_json(self: ?) -> baml.json.json  [builtin]
+function baml.to_string(self: ?) -> string  [builtin]
 function baml.trailing_ones(self: ?) -> int  [builtin]
 function baml.trailing_zeros(self: ?) -> int  [builtin]
 
@@ -1078,6 +1081,7 @@ function baml.starts_with(self: ?, prefix: string) -> bool  [builtin]
 function baml.substring(self: ?, start: int, end: int) -> string  [builtin]
 function baml.to_json(self: ?) -> baml.json.json  [builtin]
 function baml.to_lower_case(self: ?) -> string  [builtin]
+function baml.to_string(self: ?) -> string  [builtin]
 function baml.to_upper_case(self: ?) -> string  [builtin]
 function baml.to_utf8(self: ?) -> uint8array  [builtin]
 function baml.trim(self: ?) -> string  [builtin]
