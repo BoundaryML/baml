@@ -1150,6 +1150,15 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
         }
     }
 
+    // The `BamlError` / `BamlPanic` wrappers are defined in `baml_core` and
+    // re-exported on the top-level `baml` builtins package so user code can
+    // `from baml_sdk.baml import BamlError, BamlPanic` (31a-spec / 31f-phase5).
+    let is_baml_builtins_root = body.leaf.segments == ["baml"];
+    if is_baml_builtins_root {
+        out.push('\n');
+        out.push_str("from baml_core import BamlError as BamlError, BamlPanic as BamlPanic\n");
+    }
+
     let typevars = body.generic_typevars();
     if !typevars.is_empty() {
         out.push_str("\n\n");
@@ -1189,7 +1198,12 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
     // it. `BamlTypeMap.get_class(fqn)` resolves via importlib on first
     // lookup. Class bodies are pure Pydantic — no codegen metadata.
 
-    let names = body.all_names();
+    let mut names = body.all_names();
+    // Surface the re-exported wrappers in `__all__` on the `baml` root too.
+    if is_baml_builtins_root {
+        names.push("BamlError");
+        names.push("BamlPanic");
+    }
     if !names.is_empty() {
         out.push_str("\n\n");
         out.push_str("__all__ = [\n");
@@ -1547,6 +1561,14 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
         out.push_str("from baml_core import BamlPyHandle as _BamlPyHandle\n");
     }
 
+    // Mirror the `.py` re-export so `from baml_sdk.baml import BamlError,
+    // BamlPanic` type-checks.
+    let is_baml_builtins_root = body.leaf.segments == ["baml"];
+    if is_baml_builtins_root {
+        out.push('\n');
+        out.push_str("from baml_core import BamlError as BamlError, BamlPanic as BamlPanic\n");
+    }
+
     // The `.pyi` re-declares TypeVars because stubs don't import from
     // sibling `.py` files.
     let typevars = body.generic_typevars();
@@ -1582,7 +1604,11 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
         prev = Some((key, sym));
     }
 
-    let names = body.all_names();
+    let mut names = body.all_names();
+    if is_baml_builtins_root {
+        names.push("BamlError");
+        names.push("BamlPanic");
+    }
     if !names.is_empty() {
         out.push_str("\n\n");
         out.push_str("__all__ = [\n");

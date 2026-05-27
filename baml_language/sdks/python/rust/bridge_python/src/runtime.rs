@@ -17,7 +17,7 @@ use pyo3_stub_gen::{
 
 use crate::{
     abort_controller::AbortController,
-    errors::{BamlError, BamlInvalidArgumentError, bridge_error_to_py},
+    errors::{bridge_error_to_py, py_baml_error},
     types::collector::Collector,
 };
 
@@ -185,13 +185,13 @@ impl BamlRuntime {
 fn decode_args(args_proto: &[u8], function_name: &str) -> PyResult<bex_project::BexArgs> {
     let args =
         bridge_ctypes::baml_core::cffi::CallFunctionArgs::decode(args_proto).map_err(|e| {
-            pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!(
+            py_baml_error(format!(
                 "Failed to decode arguments for function '{function_name}': {e}"
             ))
         })?;
 
     let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE).map_err(|e| {
-        pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!(
+        py_baml_error(format!(
             "Failed to convert arguments for function '{function_name}': {e}"
         ))
     })?;
@@ -212,7 +212,7 @@ pub fn get_runtime() -> PyResult<BamlRuntime> {
     // here rather than a confusing one deep in a later call; the handle itself
     // is zero-sized (the Arc lives in bridge_cffi).
     bridge_cffi::engine::get_runtime().map_err(|e| match e {
-        bridge_cffi::BridgeError::NotInitialized => pyo3::PyErr::new::<BamlError, _>(
+        bridge_cffi::BridgeError::NotInitialized => py_baml_error(
             "BAML runtime has not been initialized — did baml_sdk/__init__.py fail to import?",
         ),
         other => bridge_error_to_py(other),
