@@ -37,7 +37,7 @@ bex_vm_types = { workspace = true }
 sys_ops = { workspace = true }
 sys_types = { workspace = true }
 async-trait = { workspace = true }
-crossbeam = { workspace = true }
+crossbeam-channel = { workspace = true }
 log = { workspace = true }
 lsp-server = { workspace = true }
 lsp-types = { workspace = true }
