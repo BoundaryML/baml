@@ -2,8 +2,7 @@
 
 use std::sync::Arc;
 
-use bex_project::Bex;
-use bridge_ctypes::{HANDLE_TABLE, external_to_outbound, kwargs_to_bex_values};
+use bridge_ctypes::{HANDLE_TABLE, kwargs_to_bex_values};
 use prost::Message;
 use pyo3::{
     Py, Python,
@@ -18,16 +17,17 @@ use pyo3_stub_gen::{
 
 use crate::{
     abort_controller::AbortController,
-    errors::{BamlError, BamlInvalidArgumentError, bridge_error_to_py, runtime_error_to_py},
+    errors::{BamlError, BamlInvalidArgumentError, bridge_error_to_py},
     types::collector::Collector,
 };
 
-/// The main BAML runtime, wrapping a `dyn Bex` instance.
+/// The main BAML runtime. A zero-sized handle: the single source of truth for
+/// the `Arc<dyn Bex>` singleton is `bridge_cffi`, fetched via
+/// `bridge_cffi::engine::get_runtime()` at each call site (31e-phase4), so this
+/// no longer caches its own clone.
 #[gen_stub_pyclass]
 #[pyclass]
-pub struct BamlRuntime {
-    bex: Arc<dyn Bex>,
-}
+pub struct BamlRuntime;
 
 #[gen_stub_pymethods]
 #[pymethods]
@@ -46,8 +46,10 @@ impl BamlRuntime {
         root_path: String,
         files: std::collections::HashMap<String, String>,
     ) -> PyResult<Self> {
+        // `initialize_runtime` stores the `Arc<dyn Bex>` in bridge_cffi's
+        // singleton; we don't keep our own copy.
         match bridge_cffi::engine::initialize_runtime(&root_path, files) {
-            Ok(bex) => Ok(BamlRuntime { bex }),
+            Ok(_bex) => Ok(BamlRuntime),
             Err(e) => Err(bridge_error_to_py(e)),
         }
     }
@@ -90,7 +92,7 @@ impl BamlRuntime {
         collectors: Option<Vec<pyo3::PyRef<'py, Collector>>>,
         abort_controller: Option<&AbortController>,
     ) -> PyResult<Py<PyAny>> {
-        let bex = self.bex.clone();
+        let runtime = bridge_cffi::engine::get_runtime().map_err(bridge_error_to_py)?;
         let kwargs = decode_args(&args_proto, &function_name)?;
         let host_ctx = ctx.and_then(|c| c.host_span_context());
         let cancel = abort_controller
@@ -111,20 +113,14 @@ impl BamlRuntime {
             call_ctx = call_ctx.with_host_ctx(host_ctx);
         }
 
+        // The whole Result -> BamlOutboundResult translation (incl. the
+        // catch_unwind -> SdkPanic boundary) lives in bridge_cffi; we just
+        // return the encoded envelope bytes for Python to decode + raise.
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let result = bex
-                .call_function(&function_name, kwargs, call_ctx.build())
-                .await
-                .map_err(runtime_error_to_py)?;
-
-            let handle_options = bridge_ctypes::CffiHandleTableOptions::for_in_process();
-            let baml_value = external_to_outbound(&result, &handle_options).map_err(|e| {
-                pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!(
-                    "Failed to encode result: {e}"
-                ))
-            })?;
-
-            Ok(baml_value.encode_to_vec())
+            let bytes =
+                bridge_cffi::call_and_encode(runtime, function_name, kwargs, call_ctx.build())
+                    .await;
+            Ok(bytes)
         })
         .map(pyo3::Bound::into)
     }
@@ -147,7 +143,7 @@ impl BamlRuntime {
         collectors: Option<Vec<pyo3::PyRef<'_, Collector>>>,
         abort_controller: Option<&AbortController>,
     ) -> PyResult<Vec<u8>> {
-        let bex = self.bex.clone();
+        let runtime = bridge_cffi::engine::get_runtime().map_err(bridge_error_to_py)?;
         let kwargs = decode_args(&args_proto, &function_name)?;
         let host_ctx = ctx.and_then(|c| c.host_span_context());
         let cancel = abort_controller
@@ -170,16 +166,18 @@ impl BamlRuntime {
 
         let rt = bridge_cffi::engine::get_tokio_runtime().map_err(bridge_error_to_py)?;
 
-        let result = py
-            .detach(|| rt.block_on(bex.call_function(&function_name, kwargs, call_ctx.build())))
-            .map_err(runtime_error_to_py)?;
+        // Same shared call_and_encode as the async + C-ABI paths — returns the
+        // encoded BamlOutboundResult envelope bytes.
+        let bytes = py.detach(|| {
+            rt.block_on(bridge_cffi::call_and_encode(
+                runtime,
+                function_name,
+                kwargs,
+                call_ctx.build(),
+            ))
+        });
 
-        let handle_options = bridge_ctypes::CffiHandleTableOptions::for_in_process();
-        let baml_value = external_to_outbound(&result, &handle_options).map_err(|e| {
-            pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!("Failed to encode result: {e}"))
-        })?;
-
-        Ok(baml_value.encode_to_vec())
+        Ok(bytes)
     }
 }
 
@@ -210,11 +208,14 @@ fn decode_args(args_proto: &[u8], function_name: &str) -> PyResult<bex_project::
 #[gen_stub_pyfunction]
 #[pyfunction]
 pub fn get_runtime() -> PyResult<BamlRuntime> {
-    let bex = bridge_cffi::engine::get_runtime().map_err(|e| match e {
+    // Validate the singleton is initialized so callers get a helpful error
+    // here rather than a confusing one deep in a later call; the handle itself
+    // is zero-sized (the Arc lives in bridge_cffi).
+    bridge_cffi::engine::get_runtime().map_err(|e| match e {
         bridge_cffi::BridgeError::NotInitialized => pyo3::PyErr::new::<BamlError, _>(
             "BAML runtime has not been initialized — did baml_sdk/__init__.py fail to import?",
         ),
         other => bridge_error_to_py(other),
     })?;
-    Ok(BamlRuntime { bex })
+    Ok(BamlRuntime)
 }

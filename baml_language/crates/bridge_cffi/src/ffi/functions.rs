@@ -8,7 +8,7 @@ use futures::future::FutureExt;
 use crate::{
     engine::{get_runtime, get_tokio_runtime},
     error::BridgeError,
-    ffi::callbacks::{send_error_to_callback, send_result_to_callback},
+    ffi::callbacks::{send_error_to_callback, send_outbound_result_to_callback},
 };
 
 /// Format a BridgeError into the prefixed string protocol that Go's
@@ -117,21 +117,22 @@ fn call_function_inner(
     let call_ctx = bex_project::FunctionCallContextBuilder::new(sys_types::CallId(id.into()));
 
     get_tokio_runtime()?.spawn(async move {
-        let result = AssertUnwindSafe(async {
-            runtime
-                .call_function(&func_name, kwargs.into(), call_ctx.build())
-                .await
-        })
+        // `call_and_encode` already wraps the engine call in its own
+        // `catch_unwind` and turns a call-time panic into a `SdkPanic`
+        // envelope. The outer `catch_unwind` here is the C-ABI safety net for
+        // a panic during *encoding* — which must not cross the C boundary.
+        let encoded = AssertUnwindSafe(crate::call_and_encode(
+            runtime,
+            func_name,
+            kwargs.into(),
+            call_ctx.build(),
+        ))
         .catch_unwind()
         .await;
 
-        match result {
-            Ok(Ok(value)) => {
-                send_result_to_callback(id, &value);
-            }
-            Ok(Err(e)) => {
-                let bridge_err = BridgeError::Runtime(e);
-                send_error_to_callback(id, &bridge_error_to_string(&bridge_err));
+        match encoded {
+            Ok(bytes) => {
+                send_outbound_result_to_callback(id, &bytes);
             }
             Err(panic_info) => {
                 let msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
