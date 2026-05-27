@@ -29,7 +29,7 @@ from .baml_py import (
     release_host_callable,
 )
 from ._stream import BamlStream
-from .errors import BamlError, BamlPanic
+from .errors import BamlError, BamlPanic, attach_baml_traceback
 from .typemap import BamlTypeMap, get_type_map
 
 def _is_pydantic_model(value: Any) -> bool:
@@ -701,10 +701,12 @@ def decode_call_result(data: bytes) -> Any:
 
     if which == "error":
         msg = result.error
-        raise BamlError(
-            decode_value(msg.value, type_map),
-            baml_trace=list(msg.trace),
-            class_name=_outbound_class_fqn(msg.value),
+        raise attach_baml_traceback(
+            BamlError(
+                decode_value(msg.value, type_map),
+                baml_trace=list(msg.trace),
+                class_name=_outbound_class_fqn(msg.value),
+            )
         )
 
     if which == "panic":
@@ -714,10 +716,12 @@ def decode_call_result(data: bytes) -> Any:
         if msg.is_exit_panic:
             _flush_for_exit()
             os._exit(msg.exit_code)
-        raise BamlPanic(
-            decode_value(msg.value, type_map),
-            baml_trace=list(msg.trace),
-            class_name=_outbound_class_fqn(msg.value),
+        raise attach_baml_traceback(
+            BamlPanic(
+                decode_value(msg.value, type_map),
+                baml_trace=list(msg.trace),
+                class_name=_outbound_class_fqn(msg.value),
+            )
         )
 
     # `ok` (or an absent oneof — an all-default envelope is a null `ok`).

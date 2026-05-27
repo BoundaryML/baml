@@ -12,7 +12,82 @@
 
 from __future__ import annotations
 
-from typing import Any, List, Optional
+import re
+import sys
+import types
+from typing import Any, List, Optional, TypeVar
+
+# Wire trace line shape, e.g. `File "resume.baml", line 12, in user.extract`.
+_TRACE_LINE = re.compile(r'File "(?P<file>.*)", line (?P<line>\d+), in (?P<func>.*)')
+
+_E = TypeVar("_E", bound=BaseException)
+
+
+def _capture_frame(filename: str, lineno: int, func: str) -> Optional[types.FrameType]:
+    """Build a real `frame` object whose displayed location is
+    `(filename, lineno, func)` — the Jinja2 technique (31g-phase6).
+
+    `compile`/`exec` a throwaway one-line `def` with the frame's `co_filename`
+    (padded so `lineno` is valid), rename its `co_name` to `func`, then raise
+    inside it to capture the frame off the traceback.
+    """
+    lineno = max(int(lineno), 1)
+    src = ("\n" * (lineno - 1)) + "def __baml(): raise ValueError()\n"
+    code = compile(src, filename, "exec")
+    ns: dict = {}
+    exec(code, ns)  # noqa: S102 — throwaway frame factory, not user input
+    fn = ns["__baml"]
+    try:
+        fn.__code__ = fn.__code__.replace(co_name=func)
+    except (ValueError, TypeError):
+        pass  # exotic name; keep the default co_name rather than fail
+    try:
+        fn()
+    except ValueError:
+        tb = sys.exc_info()[2]
+        if tb is not None and tb.tb_next is not None:
+            return tb.tb_next.tb_frame
+    return None
+
+
+def _synthesize_traceback(lines: List[str]) -> Optional[types.TracebackType]:
+    """Turn the pre-rendered BAML frame lines into a real `TracebackType`
+    chain so they render as ordinary traceback lines (one continuous
+    traceback ending in `.baml` source) rather than a detached blob.
+
+    The wire is most-recent-call-last (oldest first); a Python tb is linked
+    head=outermost with `tb_next` walking inward, and `TracebackType` is
+    immutable (built tail-first), so we iterate `reversed(lines)` — wrapping
+    the innermost frame first and ending with the outermost as the head.
+    """
+    tb_next: Optional[types.TracebackType] = None
+    for line in reversed(lines):
+        m = _TRACE_LINE.match(line.strip())
+        if m is None:
+            continue
+        frame = _capture_frame(m.group("file"), int(m.group("line")), m.group("func"))
+        if frame is None:
+            continue
+        tb_next = types.TracebackType(
+            tb_next, frame, frame.f_lasti, max(int(m.group("line")), 1)
+        )
+    return tb_next
+
+
+def attach_baml_traceback(exc: _E) -> _E:
+    """Splice `exc.baml_trace` into `exc`'s Python traceback, if any. Best
+    effort — on any failure the exception is returned untouched, so error
+    delivery never depends on the cosmetic splice."""
+    trace = getattr(exc, "baml_trace", None)
+    if not trace:
+        return exc
+    try:
+        synth = _synthesize_traceback(trace)
+    except Exception:
+        synth = None
+    if synth is None:
+        return exc
+    return exc.with_traceback(synth)
 
 
 def _format_message(class_name: Optional[str], value: Any) -> str:
