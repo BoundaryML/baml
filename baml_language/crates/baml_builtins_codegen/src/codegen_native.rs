@@ -396,7 +396,7 @@ fn extraction_rhs_expr(
             if is_mut {
                 quote!(vm.as_map_mut(#value_expr)?)
             } else {
-                quote!(vm.as_map(#value_expr)?.clone())
+                quote!(vm.as_map(#value_expr)?.to_index_map())
             }
         }
         t if t.starts_with("Option<") => {

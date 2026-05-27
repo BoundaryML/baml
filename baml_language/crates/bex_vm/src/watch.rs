@@ -471,7 +471,11 @@ pub fn track_watch_dependencies(watch: &mut Watch, parent: NodeId, path: Path, c
                 .fields
                 .iter()
                 .enumerate()
-                .filter_map(|(idx, v)| v.as_object_ptr().map(|p| (Path::InstanceField(idx), p)))
+                .filter_map(|(idx, v)| {
+                    v.load()
+                        .as_object_ptr()
+                        .map(|p| (Path::InstanceField(idx), p))
+                })
                 .collect(),
 
             Object::Array(array) => array
@@ -731,11 +735,7 @@ mod tests {
 
     /// Allocates an instance whose fields point to the given objects.
     fn instance(class: HeapPtr, fields: Vec<Value>) -> HeapPtr {
-        heap_alloc(Object::Instance(Instance {
-            class,
-            class_type_args: Vec::new(),
-            fields,
-        }))
+        heap_alloc(Object::Instance(Instance::new(class, Vec::new(), fields)))
     }
 
     #[test]
@@ -788,7 +788,7 @@ mod tests {
         // Close the cycle: mutate A's field to point to B.
         unsafe {
             if let Object::Instance(inst) = a.get_mut() {
-                inst.fields[0] = Value::object(b);
+                inst.store_field(0, Value::object(b));
             }
         }
 
