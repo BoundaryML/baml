@@ -27,6 +27,38 @@ fn collect_type_attrs(type_expr: &CstTypeExpr) -> Vec<RawAttribute> {
         .collect()
 }
 
+fn collect_function_type_generic_params(type_expr: &CstTypeExpr) -> Vec<(Name, Option<TypeExpr>)> {
+    let mut out = Vec::new();
+    for param_list in type_expr
+        .syntax()
+        .children()
+        .filter(|node| node.kind() == SyntaxKind::GENERIC_PARAM_LIST)
+    {
+        for param_node in param_list
+            .children()
+            .filter(|node| node.kind() == SyntaxKind::GENERIC_PARAM)
+        {
+            let name = param_node.children_with_tokens().find_map(|elem| {
+                let token = elem.as_token()?;
+                (token.kind() == SyntaxKind::WORD).then(|| Name::new(token.text()))
+            });
+            let bound = param_node
+                .children()
+                .find(|node| node.kind() == SyntaxKind::GENERIC_PARAM_BOUNDS)
+                .and_then(|bounds| {
+                    bounds
+                        .children()
+                        .find_map(baml_compiler_syntax::ast::TypeExpr::cast)
+                })
+                .map(|bound| lower_type_expr_inner(&bound, true));
+            if let Some(name) = name {
+                out.push((name, bound));
+            }
+        }
+    }
+    out
+}
+
 /// Convert a CST `TypeExpr` node to our `ast::TypeExpr` recursive enum.
 ///
 /// Called by `lower_cst.rs` for field/alias/param/return-type positions.
@@ -150,6 +182,15 @@ fn lower_base(type_expr: &CstTypeExpr) -> TypeExpr {
 fn lower_base_terminal(type_expr: &CstTypeExpr) -> TypeExpr {
     // Handle function types like `(x: int, y: int) -> bool`
     if type_expr.is_function_type() {
+        let generic_params_with_bounds = collect_function_type_generic_params(type_expr);
+        let generic_params = generic_params_with_bounds
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect();
+        let generic_param_bounds = generic_params_with_bounds
+            .into_iter()
+            .map(|(_, bound)| bound)
+            .collect();
         let params = type_expr
             .function_type_params()
             .iter()
@@ -171,6 +212,8 @@ fn lower_base_terminal(type_expr: &CstTypeExpr) -> TypeExpr {
             .function_throws_type()
             .map(|t| Box::new(lower_type_expr_inner(&t, false)));
         return TypeExpr::Function {
+            generic_params,
+            generic_param_bounds,
             params,
             ret: Box::new(ret),
             throws,

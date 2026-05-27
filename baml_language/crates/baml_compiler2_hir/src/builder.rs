@@ -1082,6 +1082,20 @@ impl<'db> SemanticIndexBuilder<'db> {
 
     fn lower_implements_for(&mut self, imp: &ast::ImplementsForDef) {
         self.class_depth += 1;
+        // For blanket impls (implements<T> I for C<T>), push a class-like scope
+        // so TIR can resolve `self` and type variables in method bodies.
+        let has_generic_params = !imp.generic_params.is_empty();
+        if has_generic_params {
+            // Derive a synthetic scope name from the for_target for `self` resolution.
+            // Use the for_target's root name (e.g. "Container" from "Container<T>").
+            let scope_name = match &imp.for_target.expr {
+                baml_compiler2_ast::TypeExpr::Path { segments, .. } => segments.first().cloned(),
+                _ => None,
+            };
+            if let Some(name) = scope_name {
+                self.push_scope(ScopeKind::Class, Some(name), imp.span);
+            }
+        }
         let mut method_ids = Vec::new();
         for method in &imp.methods {
             let fid = self.lower_function(method);
@@ -1089,6 +1103,9 @@ impl<'db> SemanticIndexBuilder<'db> {
                 .method_to_iface_target
                 .insert(fid, imp.interface_target.clone());
             method_ids.push(fid);
+        }
+        if has_generic_params {
+            self.pop_scope();
         }
         self.class_depth -= 1;
         self.item_tree.add_implements_for(imp, method_ids);

@@ -162,7 +162,10 @@ impl StructuralTy {
             } => {
                 let mut required = Vec::new();
                 let mut optional = Vec::new();
-                for param in params.into_iter().map(StructuralFunctionParam::canonicalize) {
+                for param in params
+                    .into_iter()
+                    .map(StructuralFunctionParam::canonicalize)
+                {
                     match param.mode {
                         FunctionParamMode::Required => required.push(param),
                         FunctionParamMode::Optional => optional.push(param),
@@ -1229,6 +1232,8 @@ mod tests {
         let int = Ty::Primitive(PrimitiveType::Int, TyAttr::default());
         let string = Ty::Primitive(PrimitiveType::String, TyAttr::default());
         let lhs = Ty::Function {
+            generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
             params: vec![FunctionParamTy::required(Some(Name::new("x")), int.clone())],
             ret: Box::new(string.clone()),
             throws: Box::new(Ty::Never {
@@ -1237,6 +1242,8 @@ mod tests {
             attr: TyAttr::default(),
         };
         let rhs = Ty::Function {
+            generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
             params: vec![FunctionParamTy::required(Some(Name::new("y")), int)],
             ret: Box::new(string),
             throws: Box::new(Ty::Never {
@@ -1255,6 +1262,8 @@ mod tests {
         let string = Ty::Primitive(PrimitiveType::String, TyAttr::default());
         let bool_ty = Ty::Primitive(PrimitiveType::Bool, TyAttr::default());
         let lhs = Ty::Function {
+            generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
             params: vec![
                 FunctionParamTy::optional(Some(Name::new("a")), int.clone()),
                 FunctionParamTy::optional(Some(Name::new("b")), string.clone()),
@@ -1266,6 +1275,8 @@ mod tests {
             attr: TyAttr::default(),
         };
         let rhs = Ty::Function {
+            generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
             params: vec![
                 FunctionParamTy::optional(Some(Name::new("b")), string),
                 FunctionParamTy::optional(Some(Name::new("a")), int),
@@ -1494,6 +1505,8 @@ mod tests {
     fn test_function_covariant_return() {
         let aliases = HashMap::new();
         let f1 = Ty::Function {
+            generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
             params: vec![required_param(Ty::Primitive(
                 PrimitiveType::Int,
                 TyAttr::default(),
@@ -1509,6 +1522,8 @@ mod tests {
             attr: TyAttr::default(),
         };
         let f2 = Ty::Function {
+            generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
             params: vec![required_param(Ty::Primitive(
                 PrimitiveType::Int,
                 TyAttr::default(),
@@ -1527,6 +1542,8 @@ mod tests {
     fn test_function_contravariant_params() {
         let aliases = HashMap::new();
         let f1 = Ty::Function {
+            generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
             params: vec![required_param(Ty::Primitive(
                 PrimitiveType::String,
                 TyAttr::default(),
@@ -1538,6 +1555,8 @@ mod tests {
             attr: TyAttr::default(),
         };
         let f2 = Ty::Function {
+            generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
             params: vec![required_param(Ty::Literal(
                 LiteralValue::String("hi".into()),
                 Freshness::Fresh,
@@ -1557,6 +1576,8 @@ mod tests {
     fn test_function_covariant_throws() {
         let aliases = HashMap::new();
         let f1 = Ty::Function {
+            generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
             params: vec![required_param(Ty::Primitive(
                 PrimitiveType::Int,
                 TyAttr::default(),
@@ -1568,6 +1589,8 @@ mod tests {
             attr: TyAttr::default(),
         };
         let f2 = Ty::Function {
+            generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
             params: vec![required_param(Ty::Primitive(
                 PrimitiveType::Int,
                 TyAttr::default(),
@@ -1590,6 +1613,8 @@ mod tests {
     fn test_function_optional_param_dropping_subtyping() {
         let aliases = HashMap::new();
         let with_two_optionals = Ty::Function {
+            generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
             params: vec![
                 required_param(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
                 optional_param("max", Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
@@ -1605,6 +1630,8 @@ mod tests {
             attr: TyAttr::default(),
         };
         let with_one_optional = Ty::Function {
+            generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
             params: vec![
                 required_param(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
                 optional_param(
@@ -1635,6 +1662,8 @@ mod tests {
     fn test_function_optional_param_order_is_insignificant() {
         let aliases = HashMap::new();
         let f1 = Ty::Function {
+            generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
             params: vec![
                 required_param(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
                 optional_param("max", Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
@@ -1650,6 +1679,8 @@ mod tests {
             attr: TyAttr::default(),
         };
         let f2 = Ty::Function {
+            generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
             params: vec![
                 required_param(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
                 optional_param(
@@ -1673,6 +1704,8 @@ mod tests {
     fn test_function_optional_and_required_params_are_incomparable() {
         let aliases = HashMap::new();
         let optional = Ty::Function {
+            generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
             params: vec![optional_param(
                 "value",
                 Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
@@ -1684,6 +1717,8 @@ mod tests {
             attr: TyAttr::default(),
         };
         let required = Ty::Function {
+            generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
             params: vec![FunctionParamTy::required(
                 Some(Name::new("value")),
                 Ty::Primitive(PrimitiveType::Int, TyAttr::default()),

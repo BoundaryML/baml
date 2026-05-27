@@ -179,9 +179,7 @@ pub fn lower_file_with_file_id(
                 segments,
                 generic_args,
                 ..
-            } if segments.len() == 1 && generic_args.is_empty() => {
-                segments.first().cloned()
-            }
+            } if segments.len() == 1 && generic_args.is_empty() => segments.first().cloned(),
             _ => None,
         };
         if let Some(target_name) = target_name {
@@ -1122,8 +1120,10 @@ fn lower_interface(
         .iter()
         .map(|(n, _)| n.clone())
         .collect();
-    let generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> =
-        generic_params_with_bounds.into_iter().map(|(_, b)| b).collect();
+    let generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
+        .into_iter()
+        .map(|(_, b)| b)
+        .collect();
 
     // BEP-044: `requires` is the canonical keyword; `extends` is accepted as
     // a legacy alias. Both produce the same AST `extends` field.
@@ -1239,8 +1239,10 @@ fn lower_method_sig(
         .iter()
         .map(|(n, _)| n.clone())
         .collect();
-    let generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> =
-        generic_params_with_bounds.into_iter().map(|(_, b)| b).collect();
+    let generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
+        .into_iter()
+        .map(|(_, b)| b)
+        .collect();
     let parameter_context = format!("method signature `{}`", name.as_str());
 
     let (params, defaults) = sig

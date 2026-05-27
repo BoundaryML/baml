@@ -144,9 +144,8 @@ pub fn display_function_param_ty(param: &FunctionParamTy) -> String {
 
 /// Format a resolved `Ty` as a user-friendly string.
 ///
-/// Delegates to the `Display` impl on `Ty`. For user-visible output (hover,
-/// inlay hints) we strip the package qualifier so `user.Foo` shows as `Foo`
-/// and `baml.PrimitiveClient` shows as `PrimitiveClient`.
+/// Delegates to the `Display` impl on `Ty` while preserving fully-qualified
+/// names so same-short-name types remain distinguishable in hover output.
 pub fn display_ty(ty: &Ty) -> String {
     use baml_compiler2_tir::ty::PrimitiveType;
     let rendered = match ty {
@@ -195,14 +194,34 @@ pub fn display_ty(ty: &Ty) -> String {
         Ty::Optional(inner, _) => format!("{}?", display_ty_as_postfix_base(inner)),
         Ty::Literal(lit, _freshness, _) => lit.to_string(),
         Ty::Function {
+            generic_params,
+            generic_param_bounds,
             params,
             ret,
             throws,
             ..
         } => {
+            let generics = if generic_params.is_empty() {
+                String::new()
+            } else {
+                let params = generic_params
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, param)| {
+                        if let Some(bound) = generic_param_bounds.get(idx).and_then(Option::as_ref)
+                        {
+                            format!("{param} extends {}", display_ty(bound))
+                        } else {
+                            param.to_string()
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("<{params}>")
+            };
             let ps: Vec<String> = params.iter().map(display_function_param_ty).collect();
             format!(
-                "({}) -> {} throws {}",
+                "{generics}({}) -> {} throws {}",
                 ps.join(", "),
                 display_ty_as_function_result(ret),
                 display_ty(throws)
@@ -284,11 +303,31 @@ pub fn display_type_expr(te: &TypeExpr) -> String {
         }
         TypeExpr::Literal { value, .. } => value.to_string(),
         TypeExpr::Function {
+            generic_params,
+            generic_param_bounds,
             params,
             ret,
             throws,
             ..
         } => {
+            let generics = if generic_params.is_empty() {
+                String::new()
+            } else {
+                let params = generic_params
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, param)| {
+                        if let Some(bound) = generic_param_bounds.get(idx).and_then(Option::as_ref)
+                        {
+                            format!("{param} extends {}", display_type_expr(bound))
+                        } else {
+                            param.to_string()
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("<{params}>")
+            };
             let ps: Vec<String> = params
                 .iter()
                 .map(|p| {
@@ -307,7 +346,7 @@ pub fn display_type_expr(te: &TypeExpr) -> String {
                 .map(|throws| format!(" throws {throws}"))
                 .unwrap_or_default();
             format!(
-                "({}) -> {}{}",
+                "{generics}({}) -> {}{}",
                 ps.join(", "),
                 display_type_expr_as_function_result(ret),
                 throws

@@ -604,11 +604,22 @@ pub fn infer_scope_types<'db>(
                     let body = baml_compiler2_ppir::function_body(db, func_loc);
                     let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
 
+                    let enclosing_impl = item_tree
+                        .implements_for
+                        .iter()
+                        .find(|imp| imp.methods.contains(local_id));
+
                     // Compute the generic params for this function scope.
-                    // If this is a method inside a class, also include the class's generic params.
+                    // If this method belongs to an out-of-body `implements<T> ... for ...`
+                    // rule, the rule owns the generic params. Otherwise, methods
+                    // inside classes also include their class's generic params.
                     let mut generic_params = sig.user_generic_params.clone();
                     generic_params.extend(sig.synthetic_effect_params.iter().cloned());
-                    if let Some(parent_idx) = scope.parent {
+                    if let Some(imp) = enclosing_impl {
+                        let mut merged = imp.generic_params.clone();
+                        merged.extend(generic_params);
+                        generic_params = merged;
+                    } else if let Some(parent_idx) = scope.parent {
                         let parent = &index.scopes[parent_idx.index() as usize];
                         if matches!(parent.kind, ScopeKind::Class) {
                             if let Some(class_name) = &parent.name {
@@ -642,8 +653,11 @@ pub fn infer_scope_types<'db>(
                     // walks this map to expose the bound's contract.
                     let mut bounds: rustc_hash::FxHashMap<Name, Ty> =
                         rustc_hash::FxHashMap::default();
-                    for (i, name) in func_data.generic_params.iter().enumerate() {
-                        if let Some(Some(bound_te)) = func_data.generic_param_bounds.get(i) {
+                    let (bound_param_names, bound_exprs) = enclosing_impl
+                        .map(|imp| (&imp.generic_params, &imp.generic_param_bounds))
+                        .unwrap_or((&func_data.generic_params, &func_data.generic_param_bounds));
+                    for (i, name) in bound_param_names.iter().enumerate() {
+                        if let Some(Some(bound_te)) = bound_exprs.get(i) {
                             let mut bd = Vec::new();
                             let bound_ty = crate::lower_type_expr::lower_type_expr_in_ns(
                                 db,
@@ -702,13 +716,17 @@ pub fn infer_scope_types<'db>(
                                     None
                                 }
                             });
-                        // BEP-044 `Self` substitution: when lowering signatures
-                        // inside a class/interface body, swap any `Self` for
-                        // the enclosing type's name so it resolves to the
-                        // concrete class/interface.
-                        let self_replacement = enclosing_class_name
-                            .as_ref()
-                            .map(|cn| crate::lower_type_expr::type_expr_for_name(cn.clone()));
+                        // BEP-044 `Self` substitution: inside an out-of-body
+                        // implementation, `Self` is the rule receiver pattern
+                        // (`Box<T>` or `T`). Otherwise it is the enclosing
+                        // class/interface type.
+                        let self_replacement = enclosing_impl
+                            .map(|imp| imp.for_target.expr.clone())
+                            .or_else(|| {
+                                enclosing_class_name.as_ref().map(|cn| {
+                                    crate::lower_type_expr::type_expr_for_name(cn.clone())
+                                })
+                            });
                         let lower_with_self = |te: &baml_compiler2_ast::TypeExpr,
                                                diags: &mut Vec<
                             crate::infer_context::TirTypeError,
@@ -762,59 +780,58 @@ pub fn infer_scope_types<'db>(
                             let param_ty = if param.name.as_str() == "self"
                                 && matches!(param.ty, baml_compiler2_ast::TypeExpr::Unknown { .. })
                             {
-                                // `self` parameter with no type annotation — infer from
-                                // enclosing class. For BEP-044 interface default methods
-                                // the enclosing scope is the interface, so we produce
-                                // `Ty::Interface` so member resolution dispatches through
-                                // the interface contract.
-                                enclosing_class_name
-                                    .as_ref()
-                                    .and_then(|cn| {
-                                        let ns_path = &pkg_info.namespace_path;
-                                        pkg_items.lookup_type(ns_path, cn).map(|def| {
-                                            let qtn = crate::lower_type_expr::qualify_def(
-                                                db, def, cn,
-                                            );
-                                            match def {
-                                                baml_compiler2_hir::contributions::Definition::Interface(_) => {
-                                                    Ty::Interface(qtn, vec![], TyAttr::default())
+                                if let Some(imp) = enclosing_impl {
+                                    let mut self_diags = Vec::new();
+                                    let ty = crate::lower_type_expr::lower_type_expr_in_ns(
+                                        db,
+                                        &imp.for_target.expr,
+                                        pkg_items,
+                                        &pkg_info.namespace_path,
+                                        &generic_params,
+                                        &mut self_diags,
+                                    );
+                                    if !self_diags.is_empty() {
+                                        let span =
+                                            sig_sm.param_spans.get(i).copied().unwrap_or_default();
+                                        for diag in self_diags {
+                                            builder.report_at_span(diag, span);
+                                        }
+                                    }
+                                    ty
+                                } else {
+                                    // `self` parameter with no type annotation — infer from
+                                    // enclosing class. For BEP-044 interface default methods
+                                    // the enclosing scope is the interface, so we produce
+                                    // `Ty::Interface` so member resolution dispatches through
+                                    // the interface contract.
+                                    enclosing_class_name
+                                        .as_ref()
+                                        .and_then(|cn| {
+                                            let ns_path = &pkg_info.namespace_path;
+                                            pkg_items.lookup_type(ns_path, cn).map(|def| {
+                                                let qtn =
+                                                    crate::lower_type_expr::qualify_def(db, def, cn);
+                                                match def {
+                                                    baml_compiler2_hir::contributions::Definition::Interface(_) => {
+                                                        Ty::Interface(qtn, vec![], TyAttr::default())
+                                                    }
+                                                    _ => Ty::Class(qtn, vec![], TyAttr::default()),
                                                 }
-                                                _ => Ty::Class(qtn, vec![], TyAttr::default()),
-                                            }
+                                            })
                                         })
-                                    })
-                                    .unwrap_or(Ty::Unknown {
-                                        attr: TyAttr::default(),
-                                    })
+                                        .unwrap_or(Ty::Unknown {
+                                            attr: TyAttr::default(),
+                                        })
+                                }
                             } else {
                                 let mut param_diags = Vec::new();
-                                // BEP-044: pre-substitute bounded type-vars
-                                // with their bound's `TypeExpr` so the local
-                                // ends up typed at the bound's concrete shape
-                                // (e.g. `Named`) instead of an opaque
-                                // `TypeVar` that downstream can't dispatch on.
-                                let bound_subst: std::collections::HashMap<
-                                    Name,
-                                    baml_compiler2_ast::TypeExpr,
-                                > = func_data
-                                    .generic_params
-                                    .iter()
-                                    .zip(func_data.generic_param_bounds.iter())
-                                    .filter_map(|(n, b)| {
-                                        b.as_ref().map(|te| (n.clone(), te.clone()))
-                                    })
-                                    .collect();
-                                let resolved_te = crate::lower_type_expr::substitute_paths_in(
-                                    &param.ty,
-                                    &bound_subst,
-                                );
                                 let resolved_te = if let Some(replacement) = &self_replacement {
                                     crate::lower_type_expr::substitute_self_in(
-                                        &resolved_te,
+                                        &param.ty,
                                         replacement,
                                     )
                                 } else {
-                                    resolved_te
+                                    param.ty.clone()
                                 };
                                 let ty = crate::lower_type_expr::lower_type_expr_in_ns(
                                     db,

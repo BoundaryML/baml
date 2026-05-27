@@ -918,39 +918,58 @@ pub fn generate_project_bytecode_with_opt(
         let mut inverted: indexmap::IndexMap<baml_type::TypeName, Vec<baml_type::TypeName>> =
             indexmap::IndexMap::new();
         let mut seen_pairs: HashSet<(String, String)> = HashSet::new();
-        for file in &all_files {
-            let pkg_info = file_package(db, *file);
-            let pkg_id = PackageId::new(db, pkg_info.package.clone());
+        for (pkg_name, cache) in &alias_caches {
+            let pkg_id = PackageId::new(db, pkg_name.clone());
             let registry = baml_compiler2_tir::interfaces::package_implements_registry(db, pkg_id);
-            let item_tree = file_item_tree(db, *file);
-            let class_module_path: Vec<Name> = std::iter::once(pkg_info.package.clone())
-                .chain(pkg_info.namespace_path.iter().cloned())
-                .collect();
-            for class_data in item_tree.classes.values() {
-                let class_fq = class_module_path
-                    .iter()
-                    .chain(std::iter::once(&class_data.name))
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join(".");
-                let class_name = fq_to_type_name(&class_fq);
-                let class_qtn = baml_compiler2_tir::ty::QualifiedTypeName::new(
-                    pkg_info.package.clone(),
-                    pkg_info.namespace_path.clone(),
-                    class_data.name.clone(),
-                );
-                let Some(iface_qtns) = registry.class_implements.get(&class_qtn) else {
+            let mut add_pair =
+                |iface_qtn: &baml_compiler2_tir::ty::QualifiedTypeName,
+                 class_qtn: &baml_compiler2_tir::ty::QualifiedTypeName| {
+                    let iface_name = baml_compiler2_mir::qtn_to_type_name(iface_qtn);
+                    let class_name = baml_compiler2_mir::qtn_to_type_name(class_qtn);
+                    if seen_pairs.insert((iface_qtn.to_string(), class_qtn.to_string())) {
+                        inverted.entry(iface_name).or_default().push(class_name);
+                    }
+                };
+
+            for rule in &registry.interface_impl_rules {
+                let baml_compiler2_tir::ty::Ty::Interface(iface_qtn, _, _) = &rule.interface_ty
+                else {
                     continue;
                 };
-                for iface_qtn in iface_qtns {
-                    let iface_name = baml_compiler2_mir::qtn_to_type_name(iface_qtn);
-                    let iface_fq = format!("{iface_name}");
-                    if seen_pairs.insert((iface_fq, class_fq.clone())) {
-                        inverted
-                            .entry(iface_name)
-                            .or_default()
-                            .push(class_name.clone());
+                match &rule.for_ty_pattern {
+                    baml_compiler2_tir::ty::Ty::Class(class_qtn, _, _) => {
+                        add_pair(iface_qtn, class_qtn);
                     }
+                    baml_compiler2_tir::ty::Ty::TypeVar(type_var, _) => {
+                        let Some(bound) = rule
+                            .generic_params
+                            .iter()
+                            .position(|param| param == type_var)
+                            .and_then(|idx| rule.generic_param_bounds.get(idx))
+                            .and_then(|bound| bound.as_ref())
+                        else {
+                            continue;
+                        };
+                        let baml_compiler2_tir::ty::Ty::Interface(..) = bound else {
+                            continue;
+                        };
+                        for class_qtn in registry.class_implements.keys() {
+                            let actual = baml_compiler2_tir::ty::Ty::Class(
+                                class_qtn.clone(),
+                                Vec::new(),
+                                baml_compiler2_tir::ty::TyAttr::default(),
+                            );
+                            if registry.type_implements_interface_via_rule(
+                                &actual,
+                                bound,
+                                &cache.aliases,
+                                |_actual, _bound| false,
+                            ) {
+                                add_pair(iface_qtn, class_qtn);
+                            }
+                        }
+                    }
+                    _ => {}
                 }
             }
         }
@@ -1055,6 +1074,101 @@ fn compute_throws_type(
     }
 }
 
+fn erase_bound_typevars_for_runtime_metadata(
+    ty: &baml_compiler2_tir::ty::Ty,
+    bounds: &HashMap<Name, baml_compiler2_tir::ty::Ty>,
+) -> baml_compiler2_tir::ty::Ty {
+    use baml_compiler2_tir::ty::Ty as TirTy;
+
+    if !baml_compiler2_tir::generics::contains_typevar(ty) {
+        return ty.clone();
+    }
+
+    match ty {
+        TirTy::TypeVar(name, attr) if bounds.contains_key(name) => {
+            TirTy::BuiltinUnknown { attr: attr.clone() }
+        }
+        TirTy::Class(qtn, args, attr) => TirTy::Class(
+            qtn.clone(),
+            args.iter()
+                .map(|arg| erase_bound_typevars_for_runtime_metadata(arg, bounds))
+                .collect(),
+            attr.clone(),
+        ),
+        TirTy::Interface(qtn, args, attr) => TirTy::Interface(
+            qtn.clone(),
+            args.iter()
+                .map(|arg| erase_bound_typevars_for_runtime_metadata(arg, bounds))
+                .collect(),
+            attr.clone(),
+        ),
+        TirTy::List(inner, attr) => TirTy::List(
+            Box::new(erase_bound_typevars_for_runtime_metadata(inner, bounds)),
+            attr.clone(),
+        ),
+        TirTy::EvolvingList(inner, attr) => TirTy::EvolvingList(
+            Box::new(erase_bound_typevars_for_runtime_metadata(inner, bounds)),
+            attr.clone(),
+        ),
+        TirTy::Optional(inner, attr) => TirTy::Optional(
+            Box::new(erase_bound_typevars_for_runtime_metadata(inner, bounds)),
+            attr.clone(),
+        ),
+        TirTy::Map(key, value, attr) => TirTy::Map(
+            Box::new(erase_bound_typevars_for_runtime_metadata(key, bounds)),
+            Box::new(erase_bound_typevars_for_runtime_metadata(value, bounds)),
+            attr.clone(),
+        ),
+        TirTy::EvolvingMap(key, value, attr) => TirTy::EvolvingMap(
+            Box::new(erase_bound_typevars_for_runtime_metadata(key, bounds)),
+            Box::new(erase_bound_typevars_for_runtime_metadata(value, bounds)),
+            attr.clone(),
+        ),
+        TirTy::Union(members, attr) => TirTy::Union(
+            members
+                .iter()
+                .map(|member| erase_bound_typevars_for_runtime_metadata(member, bounds))
+                .collect(),
+            attr.clone(),
+        ),
+        TirTy::Future(value, error, attr) => TirTy::Future(
+            Box::new(erase_bound_typevars_for_runtime_metadata(value, bounds)),
+            Box::new(erase_bound_typevars_for_runtime_metadata(error, bounds)),
+            attr.clone(),
+        ),
+        TirTy::Function {
+            generic_params,
+            generic_param_bounds,
+            params,
+            ret,
+            throws,
+            attr,
+        } => TirTy::Function {
+            generic_params: generic_params.clone(),
+            generic_param_bounds: generic_param_bounds
+                .iter()
+                .map(|bound| {
+                    bound
+                        .as_ref()
+                        .map(|ty| erase_bound_typevars_for_runtime_metadata(ty, bounds))
+                })
+                .collect(),
+            params: params
+                .iter()
+                .map(|param| {
+                    let mut param = param.clone();
+                    param.ty = erase_bound_typevars_for_runtime_metadata(&param.ty, bounds);
+                    param
+                })
+                .collect(),
+            ret: Box::new(erase_bound_typevars_for_runtime_metadata(ret, bounds)),
+            throws: Box::new(erase_bound_typevars_for_runtime_metadata(throws, bounds)),
+            attr: attr.clone(),
+        },
+        _ => ty.clone(),
+    }
+}
+
 /// Extract param names, param types, and return type from an `item_tree` Function.
 ///
 /// Type resolution delegates to TIR's `lower_type_expr` (single source of truth)
@@ -1080,6 +1194,24 @@ fn compute_function_metadata_from_item_tree(
         attr: baml_type::TyAttr::default(),
     };
 
+    let item_tree = file_item_tree(db, file);
+    let enclosing_impl = item_tree
+        .implements_for
+        .iter()
+        .find(|imp| imp.methods.contains(&func_id));
+    let enclosing_class_self = item_tree
+        .classes
+        .values()
+        .find(|class_data| class_data.methods.contains(&func_id))
+        .map(|class_data| class_data.name.clone());
+    let self_replacement = enclosing_impl
+        .map(|imp| imp.for_target.expr.clone())
+        .or_else(|| {
+            enclosing_class_self
+                .clone()
+                .map(baml_compiler2_tir::lower_type_expr::type_expr_for_name)
+        });
+
     // For methods on generic classes, the class-level generic params are in
     // scope inside the method signature.  Without them, type references like
     // `S` in `Stream<T, S>.next(self) -> S | StreamFinished` route through
@@ -1088,16 +1220,47 @@ fn compute_function_metadata_from_item_tree(
     // `MirLowerer::enclosing_generic_params`: class params come first, then
     // function-level params.
     let enclosing_generics: Vec<baml_base::Name> = {
-        let item_tree = file_item_tree(db, file);
-        let mut params: Vec<baml_base::Name> = item_tree
-            .classes
-            .values()
-            .find(|class_data| class_data.methods.contains(&func_id))
-            .map(|class_data| class_data.generic_params.clone())
-            .unwrap_or_default();
-        params.extend(func_data.generic_params.iter().cloned());
-        params
+        if let Some(imp) = enclosing_impl {
+            imp.generic_params.clone()
+        } else {
+            let mut params: Vec<baml_base::Name> = item_tree
+                .classes
+                .values()
+                .find(|class_data| class_data.methods.contains(&func_id))
+                .map(|class_data| class_data.generic_params.clone())
+                .unwrap_or_default();
+            params.extend(func_data.generic_params.iter().cloned());
+            params
+        }
     };
+    let (bound_param_names, bound_exprs) = item_tree
+        .implements_for
+        .iter()
+        .find(|imp| imp.methods.contains(&func_id))
+        .map(|imp| (imp.generic_params.clone(), imp.generic_param_bounds.clone()))
+        .unwrap_or_else(|| {
+            (
+                func_data.generic_params.clone(),
+                func_data.generic_param_bounds.clone(),
+            )
+        });
+    let generic_param_bounds: HashMap<Name, baml_compiler2_tir::ty::Ty> = bound_param_names
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, name)| {
+            let bound_te = bound_exprs.get(idx)?.as_ref()?;
+            let mut diags = Vec::new();
+            let bound_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+                db,
+                bound_te,
+                pkg_items,
+                &pkg_info.namespace_path,
+                &enclosing_generics,
+                &mut diags,
+            );
+            diags.is_empty().then(|| (name.clone(), bound_ty))
+        })
+        .collect();
 
     let resolve = |te: &TypeExpr| -> baml_type::Ty {
         let mut diags = Vec::new();
@@ -1108,15 +1271,21 @@ fn compute_function_metadata_from_item_tree(
         // parameter types to `Ty::Unknown` → `Ty::Void` for any non-root-ns
         // class — surfacing as "expected instance, got map" in the runtime
         // because the coercion layer can't see the declared type.
+        let resolved_te = if let Some(replacement) = &self_replacement {
+            baml_compiler2_tir::lower_type_expr::substitute_self_in(te, replacement)
+        } else {
+            te.clone()
+        };
         let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
             db,
-            te,
+            &resolved_te,
             pkg_items,
             &pkg_info.namespace_path,
             &enclosing_generics,
             &mut diags,
         );
-        cache.convert(&tir_ty)
+        let runtime_ty = erase_bound_typevars_for_runtime_metadata(&tir_ty, &generic_param_bounds);
+        cache.convert(&runtime_ty)
     };
 
     let param_types: Vec<baml_type::Ty> = func_data
@@ -1126,6 +1295,15 @@ fn compute_function_metadata_from_item_tree(
             p.type_expr
                 .as_ref()
                 .map(|te| resolve(&te.expr))
+                .or_else(|| {
+                    (p.name.as_str() == "self")
+                        .then(|| {
+                            self_replacement
+                                .as_ref()
+                                .map(|replacement| resolve(replacement))
+                        })
+                        .flatten()
+                })
                 .unwrap_or_else(null_ty)
         })
         .collect();

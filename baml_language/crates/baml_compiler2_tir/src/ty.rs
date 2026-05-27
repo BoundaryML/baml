@@ -170,6 +170,8 @@ pub enum Ty {
     EvolvingMap(Box<Ty>, Box<Ty>, TyAttr),
     /// Function type: (params) -> return.
     Function {
+        generic_params: Vec<Name>,
+        generic_param_bounds: Vec<Option<Ty>>,
         params: Vec<FunctionParamTy>,
         ret: Box<Ty>,
         throws: Box<Ty>,
@@ -620,11 +622,26 @@ impl fmt::Display for Ty {
             }
             Ty::Literal(lit, _freshness, _) => write!(f, "{lit}"),
             Ty::Function {
+                generic_params,
+                generic_param_bounds,
                 params,
                 ret,
                 throws,
                 ..
             } => {
+                if !generic_params.is_empty() {
+                    write!(f, "<")?;
+                    for (i, param) in generic_params.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{param}")?;
+                        if let Some(bound) = generic_param_bounds.get(i).and_then(Option::as_ref) {
+                            write!(f, " extends {bound}")?;
+                        }
+                    }
+                    write!(f, ">")?;
+                }
                 let ps: Vec<String> = params
                     .iter()
                     .map(|param| {

@@ -382,6 +382,7 @@ impl<'a> Parser<'a> {
             || self.at(TokenKind::IntegerLiteral)
             || self.at(TokenKind::FloatLiteral)
             || self.at(TokenKind::LParen) // tuple/parenthesized type
+            || self.at(TokenKind::Less) // generic function type: <T>(T) -> U
             || (self.at(TokenKind::Minus)
                 && matches!(
                     self.peek(1).map(|t| t.kind),
@@ -2075,6 +2076,17 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_type_primary(&mut self, consume_union: bool) {
+        // Generic function type: `<T extends I>(T) -> R`.
+        if self.at(TokenKind::Less) {
+            self.parse_generic_param_list();
+            if self.at(TokenKind::LParen) {
+                self.parse_paren_or_function_type(consume_union);
+            } else {
+                self.error_unexpected_token("function type parameter list".to_string());
+            }
+            return;
+        }
+
         // Check for string literal types: "user" | "assistant"
         if self.parse_any_string() {
             return;
@@ -3975,6 +3987,7 @@ impl<'a> Parser<'a> {
                     | TokenKind::Minus
                     | TokenKind::LParen
                     | TokenKind::LBracket
+                    | TokenKind::Less
                     | TokenKind::Let
             )
         )

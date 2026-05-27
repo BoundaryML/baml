@@ -438,6 +438,16 @@ fn check_interfaces<'db>(
         }
     }
 
+    validate_overlapping_implements(
+        db,
+        file_id,
+        items,
+        pkg_items,
+        namespace_path,
+        aliases,
+        &mut diagnostics,
+    );
+
     for item in items {
         if let baml_compiler2_ast::Item::Interface(iface) = item {
             for method in &iface.default_methods {
@@ -688,11 +698,22 @@ fn substitute_type_vars(
             attrs: attrs.clone(),
         },
         TypeExpr::Function {
+            generic_params,
+            generic_param_bounds,
             params,
             ret,
             throws,
             attrs,
         } => TypeExpr::Function {
+            generic_params: generic_params.clone(),
+            generic_param_bounds: generic_param_bounds
+                .iter()
+                .map(|bound| {
+                    bound
+                        .as_ref()
+                        .map(|bound| substitute_type_vars(bound, subst))
+                })
+                .collect(),
             params: params
                 .iter()
                 .map(|param| baml_compiler2_ast::FunctionTypeParam {
@@ -739,7 +760,11 @@ type InterfaceMemberStackEntry = (
 
 fn interface_qtn_for_file(db: &dyn Db, file: SourceFile, name: &Name) -> QualifiedTypeName {
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    QualifiedTypeName::new(pkg_info.package.clone(), pkg_info.namespace_path, name.clone())
+    QualifiedTypeName::new(
+        pkg_info.package.clone(),
+        pkg_info.namespace_path,
+        name.clone(),
+    )
 }
 
 fn lower_interface_origin_type_args(
@@ -833,17 +858,12 @@ fn collect_interface_members_with_subst<'db>(
             })
         })
         .collect();
-    let mut stack: Vec<InterfaceMemberStackEntry> = vec![(
-        iface.clone(),
-        iface_file,
-        subst.clone(),
-        root_type_args,
-        {
+    let mut stack: Vec<InterfaceMemberStackEntry> =
+        vec![(iface.clone(), iface_file, subst.clone(), root_type_args, {
             let mut params = iface.generic_params.clone();
             params.extend(generic_params_in_scope.iter().cloned());
             params
-        },
-    )];
+        })];
     visited.insert(vec![iface.name.clone()]);
 
     while let Some((
@@ -1047,9 +1067,7 @@ fn interface_origin_matches_target_expr<'db>(
             .zip(origin.lowered_type_args.iter())
             .all(|(target_arg, origin_arg)| {
                 baml_compiler2_tir::normalize::is_same_normalized_type(
-                    target_arg,
-                    origin_arg,
-                    aliases,
+                    target_arg, origin_arg, aliases,
                 )
             })
     {
@@ -1119,6 +1137,231 @@ fn has_sibling_implements_for_origin<'db>(
             origin,
         )
     })
+}
+
+#[derive(Clone)]
+struct ImplOverlapEntry {
+    iface_qtn: QualifiedTypeName,
+    iface_ty: Ty,
+    for_ty: Ty,
+    generic_params: Vec<Name>,
+    span: TextRange,
+}
+
+fn validate_overlapping_implements<'db>(
+    db: &'db dyn Db,
+    file_id: FileId,
+    items: &[baml_compiler2_ast::Item],
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    namespace_path: &[Name],
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let entries = collect_impl_overlap_entries(db, items, pkg_items, namespace_path);
+    for (idx, lhs) in entries.iter().enumerate() {
+        for rhs in entries.iter().skip(idx + 1) {
+            if lhs.iface_qtn != rhs.iface_qtn {
+                continue;
+            }
+            if !impl_patterns_overlap(lhs, rhs, aliases) {
+                continue;
+            }
+            diagnostics.push(
+                Diagnostic::error(
+                    DiagnosticId::OverlappingImplements,
+                    "overlapping interface implementations for the same receiver/interface",
+                )
+                .with_primary_span(Span {
+                    file_id,
+                    range: rhs.span,
+                })
+                .with_secondary(
+                    Span {
+                        file_id,
+                        range: lhs.span,
+                    },
+                    "first implementation is here",
+                )
+                .with_phase(DiagnosticPhase::Type),
+            );
+        }
+    }
+}
+
+fn collect_impl_overlap_entries<'db>(
+    db: &'db dyn Db,
+    items: &[baml_compiler2_ast::Item],
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    namespace_path: &[Name],
+) -> Vec<ImplOverlapEntry> {
+    use baml_compiler2_hir::contributions::Definition;
+
+    let mut entries = Vec::new();
+    for item in items {
+        match item {
+            baml_compiler2_ast::Item::Class(class) => {
+                let Some(Definition::Class(class_loc)) =
+                    pkg_items.lookup_type(namespace_path, &class.name)
+                else {
+                    continue;
+                };
+                let class_qtn = baml_compiler2_tir::lower_type_expr::qualify_def(
+                    db,
+                    Definition::Class(class_loc),
+                    &class.name,
+                );
+                let for_ty = Ty::Class(
+                    class_qtn,
+                    class
+                        .generic_params
+                        .iter()
+                        .map(|param| Ty::TypeVar(param.clone(), TyAttr::default()))
+                        .collect(),
+                    TyAttr::default(),
+                );
+                for block in &class.implements {
+                    let Some((iface_loc, iface)) =
+                        resolve_interface_path(db, &block.target.expr, pkg_items, namespace_path)
+                    else {
+                        continue;
+                    };
+                    let iface_qtn = interface_qtn_for_file(db, iface_loc.file(db), &iface.name);
+                    let iface_args = lower_path_generic_args(
+                        db,
+                        &block.target.expr,
+                        pkg_items,
+                        namespace_path,
+                        &class.generic_params,
+                    );
+                    entries.push(ImplOverlapEntry {
+                        iface_qtn: iface_qtn.clone(),
+                        iface_ty: Ty::Interface(iface_qtn, iface_args, TyAttr::default()),
+                        for_ty: for_ty.clone(),
+                        generic_params: class.generic_params.clone(),
+                        span: block.target.span,
+                    });
+                }
+            }
+            baml_compiler2_ast::Item::ImplementsFor(imp) => {
+                let generic_params: Vec<Name> = imp
+                    .generic_params
+                    .iter()
+                    .map(|(name, _)| name.clone())
+                    .collect();
+                let Some((iface_loc, iface)) = resolve_interface_path(
+                    db,
+                    &imp.interface_target.expr,
+                    pkg_items,
+                    namespace_path,
+                ) else {
+                    continue;
+                };
+                let mut diags = Vec::new();
+                let for_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+                    db,
+                    &imp.for_target.expr,
+                    pkg_items,
+                    namespace_path,
+                    &generic_params,
+                    &mut diags,
+                );
+                if !diags.is_empty() {
+                    continue;
+                }
+                let iface_qtn = interface_qtn_for_file(db, iface_loc.file(db), &iface.name);
+                let iface_args = lower_path_generic_args(
+                    db,
+                    &imp.interface_target.expr,
+                    pkg_items,
+                    namespace_path,
+                    &generic_params,
+                );
+                entries.push(ImplOverlapEntry {
+                    iface_qtn: iface_qtn.clone(),
+                    iface_ty: Ty::Interface(iface_qtn, iface_args, TyAttr::default()),
+                    for_ty,
+                    generic_params,
+                    span: imp.span,
+                });
+            }
+            _ => {}
+        }
+    }
+    entries
+}
+
+fn lower_path_generic_args<'db>(
+    db: &'db dyn Db,
+    expr: &baml_compiler2_ast::TypeExpr,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    namespace_path: &[Name],
+    generic_params: &[Name],
+) -> Vec<Ty> {
+    let baml_compiler2_ast::TypeExpr::Path { generic_args, .. } = expr else {
+        return Vec::new();
+    };
+    let mut diags = Vec::new();
+    generic_args
+        .iter()
+        .map(|arg| {
+            baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+                db,
+                arg,
+                pkg_items,
+                namespace_path,
+                generic_params,
+                &mut diags,
+            )
+        })
+        .collect()
+}
+
+fn impl_patterns_overlap(
+    lhs: &ImplOverlapEntry,
+    rhs: &ImplOverlapEntry,
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+) -> bool {
+    let lhs_for_rhs = baml_compiler2_tir::interfaces::match_ty_pattern(
+        &lhs.for_ty,
+        &rhs.for_ty,
+        &lhs.generic_params,
+        aliases,
+    )
+    .is_some();
+    let rhs_for_lhs = baml_compiler2_tir::interfaces::match_ty_pattern(
+        &rhs.for_ty,
+        &lhs.for_ty,
+        &rhs.generic_params,
+        aliases,
+    )
+    .is_some();
+    if !(lhs_for_rhs || rhs_for_lhs) {
+        return false;
+    }
+    if lhs.generic_params == rhs.generic_params
+        && baml_compiler2_tir::normalize::is_same_normalized_type(&lhs.for_ty, &rhs.for_ty, aliases)
+    {
+        return baml_compiler2_tir::normalize::is_same_normalized_type(
+            &lhs.iface_ty,
+            &rhs.iface_ty,
+            aliases,
+        );
+    }
+
+    baml_compiler2_tir::interfaces::match_ty_pattern(
+        &lhs.iface_ty,
+        &rhs.iface_ty,
+        &lhs.generic_params,
+        aliases,
+    )
+    .is_some()
+        || baml_compiler2_tir::interfaces::match_ty_pattern(
+            &rhs.iface_ty,
+            &lhs.iface_ty,
+            &rhs.generic_params,
+            aliases,
+        )
+        .is_some()
 }
 
 fn validate_interface_extends_fields<'db>(
@@ -1212,13 +1455,15 @@ fn validate_implements_for<'db>(
     use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
 
     let target_name = Name::new(format!("{}", imp.for_target.expr));
+    let generic_param_names: Vec<Name> =
+        imp.generic_params.iter().map(|(n, _)| n.clone()).collect();
     let mut target_type_errors = Vec::new();
     baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
         db,
         &imp.for_target.expr,
         pkg_items,
         namespace_path,
-        &[],
+        &generic_param_names,
         &mut target_type_errors,
     );
     if !target_type_errors.is_empty() {

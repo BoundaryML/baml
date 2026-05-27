@@ -249,11 +249,18 @@ mod tests {
                 attrs: strip_attrs(attrs),
             },
             TypeExpr::Function {
+                generic_params,
+                generic_param_bounds,
                 params,
                 ret,
                 throws,
                 attrs,
             } => TypeExpr::Function {
+                generic_params: generic_params.clone(),
+                generic_param_bounds: generic_param_bounds
+                    .iter()
+                    .map(|bound| bound.as_ref().map(strip_spans))
+                    .collect(),
                 params: params
                     .iter()
                     .map(|p| crate::ast::FunctionTypeParam {

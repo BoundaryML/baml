@@ -450,8 +450,11 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
 }
 
 fn display_surface_ty(ty: &baml_compiler2_tir::ty::Ty) -> String {
-    let rendered = utils::display_ty(ty);
-    rendered.replace("user.", "").replace("baml.", "")
+    utils::display_ty(ty)
+}
+
+fn display_local_binding_ty(ty: &baml_compiler2_tir::ty::Ty) -> String {
+    utils::display_ty(ty)
 }
 
 fn is_synthetic_effect_param_name(name: &Name) -> bool {
@@ -590,7 +593,7 @@ fn local_type_info(
             let inference = baml_compiler2_tir::inference::infer_scope_types(db, func_scope_id);
             let ty_str = inference
                 .binding_type(pat_id)
-                .map(utils::display_ty)
+                .map(display_local_binding_ty)
                 .unwrap_or_else(|| {
                     // Try the use-site's ancestor scope chain — restricts the
                     // lookup to inferences for bodies that share the
@@ -599,6 +602,7 @@ fn local_type_info(
                     // ExprBodies (e.g. two lambdas with the same arena
                     // index), surface the wrong type for hover/inlay hints.
                     find_binding_ty_in_scopes(db, index, scope_id, pat_id)
+                        .map(|ty| display_local_binding_ty(&ty))
                         .unwrap_or_else(|| "unknown".to_string())
                 });
 
@@ -656,12 +660,12 @@ fn find_binding_ty_in_scopes(
     index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
     from_scope: baml_compiler2_hir::scope::FileScopeId,
     pat_id: baml_compiler2_ast::PatId,
-) -> Option<String> {
+) -> Option<baml_compiler2_tir::ty::Ty> {
     for ancestor_id in index.ancestor_scopes(from_scope) {
         let scope_id = index.scope_ids[ancestor_id.index() as usize];
         let inference = baml_compiler2_tir::inference::infer_scope_types(db, scope_id);
         if let Some(ty) = inference.binding_type(pat_id) {
-            return Some(utils::display_ty(ty));
+            return Some(ty.clone());
         }
     }
     None

@@ -75,9 +75,19 @@ fn assert_compile_error_contains(source: &str, needle: &str) {
 }
 
 #[track_caller]
+fn assert_no_compile_errors(source: &str) {
+    let errors = collect_compile_errors(source);
+    assert!(
+        errors.is_empty(),
+        "expected no compile errors, got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
+#[track_caller]
 fn assert_no_interface_errors(source: &str) {
     let errors = collect_compile_errors(source);
-    // Interface errors all live in the E0112-E0131 range.
+    // Interface errors all live in the E0112-E0132 range.
     let interface_errors: Vec<_> = errors
         .iter()
         .filter(|e| {
@@ -101,6 +111,7 @@ fn assert_no_interface_errors(source: &str) {
                 || e.starts_with("[E0129]")
                 || e.starts_with("[E0130]")
                 || e.starts_with("[E0131]")
+                || e.starts_with("[E0132]")
         })
         .collect();
     assert!(
@@ -1900,9 +1911,9 @@ async fn default_method_dispatch_through_interface_var() {
     );
 }
 
-#[test]
-fn interface_default_method_requires_receiver_projection() {
-    assert_compile_error_contains(
+#[tokio::test]
+async fn interface_default_method_reference_accepts_explicit_receiver() {
+    let output = baml_test!(
         r#"
         interface Describable {
             function describe(self) -> string {
@@ -1914,10 +1925,14 @@ fn interface_default_method_requires_receiver_projection() {
         }
         function main() -> string {
             let t = Thing {}
-            return Describable.describe(t)
+            let describe = Describable.describe
+            return describe(t)
         }
-        "#,
-        "must be accessed through a value",
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("default".into())
     );
 }
 
@@ -4378,8 +4393,8 @@ async fn requires_closure_preserves_multiple_parent_instantiations_runtime() {
 }
 
 #[test]
-fn generic_interface_default_method_requires_receiver_projection() {
-    assert_compile_error_contains(
+fn generic_interface_default_method_reference_compiles() {
+    assert_no_compile_errors(
         r#"
         interface Label<T> {
             function label(self) -> string {
@@ -4389,11 +4404,10 @@ fn generic_interface_default_method_requires_receiver_projection() {
         class Box {
             implements Label<int> {}
         }
-        function main() -> string {
-            return Label<int>.label(Box {})
+        function main() -> void {
+            let label = Label.label
         }
         "#,
-        "must be accessed through a value",
     );
 }
 
@@ -4545,7 +4559,8 @@ fn requires_chain_interface_subtype_is_ok() {
 
 #[test]
 fn form1_syntax_parses_without_errors() {
-    assert_no_interface_errors(r#"
+    assert_no_interface_errors(
+        r#"
         interface Printable {
             function display(self) -> string
         }
@@ -4555,12 +4570,14 @@ fn form1_syntax_parses_without_errors() {
         implements<T> Printable for Box<T> {
             function display(self) -> string { return "a box" }
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn form1_bounded_syntax_parses_without_errors() {
-    assert_no_interface_errors(r#"
+    assert_no_interface_errors(
+        r#"
         interface Named {
             name: string
         }
@@ -4573,12 +4590,14 @@ fn form1_bounded_syntax_parses_without_errors() {
         implements<T extends Named> Printable for Wrapper<T> {
             function display(self) -> string { return "a wrapper" }
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn form2_syntax_parses_without_errors() {
-    assert_no_interface_errors(r#"
+    assert_no_interface_errors(
+        r#"
         interface Named {
             name: string
         }
@@ -4588,17 +4607,928 @@ fn form2_syntax_parses_without_errors() {
         implements<T extends Named> Printable for T {
             function display(self) -> string { return "named thing" }
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn existing_concrete_implements_for_still_works() {
-    assert_no_interface_errors(r#"
+    assert_no_interface_errors(
+        r#"
         interface Debuggable {
             function debug(self) -> string
         }
         implements Debuggable for int {
             function debug(self) -> string { return "int" }
         }
-    "#);
+    "#,
+    );
+}
+
+// ── Group: Blanket implementations — Phase 2 (Form 1 runtime) ─────────────
+
+#[tokio::test]
+async fn form1_dispatches_through_interface_typed_var() {
+    let output = baml_test!(
+        r#"
+        interface Printable {
+            function display(self) -> string
+        }
+        class Box<T> {
+            value: T
+        }
+        implements<T> Printable for Box<T> {
+            function display(self) -> string { return "a box" }
+        }
+        function main() -> string {
+            let b: Printable = Box<int> { value: 42 }
+            return b.display()
+        }
+    "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("a box".into())
+    );
+}
+
+#[tokio::test]
+async fn form1_dispatches_for_different_instantiations() {
+    let output = baml_test!(
+        r#"
+        interface Printable {
+            function display(self) -> string
+        }
+        class Box<T> {
+            value: T
+        }
+        implements<T> Printable for Box<T> {
+            function display(self) -> string { return "a box" }
+        }
+        function main() -> string {
+            let a: Printable = Box<int> { value: 42 }
+            let b: Printable = Box<string> { value: "hi" }
+            return a.display() + " " + b.display()
+        }
+    "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("a box a box".into())
+    );
+}
+
+#[tokio::test]
+async fn form1_self_accesses_receiver_fields() {
+    let output = baml_test!(
+        r#"
+        interface Describable {
+            function describe(self) -> string
+        }
+        class Pair<T> {
+            first: T
+            second: T
+        }
+        implements<T> Describable for Pair<T> {
+            function describe(self) -> string { return "a pair" }
+        }
+        function main() -> string {
+            let p: Describable = Pair<int> { first: 1, second: 2 }
+            return p.describe()
+        }
+    "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("a pair".into())
+    );
+}
+
+#[tokio::test]
+async fn form1_with_generic_interface_args() {
+    let output = baml_test!(
+        r#"
+        interface Container<T> {
+            function get(self) -> T
+        }
+        class Wrapper<T> {
+            value: T
+        }
+        implements<T> Container<T> for Wrapper<T> {
+            function get(self) -> T { return self.value }
+        }
+        function main() -> int {
+            let w: Container<int> = Wrapper<int> { value: 42 }
+            return w.get()
+        }
+    "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(42));
+}
+
+#[test]
+fn form1_coexists_with_concrete_impl_for_different_class() {
+    assert_no_interface_errors(
+        r#"
+        interface Printable {
+            function display(self) -> string
+        }
+        class Box<T> {
+            value: T
+        }
+        class Leaf {
+            label: string
+        }
+        implements<T> Printable for Box<T> {
+            function display(self) -> string { return "box" }
+        }
+        implements Printable for Leaf {
+            function display(self) -> string { return "leaf" }
+        }
+    "#,
+    );
+}
+
+#[test]
+fn form1_blanket_has_no_compile_errors_at_all() {
+    let errors = collect_compile_errors(
+        r#"
+        interface Printable {
+            function display(self) -> string
+        }
+        class Box<T> {
+            value: T
+        }
+        implements<T> Printable for Box<T> {
+            function display(self) -> string { return "a box" }
+        }
+    "#,
+    );
+    assert!(
+        errors.is_empty(),
+        "expected zero errors, got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
+#[test]
+fn unified_rule_rejects_mismatched_generic_interface_arg() {
+    assert_compile_error_contains(
+        r#"
+        interface Container<T> {
+            function get(self) -> T
+        }
+        class Wrapper<T> {
+            value: T
+        }
+        implements<T> Container<T> for Wrapper<T> {
+            function get(self) -> T { return self.value }
+        }
+        function take(c: Container<string>) -> string {
+            return c.get()
+        }
+        function bad() -> string {
+            return take(Wrapper<int> { value: 42 })
+        }
+        "#,
+        "Wrapper<int>",
+    );
+}
+
+#[tokio::test]
+async fn unified_rule_nested_interface_args_dispatch() {
+    let output = baml_test!(
+        r#"
+        interface Container<T> {
+            function get(self) -> T
+        }
+        class Wrapper<T> {
+            values: T[]
+        }
+        implements<T> Container<T[]> for Wrapper<T> {
+            function get(self) -> T[] { return self.values }
+        }
+        function main() -> int {
+            let w: Container<int[]> = Wrapper<int> { values: [1, 2, 3] }
+            return w.get().length()
+        }
+    "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(3));
+}
+
+#[tokio::test]
+async fn unified_rule_repeated_type_vars_match_runtime() {
+    let output = baml_test!(
+        r#"
+        interface Same {
+            function tag(self) -> string
+        }
+        class Pair<L, R> {
+            left: L
+            right: R
+        }
+        implements<T> Same for Pair<T, T> {
+            function tag(self) -> string { return "same" }
+        }
+        function main() -> string {
+            let p: Same = Pair<int, int> { left: 7, right: 8 }
+            return p.tag()
+        }
+    "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("same".into())
+    );
+}
+
+#[test]
+fn unified_rule_repeated_type_vars_reject_conflicting_args() {
+    assert_compile_error_contains(
+        r#"
+        interface Same {
+            function tag(self) -> string
+        }
+        class Pair<L, R> {
+            left: L
+            right: R
+        }
+        implements<T> Same for Pair<T, T> {
+            function tag(self) -> string { return "same" }
+        }
+        function take(p: Same) -> string {
+            return p.tag()
+        }
+        function bad() -> string {
+            return take(Pair<int, string> { left: 7, right: "nope" })
+        }
+        "#,
+        "Pair<int, string>",
+    );
+}
+
+#[tokio::test]
+async fn unified_rule_default_method_inherited_through_generic_rule() {
+    let output = baml_test!(
+        r#"
+        interface Printable {
+            function display(self) -> string { return "default" }
+        }
+        class Box<T> {
+            value: T
+        }
+        implements<T> Printable for Box<T> {}
+        function main() -> string {
+            let b: Printable = Box<int> { value: 42 }
+            return b.display()
+        }
+    "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("default".into())
+    );
+}
+
+#[tokio::test]
+async fn unified_rule_reflection_sees_generic_class_implementor_once() {
+    let output = baml_test!(
+        r#"
+        interface Printable {
+            function display(self) -> string
+        }
+        class Box<T> {
+            value: T
+        }
+        implements<T> Printable for Box<T> {
+            function display(self) -> string { return "box" }
+        }
+        function main() -> bool {
+            let impls = reflect.type_of<Printable>().implementors()
+            return reflect.type_of<Box<int>>().implements(reflect.type_of<Printable>())
+                && impls.length() == 1
+        }
+    "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
+}
+
+#[tokio::test]
+async fn form2_dispatches_through_interface_typed_var() {
+    let output = baml_test!(
+        r#"
+        interface Named {
+            name: string
+        }
+        interface Printable {
+            function display(self) -> string
+        }
+        class Person {
+            name: string
+            implements Named {}
+        }
+        implements<T extends Named> Printable for T {
+            function display(self) -> string { return "named:" + self.name }
+        }
+        function main() -> string {
+            let p: Printable = Person { name: "Ada" }
+            return p.display()
+        }
+    "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("named:Ada".into())
+    );
+}
+
+#[tokio::test]
+async fn form2_self_accesses_bound_members() {
+    let output = baml_test!(
+        r#"
+        interface Named {
+            name: string
+        }
+        interface Labeled {
+            function label(self) -> string
+        }
+        class Project {
+            name: string
+            implements Named {}
+        }
+        implements<T extends Named> Labeled for T {
+            function label(self) -> string { return self.name }
+        }
+        function main() -> string {
+            let item: Labeled = Project { name: "Launch" }
+            return item.label()
+        }
+    "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("Launch".into())
+    );
+}
+
+#[tokio::test]
+async fn form2_applies_to_multiple_satisfying_classes() {
+    let output = baml_test!(
+        r#"
+        interface Named {
+            name: string
+        }
+        interface Printable {
+            function display(self) -> string
+        }
+        class Person {
+            name: string
+            implements Named {}
+        }
+        class Team {
+            name: string
+            implements Named {}
+        }
+        implements<T extends Named> Printable for T {
+            function display(self) -> string { return self.name }
+        }
+        function main() -> string {
+            let person: Printable = Person { name: "Ada" }
+            let team: Printable = Team { name: "Core" }
+            return person.display() + "/" + team.display()
+        }
+    "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("Ada/Core".into())
+    );
+}
+
+#[test]
+fn form2_does_not_apply_when_bound_not_satisfied() {
+    assert_compile_error_contains(
+        r#"
+        interface Named {
+            name: string
+        }
+        interface Printable {
+            function display(self) -> string
+        }
+        class Rock {
+            label: string
+        }
+        implements<T extends Named> Printable for T {
+            function display(self) -> string { return self.name }
+        }
+        function bad() -> string {
+            let item: Printable = Rock { label: "igneous" }
+            return item.display()
+        }
+        "#,
+        "Rock",
+    );
+}
+
+#[tokio::test]
+async fn form2_reflect_implements_returns_true() {
+    let output = baml_test!(
+        r#"
+        interface Named {
+            name: string
+        }
+        interface Printable {
+            function display(self) -> string
+        }
+        class Person {
+            name: string
+            implements Named {}
+        }
+        implements<T extends Named> Printable for T {
+            function display(self) -> string { return self.name }
+        }
+        function main() -> bool {
+            return reflect.type_of<Person>().implements(reflect.type_of<Printable>())
+        }
+    "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
+}
+
+#[tokio::test]
+async fn form2_reflect_implementors_includes_satisfying_classes() {
+    let output = baml_test!(
+        r#"
+        interface Named {
+            name: string
+        }
+        interface Printable {
+            function display(self) -> string
+        }
+        class Person {
+            name: string
+            implements Named {}
+        }
+        class Team {
+            name: string
+            implements Named {}
+        }
+        implements<T extends Named> Printable for T {
+            function display(self) -> string { return self.name }
+        }
+        function main() -> bool {
+            let printable = reflect.type_of<Printable>()
+            return printable.implemented_by(reflect.type_of<Person>())
+                && printable.implemented_by(reflect.type_of<Team>())
+                && printable.implementors().length() == 2
+        }
+    "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
+}
+
+#[tokio::test]
+async fn unified_rule_implementor_satisfies_generic_interface_bound() {
+    let output = baml_test!(
+        r#"
+        interface Printable {
+            function display(self) -> string
+        }
+        class Box<T> {
+            value: T
+        }
+        implements<T> Printable for Box<T> {
+            function display(self) -> string { return "box" }
+        }
+        function f<T extends Printable>(x: T) -> string {
+            return x.display()
+        }
+        function main() -> string {
+            return f<Box<int>>(Box<int> { value: 42 })
+        }
+    "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("box".into())
+    );
+}
+
+#[tokio::test]
+async fn unified_rule_implementor_satisfies_inferred_generic_interface_bound() {
+    let output = baml_test!(
+        r#"
+        interface Printable {
+            function display(self) -> string
+        }
+        class Box<T> {
+            value: T
+        }
+        implements<T> Printable for Box<T> {
+            function display(self) -> string { return "box" }
+        }
+        function f<T extends Printable>(x: T) -> string {
+            return x.display()
+        }
+        function main() -> string {
+            return f(Box<int> { value: 42 })
+        }
+    "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("box".into())
+    );
+}
+
+#[tokio::test]
+async fn unified_rule_implementor_satisfies_inferred_generic_bound_from_constructor_args() {
+    let output = baml_test!(
+        r#"
+        interface Printable {
+            function display(self) -> string
+        }
+        class Box<T> {
+            value: T
+        }
+        implements<T> Printable for Box<T> {
+            function display(self) -> string { return "box" }
+        }
+        function f<T extends Printable>(x: T) -> string {
+            return x.display()
+        }
+        function main() -> string {
+            return f(Box { value: 42 })
+        }
+    "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("box".into())
+    );
+}
+
+#[tokio::test]
+async fn bounded_type_var_rule_satisfies_generic_interface_bound() {
+    let output = baml_test!(
+        r#"
+        interface Named {
+            name: string
+        }
+        interface Printable {
+            function display(self) -> string
+        }
+        class Person {
+            name: string
+            implements Named {}
+        }
+        implements<T extends Named> Printable for T {
+            function display(self) -> string { return self.name }
+        }
+        function f<T extends Printable>(x: T) -> string {
+            return x.display()
+        }
+        function main() -> string {
+            return f<Person>(Person { name: "Ada" })
+        }
+    "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("Ada".into())
+    );
+}
+
+#[tokio::test]
+async fn bounded_type_var_rule_satisfies_inferred_generic_interface_bound() {
+    let output = baml_test!(
+        r#"
+        interface Named {
+            name: string
+        }
+        interface Printable {
+            function display(self) -> string
+        }
+        class Person {
+            name: string
+            implements Named {}
+        }
+        implements<T extends Named> Printable for T {
+            function display(self) -> string { return self.name }
+        }
+        function f<T extends Printable>(x: T) -> string {
+            return x.display()
+        }
+        function main() -> string {
+            return f(Person { name: "Ada" })
+        }
+    "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("Ada".into())
+    );
+}
+
+#[test]
+fn interface_method_reference_accepts_bounded_generic_function_annotation() {
+    assert_no_compile_errors(
+        r#"
+        interface MyInterface {
+            function myMethod(self) -> int
+        }
+        class MyClass {
+            implements MyInterface {
+                function myMethod(self) -> int {
+                    return 1
+                }
+            }
+        }
+        function main() -> void {
+            let method : <T extends MyInterface>(T) -> int = MyInterface.myMethod
+        }
+    "#,
+    );
+}
+
+#[test]
+fn inferred_interface_method_reference_enforces_receiver_bound() {
+    assert_no_compile_errors(
+        r#"
+        interface MyInterface {
+            function myMethod(self) -> int
+        }
+        class MyClass {
+            implements MyInterface {
+                function myMethod(self) -> int {
+                    return 1
+                }
+            }
+        }
+        function main() -> int {
+            let method = MyInterface.myMethod
+            return method(MyClass {})
+        }
+    "#,
+    );
+}
+
+#[test]
+fn inferred_interface_method_reference_rejects_receiver_outside_bound() {
+    assert_compile_error_contains(
+        r#"
+        interface MyInterface {
+            function myMethod(self) -> int
+        }
+        class Other {}
+        function main() -> int {
+            let method = MyInterface.myMethod
+            return method(Other {})
+        }
+    "#,
+        "MyInterface",
+    );
+}
+
+#[tokio::test]
+async fn form1_bounded_generic_receiver_dispatches_when_bound_satisfied() {
+    let output = baml_test!(
+        r#"
+        interface Named {
+            name: string
+        }
+        interface Printable {
+            function display(self) -> string
+        }
+        class Person {
+            name: string
+            implements Named {}
+        }
+        class Wrapper<T> {
+            inner: T
+        }
+        implements<T extends Named> Printable for Wrapper<T> {
+            function display(self) -> string { return self.inner.name }
+        }
+        function main() -> string {
+            let item: Printable = Wrapper<Person> { inner: Person { name: "Ada" } }
+            return item.display()
+        }
+    "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("Ada".into())
+    );
+}
+
+#[test]
+fn form1_bounded_generic_receiver_rejects_when_bound_not_satisfied() {
+    let source = r#"
+    interface Named {
+        name: string
+    }
+    interface Printable {
+        function display(self) -> string
+    }
+    class Rock {
+        label: string
+    }
+    class Wrapper<T> {
+        inner: T
+    }
+    implements<T extends Named> Printable for Wrapper<T> {
+        function display(self) -> string { return self.inner.name }
+    }
+    function bad() -> string {
+        let item: Printable = Wrapper<Rock> { inner: Rock { label: "igneous" } }
+        return item.display()
+    }
+    "#;
+    assert_compile_error_contains(source, "Wrapper");
+    assert_compile_error_contains(source, "Rock");
+}
+
+#[test]
+fn overlapping_concrete_and_generic_rules_are_e0132() {
+    assert_compile_error_code(
+        r#"
+        interface Printable {
+            function display(self) -> string
+        }
+        class Box<T> {
+            value: T
+        }
+        implements<T> Printable for Box<T> {
+            function display(self) -> string { return "box" }
+        }
+        implements Printable for Box<int> {
+            function display(self) -> string { return "int box" }
+        }
+        "#,
+        "E0132",
+    );
+}
+
+#[test]
+fn overlapping_generic_rules_are_e0132() {
+    assert_compile_error_code(
+        r#"
+        interface Printable {
+            function display(self) -> string
+        }
+        class Box<T> {
+            value: T
+        }
+        implements<T> Printable for Box<T> {
+            function display(self) -> string { return "box" }
+        }
+        implements<U> Printable for Box<U> {
+            function display(self) -> string { return "other box" }
+        }
+        "#,
+        "E0132",
+    );
+}
+
+#[test]
+fn overlapping_in_body_and_out_of_body_generic_rules_are_e0132() {
+    assert_compile_error_code(
+        r#"
+        interface Printable {
+            function display(self) -> string
+        }
+        class Box<T> {
+            value: T
+            implements Printable {
+                function display(self) -> string { return "in body" }
+            }
+        }
+        implements<T> Printable for Box<T> {
+            function display(self) -> string { return "out of body" }
+        }
+        "#,
+        "E0132",
+    );
+}
+
+#[test]
+fn form2_overlap_with_form2_is_e0132() {
+    assert_compile_error_code(
+        r#"
+        interface Named {
+            name: string
+        }
+        interface Printable {
+            function display(self) -> string
+        }
+        implements<T extends Named> Printable for T {
+            function display(self) -> string { return "first" }
+        }
+        implements<U extends Named> Printable for U {
+            function display(self) -> string { return "second" }
+        }
+        "#,
+        "E0132",
+    );
+}
+
+#[test]
+fn overlapping_bounded_generic_receiver_rules_are_e0132() {
+    assert_compile_error_code(
+        r#"
+        interface Named {
+            name: string
+        }
+        interface Tagged {
+            tag: string
+        }
+        interface Printable {
+            function display(self) -> string
+        }
+        class Box<T> {
+            value: T
+        }
+        implements<T extends Named> Printable for Box<T> {
+            function display(self) -> string { return "named box" }
+        }
+        implements<U extends Tagged> Printable for Box<U> {
+            function display(self) -> string { return "tagged box" }
+        }
+        "#,
+        "E0132",
+    );
+}
+
+#[test]
+fn overlapping_bounded_and_unbounded_generic_receiver_rules_are_e0132() {
+    assert_compile_error_code(
+        r#"
+        interface Named {
+            name: string
+        }
+        interface Printable {
+            function display(self) -> string
+        }
+        class Box<T> {
+            value: T
+        }
+        implements<T> Printable for Box<T> {
+            function display(self) -> string { return "box" }
+        }
+        implements<U extends Named> Printable for Box<U> {
+            function display(self) -> string { return "named box" }
+        }
+        "#,
+        "E0132",
+    );
+}
+
+#[test]
+fn non_overlapping_generic_receiver_rules_for_different_classes_are_ok() {
+    assert_no_interface_errors(
+        r#"
+        interface Printable {
+            function display(self) -> string
+        }
+        class Box<T> {
+            value: T
+        }
+        class Envelope<T> {
+            value: T
+        }
+        implements<T> Printable for Box<T> {
+            function display(self) -> string { return "box" }
+        }
+        implements<T> Printable for Envelope<T> {
+            function display(self) -> string { return "envelope" }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn bounded_type_var_rule_conservatively_overlaps_concrete_rule() {
+    assert_compile_error_code(
+        r#"
+        interface Named {
+            name: string
+        }
+        interface Printable {
+            function display(self) -> string
+        }
+        class User {
+            name: string
+            implements Named {}
+        }
+        implements Printable for User {
+            function display(self) -> string { return "user" }
+        }
+        implements<T extends Named> Printable for T {
+            function display(self) -> string { return "named" }
+        }
+        "#,
+        "E0132",
+    );
 }

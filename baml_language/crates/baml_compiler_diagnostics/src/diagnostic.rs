@@ -250,6 +250,8 @@ pub enum DiagnosticId {
     DuplicateInterfaceFieldLink,
     /// Interface field access is ambiguous.
     AmbiguousInterfaceField,
+    /// Two interface implementation rules can apply to the same receiver/interface.
+    OverlappingImplements,
 }
 
 impl DiagnosticId {
@@ -427,6 +429,7 @@ impl DiagnosticId {
             DiagnosticId::UnknownClassFieldInInterfaceLink => "E0129",
             DiagnosticId::DuplicateInterfaceFieldLink => "E0130",
             DiagnosticId::AmbiguousInterfaceField => "E0131",
+            DiagnosticId::OverlappingImplements => "E0132",
         }
     }
 }

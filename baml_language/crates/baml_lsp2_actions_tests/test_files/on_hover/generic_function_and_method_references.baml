@@ -1,0 +1,71 @@
+function f<T>(x: T) -> void {
+}
+
+class Wrapper<T> {
+  inner: T
+
+  function value(self) -> T {
+    return self.inner
+  }
+}
+
+interface MyInterface {
+  function myMethod(self) -> int
+}
+
+class MyClass {
+  implements MyInterface {
+    function myMethod(self) -> int {
+      return 0
+    }
+  }
+}
+
+function example() -> void {
+  let g<[CURSOR] = f
+
+  let a = Wrapper<string> { inner: "asdf" }
+  let boundValue<[CURSOR] = a.value
+
+  let classMethod<[CURSOR] = MyClass.myMethod
+  let interfaceMethod<[CURSOR] : <T extends MyInterface>(T) -> int = MyInterface.myMethod
+  let inferredInterfaceMethod<[CURSOR] = MyInterface.myMethod
+
+  let myInstance = MyClass {}
+  let instanceMethod<[CURSOR] = myInstance.myMethod
+  let instanceProjectedMethod<[CURSOR] = myInstance.as<MyInterface>.myMethod
+}
+
+//----
+//- diagnostics
+// <no-diagnostics-expected>
+//
+//- on_hover expressions
+// hover at generic_function_and_method_references.baml:25:8
+// ```baml
+// g: <T>(x: T) -> void throws never
+// ```
+// hover at generic_function_and_method_references.baml:28:17
+// ```baml
+// boundValue: () -> string throws never
+// ```
+// hover at generic_function_and_method_references.baml:30:18
+// ```baml
+// classMethod: (self: user.MyClass) -> int throws never
+// ```
+// hover at generic_function_and_method_references.baml:31:22
+// ```baml
+// interfaceMethod: <T extends user.MyInterface>(T) -> int throws never
+// ```
+// hover at generic_function_and_method_references.baml:32:30
+// ```baml
+// inferredInterfaceMethod: <T extends user.MyInterface>(self: T) -> int throws never
+// ```
+// hover at generic_function_and_method_references.baml:35:21
+// ```baml
+// instanceMethod: () -> int throws never
+// ```
+// hover at generic_function_and_method_references.baml:36:30
+// ```baml
+// instanceProjectedMethod: () -> int throws never
+// ```
