@@ -110,6 +110,14 @@ impl BorshDeserialize for Span {
         let file_id = FileId::deserialize_reader(reader)?;
         let start = u32::deserialize_reader(reader)?;
         let end = u32::deserialize_reader(reader)?;
+        // `TextRange::new` panics on `end < start`. A malformed envelope
+        // should surface as a clean borsh error rather than a thread crash.
+        if start > end {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("invalid Span range: start ({start}) > end ({end})"),
+            ));
+        }
         Ok(Span {
             file_id,
             range: TextRange::new(TextSize::new(start), TextSize::new(end)),
