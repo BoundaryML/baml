@@ -327,7 +327,7 @@ pub fn serde_to_value(vm: &mut BexVm, v: &serde_json::Value) -> Value {
                 .iter()
                 .map(|(k, v)| (k.clone(), serde_to_value(vm, v)))
                 .collect();
-            Value::object(vm.tlab.alloc(Object::Map(Box::new(entries.into()))))
+            Value::object(vm.tlab.alloc(Object::Map(entries.into())))
         }
     }
 }
@@ -587,7 +587,7 @@ fn serialize_class_instance(
         Object::Instance(inst) => (
             inst.class,
             inst.class_type_args.clone(),
-            inst.fields.clone(),
+            inst.field_values().collect::<Vec<_>>(),
         ),
         _ => {
             return Err(raise_serialize(
@@ -697,7 +697,7 @@ fn read_media_value(vm: &BexVm, value: Value) -> Option<Arc<baml_builtins2::Medi
         _ => return None,
     };
     // Media classes have a single `_data: $rust_type` field.
-    let data_value = *inst.fields.first()?;
+    let data_value = inst.fields.first()?.load();
     let data_ptr = data_value.as_object_ptr()?;
     match vm.get_object(data_ptr) {
         Object::RustData(arc) => arc.clone().downcast::<baml_builtins2::MediaValue>().ok(),
@@ -798,9 +798,7 @@ fn ty_serde_to_value(
                     })?;
                     entries.insert(k.clone(), v);
                 }
-                Ok(Value::object(
-                    vm.tlab.alloc(Object::Map(Box::new(entries.into()))),
-                ))
+                Ok(Value::object(vm.tlab.alloc(Object::Map(entries.into()))))
             }
             _ => Err(raise_decode(vm, "expected object", path)),
         },
@@ -962,11 +960,9 @@ fn deserialize_class_instance(
         field_values.push(v);
     }
 
-    Ok(Value::object(vm.tlab.alloc(Object::Instance(Instance {
-        class: class_ptr,
-        class_type_args: type_args.to_vec(),
-        fields: field_values,
-    }))))
+    Ok(Value::object(vm.tlab.alloc(Object::Instance(
+        Instance::new(class_ptr, type_args.to_vec(), field_values),
+    ))))
 }
 
 fn deserialize_enum_variant(
@@ -1311,7 +1307,7 @@ fn map_drive(
             Err(e) => return NativeCallResult::Error(e),
         }
     }
-    let map_val = Value::object(vm.tlab.alloc(Object::Map(Box::new(results.into()))));
+    let map_val = Value::object(vm.tlab.alloc(Object::Map(results.into())));
     NativeCallResult::Done(map_val)
 }
 
