@@ -201,10 +201,13 @@ func decodeResult(data []byte) (any, error) {
 	}
 }
 
-// thrownError builds a generic Go error from an `error`/`panic` envelope arm.
-// It reads the thrown value's class name and `message` field (the shape of the
+// thrownError builds a Go error from an `error`/`panic` envelope arm. It reads
+// the thrown value's class name and `message` field (the shape of the
 // synthesized baml.errors.* / baml.panics.* infra classes and most user error
-// types) plus the pre-rendered BAML traceback — no structured type mapping.
+// types) plus the pre-rendered BAML traceback, and surfaces them as a single
+// generic `*BamlError`. The class name is recorded on the error so callers that
+// need to discriminate can do so without reconstructing typed Go subtypes —
+// see 33b for why the typed subtypes were dropped.
 func thrownError(kind string, value *pb.BamlOutboundValue, trace []string) error {
 	className := ""
 	message := ""
@@ -229,7 +232,7 @@ func thrownError(kind string, value *pb.BamlOutboundValue, trace []string) error
 		b.WriteString("\n    ")
 		b.WriteString(line)
 	}
-	return &BamlError{Message: b.String()}
+	return &BamlError{ClassName: className, Message: b.String()}
 }
 
 func outboundToGo(val *pb.BamlOutboundValue) (any, error) {

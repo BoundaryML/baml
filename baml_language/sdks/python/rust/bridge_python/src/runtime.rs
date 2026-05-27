@@ -23,7 +23,7 @@ use crate::{
 
 /// The main BAML runtime. A zero-sized handle: the single source of truth for
 /// the `Arc<dyn Bex>` singleton is `bridge_cffi`, fetched via
-/// `bridge_cffi::engine::get_runtime()` at each call site (31e-phase4), so this
+/// `bridge_cffi::get_runtime()` at each call site (31e-phase4), so this
 /// no longer caches its own clone.
 #[gen_stub_pyclass]
 #[pyclass]
@@ -34,7 +34,7 @@ pub struct BamlRuntime;
 impl BamlRuntime {
     /// Initialize the process-global runtime from in-memory BAML source files.
     ///
-    /// Mirrors `bridge_cffi::engine::initialize_runtime`: the same
+    /// Mirrors `bridge_cffi::initialize_runtime`: the same
     /// single-slot singleton is used, so a second call replaces the prior
     /// runtime.
     ///
@@ -48,7 +48,7 @@ impl BamlRuntime {
     ) -> PyResult<Self> {
         // `initialize_runtime` stores the `Arc<dyn Bex>` in bridge_cffi's
         // singleton; we don't keep our own copy.
-        match bridge_cffi::engine::initialize_runtime(&root_path, files) {
+        match bridge_cffi::initialize_runtime(&root_path, files) {
             Ok(_bex) => Ok(BamlRuntime),
             // Handle-returning site: can't hand back envelope bytes, so an
             // SDK setup failure surfaces as BamlPanic(SdkPanic) (32c).
@@ -99,7 +99,7 @@ impl BamlRuntime {
         // future yields bytes that decode_call_result raises uniformly (same
         // BamlError(baml.errors.*) as an engine failure).
         let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
-            let runtime = bridge_cffi::engine::get_runtime()?;
+            let runtime = bridge_cffi::get_runtime()?;
             let kwargs = decode_args(&args_proto, &function_name)?;
             Ok((runtime, kwargs))
         })();
@@ -162,9 +162,9 @@ impl BamlRuntime {
         // raise — they become a structured BamlOutboundResult envelope so the
         // returned bytes decode + raise uniformly via decode_call_result.
         let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
-            let runtime = bridge_cffi::engine::get_runtime()?;
+            let runtime = bridge_cffi::get_runtime()?;
             let kwargs = decode_args(&args_proto, &function_name)?;
-            let rt = bridge_cffi::engine::get_tokio_runtime()?;
+            let rt = bridge_cffi::get_tokio_runtime()?;
             Ok((runtime, kwargs, rt))
         })();
 
@@ -248,7 +248,7 @@ pub fn get_runtime() -> PyResult<BamlRuntime> {
     // is zero-sized (the Arc lives in bridge_cffi).
     // Handle-returning site: an uninitialized/failed runtime is an SDK setup
     // failure, surfaced as BamlPanic(SdkPanic) (32c).
-    bridge_cffi::engine::get_runtime().map_err(|e| match e {
+    bridge_cffi::get_runtime().map_err(|e| match e {
         bridge_cffi::BridgeError::NotInitialized => py_sdk_panic(
             "BAML runtime has not been initialized — did baml_sdk/__init__.py fail to import?",
         ),

@@ -2,22 +2,41 @@
 //!
 //! This crate provides the same FFI interface as `engine/language_client_cffi/`
 //! but powered by `bex_engine` instead of `baml-runtime`.
+//!
+//! `lib.rs` is the crate root: it owns global runtime management and the
+//! primary `call_function` / `cancel_function_call` entry points. The
+//! result-encoding logic lives in [`baml_to_host`]; the remaining C-ABI shims
+//! (handles, host values, objects, runtime lifecycle, callbacks) live under
+//! `ffi`.
 
+use std::{
+    collections::HashMap,
+    ffi::CStr,
+    panic::AssertUnwindSafe,
+    sync::{Arc, RwLock},
+};
+
+use bex_project::Bex;
+use bridge_ctypes::{DecodeFromBuffer, HANDLE_TABLE, kwargs_to_bex_values};
+use futures::future::FutureExt;
+use once_cell::sync::OnceCell;
+use sys_native::SysOpsExt;
+use tokio::runtime::Runtime;
+
+pub mod baml_to_host;
+pub mod buffer;
 pub mod collector;
-pub mod encode;
-pub mod engine;
 pub mod error;
 mod ffi;
 pub mod host_spans;
 mod panic;
 
+pub use baml_to_host::{call_and_encode, error_to_outbound, result_to_outbound};
 pub use bridge_ctypes::baml_core;
-pub use encode::{call_and_encode, error_to_outbound, result_to_outbound};
-pub use engine::{flush_event_sink, get_event_sink};
+pub use buffer::Buffer;
 pub use error::BridgeError;
 pub use ffi::{
     callbacks::{CallbackFn, register_callback},
-    functions::{call_function, cancel_function_call},
     handle::{clone_handle, release_handle},
     host_value::{
         HostDispatchFn, complete_host_call, register_host_dispatch_callback,
@@ -27,34 +46,178 @@ pub use ffi::{
     runtime::{create_baml_runtime, destroy_baml_runtime, invoke_runtime_cli, version},
 };
 
-/// Buffer type for returning data across FFI boundary.
-/// Caller must free with `free_buffer()`.
-///
-/// This matches the Buffer struct expected by baml-sys.
-#[repr(C)]
-pub struct Buffer {
-    pub ptr: *const i8,
-    pub len: usize,
+use crate::ffi::callbacks::send_outbound_result_to_callback;
+
+// ============================================================================
+// Global Bex runtime management
+// ============================================================================
+
+/// Global Bex runtime. Uses RwLock to allow replacing the runtime.
+static RUNTIME_INSTANCE: RwLock<Option<Arc<dyn Bex>>> = RwLock::new(None);
+
+/// Global Tokio runtime for async execution.
+static TOKIO_RUNTIME: OnceCell<Arc<Runtime>> = OnceCell::new();
+
+/// Initialize the global Tokio runtime.
+pub fn get_tokio_runtime() -> Result<Arc<Runtime>, BridgeError> {
+    let result = TOKIO_RUNTIME.get_or_try_init(|| {
+        Runtime::new()
+            .map_err(|e| BridgeError::Internal(format!("Failed to create Tokio runtime: {e}")))
+            .map(Arc::new)
+    });
+    result.cloned()
 }
 
-impl Buffer {
-    pub fn from(data: Vec<u8>) -> Self {
-        let data = data.into_boxed_slice();
-        let ptr = data.as_ptr() as *const i8;
-        let len = data.len();
-        std::mem::forget(data);
-        Buffer { ptr, len }
-    }
+/// Get a clone of the global runtime, or error if not initialized.
+pub fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
+    RUNTIME_INSTANCE
+        .read()
+        .map_err(|_| BridgeError::LockPoisoned)?
+        .clone()
+        .ok_or(BridgeError::NotInitialized)
+}
 
-    pub fn as_ptr(&self) -> *const i8 {
-        self.ptr
-    }
+/// Initialize the global runtime from BAML source files.
+///
+/// If a runtime is already initialized, it will be replaced with the new one.
+///
+/// # Arguments
+/// * `root_path` - Root path for BAML files
+/// * `src_files` - Map of filename to content
+pub fn initialize_runtime(
+    root_path: &str,
+    src_files: HashMap<String, String>,
+) -> Result<Arc<dyn Bex>, BridgeError> {
+    let physical_fs = vfs::PhysicalFS::new("/");
+    let vfs_root = vfs::VfsPath::new(physical_fs);
+    let vfs_path = vfs_root
+        .join(root_path)
+        .map_err(|e| bex_project::RuntimeError::Other(e.to_string()))?;
 
-    pub fn len(&self) -> usize {
-        self.len
-    }
+    let files = src_files
+        .into_iter()
+        .map(|(k, v)| (bex_project::FsPath::from_str(k), v))
+        .collect();
 
-    pub fn is_empty(&self) -> bool {
-        self.len == 0
+    let event_sink = Some(
+        std::env::var("BAML_TRACE_FILE")
+            .ok()
+            .map(|trace_file| bex_events_native::start(trace_file.into()))
+            .unwrap_or_else(bex_events_native::start_stderr),
+    );
+
+    let rt = bex_project::new(vfs_path, bex_project::SysOps::native(), files, event_sink)?;
+
+    let mut guard = RUNTIME_INSTANCE
+        .write()
+        .map_err(|_| BridgeError::LockPoisoned)?;
+    *guard = Some(rt.clone());
+
+    Ok(rt)
+}
+
+/// Flush the current runtime's event sink. Called by `bridge_python::flush_events()`.
+pub fn flush_event_sink() {
+    if let Ok(rt) = get_runtime()
+        && let Some(sink) = rt.event_sink()
+    {
+        sink.flush();
+    }
+}
+
+/// Get the current runtime's event sink (for passing to HostSpanManager).
+pub fn get_event_sink() -> Option<Arc<dyn bex_events::EventSink>> {
+    get_runtime().ok().and_then(|rt| rt.event_sink())
+}
+
+// ============================================================================
+// Function call entry points
+// ============================================================================
+
+/// Call a BAML function asynchronously.
+///
+/// Returns immediately after spawning the async task.
+/// Result/error is delivered via the registered callback as a
+/// `BamlOutboundResult` envelope — including pre-call host-boundary failures,
+/// which are synthesized into the envelope via [`error_to_outbound`].
+#[unsafe(no_mangle)]
+pub extern "C" fn call_function(
+    function_name: *const libc::c_char,
+    encoded_args: *const u8,
+    length: usize,
+    id: u32,
+) {
+    if let Err(e) = call_function_inner(function_name, encoded_args, length, id) {
+        // Pre-call failure: synthesize the structured envelope and deliver it
+        // through the one result channel — no separate error path.
+        send_outbound_result_to_callback(id, &error_to_outbound(e));
+    }
+}
+
+fn call_function_inner(
+    function_name: *const libc::c_char,
+    encoded_args: *const u8,
+    length: usize,
+    id: u32,
+) -> Result<(), BridgeError> {
+    use bridge_ctypes::baml_core::cffi::CallFunctionArgs;
+
+    let runtime = get_runtime()?;
+
+    if function_name.is_null() {
+        return Err(BridgeError::NullFunctionName);
+    }
+    let func_name = unsafe { CStr::from_ptr(function_name) }
+        .to_str()
+        .map_err(BridgeError::from)?
+        .to_owned();
+
+    let args = if encoded_args.is_null() || length == 0 {
+        CallFunctionArgs::default()
+    } else {
+        unsafe { CallFunctionArgs::from_c_buffer(encoded_args, length) }?
+    };
+    let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE)?;
+
+    let call_ctx = bex_project::FunctionCallContextBuilder::new(sys_types::CallId(id.into()));
+
+    get_tokio_runtime()?.spawn(async move {
+        // `call_and_encode` already wraps the engine call in its own
+        // `catch_unwind` and turns a call-time panic into a `SdkPanic`
+        // envelope. The outer `catch_unwind` here is the C-ABI safety net for
+        // a panic during *encoding* — which must not cross the C boundary.
+        let encoded = AssertUnwindSafe(call_and_encode(
+            runtime,
+            func_name,
+            kwargs.into(),
+            call_ctx.build(),
+        ))
+        .catch_unwind()
+        .await;
+
+        let bytes = match encoded {
+            Ok(bytes) => bytes,
+            // An encode-stage panic also rides the envelope as an `SdkPanic`,
+            // uniform with every other result.
+            Err(panic_info) => baml_to_host::panic_to_outbound(panic_info.as_ref()),
+        };
+        send_outbound_result_to_callback(id, &bytes);
+    });
+
+    Ok(())
+}
+
+/// Cancel an in-flight function call.
+///
+/// Returns 0 on success, 1 if the call ID is unknown or already completed.
+#[unsafe(no_mangle)]
+pub extern "C" fn cancel_function_call(id: u32) -> i32 {
+    let runtime = match get_runtime() {
+        Ok(rt) => rt,
+        Err(_) => return 1,
+    };
+    match runtime.cancel_function_call(sys_types::CallId(id.into())) {
+        Ok(()) => 0,
+        Err(_) => 1,
     }
 }

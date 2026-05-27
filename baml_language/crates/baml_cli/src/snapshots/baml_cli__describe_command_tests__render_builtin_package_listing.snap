@@ -28,6 +28,8 @@ class            errors.LlmClient                 <builtin>/baml/ns_errors/error
 class            errors.DevOther                  <builtin>/baml/ns_errors/errors.baml:49
 class            errors.HostPanic                 <builtin>/baml/ns_errors/errors.baml:54
 class            errors.HostCallable              <builtin>/baml/ns_errors/errors.baml:58
+class            errors.GenericSdkError           <builtin>/baml/ns_errors/errors.baml:69
+class            errors.CompilationError          <builtin>/baml/ns_errors/errors.baml:75
 class            errors.StackFrame                <builtin>/baml/ns_errors/stack_trace.baml:2
 class            errors.StackTrace                <builtin>/baml/ns_errors/stack_trace.baml:9
 function         events.send                      <builtin>/baml/ns_events/events.baml:3
@@ -125,7 +127,8 @@ class            panics.Exit                      <builtin>/baml/ns_panics/panic
 class            panics.AllocFailure              <builtin>/baml/ns_panics/panics.baml:54
 class            panics.HostUnavailable           <builtin>/baml/ns_panics/panics.baml:61
 class            panics.NegativeBitShift          <builtin>/baml/ns_panics/panics.baml:69
-type             panics.Panic                     <builtin>/baml/ns_panics/panics.baml:73
+class            panics.SdkPanic                  <builtin>/baml/ns_panics/panics.baml:77
+type             panics.Panic                     <builtin>/baml/ns_panics/panics.baml:81
 class            stream.StreamFinished            <builtin>/baml/ns_stream/stream.baml:4
 class            stream.StreamNoYield             <builtin>/baml/ns_stream/stream.baml:9
 class            sys.ProcessOptions               <builtin>/baml/ns_sys/sys.baml:2

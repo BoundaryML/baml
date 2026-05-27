@@ -1,11 +1,14 @@
 //! Shared `Result<BexExternalValue, RuntimeError>` → `BamlOutboundResult`
-//! translation (31e-phase4).
+//! translation: encoding the engine's BEV result into the host-facing
+//! `BamlOutboundResult` envelope.
 //!
 //! The whole classify-and-encode lives here, in the bridge — not in bex.
-//! Both the C-ABI shim (`ffi/functions.rs`) and the PyO3 path
+//! Both the C-ABI entry point (`call_function` in `lib.rs`) and the PyO3 path
 //! (`bridge_python`'s `runtime.rs`) call [`call_and_encode`], so the
 //! `catch_unwind` → `SdkPanic` boundary and the error/panic routing are
-//! defined exactly once.
+//! defined exactly once. Every result — ok value, thrown error, panic, and
+//! pre-call host-boundary failure — leaves the bridge as one envelope; there is
+//! no separate error channel.
 //!
 //! Routing recovers the panic-vs-error distinction the same way the VM does
 //! internally: by namespace. A thrown `BexExternalValue::Instance` whose
@@ -252,14 +255,30 @@ fn panic_message(panic_info: &(dyn std::any::Any + Send)) -> String {
     }
 }
 
+/// Encode a caught panic payload as `BamlOutboundResult` envelope bytes.
+///
+/// Used by the C-ABI entry point's *outer* `catch_unwind` (the safety net for a
+/// panic during *encoding*, which must not cross the C boundary): instead of an
+/// opaque string, the panic rides the same `baml.panics.SdkPanic` ⇒
+/// `BamlOutboundPanic` envelope as a call-time panic — uniform with every other
+/// result.
+pub fn panic_to_outbound(panic_info: &(dyn std::any::Any + Send)) -> Vec<u8> {
+    let options = CffiHandleTableOptions::for_in_process();
+    BamlOutboundResult {
+        result: Some(sdk_panic_arm(panic_message(panic_info), &options)),
+    }
+    .encode_to_vec()
+}
+
 /// Call a BAML function and encode the result as `BamlOutboundResult` bytes.
 ///
 /// The `catch_unwind` boundary wraps the engine call so a Rust panic surfaces
 /// as a `baml.panics.SdkPanic` ⇒ `BamlOutboundPanic` (a catchable `BamlPanic`
 /// in Python), not an opaque ABI panic. A panic during *encoding* (outside the
-/// inner `catch_unwind` but still rare) escapes this function; the C-ABI shim
-/// keeps its own outer `catch_unwind` for that, and the PyO3 glue lets it
-/// become pyo3's `PanicException`.
+/// inner `catch_unwind` but still rare) escapes this function; the C-ABI entry
+/// point keeps its own outer `catch_unwind` for that (encoding via
+/// [`panic_to_outbound`]), and the PyO3 glue lets it become pyo3's
+/// `PanicException`.
 pub async fn call_and_encode(
     runtime: Arc<dyn Bex>,
     function_name: String,
