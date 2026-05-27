@@ -28,6 +28,7 @@ use std::{
     io::{Cursor, Read},
     path::{Path, PathBuf},
     sync::Arc,
+    time::Duration,
 };
 
 use anyhow::{Context, Result, anyhow};
@@ -520,7 +521,13 @@ fn download_release_asset(url: &str) -> Result<Vec<u8>> {
     let rt = tokio::runtime::Runtime::new()
         .context("Failed to create tokio runtime for release asset download")?;
     rt.block_on(async {
-        let response = reqwest::get(url)
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(120))
+            .build()
+            .context("Failed to build HTTP client for release asset download")?;
+        let response = client
+            .get(url)
+            .send()
             .await
             .with_context(|| format!("Failed to download BAML release asset from {url}"))?
             .error_for_status()

@@ -33,7 +33,7 @@ use bex_vm_types::{
     indexable::{GlobalIndex, ObjectPool},
     types::{Function, Object, Value},
 };
-use colored::{Color, Colorize};
+use console::Style;
 
 /// Display format for bytecode output.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -335,22 +335,22 @@ fn display_object_ptr(ptr: HeapPtr) -> String {
 /// See [`display_bytecode`] for more information.
 const COLUMN_MARGIN: usize = 3;
 
-/// Get color for instruction based on its type
-fn instruction_color(instruction: &Instruction) -> Color {
+/// Get color style for an instruction based on its type.
+fn instruction_style(instruction: &Instruction) -> Style {
     match instruction {
-        Instruction::NotifyBlock(_) => Color::BrightYellow,
+        Instruction::NotifyBlock(_) => Style::new().yellow().bright(),
         Instruction::LoadConst(_)
         | Instruction::LoadVar(_)
         | Instruction::LoadGlobal(_)
         | Instruction::LoadField(_)
         | Instruction::LoadArrayElement
-        | Instruction::LoadMapElement => Color::Blue,
+        | Instruction::LoadMapElement => Style::new().blue(),
         Instruction::StoreVar(_)
         | Instruction::StoreGlobal(_)
         | Instruction::StoreField(_)
         | Instruction::InitField(_)
         | Instruction::StoreArrayElement
-        | Instruction::StoreMapElement => Color::Green,
+        | Instruction::StoreMapElement => Style::new().green(),
         Instruction::BinOp(_)
         | Instruction::CmpOp(_)
         | Instruction::AddInt
@@ -364,61 +364,63 @@ fn instruction_color(instruction: &Instruction) -> Color {
         | Instruction::DivFloat
         | Instruction::CmpIntOp(_)
         | Instruction::CmpFloatOp(_)
-        | Instruction::UnaryOp(_) => Color::BrightBlue,
+        | Instruction::UnaryOp(_) => Style::new().blue().bright(),
         Instruction::Jump(_)
         | Instruction::PopJumpIfFalse(_)
         | Instruction::JumpIfFalse(_)
         | Instruction::JumpTable { .. }
-        | Instruction::DenseTag(_) => Color::Yellow,
-        Instruction::Call { .. } | Instruction::CallIndirect => Color::Magenta,
+        | Instruction::DenseTag(_) => Style::new().yellow(),
+        Instruction::Call { .. } | Instruction::CallIndirect => Style::new().magenta(),
         Instruction::Return | Instruction::Pop(_) | Instruction::Copy(_) | Instruction::Throw => {
-            Color::Red
+            Style::new().red()
         }
         Instruction::AllocMap(_)
         | Instruction::AllocInstance { .. }
         | Instruction::AllocVariant(_)
-        | Instruction::AllocArray(_) => Color::Cyan,
-        Instruction::SysOp(_) | Instruction::Spawn | Instruction::Await => Color::BrightGreen,
-        Instruction::Watch(_) | Instruction::Unwatch(_) | Instruction::Notify(_) => {
-            Color::BrightRed
+        | Instruction::AllocArray(_) => Style::new().cyan(),
+        Instruction::SysOp(_) | Instruction::Spawn | Instruction::Await => {
+            Style::new().green().bright()
         }
-        Instruction::VizEnter(_) | Instruction::VizExit(_) => Color::BrightYellow,
+        Instruction::Watch(_) | Instruction::Unwatch(_) | Instruction::Notify(_) => {
+            Style::new().red().bright()
+        }
+        Instruction::VizEnter(_) | Instruction::VizExit(_) => Style::new().yellow().bright(),
         Instruction::Discriminant
         | Instruction::TypeTag
         | Instruction::IsType(_)
         | Instruction::LoadType(_)
-        | Instruction::ThrowIfPanic => Color::BrightBlue,
-        Instruction::Unreachable => Color::BrightRed,
+        | Instruction::ThrowIfPanic => Style::new().blue().bright(),
+        Instruction::Unreachable => Style::new().red().bright(),
         Instruction::MakeClosure { .. }
         | Instruction::MakeBoundMethod(_)
-        | Instruction::MakeCell => Color::Cyan,
+        | Instruction::MakeCell => Style::new().cyan(),
         Instruction::LoadDeref(_) | Instruction::LoadCapture(_) | Instruction::CaptureRef(_) => {
-            Color::Blue
+            Style::new().blue()
         }
-        Instruction::StoreDeref(_) | Instruction::StoreCapture(_) => Color::Green,
-        Instruction::SendEvent => Color::BrightGreen,
+        Instruction::StoreDeref(_) | Instruction::StoreCapture(_) => Style::new().green(),
+        Instruction::SendEvent => Style::new().green().bright(),
     }
 }
 
 struct Col {
     text: String,
     char_count: usize,
-    color: Color,
+    style: Style,
 }
 
 impl From<String> for Col {
     fn from(text: String) -> Self {
         Self {
             char_count: text.chars().count(),
-            color: Color::White,
+            style: Style::new(),
             text,
         }
     }
 }
 
 impl Col {
-    fn with_color(mut self, color: Color) -> Self {
-        self.color = color;
+    fn with_style(mut self, style: Style) -> Self {
+        self.style = style;
         self
     }
 }
@@ -480,13 +482,13 @@ pub fn display_bytecode(
         // since a single line could emit multiple instructions
         let source_line = display_source_line_cell(function, instruction_ptr, &mut last_line);
 
-        let instruction_color = instruction_color(&function.bytecode.instructions[instruction_ptr]);
+        let instr_style = instruction_style(&function.bytecode.instructions[instruction_ptr]);
 
         // Table format is [LINE, IP, INSTR, META].
         let row = [
             Col::from(source_line),
             Col::from(instruction_ptr.to_string()),
-            Col::from(instruction).with_color(instruction_color),
+            Col::from(instruction).with_style(instr_style),
             Col::from(metadata),
         ];
 
@@ -522,23 +524,21 @@ pub fn display_bytecode(
                 width = 0;
             }
 
-            let mut colored_text = col.text.normal();
-
-            // Apply color based on column, only if output is to a TTY
+            // Apply color based on column, only if output is to a TTY.
+            // ANSI codes don't change the visual character count, so we
+            // pad based on `col.char_count` after pushing the styled text.
             if use_colors {
-                colored_text = match j {
-                    0 => col.text.bright_black(),   // Line numbers in gray
-                    1 => col.text.white(),          // IP in white
-                    2 => col.text.color(col.color), // Instruction with type-based color
-                    3 => col.text.bright_cyan(),    // Metadata in cyan
-                    _ => col.text.normal(),
-                }
+                let style = match j {
+                    0 => Style::new().black().bright(), // Line numbers in gray
+                    1 => Style::new().white(),          // IP in white
+                    2 => col.style.clone(),             // Instruction with type-based color
+                    3 => Style::new().cyan().bright(),  // Metadata in cyan
+                    _ => Style::new(),
+                };
+                table.push_str(&style.apply_to(&col.text).to_string());
+            } else {
+                table.push_str(&col.text);
             }
-
-            // For colored strings, we need to use the actual character count
-            // not the length with ANSI codes. Also, `to_string` has to be
-            // called here so that ANSI codes are inserted.
-            table.push_str(&colored_text.to_string());
             for _ in col.char_count..width {
                 table.push(' ');
             }

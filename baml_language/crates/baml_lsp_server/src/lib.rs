@@ -124,7 +124,7 @@ pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
     let baml_vfs = bex_project::BamlVFS::new(vfs);
 
     // Stdio sender (LSP client sender)
-    let (writer_tx, writer_rx) = crossbeam::channel::unbounded::<lsp_server::Message>();
+    let (writer_tx, writer_rx) = crossbeam_channel::unbounded::<lsp_server::Message>();
     let writer_tx = Arc::new(writer_tx);
     let lsp_sender: Arc<dyn bex_project::LspClientSenderTrait + Send + Sync> =
         Arc::new(native_lsp_sender::NativeLspSender::new(&writer_tx));
