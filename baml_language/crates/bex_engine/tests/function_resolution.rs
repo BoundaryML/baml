@@ -12,7 +12,7 @@
 use std::sync::Arc;
 
 use baml_project::testing::compile_multi_file;
-use bex_engine::{BexEngine, CallId, EngineError, FunctionCallContextBuilder};
+use bex_engine::{BexEngine, BexExternalValue, CallId, EngineError, FunctionCallContextBuilder};
 use sys_native::SysOpsExt;
 
 fn engine(files: &[(&str, &str)]) -> Arc<BexEngine> {
@@ -118,46 +118,46 @@ fn find_user_function_does_not_expose_stdlib() {
     assert_eq!(main_info.qualified_name, "user.main");
 }
 
-/// `BexEngine::call_function*` requires a [`FunctionKind::Bytecode`]
-/// callee — `$rust_function` natives, sysops, and unresolved natives
-/// have no enclosing bytecode frame to `YieldToCall` back into, so
-/// dispatch can't honor a yield. Without the gate, a future host
-/// calling e.g. `baml.json.to_string<T>` directly would crash deep in
-/// the VM with a misleading internal error. Catching it at the engine
-/// boundary surfaces a clean, documented `NotInvokableAsEntry`.
+/// `baml.math.trunc(value: float) -> int` is a `$rust_function` →
+/// `FunctionKind::Native`. Calling it as an entry point should truncate
+/// toward zero and return `3`, not reject with `NotInvokableAsEntry`.
 #[tokio::test]
-async fn call_function_rejects_non_bytecode_entry() {
+async fn native_trunc_callable_as_entry_point() {
     let eng = engine(&[("main.baml", "function main() -> int { 1 }")]);
 
-    // `baml.json.to_string` is a `$rust_function` native (see
-    // baml_builtins2/baml_std/baml/ns_json/json.baml). Invoking it as
-    // an entry must be rejected up-front.
     let result = eng
         .call_function(
-            "baml.json.to_string",
-            vec![],
+            "baml.math.trunc",
+            vec![BexExternalValue::Float(3.7)],
             FunctionCallContextBuilder::new(CallId::next()).build(),
             true,
         )
         .await;
 
     match result {
-        Err(EngineError::NotInvokableAsEntry { name, .. }) => {
-            assert_eq!(name, "baml.json.to_string");
-        }
-        other => panic!("expected NotInvokableAsEntry, got {other:?}"),
+        Ok(BexExternalValue::Int(n)) => assert_eq!(n, 3, "trunc(3.7) should be 3"),
+        other => panic!("expected Ok(Int(3)) from baml.math.trunc as entry, got {other:?}"),
     }
+}
 
-    // Sanity: bytecode entries (including LLM-typed bytecode, which is
-    // `FunctionKind::Bytecode + FunctionMeta::Llm`) still work — this
-    // gate only blocks `Native`/`SysOp`/`NativeUnresolved`.
-    let ok = eng
+/// `baml.fs.exists(path: string) -> bool` is a `$rust_io_function` →
+/// `FunctionKind::SysOp`. Calling it as an entry point should run the
+/// filesystem sysop and return a bool. `/` exists on the test host.
+#[tokio::test]
+async fn sysop_fs_exists_callable_as_entry_point() {
+    let eng = engine(&[("main.baml", "function main() -> int { 1 }")]);
+
+    let result = eng
         .call_function(
-            "user.main",
-            vec![],
+            "baml.fs.exists",
+            vec![BexExternalValue::String("/".to_string())],
             FunctionCallContextBuilder::new(CallId::next()).build(),
             true,
         )
         .await;
-    assert!(ok.is_ok(), "bytecode entry must still resolve: {ok:?}");
+
+    match result {
+        Ok(BexExternalValue::Bool(exists)) => assert!(exists, "`/` should exist"),
+        other => panic!("expected Ok(Bool(true)) from baml.fs.exists as entry, got {other:?}"),
+    }
 }

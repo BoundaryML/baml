@@ -122,14 +122,14 @@ impl RootHaver for BytecodeFrame {
 /// Native continuation frame — pushed when a native function yields via
 /// `NativeCallResult::YieldToCall`. Sits below the callback's bytecode
 /// frame on the call stack and is popped when the callback returns.
-pub struct NativeFrame {
+pub struct NativeContinuationFrame {
     /// Pointer to the native function object (for GC roots + stack traces).
     pub(crate) function: HeapPtr,
     /// The continuation to invoke with the callback's return value.
     pub(crate) continuation: Box<dyn crate::package_baml::Continuation>,
 }
 
-impl RootHaver for NativeFrame {
+impl RootHaver for NativeContinuationFrame {
     fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
         roots.push(self.function);
         roots.extend_from_slice(&self.continuation.gc_roots());
@@ -143,7 +143,7 @@ impl RootHaver for NativeFrame {
 /// Call frame — either a bytecode frame or a native continuation frame.
 pub enum Frame {
     Bytecode(BytecodeFrame),
-    Native(NativeFrame),
+    NativeContinuation(NativeContinuationFrame),
 }
 
 impl Frame {
@@ -151,7 +151,7 @@ impl Frame {
     pub(crate) fn function(&self) -> HeapPtr {
         match self {
             Frame::Bytecode(f) => f.function,
-            Frame::Native(f) => f.function,
+            Frame::NativeContinuation(f) => f.function,
         }
     }
 }
@@ -312,13 +312,13 @@ impl RootHaver for Frame {
     fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
         match self {
             Frame::Bytecode(f) => f.collect_roots(roots),
-            Frame::Native(f) => f.collect_roots(roots),
+            Frame::NativeContinuation(f) => f.collect_roots(roots),
         }
     }
     fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
         match self {
             Frame::Bytecode(f) => f.forward_roots(roots),
-            Frame::Native(f) => f.forward_roots(roots),
+            Frame::NativeContinuation(f) => f.forward_roots(roots),
         }
     }
 }
@@ -965,7 +965,7 @@ impl BexVm {
         let mut roots = Vec::new();
         for frame in &self.frames {
             roots.push(frame.function());
-            if let Frame::Native(nf) = frame {
+            if let Frame::NativeContinuation(nf) = frame {
                 roots.extend(nf.continuation.gc_roots());
             }
         }
@@ -983,7 +983,7 @@ impl BexVm {
                         bf.function = new_ptr;
                     }
                 }
-                Frame::Native(nf) => {
+                Frame::NativeContinuation(nf) => {
                     if let Some(&new_ptr) = forwarding.get(&nf.function) {
                         nf.function = new_ptr;
                     }
@@ -1299,16 +1299,10 @@ impl BexVm {
             "expect function or closure as entry point, got {:?}",
             self.get_object(function)
         );
-        debug_assert!(
-            match self.get_object(function) {
-                Object::Function(f) => matches!(f.kind, bex_vm_types::FunctionKind::Bytecode),
-                Object::Closure(_) => true,
-                _ => false,
-            },
-            "entry points must be Function::Bytecode or Closure; engine \
-             boundary should have rejected this — see \
-             EngineError::NotInvokableAsEntry"
-        );
+        // 35d EXPERIMENT: the `FunctionKind::Bytecode`-only debug-assert
+        // that used to guard entry points has been removed alongside the
+        // engine-boundary guard, to see what happens when a native/sysop
+        // is entered directly.
 
         self.pending_call_type_args.clone_from(&type_args);
 
@@ -2163,7 +2157,7 @@ impl BexVm {
                             error_line,
                         })
                     }
-                    Frame::Native(_) => Some(StackFrame {
+                    Frame::NativeContinuation(_) => Some(StackFrame {
                         function_name: func.name.clone(),
                         file_path: func.source_file.clone(),
                         function_span: func.span,
@@ -2195,7 +2189,7 @@ impl BexVm {
 
             // Native continuation frames have no exception handlers and own
             // no eval stack region — just pop and continue unwinding.
-            if matches!(frame, Frame::Native(_)) {
+            if matches!(frame, Frame::NativeContinuation(_)) {
                 if self.frames.len() <= 1 {
                     return Err(VmError::Thrown(exception_value));
                 }
@@ -2292,7 +2286,7 @@ impl BexVm {
                 Frame::Bytecode(bf) => {
                     self.stack.drain(bf.locals_offset..);
                 }
-                Frame::Native(_) => {} // native frames own no stack region
+                Frame::NativeContinuation(_) => {} // native frames own no stack region
             }
 
             // Clean up tracing / interrupt bookkeeping for popped frames.
@@ -2562,10 +2556,11 @@ impl BexVm {
                         // callback through ECFLO. The exec loop's continuation
                         // handler (at the top of the loop) will invoke the
                         // continuation when the callback completes.
-                        self.frames.push(Frame::Native(NativeFrame {
-                            function: callee_ptr,
-                            continuation,
-                        }));
+                        self.frames
+                            .push(Frame::NativeContinuation(NativeContinuationFrame {
+                                function: callee_ptr,
+                                continuation,
+                            }));
 
                         // If callee is a BoundMethod, insert receiver into args.
                         let real_callee =
@@ -3338,9 +3333,9 @@ impl BexVm {
         // Outer loop handles CPS continuations and frame transitions.
         loop {
             // ── CPS continuation handler (identical to exec_inner) ────────
-            while matches!(self.frames.last(), Some(Frame::Native(_))) {
+            while matches!(self.frames.last(), Some(Frame::NativeContinuation(_))) {
                 let v = self.stack.ensure_pop();
-                let Some(Frame::Native(nf)) = self.frames.pop() else {
+                let Some(Frame::NativeContinuation(nf)) = self.frames.pop() else {
                     unreachable!("just matched Some(Frame::Native(_))");
                 };
                 let native_fn_ptr = nf.function;
@@ -3366,10 +3361,11 @@ impl BexVm {
                         type_args: callback_type_args,
                         continuation,
                     } => {
-                        self.frames.push(Frame::Native(NativeFrame {
-                            function: native_fn_ptr,
-                            continuation,
-                        }));
+                        self.frames
+                            .push(Frame::NativeContinuation(NativeContinuationFrame {
+                                function: native_fn_ptr,
+                                continuation,
+                            }));
 
                         let real_callee =
                             self.resolve_bound_method_callee(callee, &mut callback_args);

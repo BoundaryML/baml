@@ -20,6 +20,7 @@ use bex_project::Bex;
 use bridge_ctypes::{DecodeFromBuffer, HANDLE_TABLE, kwargs_to_bex_values};
 use futures::future::FutureExt;
 use once_cell::sync::OnceCell;
+use prost::Message;
 use sys_native::SysOpsExt;
 use tokio::runtime::Runtime;
 
@@ -186,7 +187,7 @@ fn call_function_inner(
         // `catch_unwind` and turns a call-time panic into a `SdkPanic`
         // envelope. The outer `catch_unwind` here is the C-ABI safety net for
         // a panic during *encoding* — which must not cross the C boundary.
-        let encoded = AssertUnwindSafe(call_and_encode(
+        let outbound = AssertUnwindSafe(call_and_encode(
             runtime,
             func_name,
             kwargs.into(),
@@ -195,8 +196,8 @@ fn call_function_inner(
         .catch_unwind()
         .await;
 
-        let bytes = match encoded {
-            Ok(bytes) => bytes,
+        let bytes = match outbound {
+            Ok(result) => result.encode_to_vec(),
             // An encode-stage panic also rides the envelope as an `SdkPanic`,
             // uniform with every other result.
             Err(panic_info) => baml_to_host::panic_to_outbound(panic_info.as_ref()),

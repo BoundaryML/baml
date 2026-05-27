@@ -278,33 +278,28 @@ pub fn panic_to_outbound(panic_info: &(dyn std::any::Any + Send)) -> Vec<u8> {
     .encode_to_vec()
 }
 
-/// Call a BAML function and encode the result as `BamlOutboundResult` bytes.
+/// Call a BAML function and return the result as a `BamlOutboundResult`.
 ///
 /// The `catch_unwind` boundary wraps the engine call so a Rust panic surfaces
 /// as a `baml.panics.SdkPanic` ⇒ `BamlOutboundPanic` (a catchable `BamlPanic`
-/// in Python), not an opaque ABI panic. A panic during *encoding* (outside the
-/// inner `catch_unwind` but still rare) escapes this function; the C-ABI entry
-/// point keeps its own outer `catch_unwind` for that (encoding via
-/// [`panic_to_outbound`]), and the PyO3 glue lets it become pyo3's
-/// `PanicException`.
+/// in Python), not an opaque ABI panic. Callers that cross a byte boundary are
+/// responsible for calling `.encode_to_vec()`.
 pub async fn call_and_encode(
     runtime: Arc<dyn Bex>,
     function_name: String,
     args: BexArgs,
     call_ctx: FunctionCallContext,
-) -> Vec<u8> {
+) -> BamlOutboundResult {
     let options = CffiHandleTableOptions::for_in_process();
 
     let caught = AssertUnwindSafe(runtime.call_function(&function_name, args, call_ctx))
         .catch_unwind()
         .await;
 
-    let result = match caught {
+    match caught {
         Ok(call_result) => result_to_outbound(call_result, &options),
         Err(panic_info) => BamlOutboundResult {
             result: Some(sdk_panic_arm(panic_message(panic_info.as_ref()), &options)),
         },
-    };
-
-    result.encode_to_vec()
+    }
 }

@@ -124,13 +124,14 @@ impl BamlRuntime {
         }
 
         // The whole Result -> BamlOutboundResult translation (incl. the
-        // catch_unwind -> SdkPanic boundary) lives in bridge_cffi; we just
-        // return the encoded envelope bytes for Python to decode + raise.
+        // catch_unwind -> SdkPanic boundary) lives in bridge_cffi; this Python
+        // byte boundary owns the final protobuf encoding.
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let bytes = match prepared {
                 Ok((runtime, kwargs)) => {
                     bridge_cffi::call_and_encode(runtime, function_name, kwargs, call_ctx.build())
                         .await
+                        .encode_to_vec()
                 }
                 Err(e) => bridge_cffi::error_to_outbound(e),
             };
@@ -192,8 +193,8 @@ impl BamlRuntime {
             call_ctx = call_ctx.with_host_ctx(host_ctx);
         }
 
-        // Same shared call_and_encode as the async + C-ABI paths — returns the
-        // encoded BamlOutboundResult envelope bytes.
+        // Same shared call_and_encode as the async + C-ABI paths; this Python
+        // byte boundary owns the final protobuf encoding.
         let bytes = py.detach(|| {
             rt.block_on(bridge_cffi::call_and_encode(
                 runtime,
@@ -201,6 +202,7 @@ impl BamlRuntime {
                 kwargs,
                 call_ctx.build(),
             ))
+            .encode_to_vec()
         });
 
         Ok(bytes)

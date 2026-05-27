@@ -74,14 +74,15 @@ impl BamlRuntime {
 
         // The whole Result -> BamlOutboundResult translation (incl. the
         // catch_unwind -> SdkPanic boundary and error/panic routing) lives in
-        // bridge_cffi; we just return the encoded envelope bytes for the TS
-        // decoder to surface.
-        let bytes = rt.block_on(bridge_cffi::call_and_encode(
-            runtime,
-            function_name,
-            kwargs,
-            call_ctx,
-        ));
+        // bridge_cffi; this Node byte boundary owns the final protobuf encoding.
+        let bytes = rt
+            .block_on(bridge_cffi::call_and_encode(
+                runtime,
+                function_name,
+                kwargs,
+                call_ctx,
+            ))
+            .encode_to_vec();
 
         Ok(Buffer::from(bytes))
     }
@@ -119,11 +120,12 @@ impl BamlRuntime {
 
         let call_ctx = call_ctx.build();
 
-        // Same shared call_and_encode as the sync + C-ABI paths — returns the
-        // encoded BamlOutboundResult envelope bytes for the TS decoder.
+        // Same shared call_and_encode as the sync + C-ABI paths; this Node
+        // byte boundary owns the final protobuf encoding.
         env.spawn_future(async move {
-            let bytes =
-                bridge_cffi::call_and_encode(runtime, function_name, kwargs, call_ctx).await;
+            let bytes = bridge_cffi::call_and_encode(runtime, function_name, kwargs, call_ctx)
+                .await
+                .encode_to_vec();
             Ok(Buffer::from(bytes))
         })
     }
