@@ -23,9 +23,11 @@ return code — covering both a non-zero code and `exit(0)`, the case the
 from __future__ import annotations
 
 import asyncio
+import re
 import subprocess
 import sys
 import textwrap
+import traceback
 
 import pytest
 
@@ -108,6 +110,56 @@ def test_str_is_non_empty():
     with pytest.raises(BamlError) as exc_info:
         ParseJson(_BAD_JSON)
     assert str(exc_info.value)
+
+
+# ---------------------------------------------------------------------------
+# BAML traceback (31g-phase6). The thrown error carries the BAML stack as a
+# list of pre-rendered `File "<src>", line N, in <fn>` strings on
+# `.baml_trace`, which are also spliced into the exception's real Python
+# traceback so `traceback.format_exception` renders the `.baml` source frame
+# as an ordinary traceback line.
+# ---------------------------------------------------------------------------
+
+# `File "<src>", line N, in <fn>` — the wire trace-line shape.
+_TRACE_LINE = r'File "(?P<file>[^"]+)", line (?P<line>\d+), in (?P<func>[^"]+)'
+
+
+def test_baml_error_carries_baml_trace():
+    """`.baml_trace` is the list of rendered BAML stack frames (one per
+    frame), pointing into the throwing function's `.baml` source."""
+    with pytest.raises(BamlError) as exc_info:
+        ThrowMyError()
+    trace = exc_info.value.baml_trace
+    assert isinstance(trace, list) and trace, f"expected a non-empty list, got {trace!r}"
+    # Most-recent-call-last: the throwing function is the last frame.
+    m = re.fullmatch(_TRACE_LINE, trace[-1])
+    assert m is not None, f"trace line not in `File ..., line N, in fn` form: {trace[-1]!r}"
+    assert m["file"].endswith("types.baml"), m["file"]
+    assert m["func"] == "user.throws.ThrowMyError", m["func"]
+    assert int(m["line"]) >= 1
+
+
+def test_baml_trace_spliced_into_python_traceback():
+    """The BAML frames are spliced into the exception's Python traceback, so
+    `traceback.format_exception` renders the `.baml` source frame inline (not
+    as a detached blob)."""
+    try:
+        ParseJson(_BAD_JSON)
+    except BamlError as e:
+        # Bind inside the handler — Python unbinds `e` after the except block.
+        rendered = "".join(traceback.format_exception(type(e), e, e.__traceback__))
+        wire_trace = list(e.baml_trace)
+    else:
+        pytest.fail("ParseJson did not raise BamlError")
+
+    # Every wire trace line must appear verbatim in the rendered traceback...
+    for line in wire_trace:
+        assert line in rendered, f"{line!r} not spliced into:\n{rendered}"
+    # ...and the splice must name the throwing BAML function + its source.
+    assert re.search(
+        r'File "[^"]*types\.baml", line \d+, in user\.throws\.ParseJson',
+        rendered,
+    ), rendered
 
 
 # ---------------------------------------------------------------------------
