@@ -166,7 +166,6 @@ ast_node!(ImplementsTarget, IMPLEMENTS_TARGET);
 ast_node!(InterfaceFieldLink, INTERFACE_FIELD_LINK);
 ast_node!(ImplementsFor, IMPLEMENTS_FOR);
 ast_node!(ImplementsForTarget, IMPLEMENTS_FOR_TARGET);
-ast_node!(ExtendsClause, EXTENDS_CLAUSE);
 ast_node!(RequiresClause, REQUIRES_CLAUSE);
 ast_node!(MethodSig, METHOD_SIG);
 ast_node!(ClientDef, CLIENT_DEF);
@@ -1292,21 +1291,9 @@ impl InterfaceDef {
         self.syntax.children().filter_map(MethodSig::cast)
     }
 
-    /// Optional `extends I1, I2` clause (legacy — use `requires_clause` for BEP-044).
-    pub fn extends_clause(&self) -> Option<ExtendsClause> {
-        self.syntax.children().find_map(ExtendsClause::cast)
-    }
-
     /// Optional `requires I1, I2` clause (BEP-044 canonical form).
     pub fn requires_clause(&self) -> Option<RequiresClause> {
         self.syntax.children().find_map(RequiresClause::cast)
-    }
-}
-
-impl ExtendsClause {
-    /// Each `TypeExpr` in the extends clause — one per parent interface.
-    pub fn parents(&self) -> impl Iterator<Item = TypeExpr> {
-        self.syntax.children().filter_map(TypeExpr::cast)
     }
 }
 

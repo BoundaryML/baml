@@ -1125,12 +1125,8 @@ fn lower_interface(
         .map(|(_, b)| b)
         .collect();
 
-    // BEP-044: `requires` is the canonical keyword; `extends` is accepted as
-    // a legacy alias. Both produce the same AST `extends` field.
     let parent_type_nodes: Vec<baml_compiler_syntax::ast::TypeExpr> =
         if let Some(c) = iface.requires_clause() {
-            c.parents().collect()
-        } else if let Some(c) = iface.extends_clause() {
             c.parents().collect()
         } else {
             Vec::new()

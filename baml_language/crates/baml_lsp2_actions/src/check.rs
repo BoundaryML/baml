@@ -1080,9 +1080,12 @@ fn interface_origin_matches_target_expr<'db>(
 fn implements_for_targets_match<'db>(
     db: &'db dyn Db,
     lhs: &baml_compiler2_ast::TypeExpr,
+    lhs_generic_params: &[Name],
     rhs: &baml_compiler2_ast::TypeExpr,
+    rhs_generic_params: &[Name],
     pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
 ) -> bool {
     let mut lhs_diags = Vec::new();
     let mut rhs_diags = Vec::new();
@@ -1091,7 +1094,7 @@ fn implements_for_targets_match<'db>(
         lhs,
         pkg_items,
         namespace_path,
-        &[],
+        lhs_generic_params,
         &mut lhs_diags,
     );
     let rhs_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
@@ -1099,10 +1102,26 @@ fn implements_for_targets_match<'db>(
         rhs,
         pkg_items,
         namespace_path,
-        &[],
+        rhs_generic_params,
         &mut rhs_diags,
     );
-    lhs_diags.is_empty() && rhs_diags.is_empty() && lhs_ty == rhs_ty
+    lhs_diags.is_empty()
+        && rhs_diags.is_empty()
+        && (baml_compiler2_tir::normalize::is_same_normalized_type(&lhs_ty, &rhs_ty, aliases)
+            || baml_compiler2_tir::interfaces::match_ty_pattern(
+                &lhs_ty,
+                &rhs_ty,
+                lhs_generic_params,
+                aliases,
+            )
+            .is_some()
+            || baml_compiler2_tir::interfaces::match_ty_pattern(
+                &rhs_ty,
+                &lhs_ty,
+                rhs_generic_params,
+                aliases,
+            )
+            .is_some())
 }
 
 fn has_sibling_implements_for_origin<'db>(
@@ -1121,18 +1140,31 @@ fn has_sibling_implements_for_origin<'db>(
         if candidate.span == current.span {
             return false;
         }
+        let candidate_generic_params: Vec<Name> = candidate
+            .generic_params
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect();
+        let current_generic_params: Vec<Name> = current
+            .generic_params
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect();
         implements_for_targets_match(
             db,
             &candidate.for_target.expr,
+            &candidate_generic_params,
             &current.for_target.expr,
+            &current_generic_params,
             pkg_items,
             namespace_path,
+            aliases,
         ) && interface_origin_matches_target_expr(
             db,
             &candidate.interface_target.expr,
             pkg_items,
             namespace_path,
-            &[],
+            &candidate_generic_params,
             aliases,
             origin,
         )

@@ -1284,8 +1284,9 @@ pub struct InterfaceDef {
     /// means the parameter at the matching index was declared with
     /// `T extends <te>`; `None` means unbounded.
     pub generic_param_bounds: Vec<Option<TypeExpr>>,
-    /// Parent interfaces from `extends I1, I2, ...`. Each is parsed as a
-    /// `TypeExpr` so we can accept generic parents like `Container<int>`.
+    /// Required interfaces from `requires I1, I2, ...`. Each is parsed as a
+    /// `TypeExpr` so we can accept generic requirements like `Container<int>`.
+    /// Field name is retained for compatibility with existing consumers.
     pub extends: Vec<SpannedTypeExpr>,
     /// Field signatures declared on the interface. Interface fields cannot
     /// have default values — see BEP-044 §"Interface Fields".

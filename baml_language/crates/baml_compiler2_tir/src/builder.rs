@@ -3100,52 +3100,23 @@ impl<'db> TypeInferenceBuilder<'db> {
                 fields,
                 ..
             } => {
-                // Lower explicit type args from `Foo<int> { ... }` syntax.
-                let lowered_type_args: Vec<Ty> = obj_type_args
-                    .iter()
-                    .map(|te| {
+                let ty = type_name
+                    .as_ref()
+                    .map(|path| {
                         let mut diags = Vec::new();
-                        let ty = crate::lower_type_expr::lower_type_expr_in_ns(
+                        let ty_expr = TypeExpr::Path {
+                            segments: path.segments().to_vec(),
+                            generic_args: obj_type_args.clone(),
+                            attrs: Vec::new(),
+                        };
+                        crate::lower_type_expr::lower_type_expr_in_ns(
                             self.context.db(),
-                            te,
+                            &ty_expr,
                             self.package_items,
                             &self.ns_context,
                             &self.generic_params,
                             &mut diags,
-                        );
-                        // Swallow diagnostics silently — errors will be caught during
-                        // elaboration and reported with better context.
-                        let _ = diags;
-                        ty
-                    })
-                    .collect();
-                let ty = type_name
-                    .as_ref()
-                    .and_then(|path| {
-                        // Bare names: look up in the local package's namespace
-                        // context. Qualified paths (`baml.glob.ScanOptions`,
-                        // `root.http.Response`): go through the resolver that
-                        // understands cross-namespace and cross-package paths.
-                        // Mixing these would let a bare name fall through to
-                        // another package, which the project intentionally
-                        // forbids — single-segment writes mean "in scope here".
-                        let db = self.context.db();
-                        if path.is_qualified() {
-                            self.res_ctx
-                                .resolve_type(db, path.segments(), &self.ns_context)
-                                .map(|(_, ty)| ty)
-                        } else {
-                            let leaf = path.leaf();
-                            self.package_items
-                                .lookup_type(&self.ns_context, leaf)
-                                .map(|def| {
-                                    Ty::Class(
-                                        crate::lower_type_expr::qualify_def(db, def, leaf),
-                                        lowered_type_args,
-                                        TyAttr::default(),
-                                    )
-                                })
-                        }
+                        )
                     })
                     .unwrap_or(Ty::Unknown {
                         attr: TyAttr::default(),
@@ -9679,14 +9650,12 @@ impl<'db> TypeInferenceBuilder<'db> {
             let registry = crate::interfaces::package_implements_registry(db, self.package_id);
             let requested_iface_ty =
                 Ty::Interface(iface_qtn.clone(), iface_args.clone(), TyAttr::default());
-            if registry.type_implements_interface_via_rule(
+            return registry.type_implements_interface_via_rule(
                 sub,
                 &requested_iface_ty,
                 &self.aliases,
                 |actual, bound| self.is_subtype(actual, bound),
-            ) {
-                return true;
-            }
+            );
         }
         // BEP-044 interface-to-interface subtyping: `Interface A <: Interface B`
         // iff A == B or A requires B (transitively). Two unrelated interfaces

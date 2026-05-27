@@ -178,7 +178,7 @@ pub enum SyntaxKind {
 
     // Interface components
     METHOD_SIG,            // function name(params) -> ReturnType (no body)
-    EXTENDS_CLAUSE,        // extends I1, I2
+    EXTENDS_CLAUSE,        // reserved legacy node; interfaces use `requires`
     REQUIRES_CLAUSE,       // requires I1, I2
     IMPLEMENTS_BLOCK,      // implements I { ... } inside a class
     IMPLEMENTS_TARGET,     // the interface name (path) in `implements I`

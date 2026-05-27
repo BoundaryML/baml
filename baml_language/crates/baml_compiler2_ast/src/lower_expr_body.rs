@@ -2446,11 +2446,40 @@ impl LoweringContext {
     }
 
     fn lower_object_literal(&mut self, node: &SyntaxNode) -> ExprId {
+        fn collect_constructor_path(
+            node: &SyntaxNode,
+            path_segments: &mut Vec<Name>,
+            type_args: &mut Vec<TypeExpr>,
+        ) {
+            for elem in node.children_with_tokens() {
+                match elem {
+                    rowan::NodeOrToken::Token(token) if is_ident_token(token.kind()) => {
+                        path_segments.push(Name::new(token.text()));
+                    }
+                    rowan::NodeOrToken::Node(args_node)
+                        if args_node.kind() == SyntaxKind::GENERIC_ARGS =>
+                    {
+                        *type_args = args_node
+                            .children()
+                            .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+                            .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
+                            .map(|te| crate::lower_type_expr::lower_type_expr_node(&te))
+                            .collect();
+                    }
+                    rowan::NodeOrToken::Node(child_node) => {
+                        collect_constructor_path(&child_node, path_segments, type_args);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
         let mut fields = Vec::new();
         let mut spreads = Vec::new();
         let mut position = 0;
         let mut type_name = None;
         let mut type_args: Vec<TypeExpr> = vec![];
+        let mut type_path_segments: Vec<Name> = vec![];
 
         // Look for the optional type name (first WORD or path before the brace):
         //   - A simple WORD token: `MyClass { ... }` → `TypePath::bare`.
@@ -2458,40 +2487,23 @@ impl LoweringContext {
         //     PATH_EXPR) → `TypePath` of all the WORD segments.
         //   - A generic path: `Foo<int> { ... }` (parsed as PATH_EXPR with
         //     GENERIC_ARGS child) → `TypePath::bare("Foo")` + `type_args = [int]`.
-        'outer: for elem in node.children_with_tokens() {
+        for elem in node.children_with_tokens() {
             match elem {
                 rowan::NodeOrToken::Token(token) => {
                     if token.kind() == SyntaxKind::L_BRACE {
                         break;
                     }
-                    if is_ident_token(token.kind()) && type_name.is_none() {
-                        type_name = Some(TypePath::bare(Name::new(token.text())));
+                    if is_ident_token(token.kind()) {
+                        type_path_segments.push(Name::new(token.text()));
                     }
                 }
                 rowan::NodeOrToken::Node(child_node) => {
-                    let segments: Vec<Name> = child_node
-                        .children_with_tokens()
-                        .filter_map(rowan::NodeOrToken::into_token)
-                        .filter(|t| is_ident_token(t.kind()))
-                        .map(|t| Name::new(t.text()))
-                        .collect();
-                    if !segments.is_empty() {
-                        type_name = Some(TypePath::new(segments));
-                    }
-                    // Also extract explicit generic type args from `Foo<int>` syntax:
-                    // PATH_EXPR contains a GENERIC_ARGS child with TYPE_EXPR children.
-                    type_args = child_node
-                        .children()
-                        .find(|n| n.kind() == SyntaxKind::GENERIC_ARGS)
-                        .into_iter()
-                        .flat_map(|args_node| args_node.children())
-                        .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
-                        .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
-                        .map(|te| crate::lower_type_expr::lower_type_expr_node(&te))
-                        .collect();
-                    break 'outer;
+                    collect_constructor_path(&child_node, &mut type_path_segments, &mut type_args);
                 }
             }
+        }
+        if !type_path_segments.is_empty() {
+            type_name = Some(TypePath::new(type_path_segments));
         }
 
         // Object fields are child nodes after L_BRACE

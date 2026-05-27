@@ -2533,7 +2533,7 @@ impl<'a> Parser<'a> {
     ///
     /// Syntax:
     /// ```text
-    /// interface Name<T> extends I1, I2 {
+    /// interface Name<T> requires I1, I2 {
     ///   field: Type
     ///   function method(p: T) -> R
     ///   function with_default(p: T) -> R { ... }
@@ -2558,12 +2558,10 @@ impl<'a> Parser<'a> {
                 p.parse_generic_param_list();
             }
 
-            // Optional requires clause (BEP-044: `requires` replaces `extends`
-            // on interface declarations; `extends` is still accepted for now)
+            // Optional requires clause. Interfaces do not extend each other:
+            // `requires` says implementors must also implement the listed interfaces.
             if p.at(TokenKind::Requires) {
                 p.parse_requires_clause();
-            } else if p.at(TokenKind::Extends) {
-                p.parse_extends_clause();
             }
 
             // Opening brace
@@ -2596,33 +2594,6 @@ impl<'a> Parser<'a> {
             }
 
             p.expect(TokenKind::RBrace);
-        });
-    }
-
-    /// Parse an `extends I1, I2, ...` clause inside an interface declaration.
-    /// (Legacy — `requires` is the canonical keyword per BEP-044.)
-    fn parse_extends_clause(&mut self) {
-        self.with_node(SyntaxKind::EXTENDS_CLAUSE, |p| {
-            p.expect(TokenKind::Extends);
-
-            // First parent
-            if p.is_at_type_start() {
-                p.parse_type();
-            } else {
-                p.error_unexpected_token("interface name".to_string());
-            }
-
-            while p.eat(TokenKind::Comma) {
-                if p.at(TokenKind::LBrace) {
-                    break;
-                }
-                if p.is_at_type_start() {
-                    p.parse_type();
-                } else {
-                    p.error_unexpected_token("interface name".to_string());
-                    break;
-                }
-            }
         });
     }
 

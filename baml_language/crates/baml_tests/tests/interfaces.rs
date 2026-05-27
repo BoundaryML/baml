@@ -26,7 +26,7 @@
 use std::collections::HashSet;
 
 use baml_compiler_diagnostics::Severity;
-use baml_project::{collect_diagnostics, testing::setup_test_db};
+use baml_project::{ProjectDatabase, collect_diagnostics, testing::setup_test_db};
 use baml_tests::baml_test;
 use baml_type::Ty;
 use bex_engine::BexExternalValue;
@@ -38,9 +38,22 @@ use bex_engine::BexExternalValue;
 /// being tied to exact wording.
 fn collect_compile_errors(source: &str) -> Vec<String> {
     let db = setup_test_db(source);
+    collect_compile_errors_from_db(&db)
+}
+
+fn collect_compile_errors_multi(files: &[(&str, &str)]) -> Vec<String> {
+    let mut db = ProjectDatabase::new();
+    db.set_project_root(std::path::Path::new("."));
+    for (path, source) in files {
+        db.add_file(*path, *source);
+    }
+    collect_compile_errors_from_db(&db)
+}
+
+fn collect_compile_errors_from_db(db: &ProjectDatabase) -> Vec<String> {
     let project = db.get_project().expect("project must be set");
     let all_files = db.get_source_files();
-    let user_file_ids: HashSet<_> = all_files.iter().map(|f| f.file_id(&db)).collect();
+    let user_file_ids: HashSet<_> = all_files.iter().map(|f| f.file_id(db)).collect();
 
     collect_diagnostics(&db, project, &all_files)
         .into_iter()
@@ -52,6 +65,26 @@ fn collect_compile_errors(source: &str) -> Vec<String> {
         })
         .map(|d| format!("[{}] {}", d.code(), d.message))
         .collect()
+}
+
+#[track_caller]
+fn assert_compile_error_contains_multi(files: &[(&str, &str)], needle: &str) {
+    let errors = collect_compile_errors_multi(files);
+    assert!(
+        errors.iter().any(|e| e.contains(needle)),
+        "expected a compile error containing {needle:?}; got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
+#[track_caller]
+fn assert_no_compile_errors_multi(files: &[(&str, &str)]) {
+    let errors = collect_compile_errors_multi(files);
+    assert!(
+        errors.is_empty(),
+        "expected no compile errors; got:\n  {}",
+        errors.join("\n  ")
+    );
 }
 
 #[track_caller]
@@ -502,6 +535,21 @@ fn unrelated_interfaces_same_field_different_types_are_separate_namespaces() {
 }
 
 // ── Group E: inheritance / requires ─────────────────────────────────────────
+
+#[test]
+fn interface_extends_clause_is_rejected() {
+    assert_compile_error_contains(
+        r#"
+        interface Named {
+            name: string
+        }
+        interface Person extends Named {
+            age: int
+        }
+        "#,
+        "extends",
+    );
+}
 
 #[test]
 fn implementing_requires_chain_satisfies_parent_required_methods() {
@@ -5526,6 +5574,219 @@ fn bounded_type_var_rule_conservatively_overlaps_concrete_rule() {
             function display(self) -> string { return "user" }
         }
         implements<T extends Named> Printable for T {
+            function display(self) -> string { return "named" }
+        }
+        "#,
+        "E0132",
+    );
+}
+
+#[test]
+fn unified_rule_namespaced_classes_with_same_short_name_do_not_cross_match() {
+    let files = &[
+        (
+            "main.baml",
+                r#"
+                function take(item: root.a.Printable) -> string {
+                    return item.display()
+                }
+                function bad() -> string {
+                    return take(root.b.Wrapper { value: 42 })
+                }
+                "#,
+            ),
+            (
+                "ns_a/wrapper.baml",
+                r#"
+                interface Printable {
+                    function display(self) -> string
+                }
+                class Wrapper {
+                    value: int
+                }
+                implements Printable for Wrapper {
+                    function display(self) -> string { return "a" }
+                }
+                "#,
+            ),
+            (
+                "ns_b/wrapper.baml",
+                r#"
+                class Wrapper {
+                    value: int
+                }
+                "#,
+            ),
+        ];
+    assert_compile_error_contains_multi(files, "b.Wrapper");
+}
+
+#[test]
+fn unified_rule_namespaced_generic_classes_with_same_short_name_do_not_cross_match() {
+    let files = &[
+        (
+            "main.baml",
+            r#"
+                function take(item: root.a.Printable<int>) -> string {
+                    return item.display()
+                }
+                function bad(item: root.b.Wrapper<int>) -> string {
+                    return take(item)
+                }
+                "#,
+        ),
+        (
+            "ns_a/wrapper.baml",
+            r#"
+                interface Printable<T> {
+                    function display(self) -> string
+                }
+                class Wrapper<T> {
+                    value: T
+                }
+                implements<T> Printable<T> for Wrapper<T> {
+                    function display(self) -> string { return "a" }
+                }
+                "#,
+        ),
+        (
+            "ns_b/wrapper.baml",
+            r#"
+                class Wrapper<T> {
+                    value: T
+                }
+                "#,
+        ),
+    ];
+    assert_compile_error_contains_multi(files, "b.Wrapper<int>");
+}
+
+#[test]
+fn qualified_generic_constructor_preserves_concrete_type_in_diagnostics() {
+    let files = &[
+        (
+            "main.baml",
+            r#"
+                interface Printable<T> {
+                    function display(self) -> string
+                }
+                class Box<T> {
+                    value: T
+                }
+                function take(item: Printable<int>) -> string {
+                    return item.display()
+                }
+                function bad() -> string {
+                    return take(root.b.Box<int> { value: 42 })
+                }
+                "#,
+        ),
+        (
+            "ns_b/box.baml",
+            r#"
+                class Box<T> {
+                    value: T
+                }
+                "#,
+        ),
+    ];
+    assert_compile_error_contains_multi(files, "b.Box<int>");
+}
+
+#[test]
+fn qualified_generic_constructor_resolves_child_namespace_type_args() {
+    let files = &[
+        (
+            "main.baml",
+            r#"
+                function explicit() -> root.b.Box<int> {
+                    return root.b.Box<int> { value: 42 }
+                }
+
+                function inferred() -> root.b.Box<int> {
+                    return root.b.Box { value: 42 }
+                }
+                "#,
+        ),
+        (
+            "ns_b/box.baml",
+            r#"
+                class Box<T> {
+                    value: T
+                }
+                "#,
+        ),
+    ];
+    assert_no_compile_errors_multi(files);
+}
+
+#[tokio::test]
+async fn unified_rule_requires_closure_preserves_substituted_generic_args() {
+    let output = baml_test!(
+        r#"
+        interface Parent<T> {
+            function get(self) -> T
+        }
+        interface Child<T> requires Parent<T> {}
+        class Wrapper<T> {
+            value: T
+        }
+        implements<T> Parent<T> for Wrapper<T> {
+            function get(self) -> T { return self.value }
+        }
+        implements<T> Child<T> for Wrapper<T> {}
+        function take(child: Child<int>) -> int {
+            return child.get()
+        }
+        function main() -> int {
+            return take(Wrapper<int> { value: 42 })
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(42));
+}
+
+#[test]
+fn bounded_type_var_rule_conservatively_overlaps_generic_class_rule() {
+    assert_compile_error_code(
+        r#"
+        interface Named {
+            name: string
+        }
+        interface Printable {
+            function display(self) -> string
+        }
+        class Box<T> {
+            value: T
+        }
+        implements<T> Printable for Box<T> {
+            function display(self) -> string { return "box" }
+        }
+        implements<U extends Named> Printable for U {
+            function display(self) -> string { return "named" }
+        }
+        "#,
+        "E0132",
+    );
+}
+
+#[test]
+fn bounded_type_var_rule_conservatively_overlaps_in_body_generic_class_rule() {
+    assert_compile_error_code(
+        r#"
+        interface Named {
+            name: string
+        }
+        interface Printable {
+            function display(self) -> string
+        }
+        class Box<T> {
+            value: T
+            implements Printable {
+                function display(self) -> string { return "box" }
+            }
+        }
+        implements<U extends Named> Printable for U {
             function display(self) -> string { return "named" }
         }
         "#,
