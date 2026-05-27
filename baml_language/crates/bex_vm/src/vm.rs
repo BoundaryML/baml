@@ -2857,9 +2857,8 @@ impl BexVm {
         } else if left.is_object() && right.is_object() && op == BinOp::Add {
             let ls = self.as_string(&left)?;
             let rs = self.as_string(&right)?;
-            let mut concat = ls.as_str().to_owned();
-            concat.push_str(rs.as_str());
-            self.alloc_string(concat)
+            let result = bex_str::BexStr::concat(ls.clone(), rs.clone());
+            self.alloc_string(result)
         } else {
             return Err(VmInternalError::CannotApplyBinOp {
                 left: self.type_of(&left),

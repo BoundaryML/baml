@@ -12,8 +12,8 @@ use crate::{
 };
 
 impl BamlNamespaceUnstable for PackageBamlImpl {
-    fn string(vm: &BexVm, value: &Value) -> Result<String, VmRustFnError> {
-        format_value_recursive(vm, *value, 0)
+    fn string(vm: &BexVm, value: &Value) -> Result<bex_str::BexStr, VmRustFnError> {
+        format_value_recursive(vm, *value, 0).map(bex_str::BexStr::from)
     }
 }
 

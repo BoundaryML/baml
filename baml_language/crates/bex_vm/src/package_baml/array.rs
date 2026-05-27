@@ -446,8 +446,9 @@ impl BamlClassArray for PackageBamlImpl {
         array[start..end].to_vec()
     }
 
-    fn join(vm: &BexVm, array: &[Value], separator: &str) -> String {
-        array
+    fn join(vm: &BexVm, array: &[Value], separator: &bex_str::BexStr) -> bex_str::BexStr {
+        let sep = separator.as_str();
+        let joined = array
             .iter()
             .map(|v| {
                 vm.as_string(v)
@@ -455,7 +456,8 @@ impl BamlClassArray for PackageBamlImpl {
                     .unwrap_or_default()
             })
             .collect::<Vec<_>>()
-            .join(separator)
+            .join(sep);
+        bex_str::BexStr::from(joined)
     }
 
     #[allow(clippy::unused_unit)]
