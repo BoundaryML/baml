@@ -143,6 +143,31 @@ pub(crate) fn format_class_docstring(
     Some(out)
 }
 
+/// Compose a function/method docstring body from an optional `///` summary
+/// and the unqualified names of its thrown types (32d). Returns the raw
+/// docstring *text* (no `"""` fences — the caller wraps it via
+/// [`format_docstring`]).
+///
+/// - no summary, no raises → `None` (omit the docstring entirely)
+/// - summary, no raises     → just the summary (unchanged behavior)
+/// - no summary, raises      → `"Raises:\n    E1, E2"`
+/// - summary + raises        → `"<summary>\n\nRaises:\n    E1, E2"`
+///
+/// Names are joined `", "` on one indented line; the `Raises:` label follows
+/// Google-style docstring convention so `inspect.getdoc` renders cleanly (the
+/// summary line keeps the names' leading indent intact under `cleandoc`).
+pub(crate) fn build_function_docstring(summary: Option<&str>, raises: &[String]) -> Option<String> {
+    let summary = summary.filter(|s| !s.is_empty());
+    if raises.is_empty() {
+        return summary.map(std::string::ToString::to_string);
+    }
+    let raises_block = format!("Raises:\n    {}", raises.join(", "));
+    Some(match summary {
+        Some(s) => format!("{s}\n\n{raises_block}"),
+        None => raises_block,
+    })
+}
+
 /// Escape `\` and `"""` so they don't break the surrounding
 /// `"""…"""` fence. `\` first so a later `\"""` substitution isn't
 /// itself doubled.
@@ -183,6 +208,38 @@ mod tests {
     #[test]
     fn format_docstring_escapes_trailing_backslash() {
         assert_eq!(format_docstring("text\\", "    "), "\"\"\"text\\\\\"\"\"");
+    }
+
+    // ── build_function_docstring: the 4-case table (32d) ────────────────────
+
+    #[test]
+    fn build_function_docstring_none_when_no_summary_no_raises() {
+        assert_eq!(build_function_docstring(None, &[]), None);
+        assert_eq!(build_function_docstring(Some(""), &[]), None);
+    }
+
+    #[test]
+    fn build_function_docstring_summary_only_unchanged() {
+        assert_eq!(
+            build_function_docstring(Some("Load a doc."), &[]),
+            Some("Load a doc.".to_string()),
+        );
+    }
+
+    #[test]
+    fn build_function_docstring_raises_only() {
+        assert_eq!(
+            build_function_docstring(None, &["E1".to_string(), "E2".to_string()]),
+            Some("Raises:\n    E1, E2".to_string()),
+        );
+    }
+
+    #[test]
+    fn build_function_docstring_summary_plus_raises() {
+        assert_eq!(
+            build_function_docstring(Some("Load a doc."), &["E1".to_string()]),
+            Some("Load a doc.\n\nRaises:\n    E1".to_string()),
+        );
     }
 
     #[test]
