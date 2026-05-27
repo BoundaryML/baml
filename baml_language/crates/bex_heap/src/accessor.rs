@@ -292,10 +292,8 @@ impl<'a> BexValue<'a> {
                         actual: obj.to_string(),
                     });
                 };
-                // SAFETY: host accessor invoked under a serialized FFI
-                // callback; no `spawn`ed mutator is concurrently active.
-                let data = unsafe { array.data_unchecked() };
-                Ok(data.iter().map(BexValue::Value).collect())
+                let data = array.to_vec();
+                Ok(data.into_iter().map(BexValue::OwnedValue).collect())
             }),
         }
     }
@@ -318,11 +316,10 @@ impl<'a> BexValue<'a> {
                         actual: obj.to_string(),
                     });
                 };
-                // SAFETY: see `as_array` above.
-                let data = unsafe { map.data_unchecked() };
+                let data = map.to_index_map();
                 Ok(data
-                    .iter()
-                    .map(|(k, v)| (k.clone(), BexValue::Value(v)))
+                    .into_iter()
+                    .map(|(k, v)| (k, BexValue::OwnedValue(v)))
                     .collect())
             }),
         }
@@ -703,11 +700,10 @@ fn convert_object(
             element_type: Ty::BuiltinUnknown {
                 attr: baml_type::TyAttr::default(),
             },
-            // SAFETY: host accessor invoked under a serialized FFI
-            // callback; no `spawn`ed mutator is concurrently active.
-            items: unsafe { array.data_unchecked() }
-                .iter()
-                .map(|item| owned_inner(BexValue::Value(item), heap, lossy))
+            items: array
+                .to_vec()
+                .into_iter()
+                .map(|item| owned_inner(BexValue::OwnedValue(item), heap, lossy))
                 .collect::<Result<_, _>>()?,
         }),
         Object::Map(map) => Ok(BexExternalValue::Map {
@@ -717,10 +713,10 @@ fn convert_object(
             value_type: Ty::BuiltinUnknown {
                 attr: baml_type::TyAttr::default(),
             },
-            // SAFETY: see `Object::Array` arm above.
-            entries: unsafe { map.data_unchecked() }
-                .iter()
-                .map(|(k, v)| Ok((k.clone(), owned_inner(BexValue::Value(v), heap, lossy)?)))
+            entries: map
+                .to_index_map()
+                .into_iter()
+                .map(|(k, v)| Ok((k, owned_inner(BexValue::OwnedValue(v), heap, lossy)?)))
                 .collect::<Result<_, _>>()?,
         }),
         Object::Instance(instance) => {

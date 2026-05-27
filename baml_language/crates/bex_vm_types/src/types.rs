@@ -1397,8 +1397,8 @@ impl<T> LockedContainer<T> {
     ///
     /// - GC traversal while the stop-the-world barrier is engaged
     ///   (all mutator threads are parked).
-    /// - Host accessor invocations during a serialized FFI callback.
     /// - Single-threaded engine setup / init.
+    /// - Other code that has independently stopped all VM mutators.
     ///
     /// For any path where a `spawn`ed fiber may be running, use
     /// [`Self::lock`] instead.
