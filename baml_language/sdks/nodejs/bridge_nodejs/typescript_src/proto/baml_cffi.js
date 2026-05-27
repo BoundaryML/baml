@@ -1,10 +1,3 @@
-/**
- * THIS FILE IS AUTO-GENERATED — DO NOT EDIT BY HAND.
- *
- * Source: baml_language/crates/bridge_nodejs/typescript_src/
- * Proto:  baml_language/crates/bridge_ctypes/types/baml_core/cffi/v1/*.proto
- * Build:  cd baml_language/crates/bridge_nodejs && pnpm build:debug
- */
 /*eslint-disable block-scoped-var, id-length, no-control-regex, no-magic-numbers, no-prototype-builtins, no-redeclare, no-shadow, no-var, sort-vars*/
 "use strict";
 
@@ -3061,6 +3054,866 @@ $root.baml_core = (function() {
                 };
 
                 return CallAck;
+            })();
+
+            v1.BamlOutboundResult = (function() {
+
+                /**
+                 * Properties of a BamlOutboundResult.
+                 * @memberof baml_core.cffi.v1
+                 * @interface IBamlOutboundResult
+                 * @property {baml_core.cffi.v1.IBamlOutboundValue|null} [ok] BamlOutboundResult ok
+                 * @property {baml_core.cffi.v1.IBamlOutboundError|null} [error] BamlOutboundResult error
+                 * @property {baml_core.cffi.v1.IBamlOutboundPanic|null} [panic] BamlOutboundResult panic
+                 */
+
+                /**
+                 * Constructs a new BamlOutboundResult.
+                 * @memberof baml_core.cffi.v1
+                 * @classdesc Represents a BamlOutboundResult.
+                 * @implements IBamlOutboundResult
+                 * @constructor
+                 * @param {baml_core.cffi.v1.IBamlOutboundResult=} [properties] Properties to set
+                 */
+                function BamlOutboundResult(properties) {
+                    if (properties)
+                        for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                            if (properties[keys[i]] != null)
+                                this[keys[i]] = properties[keys[i]];
+                }
+
+                /**
+                 * BamlOutboundResult ok.
+                 * @member {baml_core.cffi.v1.IBamlOutboundValue|null|undefined} ok
+                 * @memberof baml_core.cffi.v1.BamlOutboundResult
+                 * @instance
+                 */
+                BamlOutboundResult.prototype.ok = null;
+
+                /**
+                 * BamlOutboundResult error.
+                 * @member {baml_core.cffi.v1.IBamlOutboundError|null|undefined} error
+                 * @memberof baml_core.cffi.v1.BamlOutboundResult
+                 * @instance
+                 */
+                BamlOutboundResult.prototype.error = null;
+
+                /**
+                 * BamlOutboundResult panic.
+                 * @member {baml_core.cffi.v1.IBamlOutboundPanic|null|undefined} panic
+                 * @memberof baml_core.cffi.v1.BamlOutboundResult
+                 * @instance
+                 */
+                BamlOutboundResult.prototype.panic = null;
+
+                // OneOf field names bound to virtual getters and setters
+                var $oneOfFields;
+
+                /**
+                 * BamlOutboundResult result.
+                 * @member {"ok"|"error"|"panic"|undefined} result
+                 * @memberof baml_core.cffi.v1.BamlOutboundResult
+                 * @instance
+                 */
+                Object.defineProperty(BamlOutboundResult.prototype, "result", {
+                    get: $util.oneOfGetter($oneOfFields = ["ok", "error", "panic"]),
+                    set: $util.oneOfSetter($oneOfFields)
+                });
+
+                /**
+                 * Creates a new BamlOutboundResult instance using the specified properties.
+                 * @function create
+                 * @memberof baml_core.cffi.v1.BamlOutboundResult
+                 * @static
+                 * @param {baml_core.cffi.v1.IBamlOutboundResult=} [properties] Properties to set
+                 * @returns {baml_core.cffi.v1.BamlOutboundResult} BamlOutboundResult instance
+                 */
+                BamlOutboundResult.create = function create(properties) {
+                    return new BamlOutboundResult(properties);
+                };
+
+                /**
+                 * Encodes the specified BamlOutboundResult message. Does not implicitly {@link baml_core.cffi.v1.BamlOutboundResult.verify|verify} messages.
+                 * @function encode
+                 * @memberof baml_core.cffi.v1.BamlOutboundResult
+                 * @static
+                 * @param {baml_core.cffi.v1.IBamlOutboundResult} message BamlOutboundResult message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlOutboundResult.encode = function encode(message, writer) {
+                    if (!writer)
+                        writer = $Writer.create();
+                    if (message.ok != null && Object.hasOwnProperty.call(message, "ok"))
+                        $root.baml_core.cffi.v1.BamlOutboundValue.encode(message.ok, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+                    if (message.error != null && Object.hasOwnProperty.call(message, "error"))
+                        $root.baml_core.cffi.v1.BamlOutboundError.encode(message.error, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+                    if (message.panic != null && Object.hasOwnProperty.call(message, "panic"))
+                        $root.baml_core.cffi.v1.BamlOutboundPanic.encode(message.panic, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+                    return writer;
+                };
+
+                /**
+                 * Encodes the specified BamlOutboundResult message, length delimited. Does not implicitly {@link baml_core.cffi.v1.BamlOutboundResult.verify|verify} messages.
+                 * @function encodeDelimited
+                 * @memberof baml_core.cffi.v1.BamlOutboundResult
+                 * @static
+                 * @param {baml_core.cffi.v1.IBamlOutboundResult} message BamlOutboundResult message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlOutboundResult.encodeDelimited = function encodeDelimited(message, writer) {
+                    return this.encode(message, writer).ldelim();
+                };
+
+                /**
+                 * Decodes a BamlOutboundResult message from the specified reader or buffer.
+                 * @function decode
+                 * @memberof baml_core.cffi.v1.BamlOutboundResult
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @param {number} [length] Message length if known beforehand
+                 * @returns {baml_core.cffi.v1.BamlOutboundResult} BamlOutboundResult
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlOutboundResult.decode = function decode(reader, length, error) {
+                    if (!(reader instanceof $Reader))
+                        reader = $Reader.create(reader);
+                    var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlOutboundResult();
+                    while (reader.pos < end) {
+                        var tag = reader.uint32();
+                        if (tag === error)
+                            break;
+                        switch (tag >>> 3) {
+                        case 1: {
+                                message.ok = $root.baml_core.cffi.v1.BamlOutboundValue.decode(reader, reader.uint32());
+                                break;
+                            }
+                        case 2: {
+                                message.error = $root.baml_core.cffi.v1.BamlOutboundError.decode(reader, reader.uint32());
+                                break;
+                            }
+                        case 3: {
+                                message.panic = $root.baml_core.cffi.v1.BamlOutboundPanic.decode(reader, reader.uint32());
+                                break;
+                            }
+                        default:
+                            reader.skipType(tag & 7);
+                            break;
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Decodes a BamlOutboundResult message from the specified reader or buffer, length delimited.
+                 * @function decodeDelimited
+                 * @memberof baml_core.cffi.v1.BamlOutboundResult
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @returns {baml_core.cffi.v1.BamlOutboundResult} BamlOutboundResult
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlOutboundResult.decodeDelimited = function decodeDelimited(reader) {
+                    if (!(reader instanceof $Reader))
+                        reader = new $Reader(reader);
+                    return this.decode(reader, reader.uint32());
+                };
+
+                /**
+                 * Verifies a BamlOutboundResult message.
+                 * @function verify
+                 * @memberof baml_core.cffi.v1.BamlOutboundResult
+                 * @static
+                 * @param {Object.<string,*>} message Plain object to verify
+                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
+                 */
+                BamlOutboundResult.verify = function verify(message) {
+                    if (typeof message !== "object" || message === null)
+                        return "object expected";
+                    var properties = {};
+                    if (message.ok != null && message.hasOwnProperty("ok")) {
+                        properties.result = 1;
+                        {
+                            var error = $root.baml_core.cffi.v1.BamlOutboundValue.verify(message.ok);
+                            if (error)
+                                return "ok." + error;
+                        }
+                    }
+                    if (message.error != null && message.hasOwnProperty("error")) {
+                        if (properties.result === 1)
+                            return "result: multiple values";
+                        properties.result = 1;
+                        {
+                            var error = $root.baml_core.cffi.v1.BamlOutboundError.verify(message.error);
+                            if (error)
+                                return "error." + error;
+                        }
+                    }
+                    if (message.panic != null && message.hasOwnProperty("panic")) {
+                        if (properties.result === 1)
+                            return "result: multiple values";
+                        properties.result = 1;
+                        {
+                            var error = $root.baml_core.cffi.v1.BamlOutboundPanic.verify(message.panic);
+                            if (error)
+                                return "panic." + error;
+                        }
+                    }
+                    return null;
+                };
+
+                /**
+                 * Creates a BamlOutboundResult message from a plain object. Also converts values to their respective internal types.
+                 * @function fromObject
+                 * @memberof baml_core.cffi.v1.BamlOutboundResult
+                 * @static
+                 * @param {Object.<string,*>} object Plain object
+                 * @returns {baml_core.cffi.v1.BamlOutboundResult} BamlOutboundResult
+                 */
+                BamlOutboundResult.fromObject = function fromObject(object) {
+                    if (object instanceof $root.baml_core.cffi.v1.BamlOutboundResult)
+                        return object;
+                    var message = new $root.baml_core.cffi.v1.BamlOutboundResult();
+                    if (object.ok != null) {
+                        if (typeof object.ok !== "object")
+                            throw TypeError(".baml_core.cffi.v1.BamlOutboundResult.ok: object expected");
+                        message.ok = $root.baml_core.cffi.v1.BamlOutboundValue.fromObject(object.ok);
+                    }
+                    if (object.error != null) {
+                        if (typeof object.error !== "object")
+                            throw TypeError(".baml_core.cffi.v1.BamlOutboundResult.error: object expected");
+                        message.error = $root.baml_core.cffi.v1.BamlOutboundError.fromObject(object.error);
+                    }
+                    if (object.panic != null) {
+                        if (typeof object.panic !== "object")
+                            throw TypeError(".baml_core.cffi.v1.BamlOutboundResult.panic: object expected");
+                        message.panic = $root.baml_core.cffi.v1.BamlOutboundPanic.fromObject(object.panic);
+                    }
+                    return message;
+                };
+
+                /**
+                 * Creates a plain object from a BamlOutboundResult message. Also converts values to other types if specified.
+                 * @function toObject
+                 * @memberof baml_core.cffi.v1.BamlOutboundResult
+                 * @static
+                 * @param {baml_core.cffi.v1.BamlOutboundResult} message BamlOutboundResult
+                 * @param {$protobuf.IConversionOptions} [options] Conversion options
+                 * @returns {Object.<string,*>} Plain object
+                 */
+                BamlOutboundResult.toObject = function toObject(message, options) {
+                    if (!options)
+                        options = {};
+                    var object = {};
+                    if (message.ok != null && message.hasOwnProperty("ok")) {
+                        object.ok = $root.baml_core.cffi.v1.BamlOutboundValue.toObject(message.ok, options);
+                        if (options.oneofs)
+                            object.result = "ok";
+                    }
+                    if (message.error != null && message.hasOwnProperty("error")) {
+                        object.error = $root.baml_core.cffi.v1.BamlOutboundError.toObject(message.error, options);
+                        if (options.oneofs)
+                            object.result = "error";
+                    }
+                    if (message.panic != null && message.hasOwnProperty("panic")) {
+                        object.panic = $root.baml_core.cffi.v1.BamlOutboundPanic.toObject(message.panic, options);
+                        if (options.oneofs)
+                            object.result = "panic";
+                    }
+                    return object;
+                };
+
+                /**
+                 * Converts this BamlOutboundResult to JSON.
+                 * @function toJSON
+                 * @memberof baml_core.cffi.v1.BamlOutboundResult
+                 * @instance
+                 * @returns {Object.<string,*>} JSON object
+                 */
+                BamlOutboundResult.prototype.toJSON = function toJSON() {
+                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+                };
+
+                /**
+                 * Gets the default type url for BamlOutboundResult
+                 * @function getTypeUrl
+                 * @memberof baml_core.cffi.v1.BamlOutboundResult
+                 * @static
+                 * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns {string} The default type url
+                 */
+                BamlOutboundResult.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                    if (typeUrlPrefix === undefined) {
+                        typeUrlPrefix = "type.googleapis.com";
+                    }
+                    return typeUrlPrefix + "/baml_core.cffi.v1.BamlOutboundResult";
+                };
+
+                return BamlOutboundResult;
+            })();
+
+            v1.BamlOutboundError = (function() {
+
+                /**
+                 * Properties of a BamlOutboundError.
+                 * @memberof baml_core.cffi.v1
+                 * @interface IBamlOutboundError
+                 * @property {baml_core.cffi.v1.IBamlOutboundValue|null} [value] BamlOutboundError value
+                 * @property {Array.<string>|null} [trace] BamlOutboundError trace
+                 */
+
+                /**
+                 * Constructs a new BamlOutboundError.
+                 * @memberof baml_core.cffi.v1
+                 * @classdesc Represents a BamlOutboundError.
+                 * @implements IBamlOutboundError
+                 * @constructor
+                 * @param {baml_core.cffi.v1.IBamlOutboundError=} [properties] Properties to set
+                 */
+                function BamlOutboundError(properties) {
+                    this.trace = [];
+                    if (properties)
+                        for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                            if (properties[keys[i]] != null)
+                                this[keys[i]] = properties[keys[i]];
+                }
+
+                /**
+                 * BamlOutboundError value.
+                 * @member {baml_core.cffi.v1.IBamlOutboundValue|null|undefined} value
+                 * @memberof baml_core.cffi.v1.BamlOutboundError
+                 * @instance
+                 */
+                BamlOutboundError.prototype.value = null;
+
+                /**
+                 * BamlOutboundError trace.
+                 * @member {Array.<string>} trace
+                 * @memberof baml_core.cffi.v1.BamlOutboundError
+                 * @instance
+                 */
+                BamlOutboundError.prototype.trace = $util.emptyArray;
+
+                /**
+                 * Creates a new BamlOutboundError instance using the specified properties.
+                 * @function create
+                 * @memberof baml_core.cffi.v1.BamlOutboundError
+                 * @static
+                 * @param {baml_core.cffi.v1.IBamlOutboundError=} [properties] Properties to set
+                 * @returns {baml_core.cffi.v1.BamlOutboundError} BamlOutboundError instance
+                 */
+                BamlOutboundError.create = function create(properties) {
+                    return new BamlOutboundError(properties);
+                };
+
+                /**
+                 * Encodes the specified BamlOutboundError message. Does not implicitly {@link baml_core.cffi.v1.BamlOutboundError.verify|verify} messages.
+                 * @function encode
+                 * @memberof baml_core.cffi.v1.BamlOutboundError
+                 * @static
+                 * @param {baml_core.cffi.v1.IBamlOutboundError} message BamlOutboundError message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlOutboundError.encode = function encode(message, writer) {
+                    if (!writer)
+                        writer = $Writer.create();
+                    if (message.value != null && Object.hasOwnProperty.call(message, "value"))
+                        $root.baml_core.cffi.v1.BamlOutboundValue.encode(message.value, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+                    if (message.trace != null && message.trace.length)
+                        for (var i = 0; i < message.trace.length; ++i)
+                            writer.uint32(/* id 2, wireType 2 =*/18).string(message.trace[i]);
+                    return writer;
+                };
+
+                /**
+                 * Encodes the specified BamlOutboundError message, length delimited. Does not implicitly {@link baml_core.cffi.v1.BamlOutboundError.verify|verify} messages.
+                 * @function encodeDelimited
+                 * @memberof baml_core.cffi.v1.BamlOutboundError
+                 * @static
+                 * @param {baml_core.cffi.v1.IBamlOutboundError} message BamlOutboundError message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlOutboundError.encodeDelimited = function encodeDelimited(message, writer) {
+                    return this.encode(message, writer).ldelim();
+                };
+
+                /**
+                 * Decodes a BamlOutboundError message from the specified reader or buffer.
+                 * @function decode
+                 * @memberof baml_core.cffi.v1.BamlOutboundError
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @param {number} [length] Message length if known beforehand
+                 * @returns {baml_core.cffi.v1.BamlOutboundError} BamlOutboundError
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlOutboundError.decode = function decode(reader, length, error) {
+                    if (!(reader instanceof $Reader))
+                        reader = $Reader.create(reader);
+                    var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlOutboundError();
+                    while (reader.pos < end) {
+                        var tag = reader.uint32();
+                        if (tag === error)
+                            break;
+                        switch (tag >>> 3) {
+                        case 1: {
+                                message.value = $root.baml_core.cffi.v1.BamlOutboundValue.decode(reader, reader.uint32());
+                                break;
+                            }
+                        case 2: {
+                                if (!(message.trace && message.trace.length))
+                                    message.trace = [];
+                                message.trace.push(reader.string());
+                                break;
+                            }
+                        default:
+                            reader.skipType(tag & 7);
+                            break;
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Decodes a BamlOutboundError message from the specified reader or buffer, length delimited.
+                 * @function decodeDelimited
+                 * @memberof baml_core.cffi.v1.BamlOutboundError
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @returns {baml_core.cffi.v1.BamlOutboundError} BamlOutboundError
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlOutboundError.decodeDelimited = function decodeDelimited(reader) {
+                    if (!(reader instanceof $Reader))
+                        reader = new $Reader(reader);
+                    return this.decode(reader, reader.uint32());
+                };
+
+                /**
+                 * Verifies a BamlOutboundError message.
+                 * @function verify
+                 * @memberof baml_core.cffi.v1.BamlOutboundError
+                 * @static
+                 * @param {Object.<string,*>} message Plain object to verify
+                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
+                 */
+                BamlOutboundError.verify = function verify(message) {
+                    if (typeof message !== "object" || message === null)
+                        return "object expected";
+                    if (message.value != null && message.hasOwnProperty("value")) {
+                        var error = $root.baml_core.cffi.v1.BamlOutboundValue.verify(message.value);
+                        if (error)
+                            return "value." + error;
+                    }
+                    if (message.trace != null && message.hasOwnProperty("trace")) {
+                        if (!Array.isArray(message.trace))
+                            return "trace: array expected";
+                        for (var i = 0; i < message.trace.length; ++i)
+                            if (!$util.isString(message.trace[i]))
+                                return "trace: string[] expected";
+                    }
+                    return null;
+                };
+
+                /**
+                 * Creates a BamlOutboundError message from a plain object. Also converts values to their respective internal types.
+                 * @function fromObject
+                 * @memberof baml_core.cffi.v1.BamlOutboundError
+                 * @static
+                 * @param {Object.<string,*>} object Plain object
+                 * @returns {baml_core.cffi.v1.BamlOutboundError} BamlOutboundError
+                 */
+                BamlOutboundError.fromObject = function fromObject(object) {
+                    if (object instanceof $root.baml_core.cffi.v1.BamlOutboundError)
+                        return object;
+                    var message = new $root.baml_core.cffi.v1.BamlOutboundError();
+                    if (object.value != null) {
+                        if (typeof object.value !== "object")
+                            throw TypeError(".baml_core.cffi.v1.BamlOutboundError.value: object expected");
+                        message.value = $root.baml_core.cffi.v1.BamlOutboundValue.fromObject(object.value);
+                    }
+                    if (object.trace) {
+                        if (!Array.isArray(object.trace))
+                            throw TypeError(".baml_core.cffi.v1.BamlOutboundError.trace: array expected");
+                        message.trace = [];
+                        for (var i = 0; i < object.trace.length; ++i)
+                            message.trace[i] = String(object.trace[i]);
+                    }
+                    return message;
+                };
+
+                /**
+                 * Creates a plain object from a BamlOutboundError message. Also converts values to other types if specified.
+                 * @function toObject
+                 * @memberof baml_core.cffi.v1.BamlOutboundError
+                 * @static
+                 * @param {baml_core.cffi.v1.BamlOutboundError} message BamlOutboundError
+                 * @param {$protobuf.IConversionOptions} [options] Conversion options
+                 * @returns {Object.<string,*>} Plain object
+                 */
+                BamlOutboundError.toObject = function toObject(message, options) {
+                    if (!options)
+                        options = {};
+                    var object = {};
+                    if (options.arrays || options.defaults)
+                        object.trace = [];
+                    if (options.defaults)
+                        object.value = null;
+                    if (message.value != null && message.hasOwnProperty("value"))
+                        object.value = $root.baml_core.cffi.v1.BamlOutboundValue.toObject(message.value, options);
+                    if (message.trace && message.trace.length) {
+                        object.trace = [];
+                        for (var j = 0; j < message.trace.length; ++j)
+                            object.trace[j] = message.trace[j];
+                    }
+                    return object;
+                };
+
+                /**
+                 * Converts this BamlOutboundError to JSON.
+                 * @function toJSON
+                 * @memberof baml_core.cffi.v1.BamlOutboundError
+                 * @instance
+                 * @returns {Object.<string,*>} JSON object
+                 */
+                BamlOutboundError.prototype.toJSON = function toJSON() {
+                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+                };
+
+                /**
+                 * Gets the default type url for BamlOutboundError
+                 * @function getTypeUrl
+                 * @memberof baml_core.cffi.v1.BamlOutboundError
+                 * @static
+                 * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns {string} The default type url
+                 */
+                BamlOutboundError.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                    if (typeUrlPrefix === undefined) {
+                        typeUrlPrefix = "type.googleapis.com";
+                    }
+                    return typeUrlPrefix + "/baml_core.cffi.v1.BamlOutboundError";
+                };
+
+                return BamlOutboundError;
+            })();
+
+            v1.BamlOutboundPanic = (function() {
+
+                /**
+                 * Properties of a BamlOutboundPanic.
+                 * @memberof baml_core.cffi.v1
+                 * @interface IBamlOutboundPanic
+                 * @property {baml_core.cffi.v1.IBamlOutboundValue|null} [value] BamlOutboundPanic value
+                 * @property {Array.<string>|null} [trace] BamlOutboundPanic trace
+                 * @property {boolean|null} [isExitPanic] BamlOutboundPanic isExitPanic
+                 * @property {number|Long|null} [exitCode] BamlOutboundPanic exitCode
+                 */
+
+                /**
+                 * Constructs a new BamlOutboundPanic.
+                 * @memberof baml_core.cffi.v1
+                 * @classdesc Represents a BamlOutboundPanic.
+                 * @implements IBamlOutboundPanic
+                 * @constructor
+                 * @param {baml_core.cffi.v1.IBamlOutboundPanic=} [properties] Properties to set
+                 */
+                function BamlOutboundPanic(properties) {
+                    this.trace = [];
+                    if (properties)
+                        for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                            if (properties[keys[i]] != null)
+                                this[keys[i]] = properties[keys[i]];
+                }
+
+                /**
+                 * BamlOutboundPanic value.
+                 * @member {baml_core.cffi.v1.IBamlOutboundValue|null|undefined} value
+                 * @memberof baml_core.cffi.v1.BamlOutboundPanic
+                 * @instance
+                 */
+                BamlOutboundPanic.prototype.value = null;
+
+                /**
+                 * BamlOutboundPanic trace.
+                 * @member {Array.<string>} trace
+                 * @memberof baml_core.cffi.v1.BamlOutboundPanic
+                 * @instance
+                 */
+                BamlOutboundPanic.prototype.trace = $util.emptyArray;
+
+                /**
+                 * BamlOutboundPanic isExitPanic.
+                 * @member {boolean} isExitPanic
+                 * @memberof baml_core.cffi.v1.BamlOutboundPanic
+                 * @instance
+                 */
+                BamlOutboundPanic.prototype.isExitPanic = false;
+
+                /**
+                 * BamlOutboundPanic exitCode.
+                 * @member {number|Long} exitCode
+                 * @memberof baml_core.cffi.v1.BamlOutboundPanic
+                 * @instance
+                 */
+                BamlOutboundPanic.prototype.exitCode = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+                /**
+                 * Creates a new BamlOutboundPanic instance using the specified properties.
+                 * @function create
+                 * @memberof baml_core.cffi.v1.BamlOutboundPanic
+                 * @static
+                 * @param {baml_core.cffi.v1.IBamlOutboundPanic=} [properties] Properties to set
+                 * @returns {baml_core.cffi.v1.BamlOutboundPanic} BamlOutboundPanic instance
+                 */
+                BamlOutboundPanic.create = function create(properties) {
+                    return new BamlOutboundPanic(properties);
+                };
+
+                /**
+                 * Encodes the specified BamlOutboundPanic message. Does not implicitly {@link baml_core.cffi.v1.BamlOutboundPanic.verify|verify} messages.
+                 * @function encode
+                 * @memberof baml_core.cffi.v1.BamlOutboundPanic
+                 * @static
+                 * @param {baml_core.cffi.v1.IBamlOutboundPanic} message BamlOutboundPanic message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlOutboundPanic.encode = function encode(message, writer) {
+                    if (!writer)
+                        writer = $Writer.create();
+                    if (message.value != null && Object.hasOwnProperty.call(message, "value"))
+                        $root.baml_core.cffi.v1.BamlOutboundValue.encode(message.value, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+                    if (message.trace != null && message.trace.length)
+                        for (var i = 0; i < message.trace.length; ++i)
+                            writer.uint32(/* id 2, wireType 2 =*/18).string(message.trace[i]);
+                    if (message.isExitPanic != null && Object.hasOwnProperty.call(message, "isExitPanic"))
+                        writer.uint32(/* id 3, wireType 0 =*/24).bool(message.isExitPanic);
+                    if (message.exitCode != null && Object.hasOwnProperty.call(message, "exitCode"))
+                        writer.uint32(/* id 4, wireType 0 =*/32).int64(message.exitCode);
+                    return writer;
+                };
+
+                /**
+                 * Encodes the specified BamlOutboundPanic message, length delimited. Does not implicitly {@link baml_core.cffi.v1.BamlOutboundPanic.verify|verify} messages.
+                 * @function encodeDelimited
+                 * @memberof baml_core.cffi.v1.BamlOutboundPanic
+                 * @static
+                 * @param {baml_core.cffi.v1.IBamlOutboundPanic} message BamlOutboundPanic message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlOutboundPanic.encodeDelimited = function encodeDelimited(message, writer) {
+                    return this.encode(message, writer).ldelim();
+                };
+
+                /**
+                 * Decodes a BamlOutboundPanic message from the specified reader or buffer.
+                 * @function decode
+                 * @memberof baml_core.cffi.v1.BamlOutboundPanic
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @param {number} [length] Message length if known beforehand
+                 * @returns {baml_core.cffi.v1.BamlOutboundPanic} BamlOutboundPanic
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlOutboundPanic.decode = function decode(reader, length, error) {
+                    if (!(reader instanceof $Reader))
+                        reader = $Reader.create(reader);
+                    var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlOutboundPanic();
+                    while (reader.pos < end) {
+                        var tag = reader.uint32();
+                        if (tag === error)
+                            break;
+                        switch (tag >>> 3) {
+                        case 1: {
+                                message.value = $root.baml_core.cffi.v1.BamlOutboundValue.decode(reader, reader.uint32());
+                                break;
+                            }
+                        case 2: {
+                                if (!(message.trace && message.trace.length))
+                                    message.trace = [];
+                                message.trace.push(reader.string());
+                                break;
+                            }
+                        case 3: {
+                                message.isExitPanic = reader.bool();
+                                break;
+                            }
+                        case 4: {
+                                message.exitCode = reader.int64();
+                                break;
+                            }
+                        default:
+                            reader.skipType(tag & 7);
+                            break;
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Decodes a BamlOutboundPanic message from the specified reader or buffer, length delimited.
+                 * @function decodeDelimited
+                 * @memberof baml_core.cffi.v1.BamlOutboundPanic
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @returns {baml_core.cffi.v1.BamlOutboundPanic} BamlOutboundPanic
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlOutboundPanic.decodeDelimited = function decodeDelimited(reader) {
+                    if (!(reader instanceof $Reader))
+                        reader = new $Reader(reader);
+                    return this.decode(reader, reader.uint32());
+                };
+
+                /**
+                 * Verifies a BamlOutboundPanic message.
+                 * @function verify
+                 * @memberof baml_core.cffi.v1.BamlOutboundPanic
+                 * @static
+                 * @param {Object.<string,*>} message Plain object to verify
+                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
+                 */
+                BamlOutboundPanic.verify = function verify(message) {
+                    if (typeof message !== "object" || message === null)
+                        return "object expected";
+                    if (message.value != null && message.hasOwnProperty("value")) {
+                        var error = $root.baml_core.cffi.v1.BamlOutboundValue.verify(message.value);
+                        if (error)
+                            return "value." + error;
+                    }
+                    if (message.trace != null && message.hasOwnProperty("trace")) {
+                        if (!Array.isArray(message.trace))
+                            return "trace: array expected";
+                        for (var i = 0; i < message.trace.length; ++i)
+                            if (!$util.isString(message.trace[i]))
+                                return "trace: string[] expected";
+                    }
+                    if (message.isExitPanic != null && message.hasOwnProperty("isExitPanic"))
+                        if (typeof message.isExitPanic !== "boolean")
+                            return "isExitPanic: boolean expected";
+                    if (message.exitCode != null && message.hasOwnProperty("exitCode"))
+                        if (!$util.isInteger(message.exitCode) && !(message.exitCode && $util.isInteger(message.exitCode.low) && $util.isInteger(message.exitCode.high)))
+                            return "exitCode: integer|Long expected";
+                    return null;
+                };
+
+                /**
+                 * Creates a BamlOutboundPanic message from a plain object. Also converts values to their respective internal types.
+                 * @function fromObject
+                 * @memberof baml_core.cffi.v1.BamlOutboundPanic
+                 * @static
+                 * @param {Object.<string,*>} object Plain object
+                 * @returns {baml_core.cffi.v1.BamlOutboundPanic} BamlOutboundPanic
+                 */
+                BamlOutboundPanic.fromObject = function fromObject(object) {
+                    if (object instanceof $root.baml_core.cffi.v1.BamlOutboundPanic)
+                        return object;
+                    var message = new $root.baml_core.cffi.v1.BamlOutboundPanic();
+                    if (object.value != null) {
+                        if (typeof object.value !== "object")
+                            throw TypeError(".baml_core.cffi.v1.BamlOutboundPanic.value: object expected");
+                        message.value = $root.baml_core.cffi.v1.BamlOutboundValue.fromObject(object.value);
+                    }
+                    if (object.trace) {
+                        if (!Array.isArray(object.trace))
+                            throw TypeError(".baml_core.cffi.v1.BamlOutboundPanic.trace: array expected");
+                        message.trace = [];
+                        for (var i = 0; i < object.trace.length; ++i)
+                            message.trace[i] = String(object.trace[i]);
+                    }
+                    if (object.isExitPanic != null)
+                        message.isExitPanic = Boolean(object.isExitPanic);
+                    if (object.exitCode != null)
+                        if ($util.Long)
+                            (message.exitCode = $util.Long.fromValue(object.exitCode)).unsigned = false;
+                        else if (typeof object.exitCode === "string")
+                            message.exitCode = parseInt(object.exitCode, 10);
+                        else if (typeof object.exitCode === "number")
+                            message.exitCode = object.exitCode;
+                        else if (typeof object.exitCode === "object")
+                            message.exitCode = new $util.LongBits(object.exitCode.low >>> 0, object.exitCode.high >>> 0).toNumber();
+                    return message;
+                };
+
+                /**
+                 * Creates a plain object from a BamlOutboundPanic message. Also converts values to other types if specified.
+                 * @function toObject
+                 * @memberof baml_core.cffi.v1.BamlOutboundPanic
+                 * @static
+                 * @param {baml_core.cffi.v1.BamlOutboundPanic} message BamlOutboundPanic
+                 * @param {$protobuf.IConversionOptions} [options] Conversion options
+                 * @returns {Object.<string,*>} Plain object
+                 */
+                BamlOutboundPanic.toObject = function toObject(message, options) {
+                    if (!options)
+                        options = {};
+                    var object = {};
+                    if (options.arrays || options.defaults)
+                        object.trace = [];
+                    if (options.defaults) {
+                        object.value = null;
+                        object.isExitPanic = false;
+                        if ($util.Long) {
+                            var long = new $util.Long(0, 0, false);
+                            object.exitCode = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                        } else
+                            object.exitCode = options.longs === String ? "0" : 0;
+                    }
+                    if (message.value != null && message.hasOwnProperty("value"))
+                        object.value = $root.baml_core.cffi.v1.BamlOutboundValue.toObject(message.value, options);
+                    if (message.trace && message.trace.length) {
+                        object.trace = [];
+                        for (var j = 0; j < message.trace.length; ++j)
+                            object.trace[j] = message.trace[j];
+                    }
+                    if (message.isExitPanic != null && message.hasOwnProperty("isExitPanic"))
+                        object.isExitPanic = message.isExitPanic;
+                    if (message.exitCode != null && message.hasOwnProperty("exitCode"))
+                        if (typeof message.exitCode === "number")
+                            object.exitCode = options.longs === String ? String(message.exitCode) : message.exitCode;
+                        else
+                            object.exitCode = options.longs === String ? $util.Long.prototype.toString.call(message.exitCode) : options.longs === Number ? new $util.LongBits(message.exitCode.low >>> 0, message.exitCode.high >>> 0).toNumber() : message.exitCode;
+                    return object;
+                };
+
+                /**
+                 * Converts this BamlOutboundPanic to JSON.
+                 * @function toJSON
+                 * @memberof baml_core.cffi.v1.BamlOutboundPanic
+                 * @instance
+                 * @returns {Object.<string,*>} JSON object
+                 */
+                BamlOutboundPanic.prototype.toJSON = function toJSON() {
+                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+                };
+
+                /**
+                 * Gets the default type url for BamlOutboundPanic
+                 * @function getTypeUrl
+                 * @memberof baml_core.cffi.v1.BamlOutboundPanic
+                 * @static
+                 * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns {string} The default type url
+                 */
+                BamlOutboundPanic.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                    if (typeUrlPrefix === undefined) {
+                        typeUrlPrefix = "type.googleapis.com";
+                    }
+                    return typeUrlPrefix + "/baml_core.cffi.v1.BamlOutboundPanic";
+                };
+
+                return BamlOutboundPanic;
             })();
 
             v1.BamlOutboundValue = (function() {
