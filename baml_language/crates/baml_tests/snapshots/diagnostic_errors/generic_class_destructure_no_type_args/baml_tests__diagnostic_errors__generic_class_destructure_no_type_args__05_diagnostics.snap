@@ -1,0 +1,34 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] error: type mismatch: expected user.Box<int>, got user.Box
+    ╭─[ main.baml:10:45 ]
+    │
+ 10 │ ╭─▶     let boxed: Box<int> = Box { value: 42 };
+ 11 │ ├─▶     let Box { value } = boxed;
+    │ │                                    
+    │ ╰──────────────────────────────────── type mismatch: expected user.Box<int>, got user.Box
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] error: generic class destructure `Box { ... }` must specify type arguments
+    ╭─[ main.baml:11:25 ]
+    │
+ 11 │     let Box { value } = boxed;
+    │                         ──┬──  
+    │                           ╰──── generic class destructure `Box { ... }` must specify type arguments
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] error: type mismatch: expected int, got T
+    ╭─[ main.baml:12:5 ]
+    │
+ 12 │     value
+    │     ──┬──  
+    │       ╰──── type mismatch: expected int, got T
+    │ 
+    │ Note: Error code: E0001
+────╯

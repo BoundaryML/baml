@@ -1250,6 +1250,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "allocates ~15k objects to drive GC heuristics; runs for minutes under Miri and exercises collection policy, not unsafe memory paths"
+    )]
     fn test_gc_heuristics() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
@@ -2557,6 +2561,10 @@ mod tests {
 
     /// Verify `should_collect` returns `Some(Minor)` after 10,000+ allocations.
     #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "allocates 10k+ objects to cross the GC threshold; runs for minutes under Miri and exercises collection policy, not unsafe memory paths"
+    )]
     fn test_should_collect_minor_on_gen0_pressure() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
@@ -2571,6 +2579,10 @@ mod tests {
 
     /// Verify `should_collect` returns `Some(Minor)` when Gen1 exceeds its threshold.
     #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "allocates 10k+ objects to cross the GC threshold; runs for minutes under Miri and exercises collection policy, not unsafe memory paths"
+    )]
     fn test_should_collect_minor_on_gen1_pressure() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
@@ -2709,6 +2721,10 @@ mod tests {
     /// Verify that the `should_collect` Gen1 path triggers correctly once the
     /// threshold has been lowered by post-collection adaptation.
     #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "allocates 10k+ objects to cross the GC threshold; runs for minutes under Miri and exercises collection policy, not unsafe memory paths"
+    )]
     fn test_should_collect_minor_when_gen1_exceeds_adapted_threshold() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
