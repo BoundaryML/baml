@@ -122,7 +122,7 @@ async fn if_let_takes_then_branch_when_pattern_matches() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(BexExternalValue::String("hit".to_string())),
+        expected: Ok(BexExternalValue::String("hit".into())),
         ..Default::default()
     })
     .await
@@ -150,7 +150,7 @@ async fn if_let_takes_else_branch_when_pattern_does_not_match() -> anyhow::Resul
             }
         "#,
         entry: "main",
-        expected: Ok(BexExternalValue::String("boom".to_string())),
+        expected: Ok(BexExternalValue::String("boom".into())),
         ..Default::default()
     })
     .await
@@ -178,7 +178,7 @@ async fn if_let_destructure_binds_fields_at_runtime() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(BexExternalValue::String("alice".to_string())),
+        expected: Ok(BexExternalValue::String("alice".into())),
         ..Default::default()
     })
     .await
@@ -209,7 +209,7 @@ async fn if_let_else_if_let_chain_runs_correct_arm() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(BexExternalValue::String("second".to_string())),
+        expected: Ok(BexExternalValue::String("second".into())),
         ..Default::default()
     })
     .await
@@ -239,7 +239,7 @@ async fn if_let_chain_falls_through_to_final_else() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(BexExternalValue::String("empty".to_string())),
+        expected: Ok(BexExternalValue::String("empty".into())),
         ..Default::default()
     })
     .await
@@ -277,7 +277,7 @@ async fn if_let_or_pattern_dispatches_to_either_alternative() -> anyhow::Result<
         assert_engine_executes(EngineProgram {
             source: Box::leak(source.into_boxed_str()),
             entry: "main",
-            expected: Ok(BexExternalValue::String(expected.to_string())),
+            expected: Ok(BexExternalValue::String(expected.into())),
             ..Default::default()
         })
         .await?;
@@ -316,7 +316,7 @@ async fn if_let_nested_shadowing_restores_outer_binding() -> anyhow::Result<()> 
             }
         "#,
         entry: "main",
-        expected: Ok(BexExternalValue::String("outer".to_string())),
+        expected: Ok(BexExternalValue::String("outer".into())),
         ..Default::default()
     })
     .await
@@ -345,7 +345,7 @@ async fn if_let_composite_scrutinee_binds_call_result() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(BexExternalValue::String("from call".to_string())),
+        expected: Ok(BexExternalValue::String("from call".into())),
         ..Default::default()
     })
     .await
@@ -371,7 +371,7 @@ async fn if_let_optional_scrutinee_some() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(BexExternalValue::String("alice".to_string())),
+        expected: Ok(BexExternalValue::String("alice".into())),
         ..Default::default()
     })
     .await
@@ -397,7 +397,7 @@ async fn if_let_optional_scrutinee_null() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(BexExternalValue::String("none".to_string())),
+        expected: Ok(BexExternalValue::String("none".into())),
         ..Default::default()
     })
     .await
@@ -424,7 +424,7 @@ async fn if_let_statement_form_with_return_in_then() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(BexExternalValue::String("fell through".to_string())),
+        expected: Ok(BexExternalValue::String("fell through".into())),
         ..Default::default()
     })
     .await
@@ -449,7 +449,7 @@ async fn let_else_binds_when_pattern_matches() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(BexExternalValue::String("hit".to_string())),
+        expected: Ok(BexExternalValue::String("hit".into())),
         ..Default::default()
     })
     .await
@@ -474,7 +474,7 @@ async fn let_else_takes_else_branch_when_pattern_does_not_match() -> anyhow::Res
             }
         "#,
         entry: "main",
-        expected: Ok(BexExternalValue::String("fallback".to_string())),
+        expected: Ok(BexExternalValue::String("fallback".into())),
         ..Default::default()
     })
     .await
@@ -499,7 +499,7 @@ async fn let_else_destructure_binds_fields_at_runtime() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(BexExternalValue::String("alice".to_string())),
+        expected: Ok(BexExternalValue::String("alice".into())),
         ..Default::default()
     })
     .await
@@ -525,7 +525,7 @@ async fn let_else_or_pattern_matches_either_alternative() -> anyhow::Result<()> 
             }
         "#,
         entry: "main",
-        expected: Ok(BexExternalValue::String("warn-val".to_string())),
+        expected: Ok(BexExternalValue::String("warn-val".into())),
         ..Default::default()
     })
     .await
@@ -561,7 +561,7 @@ async fn let_else_break_in_else_inside_loop() -> anyhow::Result<()> {
         entry: "main",
         // Iteration 0: Ok → result = "first". Iteration 1: Err → break.
         // Iteration 2 never runs; result stays "first".
-        expected: Ok(BexExternalValue::String("first".to_string())),
+        expected: Ok(BexExternalValue::String("first".into())),
         ..Default::default()
     })
     .await
@@ -593,7 +593,7 @@ async fn let_else_continue_in_else_inside_loop() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(BexExternalValue::String("ac".to_string())),
+        expected: Ok(BexExternalValue::String("ac".into())),
         ..Default::default()
     })
     .await
@@ -620,7 +620,7 @@ async fn let_else_multiple_consecutive_bindings() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(BexExternalValue::String("x-y".to_string())),
+        expected: Ok(BexExternalValue::String("x-y".into())),
         ..Default::default()
     })
     .await
@@ -646,7 +646,7 @@ async fn let_else_second_miss_skips_first_binding() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(BexExternalValue::String("b-failed".to_string())),
+        expected: Ok(BexExternalValue::String("b-failed".into())),
         ..Default::default()
     })
     .await
@@ -676,7 +676,7 @@ async fn let_else_throw_in_else_is_caught_by_outer_catch() -> anyhow::Result<()>
             }
         "#,
         entry: "main",
-        expected: Ok(BexExternalValue::String("caught".to_string())),
+        expected: Ok(BexExternalValue::String("caught".into())),
         ..Default::default()
     })
     .await

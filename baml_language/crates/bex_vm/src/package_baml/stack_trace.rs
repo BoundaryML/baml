@@ -7,7 +7,7 @@ impl BamlNamespaceErrors for PackageBamlImpl {}
 
 impl BamlClassErrorsStackTrace for PackageBamlImpl {
     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-    fn to_string(vm: &BexVm, stacktrace: &Value) -> String {
+    fn to_string(vm: &BexVm, stacktrace: &Value) -> bex_str::BexStr {
         let instance = vm
             .as_instance(stacktrace)
             .expect("StackTrace: expected Instance");
@@ -34,6 +34,6 @@ impl BamlClassErrorsStackTrace for PackageBamlImpl {
             )
         }));
 
-        out.trim_end().to_string()
+        bex_str::BexStr::from(out.trim_end().to_string())
     }
 }

@@ -9,43 +9,40 @@ class String {
     $rust_function
   }
 
-  /// Returns the length of the string in **UTF-8 bytes**.
+  /// Returns the number of **Unicode code points** (characters) in the string.
   ///
-  /// This is `O(1)`. For ASCII text the byte length equals the character
-  /// count, but for any string containing multi-byte characters the two
-  /// differ — e.g. `"héllo".length() == 6` because `é` is two bytes.
-  ///
-  /// To count Unicode code points (`O(n)`), use `char_count()`.
+  /// This is `O(1)` — the count is cached at construction time. For ASCII
+  /// text it equals `byte_length()`, but for strings with multi-byte UTF-8
+  /// characters they differ.
   ///
   /// # Examples
   /// ```
   /// "hello".length()  // 5
-  /// "héllo".length()  // 6 (é is 2 bytes in UTF-8)
+  /// "héllo".length()  // 5
+  /// "😀".length()     // 1
   /// "".length()       // 0
   /// ```
   function length(self) -> int {
     $rust_function
   }
 
-  /// Returns the number of **Unicode code points** (characters) in the string.
+  /// Alias for `length()`.
+  function char_count(self) -> int {
+    $rust_function
+  }
+
+  /// Returns the length of the string in **UTF-8 bytes**.
   ///
-  /// This is `O(n)` because it iterates the string. For ASCII text it equals
-  /// `length()`, but for strings with multi-byte UTF-8 characters they differ.
-  ///
-  /// Note: a code point is not always one user-perceived character — e.g. a
-  /// flag emoji like `🇺🇸` is composed of two code points, and combining marks
-  /// (like `é` written as `e` + U+0301) count as multiple. For most practical
-  /// purposes (counting characters in Latin/CJK text) this returns what you
-  /// expect.
+  /// This is `O(1)`. Useful for serialization, network I/O, and buffer
+  /// allocation where byte size matters.
   ///
   /// # Examples
   /// ```
-  /// "hello".char_count()  // 5
-  /// "héllo".char_count()  // 5  (`length()` is 6)
-  /// "🐑".char_count()  // 1  (`length()` is 4)
-  /// "".char_count()       // 0
+  /// "hello".byte_length()  // 5
+  /// "héllo".byte_length()  // 6
+  /// "😀".byte_length()     // 4
   /// ```
-  function char_count(self) -> int {
+  function byte_length(self) -> int {
     $rust_function
   }
 
@@ -141,23 +138,19 @@ class String {
     $rust_function
   }
 
-  /// Returns the substring between two **byte** offsets `[start, end)`.
+  /// Returns the substring between two **character** offsets `[start, end)`.
   ///
-  /// Both `start` and `end` are byte indices, matching `length()`. They are
-  /// clamped to the range `[0, length()]`, and `end` is further clamped so
-  /// that `end >= start` (an empty string is returned if `end < start` after
-  /// clamping).
-  ///
-  /// Throws `InvalidArgument` if either clamped offset falls in the middle
-  /// of a multi-byte UTF-8 character, since the result would not be a valid
-  /// string.
+  /// Both `start` and `end` are codepoint indices, matching `length()`. They
+  /// are clamped to the range `[0, length()]`, and `end` is further clamped
+  /// so that `end >= start`. Out-of-bounds indices are silently clamped —
+  /// this method never throws.
   ///
   /// # Examples
   /// ```
   /// "hello world".substring(0, 5)   // "hello"
   /// "hello".substring(2, 100)       // "llo" (end clamped)
-  /// "héllo".substring(0, 3)         // "hé"
-  /// "héllo".substring(0, 2)         // throws — index 2 is mid-`é`
+  /// "😀hello".substring(0, 1)       // "😀"
+  /// "😀hello".substring(1, 4)       // "hel"
   /// ```
   function substring(self, start: int, end: int) -> string throws root.errors.InvalidArgument {
     $rust_function
@@ -168,57 +161,48 @@ class String {
     $rust_function
   }
 
-  /// Returns the **byte offset** of the first occurrence of `search`, or `-1`
-  /// if not found. The returned offset is suitable for use with `substring`,
-  /// `char_at`, and `code_point_at`.
+  /// Returns the **character index** of the first occurrence of `search`, or
+  /// `-1` if not found.
   ///
   /// # Examples
   /// ```
   /// "hello world".index_of("world")  // 6
-  /// "héllo".index_of("l")            // 3 (after the 2-byte `é`)
+  /// "héllo".index_of("l")            // 2
+  /// "😀hello".index_of("h")          // 1
   /// "abc".index_of("z")              // -1
   /// ```
   function index_of(self, search: string) -> int {
     $rust_function
   }
 
-  /// Returns the single character that starts at the given **byte offset**,
-  /// as a one-character string.
+  /// Returns the character at the given **codepoint index** as a
+  /// one-character string.
   ///
-  /// `index` is a byte index (matching `length()`). If `index == length()`
-  /// the result is an empty string. Throws `InvalidArgument` if `index` is
-  /// negative, beyond `length()`, or falls in the middle of a multi-byte
-  /// UTF-8 character.
+  /// Returns an empty string if `index >= length()`. Throws
+  /// `InvalidArgument` if `index` is negative.
   ///
   /// # Examples
   /// ```
   /// "hello".char_at(0)   // "h"
   /// "héllo".char_at(1)   // "é"
-  /// "héllo".char_at(3)   // "l" (the `é` occupies bytes 1..3)
-  /// "héllo".char_at(2)   // throws — index 2 is mid-`é`
-  /// "hi".char_at(2)      // ""  (one past the end)
+  /// "héllo".char_at(2)   // "l"
+  /// "😀hello".char_at(0) // "😀"
+  /// "hi".char_at(99)     // ""
   /// ```
   function char_at(self, index: int) -> string throws root.errors.InvalidArgument {
     $rust_function
   }
 
-  /// Returns the Unicode code point starting at the given **byte offset** as
-  /// an integer in the range `[0, 0x10FFFF]`.
-  ///
-  /// `index` is a byte index (matching `length()`). Throws `InvalidArgument`
-  /// if `index` is negative, beyond `length() - 1`, or falls in the middle of
-  /// a multi-byte UTF-8 character. Note that, unlike `char_at`, requesting the
-  /// position one past the end (`index == length()`) is also an error since
-  /// there is no code point there.
+  /// Returns a new string that repeats `self` the given number of times.
+  /// Negative counts are treated as 0.
   ///
   /// # Examples
   /// ```
-  /// "hi".code_point_at(0)     // 104  (ASCII 'h')
-  /// "héllo".code_point_at(1)  // 233  (U+00E9 'é')
-  /// "🐑".code_point_at(0)     // 128017 (U+1F411)
-  /// "héllo".code_point_at(2)  // throws — index 2 is mid-`é`
+  /// "ab".repeat(3)   // "ababab"
+  /// "hi".repeat(0)   // ""
+  /// "hi".repeat(-1)  // ""
   /// ```
-  function code_point_at(self, index: int) -> int throws root.errors.InvalidArgument {
+  function repeat(self, count: int) -> string {
     $rust_function
   }
 

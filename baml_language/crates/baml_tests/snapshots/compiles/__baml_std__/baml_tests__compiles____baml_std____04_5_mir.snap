@@ -7548,11 +7548,11 @@ fn baml.Null.from_json(j: baml.json.json) -> baml.Null {
 
 fn baml.Null.to_json = builtin(vm)
 
+fn baml.String.byte_length = builtin(vm)
+
 fn baml.String.char_at = builtin(vm)
 
 fn baml.String.char_count = builtin(vm)
-
-fn baml.String.code_point_at = builtin(vm)
 
 fn baml.String.ends_with = builtin(vm)
 
@@ -7620,6 +7620,8 @@ fn baml.String.length = builtin(vm)
 fn baml.String.lines = builtin(vm)
 
 fn baml.String.matches = builtin(vm)
+
+fn baml.String.repeat = builtin(vm)
 
 fn baml.String.replace = builtin(vm)
 

@@ -232,7 +232,7 @@ fn view_return_type(ty: &BamlType, needs_heap: &mut bool) -> TokenStream {
         BamlType::Bool => quote! { Result<bool, AccessError> },
         BamlType::String => {
             *needs_heap = true;
-            quote! { Result<&'a String, AccessError> }
+            quote! { Result<&'a bex_str::BexStr, AccessError> }
         }
         BamlType::RustType => {
             *needs_heap = true;
@@ -269,7 +269,7 @@ fn external_to_typed_expr(
     match ty {
         BamlType::String => quote! {
             match #val_expr {
-                BexExternalValue::String(v) => Ok(v),
+                BexExternalValue::String(v) => Ok(v.to_string()),
                 other => Err(AccessError::TypeMismatch {
                     expected: "string",
                     actual: other.type_name().to_string(),
@@ -396,7 +396,7 @@ fn into_owned_expr(
         }
         // Float accessor is now heap-aware (`Object::Float` deref).
         BamlType::Float => quote! { self.#field_ident(heap, permit)? },
-        BamlType::String => quote! { self.#field_ident(heap, permit)?.clone() },
+        BamlType::String => quote! { self.#field_ident(heap, permit)?.to_string() },
         BamlType::RustType => quote! { self.#field_ident(heap, permit)? },
         BamlType::Uint8Array | BamlType::List(_) | BamlType::Map(_, _) | BamlType::Optional(_) => {
             let val = quote! { self.#field_ident(heap, permit)? };
@@ -426,7 +426,7 @@ fn owned_to_external_expr(
         },
         BamlType::Float => quote! { BexExternalValue::Float(#field_expr) },
         BamlType::Bool => quote! { BexExternalValue::Bool(#field_expr) },
-        BamlType::String => quote! { BexExternalValue::String(#field_expr) },
+        BamlType::String => quote! { BexExternalValue::String((#field_expr).into()) },
         BamlType::RustType => quote! { BexExternalValue::RustData(#field_expr) },
         BamlType::Null => quote! { BexExternalValue::Null },
         BamlType::List(inner) => {
@@ -2269,7 +2269,7 @@ fn emit_result_conversion_for_ty(
             let msg = format!("expected string{ctx}, got {{}}");
             quote! {
                 match __val {
-                    BexExternalValue::String(s) => Ok(s),
+                    BexExternalValue::String(s) => Ok(s.to_string()),
                     other => Err(RuntimeIoError::Other(
                         format!(#msg, other.type_name()),
                     )),

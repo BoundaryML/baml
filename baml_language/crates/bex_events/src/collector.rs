@@ -303,7 +303,7 @@ fn extract_log_from_custom(custom: &CustomEvent) -> Option<LogEvent> {
     match &custom.data {
         BexExternalValue::Map { entries, .. } => {
             let level = match entries.get("level")? {
-                BexExternalValue::String(s) => s.clone(),
+                BexExternalValue::String(s) => s.to_string(),
                 _ => return None,
             };
             let data = entries

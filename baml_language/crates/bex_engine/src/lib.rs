@@ -383,7 +383,7 @@ pub fn cancelled_unhandled_throw() -> EngineError {
     let mut fields = indexmap::IndexMap::new();
     fields.insert(
         "message".to_string(),
-        BexExternalValue::String("operation cancelled".to_string()),
+        BexExternalValue::String("operation cancelled".into()),
     );
     EngineError::UnhandledThrow {
         value: Box::new(BexExternalValue::Instance {
@@ -589,20 +589,20 @@ pub(crate) fn op_error_to_catchable_throw(op_err: &OpError) -> Option<BexExterna
         let mut fields = indexmap::IndexMap::new();
         fields.insert(
             "message".to_string(),
-            BexExternalValue::String(message.clone()),
+            BexExternalValue::String(message.as_str().into()),
         );
         fields.insert(
             "class_name".to_string(),
-            BexExternalValue::String(class_name.clone()),
+            BexExternalValue::String(class_name.as_str().into()),
         );
         fields.insert(
             "language".to_string(),
-            BexExternalValue::String(language.clone().unwrap_or_default()),
+            BexExternalValue::String(language.as_deref().unwrap_or_default().into()),
         );
         fields.insert(
             "traceback".to_string(),
             traceback.as_ref().map_or(BexExternalValue::Null, |t| {
-                BexExternalValue::String(t.clone())
+                BexExternalValue::String(t.as_str().into())
             }),
         );
         fields.insert(
@@ -1752,7 +1752,7 @@ impl BexEngine {
         let collector = self
             .call_function(
                 "testing.TestCollector.new",
-                vec![BexExternalValue::String(String::new())],
+                vec![BexExternalValue::String("".into())],
                 ctx(),
                 false, // return Handle, not deep copy
             )
@@ -2492,7 +2492,7 @@ impl BexEngine {
                     };
                     let spawn_name: Option<String> =
                         name_ptr.and_then(|ptr| match unsafe { ptr.get() } {
-                            Object::String(s) => Some(s.clone()),
+                            Object::String(s) => Some(s.to_string()),
                             _ => None,
                         });
                     let parent_errors_arc = thread.vm_thread_pending_errors_arc();
@@ -2670,7 +2670,7 @@ impl BexEngine {
                                     .get("level")
                                     .and_then(|v| {
                                         if let BexExternalValue::String(s) = v {
-                                            Some(s.clone())
+                                            Some(s.to_string())
                                         } else {
                                             None
                                         }

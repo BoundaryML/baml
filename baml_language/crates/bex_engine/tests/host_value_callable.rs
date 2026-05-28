@@ -444,7 +444,7 @@ async fn host_callable_wrong_return_type_surfaces_as_host_callable_throw() {
 
     // Behaviour: return a string where an int is expected.
     let arc = register_host_callable(|_items| {
-        FakeReturn::Ok(BexExternalValue::String("not-an-int".to_string()))
+        FakeReturn::Ok(BexExternalValue::String("not-an-int".to_string().into()))
     });
 
     let snapshot = compile_for_engine(source);
@@ -556,7 +556,7 @@ async fn host_callable_wrong_class_field_type_surfaces_as_host_callable_throw() 
         let mut fields = IndexMap::new();
         fields.insert(
             "x".to_string(),
-            BexExternalValue::String("oops".to_string()),
+            BexExternalValue::String("oops".to_string().into()),
         );
         fields.insert("y".to_string(), BexExternalValue::Int(2));
         FakeReturn::Ok(BexExternalValue::Instance {
@@ -868,7 +868,7 @@ async fn host_call_ret_ty_survives_gc_during_await() {
     // validation a silent no-op and the string is wrongly accepted.
     sys_native::host_dispatch::complete_with_value(
         call_id,
-        BexExternalValue::String("not-an-int".to_string()),
+        BexExternalValue::String("not-an-int".to_string().into()),
     );
 
     let result = call.await.expect("join call task");

@@ -1502,19 +1502,18 @@ fn call_arg_for_type(name: &str, ty: &BamlType, is_ref: bool) -> String {
         }
         BamlType::Optional(inner) => {
             if is_ref {
-                // Extraction returned Option<&T> — convert to match clean method signature
+                // Extraction returned Option<&T> — pass through (already the right type)
                 match inner.as_ref() {
-                    BamlType::String => format!("{name}.map(String::as_str)"),
                     BamlType::Uint8Array => format!("{name}.as_deref().map(Vec::as_slice)"),
                     BamlType::List(_) => format!("{name}.as_deref().map(Vec::as_slice)"),
                     BamlType::Map(_, _) => format!("{name}.as_deref().map(Box::as_ref)"),
-                    // Option<&MediaValue> — already correct
+                    // Option<&BexStr>, Option<&MediaValue> — already correct
                     _ => name.to_string(),
                 }
             } else {
                 // Extraction returned Option<T> (owned) — current behavior
                 match inner.as_ref() {
-                    BamlType::String => format!("{name}.as_deref()"),
+                    BamlType::String => format!("{name}.as_ref()"),
                     BamlType::List(_) => format!("{name}.as_deref()"),
                     BamlType::Uint8Array => format!("{name}.as_deref()"),
                     _ => {
@@ -1649,9 +1648,9 @@ fn baml_type_to_input(ty: &BamlType, is_mut: bool) -> String {
     match ty {
         BamlType::String => {
             if is_mut {
-                "&mut String".to_string()
+                "&mut bex_str::BexStr".to_string()
             } else {
-                "&str".to_string()
+                "&bex_str::BexStr".to_string()
             }
         }
         BamlType::Int => "i64".to_string(),
@@ -1668,9 +1667,9 @@ fn baml_type_to_input(ty: &BamlType, is_mut: bool) -> String {
         }
         BamlType::Map(_, _) => {
             if is_mut {
-                "&mut IndexMap<String, Value>".to_string()
+                "&mut IndexMap<bex_str::BexStr, Value>".to_string()
             } else {
-                "&IndexMap<String, Value>".to_string()
+                "&IndexMap<bex_str::BexStr, Value>".to_string()
             }
         }
         BamlType::Optional(inner) => {
@@ -1691,17 +1690,17 @@ fn baml_type_to_input(ty: &BamlType, is_mut: bool) -> String {
 
 fn baml_type_to_output(ty: &BamlType) -> String {
     match ty {
-        BamlType::String => "String".to_string(),
+        BamlType::String => "bex_str::BexStr".to_string(),
         BamlType::Int => "i64".to_string(),
         BamlType::Bigint => "std::sync::Arc<num_bigint::BigInt>".to_string(),
         BamlType::Float => "f64".to_string(),
         BamlType::Bool => "bool".to_string(),
         BamlType::Null => "()".to_string(),
         BamlType::List(inner) => match inner.as_ref() {
-            BamlType::String => "Vec<String>".to_string(),
+            BamlType::String => "Vec<bex_str::BexStr>".to_string(),
             _ => "Vec<Value>".to_string(),
         },
-        BamlType::Map(_, _) => "IndexMap<String, Value>".to_string(),
+        BamlType::Map(_, _) => "IndexMap<bex_str::BexStr, Value>".to_string(),
         BamlType::Optional(inner) => {
             let inner_str = baml_type_to_output(inner);
             format!("Option<{inner_str}>")
@@ -1742,16 +1741,16 @@ fn receiver_input_type_with_vm_usage(recv: &Receiver, vm_usage: VmUsage) -> Stri
         }
         "Map" => {
             if recv.receiver_type.is_mut() {
-                "&mut IndexMap<String, Value>".to_string()
+                "&mut IndexMap<bex_str::BexStr, Value>".to_string()
             } else {
-                "&IndexMap<String, Value>".to_string()
+                "&IndexMap<bex_str::BexStr, Value>".to_string()
             }
         }
         "String" => {
             if recv.receiver_type.is_mut() {
-                "&mut String".to_string()
+                "&mut bex_str::BexStr".to_string()
             } else {
-                "&str".to_string()
+                "&bex_str::BexStr".to_string()
             }
         }
         "Uint8Array" => {
@@ -1923,7 +1922,7 @@ mod tests {
             "BamlClassArray should have bare `length` method:\n{output}"
         );
         assert!(
-            output.contains("fn to_lower_case(string: &str) -> String;"),
+            output.contains("fn to_lower_case(string: &bex_str::BexStr) -> bex_str::BexStr;"),
             "BamlClassString should have bare `to_lower_case` method:\n{output}"
         );
         assert!(
@@ -2107,7 +2106,7 @@ mod tests {
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
-            output.contains("fn from_url(url: &str, mime_type: Option<&str>) -> copy::media::Pdf;"),
+            output.contains("fn from_url(url: &bex_str::BexStr, mime_type: Option<&bex_str::BexStr>) -> copy::media::Pdf;"),
             "BamlClassMediaPdf should have from_url static constructor returning copy::media::Pdf:\n{output}"
         );
     }

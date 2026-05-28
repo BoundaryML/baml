@@ -332,10 +332,7 @@ mod tests {
         let template = "Hello, {{ name }}!";
 
         let mut args = IndexMap::new();
-        args.insert(
-            "name".to_string(),
-            BexExternalValue::String("Alice".to_string()),
-        );
+        args.insert("name".to_string(), BexExternalValue::String("Alice".into()));
 
         let result = render_prompt(template, &args, &test_ctx()).unwrap();
 
@@ -347,10 +344,7 @@ mod tests {
         let template = "Name: {{ person.name }}, Age: {{ person.age }}";
 
         let mut person_fields = IndexMap::new();
-        person_fields.insert(
-            "name".to_string(),
-            BexExternalValue::String("Bob".to_string()),
-        );
+        person_fields.insert("name".to_string(), BexExternalValue::String("Bob".into()));
         person_fields.insert("age".to_string(), BexExternalValue::Int(30));
 
         let mut args = IndexMap::new();
@@ -439,9 +433,9 @@ mod tests {
                     attr: baml_type::TyAttr::default(),
                 },
                 items: vec![
-                    BexExternalValue::String("apple".to_string()),
-                    BexExternalValue::String("banana".to_string()),
-                    BexExternalValue::String("cherry".to_string()),
+                    BexExternalValue::String("apple".into()),
+                    BexExternalValue::String("banana".into()),
+                    BexExternalValue::String("cherry".into()),
                 ],
             },
         );
@@ -808,10 +802,7 @@ mod tests {
     fn test_non_media_instance_not_unwrapped() {
         let template = "{{ person }}";
         let mut fields = IndexMap::new();
-        fields.insert(
-            "name".to_string(),
-            BexExternalValue::String("Alice".to_string()),
-        );
+        fields.insert("name".to_string(), BexExternalValue::String("Alice".into()));
         let mut args = IndexMap::new();
         args.insert(
             "person".to_string(),

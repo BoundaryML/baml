@@ -786,7 +786,7 @@ fn mixed_text_image_parts(
         match part {
             parse_response::LlmOutputPart::Text { text } if !text.trim().is_empty() => {
                 items.push(BexExternalValue::union(
-                    BexExternalValue::String(text.clone()),
+                    BexExternalValue::String(bex_external_types::BexStr::from(text.as_str())),
                     members.clone(),
                     string_ty.clone(),
                 ));
@@ -818,24 +818,24 @@ fn single_text_or_image_union_output(
             let baml_type::Ty::Union(members, _) = target else {
                 return Ok(None);
             };
-            let text = items
+            let text: String = items
                 .into_iter()
                 .filter_map(|item| match item {
                     BexExternalValue::Union { value, .. } => match *value {
-                        BexExternalValue::String(text) => Some(text),
+                        BexExternalValue::String(text) => Some(text.to_string()),
                         _ => None,
                     },
-                    BexExternalValue::String(text) => Some(text),
+                    BexExternalValue::String(text) => Some(text.to_string()),
                     _ => None,
                 })
-                .collect::<String>();
+                .collect();
             let string_ty = members
                 .iter()
                 .find(|member| matches!(member, baml_type::Ty::String { .. }))
                 .cloned()
                 .unwrap_or_else(baml_type::Ty::string);
             Ok(Some(BexExternalValue::union(
-                BexExternalValue::String(text),
+                BexExternalValue::String(bex_external_types::BexStr::from(text.as_str())),
                 members.clone(),
                 string_ty,
             )))
@@ -1437,7 +1437,7 @@ mod tests {
                     element_type: Ty::String {
                         attr: TyAttr::default(),
                     },
-                    items: vec![BexExternalValue::String("text".to_string())],
+                    items: vec![BexExternalValue::String("text".into())],
                 },
             )]),
             ..Default::default()
