@@ -4440,6 +4440,49 @@ fn out_of_body_implements_for_primitive_satisfies_interface_type() {
 }
 
 #[test]
+fn out_of_body_implements_for_generic_function_rejects_non_generic_function_value() {
+    assert_compile_error_contains(
+        r#"
+        interface GenericCallable {}
+
+        implements GenericCallable for <T>(x: int) -> int {}
+
+        function concrete(x: int) -> int {
+            return x
+        }
+
+        function main() -> void {
+            let f: (x: int) -> int = concrete
+            let marker: GenericCallable = f
+        }
+        "#,
+        "type mismatch",
+    );
+}
+
+#[test]
+fn out_of_body_implements_for_generic_function_rejects_different_bound() {
+    assert_compile_error_contains(
+        r#"
+        interface GenericCallable {}
+        interface Readable {}
+        interface Writable {}
+
+        implements GenericCallable for <T extends Readable>(x: int) -> int {}
+
+        function writable<U extends Writable>(x: int) -> int {
+            return x
+        }
+
+        function main() -> void {
+            let marker: GenericCallable = writable
+        }
+        "#,
+        "type mismatch",
+    );
+}
+
+#[test]
 fn out_of_body_implements_for_primitive_as_projection_compiles() {
     assert_zero_compile_errors(
         r#"

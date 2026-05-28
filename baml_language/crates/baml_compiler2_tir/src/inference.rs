@@ -653,9 +653,14 @@ pub fn infer_scope_types<'db>(
                     // walks this map to expose the bound's contract.
                     let mut bounds: rustc_hash::FxHashMap<Name, Ty> =
                         rustc_hash::FxHashMap::default();
-                    let (bound_param_names, bound_exprs) = enclosing_impl
-                        .map(|imp| (&imp.generic_params, &imp.generic_param_bounds))
-                        .unwrap_or((&func_data.generic_params, &func_data.generic_param_bounds));
+                    let mut bound_param_names = Vec::new();
+                    let mut bound_exprs = Vec::new();
+                    if let Some(imp) = enclosing_impl {
+                        bound_param_names.extend(imp.generic_params.iter().cloned());
+                        bound_exprs.extend(imp.generic_param_bounds.iter().cloned());
+                    }
+                    bound_param_names.extend(func_data.generic_params.iter().cloned());
+                    bound_exprs.extend(func_data.generic_param_bounds.iter().cloned());
                     for (i, name) in bound_param_names.iter().enumerate() {
                         if let Some(Some(bound_te)) = bound_exprs.get(i) {
                             let mut bd = Vec::new();

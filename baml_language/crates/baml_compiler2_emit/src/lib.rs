@@ -1221,7 +1221,9 @@ fn compute_function_metadata_from_item_tree(
     // function-level params.
     let enclosing_generics: Vec<baml_base::Name> = {
         if let Some(imp) = enclosing_impl {
-            imp.generic_params.clone()
+            let mut params = imp.generic_params.clone();
+            params.extend(func_data.generic_params.iter().cloned());
+            params
         } else {
             let mut params: Vec<baml_base::Name> = item_tree
                 .classes
@@ -1233,17 +1235,18 @@ fn compute_function_metadata_from_item_tree(
             params
         }
     };
-    let (bound_param_names, bound_exprs) = item_tree
-        .implements_for
-        .iter()
-        .find(|imp| imp.methods.contains(&func_id))
-        .map(|imp| (imp.generic_params.clone(), imp.generic_param_bounds.clone()))
-        .unwrap_or_else(|| {
-            (
-                func_data.generic_params.clone(),
-                func_data.generic_param_bounds.clone(),
-            )
-        });
+    let (bound_param_names, bound_exprs) = if let Some(imp) = enclosing_impl {
+        let mut names = imp.generic_params.clone();
+        names.extend(func_data.generic_params.iter().cloned());
+        let mut bounds = imp.generic_param_bounds.clone();
+        bounds.extend(func_data.generic_param_bounds.iter().cloned());
+        (names, bounds)
+    } else {
+        (
+            func_data.generic_params.clone(),
+            func_data.generic_param_bounds.clone(),
+        )
+    };
     let generic_param_bounds: HashMap<Name, baml_compiler2_tir::ty::Ty> = bound_param_names
         .iter()
         .enumerate()

@@ -257,8 +257,7 @@ pub fn lower_type_expr_with_generics(
             let mut nested_bindings = bindings.clone();
             for param in generic_params {
                 nested_bindings
-                    .entry(param.clone())
-                    .or_insert_with(|| Ty::TypeVar(param.clone(), TyAttr::default()));
+                    .insert(param.clone(), Ty::TypeVar(param.clone(), TyAttr::default()));
             }
             Ty::Function {
                 generic_params: generic_params.clone(),

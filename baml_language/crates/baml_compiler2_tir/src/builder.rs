@@ -8699,9 +8699,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                 _ => Vec::new(),
             };
 
-            for iface_loc in
-                crate::interfaces::interface_closure_locs(db, root_iface_loc, pkg_items, &class_ns)
-            {
+            for (iface_loc, iface_type_args) in crate::interfaces::interface_closure_locs_with_args(
+                db,
+                root_iface_loc,
+                &root_iface_type_args,
+                pkg_items,
+                &class_ns,
+            ) {
                 let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
                 let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
                     continue;
@@ -8722,13 +8726,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let iface_ns =
                     baml_compiler2_hir::file_package::file_package(db, iface_loc.file(db))
                         .namespace_path;
-                let iface_type_args = if iface_loc == root_iface_loc {
-                    root_iface_type_args.as_slice()
-                } else {
-                    &[]
-                };
                 let bindings =
-                    crate::generics::bind_type_vars(&iface_data.generic_params, iface_type_args);
+                    crate::generics::bind_type_vars(&iface_data.generic_params, &iface_type_args);
                 let declared_ty = field
                     .type_expr
                     .as_ref()

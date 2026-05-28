@@ -454,6 +454,8 @@ fn match_ty_pattern_into(
     }
 
     if !contains_bound_typevar(pattern, generic_params)
+        && !contains_generic_function_binders(pattern)
+        && !contains_generic_function_binders(concrete)
         && normalize::is_same_normalized_type(pattern, concrete, aliases)
     {
         return Some(());
@@ -499,12 +501,16 @@ fn match_ty_pattern_into(
         }
         (
             Ty::Function {
+                generic_params: p_generic_params,
+                generic_param_bounds: p_generic_param_bounds,
                 params: p_params,
                 ret: p_ret,
                 throws: p_throws,
                 ..
             },
             Ty::Function {
+                generic_params: c_generic_params,
+                generic_param_bounds: c_generic_param_bounds,
                 params: c_params,
                 ret: c_ret,
                 throws: c_throws,
@@ -516,15 +522,95 @@ fn match_ty_pattern_into(
                 .zip(c_params.iter())
                 .all(|(p, c)| p.mode == c.mode) =>
         {
+            let canonical_params = match_function_generic_bounds(
+                p_generic_params,
+                p_generic_param_bounds,
+                c_generic_params,
+                c_generic_param_bounds,
+                generic_params,
+                aliases,
+                bindings,
+            )?;
+            let p_function_bindings =
+                function_generic_bindings(p_generic_params, &canonical_params);
+            let c_function_bindings =
+                function_generic_bindings(c_generic_params, &canonical_params);
+
             for (p, c) in p_params.iter().zip(c_params.iter()) {
-                match_ty_pattern_into(&p.ty, &c.ty, generic_params, aliases, bindings)?;
+                let p_ty = generics::substitute_ty(&p.ty, &p_function_bindings);
+                let c_ty = generics::substitute_ty(&c.ty, &c_function_bindings);
+                match_ty_pattern_into(&p_ty, &c_ty, generic_params, aliases, bindings)?;
             }
-            match_ty_pattern_into(p_ret, c_ret, generic_params, aliases, bindings)?;
-            match_ty_pattern_into(p_throws, c_throws, generic_params, aliases, bindings)
+            let p_ret = generics::substitute_ty(p_ret, &p_function_bindings);
+            let c_ret = generics::substitute_ty(c_ret, &c_function_bindings);
+            match_ty_pattern_into(&p_ret, &c_ret, generic_params, aliases, bindings)?;
+            let p_throws = generics::substitute_ty(p_throws, &p_function_bindings);
+            let c_throws = generics::substitute_ty(c_throws, &c_function_bindings);
+            match_ty_pattern_into(&p_throws, &c_throws, generic_params, aliases, bindings)
         }
         _ if normalize::is_same_normalized_type(pattern, concrete, aliases) => Some(()),
         _ => None,
     }
+}
+
+fn match_function_generic_bounds(
+    pattern_params: &[Name],
+    pattern_bounds: &[Option<Ty>],
+    concrete_params: &[Name],
+    concrete_bounds: &[Option<Ty>],
+    generic_params: &[Name],
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    bindings: &mut TypeBindings,
+) -> Option<Vec<Name>> {
+    if pattern_params.len() != concrete_params.len() {
+        return None;
+    }
+
+    let canonical_params = canonical_function_generic_params(pattern_params.len());
+    let pattern_bindings = function_generic_bindings(pattern_params, &canonical_params);
+    let concrete_bindings = function_generic_bindings(concrete_params, &canonical_params);
+
+    for idx in 0..pattern_params.len() {
+        match (
+            pattern_bounds.get(idx).and_then(Option::as_ref),
+            concrete_bounds.get(idx).and_then(Option::as_ref),
+        ) {
+            (None, None) => {}
+            (Some(_), None) | (None, Some(_)) => return None,
+            (Some(pattern_bound), Some(concrete_bound)) => {
+                let pattern_bound = generics::substitute_ty(pattern_bound, &pattern_bindings);
+                let concrete_bound = generics::substitute_ty(concrete_bound, &concrete_bindings);
+                match_ty_pattern_into(
+                    &pattern_bound,
+                    &concrete_bound,
+                    generic_params,
+                    aliases,
+                    bindings,
+                )?;
+            }
+        }
+    }
+
+    Some(canonical_params)
+}
+
+fn canonical_function_generic_params(len: usize) -> Vec<Name> {
+    (0..len)
+        .map(|idx| Name::new(format!("__fn_generic_{idx}")))
+        .collect()
+}
+
+fn function_generic_bindings(params: &[Name], canonical_params: &[Name]) -> TypeBindings {
+    params
+        .iter()
+        .zip(canonical_params.iter())
+        .map(|(param, canonical)| {
+            (
+                param.clone(),
+                Ty::TypeVar(canonical.clone(), TyAttr::default()),
+            )
+        })
+        .collect()
 }
 
 fn match_union_members(
@@ -626,16 +712,56 @@ fn contains_bound_typevar(ty: &Ty, generic_params: &[Name]) -> bool {
             contains_bound_typevar(k, generic_params) || contains_bound_typevar(v, generic_params)
         }
         Ty::Function {
+            generic_param_bounds,
             params,
             ret,
             throws,
             ..
         } => {
-            params
+            generic_param_bounds.iter().any(|bound| {
+                bound
+                    .as_ref()
+                    .is_some_and(|bound| contains_bound_typevar(bound, generic_params))
+            }) || params
                 .iter()
                 .any(|FunctionParamTy { ty, .. }| contains_bound_typevar(ty, generic_params))
                 || contains_bound_typevar(ret, generic_params)
                 || contains_bound_typevar(throws, generic_params)
+        }
+        _ => false,
+    }
+}
+
+fn contains_generic_function_binders(ty: &Ty) -> bool {
+    match ty {
+        Ty::Class(_, args, _) | Ty::Interface(_, args, _) | Ty::Union(args, _) => {
+            args.iter().any(contains_generic_function_binders)
+        }
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) | Ty::Optional(inner, _) => {
+            contains_generic_function_binders(inner)
+        }
+        Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) | Ty::Future(k, v, _) => {
+            contains_generic_function_binders(k) || contains_generic_function_binders(v)
+        }
+        Ty::Function {
+            generic_params,
+            generic_param_bounds,
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            !generic_params.is_empty()
+                || generic_param_bounds.iter().any(|bound| {
+                    bound
+                        .as_ref()
+                        .is_some_and(contains_generic_function_binders)
+                })
+                || params
+                    .iter()
+                    .any(|FunctionParamTy { ty, .. }| contains_generic_function_binders(ty))
+                || contains_generic_function_binders(ret)
+                || contains_generic_function_binders(throws)
         }
         _ => false,
     }
@@ -945,7 +1071,16 @@ pub fn resolve_path_to_interface<'db>(
     let (head, name) = segments
         .split_last()
         .map(|(last, head)| (head, last.clone()))?;
-    let lookup_ns: &[Name] = if head.is_empty() { current_ns } else { head };
+    let lookup_ns: &[Name] = if head.is_empty() {
+        current_ns
+    } else if head
+        .first()
+        .is_some_and(|segment| segment.as_str() == "root")
+    {
+        &head[1..]
+    } else {
+        head
+    };
     let _ = db;
     let Definition::Interface(loc) = pkg_items.lookup_type(lookup_ns, &name)? else {
         return None;
@@ -998,8 +1133,8 @@ fn interface_closure<'db>(
 pub fn interface_closure_locs<'db>(
     db: &'db dyn crate::Db,
     root_iface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
-    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
-    current_ns: &[Name],
+    _pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    _current_ns: &[Name],
 ) -> Vec<baml_compiler2_hir::loc::InterfaceLoc<'db>> {
     let mut out: Vec<baml_compiler2_hir::loc::InterfaceLoc<'db>> = Vec::new();
     let mut seen: FxHashSet<baml_compiler2_hir::loc::InterfaceLoc<'db>> = FxHashSet::default();
@@ -1015,10 +1150,16 @@ pub fn interface_closure_locs<'db>(
         let Some(iface) = tree.interfaces.get(&loc.id(db)) else {
             continue;
         };
+        let pkg_info = baml_compiler2_hir::file_package::file_package(db, loc.file(db));
+        let pkg_id = PackageId::new(db, pkg_info.package.clone());
+        let parent_pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
         for parent in &iface.extends {
-            if let Some(parent_loc) =
-                resolve_path_to_interface(db, &parent.expr, pkg_items, current_ns)
-            {
+            if let Some(parent_loc) = resolve_path_to_interface(
+                db,
+                &parent.expr,
+                parent_pkg_items,
+                &pkg_info.namespace_path,
+            ) {
                 queue.push_back(parent_loc);
             }
         }
@@ -1133,6 +1274,35 @@ mod tests {
         Ty::TypeVar(Name::new(name), TyAttr::default())
     }
 
+    fn never() -> Ty {
+        Ty::Never {
+            attr: TyAttr::default(),
+        }
+    }
+
+    fn function(
+        generic_params: Vec<&str>,
+        generic_param_bounds: Vec<Option<Ty>>,
+        params: Vec<Ty>,
+        ret: Ty,
+    ) -> Ty {
+        Ty::Function {
+            generic_params: generic_params.into_iter().map(Name::new).collect(),
+            generic_param_bounds,
+            params: params
+                .into_iter()
+                .map(|ty| FunctionParamTy {
+                    name: None,
+                    ty,
+                    mode: crate::ty::FunctionParamMode::Required,
+                })
+                .collect(),
+            ret: Box::new(ret),
+            throws: Box::new(never()),
+            attr: TyAttr::default(),
+        }
+    }
+
     #[test]
     fn implementation_key_for_ty_canonicalizes_union_members() {
         let int = Ty::Primitive(PrimitiveType::Int, TyAttr::default());
@@ -1204,6 +1374,48 @@ mod tests {
         )
         .expect("nested list arg should bind T");
         assert_eq!(bindings.get(&Name::new("T")), Some(&int()));
+    }
+
+    #[test]
+    fn match_ty_pattern_rejects_function_generic_count_mismatch() {
+        let pattern = function(vec!["T"], vec![None], vec![int()], int());
+        let actual = function(vec![], vec![], vec![int()], int());
+
+        assert!(
+            match_ty_pattern(
+                &pattern,
+                &actual,
+                &[],
+                &std::collections::HashMap::default()
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn match_ty_pattern_rejects_function_generic_bound_mismatch() {
+        let pattern = function(
+            vec!["T"],
+            vec![Some(interface("Readable", vec![]))],
+            vec![int()],
+            int(),
+        );
+        let actual = function(
+            vec!["U"],
+            vec![Some(interface("Writable", vec![]))],
+            vec![int()],
+            int(),
+        );
+
+        assert!(
+            match_ty_pattern(
+                &pattern,
+                &actual,
+                &[],
+                &std::collections::HashMap::default()
+            )
+            .is_none()
+        );
     }
 
     #[test]

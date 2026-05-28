@@ -503,11 +503,7 @@ fn resolve_interface_path<'db>(
         Some((last, head)) => (head, last.clone()),
         None => return None,
     };
-    let lookup_ns: &[Name] = if head.is_empty() {
-        namespace_path
-    } else {
-        head
-    };
+    let lookup_ns = path_lookup_namespace(head, namespace_path);
     let def = pkg_items.lookup_type(lookup_ns, &name)?;
     let Definition::Interface(loc) = def else {
         return None;
@@ -515,6 +511,19 @@ fn resolve_interface_path<'db>(
     let item_tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
     let iface = item_tree.interfaces.get(&loc.id(db))?.clone();
     Some((loc, iface))
+}
+
+fn path_lookup_namespace<'a>(head: &'a [Name], namespace_path: &'a [Name]) -> &'a [Name] {
+    if head.is_empty() {
+        namespace_path
+    } else if head
+        .first()
+        .is_some_and(|segment| segment.as_str() == "root")
+    {
+        &head[1..]
+    } else {
+        head
+    }
 }
 
 fn interface_has_cycle<'db>(
@@ -876,8 +885,8 @@ fn collect_interface_members_with_subst<'db>(
     db: &'db dyn Db,
     iface: &baml_compiler2_hir::item_tree::Interface,
     iface_file: baml_base::SourceFile,
-    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
-    namespace_path: &[Name],
+    _pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    _namespace_path: &[Name],
     subst: &std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr>,
     generic_params_in_scope: &[Name],
 ) -> InterfaceMembers {
@@ -1005,9 +1014,16 @@ fn collect_interface_members_with_subst<'db>(
                 generic_args: Vec::new(),
                 attrs: Vec::new(),
             };
-            if let Some((loc, parent)) =
-                resolve_interface_path(db, &probe, pkg_items, namespace_path)
-            {
+            let current_pkg_info = baml_compiler2_hir::file_package::file_package(db, current_file);
+            let current_pkg_id =
+                baml_compiler2_hir::package::PackageId::new(db, current_pkg_info.package.clone());
+            let current_pkg_items = baml_compiler2_hir::package::package_items(db, current_pkg_id);
+            if let Some((loc, parent)) = resolve_interface_path(
+                db,
+                &probe,
+                current_pkg_items,
+                &current_pkg_info.namespace_path,
+            ) {
                 let parent_args = match &parent_te.expr {
                     TypeExpr::Path { generic_args, .. } => generic_args
                         .iter()
@@ -1053,11 +1069,7 @@ fn is_non_interface_type(
     let Some((name, head)) = segments.split_last() else {
         return false;
     };
-    let lookup_ns: &[Name] = if head.is_empty() {
-        namespace_path
-    } else {
-        head
-    };
+    let lookup_ns = path_lookup_namespace(head, namespace_path);
     matches!(
         pkg_items.lookup_type(lookup_ns, name),
         Some(Definition::Class(_) | Definition::Enum(_))
@@ -1129,17 +1141,25 @@ struct InterfaceValidationCtx<'db, 'a> {
 fn interface_target_matches_required_parent(
     ctx: &InterfaceValidationCtx<'_, '_>,
     candidate_target: &baml_compiler2_ast::TypeExpr,
+    candidate_namespace_path: &[Name],
     required_parent: &baml_compiler2_ast::TypeExpr,
+    required_parent_namespace_path: &[Name],
     generic_params: &[Name],
 ) -> bool {
-    let Some((candidate_loc, candidate_iface)) =
-        resolve_interface_path(ctx.db, candidate_target, ctx.pkg_items, ctx.namespace_path)
-    else {
+    let Some((candidate_loc, candidate_iface)) = resolve_interface_path(
+        ctx.db,
+        candidate_target,
+        ctx.pkg_items,
+        candidate_namespace_path,
+    ) else {
         return false;
     };
-    let Some((required_loc, required_iface)) =
-        resolve_interface_path(ctx.db, required_parent, ctx.pkg_items, ctx.namespace_path)
-    else {
+    let Some((required_loc, required_iface)) = resolve_interface_path(
+        ctx.db,
+        required_parent,
+        ctx.pkg_items,
+        required_parent_namespace_path,
+    ) else {
         return false;
     };
     if interface_qtn_for_file(ctx.db, candidate_loc.file(ctx.db), &candidate_iface.name)
@@ -1152,14 +1172,14 @@ fn interface_target_matches_required_parent(
         ctx.db,
         candidate_target,
         ctx.pkg_items,
-        ctx.namespace_path,
+        candidate_namespace_path,
         generic_params,
     );
     let required_args = lower_path_generic_args(
         ctx.db,
         required_parent,
         ctx.pkg_items,
-        ctx.namespace_path,
+        required_parent_namespace_path,
         generic_params,
     );
     candidate_args.len() == required_args.len()
@@ -1276,12 +1296,53 @@ fn implements_for_target_matches_class(
             .is_some())
 }
 
+fn class_method_names_for_implements_target(
+    ctx: &InterfaceValidationCtx<'_, '_>,
+    target: &baml_compiler2_ast::TypeExpr,
+    target_generic_params: &[Name],
+) -> HashSet<Name> {
+    use baml_compiler2_hir::contributions::Definition;
+
+    let mut target_diags = Vec::new();
+    let target_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+        ctx.db,
+        target,
+        ctx.pkg_items,
+        ctx.namespace_path,
+        target_generic_params,
+        &mut target_diags,
+    );
+    let Ty::Class(class_qtn, _, _) = target_ty else {
+        return HashSet::new();
+    };
+    let pkg_id = baml_compiler2_hir::package::PackageId::new(ctx.db, class_qtn.package().clone());
+    let pkg_items = baml_compiler2_ppir::package_items(ctx.db, pkg_id);
+    let Some(Definition::Class(class_loc)) =
+        pkg_items.lookup_type(class_qtn.namespace(), class_qtn.name())
+    else {
+        return HashSet::new();
+    };
+    let item_tree = baml_compiler2_hir::file_item_tree(ctx.db, class_loc.file(ctx.db));
+    let Some(class_data) = item_tree.classes.get(&class_loc.id(ctx.db)) else {
+        return HashSet::new();
+    };
+
+    class_data
+        .methods
+        .iter()
+        .filter(|method_id| !item_tree.method_to_iface_target.contains_key(method_id))
+        .filter_map(|method_id| item_tree.functions.get(method_id))
+        .map(|method| method.name.clone())
+        .collect()
+}
+
 fn item_implements_required_parent_for_target(
     ctx: &InterfaceValidationCtx<'_, '_>,
     item: &baml_compiler2_ast::Item,
     current: &baml_compiler2_ast::ImplementsForDef,
     current_generic_params: &[Name],
     required_parent: &baml_compiler2_ast::TypeExpr,
+    required_parent_namespace_path: &[Name],
 ) -> bool {
     match item {
         baml_compiler2_ast::Item::ImplementsFor(candidate) => {
@@ -1302,7 +1363,9 @@ fn item_implements_required_parent_for_target(
             ) && interface_target_matches_required_parent(
                 ctx,
                 &candidate.interface_target.expr,
+                ctx.namespace_path,
                 required_parent,
+                required_parent_namespace_path,
                 &candidate_generic_params,
             )
         }
@@ -1316,7 +1379,9 @@ fn item_implements_required_parent_for_target(
                 interface_target_matches_required_parent(
                     ctx,
                     &candidate.target.expr,
+                    ctx.namespace_path,
                     required_parent,
+                    required_parent_namespace_path,
                     &class.generic_params,
                 )
             })
@@ -1754,6 +1819,8 @@ fn validate_implements_for<'db>(
     };
 
     let iface_file = iface_loc.file(db);
+    let iface_namespace_path =
+        baml_compiler2_hir::file_package::file_package(db, iface_file).namespace_path;
     let subst: std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr> =
         match &imp.interface_target.expr {
             baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => iface
@@ -1843,8 +1910,11 @@ fn validate_implements_for<'db>(
     }
 
     let iface_qtn = interface_qtn_for_file(db, iface_file, &iface.name);
+    let target_class_method_names =
+        class_method_names_for_implements_target(&ctx, &imp.for_target.expr, &generic_param_names);
     for (origin, req_name, _sig) in &members.required_methods {
-        if provided_method_names.contains(req_name) {
+        if provided_method_names.contains(req_name) || target_class_method_names.contains(req_name)
+        {
             continue;
         }
         if origin.qualified_name != iface_qtn
@@ -1880,6 +1950,7 @@ fn validate_implements_for<'db>(
                         imp,
                         &generic_param_names,
                         &required_parent,
+                        &iface_namespace_path,
                     )
                 });
                 if target_implements_it {
@@ -2286,7 +2357,9 @@ fn validate_class_implements<'db>(
                         interface_target_matches_required_parent(
                             &ctx,
                             &candidate.target.expr,
+                            namespace_path,
                             &required_parent,
+                            &iface_namespace_path,
                             &class.generic_params,
                         )
                     });
