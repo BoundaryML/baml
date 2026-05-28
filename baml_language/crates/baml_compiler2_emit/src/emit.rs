@@ -254,6 +254,12 @@ enum PendingJumpTarget {
     Trap,
 }
 
+#[derive(Default)]
+struct SpawnCaptures {
+    locals: HashSet<Local>,
+    capture_indices: HashSet<usize>,
+}
+
 /// MIR to bytecode compiler with stackification.
 struct StackifyCodegen<'ctx, 'obj> {
     /// MIR body being compiled.
@@ -340,6 +346,10 @@ struct StackifyCodegen<'ctx, 'obj> {
     /// Used for debug metadata in `MakeClosure` instructions.
     lambda_names: Vec<String>,
 
+    /// Compile-time types for this function's closure captures, indexed by
+    /// `Place::Capture`.
+    capture_types: Vec<Ty>,
+
     /// Set of locals that are captured by child lambdas and need cell wrapping.
     /// Derived from `LocalDecl.is_captured` during `compile()`.
     /// Reads/writes of these locals use `LoadDeref`/`StoreDeref` instead of
@@ -353,6 +363,9 @@ struct StackifyCodegen<'ctx, 'obj> {
     /// themselves. Specialized arithmetic is only unsafe when an operand reads
     /// from a cell that can be touched by a spawned closure.
     spawn_captured_locals: HashSet<Local>,
+
+    /// Capture slots whose cell may be read or written by a spawned thread.
+    spawn_captured_captures: HashSet<usize>,
 
     /// When `true`, the current operand load is for a `MakeClosure` capture operand.
     /// In that case, captured locals are loaded with `LoadVar` (to pass the cell
@@ -404,8 +417,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             slot_names: Vec::new(),
             lambda_object_indices: ctx.lambda_object_indices.to_vec(),
             lambda_names: ctx.lambda_names.to_vec(),
+            capture_types: ctx.capture_types.to_vec(),
             captured_locals: HashSet::new(),
             spawn_captured_locals: HashSet::new(),
+            spawn_captured_captures: ctx.spawn_capture_indices.clone(),
             loading_for_closure_capture: false,
         }
     }
@@ -423,7 +438,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     fn resolve_place_type(&self, place: &Place) -> Option<Ty> {
         match place {
             Place::Local(local) => self.local_types.get(local).cloned(),
-            Place::Capture(_) => None, // Capture type not tracked in local_types
+            Place::Capture(idx) => self.capture_types.get(*idx).cloned(),
             Place::Field { base, field } => {
                 let base_ty = self.resolve_place_type(base)?;
                 match &base_ty {
@@ -488,8 +503,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         }
     }
 
-    fn collect_spawn_captured_locals(&self) -> HashSet<Local> {
-        let mut locals = HashSet::new();
+    fn collect_spawn_captures(&self) -> SpawnCaptures {
+        let mut captures = SpawnCaptures::default();
         let mut seen = HashSet::new();
 
         for block in &self.body.blocks {
@@ -497,39 +512,41 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 continue;
             };
 
-            self.collect_spawn_closure_captures(closure, &mut locals, &mut seen);
+            self.collect_spawn_closure_captures(closure, &mut captures, &mut seen);
         }
 
-        locals
+        captures
     }
 
     fn collect_spawn_closure_captures(
         &self,
         operand: &Operand,
-        locals: &mut HashSet<Local>,
+        captures: &mut SpawnCaptures,
         seen: &mut HashSet<Local>,
     ) {
-        if let Some(Rvalue::MakeClosure { captures, .. }) =
-            self.local_def_rvalue_for_operand(operand)
+        if let Some(Rvalue::MakeClosure {
+            captures: closure_captures,
+            ..
+        }) = self.local_def_rvalue_for_operand(operand)
         {
-            for capture in captures {
-                self.collect_spawn_shared_operand(capture, locals, seen);
+            for capture in closure_captures {
+                self.collect_spawn_shared_operand(capture, captures, seen);
             }
             return;
         }
 
-        self.collect_spawn_shared_operand(operand, locals, seen);
+        self.collect_spawn_shared_operand(operand, captures, seen);
     }
 
     fn collect_spawn_shared_operand(
         &self,
         operand: &Operand,
-        locals: &mut HashSet<Local>,
+        captures: &mut SpawnCaptures,
         seen: &mut HashSet<Local>,
     ) {
         match operand {
             Operand::Copy(place) | Operand::Move(place) => {
-                self.collect_spawn_shared_place(place, locals, seen);
+                self.collect_spawn_shared_place(place, captures, seen);
             }
             Operand::Constant(_) => {}
         }
@@ -538,16 +555,18 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     fn collect_spawn_shared_place(
         &self,
         place: &Place,
-        locals: &mut HashSet<Local>,
+        captures: &mut SpawnCaptures,
         seen: &mut HashSet<Local>,
     ) {
         match place {
-            Place::Local(local) => self.collect_spawn_shared_local(*local, locals, seen),
-            Place::Capture(_) => {}
-            Place::Field { base, .. } => self.collect_spawn_shared_place(base, locals, seen),
+            Place::Local(local) => self.collect_spawn_shared_local(*local, captures, seen),
+            Place::Capture(idx) => {
+                captures.capture_indices.insert(*idx);
+            }
+            Place::Field { base, .. } => self.collect_spawn_shared_place(base, captures, seen),
             Place::Index { base, index, .. } => {
-                self.collect_spawn_shared_place(base, locals, seen);
-                self.collect_spawn_shared_local(*index, locals, seen);
+                self.collect_spawn_shared_place(base, captures, seen);
+                self.collect_spawn_shared_local(*index, captures, seen);
             }
         }
     }
@@ -555,7 +574,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     fn collect_spawn_shared_local(
         &self,
         local: Local,
-        locals: &mut HashSet<Local>,
+        captures: &mut SpawnCaptures,
         seen: &mut HashSet<Local>,
     ) {
         let local = match self.analysis.classifications.get(&local).copied() {
@@ -568,18 +587,23 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         }
 
         if self.local_slots.contains_key(&local) {
-            locals.insert(local);
+            captures.locals.insert(local);
         }
 
         match self.local_def_rvalue(local) {
-            Some(Rvalue::MakeClosure { captures, .. }) => {
-                for capture in captures {
-                    self.collect_spawn_shared_operand(capture, locals, seen);
+            Some(Rvalue::MakeClosure {
+                captures: closure_captures,
+                ..
+            }) => {
+                for capture in closure_captures {
+                    self.collect_spawn_shared_operand(capture, captures, seen);
                 }
             }
-            Some(Rvalue::Use(operand)) => self.collect_spawn_shared_operand(operand, locals, seen),
+            Some(Rvalue::Use(operand)) => {
+                self.collect_spawn_shared_operand(operand, captures, seen);
+            }
             Some(Rvalue::MakeBoundMethod { receiver, .. }) => {
-                self.collect_spawn_shared_operand(receiver, locals, seen);
+                self.collect_spawn_shared_operand(receiver, captures, seen);
             }
             _ => {}
         }
@@ -637,11 +661,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     fn place_reads_spawn_captured_local(&self, place: &Place, seen: &mut HashSet<Local>) -> bool {
         match place {
             Place::Local(local) => self.local_reads_spawn_captured_local(*local, seen),
-            // A closure body's bytecode is compiled independently from the site
-            // that creates it. Keep captured-place arithmetic generic so a
-            // closure that runs under spawn cannot observe a changed cell type
-            // through a specialized opcode.
-            Place::Capture(_) => true,
+            Place::Capture(idx) => self.spawn_captured_captures.contains(idx),
             Place::Field { base, .. } => self.place_reads_spawn_captured_local(base, seen),
             Place::Index { base, index, .. } => {
                 self.place_reads_spawn_captured_local(base, seen)
@@ -818,7 +838,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.local_slots.contains_key(&local).then_some(local)
             })
             .collect();
-        self.spawn_captured_locals = self.collect_spawn_captured_locals();
+        let spawn_captures = self.collect_spawn_captures();
+        self.spawn_captured_locals = spawn_captures.locals;
+        self.spawn_captured_captures
+            .extend(spawn_captures.capture_indices);
 
         // Emit cell-wrapping preamble: for each captured Real local, wrap the
         // initial value in a Cell so that lambdas can share and mutate it.
