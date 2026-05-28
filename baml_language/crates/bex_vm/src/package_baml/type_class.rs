@@ -32,12 +32,17 @@ impl BamlClassTypeValue for PackageBamlImpl {
         let Some(class_name) = ty_name(vm, *self_value) else {
             return false;
         };
-        let Some(iface_name) = ty_name(vm, *other) else {
+        let Some((iface_name, iface_args)) = ty_name_and_args(vm, *other) else {
             return false;
         };
-        vm.interface_implementors
-            .get(&iface_name)
-            .is_some_and(|impls| impls.contains(&class_name))
+        // BEP-044: a generic interface request (`Box<string>`) must match only
+        // implementors recorded at those exact type args. An interface request
+        // with no args (`Box` / a non-generic interface) matches any.
+        vm.interface_implementors.get(&iface_name).is_some_and(|impls| {
+            impls.iter().any(|(impl_class, impl_args)| {
+                *impl_class == class_name && (iface_args.is_empty() || *impl_args == iface_args)
+            })
+        })
     }
 
     /// BEP-044: `iface_t.implemented_by(class_t)` — same answer as
@@ -56,19 +61,37 @@ impl BamlClassTypeValue for PackageBamlImpl {
     /// `Object::Array` allocation. The element `Object::Type` values are
     /// allocated here because they each require a fresh TLAB slot.
     fn implementors(vm: &mut BexVm, self_value: &Value) -> Vec<Value> {
-        let Some(iface_name) = ty_name(vm, *self_value) else {
+        let Some((iface_name, iface_args)) = ty_name_and_args(vm, *self_value) else {
             return Vec::new();
         };
-        let Some(class_names) = vm.interface_implementors.get(&iface_name).cloned() else {
+        let Some(entries) = vm.interface_implementors.get(&iface_name).cloned() else {
             return Vec::new();
         };
-        class_names
+        entries
             .into_iter()
-            .map(|name| {
+            // Keep only implementors recorded at the requested instantiation
+            // (any, when the request carries no type args).
+            .filter(|(_, impl_args)| iface_args.is_empty() || *impl_args == iface_args)
+            .map(|(name, _)| {
                 let ty = baml_type::Ty::Class(name, Vec::new(), baml_type::TyAttr::default());
                 Value::object(vm.tlab.alloc(Object::Type(Box::new(ty))))
             })
             .collect()
+    }
+}
+
+/// Like [`ty_name`] but also returns the type's generic arguments (e.g.
+/// `[string]` for `Box<string>`). Used by reflection to discriminate generic
+/// interface instantiations.
+fn ty_name_and_args(vm: &BexVm, value: Value) -> Option<(baml_type::TypeName, Vec<baml_type::Ty>)> {
+    let ptr = value.as_object_ptr()?;
+    let Object::Type(ty) = vm.get_object(ptr) else {
+        return None;
+    };
+    match ty.as_ref() {
+        baml_type::Ty::Class(name, args, _) => Some((name.clone(), args.clone())),
+        baml_type::Ty::Enum(name, _) => Some((name.clone(), Vec::new())),
+        _ => None,
     }
 }
 

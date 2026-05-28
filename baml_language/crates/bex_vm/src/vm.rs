@@ -518,7 +518,7 @@ pub struct BexVm {
     /// reflection methods. Shared `Arc` so spawned VMs (lambdas, futures)
     /// don't duplicate the map.
     pub interface_implementors:
-        Arc<indexmap::IndexMap<baml_type::TypeName, Vec<baml_type::TypeName>>>,
+        Arc<indexmap::IndexMap<baml_type::TypeName, Vec<(baml_type::TypeName, Vec<baml_type::Ty>)>>>,
 }
 
 /// VM execution state.
@@ -681,7 +681,7 @@ pub struct BytecodeProgram {
     /// Recursive type alias definitions for output format rendering.
     pub recursive_type_alias_defs: indexmap::IndexMap<baml_type::TypeName, baml_type::Ty>,
     /// Interface → implementors registry (BEP-044) for runtime reflection.
-    pub interface_implementors: indexmap::IndexMap<baml_type::TypeName, Vec<baml_type::TypeName>>,
+    pub interface_implementors: indexmap::IndexMap<baml_type::TypeName, Vec<(baml_type::TypeName, Vec<baml_type::Ty>)>>,
 }
 
 /// Convert a compiled `Program` to a `BytecodeProgram` with native functions attached.
@@ -868,7 +868,7 @@ impl BexVm {
         #[cfg(not(target_arch = "wasm32"))] park_requested: Arc<AtomicBool>,
         argv: Arc<[String]>,
         interface_implementors: Arc<
-            indexmap::IndexMap<baml_type::TypeName, Vec<baml_type::TypeName>>,
+            indexmap::IndexMap<baml_type::TypeName, Vec<(baml_type::TypeName, Vec<baml_type::Ty>)>>,
         >,
     ) -> Self {
         // Defer the first TLAB chunk reservation until the first `tlab.alloc`,

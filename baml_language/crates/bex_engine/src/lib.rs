@@ -517,7 +517,7 @@ pub struct BexEngine {
     /// Per-program interface implementors registry (BEP-044), kept here so
     /// every spawned VM (including post-`$init` workers) sees the same map
     /// without cloning the underlying `IndexMap`.
-    interface_implementors: Arc<indexmap::IndexMap<baml_type::TypeName, Vec<baml_type::TypeName>>>,
+    interface_implementors: Arc<indexmap::IndexMap<baml_type::TypeName, Vec<(baml_type::TypeName, Vec<baml_type::Ty>)>>>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -756,7 +756,7 @@ impl BexEngine {
         let park_requested = Arc::new(AtomicBool::new(false));
 
         let interface_implementors: Arc<
-            indexmap::IndexMap<baml_type::TypeName, Vec<baml_type::TypeName>>,
+            indexmap::IndexMap<baml_type::TypeName, Vec<(baml_type::TypeName, Vec<baml_type::Ty>)>>,
         > = Arc::new(bytecode.interface_implementors.clone());
 
         // Run $init for each package in dependency order.

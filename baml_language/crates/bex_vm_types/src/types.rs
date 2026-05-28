@@ -103,7 +103,8 @@ pub struct Program {
     /// and `type.implemented_by()`.
     ///
     /// Empty for programs without interfaces.
-    pub interface_implementors: IndexMap<baml_type::TypeName, Vec<baml_type::TypeName>>,
+    pub interface_implementors:
+        IndexMap<baml_type::TypeName, Vec<(baml_type::TypeName, Vec<baml_type::Ty>)>>,
 }
 
 /// Metadata for building a client tree at runtime.

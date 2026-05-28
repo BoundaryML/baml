@@ -904,30 +904,50 @@ pub fn generate_project_bytecode_with_opt(
     {
         use std::collections::HashSet;
 
-        let mut inverted: indexmap::IndexMap<baml_type::TypeName, Vec<baml_type::TypeName>> =
-            indexmap::IndexMap::new();
-        let mut seen_pairs: HashSet<(String, String)> = HashSet::new();
+        // Per interface name: the classes that implement it, each paired with
+        // the *interface type args* that instantiation used (BEP-044). Reflection
+        // (`implements` / `implementors`) compares these so `Box<int>` and
+        // `Box<string>` are distinguished. Empty args = non-generic interface
+        // (or a blanket impl whose args can't be made concrete) → matches any.
+        let mut inverted: indexmap::IndexMap<
+            baml_type::TypeName,
+            Vec<(baml_type::TypeName, Vec<baml_type::Ty>)>,
+        > = indexmap::IndexMap::new();
+        let mut seen_pairs: HashSet<(String, String, String)> = HashSet::new();
         for (pkg_name, cache) in &alias_caches {
             let pkg_id = PackageId::new(db, pkg_name.clone());
             let registry = baml_compiler2_tir::interfaces::package_implements_registry(db, pkg_id);
             let mut add_pair =
                 |iface_qtn: &baml_compiler2_tir::ty::QualifiedTypeName,
-                 class_qtn: &baml_compiler2_tir::ty::QualifiedTypeName| {
+                 class_qtn: &baml_compiler2_tir::ty::QualifiedTypeName,
+                 iface_args: Vec<baml_type::Ty>| {
                     let iface_name = baml_compiler2_mir::qtn_to_type_name(iface_qtn);
                     let class_name = baml_compiler2_mir::qtn_to_type_name(class_qtn);
-                    if seen_pairs.insert((iface_qtn.to_string(), class_qtn.to_string())) {
-                        inverted.entry(iface_name).or_default().push(class_name);
+                    if seen_pairs.insert((
+                        iface_qtn.to_string(),
+                        class_qtn.to_string(),
+                        format!("{iface_args:?}"),
+                    )) {
+                        inverted
+                            .entry(iface_name)
+                            .or_default()
+                            .push((class_name, iface_args));
                     }
                 };
 
             for rule in &registry.interface_impl_rules {
-                let baml_compiler2_tir::ty::Ty::Interface(iface_qtn, _, _) = &rule.interface_ty
+                let baml_compiler2_tir::ty::Ty::Interface(iface_qtn, iface_type_args, _) =
+                    &rule.interface_ty
                 else {
                     continue;
                 };
+                let converted_iface_args: Vec<baml_type::Ty> = iface_type_args
+                    .iter()
+                    .map(|a| baml_compiler2_mir::convert_tir2_ty(a, cache))
+                    .collect();
                 match &rule.for_ty_pattern {
                     baml_compiler2_tir::ty::Ty::Class(class_qtn, _, _) => {
-                        add_pair(iface_qtn, class_qtn);
+                        add_pair(iface_qtn, class_qtn, converted_iface_args);
                     }
                     baml_compiler2_tir::ty::Ty::TypeVar(type_var, _) => {
                         let Some(bound) = rule
@@ -954,7 +974,10 @@ pub fn generate_project_bytecode_with_opt(
                                 &cache.aliases,
                                 |_actual, _bound| false,
                             ) {
-                                add_pair(iface_qtn, class_qtn);
+                                // Blanket impl: the concrete interface args
+                                // aren't known here, so leave them empty
+                                // (matches any instantiation at reflection time).
+                                add_pair(iface_qtn, class_qtn, Vec::new());
                             }
                         }
                     }
