@@ -583,11 +583,14 @@ pub fn generate_sys_op_enum(io_builtins: &[NativeBuiltin]) -> String {
         .iter()
         .map(|b| {
             let variant = format_ident!("{}", b.sys_op_variant_name());
-            if b.throws.is_empty() {
-                quote! { SysOp::#variant => &[] }
-            } else {
-                let cats: Vec<_> = b.throws.iter().map(|t| format_ident!("{}", t)).collect();
-                quote! { SysOp::#variant => &[#(SysOpErrorCategory::#cats),*] }
+            // `None` (no clause) is rejected during extraction; `Some([])`
+            // (`throws never`) and `None` both map to no error categories.
+            match &b.throws {
+                Some(cats) if !cats.is_empty() => {
+                    let cats: Vec<_> = cats.iter().map(|t| format_ident!("{}", t)).collect();
+                    quote! { SysOp::#variant => &[#(SysOpErrorCategory::#cats),*] }
+                }
+                _ => quote! { SysOp::#variant => &[] },
             }
         })
         .collect();

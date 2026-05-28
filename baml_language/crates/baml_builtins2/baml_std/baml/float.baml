@@ -3,7 +3,7 @@ class Float {
   /// Serializes this float to a JSON number. NaN and Infinity are serialized as null.
   // mut_vm: Float values are heap-boxed (Object::Float); construction needs a TLAB.
   //baml:mut_vm
-  function to_json(self) -> baml.json.json {
+  function to_json(self) -> baml.json.json throws never {
     $rust_function
   }
   // ─── Predicates ───────────────────────────────────────────────────────────
@@ -20,7 +20,7 @@ class Float {
   /// float.nan().is_nan()   // true
   /// float.inf().is_nan()   // false
   /// ```
-  function is_nan(self) -> bool {
+  function is_nan(self) -> bool throws never {
     $rust_function
   }
 
@@ -33,7 +33,7 @@ class Float {
   /// (1000000.0 * 1000000.0).is_infinite()     // false  (1e12, large but finite)
   /// float.nan().is_infinite()                 // false
   /// ```
-  function is_infinite(self) -> bool {
+  function is_infinite(self) -> bool throws never {
     $rust_function
   }
 
@@ -62,7 +62,7 @@ class Float {
   /// (-0.0).abs()           // 0.0
   /// float.nan().abs()      // NaN
   /// ```
-  function abs(self) -> float {
+  function abs(self) -> float throws never {
     $rust_function
   }
 
@@ -78,14 +78,14 @@ class Float {
   /// (3.0).min(float.nan())      // 3.0  (NaN suppressed)
   /// float.nan().min(float.nan()) // NaN
   /// ```
-  function min(self, other: float) -> float {
+  function min(self, other: float) -> float throws never {
     $rust_function
   }
 
   /// Returns the larger of `self` and `other`.
   ///
   /// NaN handling matches `min`: a non-NaN operand is preferred over NaN.
-  function max(self, other: float) -> float {
+  function max(self, other: float) -> float throws never {
     $rust_function
   }
 
@@ -104,7 +104,7 @@ class Float {
   /// (-3.0).clamp(0.0, 10.0)    // 0.0
   /// (15.0).clamp(0.0, 10.0)    // 10.0
   /// ```
-  function clamp(self, min: float, max: float) -> float {
+  function clamp(self, min: float, max: float) -> float throws never {
     $rust_function
   }
 
@@ -122,7 +122,7 @@ class Float {
   /// (-1.5).floor()   // -2.0
   /// (3.0).floor()    // 3.0
   /// ```
-  function floor(self) -> float {
+  function floor(self) -> float throws never {
     $rust_function
   }
 
@@ -134,7 +134,7 @@ class Float {
   /// (3.2).ceil()    // 4.0
   /// (-1.5).ceil()   // -1.0
   /// ```
-  function ceil(self) -> float {
+  function ceil(self) -> float throws never {
     $rust_function
   }
 
@@ -148,7 +148,7 @@ class Float {
   /// (1.4).round()    // 1.0
   /// (1.6).round()    // 2.0
   /// ```
-  function round(self) -> float {
+  function round(self) -> float throws never {
     $rust_function
   }
 
@@ -160,7 +160,7 @@ class Float {
   /// (3.7).trunc()    // 3.0
   /// (-3.7).trunc()   // -3.0
   /// ```
-  function trunc(self) -> float {
+  function trunc(self) -> float throws never {
     $rust_function
   }
 
@@ -172,7 +172,7 @@ class Float {
   /// (-3.7).fract()   // -0.7
   /// (5.0).fract()    // 0.0
   /// ```
-  function fract(self) -> float {
+  function fract(self) -> float throws never {
     $rust_function
   }
 
@@ -219,7 +219,7 @@ class Float {
   /// (-1.0).sqrt()      // NaN
   /// (0.0).sqrt()       // 0.0
   /// ```
-  function sqrt(self) -> float {
+  function sqrt(self) -> float throws never {
     $rust_function
   }
 
@@ -235,7 +235,7 @@ class Float {
   /// (2.0).pow(0.5)          // sqrt(2)
   /// (-1.0).pow(0.5)         // NaN
   /// ```
-  function pow(self, exp: float) -> float {
+  function pow(self, exp: float) -> float throws never {
     $rust_function
   }
 
@@ -261,7 +261,7 @@ class Float {
   /// (2.0).log(1.0)       // +infinity
   /// (1.0).log(1.0)       // NaN
   /// ```
-  function log(self, base: float) -> float {
+  function log(self, base: float) -> float throws never {
     $rust_function
   }
 
@@ -273,7 +273,7 @@ class Float {
   /// (3.0).hypot(4.0)    // 5.0
   /// (0.0).hypot(0.0)    // 0.0
   /// ```
-  function hypot(self, other: float) -> float {
+  function hypot(self, other: float) -> float throws never {
     $rust_function
   }
 
@@ -283,34 +283,34 @@ class Float {
   // to convert from degrees (or `to_degrees()` to convert results back).
 
   /// Sine of `self` (in radians).
-  function sin(self) -> float {
+  function sin(self) -> float throws never {
     $rust_function
   }
 
   /// Cosine of `self` (in radians).
-  function cos(self) -> float {
+  function cos(self) -> float throws never {
     $rust_function
   }
 
   /// Tangent of `self` (in radians). Very large near odd multiples of π/2.
-  function tan(self) -> float {
+  function tan(self) -> float throws never {
     $rust_function
   }
 
   /// Inverse sine, returning a value in `[-π/2, π/2]`.
   /// Returns NaN if `self` is outside `[-1, 1]`.
-  function asin(self) -> float {
+  function asin(self) -> float throws never {
     $rust_function
   }
 
   /// Inverse cosine, returning a value in `[0, π]`.
   /// Returns NaN if `self` is outside `[-1, 1]`.
-  function acos(self) -> float {
+  function acos(self) -> float throws never {
     $rust_function
   }
 
   /// Inverse tangent, returning a value in `(-π/2, π/2)`.
-  function atan(self) -> float {
+  function atan(self) -> float throws never {
     $rust_function
   }
 
@@ -324,38 +324,38 @@ class Float {
   /// (1.0).atan2(0.0)        // π/2    (90°, due north)
   /// (0.0).atan2(-1.0)       // π      (180°, due west)
   /// ```
-  function atan2(self, other: float) -> float {
+  function atan2(self, other: float) -> float throws never {
     $rust_function
   }
 
   /// Hyperbolic sine.
-  function sinh(self) -> float {
+  function sinh(self) -> float throws never {
     $rust_function
   }
 
   /// Hyperbolic cosine.
-  function cosh(self) -> float {
+  function cosh(self) -> float throws never {
     $rust_function
   }
 
   /// Hyperbolic tangent. Bounded to `(-1, 1)`.
-  function tanh(self) -> float {
+  function tanh(self) -> float throws never {
     $rust_function
   }
 
   /// Inverse hyperbolic sine. Domain: all reals.
-  function asinh(self) -> float {
+  function asinh(self) -> float throws never {
     $rust_function
   }
 
   /// Inverse hyperbolic cosine. Domain: `[1, ∞)`. Returns NaN for `self < 1`.
-  function acosh(self) -> float {
+  function acosh(self) -> float throws never {
     $rust_function
   }
 
   /// Inverse hyperbolic tangent. Domain: `(-1, 1)`. Returns NaN outside that
   /// range, and ±∞ at the endpoints.
-  function atanh(self) -> float {
+  function atanh(self) -> float throws never {
     $rust_function
   }
 
@@ -412,7 +412,8 @@ class Float {
   /// float.random()              // some x with 0 <= x < 1
   /// float.random() * 100.0      // some x with 0 <= x < 100
   /// ```
-  function random() -> float {
+  //baml:fallible
+  function random() -> float throws never {
     $rust_function
   }
 
@@ -420,27 +421,27 @@ class Float {
 
   /// Returns π, the ratio of a circle's circumference to its diameter,
   /// rounded to f64 precision (~15 decimal digits).
-  function pi() -> float {
+  function pi() -> float throws never {
     $rust_function
   }
 
   /// Returns Euler's number `e`, the base of the natural logarithm.
-  function e() -> float {
+  function e() -> float throws never {
     $rust_function
   }
 
   /// Returns the golden ratio `φ = (1 + √5) / 2`, approximately `1.618`.
-  function golden_ratio() -> float {
+  function golden_ratio() -> float throws never {
     $rust_function
   }
 
   /// Returns a NaN value. Use `x.is_nan()` (not equality) to test for NaN.
-  function nan() -> float {
+  function nan() -> float throws never {
     $rust_function
   }
 
   /// Returns positive infinity. Use `-float.inf()` for negative infinity.
-  function inf() -> float {
+  function inf() -> float throws never {
     $rust_function
   }
 }

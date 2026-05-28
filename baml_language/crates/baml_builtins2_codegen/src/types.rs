@@ -27,10 +27,19 @@ pub struct NativeBuiltin {
     /// When true, the trait method returns `NativeCallResult` directly instead of
     /// `Result<T, VmRustFnError>`. Set by `//baml:may_yield` directive.
     pub may_yield: bool,
+    /// When true, the builtin is treated as fallible (the trait method returns
+    /// `Result<T, VmRustFnError>`) even if it declares `throws never`. Set by the
+    /// `//baml:fallible` directive — for builtins that can raise a *panic*
+    /// (e.g. `AllocFailure`) rather than a catchable `throws` error.
+    pub fallible: bool,
     /// Which pipeline this builtin belongs to.
     pub pipeline: BuiltinPipeline,
-    /// Error categories from `throws` clause (IO only). E.g. `["Io", "Timeout"]`.
-    pub throws: Vec<String>,
+    /// The `throws` clause:
+    /// - `None` — no clause declared (a compiler error for builtins).
+    /// - `Some([])` — `throws never`: declares the builtin throws nothing.
+    /// - `Some([cats])` — error categories, e.g. `["Io", "Timeout"]`; the
+    ///   builtin is fallible.
+    pub throws: Option<Vec<String>>,
     /// Virtual path of the `.baml` source file (e.g. `"<builtin>/baml/ns_fs/fs.baml"`).
     pub source_file: String,
 }

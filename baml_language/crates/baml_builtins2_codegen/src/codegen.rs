@@ -28,22 +28,15 @@ use crate::types::{BamlType, NativeBuiltin, NativeClassDef, Receiver, VmUsage};
 /// `baml.unstable.string` can fail at runtime on certain values, and the
 /// random methods can raise a `HostUnavailable` panic if the OS entropy source
 /// is inaccessible).
+/// A builtin is fallible (its trait method returns `Result<T, VmRustFnError>`) when
+/// it declares a non-empty `throws` clause, or is explicitly `//baml:fallible`.
+///
+/// `//baml:fallible` covers builtins that raise a *panic* (e.g. `AllocFailure`)
+/// rather than a catchable `throws` error, so `throws never` wouldn't flag them on
+/// its own. A missing `throws` clause (`None`) is rejected during extraction
+/// (`extract_native_builtins`), so here it's treated as infallible.
 fn is_fallible(b: &NativeBuiltin) -> bool {
-    !b.throws.is_empty()
-        || b.path.starts_with("baml.unstable.")
-        || matches!(
-            b.path.as_str(),
-            "baml.sys.panic"
-                | "baml.sys.exit"
-                | "baml.media.Pdf.to_json"
-                | "baml.media.Audio.to_json"
-                | "baml.media.Video.to_json"
-                | "baml.media.Image.to_json"
-                | "baml.Float.random"
-                // `bigint.pow` raises `AllocFailure` (a panic, not in `throws`) when
-                // the estimated result size exceeds `MAX_BIGINT_BITS`.
-                | "baml.Bigint.pow"
-        )
+    b.fallible || matches!(&b.throws, Some(cats) if !cats.is_empty())
 }
 
 // ============================================================================

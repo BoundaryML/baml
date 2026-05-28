@@ -9,7 +9,7 @@
 class TypeValue {
     /// Returns the type name as a human-readable string.
     //baml:vm
-    function to_string(self) -> string {
+    function to_string(self) -> string throws never {
         $rust_function
     }
 }
