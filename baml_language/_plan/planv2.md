@@ -293,3 +293,81 @@ is the same substitution gap in default-method dispatch.
   position; the registry iterates unordered `FxHashMap`s).
 - **misc:** 6 — `interface X requires <non-interface>` is silently accepted; needs a new
   interface-validation diagnostic (no per-interface diagnostic pass exists today).
+
+
+
+
+
+
+## General problems:
+ The optional/union/throws/catch holes existed because is_subtype's interface arm was gated to bare Class <:
+    Interface, and normalize, check_throws_surface, and ty_covers_fact each had their own (interface-blind)
+    subtype notions. One canonical subtype/assignability function that everything routes through (coercion,
+    throws-surface, catch-pattern matching, exhaustiveness) prevents these from drifting apart again. The fix I
+    applied only patched two of the call sites; the structural normalizer still has no interface arm.
+
+    5. Determinism: stop iterating FxHashMap where order is observable
+
+    implementors() returning reverse/arbitrary order (and latent nondeterminism elsewhere) comes from iterating
+    FxHashMap (namespaces, types, class_implements) in hash order. Use IndexMap or sort by declaration position
+    (file + LocalItemId) for anything user-visible or snapshot-tested.
+
+    6. Unify enclosing-generic-scope resolution
+
+    enclosing_class_generic_params and infer_scope_types both special-cased "Class" and silently missed
+    interfaces (interfaces push a ScopeKind::Class but live in item_tree.interfaces). A single helper "given a
+    function id / scope, return its enclosing type's generic params" that checks classes and interfaces (and
+    implements for) removes the duplication and the whole "T unresolved in default body" bug.
+
+    7. Robustness guardrails worth adding
+
+    - Make compile-only tests also exercise runtime where a runtime path exists — bug 1 (method-ref crash) passed
+    a #[test] but crashed in the VM because the test never ran it. A lint or convention ("if it compiles a
+    callable, call it") would have caught it.
+    - Don't let weak assertions mask failures — match_narrows_interface_to_concrete_class "passed" while emitting
+    parser errors because it only checked the E0112–E0132 range. Prefer asserting zero diagnostics (or
+    end-to-end results) over range-filtered checks.
+    - VM "internal error: expected map, got instance" should be impossible by construction — interface values and
+    class instances diverging in representation suggests the runtime value model for interface-typed values
+    needs a single, enforced shape rather than two implicit conventions.
+
+    8. Smaller polish
+
+    - Several diagnostics (as<Box> hint without type args, E0116 naming the class field instead of the interface
+    field) carry only Vec<Name> (simple names). Carrying the resolved interface Ty in the diagnostic payload
+    would make messages correct and let multiple call sites format consistently.
+    - Interfaces have no structural-item diagnostic pass (only Class/TypeAlias are validated in
+    collect_file_diagnostics), which is why requires <non-interface> is silently accepted. Adding interface
+    validation there is the natural home.
+
+    The throughline: most of these bugs are duplication bugs — the same concept (member lookup, subtyping,
+    interface identity, enclosing generics) implemented N times with N slightly-different behaviors.
+    Consolidating each to a single source of truth is what makes the code simultaneously simpler, less buggy, and
+    more robust.
+---
+
+## Progress update 2 — RC1 core landed (21/44)
+
+Since update 1, the RC1 generic-dispatch foundation is done (+9 findings), zero regressions
+(248 existing interface tests + 1576 lib tests green):
+- **A (generic dispatch):** 8, 12, 13, 14 — partial class-arg guards. `InterfaceClassGuard::Exact`
+  now holds `Vec<Option<Tir2Ty>>`; unbound class params lower to a new `TyTemplate::Wildcard`;
+  the VM `IsType` compares `class_type_args` position-wise (wildcard matches any). So
+  `Getter<string>` on a `Pair<int,string>` selects the `Getter<R>` block.
+- **A/J (ambiguity):** 9, 27 — `implemented_interface_method_sources` dedups by
+  (interface, type-args), so `Converter<int>` + `Converter<float>` are distinct → unqualified
+  call is E0121.
+- **F (reflection):** 34, 35, 36 — `program.interface_implementors` entries carry the interface
+  type args each implementor used; `implements`/`implemented_by`/`implementors` compare them.
+
+Remaining (23): C runtime crash (10,15,43), E requires-chain view precedence (5,20,21),
+H method refs (1,2), K parser/union (4,18,29,31), D/G remainder (32,39,41,45),
+J wording (11,19,22,28), F ordering (37), 24 (generic subst through dispatch), 6.
+
+**Cluster E precise root cause (new):** `resolve_implementor_interface_field_candidates`
+(`mir/lower.rs:7032`) matches a requested field against *every* view in the interface's
+requires-closure × every impl-block, so for `B requires A` with both declaring `label`,
+`.as<B>.label` collects candidates for both the B-view (→`b_label`) and the inherited A-view
+(→`a_label`) and impl-block order picks A's. Fix: resolve the field against the *most-derived*
+declaring interface in the closure (requested interface first), then only match impl-blocks for
+that view. Same shape for methods (finding 5).
