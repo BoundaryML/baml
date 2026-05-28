@@ -192,7 +192,7 @@ impl ProjectDatabase {
     /// Get all source files in the database, sorted by `FileId` for deterministic ordering.
     pub fn get_source_files(&self) -> Vec<SourceFile> {
         let mut files: Vec<SourceFile> = self.file_map.values().copied().collect();
-        files.sort_by_key(|f| f.file_id(self).as_u32());
+        files.sort_unstable_by_key(|f| f.file_id(self).as_u32());
         files
     }
 
@@ -1127,7 +1127,7 @@ impl ProjectDatabase {
 
             // Sort smallest-first and deduplicate so the TS side tries
             // the most specific expression first.
-            containing.sort_by_key(|&(_, len)| len);
+            containing.sort_unstable_by_key(|&(_, len)| len);
             let mut seen = std::collections::HashSet::new();
             let candidates: Vec<u32> = containing
                 .iter()

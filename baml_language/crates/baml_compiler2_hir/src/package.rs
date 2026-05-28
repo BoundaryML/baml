@@ -210,9 +210,9 @@ pub fn package_items<'db>(db: &'db dyn crate::Db, package_id: PackageId<'db>) ->
             }
         }
     }
-    shadows.sort_by(|a, b| a.ns_name.cmp(&b.ns_name));
+    shadows.sort_unstable_by(|a, b| a.ns_name.cmp(&b.ns_name));
 
-    all_conflicts.sort_by(|a, b| a.name.cmp(&b.name));
+    all_conflicts.sort_unstable_by(|a, b| a.name.cmp(&b.name));
 
     let extra = if all_conflicts.is_empty() && shadows.is_empty() {
         None

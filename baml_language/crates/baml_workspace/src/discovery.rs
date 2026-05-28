@@ -29,7 +29,7 @@ pub fn discover_baml_files(root: &std::path::Path) -> Vec<std::path::PathBuf> {
         }
     }
 
-    files.sort(); // Ensure deterministic ordering
+    files.sort_unstable(); // Ensure deterministic ordering
     files
 }
 

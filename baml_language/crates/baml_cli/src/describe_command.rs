@@ -125,7 +125,7 @@ pub fn suggest_similar(db: &ProjectDatabase, name: &str, limit: usize) -> Vec<St
         .collect();
 
     // Sort by score desc, then alphabetically for stability.
-    scored.sort_by(|a, b| {
+    scored.sort_unstable_by(|a, b| {
         b.0.partial_cmp(&a.0)
             .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| a.1.cmp(&b.1))

@@ -466,7 +466,7 @@ fn function_suggestions(engine: &BexEngine, query: &str) -> Vec<String> {
                 || strsim::jaro_winkler(name, query) > 0.7
         })
         .collect();
-    hits.sort();
+    hits.sort_unstable();
     hits.dedup();
     hits.truncate(5);
     hits

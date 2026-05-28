@@ -829,7 +829,7 @@ pub fn compute_match_usefulness(cx: &dyn PatCtx, arms: &[DPat], scrut_ty: Ty) ->
         .map(ArmId)
         .filter(|a| !used.contains(a))
         .collect();
-    unreachable_arms.sort();
+    unreachable_arms.sort_unstable();
     unreachable_arms.dedup();
 
     UsefulnessReport {

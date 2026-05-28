@@ -53,7 +53,7 @@ where
         })
         .collect::<Vec<_>>();
 
-    name_distances.sort_by_key(|k| k.0);
+    name_distances.sort_unstable_by_key(|k| k.0);
 
     // Filter names based on the threshold
     let filtered_names = name_distances
@@ -79,7 +79,7 @@ impl TypeError {
 
     fn new_unresolved_variable(name: &str, span: Span, options: Vec<String>) -> Self {
         let mut close_names = sort_by_match(name, &options, Some(3));
-        close_names.sort();
+        close_names.sort_unstable();
         let close_names = close_names;
 
         let message = if close_names.is_empty() {
@@ -142,7 +142,7 @@ impl TypeError {
     fn new_unknown_arg(func: &str, span: Span, name: &str, valid_args: HashSet<&String>) -> Self {
         let names = valid_args.into_iter().collect::<Vec<_>>();
         let mut close_names = sort_by_match(name, &names, Some(3));
-        close_names.sort();
+        close_names.sort_unstable();
         let close_names = close_names;
 
         let message = if close_names.is_empty() {
@@ -167,7 +167,7 @@ impl TypeError {
 
     fn new_invalid_filter(name: &str, span: Span, valid_filters: &Vec<&str>) -> Self {
         let mut close_names = sort_by_match(name, valid_filters, Some(5));
-        close_names.sort();
+        close_names.sort_unstable();
         let close_names = close_names;
 
         let message = if close_names.is_empty() {

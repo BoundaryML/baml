@@ -87,7 +87,7 @@ pub fn prepare_control_flow_graph_for_visualization(graph: &ControlFlowGraph) ->
     }
 
     // Process deepest groups first (handles nested conditionals)
-    groups.sort_by_key(|g| std::cmp::Reverse(g.depth));
+    groups.sort_unstable_by_key(|g| std::cmp::Reverse(g.depth));
 
     for info in &groups {
         // Remove BranchGroup's outgoing edges
@@ -349,7 +349,7 @@ fn hoist_branch_arms(graph: &ControlFlowGraph) -> ControlFlowGraph {
         .collect();
 
     // Process deepest first
-    groups.sort_by_key(|g| std::cmp::Reverse(g.depth));
+    groups.sort_unstable_by_key(|g| std::cmp::Reverse(g.depth));
 
     for info in groups {
         // Move outgoing edges from branch group onto each arm
@@ -853,7 +853,7 @@ mod tests {
 
         // Check destinations and labels
         let mut edges_sorted: Vec<_> = bg_edges.iter().collect();
-        edges_sorted.sort_by_key(|e| e.dst.raw());
+        edges_sorted.sort_unstable_by_key(|e| e.dst.raw());
 
         assert_eq!(edges_sorted[0].dst, NodeId::new(4));
         assert_eq!(

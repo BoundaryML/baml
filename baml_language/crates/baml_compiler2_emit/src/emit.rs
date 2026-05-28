@@ -2320,7 +2320,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         // (innermost) to least-specific. For nested catch blocks the inner
         // region has a later start_pc, so reverse-sorted order gives innermost
         // first during a reverse linear scan.
-        self.bytecode.exception_table.sort_by_key(|e| e.start_pc);
+        self.bytecode
+            .exception_table
+            .sort_unstable_by_key(|e| e.start_pc);
     }
 
     // ========================================================================
@@ -2440,7 +2442,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
         // Sort arms by value for binary search
         let mut sorted_arms: Vec<_> = arms.to_vec();
-        sorted_arms.sort_by_key(|(v, _)| *v);
+        sorted_arms.sort_unstable_by_key(|(v, _)| *v);
 
         // Emit binary search tree
         self.emit_binary_search_node(&sorted_arms, otherwise, name_map);
@@ -2710,7 +2712,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             });
         }
 
-        locals.sort_by(|a, b| {
+        locals.sort_unstable_by(|a, b| {
             (
                 a.scope_span.file_id.as_u32(),
                 u32::from(a.scope_span.range.start()),

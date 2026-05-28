@@ -46,7 +46,7 @@ pub(super) fn refine_stack_carry_classifications(
     let mut locals: Vec<Local> = candidates.keys().copied().collect();
     // Deterministic greedy order. Aggregate operands are ordered by their use
     // position so earlier stacked values are activated before later ones.
-    locals.sort_by_key(|l| stack_carry_sort_key(*l, body, def_use, candidates));
+    locals.sort_unstable_by_key(|l| stack_carry_sort_key(*l, body, def_use, candidates));
 
     for local in locals {
         let kind = candidates[&local];

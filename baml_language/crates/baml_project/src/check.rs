@@ -81,7 +81,7 @@ pub fn collect_compiler2_diagnostics(db: &ProjectDatabase) -> Vec<Diagnostic> {
             diagnostics.push(shadow.to_diagnostic(db));
         }
     }
-    diagnostics.sort_by(|a, b| {
+    diagnostics.sort_unstable_by(|a, b| {
         let a_span = a.primary_span();
         let b_span = b.primary_span();
         match (a_span, b_span) {

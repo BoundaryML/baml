@@ -1141,7 +1141,7 @@ pub fn box_compile_time_floats(
     // Append boxes in index order.
     let mut float_entries: Vec<(u64, usize)> =
         float_indices.iter().map(|(k, v)| (*k, *v)).collect();
-    float_entries.sort_by_key(|(_, idx)| *idx);
+    float_entries.sort_unstable_by_key(|(_, idx)| *idx);
     for (bits, _) in float_entries {
         compile_time_objects.push(Object::Float(f64::from_bits(bits)));
     }

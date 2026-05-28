@@ -4642,7 +4642,7 @@ impl LoweringContext<'_> {
             for (pos, name, op) in explicit_with_pos {
                 entries.push((pos, Entry::Named(name, op)));
             }
-            entries.sort_by_key(|(pos, _)| *pos);
+            entries.sort_unstable_by_key(|(pos, _)| *pos);
 
             // Initialize all fields to null, then apply entries in order.
             let mut result: Vec<Operand> = (0..field_count)

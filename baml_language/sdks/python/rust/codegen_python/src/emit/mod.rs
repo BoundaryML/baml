@@ -62,7 +62,7 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
     // triples with identical sort keys (shouldn't happen in practice,
     // but if they do) stay in a stable order across runs.
     let mut entries: Vec<(&Name, &Symbol)> = pool.iter().collect();
-    entries.sort_by_key(|e| e.0);
+    entries.sort_unstable_by_key(|e| e.0);
 
     let mut out: Vec<(LeafPath, EmittedSymbol, SortKey)> = Vec::new();
 
@@ -245,7 +245,7 @@ fn expand_methods(
     kind: MethodKind,
 ) -> Vec<PyMethodBinding> {
     let mut sorted: Vec<&baml_codegen_types::Function> = methods.iter().collect();
-    sorted.sort_by_key(|m| (origin_key(&m.origin), m.name.as_str()));
+    sorted.sort_unstable_by_key(|m| (origin_key(&m.origin), m.name.as_str()));
 
     let mut out: Vec<PyMethodBinding> = Vec::new();
     for m in sorted {

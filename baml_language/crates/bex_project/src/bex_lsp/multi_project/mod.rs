@@ -512,7 +512,7 @@ impl BexMulitProject {
                 });
             }
         }
-        out.sort_by(|a, b| a.message.cmp(&b.message));
+        out.sort_unstable_by(|a, b| a.message.cmp(&b.message));
         out
     }
 

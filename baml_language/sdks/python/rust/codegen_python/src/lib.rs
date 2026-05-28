@@ -377,7 +377,7 @@ struct InlinedEntry {
 fn render_inlinedbaml(files: &[UserBamlFile]) -> String {
     use askama::Template;
     let mut entries: Vec<(&PathBuf, &String)> = files.iter().map(|(p, c)| (p, c)).collect();
-    entries.sort_by(|a, b| a.0.cmp(b.0));
+    entries.sort_unstable_by(|a, b| a.0.cmp(b.0));
 
     let entries: Vec<InlinedEntry> = entries
         .into_iter()
@@ -2011,8 +2011,8 @@ mod tests {
         // Same keys + same contents on every path.
         let mut k1: Vec<_> = out1.keys().collect();
         let mut k2: Vec<_> = out2.keys().collect();
-        k1.sort();
-        k2.sort();
+        k1.sort_unstable();
+        k2.sort_unstable();
         assert_eq!(k1, k2);
         for (p, c) in &out1 {
             assert_eq!(&out2[p], c, "mismatch at {}", p.display());

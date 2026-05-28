@@ -258,7 +258,7 @@ pub fn lower_type_expr_in_ns(
                             }
                         }
                     }
-                    suggestions.sort();
+                    suggestions.sort_unstable();
                 }
                 diagnostics.push(TirTypeError::UnresolvedType {
                     name: baml_base::Name::new(&name_str),

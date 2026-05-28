@@ -170,7 +170,7 @@ pub fn namespace_items<'db>(
             pkg_info.package == *package && pkg_info.namespace_path == *ns_path
         })
         .collect();
-    matching_files.sort_by_key(|a| a.path(db));
+    matching_files.sort_unstable_by_key(|a| a.path(db));
 
     // Accumulate all contributions per name (preserving file order).
     let mut type_defs: FxHashMap<Name, Vec<Contribution<'db>>> = FxHashMap::default();

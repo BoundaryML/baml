@@ -147,11 +147,11 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.pop_scope(); // Package
         self.pop_scope(); // Project
 
-        // Sort expr_scopes for binary search
-        self.expr_scopes.sort_by_key(|(id, _)| *id);
+        // Sort expr_scopes for binary search (unstable is fine - IDs are unique)
+        self.expr_scopes.sort_unstable_by_key(|(id, _)| *id);
 
-        // Sort path_resolutions for binary search
-        self.path_resolutions.sort_by_key(|(id, _)| *id);
+        // Sort path_resolutions for binary search (unstable is fine - IDs are unique)
+        self.path_resolutions.sort_unstable_by_key(|(id, _)| *id);
 
         // Pre-intern ScopeIds for each FileScopeId
         let scope_ids: Vec<ScopeId<'db>> = (0..self.scopes.len())

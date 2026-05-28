@@ -1171,7 +1171,7 @@ impl RunArgs {
             .into_iter()
             .map(|f| f.display_name)
             .collect();
-        candidates.sort();
+        candidates.sort_unstable();
         candidates.dedup();
 
         let suggestions: Vec<&str> = candidates
@@ -1244,7 +1244,7 @@ impl RunArgs {
                 });
             }
         }
-        candidates.sort_by(|a, b| a.name.cmp(&b.name));
+        candidates.sort_unstable_by(|a, b| a.name.cmp(&b.name));
 
         let suggestions: Vec<&str> = candidates
             .iter()
@@ -1286,7 +1286,7 @@ impl RunArgs {
         output: &OutputFormat,
     ) -> Result<crate::ExitCode> {
         let mut functions = engine.user_functions();
-        functions.sort_by(|a, b| a.display_name.cmp(&b.display_name));
+        functions.sort_unstable_by(|a, b| a.display_name.cmp(&b.display_name));
 
         // Empty-target case must still honor `--output-format json` so
         // scripted consumers always receive a parseable document. The
@@ -1355,13 +1355,13 @@ impl RunArgs {
                     .filter(|ns| namespaces.contains(*ns))
             })
             .collect();
-        namespace_mains.sort();
+        namespace_mains.sort_unstable();
         namespace_mains.dedup();
 
         if !scripts.is_empty() {
             header("Scripts");
             let mut names: Vec<&String> = scripts.keys().collect();
-            names.sort();
+            names.sort_unstable();
             for name in names {
                 println!("  {name}");
             }
@@ -1471,7 +1471,7 @@ impl RunArgs {
 
         let script_items: Vec<serde_json::Value> = {
             let mut names: Vec<&String> = scripts.keys().collect();
-            names.sort();
+            names.sort_unstable();
             names
                 .into_iter()
                 .map(|name| serde_json::json!({ "name": name }))
@@ -1492,7 +1492,7 @@ impl RunArgs {
                         .map(String::from)
                 })
                 .collect();
-            namespace_mains.sort();
+            namespace_mains.sort_unstable();
             namespace_mains.dedup();
             namespace_mains
                 .into_iter()

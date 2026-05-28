@@ -269,19 +269,19 @@ impl BitOr for Type {
             (Type::Union(mut v1), Type::Union(v2)) => {
                 v1.extend(v2);
                 // Remove duplicates
-                v1.sort();
+                v1.sort_unstable();
                 v1.dedup();
                 Type::Union(v1)
             }
             (Type::Union(mut v), t) => {
                 v.push(t);
-                v.sort();
+                v.sort_unstable();
                 v.dedup();
                 Type::Union(v)
             }
             (t, Type::Union(mut v)) => {
                 v.push(t);
-                v.sort();
+                v.sort_unstable();
                 v.dedup();
                 Type::Union(v)
             }
@@ -293,7 +293,7 @@ impl BitOr for Type {
                     return t2;
                 }
                 let mut types = vec![t1, t2];
-                types.sort();
+                types.sort_unstable();
                 Type::Union(types)
             }
         }

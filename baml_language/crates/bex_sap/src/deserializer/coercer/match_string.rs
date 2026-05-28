@@ -287,7 +287,7 @@ fn string_match_strategy<'t, N: TypeIdent>(
     }
 
     // Sort by position and length
-    all_matches.sort_by(|a, b| {
+    all_matches.sort_unstable_by(|a, b| {
         match a.0.cmp(&b.0) {
             Ordering::Equal => b.1.cmp(&a.1), // Longer first
             ordering => ordering,             // Less or Greater stays the same

@@ -45,7 +45,7 @@ impl BexLspNotification for BexMulitProject {
             }
         }
 
-        project_roots.sort_by_key(|path| path.as_str().to_string());
+        project_roots.sort_unstable_by_key(|path| path.as_str().to_string());
         project_roots.dedup_by(|a, b| a.as_str() == b.as_str());
 
         tracing::info!("Discovered {} BAML project(s)", project_roots.len());
@@ -99,7 +99,7 @@ impl BexLspNotification for BexMulitProject {
             }
         }
 
-        projects_to_update.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+        projects_to_update.sort_unstable_by(|a, b| a.as_str().cmp(b.as_str()));
         projects_to_update.dedup();
 
         for project_root in projects_to_update {

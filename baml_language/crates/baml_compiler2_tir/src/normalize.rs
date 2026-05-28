@@ -792,7 +792,7 @@ impl<'g> Tarjan<'g> {
 
         // Sort nodes for deterministic traversal order.
         let mut nodes: Vec<_> = graph.keys().cloned().collect();
-        nodes.sort_by_key(std::string::ToString::to_string);
+        nodes.sort_unstable_by_key(std::string::ToString::to_string);
 
         for node in &nodes {
             if tarjan.state[node].index == Self::UNVISITED {
@@ -803,7 +803,7 @@ impl<'g> Tarjan<'g> {
         // Sort components by first element for deterministic output.
         tarjan
             .components
-            .sort_by(|a, b| a[0].to_string().cmp(&b[0].to_string()));
+            .sort_unstable_by(|a, b| a[0].to_string().cmp(&b[0].to_string()));
 
         tarjan.components
     }
@@ -820,7 +820,7 @@ impl<'g> Tarjan<'g> {
 
         // Sort successors for deterministic DFS order.
         let mut successors: Vec<_> = self.graph[node_id].iter().collect();
-        successors.sort_by_key(std::string::ToString::to_string);
+        successors.sort_unstable_by_key(std::string::ToString::to_string);
 
         for successor_id in successors {
             let mut successor = self.state[successor_id];

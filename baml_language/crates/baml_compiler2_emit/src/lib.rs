@@ -1139,7 +1139,7 @@ fn topological_sort_packages(
         .filter(|(_, deg)| **deg == 0)
         .map(|(name, _)| name.clone())
         .collect();
-    initial.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+    initial.sort_unstable_by(|a, b| a.as_str().cmp(b.as_str()));
     let mut queue: VecDeque<baml_base::Name> = initial.into_iter().collect();
 
     let mut result = Vec::new();
@@ -1154,7 +1154,7 @@ fn topological_sort_packages(
                     next.push(dep.clone());
                 }
             }
-            next.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+            next.sort_unstable_by(|a, b| a.as_str().cmp(b.as_str()));
             queue.extend(next);
         }
     }

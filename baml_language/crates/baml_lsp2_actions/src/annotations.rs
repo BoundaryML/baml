@@ -273,7 +273,7 @@ pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
     }
 
     // Sort by offset to ensure document order (required by LSP).
-    out.sort_by_key(|h| h.offset);
+    out.sort_unstable_by_key(|h| h.offset);
     out
 }
 

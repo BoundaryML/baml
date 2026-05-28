@@ -50,9 +50,9 @@ pub(crate) fn render_typemap_module(
             }
         }
     }
-    classes.sort();
-    enums.sort();
-    aliases.sort();
+    classes.sort_unstable();
+    enums.sort_unstable();
+    aliases.sort_unstable();
 
     let mut out = String::new();
     out.push_str("from __future__ import annotations\n\n");

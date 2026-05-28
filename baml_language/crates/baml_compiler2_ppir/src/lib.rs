@@ -734,7 +734,7 @@ pub fn namespace_items<'db>(
             pkg_info.package == *package && pkg_info.namespace_path == *ns_path
         })
         .collect();
-    matching_files.sort_by_key(|a| a.path(db));
+    matching_files.sort_unstable_by_key(|a| a.path(db));
 
     // Uses PPIR's file_symbol_contributions (canonical, includes *$stream types).
     let mut type_defs: FxHashMap<Name, Vec<Contribution<'db>>> = FxHashMap::default();
@@ -785,7 +785,7 @@ pub fn namespace_items<'db>(
         }
     }
 
-    conflicts.sort_by(|a, b| a.name.cmp(&b.name));
+    conflicts.sort_unstable_by(|a, b| a.name.cmp(&b.name));
 
     let extra = if conflicts.is_empty() {
         None
@@ -822,7 +822,7 @@ pub fn package_items<'db>(db: &'db dyn Db, package_id: PackageId<'db>) -> Packag
         namespaces.insert(ns_path, items.clone());
     }
 
-    all_conflicts.sort_by(|a, b| a.name.cmp(&b.name));
+    all_conflicts.sort_unstable_by(|a, b| a.name.cmp(&b.name));
 
     let extra = if all_conflicts.is_empty() {
         None

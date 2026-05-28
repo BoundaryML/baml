@@ -97,7 +97,7 @@ pub fn list_functions(db: &ProjectDatabase) -> Vec<Symbol> {
             }
         }
     }
-    result.sort_by(|a, b| a.name.cmp(&b.name));
+    result.sort_unstable_by(|a, b| a.name.cmp(&b.name));
     result
 }
 
@@ -174,7 +174,7 @@ pub fn list_tests_with_metadata(db: &ProjectDatabase) -> Vec<TestSymbol> {
             }
         }
     }
-    result.sort_by(|a, b| a.name.cmp(&b.name));
+    result.sort_unstable_by(|a, b| a.name.cmp(&b.name));
     result
 }
 

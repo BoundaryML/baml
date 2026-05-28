@@ -2735,7 +2735,7 @@ impl BexVm {
         // because we only have variables, at this point it's unlikely we will
         // implement notifications on objects (references), so we might be able
         // to get rid of this.
-        notifications.sort_by(|a, b| match (a, b) {
+        notifications.sort_unstable_by(|a, b| match (a, b) {
             (NodeId::LocalVar(a), NodeId::LocalVar(b)) => a.cmp(b),
             (NodeId::LocalVar(_), NodeId::HeapObject(_)) => std::cmp::Ordering::Less,
             (NodeId::HeapObject(_), NodeId::LocalVar(_)) => std::cmp::Ordering::Greater,

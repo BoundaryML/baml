@@ -1188,8 +1188,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         } else {
             Vec::new()
         };
-        extra.sort();
-        extraneous.sort();
+        extra.sort_unstable();
+        extraneous.sort_unstable();
 
         if !extra.is_empty() {
             let missing_effect_fact = extra_facts.iter().next();

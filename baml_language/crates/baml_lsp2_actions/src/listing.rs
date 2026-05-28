@@ -200,7 +200,7 @@ fn collect_entries_from_package(db: &dyn Db, pkg: &PackageItems<'_>) -> Vec<List
 
     // Sort by (ns_path, file_path, line): root namespace first, then
     // namespaces alphabetically, then by file path, then by source position.
-    entries.sort_by(|a, b| {
+    entries.sort_unstable_by(|a, b| {
         // Compare ns_path lexicographically by joining segments.
         let a_ns: Vec<&str> = a.ns_path.iter().map(Name::as_str).collect();
         let b_ns: Vec<&str> = b.ns_path.iter().map(Name::as_str).collect();
@@ -258,7 +258,7 @@ pub fn list_namespace_items(
         }
     }
 
-    entries.sort_by(|a, b| a.file_path.cmp(&b.file_path).then(a.line.cmp(&b.line)));
+    entries.sort_unstable_by(|a, b| a.file_path.cmp(&b.file_path).then(a.line.cmp(&b.line)));
     Some(entries)
 }
 
