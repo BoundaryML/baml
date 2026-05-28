@@ -70,6 +70,64 @@ pub struct BlanketClassImpl {
     pub for_target_ty: Ty,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct InterfaceImplRuleIndex {
+    /// Interface QTN -> all rules that can possibly satisfy that interface.
+    pub by_interface: FxHashMap<QualifiedTypeName, Vec<usize>>,
+    /// Interface QTN -> class QTN -> rules with a class-shaped `for` pattern.
+    pub by_class: FxHashMap<QualifiedTypeName, FxHashMap<QualifiedTypeName, Vec<usize>>>,
+    /// Interface QTN -> canonical non-class type key -> matching rules.
+    pub by_type: FxHashMap<QualifiedTypeName, FxHashMap<Ty, Vec<usize>>>,
+    /// Interface QTN -> rules whose implementor pattern is too open to key.
+    pub fallback_by_interface: FxHashMap<QualifiedTypeName, Vec<usize>>,
+}
+
+impl InterfaceImplRuleIndex {
+    fn from_rules(rules: &[InterfaceImplRule]) -> Self {
+        let mut index = Self::default();
+        for (idx, rule) in rules.iter().enumerate() {
+            let Some(iface_qtn) = interface_qtn(&rule.interface_ty) else {
+                continue;
+            };
+            index
+                .by_interface
+                .entry(iface_qtn.clone())
+                .or_default()
+                .push(idx);
+
+            match &rule.for_ty_pattern {
+                Ty::Class(class_qtn, _, _) => {
+                    index
+                        .by_class
+                        .entry(iface_qtn.clone())
+                        .or_default()
+                        .entry(class_qtn.clone())
+                        .or_default()
+                        .push(idx);
+                }
+                ty => {
+                    if let Some(key) = implementation_key_for_ty(ty) {
+                        index
+                            .by_type
+                            .entry(iface_qtn.clone())
+                            .or_default()
+                            .entry(key)
+                            .or_default()
+                            .push(idx);
+                    } else {
+                        index
+                            .fallback_by_interface
+                            .entry(iface_qtn.clone())
+                            .or_default()
+                            .push(idx);
+                    }
+                }
+            }
+        }
+        index
+    }
+}
+
 /// For every class in a package, the set of interfaces it implements directly.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ImplementsRegistry {
@@ -77,6 +135,9 @@ pub struct ImplementsRegistry {
     /// expressed in terms of these rules rather than the compatibility maps
     /// below.
     pub interface_impl_rules: Vec<InterfaceImplRule>,
+    /// Lookup tables for `interface_impl_rules`, used by subtype checks to
+    /// avoid probing unrelated implementation rules.
+    pub interface_impl_rule_index: InterfaceImplRuleIndex,
     /// Class QTN → interfaces it implements.
     pub class_implements: FxHashMap<QualifiedTypeName, FxHashSet<QualifiedTypeName>>,
     /// Non-class concrete type → interfaces it implements.
@@ -187,15 +248,117 @@ impl ImplementsRegistry {
         aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
         mut is_subtype: impl FnMut(&Ty, &Ty) -> bool,
     ) -> bool {
-        self.interface_impl_rules.iter().any(|rule| {
-            self.rule_matches_actual(
-                rule,
-                actual_ty,
-                requested_iface_ty,
-                aliases,
-                &mut is_subtype,
-            )
-            .is_some()
+        let Some(iface_qtn) = interface_qtn(requested_iface_ty) else {
+            return self.interface_impl_rules.iter().any(|rule| {
+                self.rule_matches_actual(
+                    rule,
+                    actual_ty,
+                    requested_iface_ty,
+                    aliases,
+                    &mut is_subtype,
+                )
+                .is_some()
+            });
+        };
+
+        match actual_ty {
+            Ty::Class(class_qtn, _, _) => {
+                if let Some(indices_by_class) =
+                    self.interface_impl_rule_index.by_class.get(iface_qtn)
+                    && let Some(indices) = indices_by_class.get(class_qtn)
+                    && self.any_indexed_rule_matches(
+                        indices,
+                        actual_ty,
+                        requested_iface_ty,
+                        aliases,
+                        &mut is_subtype,
+                    )
+                {
+                    return true;
+                }
+                if let Some(indices) = self
+                    .interface_impl_rule_index
+                    .fallback_by_interface
+                    .get(iface_qtn)
+                {
+                    return self.any_indexed_rule_matches(
+                        indices,
+                        actual_ty,
+                        requested_iface_ty,
+                        aliases,
+                        &mut is_subtype,
+                    );
+                }
+                false
+            }
+            _ => {
+                if let Some(key) = implementation_key_for_ty(actual_ty) {
+                    if let Some(indices_by_type) =
+                        self.interface_impl_rule_index.by_type.get(iface_qtn)
+                        && let Some(indices) = indices_by_type.get(&key)
+                        && self.any_indexed_rule_matches(
+                            indices,
+                            actual_ty,
+                            requested_iface_ty,
+                            aliases,
+                            &mut is_subtype,
+                        )
+                    {
+                        return true;
+                    }
+                    if let Some(indices) = self
+                        .interface_impl_rule_index
+                        .fallback_by_interface
+                        .get(iface_qtn)
+                    {
+                        return self.any_indexed_rule_matches(
+                            indices,
+                            actual_ty,
+                            requested_iface_ty,
+                            aliases,
+                            &mut is_subtype,
+                        );
+                    }
+                    return false;
+                }
+
+                self.interface_impl_rule_index
+                    .by_interface
+                    .get(iface_qtn)
+                    .is_some_and(|indices| {
+                        self.any_indexed_rule_matches(
+                            indices,
+                            actual_ty,
+                            requested_iface_ty,
+                            aliases,
+                            &mut is_subtype,
+                        )
+                    })
+            }
+        }
+    }
+
+    fn any_indexed_rule_matches(
+        &self,
+        indices: &[usize],
+        actual_ty: &Ty,
+        requested_iface_ty: &Ty,
+        aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+        is_subtype: &mut impl FnMut(&Ty, &Ty) -> bool,
+    ) -> bool {
+        indices.iter().any(|idx| {
+            self.interface_impl_rules
+                .get(*idx)
+                .and_then(|rule| {
+                    self.rule_matches_actual(
+                        rule,
+                        actual_ty,
+                        requested_iface_ty,
+                        aliases,
+                        &mut *is_subtype,
+                    )
+                })
+                .is_some()
         })
     }
 
@@ -257,6 +420,13 @@ fn validate_rule_bounds(
         }
     }
     Some(())
+}
+
+fn interface_qtn(ty: &Ty) -> Option<&QualifiedTypeName> {
+    match ty {
+        Ty::Interface(qtn, _, _) => Some(qtn),
+        _ => None,
+    }
 }
 
 pub fn match_ty_pattern(
@@ -746,8 +916,11 @@ pub fn package_implements_registry<'db>(
         }
     }
 
+    let interface_impl_rule_index = InterfaceImplRuleIndex::from_rules(&interface_impl_rules);
+
     ImplementsRegistry {
         interface_impl_rules,
+        interface_impl_rule_index,
         class_implements,
         type_implements,
         blanket_class_implements,
@@ -1070,6 +1243,7 @@ mod tests {
     fn rule_matches_actual_rejects_conflicting_interface_binding() {
         let registry = ImplementsRegistry {
             interface_impl_rules: Vec::new(),
+            interface_impl_rule_index: InterfaceImplRuleIndex::default(),
             class_implements: FxHashMap::default(),
             type_implements: FxHashMap::default(),
             blanket_class_implements: Vec::new(),

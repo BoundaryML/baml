@@ -1111,7 +1111,7 @@ impl<'db> LoweringContext<'db> {
                         let enum_data = &eitree[enum_loc.id(db)];
                         let enum_qtn = QualifiedTypeName::new(
                             pkg_name.clone(),
-                            ns_names.iter().cloned().collect(),
+                            ns_names.to_vec(),
                             enum_data.name.clone(),
                         );
 
