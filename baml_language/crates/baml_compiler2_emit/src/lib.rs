@@ -1675,6 +1675,7 @@ mod tests {
             declarative_meta: None,
             origin: ast::FunctionOrigin::UserDefined,
             docstring: None,
+            is_tagged_template_tag: false,
             span: baml_base::Span::fake().range,
         };
         let parameter_defaults = baml_compiler2_hir::signature::FunctionParameterDefaults {

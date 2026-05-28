@@ -918,6 +918,10 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::SuggestNullCoalesce { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::NullCoalesceWithNull { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::NullableMemberAccess { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::TaggedTagNotAFunction { .. } => DiagnosticId::NotCallable,
+        TirTypeError::TaggedTagNotMarked { .. } | TirTypeError::TaggedTagBadBodyParam { .. } => {
+            DiagnosticId::TypeMismatch
+        }
     }
 }
 

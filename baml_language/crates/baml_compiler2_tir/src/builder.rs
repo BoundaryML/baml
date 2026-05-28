@@ -3355,12 +3355,43 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 }
             }
-            Expr::TaggedTemplate { .. } => {
-                // M4d.4 placeholder: tag-aware type inference still TODO.
-                // For now, surface as Unknown so downstream layers don't see
-                // a missing entry in `self.expressions`.
-                Ty::Unknown {
-                    attr: TyAttr::default(),
+            Expr::TaggedTemplate { tag, .. } => {
+                // M4d.3: resolve the tag and validate it is a
+                // `//baml:tagged_string` function whose first parameter is
+                // `body: (...) -> baml.TaggedString`. On success the whole
+                // template's type is the tag fn's return type.
+                //
+                // Segment/interpolation typing — binding the body-lambda
+                // params and `${for}` bindings into scope and type-checking
+                // `${expr}` sites — is M4d.4, so we deliberately do NOT walk
+                // `segments` here (walking now would emit spurious
+                // `UnresolvedName` for `${for}` bindings before their scope
+                // handling lands).
+                let tag_ty = self.infer_expr(*tag, body);
+                let tag_name = match &body.exprs[*tag] {
+                    Expr::Path(segs) => segs.last().cloned(),
+                    _ => None,
+                }
+                .unwrap_or_else(|| Name::new("<tag>"));
+
+                match &tag_ty {
+                    // Unresolved: `infer_path` already reported `UnresolvedName`
+                    // for a bare-path tag — stay quiet to avoid double-reporting.
+                    Ty::Unknown { .. } => Ty::Unknown {
+                        attr: TyAttr::default(),
+                    },
+                    Ty::Function { params, ret, .. } => {
+                        self.validate_tagged_tag(*tag, &tag_name, params, ret)
+                    }
+                    _ => {
+                        self.context.report_simple(
+                            TirTypeError::TaggedTagNotAFunction { name: tag_name },
+                            *tag,
+                        );
+                        Ty::Unknown {
+                            attr: TyAttr::default(),
+                        }
+                    }
                 }
             }
             Expr::Missing => Ty::Unknown {
@@ -6529,6 +6560,93 @@ impl<'db> TypeInferenceBuilder<'db> {
                 attr: TyAttr::default(),
             }
         }
+    }
+
+    /// BEP-049 §10 (M4d.3): validate a tagged-template tag that resolved to a
+    /// function type, and return the template's type (the tag fn's return type
+    /// on success, `Unknown` on error).
+    ///
+    /// `params`/`ret` are the tag function's already-lowered signature. The
+    /// tag must (1) carry a `//baml:tagged_string` marker and (2) declare a
+    /// first parameter `body: (...) -> baml.TaggedString`. Diagnostics point
+    /// at the tag expression, with a secondary note at the function/param def.
+    fn validate_tagged_tag(
+        &self,
+        tag_expr: ExprId,
+        tag_name: &Name,
+        params: &[FunctionParamTy],
+        ret: &Ty,
+    ) -> Ty {
+        let db = self.context.db();
+
+        // Reach the marker flag via the recorded free-function resolution.
+        let func_loc = match self.resolutions.get(&tag_expr) {
+            Some(crate::inference::MemberResolution::Free { func_loc }) => Some(*func_loc),
+            _ => None,
+        };
+        let is_tagged = func_loc.is_some_and(|fl| {
+            baml_compiler2_hir::file_item_tree(db, fl.file(db))[fl.id(db)].is_tagged_template_tag
+        });
+
+        // (c) resolves to a function, but it isn't a tagged-string tag.
+        if !is_tagged {
+            let related = func_loc
+                .map(|fl| {
+                    vec![RelatedNote::new(
+                        RelatedLocation::Item(Definition::Function(fl)),
+                        "add a `//baml:tagged_string` marker comment above this function",
+                    )]
+                })
+                .unwrap_or_default();
+            self.context.report(
+                TirTypeError::TaggedTagNotMarked {
+                    name: tag_name.clone(),
+                },
+                tag_expr,
+                related,
+            );
+            return Ty::Unknown {
+                attr: TyAttr::default(),
+            };
+        }
+
+        // (d) marked, but the first parameter must be a well-formed
+        //     `body: (...) -> baml.TaggedString`.
+        let body_param_ok = params.first().is_some_and(|p| {
+            let name_ok = p.name.as_ref().is_some_and(|n| n.as_str() == "body");
+            let ret_ok = matches!(
+                &p.ty,
+                Ty::Function { ret: body_ret, .. }
+                    if matches!(
+                        body_ret.as_ref(),
+                        Ty::Class(qtn, _, _) if qtn.is_builtin_root_type("TaggedString")
+                    )
+            );
+            name_ok && ret_ok
+        });
+        if !body_param_ok {
+            let related = func_loc
+                .map(|fl| {
+                    vec![RelatedNote::new(
+                        RelatedLocation::Param(fl, 0),
+                        "the first parameter must be `body: (...) -> baml.TaggedString`",
+                    )]
+                })
+                .unwrap_or_default();
+            self.context.report(
+                TirTypeError::TaggedTagBadBodyParam {
+                    name: tag_name.clone(),
+                },
+                tag_expr,
+                related,
+            );
+            return Ty::Unknown {
+                attr: TyAttr::default(),
+            };
+        }
+
+        // Valid tag: the template evaluates to the tag fn's return type.
+        ret.clone()
     }
 
     /// Resolve a member access on a known base type.

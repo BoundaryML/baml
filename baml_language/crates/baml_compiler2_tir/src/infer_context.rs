@@ -220,6 +220,16 @@ pub enum TirTypeError {
         /// The full expression text (e.g. `a.name`)
         expr: String,
     },
+    /// BEP-049 §10: a backtick template was attached to a tag that resolves to
+    /// something that isn't a function (so it can't be a tagged-string tag).
+    TaggedTagNotAFunction { name: Name },
+    /// BEP-049 §10: the tag resolves to a function, but it lacks the
+    /// `//baml:tagged_string` marker that makes it usable as a tagged-template tag.
+    TaggedTagNotMarked { name: Name },
+    /// BEP-049 §10: a `//baml:tagged_string` tag's first parameter is not a
+    /// well-formed `body: (...) -> baml.TaggedString` (missing / wrong name /
+    /// not a lambda / lambda return type isn't `baml.TaggedString`).
+    TaggedTagBadBodyParam { name: Name },
 }
 
 impl fmt::Display for TirTypeError {
@@ -547,6 +557,18 @@ impl fmt::Display for TirTypeError {
                     "did you mean `{suggested}`? `{expr}` does not handle the case when `{base}` is null"
                 )
             }
+            TirTypeError::TaggedTagNotAFunction { name } => write!(
+                f,
+                "`{name}` is not a function — a tagged-template tag must be a function marked `//baml:tagged_string`"
+            ),
+            TirTypeError::TaggedTagNotMarked { name } => write!(
+                f,
+                "`{name}` is not a tagged-string function — only functions marked `//baml:tagged_string` can be used as a tagged-template tag"
+            ),
+            TirTypeError::TaggedTagBadBodyParam { name } => write!(
+                f,
+                "the first parameter of tagged-string function `{name}` must be `body: (...) -> baml.TaggedString`"
+            ),
         }
     }
 }
