@@ -2685,6 +2685,26 @@ fn generic_interface_method_explicit_type_args_are_checked() {
 }
 
 #[test]
+fn required_interface_method_generic_bound_mismatch_is_error() {
+    assert_compile_error_code(
+        r#"
+        interface Named { name: string }
+        interface Reader {
+            function read<T>(self, value: T) -> string
+        }
+        class ReaderImpl {
+            implements Reader {
+                function read<T extends Named>(self, value: T) -> string {
+                    return value.name
+                }
+            }
+        }
+        "#,
+        "E0120",
+    );
+}
+
+#[test]
 fn generic_bounds_accept_compound_type_expressions() {
     assert_zero_compile_errors(
         r#"

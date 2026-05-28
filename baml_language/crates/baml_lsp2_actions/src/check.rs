@@ -573,6 +573,10 @@ fn interface_has_cycle<'db>(
 /// declared signature.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct MethodSignature {
+    /// Generic type parameters local to this method, in declaration order.
+    generic_params: Vec<Name>,
+    /// Rendered generic bounds parallel to `generic_params`.
+    generic_param_bounds: Vec<Option<String>>,
     /// `(name, type)` pairs in declaration order. `self` is excluded — its
     /// type is the implementing class and so trivially matches.
     params: Vec<(Name, String)>,
@@ -585,11 +589,15 @@ struct MethodSignature {
 
 impl MethodSignature {
     fn from_params_and_return(
+        generic_params: &[Name],
+        generic_param_bounds: &[Option<baml_compiler2_ast::TypeExpr>],
         params: &[baml_compiler2_ast::Param],
         return_type: Option<&baml_compiler2_ast::SpannedTypeExpr>,
         throws: Option<&baml_compiler2_ast::SpannedTypeExpr>,
     ) -> Self {
         Self::from_params_and_return_with_subst(
+            generic_params,
+            generic_param_bounds,
             params,
             return_type,
             throws,
@@ -603,11 +611,21 @@ impl MethodSignature {
     /// block against `interface Container<T>`: the interface signature is
     /// rebuilt with `T → int` so a concrete-typed override matches.
     fn from_params_and_return_with_subst(
+        generic_params: &[Name],
+        generic_param_bounds: &[Option<baml_compiler2_ast::TypeExpr>],
         params: &[baml_compiler2_ast::Param],
         return_type: Option<&baml_compiler2_ast::SpannedTypeExpr>,
         throws: Option<&baml_compiler2_ast::SpannedTypeExpr>,
         subst: &std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr>,
     ) -> Self {
+        let generic_param_bounds = generic_param_bounds
+            .iter()
+            .map(|bound| {
+                bound
+                    .as_ref()
+                    .map(|bound| substitute_type_vars(bound, subst).to_string())
+            })
+            .collect();
         let params = params
             .iter()
             .filter(|p| p.name.as_str() != "self")
@@ -625,6 +643,8 @@ impl MethodSignature {
             .unwrap_or_else(|| "<unspecified>".to_string());
         let throws = throws.map(|te| substitute_type_vars(&te.expr, subst).to_string());
         Self {
+            generic_params: generic_params.to_vec(),
+            generic_param_bounds,
             params,
             return_type,
             throws,
@@ -632,12 +652,29 @@ impl MethodSignature {
     }
 
     fn render(&self) -> String {
+        let generic_params: Vec<String> = self
+            .generic_params
+            .iter()
+            .enumerate()
+            .map(|(idx, param)| {
+                if let Some(Some(bound)) = self.generic_param_bounds.get(idx) {
+                    format!("{param} extends {bound}")
+                } else {
+                    param.to_string()
+                }
+            })
+            .collect();
         let ps: Vec<String> = self
             .params
             .iter()
             .map(|(n, t)| format!("{n}: {t}"))
             .collect();
-        let mut rendered = format!("({}) -> {}", ps.join(", "), self.return_type);
+        let generics = if generic_params.is_empty() {
+            String::new()
+        } else {
+            format!("<{}>", generic_params.join(", "))
+        };
+        let mut rendered = format!("{generics}({}) -> {}", ps.join(", "), self.return_type);
         if let Some(throws) = &self.throws {
             write!(rendered, " throws {throws}").expect("writing to String cannot fail");
         }
@@ -913,6 +950,8 @@ fn collect_interface_members_with_subst<'db>(
                 })
                 .collect();
             let signature = MethodSignature::from_params_and_return_with_subst(
+                &sig.generic_params,
+                &sig.generic_param_bounds,
                 &ast_params,
                 sig.return_type.as_ref(),
                 sig.throws.as_ref(),
@@ -939,6 +978,8 @@ fn collect_interface_members_with_subst<'db>(
                     })
                     .collect();
                 let signature = MethodSignature::from_params_and_return_with_subst(
+                    &f.generic_params,
+                    &f.generic_param_bounds,
                     &ast_params,
                     f.return_type.as_ref(),
                     f.throws.as_ref(),
@@ -1777,6 +1818,8 @@ fn validate_implements_for<'db>(
             ),
             Some(expected) => {
                 let actual = MethodSignature::from_params_and_return(
+                    &method.generic_params,
+                    &method.generic_param_bounds,
                     &method.params,
                     method.return_type.as_ref(),
                     method.throws.as_ref(),
@@ -2017,6 +2060,8 @@ fn validate_class_implements<'db>(
                 ),
                 Some(expected) => {
                     let actual = MethodSignature::from_params_and_return(
+                        &m.generic_params,
+                        &m.generic_param_bounds,
                         &m.params,
                         m.return_type.as_ref(),
                         m.throws.as_ref(),
