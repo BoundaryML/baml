@@ -6219,3 +6219,1129 @@ fn bounded_type_var_rule_conservatively_overlaps_in_body_generic_class_rule() {
         "E0132",
     );
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BEP-044 regression suite — derived from a CLI fuzz/stress sweep (45 findings).
+//
+// Every test below pins behavior that is currently BROKEN. They are expected to
+// FAIL on `canary` and to start passing as each defect is fixed. Numbers map to
+// _plan/baml_interface_findings.md. Positive cases run the program end-to-end and
+// assert the concrete result; "must-reject" cases assert the diagnostic that
+// should fire. Finding #30 (a too-weak existing test) is covered by
+// `fuzz_bug29_*` below, which asserts the `d: Dog =>` form actually runs.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Finding #1 [crash]: Interface method reference on required (abstract) method crashes at runtime
+#[tokio::test]
+async fn fuzz_bug01_method_ref_required_method_crashes() {
+    let output = baml_test!(r##"interface Animal {
+    function speak(self) -> string
+}
+
+class Dog {
+    implements Animal {
+        function speak(self) -> string { return "Woof!" }
+    }
+}
+
+function main() -> string {
+    let speak_fn = Animal.speak
+    let d = Dog {}
+    return speak_fn(d)
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("Woof!".into()));
+}
+
+/// Finding #2 [wrong-result]: Interface method references (default body) always call the default, never dispatch to overrides
+#[tokio::test]
+async fn fuzz_bug02_method_ref_default_dispatches_to_override() {
+    let output = baml_test!(r##"interface Greeter {
+    function greet(self) -> string {
+        return "Hello from default"
+    }
+}
+
+class FormalGreeter {
+    title: string
+    implements Greeter {
+        function greet(self) -> string { return "Good day, " + self.title }
+    }
+}
+
+class CasualGreeter {
+    name: string
+    implements Greeter {
+        function greet(self) -> string { return "Hey " + self.name }
+    }
+}
+
+function main() -> string {
+    let greet_fn = Greeter.greet
+    let formal = FormalGreeter { title: "Sir" }
+    let casual = CasualGreeter { name: "Bob" }
+    return greet_fn(formal) + "|" + greet_fn(casual)
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("Good day, Sir|Hey Bob".into()));
+}
+
+/// Finding #3 [wrong-result]: Concrete class cannot be assigned to optional interface type (Dog not accepted for Animal?)
+#[tokio::test]
+async fn fuzz_bug03_implementor_assignable_to_optional_interface_param() {
+    let output = baml_test!(r##"interface Animal {
+    function speak(self) -> string
+}
+
+class Dog {
+    implements Animal {
+        function speak(self) -> string { return "Woof!" }
+    }
+}
+
+function accepts_optional(a: Animal?) -> string {
+    if (a != null) {
+        return a.speak()
+    } else {
+        return "none"
+    }
+}
+
+function main() -> string {
+    let d = Dog {}
+    return accepts_optional(d)
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("Woof!".into()));
+}
+
+/// Finding #4 [crash]: Calling method directly on parenthesized if-expression with different concrete types in branches crashes
+#[tokio::test]
+async fn fuzz_bug04_method_call_on_parenthesized_if_expr() {
+    let output = baml_test!(r##"interface Animal {
+    function speak(self) -> string
+}
+
+class Dog {
+    implements Animal {
+        function speak(self) -> string { return "Woof!" }
+    }
+}
+
+class Cat {
+    implements Animal {
+        function speak(self) -> string { return "Meow." }
+    }
+}
+
+function main() -> string {
+    return (if (true) { Dog {} } else { Cat {} }).speak()
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("Woof!".into()));
+}
+
+/// Finding #5 [wrong-result]: dispatch leaks child override into parent projection when B requires A and both define same-named method
+#[tokio::test]
+async fn fuzz_bug05_requires_child_override_does_not_leak_into_parent_slot() {
+    let output = baml_test!(r##"interface A {
+    function foo(self) -> string { return "A" }
+}
+interface B requires A {
+    function foo(self) -> string { return "B" }
+}
+class C {
+    implements A {}
+    implements B {
+        function foo(self) -> string { return "B-override" }
+    }
+}
+function main() -> string {
+    let c = C {}
+    let a: A = c
+    return a.foo()
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("A".into()));
+}
+
+/// Finding #6 [bad-error]: interface requires a class/enum/unknown type is silently accepted at declaration; error only fires (misleadingly) at class implements site
+#[test]
+fn fuzz_bug06_interface_requires_non_interface_errors_at_declaration() {
+    assert_compile_error_contains(
+        r##"
+        class Foo { x: int }
+        interface Bad requires Foo {}
+        function main() -> bool { return true }
+"##,
+        "Foo",
+    );
+}
+
+/// Finding #7 [wrong-result]: Interface type param T is unresolved in generic interface default method bodies
+#[tokio::test]
+async fn fuzz_bug07_generic_default_method_body_can_use_type_param() {
+    let output = baml_test!(r##"interface Echo<T> {
+    function echo(self, x: T) -> T {
+        return x
+    }
+}
+
+class IntEcho {
+    implements Echo<int> {}
+}
+
+function main() -> int {
+    let e = IntEcho {}
+    return e.echo(42)
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(42));
+}
+
+/// Finding #8 [wrong-result]: Generic class implementing single-T generic interface for both type params always dispatches to first implementor
+#[tokio::test]
+async fn fuzz_bug08_generic_class_dispatches_by_type_arg_to_correct_impl() {
+    let output = baml_test!(r##"interface Getter<T> {
+    function get(self) -> T
+}
+
+class Pair<L, R> {
+    left: L
+    right: R
+    implements Getter<L> {
+        function get(self) -> L { return self.left }
+    }
+    implements Getter<R> {
+        function get(self) -> R { return self.right }
+    }
+}
+
+function main() -> bool {
+    let p: Pair<int, string> = Pair { left: 7, right: "seven" }
+    let gr: Getter<string> = p
+    let val = gr.get()
+    return val == "seven"
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
+}
+
+/// Finding #9 [wrongly-accepted]: Unqualified method call on class implementing same generic interface with different type args silently picks first impl (no E0121)
+#[test]
+fn fuzz_bug09_same_generic_iface_diff_typeargs_unqualified_call_ambiguous() {
+    assert_compile_error_code(
+        r##"interface Converter<T> {
+    function convert(self) -> T
+}
+
+class MultiFormat {
+    int_val: int
+    str_val: string
+    implements Converter<int> {
+        function convert(self) -> int { return self.int_val }
+    }
+    implements Converter<string> {
+        function convert(self) -> string { return self.str_val }
+    }
+}
+
+function main() -> int {
+    let m = MultiFormat { int_val: 42, str_val: "hello" }
+    return m.convert()
+}
+"##,
+        "E0121",
+    );
+}
+
+/// Finding #10 [crash]: Generic function with interface type parameter Box<T> crashes at runtime with 'expected map, got instance' when dispatching methods
+#[tokio::test]
+async fn fuzz_bug10_generic_interface_as_function_param_dispatches() {
+    let output = baml_test!(r##"interface Box<T> {
+    function get(self) -> T
+}
+
+class IntBox {
+    value: int
+    implements Box<int> {
+        function get(self) -> int { return self.value }
+    }
+}
+
+// Function parameter type is Box<T> (generic interface)
+function read<T>(b: Box<T>) -> T {
+    return b.get()
+}
+
+function main() -> int {
+    let b = IntBox { value: 55 }
+    return read<int>(b)
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(55));
+}
+
+/// Finding #11 [bad-error]: Error message for ambiguous generic interface field access suggests invalid fix (as<Box> without type args)
+#[test]
+fn fuzz_bug11_ambiguous_generic_field_error_includes_type_args() {
+    assert_compile_error_contains(
+        r##"interface Box<T> {
+    value: T
+}
+
+class MultiBox {
+    int_v: int
+    str_v: string
+    implements Box<int> { value as int_v }
+    implements Box<string> { value as str_v }
+}
+
+function main() -> int {
+    let b = MultiBox { int_v: 42, str_v: "hello" }
+    return b.value
+}
+"##,
+        "as<Box<int>>",
+    );
+}
+
+/// Finding #12 [wrong-result]: Generic class Pair<L,R> always dispatches to the FIRST implements block for both Slot<L> and Slot<string> interface types
+#[tokio::test]
+async fn fuzz_bug12_generic_pair_dispatches_second_type_arg_correctly() {
+    let output = baml_test!(r##"interface Slot<T> {
+    function get(self) -> T
+}
+
+class GenPair<L, R> {
+    left: L
+    right: R
+    implements Slot<L> {
+        function get(self) -> L { return self.left }
+    }
+    implements Slot<R> {
+        function get(self) -> R { return self.right }
+    }
+}
+
+function main() -> bool {
+    let p: GenPair<int, string> = GenPair { left: 42, right: "world" }
+    let rl: Slot<int> = p
+    let rr: Slot<string> = p
+    let lv = rl.get()
+    let rv = rr.get()
+    // Expected: lv == 42 && rv == "world"
+    // Actual:   lv == 42 && rv == 42  (second dispatch picks first impl block)
+    return lv == 42 && rv == "world"
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
+}
+
+/// Finding #13 [wrong-result]: Same dispatch bug affects field-link views: GenPair<L,R> with 'value as left' and 'value as right' returns wrong field for second type param
+#[tokio::test]
+async fn fuzz_bug13_generic_field_link_views_select_correct_type_arg() {
+    let output = baml_test!(r##"interface Slot<T> {
+    value: T
+}
+
+class GenPair<L, R> {
+    left: L
+    right: R
+    implements Slot<L> {
+        value as left
+    }
+    implements Slot<R> {
+        value as right
+    }
+}
+
+function main() -> bool {
+    let p: GenPair<int, string> = GenPair { left: 7, right: "seven" }
+    let i: Slot<int> = p
+    let s: Slot<string> = p
+    // Expected: i.value == 7 && s.value == "seven"
+    // Actual: i.value == 7 && s.value == 7 (wrong impl selected)
+    return i.value == 7 && s.value == "seven"
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
+}
+
+/// Finding #14 [wrong-result]: Explicit .as<Slot<string>> projection on a generic Pair<int,string> also dispatches to the wrong block
+#[tokio::test]
+async fn fuzz_bug14_explicit_as_projection_selects_generic_type_arg() {
+    let output = baml_test!(r##"interface Slot<T> {
+    function get(self) -> T
+}
+
+class GenPair<L, R> {
+    left: L
+    right: R
+    implements Slot<L> {
+        function get(self) -> L { return self.left }
+    }
+    implements Slot<R> {
+        function get(self) -> R { return self.right }
+    }
+}
+
+function main() -> bool {
+    let p: GenPair<int, string> = GenPair { left: 42, right: "world" }
+    // Explicit .as<> projection should select the Slot<string> block
+    let rv = p.as<Slot<string>>.get()
+    return rv == "world"
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
+}
+
+/// Finding #15 [crash]: Generic interface default method crashes with 'expected map, got instance' when calling self.method() through an interface-typed variable
+#[tokio::test]
+async fn fuzz_bug15_generic_default_method_self_call_through_interface_var() {
+    let output = baml_test!(r##"interface Container<T> {
+    function size(self) -> int
+    function describe_with_self_call(self) -> string {
+        let n = self.size()   // calling another interface method on self
+        return "ok"
+    }
+}
+
+class IntBox {
+    items: int[]
+    implements Container<int> {
+        function size(self) -> int { return self.items.length() }
+    }
+}
+
+function main() -> string {
+    let b = IntBox { items: [1, 2, 3] }
+    let c: Container<int> = b
+    return c.describe_with_self_call()
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("ok".into()));
+}
+
+/// Finding #16 [bad-error]: Type parameter T from a generic interface is not in scope in default method signatures and bodies (E0002 'unresolved type: T')
+#[tokio::test]
+async fn fuzz_bug16_generic_interface_type_param_in_scope_in_default_method() {
+    let output = baml_test!(r##"interface Container<T> {
+    function get(self) -> T           // required method - T is fine here
+    function get_or(self, fallback: T) -> T {   // default method - T is NOT in scope!
+        return self.get()
+    }
+}
+
+class IntBox {
+    value: int
+    implements Container<int> {
+        function get(self) -> int { return self.value }
+    }
+}
+
+function main() -> bool {
+    return true
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
+}
+
+/// Finding #17 [wrong-result]: Inherited default method (not overridden) inaccessible via class-typed variable
+#[tokio::test]
+async fn fuzz_bug17_inherited_default_method_callable_on_class_var() {
+    let output = baml_test!(r##"interface Greetable {
+    function greet(self) -> string {
+        return "Hello!"
+    }
+}
+class Greeter {
+    implements Greetable {}  // empty block - inherits default
+}
+function main() -> string {
+    let g = Greeter {}
+    return g.greet()  // should work - inherits default
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("Hello!".into()));
+}
+
+/// Finding #18 [wrong-result]: Class method shadowed by aliased interface field view — calling class method fails with misleading interface-field error
+#[tokio::test]
+async fn fuzz_bug18_class_method_preferred_over_aliased_field_view_on_call() {
+    let output = baml_test!(r##"interface Named {
+    name: string
+}
+class Person {
+    _name: string
+    implements Named {
+        name as _name
+    }
+    function name(self) -> string { return "method:" + self._name }
+}
+function main() -> string {
+    let p = Person { _name: "Ada" }
+    return p.name()  // Should call the class method
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("method:Ada".into()));
+}
+
+/// Finding #19 [bad-error]: E0116 type-mismatch error on aliased field reports the class field name as the interface's requirement
+#[test]
+fn fuzz_bug19_aliased_field_type_mismatch_error_names_interface_field() {
+    assert_compile_error_contains(
+        r##"interface Named {
+    name: string
+}
+class Person {
+    name_count: int
+    implements Named {
+        name as name_count
+    }
+}
+function main() -> string {
+    return "unreachable"
+}
+"##,
+        "`name`",
+    );
+}
+
+/// Finding #20 [wrong-result]: Field dispatch via .as<B>.field resolves to parent interface's field view when B requires A and both declare same field name
+#[tokio::test]
+async fn fuzz_bug20_as_projection_field_uses_own_view_in_requires_chain() {
+    let output = baml_test!(r##"interface A {
+    label: string
+}
+interface B requires A {
+    label: string
+}
+class D {
+    a_label: string
+    b_label: string
+    implements A { label as a_label }
+    implements B { label as b_label }
+}
+function main() -> string {
+    let d = D { a_label: "A_val", b_label: "B_val" }
+    let a_val = d.as<A>.label
+    let b_val = d.as<B>.label
+    return a_val + "|" + b_val
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("A_val|B_val".into()));
+}
+
+/// Finding #21 [wrong-result]: Interface-typed variable field access resolves to parent interface field when requires chain has same field name
+#[tokio::test]
+async fn fuzz_bug21_interface_param_field_uses_own_view_in_requires_chain() {
+    let output = baml_test!(r##"interface A {
+    label: string
+}
+interface B requires A {
+    label: string
+}
+class D {
+    a_label: string
+    b_label: string
+    implements A { label as a_label }
+    implements B { label as b_label }
+}
+function get_from_b(b: B) -> string {
+    return b.label
+}
+function get_from_a(a: A) -> string {
+    return a.label
+}
+function main() -> string {
+    let d = D { a_label: "A_val", b_label: "B_val" }
+    return get_from_a(d) + "|" + get_from_b(d)
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("A_val|B_val".into()));
+}
+
+/// Finding #22 [nit]: Old x.Interface.method() hint for generic interface omits type arguments
+#[test]
+fn fuzz_bug22_old_projection_syntax_hint_includes_type_args() {
+    assert_compile_error_contains(
+        r##"interface Container<T> {
+    function get(self) -> T
+}
+class IntBox {
+    value: int
+    implements Container<int> {
+        function get(self) -> int { return self.value }
+    }
+}
+function main() -> int {
+    let b = IntBox { value: 42 }
+    return b.Container.get()
+}
+"##,
+        "Container<int>",
+    );
+}
+
+/// Finding #23 [wrong-result]: Default-inherited method not accessible via unqualified call on concrete class type
+#[tokio::test]
+async fn fuzz_bug23_default_inherited_method_unqualified_call_on_class() {
+    let output = baml_test!(r##"interface Speaker {
+    function speak(self) -> string {
+        return "default speech"
+    }
+}
+
+class Thing {
+    implements Speaker {}
+}
+
+function main() -> string {
+    let t = Thing {}
+    return t.speak()
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("default speech".into()));
+}
+
+/// Finding #24 [wrong-result]: Generic interface type parameter T is unresolved in default method signatures
+#[tokio::test]
+async fn fuzz_bug24_generic_interface_type_param_in_default_method_signature() {
+    let output = baml_test!(r##"interface Container<T> {
+    function get_first(self) -> T {
+        return null
+    }
+    function get(self) -> T  // required - works fine
+}
+
+class IntBag {
+    items: int[]
+    implements Container<int> {
+        function get(self) -> int { return self.items[0] }
+    }
+}
+
+function main() -> int {
+    let b: Container<int> = IntBag { items: [42, 1, 2] }
+    return b.get()
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(42));
+}
+
+/// Finding #25 [bad-error]: Two default methods with same name give E0007 (method not found) instead of E0121 (ambiguous)
+#[test]
+fn fuzz_bug25_two_same_named_default_methods_are_ambiguous() {
+    assert_compile_error_code(
+        r##"interface Alpha {
+    function tag(self) -> string { return "alpha" }
+}
+interface Beta {
+    function tag(self) -> string { return "beta" }
+}
+
+class Both {
+    implements Alpha {}
+    implements Beta {}
+}
+
+function main() -> string {
+    let x = Both {}
+    return x.tag()
+}
+"##,
+        "E0121",
+    );
+}
+
+/// Finding #26 [wrong-result]: One default + one required method with same name: unqualified call silently picks required without E0121
+#[test]
+fn fuzz_bug26_default_plus_required_same_name_is_ambiguous() {
+    assert_compile_error_code(
+        r##"interface WithDefault {
+    function process(self) -> string { return "DEFAULT" }
+}
+interface WithRequired {
+    function process(self) -> string
+}
+
+class Impl {
+    implements WithDefault {}
+    implements WithRequired {
+        function process(self) -> string { return "REQUIRED" }
+    }
+}
+
+function main() -> string {
+    let x = Impl {}
+    return x.process()  // Expected: E0121; Actual: compiles and returns "REQUIRED"
+}
+"##,
+        "E0121",
+    );
+}
+
+/// Finding #27 [wrong-result]: Same generic interface implemented with different type args: unqualified call silently picks first by declaration order instead of raising E0121
+#[test]
+fn fuzz_bug27_same_generic_iface_diff_typeargs_no_receiver_is_ambiguous() {
+    assert_compile_error_code(
+        r##"interface Converter<T> {
+    function convert(self) -> T
+}
+
+class Multi {
+    implements Converter<int> {
+        function convert(self) -> int { return 42 }
+    }
+    implements Converter<string> {
+        function convert(self) -> string { return "hello" }
+    }
+}
+
+function main() -> int {
+    let m = Multi {}
+    return m.convert()  // picks Converter<int> silently
+}
+"##,
+        "E0121",
+    );
+}
+
+/// Finding #28 [bad-error]: E0007 with misleading suggestion for generic-interface field access: suggests raw `as<Slot>` which itself fails
+#[test]
+fn fuzz_bug28_ambiguous_generic_field_error_lists_type_args() {
+    assert_compile_error_contains(
+        r##"interface Slot<T> {
+    value: T
+}
+
+class Pair {
+    int_value: int
+    str_value: string
+    implements Slot<int> { value as int_value }
+    implements Slot<string> { value as str_value }
+}
+
+function main() -> string {
+    let p = Pair { int_value: 1, str_value: "hi" }
+    return p.value
+}
+"##,
+        "Slot<int>",
+    );
+}
+
+/// Finding #29 [wrong-result]: `d: Dog =>` binding form (without `let`) fails to parse
+#[tokio::test]
+async fn fuzz_bug29_match_binding_form_without_let_parses() {
+    let output = baml_test!(r##"interface Animal {
+    function speak(self) -> string
+}
+class Dog {
+    breed: string
+    implements Animal {
+        function speak(self) -> string { return "Woof!" }
+    }
+}
+
+function describe(a: Animal) -> string {
+    return match (a) {
+        d: Dog => d.breed
+        _ => "other"
+    }
+}
+
+function main() -> string {
+    let d = Dog { breed: "Retriever" }
+    return describe(d)
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("Retriever".into()));
+}
+
+/// Finding #31 [crash]: VM crash when calling method on `Dog | Cat` union type produced by match expression arms
+#[tokio::test]
+async fn fuzz_bug31_method_call_on_match_union_result_does_not_crash() {
+    let output = baml_test!(r##"interface Animal {
+    function speak(self) -> string
+}
+class Dog {
+    implements Animal {
+        function speak(self) -> string { return "Woof!" }
+    }
+}
+class Cat {
+    implements Animal {
+        function speak(self) -> string { return "Meow!" }
+    }
+}
+
+function main() -> string {
+    let b = true
+    let result = match (b) {
+        true => Dog {}
+        false => Cat {}
+    }
+    // result is Dog | Cat union - calling any method crashes the VM
+    return result.speak()
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("Woof!".into()));
+}
+
+/// Finding #32 [wrong-result]: Interface-typed variable cannot be coerced to optional interface (`Animal -> Animal?`), while `int -> int?` and `Dog -> Dog?` both work
+#[tokio::test]
+async fn fuzz_bug32_interface_value_coerces_to_optional_interface() {
+    let output = baml_test!(r##"interface Animal {
+    function speak(self) -> string
+}
+class Dog {
+    breed: string
+    implements Animal {
+        function speak(self) -> string { return "Woof!" }
+    }
+}
+
+function main() -> bool {
+    let d: Animal = Dog { breed: "Lab" }
+    let opt: Animal? = d   // should work: Animal is a subtype of Animal?
+    return opt != null
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
+}
+
+/// Finding #33 [wrong-result]: Returning concrete class from function with `-> Animal?` return type fails even though Dog is a subtype of Animal
+#[tokio::test]
+async fn fuzz_bug33_return_implementor_from_optional_interface_function() {
+    let output = baml_test!(r##"interface Animal {
+    function speak(self) -> string
+}
+class Dog {
+    breed: string
+    implements Animal {
+        function speak(self) -> string { return "Woof!" }
+    }
+}
+
+// Should work: Dog <: Animal <: Animal?
+function maybe_dog(want_dog: bool) -> Animal? {
+    if want_dog {
+        return Dog { breed: "Lab" }
+    }
+    return null
+}
+
+function main() -> bool {
+    let r = maybe_dog(true)
+    let n = maybe_dog(false)
+    return r != null && n == null
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
+}
+
+/// Finding #34 [wrong-result]: implements() ignores generic type arguments — IntBox.implements(Box<string>) returns true
+#[tokio::test]
+async fn fuzz_bug34_reflect_implements_respects_generic_type_args() {
+    let output = baml_test!(r##"interface Box<T> {
+    function get(self) -> T
+}
+class IntBox {
+    implements Box<int> {
+        function get(self) -> int { return 1 }
+    }
+}
+
+function main() -> bool {
+    // IntBox only implements Box<int>, NOT Box<string>
+    // Expected: false. Actual: true (wrong!)
+    return reflect.type_of<IntBox>().implements(reflect.type_of<Box<string>>())
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(false));
+}
+
+/// Finding #35 [wrong-result]: implemented_by() also ignores generic type arguments — Box<string>.implemented_by(IntBox) returns true
+#[tokio::test]
+async fn fuzz_bug35_reflect_implemented_by_respects_generic_type_args() {
+    let output = baml_test!(r##"interface Box<T> {
+    function get(self) -> T
+}
+class IntBox {
+    implements Box<int> {
+        function get(self) -> int { return 1 }
+    }
+}
+
+function main() -> bool {
+    // Box<string>.implemented_by(IntBox) should be false
+    // IntBox only implements Box<int>
+    return reflect.type_of<Box<string>>().implemented_by(reflect.type_of<IntBox>())
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(false));
+}
+
+/// Finding #36 [wrong-result]: implementors() on a generic interface ignores type args — Box<int>.implementors() returns both IntBox and StringBox
+#[tokio::test]
+async fn fuzz_bug36_reflect_implementors_respects_generic_type_args() {
+    let output = baml_test!(r##"interface Box<T> {
+    function get(self) -> T
+}
+class IntBox {
+    implements Box<int> {
+        function get(self) -> int { return 1 }
+    }
+}
+class StringBox {
+    implements Box<string> {
+        function get(self) -> string { return "hello" }
+    }
+}
+
+function main() -> int {
+    // Box<int>.implementors() should return [IntBox] (length 1)
+    // But actually returns both IntBox and StringBox (length 2)
+    return reflect.type_of<Box<int>>().implementors().length()
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(1));
+}
+
+/// Finding #37 [wrong-result]: implementors() returns items in wrong order when there are 3 or more implementors
+#[tokio::test]
+async fn fuzz_bug37_reflect_implementors_preserves_declaration_order() {
+    let output = baml_test!(r##"interface I {}
+class A { implements I {} }
+class B { implements I {} }
+class C { implements I {} }
+
+function main() -> string {
+    let impls = reflect.type_of<I>().implementors()
+    // Expected order: A,B,C (declaration order)
+    // Actual: C,B,A
+    return impls[0].to_string() + "," + impls[1].to_string() + "," + impls[2].to_string()
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("A,B,C".into()));
+}
+
+/// Finding #38 [wrong-result]: E0096 false positive: throwing a class that implements the declared throws interface is rejected
+#[tokio::test]
+async fn fuzz_bug38_throw_subtype_of_declared_throws_interface_is_allowed() {
+    let output = baml_test!(r##"interface IError {
+    function describe(self) -> string
+}
+
+class NetworkError {
+    msg: string
+    implements IError {
+        function describe(self) -> string { return "network: " + self.msg }
+    }
+}
+
+class DatabaseError {
+    msg: string
+    implements IError {
+        function describe(self) -> string { return "db: " + self.msg }
+    }
+}
+
+interface DataFetcher {
+    function fetch(self, key: string) -> string throws IError
+}
+
+class MyFetcher {
+    implements DataFetcher {
+        function fetch(self, key: string) -> string throws IError {
+            if key == "net" {
+                throw NetworkError { msg: "connection refused" }
+            }
+            return "data:" + key
+        }
+    }
+}
+
+function main() -> bool {
+    return true
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
+}
+
+/// Finding #39 [wrong-result]: catch-by-interface-type pattern silently fails to match at runtime when throws type is an interface
+#[tokio::test]
+async fn fuzz_bug39_catch_by_interface_pattern_matches_implementor() {
+    let output = baml_test!(r##"interface IError {
+    function describe(self) -> string
+}
+
+class ConcreteErr {
+    msg: string
+    implements IError {
+        function describe(self) -> string { return self.msg }
+    }
+}
+
+function risky() -> string throws IError {
+    let e: IError = ConcreteErr { msg: "problem" }
+    throw e
+}
+
+function main() -> string {
+    return risky() catch (e) {
+        let caught: IError => "interface-caught: " + caught.describe()
+        _ => "wildcard-caught"
+    }
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("interface-caught: problem".into()));
+}
+
+/// Finding #40 [wrong-result]: Concrete class not assignable to `Interface | OtherType` union even when class implements Interface
+#[tokio::test]
+async fn fuzz_bug40_implementor_assignable_to_interface_union() {
+    let output = baml_test!(r##"interface Animal {
+    function speak(self) -> string
+}
+class Dog {
+    implements Animal {
+        function speak(self) -> string { return "Woof!" }
+    }
+}
+
+function describe(x: Animal | string) -> string {
+    return "ok"
+}
+
+function main() -> string {
+    return describe(Dog {})
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("ok".into()));
+}
+
+/// Finding #41 [wrong-result]: Exhaustiveness checker wrongly marks `null` arm as unreachable when matching `Interface?`; runtime silently matches null as the interface type
+#[tokio::test]
+async fn fuzz_bug41_optional_interface_match_null_arm_reachable() {
+    let output = baml_test!(r##"interface Animal {
+    function speak(self) -> string
+}
+class Dog {
+    implements Animal {
+        function speak(self) -> string { return "Woof!" }
+    }
+}
+
+// Should require null arm for exhaustiveness; without it should be a compile error.
+// With it, null arm should NOT be unreachable.
+function maybe_speak(a: Animal?) -> string {
+    return match (a) {
+        let animal: Animal => animal.speak()
+        null => "silent"
+    }
+}
+
+function main() -> string {
+    return maybe_speak(null)
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("silent".into()));
+}
+
+/// Finding #42 [wrong-result]: Default interface method (inherited via empty implements block) not callable on concrete class type — only on interface-typed variables
+#[tokio::test]
+async fn fuzz_bug42_default_method_callable_on_concrete_class_type() {
+    let output = baml_test!(r##"interface Printable {
+    function print(self) -> string { return "printable" }
+}
+
+class Widget {
+    implements Printable {}
+}
+
+function main() -> string {
+    let w = Widget {}
+    // Widget inherits Printable.print via empty implements block
+    return w.print()
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("printable".into()));
+}
+
+/// Finding #43 [crash]: VM crash `expected map, got instance` when calling an interface method inside a generic function whose parameter type is `Interface<T>` with unbound T
+#[tokio::test]
+async fn fuzz_bug43_generic_fn_with_generic_interface_param_dispatches() {
+    let output = baml_test!(r##"interface Producer<T> {
+    function produce(self) -> T
+}
+
+class IntProducer {
+    val: int
+    implements Producer<int> {
+        function produce(self) -> int { return self.val }
+    }
+}
+
+// T is unconstrained but used as the type arg in Producer<T>
+function get_value<T>(p: Producer<T>) -> T {
+    return p.produce()
+}
+
+function main() -> int {
+    let p = IntProducer { val: 42 }
+    return get_value<int>(p)
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(42));
+}
+
+/// Finding #44 [wrong-result]: Generic interface default method body cannot reference type parameter T — unresolved type error
+#[tokio::test]
+async fn fuzz_bug44_generic_interface_default_method_body_uses_type_param() {
+    let output = baml_test!(r##"interface Wrapper<T> {
+    function wrap(self, x: T) -> T {
+        return x
+    }
+}
+
+class IntWrapper {
+    implements Wrapper<int> {}
+}
+
+function main() -> int {
+    let w = IntWrapper {}
+    return w.wrap(42)
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(42));
+}
+
+/// Finding #45 [wrong-result]: Union type `Interface | OtherType` exhaustiveness checking treats union as only the interface — other arms wrongly flagged unreachable
+#[tokio::test]
+async fn fuzz_bug45_interface_union_match_arms_all_reachable() {
+    let output = baml_test!(r##"interface Animal {
+    function speak(self) -> string
+}
+class Dog {
+    implements Animal {
+        function speak(self) -> string { return "Woof!" }
+    }
+}
+
+function describe(x: Animal | string) -> string {
+    return match (x) {
+        let a: Animal => a.speak()
+        let s: string => s
+    }
+}
+
+function main() -> string {
+    let a: Animal = Dog {}
+    return describe(a)
+}
+"##);
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("Woof!".into()));
+}
