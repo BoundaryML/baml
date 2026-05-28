@@ -2071,6 +2071,20 @@ impl BexVm {
                     vec![Value::int(index), Value::int(length as i64)],
                 )
             }
+            VmPanic::InvalidFieldAccess {
+                field_index,
+                field_count,
+            } =>
+            {
+                #[allow(clippy::cast_possible_wrap)]
+                (
+                    PanicClass::InvalidFieldAccess,
+                    vec![
+                        Value::int(field_index as i64),
+                        Value::int(field_count as i64),
+                    ],
+                )
+            }
             VmPanic::MapKeyNotFound => {
                 let key = self.alloc_string("(unknown)".to_string());
                 (PanicClass::MapKeyNotFound, vec![key])
@@ -2111,6 +2125,13 @@ impl BexVm {
             }
         };
         self.alloc_panic_value(class, fields)
+    }
+
+    fn invalid_field_access_error(&mut self, field_index: usize, field_count: usize) -> VmError {
+        VmError::Thrown(self.panic_to_exception_value(VmPanic::InvalidFieldAccess {
+            field_index,
+            field_count,
+        }))
     }
 
     /// Allocate a `baml.panics.*` class instance using pre-resolved pointers.
@@ -2784,7 +2805,7 @@ impl BexVm {
         let dest_ptr = self.as_object_ptr(dest_value, ObjectType::Instance)?;
         let source_ptr = self.as_object_ptr(source_value, ObjectType::Instance)?;
 
-        let copied_fields: Vec<(usize, Value, Value)> = {
+        let copied_fields = {
             let Object::Instance(source) = self.get_object(source_ptr) else {
                 return Err(VmInternalError::TypeError {
                     expected: ObjectType::Instance.into(),
@@ -2800,17 +2821,24 @@ impl BexVm {
                 .into());
             };
 
-            field_copy_set
-                .fields
-                .iter()
-                .map(|copy| {
-                    (
-                        copy.dest,
-                        dest.load_field(copy.dest),
-                        source.load_field(copy.source),
-                    )
-                })
-                .collect()
+            let mut copied_fields = Vec::with_capacity(field_copy_set.fields.len());
+            let mut invalid_field_access = None;
+            for copy in &field_copy_set.fields {
+                let Some(old_value) = dest.try_load_field(copy.dest) else {
+                    invalid_field_access = Some((copy.dest, dest.field_len()));
+                    break;
+                };
+                let Some(new_value) = source.try_load_field(copy.source) else {
+                    invalid_field_access = Some((copy.source, source.field_len()));
+                    break;
+                };
+                copied_fields.push((copy.dest, old_value, new_value));
+            }
+            if let Some((index, field_count)) = invalid_field_access {
+                return Err(self.invalid_field_access_error(index, field_count));
+            }
+
+            copied_fields
         };
 
         let watched_node = NodeId::HeapObject(dest_ptr);
@@ -2829,6 +2857,15 @@ impl BexVm {
                 old_value,
                 new_value,
             );
+            let store_error = {
+                let Object::Instance(dest) = self.get_object(dest_ptr) else {
+                    unreachable!("destination instance already type-checked above");
+                };
+                (dest_field >= dest.field_len()).then_some(dest.field_len())
+            };
+            if let Some(length) = store_error {
+                return Err(self.invalid_field_access_error(dest_field, length));
+            }
             self.heap.write_barrier(dest_ptr, new_value);
             let Object::Instance(dest) = self.get_object(dest_ptr) else {
                 unreachable!("destination instance already type-checked above");
@@ -3655,14 +3692,24 @@ impl BexVm {
                     let idx = { read_u32_unchecked(code, pc) as usize };
                     let top = self.stack.ensure_pop();
                     let obj_ptr = self.as_object_ptr(top, ObjectType::Instance)?;
-                    let Object::Instance(instance) = self.get_object(obj_ptr) else {
-                        return Err(VmInternalError::TypeError {
-                            expected: ObjectType::Instance.into(),
-                            got: ObjectType::of(self.get_object(obj_ptr)).into(),
-                        }
-                        .into());
+                    let load_result = {
+                        let Object::Instance(instance) = self.get_object(obj_ptr) else {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Instance.into(),
+                                got: ObjectType::of(self.get_object(obj_ptr)).into(),
+                            }
+                            .into());
+                        };
+                        instance
+                            .try_load_field(idx)
+                            .ok_or_else(|| instance.field_len())
                     };
-                    let value = instance.load_field(idx);
+                    let value = match load_result {
+                        Ok(value) => value,
+                        Err(length) => {
+                            return Err(self.invalid_field_access_error(idx, length));
+                        }
+                    };
                     self.stack.push(value);
                 }
 
@@ -3680,7 +3727,15 @@ impl BexVm {
                             }
                             .into());
                         };
-                        instance.load_field(idx)
+                        instance
+                            .try_load_field(idx)
+                            .ok_or_else(|| instance.field_len())
+                    };
+                    let old_value = match old_value {
+                        Ok(old_value) => old_value,
+                        Err(length) => {
+                            return Err(self.invalid_field_access_error(idx, length));
+                        }
                     };
 
                     let watched_node = NodeId::HeapObject(obj_ptr);
@@ -3690,6 +3745,15 @@ impl BexVm {
                         old_value,
                         new_value,
                     );
+                    let store_error = {
+                        let Object::Instance(instance) = self.get_object(obj_ptr) else {
+                            unreachable!("already type-checked above");
+                        };
+                        (idx >= instance.field_len()).then_some(instance.field_len())
+                    };
+                    if let Some(length) = store_error {
+                        return Err(self.invalid_field_access_error(idx, length));
+                    }
                     self.heap.write_barrier(obj_ptr, new_value);
                     let Object::Instance(instance) = self.get_object(obj_ptr) else {
                         unreachable!("already type-checked above");
@@ -3709,13 +3773,22 @@ impl BexVm {
                     let new_value = self.stack.ensure_pop();
                     let instance_value = self.stack.ensure_pop();
                     let obj_ptr = self.as_object_ptr(instance_value, ObjectType::Instance)?;
+                    let store_error = {
+                        let Object::Instance(instance) = self.get_object(obj_ptr) else {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Instance.into(),
+                                got: ObjectType::of(self.get_object(obj_ptr)).into(),
+                            }
+                            .into());
+                        };
+                        (idx >= instance.field_len()).then_some(instance.field_len())
+                    };
+                    if let Some(length) = store_error {
+                        return Err(self.invalid_field_access_error(idx, length));
+                    }
                     self.heap.write_barrier(obj_ptr, new_value);
                     let Object::Instance(instance) = self.get_object(obj_ptr) else {
-                        return Err(VmInternalError::TypeError {
-                            expected: ObjectType::Instance.into(),
-                            got: ObjectType::of(self.get_object(obj_ptr)).into(),
-                        }
-                        .into());
+                        unreachable!("already type-checked above");
                     };
                     instance.store_field(idx, new_value);
                     self.stack.push(instance_value);

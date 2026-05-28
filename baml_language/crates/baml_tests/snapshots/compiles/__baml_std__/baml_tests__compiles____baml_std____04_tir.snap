@@ -1345,6 +1345,16 @@ function baml.panics.IndexOutOfBounds.to_json(self: baml.panics.IndexOutOfBounds
 function baml.panics.IndexOutOfBounds.from_json(j: baml.json.json) -> baml.panics.IndexOutOfBounds throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   IndexOutOfBounds { index: baml.json.from_json<int>(baml.json.field(j, "index")), length: baml.json.from_json<int>(baml.json.field(j, "length")) } : baml.panics.IndexOutOfBounds
 }
+class baml.panics.InvalidFieldAccess {
+  field_index: int
+  field_count: int
+}
+function baml.panics.InvalidFieldAccess.to_json(self: baml.panics.InvalidFieldAccess) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "field_index": self.field_index.to_json(), "field_count": self.field_count.to_json() } : map<string, baml.json.json>
+}
+function baml.panics.InvalidFieldAccess.from_json(j: baml.json.json) -> baml.panics.InvalidFieldAccess throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  InvalidFieldAccess { field_index: baml.json.from_json<int>(baml.json.field(j, "field_index")), field_count: baml.json.from_json<int>(baml.json.field(j, "field_count")) } : baml.panics.InvalidFieldAccess
+}
 class baml.panics.MapKeyNotFound {
   key: string
 }
@@ -1445,13 +1455,17 @@ function baml.panics.SdkPanic.to_json(self: baml.panics.SdkPanic) -> baml.json.j
 function baml.panics.SdkPanic.from_json(j: baml.json.json) -> baml.panics.SdkPanic throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   SdkPanic { message: baml.json.from_json<string>(baml.json.field(j, "message")) } : baml.panics.SdkPanic
 }
-type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.Cancelled | baml.panics.UserPanic | baml.panics.Exit | baml.panics.AllocFailure | baml.panics.HostUnavailable | baml.panics.NegativeBitShift | baml.panics.SdkPanic
+type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.InvalidFieldAccess | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.Cancelled | baml.panics.UserPanic | baml.panics.Exit | baml.panics.AllocFailure | baml.panics.HostUnavailable | baml.panics.NegativeBitShift | baml.panics.SdkPanic
 class baml.panics.DivisionByZero$stream {
   dividend: null | int
 }
 class baml.panics.IndexOutOfBounds$stream {
   index: null | int
   length: null | int
+}
+class baml.panics.InvalidFieldAccess$stream {
+  field_index: null | int
+  field_count: null | int
 }
 class baml.panics.MapKeyNotFound$stream {
   key: null | string
@@ -1487,7 +1501,7 @@ class baml.panics.NegativeBitShift$stream {
 class baml.panics.SdkPanic$stream {
   message: null | string
 }
-type baml.panics.Panic$stream = baml.panics.DivisionByZero$stream | baml.panics.IndexOutOfBounds$stream | baml.panics.MapKeyNotFound$stream | baml.panics.StackOverflow$stream | baml.panics.AssertionFailed$stream | baml.panics.Unreachable$stream | baml.panics.Cancelled$stream | baml.panics.UserPanic$stream | baml.panics.Exit$stream | baml.panics.AllocFailure$stream | baml.panics.HostUnavailable$stream | baml.panics.NegativeBitShift$stream | baml.panics.SdkPanic$stream
+type baml.panics.Panic$stream = baml.panics.DivisionByZero$stream | baml.panics.IndexOutOfBounds$stream | baml.panics.InvalidFieldAccess$stream | baml.panics.MapKeyNotFound$stream | baml.panics.StackOverflow$stream | baml.panics.AssertionFailed$stream | baml.panics.Unreachable$stream | baml.panics.Cancelled$stream | baml.panics.UserPanic$stream | baml.panics.Exit$stream | baml.panics.AllocFailure$stream | baml.panics.HostUnavailable$stream | baml.panics.NegativeBitShift$stream | baml.panics.SdkPanic$stream
 
 --- <builtin>/baml/ns_stream/stream.baml ---
 class baml.stream.StreamFinished {

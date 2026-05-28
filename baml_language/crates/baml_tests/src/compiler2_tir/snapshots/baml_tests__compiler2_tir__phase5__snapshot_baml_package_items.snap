@@ -138,6 +138,7 @@ namespace baml.panics:
   class Exit { methods: [to_json, from_json] }
   class HostUnavailable { methods: [to_json, from_json] }
   class IndexOutOfBounds { methods: [to_json, from_json] }
+  class InvalidFieldAccess { methods: [to_json, from_json] }
   class MapKeyNotFound { methods: [to_json, from_json] }
   class NegativeBitShift { methods: [to_json, from_json] }
   type Panic
