@@ -8933,9 +8933,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 continue;
             };
             let root_name = root_data.name.clone();
-            if !seen.insert(root_name.clone()) {
-                continue;
-            }
             // Recover the interface's qtn + type args by lowering the path the
             // user wrote (e.g. `Container<int>`); class generics stay as type
             // vars, which is what `resolve_interface_member` expects.
@@ -8949,7 +8946,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 &mut diags,
             );
             if let Ty::Interface(qtn, args, _) = lowered {
-                sources.push((root_name, qtn, args));
+                // Dedup by (interface, type args): the same instantiation
+                // reached twice (e.g. via `requires`) collapses, but two
+                // distinct instantiations of one generic interface
+                // (`Converter<int>` vs `Converter<float>`) stay separate so an
+                // unqualified call is correctly ambiguous (E0121).
+                if seen.insert((qtn.clone(), args.clone())) {
+                    sources.push((root_name, qtn, args));
+                }
             }
         }
 
