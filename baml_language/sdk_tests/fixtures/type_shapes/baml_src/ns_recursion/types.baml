@@ -58,38 +58,38 @@ class T6 {
   via5 T5?
 }
 
-function RoundTripIntBinaryTree(t: IntBinaryTree) -> IntBinaryTree {
+function round_trip_int_binary_tree(t: IntBinaryTree) -> IntBinaryTree {
   t
 }
 
-function RoundTripA(a: A) -> A {
+function round_trip_a(a: A) -> A {
   a
 }
 
-function RoundTripB(b: B) -> B {
+function round_trip_b(b: B) -> B {
   b
 }
 
-function RoundTripT1(t: T1) -> T1 {
+function round_trip_t1(t: T1) -> T1 {
   t
 }
 
-function RoundTripT2(t: T2) -> T2 {
+function round_trip_t2(t: T2) -> T2 {
   t
 }
 
-function RoundTripT3(t: T3) -> T3 {
+function round_trip_t3(t: T3) -> T3 {
   t
 }
 
-function RoundTripT4(t: T4) -> T4 {
+function round_trip_t4(t: T4) -> T4 {
   t
 }
 
-function RoundTripT5(t: T5) -> T5 {
+function round_trip_t5(t: T5) -> T5 {
   t
 }
 
-function RoundTripT6(t: T6) -> T6 {
+function round_trip_t6(t: T6) -> T6 {
   t
 }

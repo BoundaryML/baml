@@ -51,12 +51,12 @@ func safeClose(ch chan ResultCallback) {
 	close(ch)
 }
 
-// baml_callback is the single unified callback from Rust.
-// is_error=0: content is protobuf-encoded BamlOutboundValue (success)
-// is_error=1: content is UTF-8 error string
+// baml_callback is the single unified callback from Rust. `content` is always
+// a protobuf-encoded BamlOutboundResult envelope (ok/error/panic, including
+// synthesized pre-call host-boundary failures) decoded by decodeResult.
 //
 //export baml_callback
-func baml_callback(id C.uint32_t, isError C.int32_t, content *C.int8_t, length C.size_t) {
+func baml_callback(id C.uint32_t, content *C.int8_t, length C.size_t) {
 	callbackMutex.RLock()
 	cb, exists := dynamicCallbacks[uint32(id)]
 	callbackMutex.RUnlock()
@@ -66,16 +66,11 @@ func baml_callback(id C.uint32_t, isError C.int32_t, content *C.int8_t, length C
 
 	contentBytes := C.GoBytes(unsafe.Pointer(content), C.int(length))
 
-	if isError != 0 {
-		errMsg := string(contentBytes)
-		safeSend(cb.channel, ResultCallback{Error: ParseBamlError(errMsg)})
+	decoded, err := decodeResult(contentBytes)
+	if err != nil {
+		safeSend(cb.channel, ResultCallback{Error: err})
 	} else {
-		decoded, err := decodeResult(contentBytes)
-		if err != nil {
-			safeSend(cb.channel, ResultCallback{Error: err})
-		} else {
-			safeSend(cb.channel, ResultCallback{Data: decoded})
-		}
+		safeSend(cb.channel, ResultCallback{Data: decoded})
 	}
 
 	safeClose(cb.channel)

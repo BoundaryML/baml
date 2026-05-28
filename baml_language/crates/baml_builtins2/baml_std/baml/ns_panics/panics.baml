@@ -70,4 +70,12 @@ class NegativeBitShift {
   message string
 }
 
-type Panic = DivisionByZero | IndexOutOfBounds | MapKeyNotFound | StackOverflow | AssertionFailed | Unreachable | Cancelled | UserPanic | Exit | AllocFailure | HostUnavailable | NegativeBitShift
+/// An internal BAML engine failure surfaced to the host. Opaque: the specific
+/// engine error (an `EngineError` variant) is carried as text in `message`,
+/// since these are engine/VM-internal failures with nothing host-actionable to
+/// branch on. Synthesized host-side from any `EngineError`.
+class SdkPanic {
+  message string
+}
+
+type Panic = DivisionByZero | IndexOutOfBounds | MapKeyNotFound | StackOverflow | AssertionFailed | Unreachable | Cancelled | UserPanic | Exit | AllocFailure | HostUnavailable | NegativeBitShift | SdkPanic

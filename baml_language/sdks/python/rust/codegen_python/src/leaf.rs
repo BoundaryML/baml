@@ -855,6 +855,24 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
         EmittedSymbol::Function(f) => {
             let mut out = render_factory_binding(f);
             out.push('\n');
+            // 32d: free functions get a runtime `__doc__` trailer carrying the
+            // `Raises:` block (the factory binding itself has no docstring
+            // slot). Gated on `raises_names` so non-throwing functions keep no
+            // runtime `__doc__` — a no-op for every existing fixture. The
+            // `_define_function` factory returns a real closure, so `__doc__`
+            // is a writable attribute on both the sync and async siblings
+            // (each renders as its own `EmittedSymbol::Function`).
+            if !f.raises_names.is_empty() {
+                if let Some(text) =
+                    crate::utils::build_function_docstring(f.docstring.as_deref(), &f.raises_names)
+                {
+                    let triple = crate::utils::format_docstring(&text, "");
+                    out.push_str(&f.py_name);
+                    out.push_str(".__doc__ = ");
+                    out.push_str(&triple);
+                    out.push('\n');
+                }
+            }
             out
         }
     }
@@ -1150,6 +1168,15 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
         }
     }
 
+    // The `BamlError` / `BamlPanic` wrappers are defined in `baml_core` and
+    // re-exported on the top-level `baml` builtins package so user code can
+    // `from baml_sdk.baml import BamlError, BamlPanic` (31a-spec / 31f-phase5).
+    let is_baml_builtins_root = body.leaf.segments == ["baml"];
+    if is_baml_builtins_root {
+        out.push('\n');
+        out.push_str("from baml_core import BamlError as BamlError, BamlPanic as BamlPanic\n");
+    }
+
     let typevars = body.generic_typevars();
     if !typevars.is_empty() {
         out.push_str("\n\n");
@@ -1189,7 +1216,12 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
     // it. `BamlTypeMap.get_class(fqn)` resolves via importlib on first
     // lookup. Class bodies are pure Pydantic — no codegen metadata.
 
-    let names = body.all_names();
+    let mut names = body.all_names();
+    // Surface the re-exported wrappers in `__all__` on the `baml` root too.
+    if is_baml_builtins_root {
+        names.push("BamlError");
+        names.push("BamlPanic");
+    }
     if !names.is_empty() {
         out.push_str("\n\n");
         out.push_str("__all__ = [\n");
@@ -1257,7 +1289,10 @@ fn render_method_block_pyi(m: &PyMethodBinding, ctx: &TranslateCtx) -> String {
     };
     let typed_params = render_method_params_pyi(m, ctx);
     let ret_py = translate_ty(&m.return_ty, ctx);
-    let signature = match m.docstring.as_deref() {
+    // 32d: methods carry their `Raises:` block in the `.pyi` only (no runtime
+    // `.py` __doc__ trailer for methods). No-op when the method throws nothing.
+    let doc = crate::utils::build_function_docstring(m.docstring.as_deref(), &m.raises_names);
+    let signature = match doc.as_deref() {
         Some(doc) => {
             let rendered = crate::utils::format_docstring(doc, "        ");
             format!(
@@ -1411,7 +1446,11 @@ fn render_function_signature_pyi(f: &PyFunction, ctx: &TranslateCtx) -> String {
     };
     let typed_params = render_typed_params(&f.param_names, &f.arg_tys, &f.arg_defaults, ctx);
     let ret_py = translate_ty(&f.return_ty, ctx);
-    match f.docstring.as_deref() {
+    // 32d: append the `Raises:` block to the stub docstring (a no-op when the
+    // function throws nothing; flips `: ...` into a docstring body when it
+    // throws but has no `///` summary).
+    let doc = crate::utils::build_function_docstring(f.docstring.as_deref(), &f.raises_names);
+    match doc.as_deref() {
         Some(doc) => {
             let rendered = crate::utils::format_docstring(doc, "    ");
             format!(
@@ -1547,6 +1586,14 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
         out.push_str("from baml_core import BamlPyHandle as _BamlPyHandle\n");
     }
 
+    // Mirror the `.py` re-export so `from baml_sdk.baml import BamlError,
+    // BamlPanic` type-checks.
+    let is_baml_builtins_root = body.leaf.segments == ["baml"];
+    if is_baml_builtins_root {
+        out.push('\n');
+        out.push_str("from baml_core import BamlError as BamlError, BamlPanic as BamlPanic\n");
+    }
+
     // The `.pyi` re-declares TypeVars because stubs don't import from
     // sibling `.py` files.
     let typevars = body.generic_typevars();
@@ -1582,7 +1629,11 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
         prev = Some((key, sym));
     }
 
-    let names = body.all_names();
+    let mut names = body.all_names();
+    if is_baml_builtins_root {
+        names.push("BamlError");
+        names.push("BamlPanic");
+    }
     if !names.is_empty() {
         out.push_str("\n\n");
         out.push_str("__all__ = [\n");

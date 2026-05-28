@@ -179,6 +179,7 @@ fn expand_function(
         .map(|n| n.as_str().to_string())
         .collect();
     let func_docstring = f.docstring.clone();
+    let raises_names = collect_raises_names(f.throws.as_ref());
     expand_callable(
         &bare,
         &fqn_root,
@@ -197,11 +198,40 @@ fn expand_function(
                     return_ty,
                     generic_params: func_generic_params.clone(),
                     docstring: func_docstring.clone(),
+                    raises_names: raises_names.clone(),
                 }),
                 sort_key.clone(),
             ));
         },
     );
+}
+
+/// Collect the unqualified leaf names of the thrown types in a `throws` `Ty`,
+/// in source order, de-duping exact-equal names (32d). Class/Enum/TypeAlias
+/// contribute their unqualified leaf name; a union contributes each member's;
+/// an optional unwraps; anything else (primitives) contributes nothing.
+fn collect_raises_names(throws: Option<&baml_codegen_types::Ty>) -> Vec<String> {
+    use baml_codegen_types::Ty;
+
+    fn walk(ty: &Ty, out: &mut Vec<String>) {
+        match ty {
+            Ty::Class(name, _) | Ty::Enum(name) | Ty::TypeAlias(name) => {
+                let n = name.name.as_str().to_string();
+                if !out.contains(&n) {
+                    out.push(n);
+                }
+            }
+            Ty::Union(members) => members.iter().for_each(|m| walk(m, out)),
+            Ty::Optional(inner) => walk(inner, out),
+            _ => {}
+        }
+    }
+
+    let mut out = Vec::new();
+    if let Some(ty) = throws {
+        walk(ty, &mut out);
+    }
+    out
 }
 
 /// Fan out source-declared methods (parents and companions) into one
@@ -228,6 +258,7 @@ fn expand_methods(
             .map(|n| n.as_str().to_string())
             .collect();
         let method_docstring = m.docstring.clone();
+        let raises_names = collect_raises_names(m.throws.as_ref());
         expand_callable(
             &bare,
             &fqn_root,
@@ -254,6 +285,7 @@ fn expand_methods(
                     return_ty,
                     generic_params: method_generic_params.clone(),
                     docstring: method_docstring.clone(),
+                    raises_names: raises_names.clone(),
                 });
             },
         );

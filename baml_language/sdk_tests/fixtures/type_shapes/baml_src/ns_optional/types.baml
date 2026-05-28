@@ -13,22 +13,22 @@ class OptionalContainer {
   optional_union (int | string)?
 }
 
-function RoundTripOptionalInt(x: int?) -> int? {
+function round_trip_optional_int(x: int?) -> int? {
   x
 }
 
-function RoundTripOptionalResume(r: Resume?) -> Resume? {
+function round_trip_optional_resume(r: Resume?) -> Resume? {
   r
 }
 
-function RoundTripOptionalUnion(u: (int | string)?) -> (int | string)? {
+function round_trip_optional_union(u: (int | string)?) -> (int | string)? {
   u
 }
 
-function RoundTripResume(r: Resume) -> Resume {
+function round_trip_resume(r: Resume) -> Resume {
   r
 }
 
-function RoundTripOptionalContainer(c: OptionalContainer) -> OptionalContainer {
+function round_trip_optional_container(c: OptionalContainer) -> OptionalContainer {
   c
 }

@@ -256,6 +256,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     docstring: method.docstring.clone(),
                     arguments,
                     return_type,
+                    throws: resolve_throws(db, method_loc, alias_map, recursive_aliases),
                     watchers: Vec::new(),
                     origin: Origin {
                         source_file_path: source_file_path.clone(),
@@ -426,6 +427,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 docstring: func.docstring.clone(),
                 arguments,
                 return_type,
+                throws: resolve_throws(db, func_loc, alias_map, recursive_aliases),
                 watchers: Vec::new(),
                 origin: Origin {
                     source_file_path: source_file_path.clone(),
@@ -489,6 +491,26 @@ fn resolve_type_expr(
         alias_map,
         recursive_aliases,
     ))
+}
+
+/// Resolve a function's **inferred** throws contract to a codegen `Ty`.
+///
+/// Sources from `callable_throws` (not the syntactic `throws` clause): a
+/// declared clause wins over inference inside that query, and a function that
+/// throws *without* a written clause still surfaces its inferred escaping
+/// throws. `None` when the function throws nothing (`Ty::Never`) or the
+/// contract can't be resolved (`Ty::Unknown`). Used for the `Raises:`
+/// docstring block (32d).
+fn resolve_throws<'db>(
+    db: &'db ProjectDatabase,
+    func_loc: FunctionLoc<'db>,
+    alias_map: &HashMap<QualifiedTypeName, TirTy>,
+    recursive_aliases: &std::collections::HashSet<QualifiedTypeName>,
+) -> Option<cg::Ty> {
+    match baml_compiler2_tir::callable::callable_throws(db, func_loc) {
+        TirTy::Never { .. } | TirTy::Unknown { .. } => None,
+        ty => Some(convert_tir_to_codegen_ty(ty, alias_map, recursive_aliases)),
+    }
 }
 
 /// Convert a TIR `Ty` to a `baml_codegen_types::Ty`, simplifying as we go.
@@ -869,6 +891,73 @@ mod tests {
             happy.docstring.as_deref(),
             Some("Smiling face."),
             "variant /// must reach pool",
+        );
+    }
+
+    /// 32d: the inferred throws contract (`callable_throws`) must reach the
+    /// `SymbolPool` as `Function.throws`. Covers both a declared union clause
+    /// and a no-clause-but-throwing body (the inferred-contract case — the
+    /// whole reason for sourcing from `callable_throws`, not the syntactic
+    /// clause).
+    #[test]
+    fn test_throws_reaches_symbol_pool() {
+        fn walk(ty: &cg::Ty, out: &mut Vec<String>) {
+            match ty {
+                cg::Ty::Class(n, _) | cg::Ty::Enum(n) | cg::Ty::TypeAlias(n) => {
+                    out.push(n.name.as_str().to_string());
+                }
+                cg::Ty::Union(ms) => ms.iter().for_each(|m| walk(m, out)),
+                cg::Ty::Optional(i) => walk(i, out),
+                _ => {}
+            }
+        }
+
+        let root = Path::new("/tmp/throws_repro");
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(root);
+        db.add_or_update_file(
+            root.join("main.baml").as_path(),
+            concat!(
+                "class E1 { message string }\n",
+                "class E2 { code int }\n\n",
+                "function F() -> int throws E1 | E2 {\n",
+                "  throw E1 { message: \"x\" }\n",
+                "}\n\n",
+                "function G() -> int {\n",
+                "  throw E1 { message: \"y\" }\n",
+                "}\n",
+            ),
+        );
+
+        let pool = build_symbol_pool(&db);
+
+        let throws_names = |fn_name: &str| -> Vec<String> {
+            let key = pool
+                .keys()
+                .find(|k| k.name.as_str() == fn_name)
+                .unwrap_or_else(|| panic!("{fn_name} missing from pool"));
+            let cg::Symbol::Function(f) = &pool[key] else {
+                panic!("{fn_name} must be a Function");
+            };
+            let mut out = Vec::new();
+            if let Some(t) = &f.throws {
+                walk(t, &mut out);
+            }
+            out
+        };
+
+        // Declared union throws → both names, in declaration order.
+        assert_eq!(
+            throws_names("F"),
+            vec!["E1".to_string(), "E2".to_string()],
+            "declared union throws must reach pool in order",
+        );
+        // No `throws` clause but a throwing body → the inferred contract still
+        // surfaces E1.
+        assert_eq!(
+            throws_names("G"),
+            vec!["E1".to_string()],
+            "inferred throws (no clause) must reach pool",
         );
     }
 

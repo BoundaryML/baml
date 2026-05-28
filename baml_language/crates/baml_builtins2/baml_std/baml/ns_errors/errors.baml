@@ -62,3 +62,16 @@ class HostCallable {
   traceback string?
   category int
 }
+
+/// A catch-all SDK-boundary failure with no more specific class. Synthesized
+/// host-side from `RuntimeError::Other` so a call-setup failure crosses the
+/// boundary as structured data rather than a stringified error.
+class GenericSdkError {
+  message string
+}
+
+/// A BAML compilation failure surfaced at the call boundary. Synthesized
+/// host-side from `RuntimeError::Compilation`.
+class CompilationError {
+  message string
+}

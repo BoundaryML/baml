@@ -27,7 +27,7 @@ export declare class BamlHandle {
   clone(): BamlHandle
 }
 
-/** The main BAML runtime, wrapping a `dyn Bex` instance. */
+/** The main BAML runtime. A zero-sized handle (see module docs). */
 export declare class BamlRuntime {
   /** Create a runtime from in-memory BAML source files. */
   static fromFiles(rootPath: string, files: Record<string, string>): BamlRuntime

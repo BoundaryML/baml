@@ -48,26 +48,26 @@ class DifferingInstantiation {
 
 // Generic classes can't be passed without a concrete instantiation, so we
 // pick `<int>` for each to exercise the lowered specialization.
-function RoundTripWrapperInt(w: Wrapper<int>) -> Wrapper<int> {
+function round_trip_wrapper_int(w: Wrapper<int>) -> Wrapper<int> {
   w
 }
 
-function RoundTripGenericLinkedListInt(l: GenericLinkedList<int>) -> GenericLinkedList<int> {
+function round_trip_generic_linked_list_int(l: GenericLinkedList<int>) -> GenericLinkedList<int> {
   l
 }
 
-function RoundTripGenericBinaryTreeInt(t: GenericBinaryTree<int>) -> GenericBinaryTree<int> {
+function round_trip_generic_binary_tree_int(t: GenericBinaryTree<int>) -> GenericBinaryTree<int> {
   t
 }
 
-function RoundTripBoxInt(b: Box<int>) -> Box<int> {
+function round_trip_box_int(b: Box<int>) -> Box<int> {
   b
 }
 
-function RoundTripNestedGenerics(n: NestedGenerics) -> NestedGenerics {
+function round_trip_nested_generics(n: NestedGenerics) -> NestedGenerics {
   n
 }
 
-function RoundTripDifferingInstantiation(d: DifferingInstantiation) -> DifferingInstantiation {
+function round_trip_differing_instantiation(d: DifferingInstantiation) -> DifferingInstantiation {
   d
 }
