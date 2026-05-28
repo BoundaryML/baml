@@ -195,8 +195,6 @@ type MergedFieldEntry = (
 /// BEP-044: collect actual runtime fields. Interface fields are views over
 /// class fields, so they never add qualified runtime slots.
 fn collect_class_fields_with_implements(
-    _db: &dyn baml_compiler2_tir::Db,
-    _pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     pkg_ns: &[Name],
     class_data: &baml_compiler2_hir::item_tree::Class,
 ) -> Vec<MergedFieldEntry> {
@@ -339,12 +337,8 @@ pub fn generate_project_bytecode_with_opt(
             // BEP-044: collect only the class's actual runtime fields.
             // Interface fields are typed views over class storage, and the
             // validator enforces/link-checks them before emit.
-            let merged_fields = collect_class_fields_with_implements(
-                db,
-                pkg_items,
-                &pkg_info.namespace_path,
-                class_data,
-            );
+            let merged_fields =
+                collect_class_fields_with_implements(&pkg_info.namespace_path, class_data);
             for (idx, (name, type_expr, attrs, gen_params, ns)) in merged_fields.iter().enumerate()
             {
                 field_indices.insert(name.clone(), idx);
@@ -434,12 +428,7 @@ pub fn generate_project_bytecode_with_opt(
             // runtime field indices used by the Class object above. Use a
             // closure that rebuilds the same ordering.
             let rebuild_indices = || {
-                let merged = collect_class_fields_with_implements(
-                    db,
-                    pkg_items,
-                    &pkg_info.namespace_path,
-                    class_data,
-                );
+                let merged = collect_class_fields_with_implements(&pkg_info.namespace_path, class_data);
                 let mut m = HashMap::new();
                 for (idx, (name, _, _, _, _)) in merged.iter().enumerate() {
                     m.insert(name.clone(), idx);
