@@ -453,11 +453,10 @@ pub(crate) fn check_void_type(
     diags: &mut Vec<LoweringDiagnostic>,
 ) {
     match type_expr {
-        TypeExpr::Void { .. } => {
-            if !allow_root_void {
-                diags.push(LoweringDiagnostic::VoidInNonReturnPosition { context, span });
-            }
+        TypeExpr::Void { .. } if !allow_root_void => {
+            diags.push(LoweringDiagnostic::VoidInNonReturnPosition { context, span });
         }
+        TypeExpr::Void { .. } => {}
         TypeExpr::Optional { inner, .. } => {
             // Once inside a wrapper, void is never allowed (even in return position).
             check_void_type(

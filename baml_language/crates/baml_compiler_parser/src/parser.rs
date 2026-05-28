@@ -150,6 +150,30 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
     }
 }
 
+/// BEP-049 §5 first-token dispatch result for `${...}` interpolation
+/// content. Used by `classify_backtick_interp` to decide which parser
+/// path to take without committing tokens.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BacktickInterpForm {
+    /// `${for (...)}` — opens a `for`-loop block-tag. Body lives in the
+    /// surrounding backtick content until a matching `${endfor}`.
+    For,
+    /// `${endfor}` — closes the innermost open `${for}`.
+    Endfor,
+    /// `${if (...)}` — opens an `if` block-tag. Distinguished from an
+    /// if-expression form by post-condition lookahead: `}` closes the
+    /// interp (block-tag), `{` opens a then-block (expression).
+    IfBlockTag,
+    /// `${else if (...)}` — continuation of an open `${if}` block-tag.
+    ElseIfBlockTag,
+    /// `${else}` — continuation of an open `${if}` block-tag.
+    ElseBlockTag,
+    /// `${endif}` — closes the innermost open `${if}`.
+    Endif,
+    /// Anything else — falls through to the M2 block-expression path.
+    Expression,
+}
+
 /// Events for building the syntax tree.
 #[derive(Debug, Clone)]
 enum Event {
@@ -2054,14 +2078,21 @@ impl<'a> Parser<'a> {
 
     /// Parse a `${...}` interpolation inside a backtick string.
     ///
-    /// Per BEP §4 the body is a **block expression** — statements + optional
-    /// trailing expression. A unit-typed block renders `""` (lowering-side).
-    /// We reuse the host `parse_block_expr` so:
-    ///   - `${name}` parses as a block with no statements and `name` as the
-    ///     tail expression — what users expect for the common case.
-    ///   - `${ let x = expensive(); x.format() }` parses as a 2-statement
-    ///     block with `x.format()` as the tail.
-    ///   - `${ let x = 1 }` parses as a 1-statement block with no tail.
+    /// Three forms exist (BEP §4–§5):
+    ///   - **Block expression** (M2): `${expr}`, `${ let x = ...; x }`. Body
+    ///     is a host block-expression; statements + optional trailing expr.
+    ///   - **Block-tag open** (M3): `${for (...)}`, `${if (...)}`. The
+    ///     interp closes here; the body comes from subsequent backtick
+    ///     content until a matching `${endfor}` / `${endif}`.
+    ///   - **Block-tag close / continuation** (M3): `${endfor}`, `${endif}`,
+    ///     `${else}`, `${else if (...)}`. Only valid as continuations of an
+    ///     open block-tag.
+    ///
+    /// Dispatch is on the first non-trivia token inside `${...}` (after
+    /// `{`). For `if` specifically, the form depends on what follows the
+    /// condition — `{` is an if-expression then-block; `}` closes the
+    /// interp (block-tag form). `for` is always block-tag (no
+    /// for-expression in BAML).
     ///
     /// Pre-condition: `self` is at `$` with `{` adjacent.
     fn parse_backtick_interpolation(&mut self) {
@@ -2070,13 +2101,227 @@ impl<'a> Parser<'a> {
         // before opening the inner node.
         while self.eat_basic_trivia() {}
 
-        self.with_node(SyntaxKind::BACKTICK_INTERPOLATION, |p| {
+        match self.classify_backtick_interp() {
+            BacktickInterpForm::For => self.parse_backtick_for_open(),
+            BacktickInterpForm::Endfor => {
+                self.parse_backtick_simple_tag(SyntaxKind::BACKTICK_ENDFOR, "endfor");
+            }
+            BacktickInterpForm::IfBlockTag => self.parse_backtick_if_open(),
+            BacktickInterpForm::ElseIfBlockTag => self.parse_backtick_else_if(),
+            BacktickInterpForm::ElseBlockTag => self.parse_backtick_else(),
+            BacktickInterpForm::Endif => {
+                self.parse_backtick_simple_tag(SyntaxKind::BACKTICK_ENDIF, "endif");
+            }
+            BacktickInterpForm::Expression => {
+                self.with_node(SyntaxKind::BACKTICK_INTERPOLATION, |p| {
+                    p.bump_raw(); // $
+                    // `parse_block_expr` consumes its own `{ ... }` and uses
+                    // the normal trivia-skipping `at()`/`bump()` — exactly
+                    // what we want once we're inside `${`: comments and
+                    // whitespace work normally.
+                    p.parse_block_expr();
+                });
+            }
+        }
+    }
+
+    /// Classify the form of a `${...}` interpolation that starts at the
+    /// current `$` token. Cheap pre-parse lookahead — does not consume
+    /// any tokens.
+    fn classify_backtick_interp(&self) -> BacktickInterpForm {
+        // current is at `$`. Peek past `${` to the first interesting token.
+        let Some(dollar_idx) = self.current_non_trivia_index() else {
+            return BacktickInterpForm::Expression;
+        };
+        debug_assert_eq!(self.tokens[dollar_idx].kind, TokenKind::Dollar);
+        // The `{` is immediately after `$` per the adjacency rule. Skip past it.
+        let mut i = dollar_idx + 2;
+        // Skip any whitespace/comments inside the interp.
+        while i < self.tokens.len()
+            && (self.is_basic_trivia(self.tokens[i].kind) || {
+                let new_i = self.skip_comment_at(i);
+                if new_i != i {
+                    i = new_i;
+                    true
+                } else {
+                    false
+                }
+            })
+        {
+            if !self.is_basic_trivia(self.tokens[i].kind) {
+                continue;
+            }
+            i += 1;
+        }
+        if i >= self.tokens.len() {
+            return BacktickInterpForm::Expression;
+        }
+        let first = &self.tokens[i];
+        match first.kind {
+            TokenKind::For => BacktickInterpForm::For,
+            TokenKind::If => {
+                if self.classify_backtick_if_is_block_tag(i + 1) {
+                    BacktickInterpForm::IfBlockTag
+                } else {
+                    BacktickInterpForm::Expression
+                }
+            }
+            TokenKind::Else => {
+                // `${else}` or `${else if (cond)}`. Look past `else` to disambiguate.
+                let mut j = i + 1;
+                while j < self.tokens.len() && self.is_basic_trivia(self.tokens[j].kind) {
+                    j += 1;
+                }
+                if j < self.tokens.len() && self.tokens[j].kind == TokenKind::If {
+                    BacktickInterpForm::ElseIfBlockTag
+                } else {
+                    BacktickInterpForm::ElseBlockTag
+                }
+            }
+            TokenKind::Word if first.text == "endfor" => BacktickInterpForm::Endfor,
+            TokenKind::Word if first.text == "endif" => BacktickInterpForm::Endif,
+            _ => BacktickInterpForm::Expression,
+        }
+    }
+
+    /// Given the index just past an `if` keyword inside a `${if ...}`, decide
+    /// whether this is a block-tag form (`}` closes the interp) or an
+    /// if-expression form (`{` opens the then-block). Walks tokens with
+    /// paren/bracket depth tracking — first `{` at depth 0 means expression,
+    /// first `}` at depth 0 means block-tag.
+    ///
+    /// Limitation: an object-literal in the condition (e.g. `${if Foo { x: 1 }}`)
+    /// confuses this exactly like the host `if` parser is confused by the
+    /// same shape. Users hitting it should write `${if (Foo { x: 1 })}`.
+    fn classify_backtick_if_is_block_tag(&self, start_after_if: usize) -> bool {
+        let mut i = start_after_if;
+        let mut paren_depth: i32 = 0;
+        let mut bracket_depth: i32 = 0;
+        while i < self.tokens.len() {
+            match self.tokens[i].kind {
+                TokenKind::LParen => paren_depth += 1,
+                TokenKind::RParen => paren_depth = paren_depth.saturating_sub(1),
+                TokenKind::LBracket => bracket_depth += 1,
+                TokenKind::RBracket => bracket_depth = bracket_depth.saturating_sub(1),
+                TokenKind::LBrace if paren_depth == 0 && bracket_depth == 0 => {
+                    return false;
+                }
+                TokenKind::RBrace if paren_depth == 0 && bracket_depth == 0 => {
+                    return true;
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+        false
+    }
+
+    /// Parse `${for (let x in xs)}` (block-tag opener). The interp closes
+    /// at the `}`; the loop body comes from subsequent backtick content
+    /// until a matching `${endfor}`.
+    fn parse_backtick_for_open(&mut self) {
+        self.with_node(SyntaxKind::BACKTICK_FOR_OPEN, |p| {
             p.bump_raw(); // $
-            // `parse_block_expr` consumes its own `{ ... }` and uses the
-            // normal trivia-skipping `at()`/`bump()` — exactly what we want
-            // once we're inside `${`: comments and whitespace work normally.
-            p.parse_block_expr();
+            p.bump_raw(); // {
+            p.expect(TokenKind::For);
+            // Reuse the host for-header grammar — handles paren / no-paren,
+            // iterator / C-style. We only consume the HEADER (no body braces).
+            p.parse_for_header_only();
+            p.expect(TokenKind::RBrace);
         });
+    }
+
+    /// Parse `${if (cond)}` or `${if cond}` (block-tag opener).
+    fn parse_backtick_if_open(&mut self) {
+        self.with_node(SyntaxKind::BACKTICK_IF_OPEN, |p| {
+            p.bump_raw(); // $
+            p.bump_raw(); // {
+            p.expect(TokenKind::If);
+            p.suppress_object_literal_depth += 1;
+            p.parse_expr();
+            p.suppress_object_literal_depth -= 1;
+            p.expect(TokenKind::RBrace);
+        });
+    }
+
+    /// Parse `${else if (cond)}` (continuation of an open `${if}` block-tag).
+    fn parse_backtick_else_if(&mut self) {
+        self.with_node(SyntaxKind::BACKTICK_ELSE_IF, |p| {
+            p.bump_raw(); // $
+            p.bump_raw(); // {
+            p.expect(TokenKind::Else);
+            p.expect(TokenKind::If);
+            p.suppress_object_literal_depth += 1;
+            p.parse_expr();
+            p.suppress_object_literal_depth -= 1;
+            p.expect(TokenKind::RBrace);
+        });
+    }
+
+    /// Parse `${else}` (continuation of an open `${if}` block-tag).
+    fn parse_backtick_else(&mut self) {
+        self.with_node(SyntaxKind::BACKTICK_ELSE, |p| {
+            p.bump_raw(); // $
+            p.bump_raw(); // {
+            p.expect(TokenKind::Else);
+            p.expect(TokenKind::RBrace);
+        });
+    }
+
+    /// Parse a `${endfor}` or `${endif}` close tag — a keyword-only interp
+    /// whose word is contextual (these aren't host language keywords).
+    fn parse_backtick_simple_tag(&mut self, kind: SyntaxKind, expected_word: &str) {
+        self.with_node(kind, |p| {
+            p.bump_raw(); // $
+            p.bump_raw(); // {
+            // `endfor` / `endif` aren't lexer keywords — they appear as
+            // WORD tokens. Validate the text matches what we expected.
+            if p.at(TokenKind::Word) && p.current().map(|t| t.text.as_str()) == Some(expected_word)
+            {
+                p.bump();
+            } else {
+                p.error_unexpected_token(format!("'{expected_word}'"));
+            }
+            p.expect(TokenKind::RBrace);
+        });
+    }
+
+    /// Parse just the *header* of a for-loop (`for (let x in xs)` minus the
+    /// body braces). Used for `${for}` block-tag where the body lives in the
+    /// surrounding backtick content rather than inline braces.
+    fn parse_for_header_only(&mut self) {
+        // Mirrors `parse_for_expr` minus the `expect(For)` and minus the
+        // trailing `parse_block_expr`. Supports parenthesized iterator,
+        // C-style for, AND non-paren iterator form (`for let x in xs`).
+        if self.at(TokenKind::LParen) {
+            self.bump(); // (
+            if self.at(TokenKind::Let) {
+                if self.looks_like_for_in_loop() {
+                    self.parse_for_in_pattern();
+                    self.expect(TokenKind::In);
+                    self.parse_expr();
+                } else {
+                    self.parse_let_stmt();
+                    if !self.at(TokenKind::Semicolon) && !self.at(TokenKind::RParen) {
+                        self.parse_expr();
+                    }
+                    self.eat(TokenKind::Semicolon);
+                    if !self.at(TokenKind::RParen) {
+                        self.parse_expr();
+                    }
+                }
+            } else if self.at(TokenKind::Word) || self.at(TokenKind::Semicolon) {
+                self.parse_c_style_for_body();
+            } else {
+                self.error_unexpected_token("'let' or ';'".to_string());
+            }
+            self.expect(TokenKind::RParen);
+        } else {
+            // Non-parenthesized iterator form.
+            self.parse_for_in_pattern();
+            self.expect(TokenKind::In);
+            self.parse_expr();
+        }
     }
 
     // ============ Attribute Parsing ============
@@ -8147,6 +8392,110 @@ function Demo(x: int) -> int {
     }
 
     #[test]
+    fn backtick_m3_for_open_emits_for_node() {
+        let source = "
+function Demo(xs: int[]) -> string {
+    `${for (let x in xs)}- ${x}
+${endfor}`
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let for_open = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::BACKTICK_FOR_OPEN)
+            .expect("expected BACKTICK_FOR_OPEN");
+        assert!(for_open.text().to_string().contains("${for"));
+        let endfor = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::BACKTICK_ENDFOR)
+            .expect("expected BACKTICK_ENDFOR");
+        assert_eq!(endfor.text().to_string(), "${endfor}");
+    }
+
+    #[test]
+    fn backtick_m3_if_block_tag_vs_if_expression() {
+        // Same condition shape, different surface form: `}` after cond
+        // → block-tag; `{` after cond → if-expression.
+        let source = "
+function Demo(c: bool) -> string {
+    let a = `${if (c)}yes${endif}`
+    let b = `${if (c) { \"yes\" } else { \"no\" }}`
+    a + b
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let if_opens: Vec<_> = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::BACKTICK_IF_OPEN)
+            .collect();
+        assert_eq!(
+            if_opens.len(),
+            1,
+            "expected exactly one BACKTICK_IF_OPEN (block-tag form)"
+        );
+        let endifs: Vec<_> = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::BACKTICK_ENDIF)
+            .collect();
+        assert_eq!(endifs.len(), 1);
+        let if_exprs: Vec<_> = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::IF_EXPR)
+            .collect();
+        assert_eq!(
+            if_exprs.len(),
+            1,
+            "expected exactly one IF_EXPR (expression form)"
+        );
+    }
+
+    #[test]
+    fn backtick_m3_if_no_parens_block_tag() {
+        // `${if cond}` (no parens) — should still dispatch as block-tag.
+        let source = "
+function Demo(c: bool) -> string {
+    `${if c}yes${endif}`
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert!(
+            root.descendants()
+                .any(|n| n.kind() == SyntaxKind::BACKTICK_IF_OPEN),
+            "expected BACKTICK_IF_OPEN for `${{if c}}` (no parens)"
+        );
+    }
+
+    #[test]
+    fn backtick_m3_else_and_else_if() {
+        let source = "
+function Demo(n: int) -> string {
+    `${if (n > 0)}pos${else if (n < 0)}neg${else}zero${endif}`
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert!(
+            root.descendants()
+                .any(|n| n.kind() == SyntaxKind::BACKTICK_IF_OPEN)
+        );
+        assert!(
+            root.descendants()
+                .any(|n| n.kind() == SyntaxKind::BACKTICK_ELSE_IF)
+        );
+        assert!(
+            root.descendants()
+                .any(|n| n.kind() == SyntaxKind::BACKTICK_ELSE)
+        );
+        assert!(
+            root.descendants()
+                .any(|n| n.kind() == SyntaxKind::BACKTICK_ENDIF)
+        );
+    }
+
+    #[test]
     fn backtick_basic_one_liner() {
         let source = r#"
 function Demo() -> string {
@@ -8336,7 +8685,9 @@ function Demo(x: string) -> string {
             .iter()
             .filter_map(|s| match s {
                 BacktickSegment::Text(t) => Some(t.as_str()),
-                BacktickSegment::Interp(_) => None,
+                BacktickSegment::Interp(_) | BacktickSegment::For(_) | BacktickSegment::If(_) => {
+                    None
+                }
             })
             .collect();
         let combined = text_parts.join("|");
@@ -8541,7 +8892,9 @@ end`
             .iter()
             .filter_map(|s| match s {
                 BacktickSegment::Text(t) => Some(t.as_str()),
-                BacktickSegment::Interp(_) => None,
+                BacktickSegment::Interp(_) | BacktickSegment::For(_) | BacktickSegment::If(_) => {
+                    None
+                }
             })
             .collect();
         // Each text *between* interpolations should remain at its own
@@ -8627,17 +8980,17 @@ function Demo() -> string {
         assert_eq!(segs.len(), 3, "segments: {segs:?}");
         match &segs[0] {
             BacktickSegment::Text(s) => assert_eq!(s, "Hello, "),
-            other @ BacktickSegment::Interp(_) => panic!("expected Text, got {other:?}"),
+            other => panic!("expected Text, got {other:?}"),
         }
         match &segs[1] {
             BacktickSegment::Interp(node) => {
                 assert_eq!(node.text().to_string(), "${user.name}");
             }
-            other @ BacktickSegment::Text(_) => panic!("expected Interp, got {other:?}"),
+            other => panic!("expected Interp, got {other:?}"),
         }
         match &segs[2] {
             BacktickSegment::Text(s) => assert_eq!(s, "!"),
-            other @ BacktickSegment::Interp(_) => panic!("expected Text, got {other:?}"),
+            other => panic!("expected Text, got {other:?}"),
         }
     }
 
@@ -8672,7 +9025,9 @@ function Demo() -> string {
             .iter()
             .filter_map(|s| match s {
                 BacktickSegment::Text(t) => Some(t.as_str()),
-                BacktickSegment::Interp(_) => None,
+                BacktickSegment::Interp(_) | BacktickSegment::For(_) | BacktickSegment::If(_) => {
+                    None
+                }
             })
             .collect();
         assert_eq!(

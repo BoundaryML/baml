@@ -293,6 +293,128 @@ fn user.BacktickLiteralAsArg() -> string {
     }
 }
 
+fn user.BacktickM3ForLoop(xs: string[]) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string[] // xs // param
+    let _2: string // __m3_for
+    let _3: string[]
+    let _4: int // __for_idx
+    let _5: int
+    let _6: bool
+    let _7: string
+    let _8: string // x
+    let _9: string
+    let _10: string
+    let _11: string
+    let _12: string
+    let _13: string
+
+    bb0: {
+        _2 = const "";
+        _3 = copy _1;
+        _4 = const 0_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _5 = len(_3);
+        _6 = copy _4 < copy _5;
+        branch copy _6 -> [bb4, bb2];
+    }
+
+    bb2: {
+        _0 = copy _2;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+
+    bb4: {
+        _7 = copy _3[_4];
+        fresh_cell(_8);
+        _8 = copy _7;
+        _9 = copy _2;
+        _13 = copy _8;
+        _12 = call const fn baml.String.to_string(copy _13) -> [bb5];
+    }
+
+    bb5: {
+        _11 = const "- " + copy _12;
+        _10 = copy _11 + const "\n";
+        _2 = copy _9 + copy _10;
+        goto -> bb6;
+    }
+
+    bb6: {
+        _4 = copy _4 + const 1_i64;
+        goto -> bb1;
+    }
+}
+
+fn user.BacktickM3IfBlock(show: bool) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: bool // show // param
+
+    bb0: {
+        branch copy _1 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _0 = const "";
+        goto -> bb3;
+    }
+
+    bb2: {
+        _0 = const "hello";
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.BacktickM3IfElseChain(n: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // n // param
+    let _2: bool
+    let _3: bool
+
+    bb0: {
+        _2 = copy _1 > const 0_i64;
+        branch copy _2 -> [bb4, bb1];
+    }
+
+    bb1: {
+        _3 = copy _1 < const 0_i64;
+        branch copy _3 -> [bb3, bb2];
+    }
+
+    bb2: {
+        _0 = const "zero";
+        goto -> bb5;
+    }
+
+    bb3: {
+        _0 = const "neg";
+        goto -> bb5;
+    }
+
+    bb4: {
+        _0 = const "pos";
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
 fn user.BacktickMultiTickThree() -> string {
     // Locals:
     let _0: string // _0 // return

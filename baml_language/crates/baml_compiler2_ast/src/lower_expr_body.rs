@@ -2436,15 +2436,26 @@ impl LoweringContext {
     /// the concatenation without explicit casts. Empty / statement-only
     /// blocks (unit-valued) emit `""` directly — see the inline guard.
     fn lower_backtick_string_literal(&mut self, node: &SyntaxNode) -> ExprId {
-        use baml_compiler_syntax::{BacktickSegment, BacktickStringLiteral};
+        use baml_compiler_syntax::BacktickStringLiteral;
         use rowan::ast::AstNode;
 
         let Some(lit) = BacktickStringLiteral::cast(node.clone()) else {
             return self.alloc_expr(Expr::Missing, node.text_range());
         };
-
         let segments = lit.segments();
         let span = node.text_range();
+        self.lower_backtick_segments(segments, span)
+    }
+
+    /// Concatenate a `Vec<BacktickSegment>` into a single string-valued
+    /// expression. Recursive — used for the top-level literal and for the
+    /// body of each `${for}` / `${if}` block segment.
+    fn lower_backtick_segments(
+        &mut self,
+        segments: Vec<baml_compiler_syntax::BacktickSegment>,
+        span: TextRange,
+    ) -> ExprId {
+        use baml_compiler_syntax::BacktickSegment;
 
         if segments.is_empty() {
             return self.alloc_expr(Expr::Literal(Literal::String(String::new())), span);
@@ -2457,87 +2468,17 @@ impl LoweringContext {
                     parts.push(self.alloc_expr(Expr::Literal(Literal::String(s)), span));
                 }
                 BacktickSegment::Interp(interp_node) => {
-                    // BACKTICK_INTERPOLATION wraps `$` + a BLOCK_EXPR. Lower
-                    // the block; missing → Missing so the type-checker
-                    // surfaces it.
-                    let block = interp_node
-                        .children()
-                        .find(|c| c.kind() == SyntaxKind::BLOCK_EXPR);
-                    let inner = match block {
-                        Some(b) => self.lower_expr(&b),
-                        None => self.alloc_expr(Expr::Missing, interp_node.text_range()),
-                    };
-
-                    // BEP §4: an interp body whose block has no trailing
-                    // expression evaluates to unit; per §4 "renders as the
-                    // empty string." Detect this at lowering time and skip
-                    // the `.to_string()` wrap — `void.to_string()` doesn't
-                    // exist, so the wrap would fail type-check.
-                    let is_unit_block = matches!(
-                        &self.exprs[inner],
-                        Expr::Block {
-                            tail_expr: None,
-                            ..
-                        },
-                    );
-                    if is_unit_block {
-                        // Preserve the side-effecting statements in the block
-                        // by leaving `inner` in place; tack on an empty
-                        // string literal as the "value" to concat with.
-                        let empty = self.alloc_expr(
-                            Expr::Literal(Literal::String(String::new())),
-                            interp_node.text_range(),
-                        );
-                        // Sequence: { ...stmts...; "" } — re-emit as a block
-                        // whose tail is "".
-                        let new_block_id = if let Expr::Block { stmts, .. } = &self.exprs[inner] {
-                            let stmts = stmts.clone();
-                            self.alloc_expr(
-                                Expr::Block {
-                                    stmts,
-                                    tail_expr: Some(empty),
-                                },
-                                interp_node.text_range(),
-                            )
-                        } else {
-                            empty
-                        };
-                        parts.push(new_block_id);
-                        continue;
-                    }
-
-                    // BEP §11: implicit `.to_string()` on the interp value so
-                    // `${user.id}` (int) just works without explicit
-                    // conversion. For values that are already strings,
-                    // `to_string` returns self — no special-casing.
-                    //
-                    // Known limitations (documented in tests):
-                    //  - Inline if-expression: trips a pre-existing VM
-                    //    lowering issue; workaround is to bind via `let`.
-                    //  - Null / optional / never: `.to_string()` doesn't
-                    //    resolve on these types. Implicit null-coalescing
-                    //    coverage is deferred to a follow-up.
-                    let callee = self.alloc_expr(
-                        Expr::MemberAccess {
-                            base: inner,
-                            member: Name::new("to_string"),
-                        },
-                        interp_node.text_range(),
-                    );
-                    let to_string_call = self.alloc_expr(
-                        Expr::Call {
-                            callee,
-                            type_args: Vec::new(),
-                            args: Vec::new(),
-                        },
-                        interp_node.text_range(),
-                    );
-                    parts.push(to_string_call);
+                    parts.push(self.lower_backtick_interp(&interp_node));
+                }
+                BacktickSegment::For(for_seg) => {
+                    parts.push(self.lower_backtick_for(for_seg, span));
+                }
+                BacktickSegment::If(if_seg) => {
+                    parts.push(self.lower_backtick_if(if_seg, span));
                 }
             }
         }
 
-        // Left-fold `+` so the runtime sees ((a + b) + c) + d.
         let mut iter = parts.into_iter();
         let first = iter.next().expect("non-empty by guard above");
         iter.fold(first, |acc, next| {
@@ -2550,6 +2491,236 @@ impl LoweringContext {
                 span,
             )
         })
+    }
+
+    /// Lower a single `${expr}` interpolation (M2 path). Wraps the inner
+    /// block with `.to_string()`; unit-blocks render as `""`.
+    fn lower_backtick_interp(&mut self, interp_node: &SyntaxNode) -> ExprId {
+        let block = interp_node
+            .children()
+            .find(|c| c.kind() == SyntaxKind::BLOCK_EXPR);
+        let inner = match block {
+            Some(b) => self.lower_expr(&b),
+            None => self.alloc_expr(Expr::Missing, interp_node.text_range()),
+        };
+
+        let is_unit_block = matches!(
+            &self.exprs[inner],
+            Expr::Block {
+                tail_expr: None,
+                ..
+            },
+        );
+        if is_unit_block {
+            let empty = self.alloc_expr(
+                Expr::Literal(Literal::String(String::new())),
+                interp_node.text_range(),
+            );
+            return if let Expr::Block { stmts, .. } = &self.exprs[inner] {
+                let stmts = stmts.clone();
+                self.alloc_expr(
+                    Expr::Block {
+                        stmts,
+                        tail_expr: Some(empty),
+                    },
+                    interp_node.text_range(),
+                )
+            } else {
+                empty
+            };
+        }
+
+        let callee = self.alloc_expr(
+            Expr::MemberAccess {
+                base: inner,
+                member: Name::new("to_string"),
+            },
+            interp_node.text_range(),
+        );
+        self.alloc_expr(
+            Expr::Call {
+                callee,
+                type_args: Vec::new(),
+                args: Vec::new(),
+            },
+            interp_node.text_range(),
+        )
+    }
+
+    /// Lower a `${for (let x in xs)}...${endfor}` block to:
+    /// ```text
+    /// { let __m3_for = "";
+    ///   for (let x in xs) { __m3_for = __m3_for + <body_string>; }
+    ///   __m3_for }
+    /// ```
+    fn lower_backtick_for(
+        &mut self,
+        for_seg: baml_compiler_syntax::BacktickForSegment,
+        outer_span: TextRange,
+    ) -> ExprId {
+        let open_span = for_seg.open.text_range();
+        // Recursively lower the body's concat string first.
+        let body_string = self.lower_backtick_segments(for_seg.body, outer_span);
+
+        // Extract iterator pattern + collection expression. `parse_for_header_only`
+        // wraps the binding in a `LET_STMT > PATTERN` and emits the collection
+        // after the KW_IN token. For simple identifier/literal collections the
+        // parser leaves the operand as a bare token rather than wrapping it in
+        // an expression node — mirror `lower_for_stmt` and handle both shapes.
+        // C-style headers have no KW_IN and aren't supported here.
+        let mut pattern_node = None;
+        let mut collection: Option<ExprId> = None;
+        let mut seen_in = false;
+        for elem in for_seg.open.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Token(t) => match t.kind() {
+                    SyntaxKind::KW_IN => seen_in = true,
+                    _ => {
+                        if seen_in && collection.is_none() {
+                            collection = self.try_lower_bare_token(&t);
+                        }
+                    }
+                },
+                rowan::NodeOrToken::Node(child) => {
+                    if !seen_in && pattern_node.is_none() && child.kind() == SyntaxKind::LET_STMT {
+                        pattern_node = child.children().find(|n| n.kind() == SyntaxKind::PATTERN);
+                    } else if seen_in && collection.is_none() {
+                        collection = Some(self.lower_expr(&child));
+                    }
+                }
+            }
+        }
+
+        let Some(pattern_node) = pattern_node else {
+            return self.alloc_expr(Expr::Literal(Literal::String(String::new())), open_span);
+        };
+        let Some(collection) = collection else {
+            return self.alloc_expr(Expr::Literal(Literal::String(String::new())), open_span);
+        };
+
+        let pattern = self.lower_pattern(&pattern_node);
+
+        // The semantic index gives a let-binding `visible_from = stmt_span.end()`,
+        // so any reference to the binding must have an offset >= that end or
+        // name resolution will silently skip it. We place every synthesized
+        // reference at `open_span.end()` (an empty range immediately after the
+        // `${for ...}` tag) so the lookups land inside the visibility window.
+        let after_let_span = TextRange::empty(open_span.end());
+
+        // Accumulator binding name. The let-binding shadowing rule
+        // makes nested for-loops safe even with a fixed name, but use
+        // a distinguishing prefix to avoid user collision.
+        let acc_name = Name::new("__m3_for");
+        let acc_pat = self.alloc_pattern(
+            Pattern::Bind {
+                name: acc_name.clone(),
+                subpat: None,
+            },
+            open_span,
+        );
+        let empty_init = self.alloc_expr(Expr::Literal(Literal::String(String::new())), open_span);
+        let let_stmt = self.alloc_stmt(
+            Stmt::Let {
+                pattern: acc_pat,
+                initializer: Some(empty_init),
+                is_watched: false,
+                origin: crate::ast::LetOrigin::Compiler,
+                else_branch: None,
+            },
+            open_span,
+        );
+
+        // `__m3_for = __m3_for + body_string`
+        let acc_path_lhs = self.alloc_expr(Expr::Path(vec![acc_name.clone()]), after_let_span);
+        let acc_path_rhs = self.alloc_expr(Expr::Path(vec![acc_name.clone()]), after_let_span);
+        let concat = self.alloc_expr(
+            Expr::Binary {
+                op: BinaryOp::Add,
+                lhs: acc_path_rhs,
+                rhs: body_string,
+            },
+            after_let_span,
+        );
+        let assign_stmt = self.alloc_stmt(
+            Stmt::Assign {
+                target: acc_path_lhs,
+                value: concat,
+            },
+            after_let_span,
+        );
+
+        // Loop body: a Block with the single assign statement.
+        let loop_body = self.alloc_expr(
+            Expr::Block {
+                stmts: vec![assign_stmt],
+                tail_expr: None,
+            },
+            after_let_span,
+        );
+        let for_stmt = self.alloc_stmt(
+            Stmt::For {
+                binding: pattern,
+                collection,
+                body: loop_body,
+            },
+            after_let_span,
+        );
+
+        // Outer block: let __m3_for = ""; for (...) { ... }; __m3_for
+        let acc_tail = self.alloc_expr(Expr::Path(vec![acc_name]), after_let_span);
+        self.alloc_expr(
+            Expr::Block {
+                stmts: vec![let_stmt, for_stmt],
+                tail_expr: Some(acc_tail),
+            },
+            open_span,
+        )
+    }
+
+    /// Lower a `${if (cond)}...${else if (cond)}...${else}...${endif}`
+    /// block to a host if-expression where each branch's body is the
+    /// concat'd string of its segments.
+    fn lower_backtick_if(
+        &mut self,
+        if_seg: baml_compiler_syntax::BacktickIfSegment,
+        outer_span: TextRange,
+    ) -> ExprId {
+        // Lower each branch body to a string-valued ExprId.
+        let mut lowered_branches: Vec<(ExprId, ExprId, TextRange)> = Vec::new();
+        for branch in if_seg.branches {
+            let header_span = branch.header.text_range();
+            let cond_node = branch
+                .header
+                .children()
+                .find(|c| c.kind() != SyntaxKind::PATTERN);
+            let cond = match cond_node {
+                Some(c) => self.lower_expr(&c),
+                None => self.alloc_expr(Expr::Missing, header_span),
+            };
+            let body_string = self.lower_backtick_segments(branch.body, outer_span);
+            lowered_branches.push((cond, body_string, header_span));
+        }
+
+        let else_body_string = if_seg
+            .else_body
+            .map(|b| self.lower_backtick_segments(b, outer_span))
+            .unwrap_or_else(|| {
+                self.alloc_expr(Expr::Literal(Literal::String(String::new())), outer_span)
+            });
+
+        // Build the if-chain from the inside out.
+        let mut current_else: ExprId = else_body_string;
+        for (cond, body, span) in lowered_branches.into_iter().rev() {
+            current_else = self.alloc_expr(
+                Expr::If {
+                    condition: cond,
+                    then_branch: body,
+                    else_branch: Some(current_else),
+                },
+                span,
+            );
+        }
+        current_else
     }
 
     fn lower_byte_string_literal(&mut self, node: &SyntaxNode) -> ExprId {

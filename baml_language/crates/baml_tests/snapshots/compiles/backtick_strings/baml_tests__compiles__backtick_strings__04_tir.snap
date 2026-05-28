@@ -126,3 +126,34 @@ function user.BacktickEscapedInterpStaysLiteral() -> string throws never {
     "literal: ${ignored}" : "literal: ${ignored}"
   }
 }
+function user.BacktickM3ForLoop(xs: string[]) -> string throws never {
+  { : string
+    { : string
+      let __m3_for = "" : "" -> string
+      for x in xs
+        { : void
+          __m3_for = __m3_for + "- " + { 0 stmts + tail }.to_string() + "\n" : string
+        }
+      __m3_for : string
+    }
+  }
+}
+function user.BacktickM3IfBlock(show: bool) -> string throws never {
+  { : "hello" | ""
+    if (show : bool) : "hello" | ""
+      "hello" : "hello"
+    else
+      "" : ""
+  }
+}
+function user.BacktickM3IfElseChain(n: int) -> string throws never {
+  { : "pos" | "neg" | "zero"
+    if (n > 0 : bool) : "pos" | "neg" | "zero"
+      "pos" : "pos"
+    else
+      if (n < 0 : bool) : "neg" | "zero"
+        "neg" : "neg"
+      else
+        "zero" : "zero"
+  }
+}

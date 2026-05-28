@@ -359,6 +359,17 @@ pub enum SyntaxKind {
     BACKTICK_TEXT,           // Plain text segment between interpolations
     BACKTICK_INTERPOLATION,  // ${ expr } inside a backtick string
 
+    // BEP-049 §5 block-tag forms inside `${...}`. The parser emits these as
+    // flat siblings of BACKTICK_INTERPOLATION inside a BACKTICK_STRING_LITERAL;
+    // segments() lifts matched open/close pairs into hierarchical For/If
+    // structures.
+    BACKTICK_FOR_OPEN, // ${for (let x in xs)}
+    BACKTICK_ENDFOR,   // ${endfor}
+    BACKTICK_IF_OPEN,  // ${if (cond)}
+    BACKTICK_ELSE_IF,  // ${else if (cond)}
+    BACKTICK_ELSE,     // ${else}
+    BACKTICK_ENDIF,    // ${endif}
+
     // Template components (inside raw strings)
     TEMPLATE_CONTENT,       // Plain text (deprecated, use PROMPT_TEXT)
     TEMPLATE_INTERPOLATION, // {{ expr }} - Jinja expressions

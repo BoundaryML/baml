@@ -1127,11 +1127,9 @@ impl BacktickStringLiteral {
     /// BEP §12 (interpolations do not affect the min-indent calculation per
     /// §12 rule 8 — "Whitespace inside `${...}` is preserved verbatim").
     pub fn segments(&self) -> Vec<BacktickSegment> {
-        enum RawPart {
-            Text(String),
-            Interp(SyntaxNode),
-        }
-
+        // Two-pass build: (1) walk CST → flat `FlatPart` stream (text +
+        // interp + block-tag opens/closes) with whole-literal dedent;
+        // (2) lift matched open/close pairs into nested For / If segments.
         let n = self.delimiter_count();
         if n == 0 {
             return Vec::new();
@@ -1146,15 +1144,20 @@ impl BacktickStringLiteral {
             return Vec::new();
         }
         let closing_start_index = total_backticks - n;
-        let mut parts: Vec<RawPart> = Vec::new();
+        let mut parts: Vec<FlatPart> = Vec::new();
         let mut current_text = String::new();
         let mut bt_seen = 0usize;
+
+        let flush_text = |current_text: &mut String, parts: &mut Vec<FlatPart>| {
+            if !current_text.is_empty() {
+                parts.push(FlatPart::Text(std::mem::take(current_text)));
+            }
+        };
 
         for el in &elements {
             match el {
                 rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::BACKTICK => {
                     if bt_seen >= n && bt_seen < closing_start_index {
-                        // Content backtick from a multi-tick ladder.
                         current_text.push('`');
                     }
                     bt_seen += 1;
@@ -1164,125 +1167,402 @@ impl BacktickStringLiteral {
                         current_text.push_str(t.text());
                     }
                 }
-                rowan::NodeOrToken::Node(child)
-                    if child.kind() == SyntaxKind::BACKTICK_INTERPOLATION =>
-                {
-                    if !current_text.is_empty() {
-                        parts.push(RawPart::Text(std::mem::take(&mut current_text)));
+                rowan::NodeOrToken::Node(child) => match child.kind() {
+                    SyntaxKind::BACKTICK_INTERPOLATION => {
+                        flush_text(&mut current_text, &mut parts);
+                        parts.push(FlatPart::Interp(child.clone()));
                     }
-                    parts.push(RawPart::Interp(child.clone()));
-                }
-                rowan::NodeOrToken::Node(child) => {
-                    if bt_seen >= n && bt_seen <= closing_start_index {
-                        current_text.push_str(&child.text().to_string());
+                    SyntaxKind::BACKTICK_FOR_OPEN => {
+                        flush_text(&mut current_text, &mut parts);
+                        parts.push(FlatPart::ForOpen(child.clone()));
                     }
-                }
+                    SyntaxKind::BACKTICK_ENDFOR => {
+                        flush_text(&mut current_text, &mut parts);
+                        parts.push(FlatPart::Endfor);
+                    }
+                    SyntaxKind::BACKTICK_IF_OPEN => {
+                        flush_text(&mut current_text, &mut parts);
+                        parts.push(FlatPart::IfOpen(child.clone()));
+                    }
+                    SyntaxKind::BACKTICK_ELSE_IF => {
+                        flush_text(&mut current_text, &mut parts);
+                        parts.push(FlatPart::ElseIf(child.clone()));
+                    }
+                    SyntaxKind::BACKTICK_ELSE => {
+                        flush_text(&mut current_text, &mut parts);
+                        parts.push(FlatPart::Else);
+                    }
+                    SyntaxKind::BACKTICK_ENDIF => {
+                        flush_text(&mut current_text, &mut parts);
+                        parts.push(FlatPart::Endif);
+                    }
+                    _ => {
+                        if bt_seen >= n && bt_seen <= closing_start_index {
+                            current_text.push_str(&child.text().to_string());
+                        }
+                    }
+                },
             }
         }
         if !current_text.is_empty() {
-            parts.push(RawPart::Text(current_text));
+            parts.push(FlatPart::Text(current_text));
         }
 
         // Decode escapes per text chunk.
-        let decoded: Vec<RawPart> = parts
-            .into_iter()
-            .map(|p| match p {
-                RawPart::Text(s) => RawPart::Text(unescape_backtick_string_literal(&s)),
-                RawPart::Interp(node) => RawPart::Interp(node),
-            })
-            .collect();
+        for p in &mut parts {
+            if let FlatPart::Text(s) = p {
+                *s = unescape_backtick_string_literal(s);
+            }
+        }
 
         // Dedent across the whole literal if any text chunk contains a
-        // newline. Replace interpolations with a single-char placeholder so
-        // they don't influence min-indent, then split the dedented result
-        // back into text segments.
-        let needs_dedent = decoded
+        // newline. Replace each non-text part with a single-char placeholder
+        // so they don't influence min-indent, then split the dedented
+        // result back into text segments and reattach the parts in order.
+        let needs_dedent = parts
             .iter()
-            .any(|p| matches!(p, RawPart::Text(s) if s.contains('\n')));
-        if !needs_dedent {
-            return decoded
-                .into_iter()
-                .map(|p| match p {
-                    RawPart::Text(s) => BacktickSegment::Text(s),
-                    RawPart::Interp(node) => BacktickSegment::Interp(node),
+            .any(|p| matches!(p, FlatPart::Text(s) if s.contains('\n')));
+        if needs_dedent {
+            // Pick a placeholder that doesn't appear in user content
+            // (ultrareview bug_006). Walk the PUA range U+E000..U+F8FF and
+            // use the first codepoint not present in any text chunk.
+            let content_chars: String = parts
+                .iter()
+                .filter_map(|p| match p {
+                    FlatPart::Text(s) => Some(s.as_str()),
+                    _ => None,
                 })
-                .collect();
-        }
+                .collect::<Vec<_>>()
+                .join("");
+            let placeholder: char = (0xE000u32..=0xF8FFu32)
+                .filter_map(char::from_u32)
+                .find(|c| !content_chars.contains(*c))
+                .unwrap_or('\u{F8FF}');
 
-        // Pick an in-band placeholder that we KNOW isn't in user content
-        // (ultrareview bug_006). U+F8FF was previously hardcoded but is a
-        // legitimate PUA codepoint (Apple logo on macOS) that users can
-        // type or paste. Walk the PUA range [U+E000..U+F8FF] and use the
-        // first codepoint that doesn't appear in any text segment. With
-        // 6400 candidates and typical text never containing any PUA char,
-        // the first probe terminates immediately.
-        let content_chars: String = decoded
-            .iter()
-            .filter_map(|p| match p {
-                RawPart::Text(s) => Some(s.as_str()),
-                RawPart::Interp(_) => None,
-            })
-            .collect::<Vec<_>>()
-            .join("");
-        let placeholder: char = (0xE000u32..=0xF8FFu32)
-            .filter_map(char::from_u32)
-            .find(|c| !content_chars.contains(*c))
-            .unwrap_or('\u{F8FF}');
-
-        let mut joined = String::new();
-        let mut interps: Vec<SyntaxNode> = Vec::new();
-        for p in decoded {
-            match p {
-                RawPart::Text(s) => joined.push_str(&s),
-                RawPart::Interp(node) => {
-                    interps.push(node);
-                    joined.push(placeholder);
+            let mut joined = String::new();
+            let mut non_text_indices: Vec<usize> = Vec::new();
+            for (i, p) in parts.iter().enumerate() {
+                match p {
+                    FlatPart::Text(s) => joined.push_str(s),
+                    _ => {
+                        non_text_indices.push(i);
+                        joined.push(placeholder);
+                    }
                 }
             }
-        }
-        let dedented = baml_base::dedent::preprocess_template(&joined);
+            let dedented = baml_base::dedent::preprocess_template(&joined);
+            let pieces: Vec<&str> = dedented.split(placeholder).collect();
 
-        // Pieces from split correspond 1:1 to text *positions* in `joined`:
-        // there are `interps.len() + 1` of them, one before each
-        // interpolation plus one after the last. Walk pieces and interps in
-        // lockstep and emit segments — skipping empty Text pieces (they
-        // represent positions that had no source content there) so the
-        // returned shape matches the M1 invariant ("no empty Text segments").
-        //
-        // Previous bug: looping over the original `decoded` vec and only
-        // advancing the piece iterator for Text parts left the leading
-        // empty piece on the iterator when decoded started with Interp,
-        // shifting every subsequent Text by one position.
-        let pieces: Vec<&str> = dedented.split(placeholder).collect();
-        let mut out: Vec<BacktickSegment> = Vec::with_capacity(pieces.len() + interps.len());
-        let mut interp_iter = interps.into_iter();
-        for (i, piece) in pieces.iter().enumerate() {
-            if !piece.is_empty() {
-                out.push(BacktickSegment::Text((*piece).to_string()));
-            }
-            if i + 1 < pieces.len() {
-                if let Some(node) = interp_iter.next() {
-                    out.push(BacktickSegment::Interp(node));
+            // Rebuild `parts` in dedented order: one text piece per gap,
+            // non-text parts in their original order.
+            let mut rebuilt: Vec<FlatPart> =
+                Vec::with_capacity(pieces.len() + non_text_indices.len());
+            let mut non_text_iter = non_text_indices.into_iter();
+            for (i, piece) in pieces.iter().enumerate() {
+                if !piece.is_empty() {
+                    rebuilt.push(FlatPart::Text((*piece).to_string()));
+                }
+                if i + 1 < pieces.len() {
+                    if let Some(orig_idx) = non_text_iter.next() {
+                        // Move the original non-text part into the rebuilt
+                        // list. We need ownership; replace with a sentinel
+                        // empty Text and ignore it in the iteration here.
+                        let part =
+                            std::mem::replace(&mut parts[orig_idx], FlatPart::Text(String::new()));
+                        rebuilt.push(part);
+                    }
                 }
             }
+            parts = rebuilt;
         }
-        out
+
+        // BEP §13 whitespace control: a block tag that's "alone on its
+        // line" (preceded only by ws back to a newline, followed only by
+        // ws up to the next newline) consumes that surrounding ws and the
+        // trailing newline. Inline `${expr}` interpolations and mid-line
+        // block tags consume nothing. Applied to the flat sequence before
+        // hierarchical lifting so it works uniformly across nested blocks.
+        apply_block_tag_whitespace_rule(&mut parts);
+
+        // Lift matched open/close pairs into hierarchical For / If segments.
+        // Returns the segments consumed for the current frame; the caller
+        // decides what kind of close terminated it (or EOF).
+        build_segment_tree(&mut parts.into_iter().peekable())
     }
 }
 
-/// A piece of a [`BacktickStringLiteral`] after splitting on interpolations.
+/// BEP §13: trim surrounding whitespace + trailing newline around block
+/// tags (`${for}`, `${if}`, `${else}`, `${else if}`, `${endfor}`, `${endif}`)
+/// that are alone on their source line. Inline `${expr}` interpolations
+/// are explicitly excluded.
+fn apply_block_tag_whitespace_rule(parts: &mut Vec<FlatPart>) {
+    fn is_block_tag(p: &FlatPart) -> bool {
+        matches!(
+            p,
+            FlatPart::ForOpen(_)
+                | FlatPart::IfOpen(_)
+                | FlatPart::ElseIf(_)
+                | FlatPart::Else
+                | FlatPart::Endfor
+                | FlatPart::Endif
+        )
+    }
+
+    // (parts_index, bytes_to_strip) for one side of an alone-on-line plan.
+    type SideStrip = Option<(usize, usize)>;
+    // (back_side, forward_side) plan for a single block tag.
+    type StripPlan = (SideStrip, SideStrip);
+
+    // "Alone on line" requires the entire source line containing the tag
+    // to consist of only whitespace + this single tag. Scan backwards/forwards
+    // through `parts`: a `\n` in a Text segment marks the line boundary; any
+    // non-Text (Interp / another tag) encountered before hitting that `\n`
+    // disqualifies the tag (it's mid-line). Returns a `StripPlan` to apply,
+    // or `None` if not alone.
+    fn alone_on_line_strips(parts: &[FlatPart], tag_idx: usize) -> Option<StripPlan> {
+        // Scan backwards: look for last `\n` in preceding text, ensuring no
+        // non-Text appears between us and that `\n`. The text content from
+        // after the `\n` (or literal start) up to the tag must be all ws.
+        let back: SideStrip = {
+            let mut strip_at: SideStrip = None;
+            let mut j = tag_idx;
+            while j > 0 {
+                j -= 1;
+                match &parts[j] {
+                    FlatPart::Text(s) => {
+                        if let Some(nl_pos) = s.rfind('\n') {
+                            let tail = &s[nl_pos + 1..];
+                            if !tail.chars().all(|c| c == ' ' || c == '\t') {
+                                return None;
+                            }
+                            let strip = s.len() - (nl_pos + 1);
+                            if strip > 0 {
+                                strip_at = Some((j, strip));
+                            }
+                            break;
+                        }
+                        // No `\n` here — entire text must be ws to keep
+                        // scanning further back.
+                        if !s.chars().all(|c| c == ' ' || c == '\t') {
+                            return None;
+                        }
+                        if !s.is_empty() {
+                            strip_at = Some((j, s.len()));
+                        }
+                    }
+                    // A non-Text part between us and the start-of-line means
+                    // there's another tag/interp on the same source line.
+                    _ => return None,
+                }
+            }
+            // If we exhausted preceding parts without finding `\n`, the tag
+            // is on the first line of the literal — treat literal-start as
+            // start-of-line. `strip_at` already captures any leading ws.
+            strip_at
+        };
+
+        // Scan forwards: look for first `\n` in following text. Everything
+        // from the tag to that `\n` (or literal end) must be all ws. The
+        // forward strip includes the `\n` itself when found.
+        let fwd: SideStrip = {
+            let mut strip_at: SideStrip = None;
+            let mut j = tag_idx + 1;
+            while j < parts.len() {
+                match &parts[j] {
+                    FlatPart::Text(s) => {
+                        if let Some(nl_pos) = s.find('\n') {
+                            let prefix = &s[..nl_pos];
+                            if !prefix.chars().all(|c| c == ' ' || c == '\t') {
+                                return None;
+                            }
+                            // Include the newline itself.
+                            strip_at = Some((j, nl_pos + 1));
+                            break;
+                        }
+                        if !s.chars().all(|c| c == ' ' || c == '\t') {
+                            return None;
+                        }
+                        if !s.is_empty() {
+                            strip_at = Some((j, s.len()));
+                        }
+                    }
+                    _ => return None,
+                }
+                j += 1;
+            }
+            strip_at
+        };
+
+        Some((back, fwd))
+    }
+
+    // Compute strips per tag first (immutable scan), then apply in reverse
+    // index order so earlier strips don't shift later positions.
+    let mut plans: Vec<StripPlan> = Vec::new();
+    for i in 0..parts.len() {
+        if !is_block_tag(&parts[i]) {
+            continue;
+        }
+        if let Some((back, fwd)) = alone_on_line_strips(parts, i) {
+            plans.push((back, fwd));
+        }
+    }
+
+    for (back, fwd) in plans {
+        if let Some((idx, n)) = back {
+            if let Some(FlatPart::Text(s)) = parts.get_mut(idx) {
+                let new_len = s.len().saturating_sub(n);
+                s.truncate(new_len);
+            }
+        }
+        if let Some((idx, n)) = fwd {
+            if let Some(FlatPart::Text(s)) = parts.get_mut(idx) {
+                let drain_n = n.min(s.len());
+                s.drain(..drain_n);
+            }
+        }
+    }
+
+    parts.retain(|p| !matches!(p, FlatPart::Text(s) if s.is_empty()));
+}
+
+/// Internal: build a hierarchical `Vec<BacktickSegment>` from a flat
+/// open/close stream, recursing into for / if bodies. Stops at a top-level
+/// close keyword (`Endfor`, `Endif`, `Else`, `ElseIf`) that the caller will
+/// inspect. Returns the segments accumulated for the current frame plus the
+/// terminating element (`None` on EOF).
+fn build_segment_tree<I: Iterator<Item = FlatPart>>(
+    iter: &mut std::iter::Peekable<I>,
+) -> Vec<BacktickSegment> {
+    let (segs, _term) = build_segment_tree_until(iter, false);
+    segs
+}
+
+fn build_segment_tree_until<I: Iterator<Item = FlatPart>>(
+    iter: &mut std::iter::Peekable<I>,
+    stop_on_else: bool,
+) -> (Vec<BacktickSegment>, Option<FlatPart>) {
+    let mut out: Vec<BacktickSegment> = Vec::new();
+    while let Some(part) = iter.next() {
+        match part {
+            FlatPart::Text(s) => {
+                if !s.is_empty() {
+                    out.push(BacktickSegment::Text(s));
+                }
+            }
+            FlatPart::Interp(node) => out.push(BacktickSegment::Interp(node)),
+            FlatPart::ForOpen(open) => {
+                let (body, _) = build_segment_tree_until(iter, false);
+                out.push(BacktickSegment::For(BacktickForSegment { open, body }));
+            }
+            FlatPart::IfOpen(open) => {
+                let mut branches: Vec<BacktickIfBranch> = Vec::new();
+                let mut else_body: Option<Vec<BacktickSegment>> = None;
+                let mut current_header = open;
+                loop {
+                    let (body, term) = build_segment_tree_until(iter, true);
+                    branches.push(BacktickIfBranch {
+                        header: current_header,
+                        body,
+                    });
+                    match term {
+                        Some(FlatPart::ElseIf(h)) => {
+                            current_header = h;
+                            continue;
+                        }
+                        Some(FlatPart::Else) => {
+                            let (eb, _) = build_segment_tree_until(iter, false);
+                            else_body = Some(eb);
+                            break;
+                        }
+                        _ => break,
+                    }
+                }
+                out.push(BacktickSegment::If(BacktickIfSegment {
+                    branches,
+                    else_body,
+                }));
+            }
+            // Closing tokens at this level terminate the current frame and
+            // bubble up to the caller for matching.
+            FlatPart::Endfor | FlatPart::Endif => return (out, Some(part)),
+            FlatPart::Else | FlatPart::ElseIf(_) if stop_on_else => return (out, Some(part)),
+            // Stray else/else-if outside an if-chain: treat as no-op for now.
+            // (Parse-time validation lives elsewhere.)
+            FlatPart::Else | FlatPart::ElseIf(_) => {}
+        }
+    }
+    (out, None)
+}
+
+// Re-export the Flat type from `segments()` so the free functions above can
+// reference it. Using a typedef'd public-but-named-private wrapper would
+// be cleaner; for now keep the recursion in private free functions and
+// hoist the enum.
+#[doc(hidden)]
+enum FlatPart {
+    Text(String),
+    Interp(SyntaxNode),
+    ForOpen(SyntaxNode),
+    Endfor,
+    IfOpen(SyntaxNode),
+    ElseIf(SyntaxNode),
+    Else,
+    Endif,
+}
+
+/// A piece of a [`BacktickStringLiteral`] after splitting on interpolations
+/// and lifting matched block-tag open/close pairs into hierarchical
+/// structures.
 ///
 /// Produced by [`BacktickStringLiteral::segments`]. The untagged lowering
-/// concatenates `text + interp.to_string()`; the M4 tagged-template lowering
-/// converts these into the BEP §10 `parts` / `values` shape.
+/// concatenates `text + interp.to_string()` + control-flow body output;
+/// the M4 tagged-template lowering converts these into the BEP §10
+/// `parts` / `values` shape.
 #[derive(Debug, Clone)]
 pub enum BacktickSegment {
     /// Literal text content, escape-decoded and dedent-adjusted.
     Text(String),
-    /// A `${...}` interpolation. The wrapped node is the `BACKTICK_INTERPOLATION`
-    /// CST node; downstream code lowers the inner block expression and
-    /// converts the result to a string.
+    /// A `${expr}` interpolation. The wrapped node is the
+    /// `BACKTICK_INTERPOLATION` CST node; downstream code lowers the
+    /// inner block expression and converts the result to a string.
     Interp(SyntaxNode),
+    /// A `${for (...)}...${endfor}` block. BEP-049 §5. The wrapped node
+    /// is the `BACKTICK_FOR_OPEN` CST node (carries the for-header);
+    /// `body` is the nested segments between the open and the matching
+    /// `${endfor}`.
+    For(BacktickForSegment),
+    /// A `${if (...)}...${else if (...)}...${else}...${endif}` chain.
+    /// Each branch's body is its own segment tree.
+    If(BacktickIfSegment),
+}
+
+/// Body of a `${for (...)}...${endfor}` block.
+#[derive(Debug, Clone)]
+pub struct BacktickForSegment {
+    /// The `BACKTICK_FOR_OPEN` CST node — caller extracts the for-header.
+    pub open: SyntaxNode,
+    /// Segments between the open and matching `${endfor}`.
+    pub body: Vec<BacktickSegment>,
+}
+
+/// Body of a `${if (...)}...${endif}` chain, with optional `else if` and
+/// `else` branches.
+#[derive(Debug, Clone)]
+pub struct BacktickIfSegment {
+    /// One entry per `${if}` / `${else if (cond)}` branch, in source order.
+    /// `header` is the corresponding `BACKTICK_IF_OPEN` or
+    /// `BACKTICK_ELSE_IF` CST node (caller extracts the condition).
+    pub branches: Vec<BacktickIfBranch>,
+    /// Body of the `${else}` branch, if present.
+    pub else_body: Option<Vec<BacktickSegment>>,
+}
+
+/// One conditional branch in a [`BacktickIfSegment`].
+#[derive(Debug, Clone)]
+pub struct BacktickIfBranch {
+    pub header: SyntaxNode,
+    pub body: Vec<BacktickSegment>,
 }
 
 impl RawStringLiteral {

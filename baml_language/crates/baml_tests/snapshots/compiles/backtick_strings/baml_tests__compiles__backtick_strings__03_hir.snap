@@ -44,6 +44,15 @@ function user.BacktickInterpSimple(name: string) -> string  [expr] {
 function user.BacktickLiteralAsArg() -> string  [expr] {
   {  } BacktickPassThrough("forwarded")
 }
+function user.BacktickM3ForLoop(xs: string[]) -> string  [expr] {
+  {  } { let __m3_for = ""; for x in xs { __m3_for = __m3_for Add "- " Add {  } x.to_string() Add "\n" } } __m3_for
+}
+function user.BacktickM3IfBlock(show: bool) -> string  [expr] {
+  {  } if (show) "hello" else ""
+}
+function user.BacktickM3IfElseChain(n: int) -> string  [expr] {
+  {  } if (n Gt 0) "pos" else if (n Lt 0) "neg" else "zero"
+}
 function user.BacktickMultiTickThree() -> string  [expr] {
   {  } "nested ``double``..."
 }

@@ -690,6 +690,608 @@ async fn backtick_trailing_dollar_is_literal() -> anyhow::Result<()> {
     .await
 }
 
+// ── M3 block control flow runtime tests ───────────────────────────────────
+
+#[tokio::test]
+async fn backtick_m3_for_loop_basic() -> anyhow::Result<()> {
+    // BEP §5 block-tag form. The for-loop iterates over `xs` and each
+    // iteration's text + interpolation gets concatenated into the output.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function main() -> string {
+                let xs = ["a", "b", "c"]
+                `${for (let x in xs)}- ${x}
+${endfor}`
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("- a\n- b\n- c\n".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_m3_for_loop_with_text_around() -> anyhow::Result<()> {
+    // Text before and after the for-block flows in order.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function main() -> string {
+                let xs = ["x", "y"]
+                `header
+${for (let v in xs)}${v}, ${endfor}done`
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("header\nx, y, done".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_m3_if_block_tag_true_branch() -> anyhow::Result<()> {
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function main() -> string {
+                let logged_in = true
+                `${if (logged_in)}welcome${endif}`
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("welcome".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_m3_if_block_tag_false_branch_empty() -> anyhow::Result<()> {
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function main() -> string {
+                let logged_in = false
+                `${if (logged_in)}welcome${endif}!`
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("!".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_m3_if_else_chain() -> anyhow::Result<()> {
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function classify(n: int) -> string {
+                `${if (n > 0)}pos${else if (n < 0)}neg${else}zero${endif}`
+            }
+            function main() -> string {
+                classify(5) + " " + classify(-3) + " " + classify(0)
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("pos neg zero".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_m3_nested_for_in_if() -> anyhow::Result<()> {
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function main() -> string {
+                let xs = ["a", "b"]
+                let show = true
+                `${if (show)}${for (let x in xs)}- ${x}
+${endfor}${endif}`
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("- a\n- b\n".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_m3_for_with_interp_in_body() -> anyhow::Result<()> {
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function main() -> string {
+                let xs = [1, 2, 3]
+                `${for (let x in xs)}${x},${endfor}`
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("1,2,3,".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+// ── M3 §13 whitespace-control worked cases from the BEP ───────────────────
+
+#[tokio::test]
+async fn backtick_m3_ws_case1_items_on_own_lines() -> anyhow::Result<()> {
+    // BEP §13 Case 1: `${for}` and `${endfor}` alone on their lines, body
+    // line indented. Each iter emits the indented body + trailing newline.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function main() -> string {
+                let names = ["a", "b", "c"]
+                `
+${for (let n in names)}
+  - ${n}
+${endfor}
+`
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("  - a\n  - b\n  - c\n".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_m3_ws_case2_inline_concatenation() -> anyhow::Result<()> {
+    // BEP §13 Case 2: all tags inline — mid-line, so consume nothing.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function main() -> string {
+                let names = ["a", "b", "c"]
+                `${for (let n in names)}${n}${endfor}`
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("abc".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_m3_ws_case3_blank_line_between_iterations() -> anyhow::Result<()> {
+    // BEP §13 Case 3: a blank line inside the body becomes a separator.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function main() -> string {
+                let names = ["a", "b", "c"]
+                `
+${for (let n in names)}
+- ${n}
+
+${endfor}
+`
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("- a\n\n- b\n\n- c\n\n".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_m3_ws_case6_if_full_line_block() -> anyhow::Result<()> {
+    // BEP §13 Case 6: full-line `${if}` / `${endif}` consume their own lines
+    // entirely, so the false branch leaves no extra newline behind.
+    let src = r#"
+        function classify(extra: bool) -> string {
+            `
+Header
+${if (extra)}
+Extra
+${endif}
+Footer
+`
+        }
+        function main() -> string {
+            classify(true) + "|" + classify(false)
+        }
+    "#;
+    assert_engine_executes(EngineProgram {
+        source: src,
+        entry: "main",
+        // M1's `preprocess_template` trims the trailing newline before the
+        // closing backtick, so "Footer\n" lands as "Footer" in the output.
+        expected: Ok(BexExternalValue::String(
+            "Header\nExtra\nFooter|Header\nFooter".into(),
+        )),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_m3_ws_case7_if_introduces_content_only_when_true() -> anyhow::Result<()> {
+    // BEP §13 Case 7: `${if}` mid-line — newline after `${if}` is body
+    // content, not block-tag whitespace, so it shows up only when true.
+    let src = r#"
+        function show(extra: bool) -> string {
+            `
+Header${if (extra)}
+Extra line${endif}
+Footer
+`
+        }
+        function main() -> string {
+            show(true) + "|" + show(false)
+        }
+    "#;
+    assert_engine_executes(EngineProgram {
+        source: src,
+        entry: "main",
+        expected: Ok(BexExternalValue::String(
+            "Header\nExtra line\nFooter|Header\nFooter".into(),
+        )),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_m3_ws_case8_nested_loops_preserving_structure() -> anyhow::Result<()> {
+    // BEP §13 Case 8: nested `${for}` loops, each alone on its line.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            class Group {
+                name string
+                items string[]
+            }
+            function main() -> string {
+                let groups = [
+                    Group { name: "Fruits", items: ["apple", "banana"] },
+                    Group { name: "Drinks", items: ["coffee"] },
+                ]
+                `
+${for (let g in groups)}
+Group: ${g.name}
+${for (let i in g.items)}
+  - ${i}
+${endfor}
+${endfor}
+`
+            }
+        "#,
+        entry: "main",
+        // The trailing newline is the inner for-body's last `\n`, emitted
+        // by each outer iteration — it's body content, not block-tag ws.
+        expected: Ok(BexExternalValue::String(
+            "Group: Fruits\n  - apple\n  - banana\nGroup: Drinks\n  - coffee\n".into(),
+        )),
+        ..Default::default()
+    })
+    .await
+}
+
+// ── M3 edge cases (gap-filling) ──────────────────────────────────────────
+
+#[tokio::test]
+async fn backtick_m3_for_loop_over_empty_collection() -> anyhow::Result<()> {
+    // Zero iterations → accumulator stays empty. The accumulator-init
+    // string is the result; surrounding text still flows through.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function main() -> string {
+                let xs: string[] = []
+                `before|${for (let x in xs)}- ${x}
+${endfor}|after`
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("before||after".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_m3_for_loop_empty_body() -> anyhow::Result<()> {
+    // A for-block with nothing between open and close tags should
+    // contribute the empty string, even with N iterations.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function main() -> string {
+                let xs = [1, 2, 3]
+                `[${for (let _x in xs)}${endfor}]`
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("[]".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_m3_for_loop_over_array_literal() -> anyhow::Result<()> {
+    // The collection expression is an inline array literal — exercises
+    // the `lower_expr` path for the collection (vs bare-token shortcut).
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function main() -> string {
+                `${for (let n in [10, 20, 30])}${n} ${endfor}`
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("10 20 30 ".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_m3_nested_if_in_for() -> anyhow::Result<()> {
+    // If-chain inside for-body — both block-tag forms composed.
+    // Uses an outer-scope flag so the if condition doesn't have to
+    // resolve against the for-binding's element type. (The for-binding's
+    // type doesn't currently reach the if condition through HIR — that's
+    // a TIR-level inference gap unrelated to M3 lowering.)
+    let src = r#"
+        function go(flag: bool, xs: string[]) -> string {
+            `${for (let x in xs)}${if (flag)}+${x}${else}-${x}${endif} ${endfor}`
+        }
+        function main() -> string {
+            go(true, ["a", "b"]) + "|" + go(false, ["a", "b"])
+        }
+    "#;
+    assert_engine_executes(EngineProgram {
+        source: src,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("+a +b |-a -b ".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_m3_ws_case4_blank_line_after_block() -> anyhow::Result<()> {
+    // BEP §13 Case 4: blank line between the for-block and a trailing
+    // Footer paragraph. The blank line stays in the output.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function main() -> string {
+                let names = ["a", "b", "c"]
+                `
+${for (let n in names)}
+- ${n}
+${endfor}
+
+Footer
+`
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("- a\n- b\n- c\n\nFooter".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_m3_ws_case5_conditional_inline() -> anyhow::Result<()> {
+    // BEP §13 Case 5: mid-line `${if}` — consumes nothing.
+    let src = r#"
+        function greet(formal: bool) -> string {
+            `Hello${if (formal)}, sir${endif}!`
+        }
+        function main() -> string {
+            greet(true) + "|" + greet(false)
+        }
+    "#;
+    assert_engine_executes(EngineProgram {
+        source: src,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("Hello, sir!|Hello!".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_m3_ws_mid_line_indented_for_keeps_indent_literal() -> anyhow::Result<()> {
+    // BEP §13 "mid-line edge case": indented `${for}` followed by inline
+    // body+endfor+Suffix on the same line is mid-line — the leading 4
+    // spaces stay in the output as literal text. `enumerate` style not
+    // used; the BEP's exact example uses a join-like body.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function main() -> string {
+                let names = ["a", "b", "c"]
+                `
+Prefix:
+    ${for (let n in names)}${n} ${endfor}Suffix
+`
+            }
+        "#,
+        entry: "main",
+        // 4 spaces before `${for}` are not consumed because the line
+        // contains other content (`${n} ${endfor}Suffix`).
+        expected: Ok(BexExternalValue::String("Prefix:\n    a b c Suffix".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_m3_ws_tag_at_literal_start() -> anyhow::Result<()> {
+    // No preceding text at all — the literal-start position is
+    // treated as start-of-line, so a `${for}` at offset 0 is alone if
+    // its trailing-to-newline check passes.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function main() -> string {
+                let xs = ["x", "y"]
+                `${for (let n in xs)}
+${n}
+${endfor}done`
+            }
+        "#,
+        entry: "main",
+        // ForOpen alone (start-of-literal + immediate \n) → strips
+        // trailing \n. Endfor alone → strips trailing... but `done`
+        // follows on same line (no \n before `done`), so Endfor is
+        // mid-line and consumes nothing.
+        expected: Ok(BexExternalValue::String("x\ny\ndone".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_m3_for_loop_shadows_outer_let() -> anyhow::Result<()> {
+    // Outer `let x` should not be visible inside the for-body —
+    // the for-binding shadows it for the duration of the loop.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function main() -> string {
+                let x = "OUTER"
+                let xs = ["a", "b"]
+                let inner = `${for (let x in xs)}${x},${endfor}`
+                inner + "|" + x
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("a,b,|OUTER".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_m3_if_with_complex_condition() -> anyhow::Result<()> {
+    // `&&` / `||` / comparison in the condition.
+    let src = r#"
+        function f(a: int, b: int) -> string {
+            `${if (a > 0 && b > 0)}pos${else if (a < 0 || b < 0)}neg${else}zero${endif}`
+        }
+        function main() -> string {
+            f(1, 1) + "|" + f(-1, 0) + "|" + f(0, 0)
+        }
+    "#;
+    assert_engine_executes(EngineProgram {
+        source: src,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("pos|neg|zero".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_m3_ws_trailing_spaces_after_tag_alone() -> anyhow::Result<()> {
+    // Trailing spaces on the same line as the tag (before the newline)
+    // still count as alone-on-line — the rule allows whitespace up to
+    // the next newline.
+    assert_engine_executes(EngineProgram {
+        source: "
+            function main() -> string {
+                let xs = [\"a\", \"b\"]
+                `
+${for (let n in xs)}   \n${n}
+${endfor}
+end`
+            }
+        ",
+        entry: "main",
+        // The trailing 3 spaces + \n after `${for}` are all consumed
+        // (alone on line). Same for `${endfor}`. Each iter emits "X\n".
+        // The literal-end "end" remains since `${endfor}` was alone
+        // and consumed its own line, then `end` is on the next line.
+        // After M1 .trim() also strips trailing whitespace.
+        expected: Ok(BexExternalValue::String("a\nb\nend".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_m3_for_inside_if_branch() -> anyhow::Result<()> {
+    // The opposite of nested-for-in-if: an if-block whose true branch
+    // contains a for-loop. Exercises the recursive lowering on if-bodies.
+    let src = r#"
+        function render(show: bool, xs: string[]) -> string {
+            `${if (show)}${for (let x in xs)}<${x}>${endfor}${else}hidden${endif}`
+        }
+        function main() -> string {
+            render(true, ["a", "b"]) + "|" + render(false, ["a", "b"])
+        }
+    "#;
+    assert_engine_executes(EngineProgram {
+        source: src,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("<a><b>|hidden".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_m3_block_tag_directly_after_interp() -> anyhow::Result<()> {
+    // `${name}${if (extra)}...${endif}` — interp immediately followed by
+    // a block tag with no text between. The if is mid-line, so consumes
+    // nothing. Validates the §13 rule isn't fooled by adjacent non-text.
+    let src = r#"
+        function greet(name: string, extra: bool) -> string {
+            `Hi ${name}${if (extra)}!${endif}`
+        }
+        function main() -> string {
+            greet("Alice", true) + "|" + greet("Bob", false)
+        }
+    "#;
+    assert_engine_executes(EngineProgram {
+        source: src,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("Hi Alice!|Hi Bob".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_m3_if_empty_true_body() -> anyhow::Result<()> {
+    // `${if (c)}${endif}` with no body content — both branches empty.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function main() -> string {
+                let yes = true
+                let no = false
+                `[${if (yes)}${endif}|${if (no)}should_not_appear${endif}]`
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("[|]".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_m3_if_else_one_branch_has_for() -> anyhow::Result<()> {
+    // The false branch contains a for-loop. Exercises lowering an
+    // entire for-block as the body of an else-branch.
+    let src = r#"
+        function render(empty: bool, xs: string[]) -> string {
+            `${if (empty)}<none>${else}${for (let x in xs)}${x},${endfor}${endif}`
+        }
+        function main() -> string {
+            render(false, ["a", "b", "c"]) + "|" + render(true, ["a"])
+        }
+    "#;
+    assert_engine_executes(EngineProgram {
+        source: src,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("a,b,c,|<none>".into())),
+        ..Default::default()
+    })
+    .await
+}
+
 // ── M1 tests retained below ───────────────────────────────────────────────
 
 #[tokio::test]

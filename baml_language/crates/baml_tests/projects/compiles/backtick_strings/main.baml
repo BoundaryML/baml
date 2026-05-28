@@ -120,3 +120,18 @@ function BacktickInterpMultiline(name: string, count: int) -> string {
 function BacktickEscapedInterpStaysLiteral() -> string {
     `literal: \${ignored}`
 }
+
+// ─── M3: ${for}/${if} block control flow ─────────────────────────────────
+
+function BacktickM3ForLoop(xs: string[]) -> string {
+    `${for (let x in xs)}- ${x}
+${endfor}`
+}
+
+function BacktickM3IfBlock(show: bool) -> string {
+    `${if (show)}hello${endif}`
+}
+
+function BacktickM3IfElseChain(n: int) -> string {
+    `${if (n > 0)}pos${else if (n < 0)}neg${else}zero${endif}`
+}

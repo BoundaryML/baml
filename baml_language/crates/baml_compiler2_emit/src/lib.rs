@@ -161,17 +161,16 @@ fn extract_schema_attrs(
     let mut skip = false;
     for attr in attrs {
         match attr.name.as_str() {
-            "description" | "alias" => {
-                if attr.args.len() == 1 {
-                    let raw = attr.args[0].value.as_str();
-                    let value = parse_string_attr_value(raw);
-                    if attr.name.as_str() == "description" {
-                        description = value;
-                    } else {
-                        alias = value;
-                    }
+            "description" | "alias" if attr.args.len() == 1 => {
+                let raw = attr.args[0].value.as_str();
+                let value = parse_string_attr_value(raw);
+                if attr.name.as_str() == "description" {
+                    description = value;
+                } else {
+                    alias = value;
                 }
             }
+            "description" | "alias" => {}
             "skip" => {
                 skip = true;
             }

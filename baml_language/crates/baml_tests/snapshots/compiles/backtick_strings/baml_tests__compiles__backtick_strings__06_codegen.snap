@@ -25,7 +25,7 @@ function user.BacktickInCondition() -> int {
     load_const "abc"
     call baml.String.length
     load_const 0
-    cmp_op >
+    cmp_int_op >
     pop_jump_if_false L0
     jump L1
 
@@ -143,6 +143,92 @@ function user.BacktickLiteralAsArg() -> string {
     return
 }
 
+function user.BacktickM3ForLoop(xs: string[]) -> string {
+    load_const ""
+    store_var __m3_for
+    load_const 0
+    store_var __for_idx
+
+  L0:
+    load_var __for_idx
+    load_var xs
+    call baml.Array.length
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var __m3_for
+    return
+
+  L2:
+    load_var __m3_for
+    store_var _9
+    load_var xs
+    load_var __for_idx
+    load_array_element
+    call baml.String.to_string
+    store_var _12
+    load_var _9
+    load_const "- "
+    load_var _12
+    bin_op +
+    load_const "\n"
+    bin_op +
+    bin_op +
+    store_var __m3_for
+    load_var __for_idx
+    load_const 1
+    add_int
+    store_var __for_idx
+    jump L0
+}
+
+function user.BacktickM3IfBlock(show: bool) -> string {
+    load_var show
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const ""
+    jump L2
+
+  L1:
+    load_const "hello"
+
+  L2:
+    return
+}
+
+function user.BacktickM3IfElseChain(n: int) -> string {
+    load_var n
+    load_const 0
+    cmp_int_op >
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var n
+    load_const 0
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "zero"
+    jump L4
+
+  L2:
+    load_const "neg"
+    jump L4
+
+  L3:
+    load_const "pos"
+
+  L4:
+    return
+}
+
 function user.BacktickMultiTickThree() -> string {
     load_const "nested ``double`` ticks"
     return
@@ -181,14 +267,14 @@ function user.BacktickStandardEscapes() -> string {
 function user.bangs(n: int) -> string {
     load_var n
     load_const 0
-    cmp_op <=
+    cmp_int_op <=
     pop_jump_if_false L0
     jump L1
 
   L0:
     load_var n
     load_const 1
-    bin_op -
+    sub_int
     call user.bangs
     store_var _3
     load_const "!"
