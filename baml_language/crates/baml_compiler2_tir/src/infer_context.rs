@@ -137,6 +137,13 @@ pub enum TirTypeError {
     /// An `if let` pattern that covers every value of the scrutinee — the
     /// `else` branch is unreachable. Suggests using a plain `let` instead.
     IrrefutablePatternInIfLet,
+    /// `let … else { … }` whose else block does not have type `Ty::Never`.
+    /// The else branch must diverge — return, throw, break, continue, or
+    /// loop forever — so that fall-through past the binding cannot occur.
+    LetElseMustDiverge { got: Ty },
+    /// A `let … else` pattern that covers every value of the initializer
+    /// type — the else branch is unreachable. Suggest using a plain `let`.
+    IrrefutablePatternInLetElse,
     /// Catch binding cannot be typed as `any` or `unknown`.
     InvalidCatchBindingType { type_name: String },
     /// Inferred escaping throws are not covered by the declared throws contract.
@@ -446,6 +453,15 @@ impl fmt::Display for TirTypeError {
             TirTypeError::IrrefutablePatternInIfLet => write!(
                 f,
                 "irrefutable `if let` pattern; the `else` branch is unreachable — use a plain `let` binding instead"
+            ),
+            TirTypeError::LetElseMustDiverge { got } => write!(
+                f,
+                "`let … else` requires a diverging else block (`return`, `throw`, `break`, or `continue`); got `{}`",
+                humanize_ty(got)
+            ),
+            TirTypeError::IrrefutablePatternInLetElse => write!(
+                f,
+                "irrefutable `let … else` pattern; the `else` branch is unreachable — use a plain `let` binding instead"
             ),
             TirTypeError::InvalidCatchBindingType { type_name } => write!(
                 f,

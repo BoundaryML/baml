@@ -67,6 +67,7 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Word => SyntaxKind::WORD,
         TokenKind::Quote => SyntaxKind::QUOTE,
         TokenKind::Hash => SyntaxKind::HASH,
+        TokenKind::BigintLiteral => SyntaxKind::BIGINT_LITERAL,
         TokenKind::IntegerLiteral => SyntaxKind::INTEGER_LITERAL,
         TokenKind::FloatLiteral => SyntaxKind::FLOAT_LITERAL,
 
@@ -388,6 +389,7 @@ impl<'a> Parser<'a> {
         self.at(TokenKind::Word)
             || self.at(TokenKind::Quote) // string literal type
             || self.at(TokenKind::Hash) // raw string literal type
+            || self.at(TokenKind::BigintLiteral)
             || self.at(TokenKind::IntegerLiteral)
             || self.at(TokenKind::FloatLiteral)
             || self.at(TokenKind::LParen) // tuple/parenthesized type
@@ -395,7 +397,11 @@ impl<'a> Parser<'a> {
             || (self.at(TokenKind::Minus)
                 && matches!(
                     self.peek(1).map(|t| t.kind),
-                    Some(TokenKind::IntegerLiteral | TokenKind::FloatLiteral)
+                    Some(
+                        TokenKind::BigintLiteral
+                            | TokenKind::IntegerLiteral
+                            | TokenKind::FloatLiteral
+                    )
                 ))
     }
 
@@ -2101,14 +2107,16 @@ impl<'a> Parser<'a> {
             return;
         }
 
-        // Negative numeric literal type: `-42`, `-3.14`. Recognised before
+        // Negative numeric literal type: `-42`, `-3.14`, `-7n`. Recognised before
         // the unary-`-` falls through to the generic error path so literal
         // unions like `-1 | 0 | 1` and pattern atoms like `match { -42 => ... }`
         // parse uniformly. Floats still error to match the positive case.
         if self.at(TokenKind::Minus)
             && matches!(
                 self.peek(1).map(|t| t.kind),
-                Some(TokenKind::IntegerLiteral | TokenKind::FloatLiteral)
+                Some(
+                    TokenKind::BigintLiteral | TokenKind::IntegerLiteral | TokenKind::FloatLiteral
+                )
             )
         {
             let next_kind = self.peek(1).map(|t| t.kind);
@@ -2124,6 +2132,12 @@ impl<'a> Parser<'a> {
             }
             self.bump(); // -
             self.bump(); // number
+            return;
+        }
+
+        // Check for bigint literal types: 42n | 0n | 99999999999999999999n
+        if self.at(TokenKind::BigintLiteral) {
+            self.bump();
             return;
         }
 
@@ -2407,6 +2421,7 @@ impl<'a> Parser<'a> {
                 // These can't be variant names, so they must be type annotations
                 p.at(TokenKind::Quote)
                     || p.at(TokenKind::Hash)
+                    || p.at(TokenKind::BigintLiteral)
                     || p.at(TokenKind::IntegerLiteral)
                     || p.at(TokenKind::FloatLiteral)
                     || p.at(TokenKind::LParen)
@@ -3560,6 +3575,28 @@ impl<'a> Parser<'a> {
                 p.error_unexpected_token("initializer (=)".to_string());
             }
 
+            // Optional `let … else { … }` — refutable binding whose else
+            // branch must diverge. Allowed in every position `parse_let_stmt`
+            // is called from, including C-style for-init (a diverging init
+            // just makes the loop unreachable — same kind of dead code we
+            // already accept elsewhere, not a parse-time concern).
+            if p.at(TokenKind::Else) {
+                p.bump(); // else
+                if p.at(TokenKind::If) {
+                    // `else if` after `let … else` has no value to chain
+                    // through (unlike `if let`, which produces a value), so
+                    // reject. The `if` token is left in place so recovery can
+                    // parse it as the next statement.
+                    p.error_unexpected_token(
+                        "block after 'else' (`else if` is not valid in let-else)".to_string(),
+                    );
+                } else if p.at(TokenKind::LBrace) {
+                    p.parse_block_expr();
+                } else {
+                    p.error_unexpected_token("block after 'else'".to_string());
+                }
+            }
+
             // Consume trailing semicolon
             p.eat(TokenKind::Semicolon);
         });
@@ -3584,6 +3621,20 @@ impl<'a> Parser<'a> {
                 p.parse_expr_bp(3);
             } else {
                 p.error_unexpected_token("initializer (=)".to_string());
+            }
+
+            // Reject `watch let … else { … }` — the divergence semantics of
+            // let-else don't compose with the auto-rerun semantics of a
+            // watched binding. Emit a parse error but eat the else block so
+            // recovery proceeds cleanly past it.
+            if p.at(TokenKind::Else) {
+                p.error_unexpected_token(
+                    "';' (`watch let` cannot have an `else` clause)".to_string(),
+                );
+                p.bump(); // else
+                if p.at(TokenKind::LBrace) {
+                    p.parse_block_expr();
+                }
             }
 
             // Consume trailing semicolon
@@ -4044,6 +4095,7 @@ impl<'a> Parser<'a> {
             self.current().map(|t| t.kind),
             Some(
                 TokenKind::Word
+                    | TokenKind::BigintLiteral
                     | TokenKind::IntegerLiteral
                     | TokenKind::FloatLiteral
                     | TokenKind::Quote
@@ -4136,6 +4188,7 @@ impl<'a> Parser<'a> {
                 | TokenKind::RBracket
                 | TokenKind::Question
                 | TokenKind::Pipe
+                | TokenKind::BigintLiteral
                 | TokenKind::IntegerLiteral
                 | TokenKind::FloatLiteral
                 | TokenKind::Minus
@@ -4541,7 +4594,10 @@ impl<'a> Parser<'a> {
                         p.expect(TokenKind::In);
                         p.parse_expr(); // iterator expression
                     } else {
-                        // C-style: for (let i = 0; cond; update)
+                        // C-style: for (let i = 0; cond; update). A
+                        // `let … else` here is unusual but legal — it
+                        // makes the loop unreachable, same as any other
+                        // diverging statement before the loop.
                         p.parse_let_stmt();
                         // The let statement already consumed the semicolon
                         // Now parse condition
@@ -5089,8 +5145,11 @@ impl<'a> Parser<'a> {
 
     /// Parse primary expression (literals, identifiers, parentheses)
     fn parse_primary_expr(&mut self) {
-        if self.at(TokenKind::IntegerLiteral) || self.at(TokenKind::FloatLiteral) {
-            // Numeric literal
+        if self.at(TokenKind::BigintLiteral)
+            || self.at(TokenKind::IntegerLiteral)
+            || self.at(TokenKind::FloatLiteral)
+        {
+            // Numeric literal (bigint, integer, or float)
             self.bump();
         } else if self.parse_any_string() {
             // String literal
@@ -5301,7 +5360,8 @@ impl<'a> Parser<'a> {
                 // - `LBracket` / `RBracket` for array suffix `T[]`
                 // - `Question` for optional `T?`
                 // - `Pipe` for unions `A | B`
-                // - `IntegerLiteral` / `FloatLiteral` for literal-union members
+                // - `BigintLiteral` / `IntegerLiteral` / `FloatLiteral` for
+                //   literal-union members
                 // - `Minus` to allow negative numeric literal types (`-1`)
                 //   that `parse_type_primary` accepts as type atoms
                 // - `Quote` / `Hash` for string-literal types (`"a"`,
@@ -5315,6 +5375,7 @@ impl<'a> Parser<'a> {
                 | TokenKind::RBracket
                 | TokenKind::Question
                 | TokenKind::Pipe
+                | TokenKind::BigintLiteral
                 | TokenKind::IntegerLiteral
                 | TokenKind::FloatLiteral
                 | TokenKind::Minus
@@ -6119,12 +6180,18 @@ impl<'a> Parser<'a> {
         }
 
         // Number literals
-        if self.at(TokenKind::IntegerLiteral) || self.at(TokenKind::FloatLiteral) {
+        if self.at(TokenKind::BigintLiteral)
+            || self.at(TokenKind::IntegerLiteral)
+            || self.at(TokenKind::FloatLiteral)
+        {
             return true;
         }
         if self.at(TokenKind::Minus)
             && self.peek(1).is_some_and(|t| {
-                matches!(t.kind, TokenKind::IntegerLiteral | TokenKind::FloatLiteral)
+                matches!(
+                    t.kind,
+                    TokenKind::BigintLiteral | TokenKind::IntegerLiteral | TokenKind::FloatLiteral
+                )
             })
         {
             return true;
@@ -6470,8 +6537,61 @@ impl<'a> Parser<'a> {
 /// Parse tokens into a green tree.
 ///
 /// Returns the green tree and any parse errors encountered.
+/// Emit a `SyntaxHint` event for any adjacent token pair that visually
+/// resembles a bigint literal but isn't a valid one — `42N` (uppercase suffix),
+/// `42.5n`, `42.5N` (float-with-suffix). The lexer splits these into two
+/// tokens (e.g. `IntegerLiteral("42")` + `Word("N")`) and the user gets a
+/// confusing downstream error otherwise.
+///
+/// Adjacency is checked via source-range endpoints (no intervening whitespace
+/// or comment trivia) so `42 N` or `42.5 n` (with a separator) don't fire.
+fn scan_malformed_bigint_literals(tokens: &[Token], events: &mut Vec<Event>) {
+    for window in tokens.windows(2) {
+        let (a, b) = (&window[0], &window[1]);
+        if b.kind != TokenKind::Word {
+            continue;
+        }
+        if a.span.range.end() != b.span.range.start() {
+            // Separated by whitespace / comment trivia — not "stuck together".
+            continue;
+        }
+        let combined_span = baml_base::Span {
+            file_id: a.span.file_id,
+            range: TextRange::new(a.span.range.start(), b.span.range.end()),
+        };
+        match (a.kind, b.text.as_str()) {
+            (TokenKind::IntegerLiteral, "N") => {
+                events.push(Event::SyntaxHint {
+                    message: format!(
+                        "bigint literal suffix must be lowercase 'n' — did you mean `{}n`?",
+                        a.text
+                    ),
+                    span: combined_span,
+                });
+            }
+            (TokenKind::FloatLiteral, "n" | "N") => {
+                events.push(Event::SyntaxHint {
+                    message: format!(
+                        "bigint literals are integer-only — `{}` is not a valid bigint",
+                        format_args!("{}{}", a.text, b.text)
+                    ),
+                    span: combined_span,
+                });
+            }
+            _ => {}
+        }
+    }
+}
+
 fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Vec<ParseError>) {
     let mut parser = Parser::new(tokens);
+
+    // Pre-scan for malformed bigint-shaped literals — adjacent tokens that
+    // *look* like a bigint to the user but the lexer split apart. Emits
+    // `SyntaxHint` events so the diagnostics show alongside other parse
+    // errors. Runs before structural parsing so the hints aren't lost if the
+    // surrounding code has additional errors.
+    scan_malformed_bigint_literals(tokens, &mut parser.events);
 
     parser.start_node(SyntaxKind::SOURCE_FILE);
 
@@ -6572,6 +6692,67 @@ mod tests {
             errors.is_empty(),
             "expected no parse errors, got: {errors:#?}"
         );
+    }
+
+    fn assert_diag_message(errors: &[ParseError], needle: &str) {
+        let has = errors.iter().any(|e| match e {
+            ParseError::InvalidSyntax { message, .. } => message.contains(needle),
+            _ => false,
+        });
+        assert!(
+            has,
+            "expected diagnostic containing {needle:?}, got: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn diagnoses_bigint_with_uppercase_n_suffix() {
+        // `42N` lexes as `[Integer, Word]`. Without the scan, the user sees
+        // no specific guidance about the wrong-case suffix.
+        let source = "function main() -> bigint { 42N }";
+        let (_root, errors) = parse_source(source);
+        assert_diag_message(&errors, "bigint literal suffix must be lowercase 'n'");
+        assert_diag_message(&errors, "did you mean `42n`?");
+    }
+
+    #[test]
+    fn diagnoses_float_with_bigint_suffix() {
+        // `42.5n` lexes as `[Float, Word("n")]`.
+        let source = "function main() -> bigint { 42.5n }";
+        let (_root, errors) = parse_source(source);
+        assert_diag_message(&errors, "bigint literals are integer-only");
+        assert_diag_message(&errors, "`42.5n` is not a valid bigint");
+    }
+
+    #[test]
+    fn diagnoses_float_with_uppercase_bigint_suffix() {
+        let source = "function main() -> bigint { 42.5N }";
+        let (_root, errors) = parse_source(source);
+        assert_diag_message(&errors, "bigint literals are integer-only");
+    }
+
+    #[test]
+    fn accepts_separated_integer_and_word() {
+        // `42 N` is a normal integer followed by an identifier — no diagnostic.
+        let source = "function main(x N) -> int { 42 }";
+        let (_root, errors) = parse_source(source);
+        let has_bigint_diag = errors.iter().any(|e| match e {
+            ParseError::InvalidSyntax { message, .. } => {
+                message.contains("bigint literal suffix") || message.contains("integer-only")
+            }
+            _ => false,
+        });
+        assert!(
+            !has_bigint_diag,
+            "should not emit bigint-shape diagnostic for separated tokens, got: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn accepts_valid_bigint_literal() {
+        let source = "function main() -> bigint { 42n }";
+        let (_root, errors) = parse_source(source);
+        assert_no_errors(&errors);
     }
 
     #[test]
@@ -8602,5 +8783,159 @@ type Searcher = (query: string, max_results?: int) -> int
         assert!(optional_param.children_with_tokens().any(
             |it| matches!(it, rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::QUESTION)
         ));
+    }
+
+    // ============ let-else ============
+
+    #[test]
+    fn let_else_basic_parses() {
+        // `let Pattern = scrutinee else { ... };` — refutable binding with a
+        // diverging else clause. The LET_STMT should carry both an EQUALS
+        // initializer and a trailing KW_ELSE + BLOCK_EXPR.
+        let source = r#"
+function f(r: int | string) -> int {
+  let v: int = r else { return 0; };
+  v
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let let_stmt = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::LET_STMT)
+            .expect("expected LET_STMT");
+        let has_else = let_stmt.children_with_tokens().any(
+            |elem| matches!(elem, rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::KW_ELSE),
+        );
+        assert!(has_else, "LET_STMT should have a KW_ELSE token");
+        let block_count = let_stmt
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
+            .count();
+        assert_eq!(
+            block_count, 1,
+            "LET_STMT should have one BLOCK_EXPR (the else body)"
+        );
+    }
+
+    #[test]
+    fn let_else_rejects_else_if() {
+        // `let X = y else if z { ... }` — `else if` is meaningless without a
+        // value being produced (unlike `if let`). Reject at parse time.
+        let source = r#"
+function f(r: int | string) -> int {
+  let v: int = r else if true { return 0; };
+  v
+}
+"#;
+        let (_, errors) = parse_source(source);
+        assert!(
+            !errors.is_empty(),
+            "expected parse error for `let ... else if ...`"
+        );
+    }
+
+    #[test]
+    fn let_else_rejected_in_watch_let() {
+        // `watch let X = y else { ... };` — combining watched bindings with
+        // let-else divergence is rejected at parse time.
+        let source = r#"
+function f(r: int | string) -> int {
+  watch let v: int = r else { return 0; };
+  v
+}
+"#;
+        let (_, errors) = parse_source(source);
+        assert!(
+            !errors.is_empty(),
+            "expected parse error for `watch let ... else {{ ... }}`"
+        );
+    }
+
+    #[test]
+    fn let_else_destructure_pattern_parses() {
+        // `let Class { f } = expr else { ... };` — destructure pattern with
+        // an else branch; verifies parser handles the structural pattern in
+        // combination with the trailing else block.
+        let source = r#"
+class User { name string }
+
+function f(u: User) -> string {
+  let User { name } = u else { return ""; };
+  name
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let let_stmt = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::LET_STMT)
+            .expect("expected LET_STMT");
+        let has_destructure = let_stmt
+            .descendants()
+            .any(|n| n.kind() == SyntaxKind::DESTRUCTURE_PATTERN);
+        assert!(has_destructure, "should contain a destructure pattern");
+        let has_else = let_stmt.children_with_tokens().any(
+            |elem| matches!(elem, rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::KW_ELSE),
+        );
+        assert!(has_else, "LET_STMT should have a KW_ELSE token");
+    }
+
+    #[test]
+    fn let_else_accepted_in_c_style_for_init() {
+        // C-style `for (let i = 0; cond; update)` accepts a let-else in the
+        // init slot. Makes the loop unreachable (the else diverges), which
+        // is silly but not a parse error — same kind of dead code we
+        // already allow elsewhere.
+        let source = r#"
+function f() -> int {
+  for (let i: int = 0 else { return 0; }; i < 3; i += 1) {
+    let _ = i;
+  }
+  0
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let for_expr = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FOR_EXPR)
+            .expect("expected FOR_EXPR");
+        let let_stmt = for_expr
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::LET_STMT)
+            .expect("for-init should expose a LET_STMT");
+        let has_else = let_stmt.children_with_tokens().any(
+            |elem| matches!(elem, rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::KW_ELSE),
+        );
+        assert!(has_else, "for-init LET_STMT should carry the else branch");
+    }
+
+    #[test]
+    fn let_without_else_unchanged() {
+        // Regression: plain `let x = …;` continues to parse with no else
+        // sibling — the new else handling must not turn surrounding tokens
+        // into a phantom else block.
+        let source = r#"
+function f() -> int {
+  let x: int = 1;
+  x
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let let_stmt = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::LET_STMT)
+            .expect("expected LET_STMT");
+        let block_count = let_stmt
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
+            .count();
+        assert_eq!(block_count, 0, "plain let-stmt should have no BLOCK_EXPR");
     }
 }

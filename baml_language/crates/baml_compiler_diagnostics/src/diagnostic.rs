@@ -69,6 +69,13 @@ pub enum DiagnosticId {
     RefutablePatternInLet,
     /// `if let` pattern that always matches — the `else` branch is dead.
     IrrefutablePatternInIfLet,
+    /// `let … else` whose else block has a non-`!` type. The else must
+    /// diverge (return / throw / break / continue / panic / infinite loop)
+    /// so that fall-through past the binding is unreachable.
+    LetElseMustDiverge,
+    /// `let … else` pattern that covers every value — the else branch is
+    /// dead. Suggest replacing with a plain `let` binding.
+    IrrefutablePatternInLetElse,
     DuplicateAttribute,
     UnknownAttribute,
     InvalidAttributeContext,
@@ -286,6 +293,8 @@ impl DiagnosticId {
             DiagnosticId::DuplicateBinding => "E0094",
             DiagnosticId::RefutablePatternInLet => "E0111",
             DiagnosticId::IrrefutablePatternInIfLet => "E0112",
+            DiagnosticId::LetElseMustDiverge => "E0113",
+            DiagnosticId::IrrefutablePatternInLetElse => "E0114",
             DiagnosticId::DuplicateAttribute => "E0014",
             DiagnosticId::UnknownAttribute => "E0015",
             DiagnosticId::InvalidAttributeContext => "E0016",

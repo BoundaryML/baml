@@ -318,8 +318,8 @@ impl BexHeap {
                     instance.fields.len(),
                     class.fields.len()
                 );
-                for value in &instance.fields {
-                    self.debug_assert_valid_value(value);
+                for slot in &instance.fields {
+                    self.debug_assert_valid_value(&slot.load());
                 }
             }
             Object::Variant(variant) => {
@@ -359,12 +359,13 @@ impl BexHeap {
                 self.debug_assert_valid_value(&bm.receiver);
             }
             Object::Cell(cell) => {
-                self.debug_assert_valid_value(&cell.value);
+                self.debug_assert_valid_value(&cell.load());
             }
             Object::Function(_)
             | Object::Class(_)
             | Object::Enum(_)
             | Object::String(_)
+            | Object::Bigint(_)
             | Object::Uint8Array(_)
             | Object::RustData(_)
             | Object::Collector(_)

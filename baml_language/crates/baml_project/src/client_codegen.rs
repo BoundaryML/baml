@@ -518,6 +518,7 @@ fn convert_tir_leaf(
     match ty {
         // Primitives
         TirTy::Primitive(PrimitiveType::Int, _) => cg::Ty::Int,
+        TirTy::Primitive(PrimitiveType::Bigint, _) => cg::Ty::Bigint,
         TirTy::Primitive(PrimitiveType::Float, _) => cg::Ty::Float,
         TirTy::Primitive(PrimitiveType::String, _) => cg::Ty::String,
         TirTy::Primitive(PrimitiveType::Bool, _) => cg::Ty::Bool,

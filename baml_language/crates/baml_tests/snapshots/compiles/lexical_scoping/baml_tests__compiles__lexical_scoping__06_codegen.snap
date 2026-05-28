@@ -38,9 +38,9 @@ function user.capture_before_after_shadow() -> int {
     store_var _8
     load_var _6
     load_const 10
-    bin_op *
+    mul_int
     load_var _8
-    bin_op +
+    add_int
     return
 }
 
@@ -61,7 +61,7 @@ function user.for_loop_restores_outer() -> int {
     load_var __for_idx
     load_var _2
     call baml.Array.length
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L1
     jump L2
 
@@ -84,7 +84,7 @@ function user.for_loop_restores_outer() -> int {
 function user.initializer_uses_previous() -> int {
     load_const 1
     load_const 1
-    bin_op +
+    add_int
     return
 }
 
@@ -122,7 +122,7 @@ function user.same_scope_shadow() -> int {
 function user.shadow_param(x: int) -> int {
     load_var x
     load_const 1
-    bin_op +
+    add_int
     return
 }
 

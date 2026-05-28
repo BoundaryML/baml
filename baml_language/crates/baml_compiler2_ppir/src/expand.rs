@@ -287,6 +287,7 @@ pub fn expand_partial(ty: &PpirTy, ctx: &ExpandCtx<'_>) -> PpirTy {
     match ty {
         // Primitives/literals/never/opaque/enum → unchanged
         PpirTy::Int { .. }
+        | PpirTy::Bigint { .. }
         | PpirTy::Float { .. }
         | PpirTy::String { .. }
         | PpirTy::Bool { .. }
@@ -402,11 +403,13 @@ fn stream_expand_inner(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> (PpirTy,
 
     let (mut stream_type, default_when_pending, in_progress) = match ty {
         // Primitive/atomic types
-        PpirTy::Int { .. } | PpirTy::Float { .. } | PpirTy::Bool { .. } => (
-            ty.clone_without_attrs(),
-            DefaultWhenPending::PrependNull,
-            InProgress::NotAllowed,
-        ),
+        PpirTy::Int { .. } | PpirTy::Bigint { .. } | PpirTy::Float { .. } | PpirTy::Bool { .. } => {
+            (
+                ty.clone_without_attrs(),
+                DefaultWhenPending::PrependNull,
+                InProgress::NotAllowed,
+            )
+        }
         PpirTy::String { .. } => (
             PpirTy::String { attrs: d.clone() },
             DefaultWhenPending::PrependNull,

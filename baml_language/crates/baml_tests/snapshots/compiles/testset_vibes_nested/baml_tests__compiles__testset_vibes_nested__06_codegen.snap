@@ -17,10 +17,10 @@ function $init_test(registry: unknown) -> null {
     return
 }
 
-function user.$init_test_34(registry: testing.TestCollector) -> null {
+function user.$init_test_35(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "test"
-    make_closure .<lambda($init_test_34, 0)>, 0
+    make_closure .<lambda($init_test_35, 0)>, 0
     load_const null
     call testing.TestCollector.register_test_set
     pop 1
@@ -169,7 +169,7 @@ function user.Foo() -> string | image {
   L0:
     load_var i
     load_const 2
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L1
     jump L2
 

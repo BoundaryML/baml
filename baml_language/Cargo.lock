@@ -977,8 +977,9 @@ name = "baml_base"
 version = "0.0.0-beta"
 dependencies = [
  "ariadne",
+ "borsh",
+ "num-bigint",
  "salsa",
- "serde",
  "smol_str 0.3.6",
  "text-size",
 ]
@@ -1061,7 +1062,7 @@ dependencies = [
  "bex_events",
  "bex_events_native",
  "bex_vm_types",
- "bitcode",
+ "borsh",
  "clap",
  "clap-cargo",
  "codegen_python",
@@ -1107,6 +1108,7 @@ dependencies = [
  "baml_compiler_parser",
  "baml_compiler_syntax",
  "la-arena",
+ "num-bigint",
  "rowan 0.16.1",
  "rustc-hash 2.1.2",
  "smol_str 0.3.6",
@@ -1158,6 +1160,7 @@ dependencies = [
  "baml_type",
  "indexmap 2.14.0",
  "log",
+ "num-bigint",
  "rustc-hash 2.1.2",
  "salsa",
  "smol_str 0.3.6",
@@ -1188,9 +1191,11 @@ dependencies = [
  "baml_compiler2_hir",
  "baml_compiler2_ppir",
  "baml_compiler_diagnostics",
+ "baml_type",
  "baml_workspace",
  "indexmap 2.14.0",
  "la-arena",
+ "num-bigint",
  "rustc-hash 2.1.2",
  "salsa",
  "smol_str 0.3.6",
@@ -1276,9 +1281,9 @@ dependencies = [
  "baml_type",
  "bex_engine",
  "bex_vm_types",
+ "borsh",
  "clap",
  "console",
- "serde",
  "serde_json",
  "sys_native",
  "tempfile",
@@ -1397,9 +1402,8 @@ dependencies = [
  "bex_engine",
  "bex_events",
  "bex_vm_types",
- "bitcode",
+ "borsh",
  "libsui",
- "serde",
  "sys_native",
  "tokio",
 ]
@@ -1470,6 +1474,7 @@ dependencies = [
  "indexmap 2.14.0",
  "insta",
  "la-arena",
+ "num-bigint",
  "prettyplease",
  "proc-macro2",
  "quote",
@@ -1491,7 +1496,8 @@ name = "baml_type"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
- "serde",
+ "borsh",
+ "num-bigint",
 ]
 
 [[package]]
@@ -1561,6 +1567,7 @@ dependencies = [
  "indexmap 2.14.0",
  "insta",
  "log",
+ "num-bigint",
  "prost",
  "serde_json",
  "sys_llm",
@@ -1615,6 +1622,7 @@ dependencies = [
  "bex_resource_types",
  "bex_vm_types",
  "indexmap 2.14.0",
+ "num-bigint",
  "once_cell",
 ]
 
@@ -1628,6 +1636,7 @@ dependencies = [
  "bex_resource_types",
  "bex_vm_types",
  "indexmap 2.14.0",
+ "num-bigint",
  "parking_lot",
  "thiserror 2.0.18",
  "tokio",
@@ -1691,6 +1700,7 @@ dependencies = [
  "derive_more",
  "indexmap 2.14.0",
  "log",
+ "num-bigint",
  "ouroboros",
  "regex",
  "rowan 0.16.1",
@@ -1722,6 +1732,7 @@ dependencies = [
  "getrandom 0.2.17",
  "indexmap 2.14.0",
  "log",
+ "num-bigint",
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
@@ -1738,10 +1749,10 @@ dependencies = [
  "baml_builtins2_codegen",
  "baml_type",
  "bex_resource_types",
+ "borsh",
  "codspeed-divan-compat",
  "indexmap 2.14.0",
- "serde",
- "serde_json",
+ "num-bigint",
  "tokio",
  "tokio-util",
 ]
@@ -1760,30 +1771,6 @@ name = "bit-vec"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e764a1d40d510daf35e07be9eb06e75770908c27d411ee6c92109c9840eaaf7"
-
-[[package]]
-name = "bitcode"
-version = "0.6.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a6ed1b54d8dc333e7be604d00fa9262f4635485ffea923647b6521a5fff045d"
-dependencies = [
- "arrayvec",
- "bitcode_derive",
- "bytemuck",
- "glam",
- "serde",
-]
-
-[[package]]
-name = "bitcode_derive"
-version = "0.6.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "238b90427dfad9da4a9abd60f3ec1cdee6b80454bde49ed37f1781dd8e9dc7f9"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.117",
-]
 
 [[package]]
 name = "bitflags"
@@ -1858,8 +1845,23 @@ version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cfd1e3f8955a5d7de9fab72fc8373fade9fb8a703968cb200ae3dc6cf08e185a"
 dependencies = [
+ "borsh-derive",
  "bytes",
  "cfg_aliases",
+ "indexmap 2.14.0",
+]
+
+[[package]]
+name = "borsh-derive"
+version = "1.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bfcfdc083699101d5a7965e49925975f2f55060f94f9a05e7187be95d530ca59"
+dependencies = [
+ "once_cell",
+ "proc-macro-crate",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -1900,6 +1902,7 @@ dependencies = [
  "bex_project",
  "bex_resource_types",
  "indexmap 2.14.0",
+ "num-bigint",
  "prost",
  "prost-build",
  "protoc-bin-vendored",
@@ -3600,12 +3603,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "glam"
-version = "0.32.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f70749695b063ecbf6b62949ccccde2e733ec3ecbbd71d467dca4e5c6c97cca0"
-
-[[package]]
 name = "glob"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5222,6 +5219,8 @@ checksum = "a5e44f723f1133c9deac646763579fdb3ac745e418f2a7af9cd0c431da1f20b9"
 dependencies = [
  "num-integer",
  "num-traits",
+ "rand 0.8.6",
+ "serde",
 ]
 
 [[package]]

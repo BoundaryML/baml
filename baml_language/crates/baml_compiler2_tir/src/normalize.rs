@@ -62,6 +62,7 @@ pub fn find_recursive_aliases(
 enum StructuralTy {
     // Primitives
     Int,
+    Bigint,
     Float,
     String,
     Bool,
@@ -188,12 +189,17 @@ impl StructuralTy {
     }
 
     /// Equirecursive subtyping with co-inductive assumptions.
+    ///
+    /// Purely structural: there are no representation-changing coercions in the
+    /// subtype relation (`int` is not a subtype of `bigint` or `float`). The
+    /// only numeric widenings are representation-preserving literal-to-base
+    /// (`literal 1 <: int`, `1n <: bigint`).
     fn is_subtype_of(
         &self,
         other: &StructuralTy,
         assumptions: &mut HashSet<(StructuralTy, StructuralTy)>,
     ) -> bool {
-        // Co-inductive: if we've assumed this pair, it holds
+        // Co-inductive: if we've assumed this pair, it holds.
         let pair = (self.clone(), other.clone());
         if assumptions.contains(&pair) {
             return true;
@@ -294,14 +300,17 @@ impl StructuralTy {
                 types.iter().any(|t| inner.is_subtype_of(t, assumptions))
             }
 
-            // List covariance
+            // List invariance: element-wise structural subtyping. `int[]` is
+            // NOT a subtype of `bigint[]` (the element rule `int <: bigint` no
+            // longer exists). `never <: T` stays free, so empty lists
+            // (`list<never>`) remain assignable anywhere.
             (StructuralTy::List(inner1), StructuralTy::List(inner2)) => {
                 inner1.is_subtype_of(inner2, assumptions)
             }
 
-            // Map: covariant in both key and value.
-            //
-            // Keys use subtyping (not equality) so that:
+            // Map: invariant in both key and value. The relation is purely
+            // structural, so `map<string, int>` is not a subtype of
+            // `map<string, bigint>`. `never`/literal-key widening stays free:
             //   - map<never, T>   <: map<K, V>    (empty map is assignable anywhere)
             //   - map<"lit", T>   <: map<string, V>  (literal keys widen to string)
             //   - map<string, T>  <: map<string, V>  (same key type)
@@ -314,8 +323,17 @@ impl StructuralTy {
                 StructuralTy::Map { key: k2, value: v2 },
             ) => k1.is_subtype_of(k2, assumptions) && v1.is_subtype_of(v2, assumptions),
 
-            // Literal types are subtypes of their base types
+            // Numeric types do not widen across representations: `int` is
+            // neither a subtype of `bigint` (i64 vs heap BigInt) nor of `float`
+            // (i64 values past 2^53 are not exactly representable as f64). Write
+            // the target literal explicitly (`1n`, `1.0`), or rely on the
+            // `bigint × int` operators / the FFI boundary to convert at runtime.
+
+            // Literal types are subtypes of their (same-representation) base
+            // type only: `literal 1 <: int`, `1n <: bigint`. An int literal is
+            // NOT a subtype of `bigint` — write `1n`.
             (StructuralTy::Literal(LiteralValue::Int(_)), StructuralTy::Int) => true,
+            (StructuralTy::Literal(LiteralValue::Bigint(_)), StructuralTy::Bigint) => true,
             (StructuralTy::Literal(LiteralValue::Float(_)), StructuralTy::Float) => true,
             (StructuralTy::Literal(LiteralValue::String(_)), StructuralTy::String) => true,
             (StructuralTy::Literal(LiteralValue::Bool(_)), StructuralTy::Bool) => true,
@@ -323,7 +341,10 @@ impl StructuralTy {
             // EnumVariant(E, V) <: Enum(E)
             (StructuralTy::EnumVariant(e, _), StructuralTy::Enum(sup_e)) => e == sup_e,
 
-            // Function subtyping: contravariant params, covariant return
+            // Function subtyping: contravariant params, covariant return and
+            // throws. As everywhere, the relation is structural — there is no
+            // numeric coercion, so `fn() -> int` is not usable as
+            // `fn() -> bigint`, nor `fn(bigint)` as `fn(int)`.
             (
                 StructuralTy::Function {
                     params: params1,
@@ -372,6 +393,7 @@ impl StructuralFunctionParam {
     }
 }
 
+/// Subtype check for function parameter lists (contravariant).
 fn function_params_subtype(
     sub_params: &[StructuralFunctionParam],
     sup_params: &[StructuralFunctionParam],
@@ -498,6 +520,7 @@ fn normalize_impl(
     match ty {
         Ty::Primitive(p, _) => match p {
             PrimitiveType::Int => StructuralTy::Int,
+            PrimitiveType::Bigint => StructuralTy::Bigint,
             PrimitiveType::Float => StructuralTy::Float,
             PrimitiveType::String => StructuralTy::String,
             PrimitiveType::Bool => StructuralTy::Bool,
@@ -1432,6 +1455,9 @@ mod tests {
 
     #[test]
     fn test_int_not_subtype_of_float() {
+        // `Int <: Float` was removed entirely (lossy: i64 values past 2^53
+        // are not exactly representable as f64). The widening, if needed,
+        // must be explicit.
         let aliases = HashMap::new();
         assert!(!is_subtype_of(
             &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
@@ -1446,6 +1472,20 @@ mod tests {
     }
 
     #[test]
+    fn test_int_not_subtype_of_bigint() {
+        // `int` is not a subtype of `bigint`: the relation is purely
+        // structural (i64 and heap BigInt are different representations).
+        // Widening happens only at the `bigint × int` operators and the FFI
+        // boundary, never as an implicit move/subtype coercion.
+        let aliases = HashMap::new();
+        assert!(!is_subtype_of(
+            &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
+            &Ty::Primitive(PrimitiveType::Bigint, TyAttr::default()),
+            &aliases
+        ));
+    }
+
+    #[test]
     fn test_literal_widens() {
         let aliases = HashMap::new();
         // Fresh and Regular should both be subtypes of their base primitive
@@ -1454,9 +1494,16 @@ mod tests {
             &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
             &aliases
         ));
+        // `Literal(Int) <: Float` was removed (lossy past 2^53). The
+        // widening, if needed, must be explicit.
         assert!(is_subtype_of(
             &Ty::Literal(LiteralValue::Int(42), Freshness::Regular, TyAttr::default()),
             &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
+            &aliases
+        ));
+        assert!(!is_subtype_of(
+            &Ty::Literal(LiteralValue::Int(42), Freshness::Regular, TyAttr::default()),
+            &Ty::Primitive(PrimitiveType::Bigint, TyAttr::default()),
             &aliases
         ));
         assert!(!is_subtype_of(
@@ -1503,8 +1550,13 @@ mod tests {
 
     #[test]
     fn test_function_covariant_return() {
+        // Function return is covariant, but checked *coercion-free*: a function
+        // value has no boundary at which to widen its result, so the covariance
+        // uses coercion-free relations (`EnumVariant <: Enum`). The coercive
+        // `int → bigint` pair is rejected in both directions.
         let aliases = HashMap::new();
-        let f1 = Ty::Function {
+
+        let returns_literal_string = Ty::Function {
             generic_params: Vec::new(),
             generic_param_bounds: Vec::new(),
             params: vec![required_param(Ty::Primitive(
@@ -1521,7 +1573,7 @@ mod tests {
             }),
             attr: TyAttr::default(),
         };
-        let f2 = Ty::Function {
+        let returns_string = Ty::Function {
             generic_params: Vec::new(),
             generic_param_bounds: Vec::new(),
             params: vec![required_param(Ty::Primitive(
@@ -1534,14 +1586,79 @@ mod tests {
             }),
             attr: TyAttr::default(),
         };
-        assert!(is_subtype_of(&f1, &f2, &aliases));
-        assert!(!is_subtype_of(&f2, &f1, &aliases));
+        assert!(is_subtype_of(
+            &returns_literal_string,
+            &returns_string,
+            &aliases
+        ));
+        assert!(!is_subtype_of(
+            &returns_string,
+            &returns_literal_string,
+            &aliases
+        ));
+
+        let returns_variant = Ty::Function {
+            generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
+            params: vec![],
+            ret: Box::new(Ty::EnumVariant(
+                qn("Color"),
+                Name::new("Red"),
+                TyAttr::default(),
+            )),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        };
+        let returns_enum = Ty::Function {
+            generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
+            params: vec![],
+            ret: Box::new(Ty::Enum(qn("Color"), TyAttr::default())),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        };
+        assert!(is_subtype_of(&returns_variant, &returns_enum, &aliases));
+        assert!(!is_subtype_of(&returns_enum, &returns_variant, &aliases));
+
+        // `fn() -> int` is NOT usable as `fn() -> bigint`: there is no site to
+        // insert the `int → bigint` coercion on the returned value.
+        let returns_int = Ty::Function {
+            generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
+            params: vec![],
+            ret: Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        };
+        let returns_bigint = Ty::Function {
+            generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
+            params: vec![],
+            ret: Box::new(Ty::Primitive(PrimitiveType::Bigint, TyAttr::default())),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        };
+        assert!(!is_subtype_of(&returns_int, &returns_bigint, &aliases));
+        assert!(!is_subtype_of(&returns_bigint, &returns_int, &aliases));
     }
 
     #[test]
     fn test_function_contravariant_params() {
+        // Function params are contravariant, and — like the return position —
+        // checked coercion-free. A function accepting the wider `Enum` stands
+        // in for one accepting an `EnumVariant`. The coercive `int`/`bigint`
+        // pair is rejected in both directions.
         let aliases = HashMap::new();
-        let f1 = Ty::Function {
+
+        let accepts_string = Ty::Function {
             generic_params: Vec::new(),
             generic_param_bounds: Vec::new(),
             params: vec![required_param(Ty::Primitive(
@@ -1554,7 +1671,7 @@ mod tests {
             }),
             attr: TyAttr::default(),
         };
-        let f2 = Ty::Function {
+        let accepts_literal_string = Ty::Function {
             generic_params: Vec::new(),
             generic_param_bounds: Vec::new(),
             params: vec![required_param(Ty::Literal(
@@ -1568,8 +1685,74 @@ mod tests {
             }),
             attr: TyAttr::default(),
         };
-        assert!(is_subtype_of(&f1, &f2, &aliases));
-        assert!(!is_subtype_of(&f2, &f1, &aliases));
+        assert!(is_subtype_of(
+            &accepts_string,
+            &accepts_literal_string,
+            &aliases
+        ));
+        assert!(!is_subtype_of(
+            &accepts_literal_string,
+            &accepts_string,
+            &aliases
+        ));
+
+        let accepts_enum = Ty::Function {
+            generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
+            params: vec![required_param(Ty::Enum(qn("Color"), TyAttr::default()))],
+            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        };
+        let accepts_variant = Ty::Function {
+            generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
+            params: vec![required_param(Ty::EnumVariant(
+                qn("Color"),
+                Name::new("Red"),
+                TyAttr::default(),
+            ))],
+            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        };
+        assert!(is_subtype_of(&accepts_enum, &accepts_variant, &aliases));
+        assert!(!is_subtype_of(&accepts_variant, &accepts_enum, &aliases));
+
+        // `fn(bigint)` is NOT usable as `fn(int)`: the caller's `int` argument
+        // has no site at which to widen before reaching the `bigint` callee.
+        let accepts_bigint = Ty::Function {
+            generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
+            params: vec![required_param(Ty::Primitive(
+                PrimitiveType::Bigint,
+                TyAttr::default(),
+            ))],
+            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        };
+        let accepts_int = Ty::Function {
+            generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
+            params: vec![required_param(Ty::Primitive(
+                PrimitiveType::Int,
+                TyAttr::default(),
+            ))],
+            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        };
+        assert!(!is_subtype_of(&accepts_bigint, &accepts_int, &aliases));
+        assert!(!is_subtype_of(&accepts_int, &accepts_bigint, &aliases));
     }
 
     #[test]
@@ -1798,25 +1981,43 @@ mod tests {
     }
 
     #[test]
-    fn test_evolving_list_covariance() {
+    fn test_evolving_list_is_invariant() {
         let aliases = HashMap::new();
-        // EvolvingList(int) is not a subtype of List(float): int does not
-        // implicitly widen to float.
+        // `List`/`EvolvingList` are invariant. So `EvolvingList(int)` is NOT a
+        // subtype of `List(bigint)` — `int` is not a subtype of `bigint`
+        // anywhere, including inside containers.
         assert!(!is_subtype_of(
             &Ty::EvolvingList(
                 Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
                 TyAttr::default()
             ),
             &Ty::List(
-                Box::new(Ty::Primitive(PrimitiveType::Float, TyAttr::default())),
+                Box::new(Ty::Primitive(PrimitiveType::Bigint, TyAttr::default())),
                 TyAttr::default()
             ),
             &aliases
         ));
-        // EvolvingList(string) NOT <: List(int)
+        // EvolvingList(string) NOT <: List(int) — unrelated primitives.
         assert!(!is_subtype_of(
             &Ty::EvolvingList(
                 Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+                TyAttr::default()
+            ),
+            &Ty::List(
+                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
+                TyAttr::default()
+            ),
+            &aliases
+        ));
+        // Free widenings inside the container survive coercion-free
+        // recursion: a literal int element widens to its base type.
+        assert!(is_subtype_of(
+            &Ty::EvolvingList(
+                Box::new(Ty::Literal(
+                    LiteralValue::Int(1),
+                    Freshness::Fresh,
+                    TyAttr::default(),
+                )),
                 TyAttr::default()
             ),
             &Ty::List(
@@ -1960,10 +2161,11 @@ mod tests {
     }
 
     #[test]
-    fn test_map_value_covariance() {
+    fn test_map_invariant_no_int_to_float_value_widening() {
         let aliases = HashMap::new();
-        // map<string, int> is not a subtype of map<string, float>: int does not
-        // implicitly widen to float.
+        // `Map` is invariant — the value-type recursion is coercion-free.
+        // `int <: float` was removed entirely (as a lossy/unsound rule),
+        // so `map<string, int>` is **not** a subtype of `map<string, float>`.
         assert!(!is_subtype_of(
             &Ty::Map(
                 Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
@@ -1973,6 +2175,27 @@ mod tests {
             &Ty::Map(
                 Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
                 Box::new(Ty::Primitive(PrimitiveType::Float, TyAttr::default())),
+                TyAttr::default(),
+            ),
+            &aliases
+        ));
+    }
+
+    #[test]
+    fn test_map_invariant_no_int_to_bigint_value_widening() {
+        let aliases = HashMap::new();
+        // `Map` is invariant, and `int` is not a subtype of `bigint` anywhere
+        // (no implicit numeric widening), so `map<string, int>` is not a
+        // subtype of `map<string, bigint>`.
+        assert!(!is_subtype_of(
+            &Ty::Map(
+                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
+                TyAttr::default(),
+            ),
+            &Ty::Map(
+                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+                Box::new(Ty::Primitive(PrimitiveType::Bigint, TyAttr::default())),
                 TyAttr::default(),
             ),
             &aliases
@@ -2158,6 +2381,10 @@ mod tests {
 
     #[test]
     fn test_union_of_int_and_float_literals_not_subtype_of_float() {
+        // `Literal(Int) <: Float` was removed entirely (i64 → f64 is lossy
+        // past 2^53), so a union containing an int literal cannot widen to
+        // `Float` even via the structural Union-vs-T rule (which requires
+        // every member to be a subtype).
         let aliases = HashMap::new();
         let sub = Ty::Union(
             vec![

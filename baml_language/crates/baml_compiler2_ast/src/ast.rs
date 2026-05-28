@@ -49,6 +49,9 @@ pub enum TypeExpr {
     Int {
         attrs: Vec<RawAttribute>,
     },
+    Bigint {
+        attrs: Vec<RawAttribute>,
+    },
     Float {
         attrs: Vec<RawAttribute>,
     },
@@ -140,6 +143,7 @@ impl TypeExpr {
         match self {
             Self::Path { attrs, .. }
             | Self::Int { attrs }
+            | Self::Bigint { attrs }
             | Self::Float { attrs }
             | Self::String { attrs }
             | Self::Bool { attrs }
@@ -167,6 +171,7 @@ impl TypeExpr {
         match self {
             Self::Path { attrs, .. }
             | Self::Int { attrs }
+            | Self::Bigint { attrs }
             | Self::Float { attrs }
             | Self::String { attrs }
             | Self::Bool { attrs }
@@ -229,6 +234,7 @@ impl std::fmt::Display for TypeExpr {
                 Ok(())
             }
             TypeExpr::Int { .. } => write!(f, "int"),
+            TypeExpr::Bigint { .. } => write!(f, "bigint"),
             TypeExpr::Float { .. } => write!(f, "float"),
             TypeExpr::String { .. } => write!(f, "string"),
             TypeExpr::Bool { .. } => write!(f, "bool"),
@@ -779,6 +785,12 @@ pub enum Stmt {
         initializer: Option<ExprId>,
         is_watched: bool,
         origin: LetOrigin,
+        /// `let PATTERN = init else { … };` — refutable binding with a
+        /// diverging else clause. `Some` activates let-else semantics:
+        /// the pattern may be refutable, and the else expression is
+        /// required to have type `Ty::Never`. Pattern bindings flow into
+        /// the enclosing scope on a successful match.
+        else_branch: Option<ExprId>,
     },
     While {
         condition: ExprId,

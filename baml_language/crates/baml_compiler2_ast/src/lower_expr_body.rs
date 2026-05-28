@@ -204,6 +204,9 @@ pub(crate) fn lower_testset_block_node(
 /// Used for runner expressions that are simple literals or identifiers.
 fn lower_bare_token_expr(kind: SyntaxKind, text: &str) -> Expr {
     match kind {
+        SyntaxKind::BIGINT_LITERAL => {
+            Expr::Literal(Literal::Bigint(crate::parse_bigint_literal_token(text)))
+        }
         SyntaxKind::INTEGER_LITERAL => {
             if let Ok(v) = text.parse::<i64>() {
                 Expr::Literal(Literal::Int(v))
@@ -405,6 +408,10 @@ impl LoweringContext {
                 };
                 Some(self.alloc_expr(expr, span))
             }
+            SyntaxKind::BIGINT_LITERAL => {
+                let value = crate::parse_bigint_literal_token(token.text());
+                Some(self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span))
+            }
             SyntaxKind::INTEGER_LITERAL => {
                 let value = token.text().parse::<i64>().unwrap_or(0);
                 Some(self.alloc_expr(Expr::Literal(Literal::Int(value)), span))
@@ -565,6 +572,10 @@ impl LoweringContext {
                                 _ => Expr::Path(vec![Name::new(text)]),
                             };
                             self.alloc_expr(e, span)
+                        }
+                        SyntaxKind::BIGINT_LITERAL => {
+                            let value = crate::parse_bigint_literal_token(token.text());
+                            self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span)
                         }
                         SyntaxKind::INTEGER_LITERAL => {
                             let value = token.text().parse::<i64>().unwrap_or(0);
@@ -805,6 +816,16 @@ impl LoweringContext {
                             // First QUESTION sets a provisional op; second one confirms.
                             op = Some(BinaryOp::NullCoalesce);
                         }
+                        SyntaxKind::BIGINT_LITERAL => {
+                            let value = crate::parse_bigint_literal_token(token.text());
+                            let expr_id =
+                                self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span);
+                            if lhs.is_none() {
+                                lhs = Some(expr_id);
+                            } else {
+                                rhs = Some(expr_id);
+                            }
+                        }
                         SyntaxKind::INTEGER_LITERAL => {
                             let value = token.text().parse::<i64>().unwrap_or(0);
                             let expr_id = self.alloc_expr(Expr::Literal(Literal::Int(value)), span);
@@ -897,6 +918,12 @@ impl LoweringContext {
                     if scrutinee.is_none() {
                         let span = token.text_range();
                         match token.kind() {
+                            SyntaxKind::BIGINT_LITERAL => {
+                                let value = crate::parse_bigint_literal_token(token.text());
+                                scrutinee = Some(
+                                    self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span),
+                                );
+                            }
                             SyntaxKind::INTEGER_LITERAL => {
                                 let value = token.text().parse::<i64>().unwrap_or(0);
                                 scrutinee =
@@ -977,6 +1004,16 @@ impl LoweringContext {
                 rowan::NodeOrToken::Token(token) => {
                     let span = token.text_range();
                     match token.kind() {
+                        SyntaxKind::BIGINT_LITERAL => {
+                            let value = crate::parse_bigint_literal_token(token.text());
+                            let expr_id =
+                                self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span);
+                            if lhs.is_none() {
+                                lhs = Some(expr_id);
+                            } else {
+                                rhs = Some(expr_id);
+                            }
+                        }
                         SyntaxKind::INTEGER_LITERAL => {
                             let value = token.text().parse::<i64>().unwrap_or(0);
                             let expr_id = self.alloc_expr(Expr::Literal(Literal::Int(value)), span);
@@ -1037,6 +1074,11 @@ impl LoweringContext {
                         SyntaxKind::MINUS_MINUS => {
                             op = Some(UnaryOp::Neg);
                             double_op = true;
+                        }
+                        SyntaxKind::BIGINT_LITERAL => {
+                            let value = crate::parse_bigint_literal_token(token.text());
+                            operand =
+                                Some(self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span));
                         }
                         SyntaxKind::INTEGER_LITERAL => {
                             let value = token.text().parse::<i64>().unwrap_or(0);
@@ -1207,6 +1249,12 @@ impl LoweringContext {
                     if scrutinee.is_none() {
                         let span = token.text_range();
                         match token.kind() {
+                            SyntaxKind::BIGINT_LITERAL => {
+                                let value = crate::parse_bigint_literal_token(token.text());
+                                scrutinee = Some(
+                                    self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span),
+                                );
+                            }
                             SyntaxKind::INTEGER_LITERAL => {
                                 let value = token.text().parse::<i64>().unwrap_or(0);
                                 scrutinee =
@@ -1275,6 +1323,14 @@ impl LoweringContext {
                                             guard = Some(self.alloc_expr(e, range));
                                             break;
                                         }
+                                        SyntaxKind::BIGINT_LITERAL => {
+                                            let value = crate::parse_bigint_literal_token(t.text());
+                                            guard = Some(self.alloc_expr(
+                                                Expr::Literal(Literal::Bigint(value)),
+                                                t.text_range(),
+                                            ));
+                                            break;
+                                        }
                                         SyntaxKind::INTEGER_LITERAL => {
                                             let value = t.text().parse::<i64>().unwrap_or(0);
                                             guard = Some(self.alloc_expr(
@@ -1303,6 +1359,14 @@ impl LoweringContext {
                 rowan::NodeOrToken::Token(token) => match token.kind() {
                     SyntaxKind::FAT_ARROW => {
                         seen_fat_arrow = true;
+                    }
+                    SyntaxKind::BIGINT_LITERAL if seen_fat_arrow && body.is_none() => {
+                        let value = crate::parse_bigint_literal_token(token.text());
+                        body =
+                            Some(self.alloc_expr(
+                                Expr::Literal(Literal::Bigint(value)),
+                                token.text_range(),
+                            ));
                     }
                     SyntaxKind::INTEGER_LITERAL if seen_fat_arrow && body.is_none() => {
                         let value = token.text().parse::<i64>().unwrap_or(0);
@@ -1772,6 +1836,14 @@ impl LoweringContext {
                 },
                 rowan::NodeOrToken::Token(token) => match token.kind() {
                     SyntaxKind::FAT_ARROW => seen_fat_arrow = true,
+                    SyntaxKind::BIGINT_LITERAL if seen_fat_arrow && body.is_none() => {
+                        let value = crate::parse_bigint_literal_token(token.text());
+                        body =
+                            Some(self.alloc_expr(
+                                Expr::Literal(Literal::Bigint(value)),
+                                token.text_range(),
+                            ));
+                    }
                     SyntaxKind::INTEGER_LITERAL if seen_fat_arrow && body.is_none() => {
                         let value = token.text().parse::<i64>().unwrap_or(0);
                         body = Some(
@@ -1891,6 +1963,12 @@ impl LoweringContext {
         {
             match token.kind() {
                 SyntaxKind::KW_THROW => continue,
+                SyntaxKind::BIGINT_LITERAL => {
+                    let value = crate::parse_bigint_literal_token(token.text());
+                    return Some(
+                        self.alloc_expr(Expr::Literal(Literal::Bigint(value)), token.text_range()),
+                    );
+                }
                 SyntaxKind::INTEGER_LITERAL => {
                     let value = token.text().parse::<i64>().unwrap_or(0);
                     return Some(
@@ -2753,6 +2831,10 @@ impl LoweringContext {
                         };
                         return Some(self.alloc_expr(e, span));
                     }
+                    SyntaxKind::BIGINT_LITERAL => {
+                        let value = crate::parse_bigint_literal_token(token.text());
+                        return Some(self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span));
+                    }
                     SyntaxKind::INTEGER_LITERAL => {
                         let value = token.text().parse::<i64>().unwrap_or(0);
                         return Some(self.alloc_expr(Expr::Literal(Literal::Int(value)), span));
@@ -2788,6 +2870,10 @@ impl LoweringContext {
 
         let span = token.text_range();
         match token.kind() {
+            SyntaxKind::BIGINT_LITERAL => {
+                let value = crate::parse_bigint_literal_token(token.text());
+                Some(self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span))
+            }
             SyntaxKind::INTEGER_LITERAL => {
                 let value = token.text().parse::<i64>().unwrap_or(0);
                 Some(self.alloc_expr(Expr::Literal(Literal::Int(value)), span))
@@ -2812,19 +2898,23 @@ impl LoweringContext {
 
     fn lower_let_stmt(&mut self, node: &SyntaxNode, is_watched: bool) -> StmtId {
         // LET_STMT shape (post-pattern-rewrite):
-        //   KW_WATCH? KW_LET? PATTERN EQUALS <init-expr> SEMICOLON?
+        //   KW_WATCH? KW_LET? PATTERN EQUALS <init-expr> (KW_ELSE BLOCK_EXPR)? SEMICOLON?
         //
         // The pattern carries its own `: T` narrow as a Chain link, so all we
-        // do here is locate the PATTERN child and the initialiser child.
+        // do here is locate the PATTERN child, the initialiser child, and an
+        // optional trailing `else { … }` block for let-else.
         let mut pattern_id = None;
         let mut initializer = None;
+        let mut else_branch = None;
         let mut seen_equals = false;
+        let mut seen_else = false;
 
         for elem in node.children_with_tokens() {
             match elem {
                 rowan::NodeOrToken::Token(token) => match token.kind() {
                     SyntaxKind::EQUALS => seen_equals = true,
-                    _ if seen_equals && initializer.is_none() => {
+                    SyntaxKind::KW_ELSE => seen_else = true,
+                    _ if seen_equals && !seen_else && initializer.is_none() => {
                         if let Some(id) = self.try_lower_bare_token(&token) {
                             initializer = Some(id);
                         }
@@ -2836,8 +2926,10 @@ impl LoweringContext {
                         if child.kind() == SyntaxKind::PATTERN && pattern_id.is_none() {
                             pattern_id = Some(self.lower_pattern(&child));
                         }
-                    } else if initializer.is_none() {
+                    } else if !seen_else && initializer.is_none() {
                         initializer = Some(self.lower_expr(&child));
+                    } else if seen_else && else_branch.is_none() {
+                        else_branch = Some(self.lower_expr(&child));
                     }
                 }
             }
@@ -2861,6 +2953,7 @@ impl LoweringContext {
                 initializer,
                 is_watched,
                 origin,
+                else_branch,
             },
             node.text_range(),
         )
@@ -2879,6 +2972,12 @@ impl LoweringContext {
                     let span = token.text_range();
                     match token.kind() {
                         SyntaxKind::KW_RETURN | SyntaxKind::SEMICOLON => continue,
+                        SyntaxKind::BIGINT_LITERAL => {
+                            let value = crate::parse_bigint_literal_token(token.text());
+                            result =
+                                Some(self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span));
+                            break;
+                        }
                         SyntaxKind::INTEGER_LITERAL => {
                             let value = token.text().parse::<i64>().unwrap_or(0);
                             result =

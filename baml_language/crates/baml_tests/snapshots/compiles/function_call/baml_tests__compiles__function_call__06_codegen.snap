@@ -42,7 +42,7 @@ function user.Baz.to_json(self: Baz) -> baml.json.json {
 function user.Foo(x: int) -> int {
     load_var x
     load_const 1
-    bin_op +
+    add_int
     return
 }
 

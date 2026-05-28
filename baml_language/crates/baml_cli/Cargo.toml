@@ -33,7 +33,7 @@ bex_vm_types = { workspace = true }
 codegen_python = { workspace = true }
 sys_native = { workspace = true }
 anyhow = { workspace = true }
-bitcode = { workspace = true }
+borsh = { workspace = true }
 clap = { workspace = true, features = [ "color" ] }
 clap-cargo = { workspace = true }
 console = { workspace = true }

@@ -348,7 +348,7 @@ impl BexHeap {
             }
             Object::Instance(inst) => {
                 worklist.push(inst.class);
-                for value in &inst.fields {
+                for value in inst.field_values() {
                     if let Some(ptr) = value.as_object_ptr() {
                         worklist.push(ptr);
                     }
@@ -369,7 +369,7 @@ impl BexHeap {
                 }
             }
             Object::Cell(cell) => {
-                if let Some(ptr) = cell.value.as_object_ptr() {
+                if let Some(ptr) = cell.load().as_object_ptr() {
                     worklist.push(ptr);
                 }
             }
@@ -394,6 +394,7 @@ impl BexHeap {
             // stub, not a heap object) and a `Box<Ty>` (no `HeapPtr`s).
             Object::HostClosure(_) => {}
             Object::String(_)
+            | Object::Bigint(_)
             | Object::Uint8Array(_)
             | Object::Class(_)
             | Object::Enum(_)
@@ -476,8 +477,10 @@ impl BexHeap {
                 if let Some(&new_ptr) = forwarding.get(&inst.class) {
                     inst.class = new_ptr;
                 }
-                for value in &mut inst.fields {
-                    self.fixup_value(value, forwarding);
+                for slot in &inst.fields {
+                    let mut value = slot.load();
+                    self.fixup_value(&mut value, forwarding);
+                    slot.store(value);
                 }
             }
             Object::Closure(closure) => {
@@ -495,7 +498,9 @@ impl BexHeap {
                 self.fixup_value(&mut bm.receiver, forwarding);
             }
             Object::Cell(cell) => {
-                self.fixup_value(&mut cell.value, forwarding);
+                let mut value = cell.load();
+                self.fixup_value(&mut value, forwarding);
+                cell.store(value);
             }
             Object::Variant(var) => {
                 // Update enum pointer
@@ -529,6 +534,7 @@ impl BexHeap {
             // `add_references_to_worklist`.
             Object::HostClosure(_) => {}
             Object::String(_)
+            | Object::Bigint(_)
             | Object::Uint8Array(_)
             | Object::Class(_)
             | Object::Enum(_)
@@ -727,7 +733,7 @@ impl BexHeap {
                 worklist.extend(
                     inst.fields
                         .iter()
-                        .filter_map(Value::as_object_ptr)
+                        .filter_map(|slot| slot.load().as_object_ptr())
                         .filter(|ptr| self.generation_of(*ptr).is_young()),
                 );
             }
@@ -754,7 +760,7 @@ impl BexHeap {
                 }
             }
             Object::Cell(cell) => {
-                if let Some(ptr) = cell.value.as_object_ptr()
+                if let Some(ptr) = cell.load().as_object_ptr()
                     && self.generation_of(ptr).is_young()
                 {
                     worklist.push(ptr);
@@ -788,6 +794,7 @@ impl BexHeap {
             // `HostClosure` carries no heap references.
             Object::HostClosure(_) => {}
             Object::String(_)
+            | Object::Bigint(_)
             | Object::Uint8Array(_)
             | Object::Class(_)
             | Object::Enum(_)
@@ -1127,11 +1134,11 @@ mod tests {
 
         let class_ptr = heap.compile_time_ptr(0);
         // Instance has 3 fields but class expects 1 — should panic on verify
-        let _bad_instance = tlab.alloc(Object::Instance(bex_vm_types::types::Instance {
-            class: class_ptr,
-            class_type_args: vec![],
-            fields: vec![Value::int(1), Value::int(2), Value::int(3)],
-        }));
+        let _bad_instance = tlab.alloc(Object::Instance(bex_vm_types::types::Instance::new(
+            class_ptr,
+            vec![],
+            vec![Value::int(1), Value::int(2), Value::int(3)],
+        )));
 
         let result = catch_unwind(AssertUnwindSafe(|| {
             heap.verify_quick();
@@ -1243,6 +1250,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "allocates ~15k objects to drive GC heuristics; runs for minutes under Miri and exercises collection policy, not unsafe memory paths"
+    )]
     fn test_gc_heuristics() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
@@ -1751,8 +1762,8 @@ mod tests {
             panic!("not instance")
         };
         assert_eq!(inst.fields.len(), 2);
-        assert!(inst.fields[0].is_object());
-        assert_eq!(inst.fields[1], Value::int(42));
+        assert!(inst.load_field(0).is_object());
+        assert_eq!(inst.load_field(1), Value::int(42));
 
         // Verify class is accessible through the instance
         let Object::Class(c) = (unsafe { inst.class.get() }) else {
@@ -1830,9 +1841,7 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         let inner = tlab.alloc_string("cell_content".to_string());
-        let cell_ptr = tlab.alloc(Object::Cell(Cell {
-            value: Value::object(inner),
-        }));
+        let cell_ptr = tlab.alloc(Object::Cell(Cell::new(Value::object(inner))));
 
         let roots = vec![cell_ptr];
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&roots) };
@@ -1841,7 +1850,7 @@ mod tests {
         let Object::Cell(c) = (unsafe { new_roots[0].get() }) else {
             panic!("not cell")
         };
-        let Some(inner_ptr) = c.value.as_object_ptr() else {
+        let Some(inner_ptr) = c.load().as_object_ptr() else {
             panic!("not object value")
         };
         let Object::String(s) = (unsafe { inner_ptr.get() }) else {
@@ -1857,9 +1866,7 @@ mod tests {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
-        let cell_ptr = tlab.alloc(Object::Cell(Cell {
-            value: Value::int(42),
-        }));
+        let cell_ptr = tlab.alloc(Object::Cell(Cell::new(Value::int(42))));
         let roots = vec![cell_ptr];
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&roots) };
 
@@ -1867,7 +1874,7 @@ mod tests {
         let Object::Cell(c) = (unsafe { new_roots[0].get() }) else {
             panic!("not cell")
         };
-        assert_eq!(c.value, Value::int(42));
+        assert_eq!(c.load(), Value::int(42));
     }
 
     #[test]
@@ -1975,13 +1982,13 @@ mod tests {
     fn test_gc_leaf_uint8array_preserved() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
-        let ptr = tlab.alloc(Object::Uint8Array(vec![1, 2, 3, 255]));
+        let ptr = tlab.alloc(Object::Uint8Array(vec![1, 2, 3, 255].into()));
 
         let (_, new_roots, _) = unsafe { heap.collect_garbage(&[ptr]) };
         let Object::Uint8Array(v) = (unsafe { new_roots[0].get() }) else {
             panic!("not uint8array")
         };
-        assert_eq!(v, &[1u8, 2, 3, 255]);
+        assert_eq!(v.lock().as_slice(), &[1u8, 2, 3, 255]);
     }
 
     #[test]
@@ -2213,9 +2220,9 @@ mod tests {
 
         // Create A (array placeholder) and B (cell pointing to A), then patch A -> B
         let a = tlab.alloc_array(vec![]); // placeholder, will be patched
-        let b = tlab.alloc(Object::Cell(bex_vm_types::types::Cell {
-            value: Value::object(a),
-        }));
+        let b = tlab.alloc(Object::Cell(bex_vm_types::types::Cell::new(Value::object(
+            a,
+        ))));
         // Patch A to reference B, forming a cycle
         unsafe {
             *a.get_mut() = Object::Array(vec![Value::object(b)].into());
@@ -2234,7 +2241,7 @@ mod tests {
         let Object::Cell(cell) = (unsafe { b_ptr.get() }) else {
             panic!("not cell b")
         };
-        let Some(a_back) = cell.value.as_object_ptr() else {
+        let Some(a_back) = cell.load().as_object_ptr() else {
             panic!("cell.value not object")
         };
         // The back-pointer from B should point to the new location of A
@@ -2392,9 +2399,7 @@ mod tests {
         }));
 
         // --- Container: Object::Cell ---
-        let cell_container = tlab.alloc(Object::Cell(Cell {
-            value: Value::object(leaf_for_cell),
-        }));
+        let cell_container = tlab.alloc(Object::Cell(Cell::new(Value::object(leaf_for_cell))));
 
         // --- Container: Object::UnscheduledFuture ---
         // After BEP-034 phase D′ the spawn case is all that's left;
@@ -2414,11 +2419,11 @@ mod tests {
             type_tag: 0,
             ty_attr: TyAttr::default(),
         })));
-        let instance_container = tlab.alloc(Object::Instance(Instance {
-            class: class_ptr,
-            class_type_args: vec![],
-            fields: vec![Value::object(leaf_string)],
-        }));
+        let instance_container = tlab.alloc(Object::Instance(Instance::new(
+            class_ptr,
+            vec![],
+            vec![Value::object(leaf_string)],
+        )));
 
         // --- Container: Object::Variant ---
         let enum_ptr = tlab.alloc(Object::Enum(Box::new(Enum {
@@ -2501,7 +2506,7 @@ mod tests {
         let Object::Cell(cell) = (unsafe { new_roots[3].get() }) else {
             panic!("new_roots[3] not Cell")
         };
-        let Some(cell_leaf) = cell.value.as_object_ptr() else {
+        let Some(cell_leaf) = cell.load().as_object_ptr() else {
             panic!("cell.value not Object")
         };
         let Object::String(s) = (unsafe { cell_leaf.get() }) else {
@@ -2523,7 +2528,7 @@ mod tests {
         let Object::Instance(inst) = (unsafe { new_roots[5].get() }) else {
             panic!("new_roots[5] not Instance")
         };
-        let Some(inst_leaf) = inst.fields.first().and_then(|v| v.as_object_ptr()) else {
+        let Some(inst_leaf) = inst.fields.first().and_then(|v| v.load().as_object_ptr()) else {
             panic!("instance.fields[0] not Object")
         };
         let Object::String(s) = (unsafe { inst_leaf.get() }) else {
@@ -2556,6 +2561,10 @@ mod tests {
 
     /// Verify `should_collect` returns `Some(Minor)` after 10,000+ allocations.
     #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "allocates 10k+ objects to cross the GC threshold; runs for minutes under Miri and exercises collection policy, not unsafe memory paths"
+    )]
     fn test_should_collect_minor_on_gen0_pressure() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
@@ -2570,6 +2579,10 @@ mod tests {
 
     /// Verify `should_collect` returns `Some(Minor)` when Gen1 exceeds its threshold.
     #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "allocates 10k+ objects to cross the GC threshold; runs for minutes under Miri and exercises collection policy, not unsafe memory paths"
+    )]
     fn test_should_collect_minor_on_gen1_pressure() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
@@ -2708,6 +2721,10 @@ mod tests {
     /// Verify that the `should_collect` Gen1 path triggers correctly once the
     /// threshold has been lowered by post-collection adaptation.
     #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "allocates 10k+ objects to cross the GC threshold; runs for minutes under Miri and exercises collection policy, not unsafe memory paths"
+    )]
     fn test_should_collect_minor_when_gen1_exceeds_adapted_threshold() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));

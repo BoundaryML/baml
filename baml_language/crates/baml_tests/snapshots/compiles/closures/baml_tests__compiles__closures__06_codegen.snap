@@ -266,7 +266,7 @@ function user.RangeCheck.is_valid(self: RangeCheck, n: int) -> bool {
     load_var n
     load_var self
     load_field .min
-    cmp_op >=
+    cmp_int_op >=
     jump_if_false L0
     pop 1
     load_var n

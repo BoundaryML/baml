@@ -48,7 +48,7 @@ fn format_value_recursive(vm: &BexVm, value: Value, depth: usize) -> Result<Stri
 
                 let class_name = class.name.clone();
                 let class_fields = class.fields.clone();
-                let fields = instance.fields.clone();
+                let fields: Vec<_> = instance.field_values().collect();
 
                 let mut result = format!("{class_name} {{\n");
                 let field_indent = "    ".repeat(depth + 1);
@@ -101,6 +101,7 @@ fn format_value_recursive(vm: &BexVm, value: Value, depth: usize) -> Result<Stri
                 Ok(result)
             }
 
+            Object::Bigint(bi) => Ok(bi.to_string()),
             Object::String(s) => Ok(format!("\"{s}\"")),
             Object::Enum(e) => Ok(e.name.display_name.to_string()),
             Object::Variant(variant) => {
@@ -136,7 +137,7 @@ fn format_value_recursive(vm: &BexVm, value: Value, depth: usize) -> Result<Stri
             }
             Object::BoundMethod(_) => Ok("<bound_method>".to_string()),
             Object::HostClosure(_) => Ok("<host_closure>".to_string()),
-            Object::Cell(cell) => Ok(format!("<cell {}>", cell.value)),
+            Object::Cell(cell) => Ok(format!("<cell {}>", cell.load())),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Ok("<sentinel>".to_string()),
         },

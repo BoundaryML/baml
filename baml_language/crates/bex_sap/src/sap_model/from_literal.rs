@@ -12,11 +12,12 @@ use crate::{
         types::{BamlValueWithFlags, DeserializerMeta},
     },
     sap_model::{
-        AnnotatedField, ArrayTy, AttrLiteral, BamlArray, BamlBool, BamlClass, BamlEnum, BamlFloat,
-        BamlInt, BamlMap, BamlNull, BamlPrimitive, BamlStreamState, BamlString, BamlValue,
-        BoolLiteralTy, BoolTy, ClassTy, EnumTy, EnumVariantTy, FloatTy, IntLiteralTy, IntTy,
-        LiteralTy, MapTy, MediaTy, NullTy, PrimitiveTy, StreamStateTy, StringLiteralTy, StringTy,
-        TyResolvedRef, TypeIdent, TypeName as _, TypeValue, UnionTy,
+        AnnotatedField, ArrayTy, AttrLiteral, BamlArray, BamlBigint, BamlBool, BamlClass, BamlEnum,
+        BamlFloat, BamlInt, BamlMap, BamlNull, BamlPrimitive, BamlStreamState, BamlString,
+        BamlValue, BigintLiteralTy, BigintTy, BoolLiteralTy, BoolTy, ClassTy, EnumTy,
+        EnumVariantTy, FloatTy, IntLiteralTy, IntTy, LiteralTy, MapTy, MediaTy, NullTy,
+        PrimitiveTy, StreamStateTy, StringLiteralTy, StringTy, TyResolvedRef, TypeIdent,
+        TypeName as _, TypeValue, UnionTy,
     },
 };
 
@@ -50,6 +51,27 @@ where
         match literal {
             AttrLiteral::Int(i) => Ok(BamlInt { value: *i }),
             _ => Err(ctx.error_internal("attribute literal must match the type: int")),
+        }
+    }
+}
+
+impl<'s, 'v, 't, N> FromLiteral<'s, 'v, 't, N> for BigintTy
+where
+    's: 'v,
+    N: TypeIdent,
+{
+    fn from_literal(
+        &'t self,
+        literal: &AttrLiteral<'t, N>,
+        ctx: &ParsingContext<'s, 'v, 't, N>,
+    ) -> Result<Self::Value, ParsingError> {
+        match literal {
+            AttrLiteral::Bigint(bi) => Ok(BamlBigint { value: bi.clone() }),
+            // `int` literals widen into `bigint`.
+            AttrLiteral::Int(i) => Ok(BamlBigint {
+                value: num_bigint::BigInt::from(*i),
+            }),
+            _ => Err(ctx.error_internal("attribute literal must match the type: bigint")),
         }
     }
 }
@@ -144,6 +166,7 @@ where
     ) -> Result<Self::Value, ParsingError> {
         match self {
             PrimitiveTy::Int(ty) => ty.from_literal(literal, ctx).map(BamlPrimitive::Int),
+            PrimitiveTy::Bigint(ty) => ty.from_literal(literal, ctx).map(BamlPrimitive::Bigint),
             PrimitiveTy::Float(ty) => ty.from_literal(literal, ctx).map(BamlPrimitive::Float),
             PrimitiveTy::String(ty) => ty.from_literal(literal, ctx).map(BamlPrimitive::String),
             PrimitiveTy::Bool(ty) => ty.from_literal(literal, ctx).map(BamlPrimitive::Bool),
@@ -164,6 +187,29 @@ where
     ) -> Result<Self::Value, ParsingError> {
         match literal {
             AttrLiteral::Int(i) if *i == self.0 => Ok(BamlInt { value: *i }),
+            _ => Err(ctx.error_internal(format!(
+                "attribute literal must match the type: {}",
+                self.type_name()
+            ))),
+        }
+    }
+}
+
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for BigintLiteralTy
+where
+    's: 'v,
+{
+    fn from_literal(
+        &'t self,
+        literal: &AttrLiteral<'t, N>,
+        ctx: &ParsingContext<'s, 'v, 't, N>,
+    ) -> Result<Self::Value, ParsingError> {
+        match literal {
+            AttrLiteral::Bigint(bi) if *bi == self.0 => Ok(BamlBigint { value: bi.clone() }),
+            // `int` literals matching the bigint literal value widen in.
+            AttrLiteral::Int(i) if num_bigint::BigInt::from(*i) == self.0 => Ok(BamlBigint {
+                value: self.0.clone(),
+            }),
             _ => Err(ctx.error_internal(format!(
                 "attribute literal must match the type: {}",
                 self.type_name()
@@ -224,6 +270,7 @@ where
         match self {
             LiteralTy::String(lit) => lit.from_literal(literal, ctx).map(BamlPrimitive::String),
             LiteralTy::Int(lit) => lit.from_literal(literal, ctx).map(BamlPrimitive::Int),
+            LiteralTy::Bigint(lit) => lit.from_literal(literal, ctx).map(BamlPrimitive::Bigint),
             LiteralTy::Bool(lit) => lit.from_literal(literal, ctx).map(BamlPrimitive::Bool),
         }
     }
@@ -565,6 +612,12 @@ where
                     .map(BamlPrimitive::Int)
                     .map(BamlValue::from)
             }
+            TyResolvedRef::Bigint(_) => {
+                const TY: &BigintTy = &BigintTy;
+                TY.from_literal(literal, ctx)
+                    .map(BamlPrimitive::Bigint)
+                    .map(BamlValue::from)
+            }
             TyResolvedRef::Float(_) => {
                 const TY: &FloatTy = &FloatTy;
                 TY.from_literal(literal, ctx)
@@ -607,6 +660,10 @@ where
             TyResolvedRef::LiteralInt(ty) => ty
                 .from_literal(literal, ctx)
                 .map(BamlPrimitive::Int)
+                .map(BamlValue::from),
+            TyResolvedRef::LiteralBigint(ty) => ty
+                .from_literal(literal, ctx)
+                .map(BamlPrimitive::Bigint)
                 .map(BamlValue::from),
             TyResolvedRef::LiteralBool(ty) => ty
                 .from_literal(literal, ctx)

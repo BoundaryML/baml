@@ -42,6 +42,11 @@ function serializeValue(val: unknown): InboundValue {
     }
     return { value: { $case: 'floatValue', floatValue: val } };
   }
+  if (typeof val === 'bigint') {
+    // Base-sixteen hex on the wire (no `0x` prefix, leading `-` for
+    // negatives) — matches Rust's `format!("{:x}")` / `parse_bytes(_, 16)`.
+    return { value: { $case: 'bigintValue', bigintValue: val.toString(16) } };
+  }
   if (typeof val === 'boolean') {
     return { value: { $case: 'boolValue', boolValue: val } };
   }

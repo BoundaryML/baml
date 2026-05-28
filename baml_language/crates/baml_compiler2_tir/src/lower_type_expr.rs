@@ -478,6 +478,7 @@ pub fn lower_type_expr_in_ns(
             }
         }
         TypeExpr::Int { .. } => Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
+        TypeExpr::Bigint { .. } => Ty::Primitive(PrimitiveType::Bigint, TyAttr::default()),
         TypeExpr::Float { .. } => Ty::Primitive(PrimitiveType::Float, TyAttr::default()),
         TypeExpr::String { .. } => Ty::Primitive(PrimitiveType::String, TyAttr::default()),
         TypeExpr::Bool { .. } => Ty::Primitive(PrimitiveType::Bool, TyAttr::default()),

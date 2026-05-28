@@ -1,0 +1,688 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function lambdas.$init_test_62(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "iife_single_param_returns_correct_value"
+    make_closure .<lambda($init_test_62, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "zero_param_lambda_returns_constant"
+    make_closure .<lambda($init_test_62, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "multi_param_lambda_returns_sum"
+    make_closure .<lambda($init_test_62, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "annotated_lambda_doubles_value"
+    make_closure .<lambda($init_test_62, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "inferred_return_type_lambda"
+    make_closure .<lambda($init_test_62, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "lambda_captures_local_variable"
+    make_closure .<lambda($init_test_62, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "lambda_captures_function_parameter"
+    make_closure .<lambda($init_test_62, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "lambda_captures_multiple_variables"
+    make_closure .<lambda($init_test_62, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "shared_cell_mutation_counter"
+    make_closure .<lambda($init_test_62, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "nested_lambda_transitive_capture"
+    make_closure .<lambda($init_test_62, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "iife_returns_closure_counter"
+    make_closure .<lambda($init_test_62, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "closure_in_map_with_captured_offset"
+    make_closure .<lambda($init_test_62, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "multiple_closures_share_cell"
+    make_closure .<lambda($init_test_62, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "multiple_closures_share_cell_deep_copy"
+    make_closure .<lambda($init_test_62, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "explicit_throwing_lambda_catches_error"
+    make_closure .<lambda($init_test_62, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "lambda_inside_catch_base_keeps_parameter_scope"
+    make_closure .<lambda($init_test_62, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "deep_nesting_three_levels"
+    make_closure .<lambda($init_test_62, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "lambda_captures_loop_variable_accumulation"
+    make_closure .<lambda($init_test_62, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "issue_e_method_resolution_different_types"
+    make_closure .<lambda($init_test_62, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "issue_f_shadowing_capture_correct_binding"
+    make_closure .<lambda($init_test_62, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "issue_f_shadowing_capture_independent_cells"
+    make_closure .<lambda($init_test_62, 20)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "issue_a_capture_read_after_mutation"
+    make_closure .<lambda($init_test_62, 21)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "issue_a_interleaved_capture_reads_writes"
+    make_closure .<lambda($init_test_62, 22)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "issue_d_capture_as_call_destination"
+    make_closure .<lambda($init_test_62, 23)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "issue_b_captured_variable_mutation_visible"
+    make_closure .<lambda($init_test_62, 24)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "issue_b_watch_let_captured_by_lambda"
+    make_closure .<lambda($init_test_62, 25)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "issue_b_watch_let_mutated_by_parent_and_lambda"
+    make_closure .<lambda($init_test_62, 26)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "lambda_param_shadows_annotated_outer_local"
+    make_closure .<lambda($init_test_62, 27)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function lambdas.lambdas_annotated_lambda_doubles() -> int {
+    load_const 21
+    make_closure .<lambda(lambdas_annotated_lambda_doubles, 0)>, 0
+    call_indirect
+    return
+}
+
+function lambdas.lambdas_captures_function_parameter() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const 21
+    store_deref ?1
+    load_var n
+    make_closure .<lambda(lambdas_captures_function_parameter, 0)>, 1
+    call_indirect
+    return
+}
+
+function lambdas.lambdas_captures_local_variable() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const 10
+    store_deref ?1
+    load_const 5
+    load_var base
+    make_closure .<lambda(lambdas_captures_local_variable, 0)>, 1
+    call_indirect
+    return
+}
+
+function lambdas.lambdas_captures_loop_variable_accumulation() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const 0
+    store_deref ?1
+    load_const 1
+    load_const 2
+    load_const 3
+    alloc_array 3
+    store_var _4
+    load_const 0
+    store_var __for_idx
+
+  L0:
+    load_var __for_idx
+    load_var _4
+    call baml.Array.length
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_deref ?1
+    return
+
+  L2:
+    load_var _4
+    load_var __for_idx
+    load_array_element
+    load_var sum
+    make_closure .<lambda(lambdas_captures_loop_variable_accumulation, 0)>, 1
+    call_indirect
+    pop 1
+    load_var __for_idx
+    load_const 1
+    add_int
+    store_var __for_idx
+    jump L0
+}
+
+function lambdas.lambdas_captures_multiple_variables() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_const 10
+    store_deref ?1
+    load_const 5
+    store_deref ?2
+    load_var a
+    load_var b
+    make_closure .<lambda(lambdas_captures_multiple_variables, 0)>, 2
+    call_indirect
+    return
+}
+
+function lambdas.lambdas_closure_in_map_with_captured_offset() -> int[] {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const 10
+    store_deref ?1
+    load_const 1
+    load_const 2
+    load_const 3
+    alloc_array 3
+    load_var offset
+    make_closure .<lambda(lambdas_closure_in_map_with_captured_offset, 0)>, 1
+    call baml.Array.map
+    return
+}
+
+function lambdas.lambdas_deep_nesting_three_levels() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const 1
+    store_deref ?1
+    load_const 10
+    load_var a
+    make_closure .<lambda(lambdas_deep_nesting_three_levels, 0)>, 1
+    call_indirect
+    return
+}
+
+function lambdas.lambdas_explicit_throwing_lambda_catches_error() -> int {
+    load_const 1
+    unary_op -
+    make_closure .<lambda(lambdas_explicit_throwing_lambda_catches_error, 0)>, 0
+    call_indirect
+    jump L2
+    load_var e
+    load_const "negative"
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    throw_if_panic
+    load_const 2
+    unary_op -
+    jump L2
+
+  L1:
+    load_const 1
+    unary_op -
+
+  L2:
+    return
+}
+
+function lambdas.lambdas_helper_42() -> int {
+    load_const 42
+    return
+}
+
+function lambdas.lambdas_iife_returns_closure_counter() -> int {
+    make_closure .<lambda(lambdas_iife_returns_closure_counter, 0)>, 0
+    call_indirect
+    store_var inc
+    load_var inc
+    call_indirect
+    pop 1
+    load_var inc
+    call_indirect
+    pop 1
+    load_var inc
+    call_indirect
+    return
+}
+
+function lambdas.lambdas_iife_single_param() -> int {
+    load_const 10
+    make_closure .<lambda(lambdas_iife_single_param, 0)>, 0
+    call_indirect
+    return
+}
+
+function lambdas.lambdas_inferred_return_type_lambda() -> int {
+    load_const 21
+    make_closure .<lambda(lambdas_inferred_return_type_lambda, 0)>, 0
+    call_indirect
+    return
+}
+
+function lambdas.lambdas_issue_a_capture_read_after_mutation() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const 0
+    store_deref ?1
+    load_var x
+    make_closure .<lambda(lambdas_issue_a_capture_read_after_mutation, 0)>, 1
+    store_var_load_var read_x
+    call_indirect
+    store_var before
+    load_var x
+    make_closure .<lambda(lambdas_issue_a_capture_read_after_mutation, 1)>, 1
+    call_indirect
+    pop 1
+    load_var read_x
+    call_indirect
+    store_var after
+    load_var before
+    load_const 10
+    mul_int
+    load_var after
+    add_int
+    return
+}
+
+function lambdas.lambdas_issue_a_interleaved_capture_reads_writes() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const 0
+    store_deref ?1
+    load_var x
+    make_closure .<lambda(lambdas_issue_a_interleaved_capture_reads_writes, 0)>, 1
+    store_var set_x
+    load_var x
+    make_closure .<lambda(lambdas_issue_a_interleaved_capture_reads_writes, 1)>, 1
+    store_var get_x
+    load_const 10
+    load_var set_x
+    call_indirect
+    pop 1
+    load_var get_x
+    call_indirect
+    store_var a
+    load_const 20
+    load_var set_x
+    call_indirect
+    pop 1
+    load_var get_x
+    call_indirect
+    store_var b
+    load_const 30
+    load_var set_x
+    call_indirect
+    pop 1
+    load_var get_x
+    call_indirect
+    store_var c
+    load_var a
+    load_var b
+    add_int
+    load_var c
+    add_int
+    return
+}
+
+function lambdas.lambdas_issue_b_captured_variable_mutation_visible() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const 0
+    store_deref ?1
+    load_const 42
+    load_var x
+    make_closure .<lambda(lambdas_issue_b_captured_variable_mutation_visible, 0)>, 1
+    call_indirect
+    pop 1
+    load_deref ?1
+    return
+}
+
+function lambdas.lambdas_issue_b_watch_let_captured_by_lambda() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const 0
+    store_deref ?1
+    load_const "x"
+    load_const null
+    watch x
+    load_var x
+    make_closure .<lambda(lambdas_issue_b_watch_let_captured_by_lambda, 0)>, 1
+    store_var_load_var inc
+    call_indirect
+    pop 1
+    load_var inc
+    call_indirect
+    pop 1
+    load_deref ?1
+    unwatch x
+    return
+}
+
+function lambdas.lambdas_issue_b_watch_let_mutated_by_parent_and_lambda() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const 0
+    store_deref ?1
+    load_const "counter"
+    load_const null
+    watch counter
+    load_const 1
+    store_deref ?1
+    load_var counter
+    make_closure .<lambda(lambdas_issue_b_watch_let_mutated_by_parent_and_lambda, 0)>, 1
+    call_indirect
+    pop 1
+    load_deref ?1
+    unwatch counter
+    return
+}
+
+function lambdas.lambdas_issue_d_capture_as_call_destination() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const 0
+    store_deref ?1
+    load_var x
+    make_closure .<lambda(lambdas_issue_d_capture_as_call_destination, 0)>, 1
+    call_indirect
+    return
+}
+
+function lambdas.lambdas_issue_e_method_resolution_different_types() -> int {
+    load_const 1
+    load_const 2
+    load_const 3
+    alloc_array 3
+    call baml.Array.length
+    store_var arr_len
+    load_const "hello"
+    make_closure .<lambda(lambdas_issue_e_method_resolution_different_types, 0)>, 0
+    call_indirect
+    store_var _6
+    load_var arr_len
+    load_const 10
+    mul_int
+    load_var _6
+    add_int
+    return
+}
+
+function lambdas.lambdas_issue_f_shadowing_capture_correct_binding() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_const 1
+    store_deref ?1
+    load_const 2
+    store_deref ?2
+    load_var x
+    make_closure .<lambda(lambdas_issue_f_shadowing_capture_correct_binding, 0)>, 1
+    call_indirect
+    store_var _6
+    load_var x
+    make_closure .<lambda(lambdas_issue_f_shadowing_capture_correct_binding, 1)>, 1
+    call_indirect
+    store_var _8
+    load_var _6
+    load_const 10
+    mul_int
+    load_var _8
+    add_int
+    return
+}
+
+function lambdas.lambdas_issue_f_shadowing_capture_independent_cells() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?3
+    make_cell
+    store_var ?3
+    load_const 10
+    store_deref ?1
+    load_var x
+    make_closure .<lambda(lambdas_issue_f_shadowing_capture_independent_cells, 0)>, 1
+    store_var inc_first
+    load_const 100
+    store_deref ?3
+    load_var inc_first
+    call_indirect
+    pop 1
+    load_var x
+    make_closure .<lambda(lambdas_issue_f_shadowing_capture_independent_cells, 1)>, 1
+    call_indirect
+    pop 1
+    load_var inc_first
+    call_indirect
+    return
+}
+
+function lambdas.lambdas_lambda_inside_catch_base_keeps_parameter_scope() -> int {
+    load_const 7
+    make_closure .<lambda(lambdas_lambda_inside_catch_base_keeps_parameter_scope, 0)>, 0
+    call_indirect
+    jump L0
+    load_var x
+    throw_if_panic
+    load_var x
+
+  L0:
+    return
+}
+
+function lambdas.lambdas_lambda_param_shadows_annotated_outer_local() -> int {
+    load_const "hi"
+    make_closure .<lambda(lambdas_lambda_param_shadows_annotated_outer_local, 0)>, 0
+    call_indirect
+    load_const 7
+    add_int
+    return
+}
+
+function lambdas.lambdas_multi_param_lambda() -> int {
+    load_const 20
+    load_const 22
+    make_closure .<lambda(lambdas_multi_param_lambda, 0)>, 0
+    call_indirect
+    return
+}
+
+function lambdas.lambdas_multiple_closures_share_cell() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const 0
+    store_deref ?1
+    load_var x
+    make_closure .<lambda(lambdas_multiple_closures_share_cell, 0)>, 1
+    store_var_load_var inc
+    call_indirect
+    pop 1
+    load_var inc
+    call_indirect
+    pop 1
+    load_var x
+    make_closure .<lambda(lambdas_multiple_closures_share_cell, 1)>, 1
+    call_indirect
+    return
+}
+
+function lambdas.lambdas_multiple_closures_share_cell_deep_copy() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const 0
+    store_deref ?1
+    load_var x
+    make_closure .<lambda(lambdas_multiple_closures_share_cell_deep_copy, 0)>, 1
+    store_var_load_var inc
+    call baml.deep_copy
+    store_var inc2
+    load_var x
+    make_closure .<lambda(lambdas_multiple_closures_share_cell_deep_copy, 1)>, 1
+    call baml.deep_copy
+    store_var dec2
+    load_var inc
+    call_indirect
+    pop 1
+    load_var inc
+    call_indirect
+    pop 1
+    load_var dec2
+    call_indirect
+    pop 1
+    load_var inc2
+    call_indirect
+    pop 1
+    load_var inc2
+    call_indirect
+    pop 1
+    load_var dec2
+    call_indirect
+    pop 1
+    load_deref ?1
+    return
+}
+
+function lambdas.lambdas_nested_lambda_transitive_capture() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const 1
+    store_deref ?1
+    load_const 10
+    load_var a
+    make_closure .<lambda(lambdas_nested_lambda_transitive_capture, 0)>, 1
+    call_indirect
+    return
+}
+
+function lambdas.lambdas_shared_cell_mutation_counter() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const 0
+    store_deref ?1
+    load_var count
+    make_closure .<lambda(lambdas_shared_cell_mutation_counter, 0)>, 1
+    store_var_load_var inc
+    call_indirect
+    pop 1
+    load_var inc
+    call_indirect
+    pop 1
+    load_deref ?1
+    return
+}
+
+function lambdas.lambdas_zero_param_lambda() -> int {
+    make_closure .<lambda(lambdas_zero_param_lambda, 0)>, 0
+    call_indirect
+    return
+}

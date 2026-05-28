@@ -2626,6 +2626,7 @@ fn jinja_type_from_type_expr_inner(
 
     match type_expr {
         TypeExpr::Int { .. } => Type::Int,
+        TypeExpr::Bigint { .. } => Type::Bigint,
         TypeExpr::Float { .. } => Type::Float,
         TypeExpr::String { .. } => Type::String,
         TypeExpr::Bool { .. } => Type::Bool,
@@ -3067,6 +3068,8 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::RestSubPatternNotSupported => DiagnosticId::TypeMismatch,
         TirTypeError::RefutablePatternInLet { .. } => DiagnosticId::RefutablePatternInLet,
         TirTypeError::IrrefutablePatternInIfLet => DiagnosticId::IrrefutablePatternInIfLet,
+        TirTypeError::LetElseMustDiverge { .. } => DiagnosticId::LetElseMustDiverge,
+        TirTypeError::IrrefutablePatternInLetElse => DiagnosticId::IrrefutablePatternInLetElse,
         TirTypeError::InvalidCatchBindingType { .. } => DiagnosticId::InvalidCatchBindingType,
         TirTypeError::ThrowsContractViolation { .. }
         | TirTypeError::CallbackThrowsContractViolation { .. } => {

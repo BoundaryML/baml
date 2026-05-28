@@ -14,13 +14,13 @@ use std::{
     mem::MaybeUninit,
     sync::{
         Arc,
-        atomic::{AtomicU8, Ordering},
+        atomic::{AtomicU8, AtomicU64, Ordering},
     },
 };
 
 use baml_type::Ty;
+use borsh::{BorshDeserialize, BorshSerialize};
 use indexmap::IndexMap;
-use serde::{Deserialize, Serialize};
 pub use tokio_util::sync::CancellationToken;
 
 use crate::{
@@ -48,7 +48,7 @@ pub mod type_tags {
 ///
 /// Note: At compile time, globals use `ConstValue` (with `ObjectIndex` for object refs).
 /// At load time (`BexEngine::new`), these are converted to `Value` (with `HeapPtr`).
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, BorshSerialize, BorshDeserialize)]
 pub struct Program {
     /// Object pool containing functions, classes, strings, etc.
     pub objects: ObjectPool,
@@ -109,7 +109,7 @@ pub struct Program {
 /// Metadata for building a client tree at runtime.
 ///
 /// Stored on `Program` during compilation, transferred to `SysOpContext` during engine construction.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, BorshSerialize, BorshDeserialize)]
 pub struct ClientBuildMeta {
     /// Provider type mapped to client type enum.
     pub client_type: ClientBuildType,
@@ -122,7 +122,7 @@ pub struct ClientBuildMeta {
 }
 
 /// Client type for build metadata (mirrors runtime `LlmClientType`).
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, BorshSerialize, BorshDeserialize)]
 pub enum ClientBuildType {
     #[default]
     Primitive,
@@ -131,7 +131,7 @@ pub enum ClientBuildType {
 }
 
 /// Retry policy metadata stored at compile time.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
 pub struct RetryPolicyMeta {
     pub max_retries: i64,
     pub initial_delay_ms: i64,
@@ -172,7 +172,7 @@ impl Program {
 /// reference. Each `OpErrorKind` variant maps to exactly one category via
 /// `OpErrorKind::category()`. Rich detail stays in `OpErrorKind`; this enum
 /// is purely for contract enforcement and compiler analysis.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub enum SysOpErrorCategory {
     Io,
     Timeout,
@@ -207,7 +207,7 @@ impl std::fmt::Display for SysOpErrorCategory {
 }
 
 /// Contract-level panic categories for `sys_op` panic contracts.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub enum SysOpPanicCategory {
     HostPanic,
 }
@@ -294,49 +294,38 @@ unsafe impl Send for FunctionKind {}
 #[allow(unsafe_code)]
 unsafe impl Sync for FunctionKind {}
 
-impl Serialize for FunctionKind {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        // Native pointers are runtime-only; serialize as NativeUnresolved.
-        match self {
-            Self::Native(_) => Self::NativeUnresolved.serialize(serializer),
-            _ => {
-                #[derive(Serialize)]
-                enum FunctionKindRef<'a> {
-                    Bytecode,
-                    SysOp(&'a SysOp),
-                    NativeUnresolved,
-                }
-                match self {
-                    Self::Bytecode => FunctionKindRef::Bytecode.serialize(serializer),
-                    Self::SysOp(op) => FunctionKindRef::SysOp(op).serialize(serializer),
-                    Self::NativeUnresolved => {
-                        FunctionKindRef::NativeUnresolved.serialize(serializer)
-                    }
-                    Self::Native(_) => unreachable!(),
-                }
-            }
-        }
+// Borsh proxy mirroring the previous serde-side shape — `Native(*const ())`
+// is runtime-only and must collapse to `NativeUnresolved` on the wire.
+#[derive(BorshSerialize, BorshDeserialize)]
+enum FunctionKindWire {
+    Bytecode,
+    SysOp(SysOp),
+    NativeUnresolved,
+}
+
+impl BorshSerialize for FunctionKind {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        let wire = match self {
+            Self::Bytecode => FunctionKindWire::Bytecode,
+            Self::SysOp(op) => FunctionKindWire::SysOp(*op),
+            Self::NativeUnresolved | Self::Native(_) => FunctionKindWire::NativeUnresolved,
+        };
+        wire.serialize(writer)
     }
 }
 
-impl<'de> Deserialize<'de> for FunctionKind {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        #[derive(Deserialize)]
-        enum FunctionKindDe {
-            Bytecode,
-            SysOp(SysOp),
-            NativeUnresolved,
-        }
-        match FunctionKindDe::deserialize(deserializer)? {
-            FunctionKindDe::Bytecode => Ok(Self::Bytecode),
-            FunctionKindDe::SysOp(op) => Ok(Self::SysOp(op)),
-            FunctionKindDe::NativeUnresolved => Ok(Self::NativeUnresolved),
-        }
+impl BorshDeserialize for FunctionKind {
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        Ok(match FunctionKindWire::deserialize_reader(reader)? {
+            FunctionKindWire::Bytecode => Self::Bytecode,
+            FunctionKindWire::SysOp(op) => Self::SysOp(op),
+            FunctionKindWire::NativeUnresolved => Self::NativeUnresolved,
+        })
     }
 }
 
 /// LLM-specific metadata for a function.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub enum FunctionMeta {
     Llm {
         prompt_template: String,
@@ -344,7 +333,7 @@ pub enum FunctionMeta {
     },
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub enum FunctionOrigin {
     UserDefined,
     Companion,
@@ -369,7 +358,7 @@ impl FunctionOrigin {
 }
 
 /// Represents any Baml function.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Function {
     /// Function name.
     pub name: String,
@@ -486,7 +475,7 @@ impl Function {
 }
 
 /// A field within a runtime class, carrying type and schema metadata.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct ClassField {
     pub name: String,
     /// Resolved field type with `TypeVar`s erased to `Ty::Void`.
@@ -508,7 +497,7 @@ pub struct ClassField {
 }
 
 /// Runtime class representation.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Class {
     /// Type identity: carries short name, module path, and display name.
     /// Use `name.display_name` for the display string (e.g. "baml.llm.OrchestrationStep" or "Person").
@@ -538,7 +527,7 @@ impl std::fmt::Display for Class {
 }
 
 /// Runtime instance representation.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Instance {
     /// Pointer to the class object in the heap.
     pub class: HeapPtr,
@@ -548,8 +537,34 @@ pub struct Instance {
     /// `enclosing_generic_params()`: index 0 = first class param, etc.
     pub class_type_args: Vec<baml_type::Ty>,
 
-    /// Fields are accessed by index. No string lookups.
-    pub fields: Vec<Value>,
+    /// Fields are accessed by index. No string lookups. Each slot is atomic so
+    /// racing field reads/writes across `spawn` fibers cannot become a Rust
+    /// data race.
+    pub fields: Vec<AtomicValueSlot>,
+}
+
+impl Instance {
+    pub fn new(class: HeapPtr, class_type_args: Vec<baml_type::Ty>, fields: Vec<Value>) -> Self {
+        Self {
+            class,
+            class_type_args,
+            fields: fields.into_iter().map(AtomicValueSlot::new).collect(),
+        }
+    }
+
+    #[inline]
+    pub fn load_field(&self, idx: usize) -> Value {
+        self.fields[idx].load()
+    }
+
+    #[inline]
+    pub fn store_field(&self, idx: usize, value: Value) {
+        self.fields[idx].store(value);
+    }
+
+    pub fn field_values(&self) -> impl Iterator<Item = Value> + '_ {
+        self.fields.iter().map(AtomicValueSlot::load)
+    }
 }
 
 impl std::fmt::Display for Instance {
@@ -559,7 +574,7 @@ impl std::fmt::Display for Instance {
 }
 
 /// A variant within a runtime enum, carrying schema metadata.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct EnumVariant {
     pub name: String,
     pub description: Option<String>,
@@ -568,7 +583,7 @@ pub struct EnumVariant {
 }
 
 /// Runtime enum representation.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Enum {
     /// Type identity: carries short name, module path, and display name.
     /// Use `name.display_name` for the display string.
@@ -594,7 +609,7 @@ impl std::fmt::Display for Enum {
 }
 
 /// Same as [`Instance`] but for enums.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Variant {
     /// Pointer to the enum object in the heap.
     pub enm: HeapPtr,
@@ -949,6 +964,62 @@ impl Default for Value {
     }
 }
 
+/// Atomic storage for a single [`Value`].
+///
+/// This is used for heap slots whose value may be read and written by multiple
+/// spawned VM fibers (`Cell.value` and `Instance.fields`). It preserves
+/// atomicity of the 8-byte tagged value and uses release/acquire ordering so a
+/// newly stored object pointer is safely published to a racing reader.
+#[repr(transparent)]
+pub struct AtomicValueSlot(AtomicU64);
+
+impl AtomicValueSlot {
+    #[inline]
+    pub const fn new(value: Value) -> Self {
+        Self(AtomicU64::new(value.bits()))
+    }
+
+    #[inline]
+    pub fn load(&self) -> Value {
+        Value(self.0.load(Ordering::Acquire))
+    }
+
+    #[inline]
+    pub fn store(&self, value: Value) {
+        self.0.store(value.bits(), Ordering::Release);
+    }
+}
+
+impl From<Value> for AtomicValueSlot {
+    fn from(value: Value) -> Self {
+        Self::new(value)
+    }
+}
+
+impl Clone for AtomicValueSlot {
+    fn clone(&self) -> Self {
+        Self::new(self.load())
+    }
+}
+
+impl std::fmt::Debug for AtomicValueSlot {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.load().fmt(f)
+    }
+}
+
+impl BorshSerialize for AtomicValueSlot {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        self.load().serialize(writer)
+    }
+}
+
+impl BorshDeserialize for AtomicValueSlot {
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        Value::deserialize_reader(reader).map(Self::new)
+    }
+}
+
 impl std::fmt::Debug for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.kind() {
@@ -979,8 +1050,8 @@ impl std::fmt::Display for Value {
 /// encoding. `Object` round-trip will fail because `HeapPtr` itself
 /// refuses to serialize — that matches the prior behavior (heap
 /// pointers are runtime-only).
-#[derive(Serialize, Deserialize)]
-enum ValueSerde {
+#[derive(BorshSerialize, BorshDeserialize)]
+enum ValueWire {
     OmittedArg,
     Null,
     Int(i64),
@@ -988,37 +1059,38 @@ enum ValueSerde {
     Object(HeapPtr),
 }
 
-impl Serialize for Value {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+impl BorshSerialize for Value {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         let proxy = match self.kind() {
-            ValueKind::Null => ValueSerde::Null,
-            ValueKind::OmittedArg => ValueSerde::OmittedArg,
-            ValueKind::Int(i) => ValueSerde::Int(i),
-            ValueKind::Bool(b) => ValueSerde::Bool(b),
-            ValueKind::Object(ptr) => ValueSerde::Object(ptr),
+            ValueKind::Null => ValueWire::Null,
+            ValueKind::OmittedArg => ValueWire::OmittedArg,
+            ValueKind::Int(i) => ValueWire::Int(i),
+            ValueKind::Bool(b) => ValueWire::Bool(b),
+            ValueKind::Object(ptr) => ValueWire::Object(ptr),
         };
-        proxy.serialize(serializer)
+        proxy.serialize(writer)
     }
 }
 
-impl<'de> Deserialize<'de> for Value {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        use serde::de::Error;
-        let proxy = ValueSerde::deserialize(deserializer)?;
+impl BorshDeserialize for Value {
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let proxy = ValueWire::deserialize_reader(reader)?;
         Ok(match proxy {
-            ValueSerde::Null => Value::NULL,
-            ValueSerde::OmittedArg => Value::OMITTED_ARG,
-            ValueSerde::Int(i) => Value::try_int(i).ok_or_else(|| {
-                D::Error::custom(format!(
-                    "Value::Int payload {i} is outside the i63 range [{}, {}]; \
-                     pre-tagged-pointer payloads with |value| >= 2^62 cannot be \
-                     loaded",
-                    Value::INT_MIN,
-                    Value::INT_MAX,
-                ))
+            ValueWire::Null => Value::NULL,
+            ValueWire::OmittedArg => Value::OMITTED_ARG,
+            ValueWire::Int(i) => Value::try_int(i).ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!(
+                        "Value::Int payload {i} is outside the i63 range [{}, {}]; \
+                         pre-tagged-pointer payloads with |value| >= 2^62 cannot be loaded",
+                        Value::INT_MIN,
+                        Value::INT_MAX,
+                    ),
+                )
             })?,
-            ValueSerde::Bool(b) => Value::bool(b),
-            ValueSerde::Object(ptr) => Value::object(ptr),
+            ValueWire::Bool(b) => Value::bool(b),
+            ValueWire::Object(ptr) => Value::object(ptr),
         })
     }
 }
@@ -1117,7 +1189,7 @@ include!(concat!(env!("OUT_DIR"), "/panics_generated.rs"));
 /// Self-contained type with no dependency on HIR or external types.
 /// Converted from HIR's `TestArgValue` during emission, and converted
 /// to `BexExternalValue` in the engine for function calls.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub enum TestArgValue {
     Null,
     Int(i64),
@@ -1136,7 +1208,7 @@ pub enum TestArgValue {
 }
 
 /// A compiled test case, ready for execution.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct TestCase {
     /// Test name (e.g., "`TestAddOne`").
     pub name: String,
@@ -1155,7 +1227,7 @@ pub struct TestCase {
 /// `LoadType` instruction reads the `TyTemplate` directly from the constant pool at execution
 /// time and substitutes type arguments from `frame.type_args` before allocating an
 /// `Object::Type` on the heap.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub enum ConstValue {
     OmittedArg,
     Null,
@@ -1246,54 +1318,54 @@ impl PartialEq for CollectorRef {
     }
 }
 
-/// Heap-mutable array container. Pairs a `Vec<Value>` with a
-/// [`LazyBiasedMutex`] so cross-fiber `spawn`-racing mutations don't
-/// corrupt the Vec's internal `(ptr, len, cap)` triple.
-///
-/// Held inline by `Object::Array`. Size: 24 (Vec) + 1 (mutex) + padding = 32 bytes.
+/// Heap-mutable structural container. Pairs a dynamic backing store with a
+/// [`LazyBiasedMutex`] so cross-fiber `spawn`-racing mutations don't corrupt
+/// internal container state such as a `Vec`'s `(ptr, len, cap)` triple or an
+/// `IndexMap`'s hash table.
 ///
 /// # Soundness
 ///
-/// The inner `Vec<Value>` is wrapped in [`UnsafeCell`] so that both
+/// The inner value is wrapped in [`UnsafeCell`] so that both
 /// [`Self::lock`] and [`Self::lock_mut`] can take `&self`. Without this,
-/// the mutator-side `BexVm::as_array_mut` would have to call
+/// the mutator-side `BexVm::as_array_mut` / `as_map_mut` would have to call
 /// `get_object_mut`, which fabricates `&'static mut Object` for slots
 /// that — by design — are shared across `spawn` fibers, violating
 /// Rust's aliasing rules even though the [`LazyBiasedMutex`] provides
 /// actual mutual exclusion at the memory level.
 ///
-/// All access to `data` happens through the lock guards, which is the
-/// only place we materialize `&Vec<Value>` / `&mut Vec<Value>`.
+/// All mutator access to `data` happens through the lock guards, which is the
+/// only place we materialize shared or mutable references to the backing store.
 #[derive(Debug)]
-pub struct ArrayContainer {
+pub struct LockedContainer<T> {
     mutex: LazyBiasedMutex,
-    data: UnsafeCell<Vec<Value>>,
+    data: UnsafeCell<T>,
 }
 
-// SAFETY: cross-thread access is serialized by `mutex`. The `UnsafeCell`
-// is necessary so callers can take the lock via `&self` (the only sound
-// option when the container is reachable through aliased `&Object` from
-// the shared heap).
-unsafe impl Sync for ArrayContainer {}
+// SAFETY: cross-thread access is serialized by `mutex`. The `UnsafeCell` is
+// necessary so callers can take the lock via `&self` (the only sound option
+// when the container is reachable through aliased `&Object` from the shared
+// heap). `T: Send` is required because the protected backing store can move
+// between threads behind the lock.
+unsafe impl<T: Send> Sync for LockedContainer<T> {}
 
-impl ArrayContainer {
-    pub fn new(data: Vec<Value>) -> Self {
+impl<T> LockedContainer<T> {
+    pub fn new(data: T) -> Self {
         Self {
             mutex: LazyBiasedMutex::new(),
             data: UnsafeCell::new(data),
         }
     }
 
-    /// Acquire the container's mutex and return a read guard. The lock
-    /// is released when the guard is dropped.
-    pub fn lock(&self) -> ArrayReadGuard<'_> {
+    /// Acquire the container's mutex and return a read guard. The lock is
+    /// released when the guard is dropped.
+    pub fn lock(&self) -> LockedReadGuard<'_, T> {
         let access = self.mutex.enter();
         // SAFETY: we just acquired the lock; no other thread can hold a
         // `&mut` to `data` (the only place `&mut data` is materialized
         // is `lock_mut`, which also takes the lock). Lifetime is tied
         // to `&self`, which is tied to the access guard.
         let data = unsafe { &*self.data.get() };
-        ArrayReadGuard {
+        LockedReadGuard {
             data,
             _access: access,
         }
@@ -1304,13 +1376,13 @@ impl ArrayContainer {
     /// `&mut self`) so callers can lock through a shared reference
     /// obtained from the shared heap (`get_object`, not the unsound
     /// `get_object_mut`).
-    pub fn lock_mut(&self) -> ArrayWriteGuard<'_> {
+    pub fn lock_mut(&self) -> LockedWriteGuard<'_, T> {
         let access = self.mutex.enter();
         // SAFETY: the access guard provides mutual exclusion against
         // all other lock holders for this container. The returned
-        // `&mut Vec<Value>` lifetime is bounded by the guard's lifetime.
+        // `&mut T` lifetime is bounded by the guard's lifetime.
         let data = unsafe { &mut *self.data.get() };
-        ArrayWriteGuard {
+        LockedWriteGuard {
             data,
             _access: access,
         }
@@ -1325,13 +1397,13 @@ impl ArrayContainer {
     ///
     /// - GC traversal while the stop-the-world barrier is engaged
     ///   (all mutator threads are parked).
-    /// - Host accessor invocations during a serialized FFI callback.
     /// - Single-threaded engine setup / init.
+    /// - Other code that has independently stopped all VM mutators.
     ///
     /// For any path where a `spawn`ed fiber may be running, use
     /// [`Self::lock`] instead.
     #[allow(clippy::missing_safety_doc)]
-    pub unsafe fn data_unchecked(&self) -> &Vec<Value> {
+    pub unsafe fn data_unchecked(&self) -> &T {
         // SAFETY: caller upholds the no-concurrent-writer contract.
         unsafe { &*self.data.get() }
     }
@@ -1345,36 +1417,14 @@ impl ArrayContainer {
     /// must hold the only `&mut ArrayContainer` (or otherwise
     /// guarantee no other readers).
     #[allow(clippy::missing_safety_doc, clippy::mut_from_ref)]
-    pub unsafe fn data_unchecked_mut(&self) -> &mut Vec<Value> {
+    pub unsafe fn data_unchecked_mut(&self) -> &mut T {
         // SAFETY: caller upholds the contract.
         unsafe { &mut *self.data.get() }
     }
-
-    /// Locked convenience: number of elements.
-    pub fn len(&self) -> usize {
-        self.lock().len()
-    }
-
-    /// Locked convenience: whether the array is empty.
-    pub fn is_empty(&self) -> bool {
-        self.lock().is_empty()
-    }
-
-    /// Locked convenience: copy the element at `idx`, or `None` if out
-    /// of bounds. `Value` is `Copy`, so no borrow is held past the
-    /// lock release.
-    pub fn get(&self, idx: usize) -> Option<Value> {
-        self.lock().get(idx).copied()
-    }
-
-    /// Locked convenience: snapshot the underlying `Vec<Value>`.
-    pub fn to_vec(&self) -> Vec<Value> {
-        self.lock().clone()
-    }
 }
 
-impl From<Vec<Value>> for ArrayContainer {
-    fn from(data: Vec<Value>) -> Self {
+impl<T> From<T> for LockedContainer<T> {
+    fn from(data: T) -> Self {
         Self::new(data)
     }
 }
@@ -1382,111 +1432,105 @@ impl From<Vec<Value>> for ArrayContainer {
 // Cloning takes the lock so a concurrent writer can't tear `data` mid-clone.
 // The contention state (the in-flight access counter) is not part of the
 // logical value of the source.
-impl Clone for ArrayContainer {
+impl<T: Clone> Clone for LockedContainer<T> {
     fn clone(&self) -> Self {
         let guard = self.lock();
         Self::new(guard.clone())
     }
 }
 
-/// Read guard for an [`ArrayContainer`]. Holds the container's
+impl<T> LockedContainer<Vec<T>> {
+    /// Locked convenience: number of elements.
+    pub fn len(&self) -> usize {
+        self.lock().len()
+    }
+
+    /// Locked convenience: whether the container is empty.
+    pub fn is_empty(&self) -> bool {
+        self.lock().is_empty()
+    }
+}
+
+impl<T: Copy> LockedContainer<Vec<T>> {
+    /// Locked convenience: copy the element at `idx`, or `None` if out of bounds.
+    pub fn get(&self, idx: usize) -> Option<T> {
+        self.lock().get(idx).copied()
+    }
+}
+
+impl<T: Clone> LockedContainer<Vec<T>> {
+    /// Locked convenience: snapshot the underlying `Vec<T>`.
+    pub fn to_vec(&self) -> Vec<T> {
+        self.lock().clone()
+    }
+}
+
+/// Read guard for a [`LockedContainer`]. Holds the container's
 /// [`LazyBiasedMutex`] for the duration of the guard's lifetime.
-pub struct ArrayReadGuard<'a> {
-    data: &'a Vec<Value>,
+pub struct LockedReadGuard<'a, T> {
+    data: &'a T,
     _access: crate::lazy_biased_mutex::AccessGuard<'a>,
 }
 
-impl std::ops::Deref for ArrayReadGuard<'_> {
-    type Target = Vec<Value>;
-    fn deref(&self) -> &Vec<Value> {
+impl<T> std::ops::Deref for LockedReadGuard<'_, T> {
+    type Target = T;
+    fn deref(&self) -> &T {
         self.data
     }
 }
 
-/// Write guard for an [`ArrayContainer`]. Holds the container's
+/// Write guard for a [`LockedContainer`]. Holds the container's
 /// [`LazyBiasedMutex`] for the duration of the guard's lifetime.
-pub struct ArrayWriteGuard<'a> {
-    data: &'a mut Vec<Value>,
+pub struct LockedWriteGuard<'a, T> {
+    data: &'a mut T,
     _access: crate::lazy_biased_mutex::AccessGuard<'a>,
 }
 
-impl std::ops::Deref for ArrayWriteGuard<'_> {
-    type Target = Vec<Value>;
-    fn deref(&self) -> &Vec<Value> {
+impl<T> std::ops::Deref for LockedWriteGuard<'_, T> {
+    type Target = T;
+    fn deref(&self) -> &T {
         self.data
     }
 }
 
-impl std::ops::DerefMut for ArrayWriteGuard<'_> {
-    fn deref_mut(&mut self) -> &mut Vec<Value> {
+impl<T> std::ops::DerefMut for LockedWriteGuard<'_, T> {
+    fn deref_mut(&mut self) -> &mut T {
         self.data
     }
 }
 
-/// Heap-mutable map container. Pairs an `IndexMap<String, Value>` with a
-/// [`LazyBiasedMutex`]. Boxed by `Object::Map` because `IndexMap` is
-/// already 72 bytes — inlining the mutex would push the Object variant
-/// past the 80-byte size cap.
+/// Heap-mutable array container.
 ///
-/// See [`ArrayContainer`] for the soundness rationale around `UnsafeCell`
-/// and `&self`-based locking.
-#[derive(Debug)]
-pub struct MapContainer {
-    mutex: LazyBiasedMutex,
-    data: UnsafeCell<IndexMap<String, Value>>,
+/// Held inline by `Object::Array`. Size: 24 (Vec) + 1 (mutex) + padding = 32 bytes.
+pub type ArrayContainer = LockedContainer<Vec<Value>>;
+pub type ArrayReadGuard<'a> = LockedReadGuard<'a, Vec<Value>>;
+pub type ArrayWriteGuard<'a> = LockedWriteGuard<'a, Vec<Value>>;
+
+/// Heap-mutable byte-array container. Same synchronization strategy as
+/// [`ArrayContainer`], but over a `Vec<u8>` backing store.
+pub type Uint8ArrayContainer = LockedContainer<Vec<u8>>;
+pub type Uint8ArrayReadGuard<'a> = LockedReadGuard<'a, Vec<u8>>;
+pub type Uint8ArrayWriteGuard<'a> = LockedWriteGuard<'a, Vec<u8>>;
+
+/// Heap-mutable map container. Pairs a boxed `IndexMap<String, Value>` with
+/// the generic [`LockedContainer`] lock/guard machinery.
+///
+/// `IndexMap` is 72 bytes before the lock, so storing it inline would push
+/// `Object` past its size cap. Storing only the backing map behind `Box<_>`
+/// keeps the container itself small while avoiding an extra indirection around
+/// the lock.
+pub type MapContainer = LockedContainer<Box<IndexMap<String, Value>>>;
+pub type MapReadGuard<'a> = LockedReadGuard<'a, Box<IndexMap<String, Value>>>;
+pub type MapWriteGuard<'a> = LockedWriteGuard<'a, Box<IndexMap<String, Value>>>;
+
+impl MapReadGuard<'_> {
+    /// Snapshot the underlying `IndexMap`.
+    pub fn to_index_map(&self) -> IndexMap<String, Value> {
+        self.as_ref().clone()
+    }
 }
 
-// SAFETY: as for `ArrayContainer` — cross-thread access is serialized by
-// `mutex`, and the `UnsafeCell` allows locking through `&self`.
-unsafe impl Sync for MapContainer {}
-
-impl MapContainer {
-    pub fn new(data: IndexMap<String, Value>) -> Self {
-        Self {
-            mutex: LazyBiasedMutex::new(),
-            data: UnsafeCell::new(data),
-        }
-    }
-
-    pub fn lock(&self) -> MapReadGuard<'_> {
-        let access = self.mutex.enter();
-        // SAFETY: lock acquired; see `ArrayContainer::lock`.
-        let data = unsafe { &*self.data.get() };
-        MapReadGuard {
-            data,
-            _access: access,
-        }
-    }
-
-    pub fn lock_mut(&self) -> MapWriteGuard<'_> {
-        let access = self.mutex.enter();
-        // SAFETY: lock acquired; see `ArrayContainer::lock_mut`.
-        let data = unsafe { &mut *self.data.get() };
-        MapWriteGuard {
-            data,
-            _access: access,
-        }
-    }
-
-    /// Unlocked accessor; same safety contract as
-    /// [`ArrayContainer::data_unchecked`].
-    ///
-    /// # Safety
-    /// See [`ArrayContainer::data_unchecked`].
-    #[allow(clippy::missing_safety_doc)]
-    pub unsafe fn data_unchecked(&self) -> &IndexMap<String, Value> {
-        // SAFETY: caller upholds the no-concurrent-writer contract.
-        unsafe { &*self.data.get() }
-    }
-
-    /// # Safety
-    /// See [`ArrayContainer::data_unchecked_mut`].
-    #[allow(clippy::missing_safety_doc, clippy::mut_from_ref)]
-    pub unsafe fn data_unchecked_mut(&self) -> &mut IndexMap<String, Value> {
-        // SAFETY: caller upholds the contract.
-        unsafe { &mut *self.data.get() }
-    }
-
+impl LockedContainer<Box<IndexMap<String, Value>>> {
     /// Locked convenience: number of entries.
     pub fn len(&self) -> usize {
         self.lock().len()
@@ -1504,50 +1548,13 @@ impl MapContainer {
 
     /// Locked convenience: snapshot the underlying `IndexMap`.
     pub fn to_index_map(&self) -> IndexMap<String, Value> {
-        self.lock().clone()
+        self.lock().to_index_map()
     }
 }
 
-impl From<IndexMap<String, Value>> for MapContainer {
+impl From<IndexMap<String, Value>> for LockedContainer<Box<IndexMap<String, Value>>> {
     fn from(data: IndexMap<String, Value>) -> Self {
-        Self::new(data)
-    }
-}
-
-impl Clone for MapContainer {
-    fn clone(&self) -> Self {
-        let guard = self.lock();
-        Self::new(guard.clone())
-    }
-}
-
-pub struct MapReadGuard<'a> {
-    data: &'a IndexMap<String, Value>,
-    _access: crate::lazy_biased_mutex::AccessGuard<'a>,
-}
-
-impl std::ops::Deref for MapReadGuard<'_> {
-    type Target = IndexMap<String, Value>;
-    fn deref(&self) -> &IndexMap<String, Value> {
-        self.data
-    }
-}
-
-pub struct MapWriteGuard<'a> {
-    data: &'a mut IndexMap<String, Value>,
-    _access: crate::lazy_biased_mutex::AccessGuard<'a>,
-}
-
-impl std::ops::Deref for MapWriteGuard<'_> {
-    type Target = IndexMap<String, Value>;
-    fn deref(&self) -> &IndexMap<String, Value> {
-        self.data
-    }
-}
-
-impl std::ops::DerefMut for MapWriteGuard<'_> {
-    fn deref_mut(&mut self) -> &mut IndexMap<String, Value> {
-        self.data
+        Self::new(Box::new(data))
     }
 }
 
@@ -1606,18 +1613,27 @@ pub enum Object {
     /// otherwise.
     String(String),
 
-    /// Byte array (uint8array).
-    Uint8Array(Vec<u8>),
+    /// Heap-allocated arbitrary-precision integer.
+    ///
+    /// `Value: Copy` so bigints must live on the heap behind an `Arc`. The
+    /// `Arc` lets multiple values share the same allocation (e.g. after a
+    /// `let y = x` assignment) without deep-copying the underlying digit slice.
+    Bigint(std::sync::Arc<num_bigint::BigInt>),
+
+    /// Byte array (uint8array). Wrapped in [`Uint8ArrayContainer`] so the
+    /// underlying `Vec<u8>` is protected by a [`LazyBiasedMutex`] against
+    /// racing mutation under `spawn`.
+    Uint8Array(Uint8ArrayContainer),
 
     /// List of values. Wrapped in [`ArrayContainer`] so the underlying
     /// `Vec<Value>` is protected by a [`LazyBiasedMutex`] against racing
     /// mutation under `spawn`.
     Array(ArrayContainer),
 
-    /// Map of values. Boxed because `MapContainer` is heavy (`IndexMap` +
-    /// mutex) and Map ops are less hot than Array ops; the indirection
-    /// keeps `Object` total size under 80 bytes.
-    Map(Box<MapContainer>),
+    /// Map of values. Wrapped in [`MapContainer`] so the underlying
+    /// `IndexMap` is protected by a [`LazyBiasedMutex`] against racing
+    /// mutation under `spawn`.
+    Map(MapContainer),
 
     /// Boxed 64-bit float. Floats are heap-allocated because `Value`
     /// itself is a single tagged 64-bit word with no inline encoding
@@ -1648,10 +1664,10 @@ const _: () = assert!(
     "Object enum size regression — expected <= 80 bytes"
 );
 
-// Custom serde for Object: RustData and Collector contain non-serializable
+// Custom borsh for Object: RustData and Collector contain non-serializable
 // trait objects (Arc<dyn Any>). They should never appear in a compiled Program.
-#[derive(Serialize, Deserialize)]
-enum ObjectSerde {
+#[derive(BorshSerialize, BorshDeserialize)]
+enum ObjectWire {
     Function(Box<Function>),
     Class(Box<Class>),
     Instance(Instance),
@@ -1661,6 +1677,17 @@ enum ObjectSerde {
     BoundMethod(BoundMethod),
     Cell(Cell),
     String(String),
+    // `Arc<BigInt>` isn't directly Borsh-derivable (and we want the same
+    // wire form `ConstValue::Bigint` uses), so the proxy holds the inner
+    // `BigInt` by value. `num_bigint::BigInt` has no native borsh impl, so
+    // route through `baml_base::core_types::borsh_bigint`.
+    Bigint(
+        #[borsh(
+            serialize_with = "baml_base::core_types::borsh_bigint::serialize",
+            deserialize_with = "baml_base::core_types::borsh_bigint::deserialize"
+        )]
+        num_bigint::BigInt,
+    ),
     Uint8Array(Vec<u8>),
     Array(Vec<Value>),
     Map(IndexMap<String, Value>),
@@ -1670,71 +1697,83 @@ enum ObjectSerde {
     Type(Box<baml_type::Ty>),
 }
 
-impl Serialize for Object {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+impl BorshSerialize for Object {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         let proxy = match self {
-            Self::Function(v) => ObjectSerde::Function(v.clone()),
-            Self::Class(v) => ObjectSerde::Class(v.clone()),
-            Self::Instance(v) => ObjectSerde::Instance(v.clone()),
-            Self::Enum(v) => ObjectSerde::Enum(v.clone()),
-            Self::Variant(v) => ObjectSerde::Variant(v.clone()),
-            Self::Closure(v) => ObjectSerde::Closure(v.clone()),
-            Self::BoundMethod(v) => ObjectSerde::BoundMethod(v.clone()),
-            Self::Cell(v) => ObjectSerde::Cell(v.clone()),
-            Self::String(v) => ObjectSerde::String(v.clone()),
-            Self::Uint8Array(v) => ObjectSerde::Uint8Array(v.clone()),
-            Self::Array(v) => ObjectSerde::Array(v.lock().clone()),
-            Self::Map(v) => ObjectSerde::Map(v.lock().clone()),
-            Self::Float(v) => ObjectSerde::Float(*v),
-            Self::Future(v) => ObjectSerde::Future(v.clone()),
-            Self::UnscheduledFuture(v) => ObjectSerde::UnscheduledFuture(v.clone()),
-            Self::Type(v) => ObjectSerde::Type(v.clone()),
+            Self::Function(v) => ObjectWire::Function(v.clone()),
+            Self::Class(v) => ObjectWire::Class(v.clone()),
+            Self::Instance(v) => ObjectWire::Instance(v.clone()),
+            Self::Enum(v) => ObjectWire::Enum(v.clone()),
+            Self::Variant(v) => ObjectWire::Variant(v.clone()),
+            Self::Closure(v) => ObjectWire::Closure(v.clone()),
+            Self::BoundMethod(v) => ObjectWire::BoundMethod(v.clone()),
+            Self::Cell(v) => ObjectWire::Cell(v.clone()),
+            Self::String(v) => ObjectWire::String(v.clone()),
+            Self::Bigint(v) => ObjectWire::Bigint((**v).clone()),
+            Self::Uint8Array(v) => ObjectWire::Uint8Array(v.lock().clone()),
+            Self::Array(v) => ObjectWire::Array(v.lock().clone()),
+            Self::Map(v) => ObjectWire::Map(v.to_index_map()),
+            Self::Float(v) => ObjectWire::Float(*v),
+            Self::Future(v) => ObjectWire::Future(v.clone()),
+            Self::UnscheduledFuture(v) => ObjectWire::UnscheduledFuture(v.clone()),
+            Self::Type(v) => ObjectWire::Type(v.clone()),
             Self::RustData(_) => {
-                return Err(serde::ser::Error::custom("RustData cannot be serialized"));
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "RustData cannot be serialized",
+                ));
             }
             Self::Collector(_) => {
-                return Err(serde::ser::Error::custom("Collector cannot be serialized"));
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "Collector cannot be serialized",
+                ));
             }
             Self::HostClosure(_) => {
-                return Err(serde::ser::Error::custom(
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
                     "HostClosure cannot be serialized",
                 ));
             }
             #[cfg(feature = "heap_debug")]
             Self::Sentinel(_) => {
-                return Err(serde::ser::Error::custom("Sentinel cannot be serialized"));
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "Sentinel cannot be serialized",
+                ));
             }
         };
-        proxy.serialize(serializer)
+        proxy.serialize(writer)
     }
 }
 
-impl<'de> Deserialize<'de> for Object {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let proxy = ObjectSerde::deserialize(deserializer)?;
+impl BorshDeserialize for Object {
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let proxy = ObjectWire::deserialize_reader(reader)?;
         Ok(match proxy {
-            ObjectSerde::Function(v) => Self::Function(v),
-            ObjectSerde::Class(v) => Self::Class(v),
-            ObjectSerde::Instance(v) => Self::Instance(v),
-            ObjectSerde::Enum(v) => Self::Enum(v),
-            ObjectSerde::Variant(v) => Self::Variant(v),
-            ObjectSerde::Closure(v) => Self::Closure(v),
-            ObjectSerde::BoundMethod(v) => Self::BoundMethod(v),
-            ObjectSerde::Cell(v) => Self::Cell(v),
-            ObjectSerde::String(v) => Self::String(v),
-            ObjectSerde::Uint8Array(v) => Self::Uint8Array(v),
-            ObjectSerde::Array(v) => Self::Array(ArrayContainer::new(v)),
-            ObjectSerde::Map(v) => Self::Map(Box::new(MapContainer::new(v))),
-            ObjectSerde::Float(v) => Self::Float(v),
-            ObjectSerde::Future(v) => Self::Future(v),
-            ObjectSerde::UnscheduledFuture(v) => Self::UnscheduledFuture(v),
-            ObjectSerde::Type(v) => Self::Type(v),
+            ObjectWire::Function(v) => Self::Function(v),
+            ObjectWire::Class(v) => Self::Class(v),
+            ObjectWire::Instance(v) => Self::Instance(v),
+            ObjectWire::Enum(v) => Self::Enum(v),
+            ObjectWire::Variant(v) => Self::Variant(v),
+            ObjectWire::Closure(v) => Self::Closure(v),
+            ObjectWire::BoundMethod(v) => Self::BoundMethod(v),
+            ObjectWire::Cell(v) => Self::Cell(v),
+            ObjectWire::String(v) => Self::String(v),
+            ObjectWire::Bigint(v) => Self::Bigint(std::sync::Arc::new(v)),
+            ObjectWire::Uint8Array(v) => Self::Uint8Array(Uint8ArrayContainer::new(v)),
+            ObjectWire::Array(v) => Self::Array(ArrayContainer::new(v)),
+            ObjectWire::Map(v) => Self::Map(v.into()),
+            ObjectWire::Float(v) => Self::Float(v),
+            ObjectWire::Future(v) => Self::Future(v),
+            ObjectWire::UnscheduledFuture(v) => Self::UnscheduledFuture(v),
+            ObjectWire::Type(v) => Self::Type(v),
         })
     }
 }
 
 /// A closure: a function object paired with a list of captured variable cells.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Closure {
     /// Pointer to the underlying `Object::Function`.
     pub function: HeapPtr,
@@ -1755,7 +1794,7 @@ pub struct Closure {
 ///
 /// Created by `MakeBoundMethod`. The receiver is inserted as `self`
 /// at call time by `CallIndirect`.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct BoundMethod {
     /// Pointer to the underlying `Object::Function`.
     pub function: HeapPtr,
@@ -1794,9 +1833,27 @@ pub struct HostClosure {
 ///
 /// Variables that are closed over are heap-allocated as `Cell` objects so that
 /// both the enclosing scope and any closures share the same storage.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Cell {
-    pub value: Value,
+    pub value: AtomicValueSlot,
+}
+
+impl Cell {
+    pub fn new(value: Value) -> Self {
+        Self {
+            value: AtomicValueSlot::new(value),
+        }
+    }
+
+    #[inline]
+    pub fn load(&self) -> Value {
+        self.value.load()
+    }
+
+    #[inline]
+    pub fn store(&self, value: Value) {
+        self.value.store(value);
+    }
 }
 
 impl std::fmt::Display for Object {
@@ -1813,8 +1870,9 @@ impl std::fmt::Display for Object {
             }
             Object::BoundMethod(_) => write!(f, "<bound_method>"),
             Object::HostClosure(_) => write!(f, "<host_closure>"),
-            Object::Cell(cell) => write!(f, "<cell {}>", cell.value),
+            Object::Cell(cell) => write!(f, "<cell {}>", cell.load()),
             Object::String(string) => string.fmt(f),
+            Object::Bigint(bi) => write!(f, "{bi}"),
             Object::Uint8Array(bytes) => write!(f, "<uint8array len={}>", bytes.len()),
             Object::Array(array) => write!(f, "<array len={}>", array.lock().len()),
             Object::Map(map) => write!(f, "<map len={}>", map.lock().len()),
@@ -1918,15 +1976,21 @@ unsafe impl Sync for Future {}
 
 // Futures are runtime-only; they never appear in a compiled Program. Reject
 // serialization explicitly so a malformed program fails fast.
-impl Serialize for Future {
-    fn serialize<S: serde::Serializer>(&self, _serializer: S) -> Result<S::Ok, S::Error> {
-        Err(serde::ser::Error::custom("Future cannot be serialized"))
+impl BorshSerialize for Future {
+    fn serialize<W: std::io::Write>(&self, _writer: &mut W) -> std::io::Result<()> {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Future cannot be serialized",
+        ))
     }
 }
 
-impl<'de> Deserialize<'de> for Future {
-    fn deserialize<D: serde::Deserializer<'de>>(_deserializer: D) -> Result<Self, D::Error> {
-        Err(serde::de::Error::custom("Future cannot be deserialized"))
+impl BorshDeserialize for Future {
+    fn deserialize_reader<R: std::io::Read>(_reader: &mut R) -> std::io::Result<Self> {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Future cannot be deserialized",
+        ))
     }
 }
 
@@ -1935,17 +1999,19 @@ impl<'de> Deserialize<'de> for Future {
 // envelope (`baml_exec::PackEnvelope`) serializes the bytecode + the
 // constant heap; if an `UnscheduledFuture` ever reaches the serializer
 // that's a malformed program and we want to fail fast.
-impl Serialize for UnscheduledFuture {
-    fn serialize<S: serde::Serializer>(&self, _serializer: S) -> Result<S::Ok, S::Error> {
-        Err(serde::ser::Error::custom(
+impl BorshSerialize for UnscheduledFuture {
+    fn serialize<W: std::io::Write>(&self, _writer: &mut W) -> std::io::Result<()> {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
             "UnscheduledFuture cannot be serialized",
         ))
     }
 }
 
-impl<'de> Deserialize<'de> for UnscheduledFuture {
-    fn deserialize<D: serde::Deserializer<'de>>(_deserializer: D) -> Result<Self, D::Error> {
-        Err(serde::de::Error::custom(
+impl BorshDeserialize for UnscheduledFuture {
+    fn deserialize_reader<R: std::io::Read>(_reader: &mut R) -> std::io::Result<Self> {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
             "UnscheduledFuture cannot be deserialized",
         ))
     }
@@ -2304,7 +2370,7 @@ pub struct UnscheduledFuture {
 ///
 /// Unlike `bex_engine::CallId`, these are created for every scheduled future (sys op or function call),
 /// not just when there is a new call from the host.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub struct FutureId {
     id: usize,
 }
@@ -2346,7 +2412,7 @@ impl FutureId {
 ///
 /// Used for checking type errors at runtime. We can probably use some lib
 /// that creates this automatically based on the [`Value`] enum.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub enum Type {
     OmittedArg,
     Int,
@@ -2396,7 +2462,7 @@ impl Type {
 }
 
 /// Object type lattice.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub enum ObjectType {
     /// Top type of the lattice. It is castable to any of the other
     /// types.
@@ -2410,6 +2476,7 @@ pub enum ObjectType {
     Cell,
     Class,
     String,
+    Bigint,
     Enum,
     Variant,
     Future(FutureType),
@@ -2434,6 +2501,7 @@ impl ObjectType {
             Object::Enum(_) => Self::Enum,
             Object::Variant(_) => Self::Enum,
             Object::String(_) => Self::String,
+            Object::Bigint(_) => Self::Bigint,
             Object::Uint8Array(_) => Self::Uint8Array,
             Object::Array(_) => Self::Array,
             Object::Map(_) => Self::Map,
@@ -2478,6 +2546,7 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Future(future_type) => write!(f, "{future_type}"),
             ObjectType::UnscheduledFuture => write!(f, "unscheduled_future"),
             ObjectType::String => write!(f, "string"),
+            ObjectType::Bigint => write!(f, "bigint"),
             ObjectType::Uint8Array => write!(f, "uint8array"),
             ObjectType::Collector => write!(f, "collector"),
             ObjectType::Type => write!(f, "type"),
@@ -2487,7 +2556,7 @@ impl std::fmt::Display for ObjectType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub enum FunctionType {
     /// Top of function type lattice: represents all function types.
     Any,
@@ -2515,7 +2584,7 @@ impl From<&FunctionKind> for FunctionType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub enum FutureType {
     /// Top of future type lattice: represents all future types.
     Any,

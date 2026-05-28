@@ -87,7 +87,7 @@ function user.nested_inner() -> int {
 function user.nested_outer() -> int {
     call user.nested_inner
     load_const 1
-    bin_op +
+    add_int
     return
 }
 

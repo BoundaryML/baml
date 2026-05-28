@@ -52,6 +52,7 @@ pub enum SyntaxKind {
 
     // Literals
     WORD,            // Any word (non-keyword identifier)
+    BIGINT_LITERAL,  // 42n
     INTEGER_LITERAL, // 123
     FLOAT_LITERAL,   // 123.45
 
@@ -418,7 +419,8 @@ impl SyntaxKind {
     pub fn is_literal(self) -> bool {
         matches!(
             self,
-            SyntaxKind::INTEGER_LITERAL
+            SyntaxKind::BIGINT_LITERAL
+                | SyntaxKind::INTEGER_LITERAL
                 | SyntaxKind::FLOAT_LITERAL
                 | SyntaxKind::STRING_LITERAL
                 | SyntaxKind::RAW_STRING_LITERAL

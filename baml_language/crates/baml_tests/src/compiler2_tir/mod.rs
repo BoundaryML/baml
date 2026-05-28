@@ -142,6 +142,7 @@ pub(crate) mod support {
                     format!("{truncated:?}")
                 }
                 Literal::Int(i) => i.to_string(),
+                Literal::Bigint(n) => format!("{n}n"),
                 Literal::Float(f) => f.clone(),
                 Literal::Bool(b) => b.to_string(),
             },
@@ -1263,6 +1264,7 @@ pub(crate) mod support {
                     }
                 }
                 baml_compiler2_ast::TypeExpr::Int { .. } => "int".into(),
+                baml_compiler2_ast::TypeExpr::Bigint { .. } => "bigint".into(),
                 baml_compiler2_ast::TypeExpr::Float { .. } => "float".into(),
                 baml_compiler2_ast::TypeExpr::String { .. } => "string".into(),
                 baml_compiler2_ast::TypeExpr::Bool { .. } => "bool".into(),
@@ -1458,6 +1460,7 @@ pub(crate) mod support {
                         format!("{truncated:?}")
                     }
                     Literal::Int(i) => i.to_string(),
+                    Literal::Bigint(n) => format!("{n}n"),
                     Literal::Float(f) => f.clone(),
                     Literal::Bool(b) => b.to_string(),
                 },

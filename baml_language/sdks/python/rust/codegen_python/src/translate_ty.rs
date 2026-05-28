@@ -39,11 +39,13 @@ pub(crate) struct SelfRef {
 pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
     match ty {
         Ty::Int => "int".to_string(),
+        Ty::Bigint => "int".to_string(),
         Ty::Float => "float".to_string(),
         Ty::String => "str".to_string(),
         Ty::Bool => "bool".to_string(),
         Ty::Null => "None".to_string(),
         Ty::Literal(Literal::Int(value)) => format!("typing.Literal[{value}]"),
+        Ty::Literal(Literal::Bigint(value)) => format!("typing.Literal[{value}]"),
         Ty::Literal(Literal::String(value)) => {
             format!("typing.Literal[{}]", py_string(value))
         }
@@ -280,6 +282,7 @@ mod tests {
     fn check_exhaustive(ty: &Ty) {
         match ty {
             Ty::Int
+            | Ty::Bigint
             | Ty::Float
             | Ty::String
             | Ty::Bool

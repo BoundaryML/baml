@@ -759,6 +759,7 @@ impl Operand {
 #[derive(Debug, Clone)]
 pub enum Constant {
     Int(i64),
+    Bigint(num_bigint::BigInt),
     Float(f64),
     String(String),
     Bool(bool),

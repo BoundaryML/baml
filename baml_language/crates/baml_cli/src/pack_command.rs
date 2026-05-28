@@ -17,7 +17,7 @@
 // at the current directory is loaded.
 //
 // The output is the host binary (baml-pack-host) with a `PackEnvelope`
-// (bitcode-serialized) appended in an OS-native section. At runtime the
+// (borsh-serialized) appended in an OS-native section. At runtime the
 // host extracts the envelope, initializes the engine, and invokes the
 // baked-in target with an auto-CLI parser driven by its signature.
 
@@ -155,7 +155,7 @@ impl PackArgs {
                 .collect(),
             output_format: self.output_format,
         };
-        let serialized = bitcode::serialize(&envelope)
+        let serialized = borsh::to_vec(&envelope)
             .map_err(|e| anyhow!("Failed to serialize pack envelope: {e}"))?;
 
         let target_triple = self.resolved_target_triple()?;
@@ -1358,7 +1358,7 @@ mod tests {
 
     // ── Envelope roundtrip ────────────────────────────────────────────
 
-    /// The PackEnvelope bitcode roundtrip is the wire contract between
+    /// The PackEnvelope borsh roundtrip is the wire contract between
     /// pack and the host. A regression here breaks every packaged binary,
     /// so it gets its own test.
     #[test]
@@ -1374,8 +1374,8 @@ mod tests {
             }],
             output_format: OutputFormat::Json,
         };
-        let bytes = bitcode::serialize(&envelope).unwrap();
-        let decoded: PackEnvelope = bitcode::deserialize(&bytes).unwrap();
+        let bytes = borsh::to_vec(&envelope).unwrap();
+        let decoded: PackEnvelope = borsh::from_slice(&bytes).unwrap();
         assert!(matches!(decoded.mode, baml_exec::PackMode::Single));
         assert_eq!(decoded.targets.len(), 1);
         assert_eq!(decoded.targets[0].qualified_name, "user.main");
