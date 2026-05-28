@@ -44,6 +44,11 @@ pub(crate) struct PyMethodBinding {
     /// Surfaced only by `.pyi` rendering as a `"""..."""` body, since
     /// `.py` factory bindings have no meaningful body.
     pub(crate) docstring: Option<String>,
+    /// Unqualified leaf names of the method's inferred thrown types, in
+    /// source order (derived from `Function.throws`). Empty for non-throwing
+    /// methods. Rendered as the `Raises:` block in the `.pyi` only (32d
+    /// decision — methods get no `.py` runtime `__doc__` trailer).
+    pub(crate) raises_names: Vec<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

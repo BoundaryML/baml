@@ -16,22 +16,22 @@ class Enums {
   variant_as_type Sentiment.Positive
 }
 
-function PickSentiment(b: bool) -> Sentiment {
+function pick_sentiment(b: bool) -> Sentiment {
   if (b) { Sentiment.Positive } else { Sentiment.Negative }
 }
 
-function PickPositive() -> Sentiment.Positive {
+function pick_positive() -> Sentiment.Positive {
   Sentiment.Positive
 }
 
-function RoundTripSentiment(s: Sentiment) -> Sentiment {
+function round_trip_sentiment(s: Sentiment) -> Sentiment {
   s
 }
 
-function RoundTripSentimentPositive(s: Sentiment.Positive) -> Sentiment.Positive {
+function round_trip_sentiment_positive(s: Sentiment.Positive) -> Sentiment.Positive {
   s
 }
 
-function RoundTripEnums(e: Enums) -> Enums {
+function round_trip_enums(e: Enums) -> Enums {
   e
 }

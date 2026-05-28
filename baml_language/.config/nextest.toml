@@ -21,3 +21,24 @@ setup = 'nodejs_typescript_pnpm_unix'
 filter = 'package(=sdk_test_nodejs_typescript)'
 platform = { host = 'cfg(windows)' }
 setup = 'nodejs_typescript_pnpm_win'
+
+# python tests need each fixture's venv synced with a freshly-rebuilt
+# baml_core `.so`. fire only when a python sdk-test is selected.
+# setup.sh / setup.ps1 are equivalent — `uv sync` per fixture plus one
+# incremental `maturin develop` of the shared extension, in the host
+# shell of each platform.
+[scripts.setup.python_pydantic2_uv_unix]
+command = './sdk_tests/crates/python_pydantic2/setup.sh'
+
+[scripts.setup.python_pydantic2_uv_win]
+command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', './sdk_tests/crates/python_pydantic2/setup.ps1']
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_python_pydantic2)'
+platform = { host = 'cfg(unix)' }
+setup = 'python_pydantic2_uv_unix'
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_python_pydantic2)'
+platform = { host = 'cfg(windows)' }
+setup = 'python_pydantic2_uv_win'

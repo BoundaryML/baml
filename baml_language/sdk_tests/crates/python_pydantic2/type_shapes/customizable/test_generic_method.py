@@ -51,9 +51,9 @@ def test_generic_wrapper_get_value_or_marker():
     [Void { ... }, Class(... WrapperMarker ...)]" — the same shape as
     the streaming smoke's error.
     """
-    from baml_sdk.generics import MakeWrapperMethods
+    from baml_sdk.generics import make_wrapper_methods
 
-    w = MakeWrapperMethods("hello")
+    w = make_wrapper_methods("hello")
     assert w.get_value_or_marker() == "hello"
 
 
@@ -67,7 +67,7 @@ def test_generic_wrapper_get_value():
           function get_value(self) -> T { self.value }
         }
 
-        function MakeWrapperMethods(text: string) -> WrapperMethods<string> {
+        function make_wrapper_methods(text: string) -> WrapperMethods<string> {
           WrapperMethods<string> { value: text }
         }
 
@@ -77,7 +77,7 @@ def test_generic_wrapper_get_value():
     with the "does not match any member of union [Void { ... }]"
     shape from the issue description.
     """
-    from baml_sdk.generics import MakeWrapperMethods
+    from baml_sdk.generics import make_wrapper_methods
 
-    w = MakeWrapperMethods("hello")
+    w = make_wrapper_methods("hello")
     assert w.get_value() == "hello"

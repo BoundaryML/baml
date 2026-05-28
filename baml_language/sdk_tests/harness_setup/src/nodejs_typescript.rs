@@ -103,6 +103,14 @@ const TSCONFIG_JSON: &str = include_str!("templates/tsconfig.json");
 const CACHE_SUBDIR: &str = "pnpm-store";
 const CACHE_ENV_VAR: &str = "npm_config_store_dir";
 
+/// Env var the setup scripts write to `$NEXTEST_ENV` and the emitted
+/// `setup_guard::ran` test checks for — the per-run breadcrumb that
+/// the pnpm install + native build actually ran. Must stay in sync
+/// with both `crates/nodejs_typescript/setup.sh` and `setup.ps1`.
+/// The guard is `#[ignore]`d alongside every other test on this
+/// crate while `codegen_nodejs` is a stub (see [`IGNORE_REASON`]).
+const SETUP_ENV_VAR: &str = "SDK_TEST_NODEJS_TYPESCRIPT_SETUP";
+
 /// Entry point for `crates/nodejs_typescript/build.rs`. Discovers
 /// fixtures, runs codegen for each (best-effort — see module docs),
 /// writes templates, and emits the per-fixture test scaffold. Does
@@ -256,6 +264,9 @@ fn write_fixtures_tests_rs(out_dir: &Path, fixtures: &[String]) {
     );
     buf.push_str(&format!(
         "::sdk_test_harness_runner::build_diagnostics!(ignore = {IGNORE_REASON:?});\n"
+    ));
+    buf.push_str(&format!(
+        "::sdk_test_harness_runner::setup_guard!(ignore = {IGNORE_REASON:?}, {SETUP_ENV_VAR:?});\n"
     ));
     for fixture in fixtures {
         buf.push_str(&format!(

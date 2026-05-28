@@ -20,7 +20,9 @@ namespace baml.env:
   function get_or_panic
 namespace baml.errors:
   class AccessError { methods: [to_json, from_json] }
+  class CompilationError { methods: [to_json, from_json] }
   class DevOther { methods: [to_json, from_json] }
+  class GenericSdkError { methods: [to_json, from_json] }
   class HostCallable { methods: [to_json, from_json] }
   class HostPanic { methods: [to_json, from_json] }
   class InvalidArgument { methods: [to_json, from_json] }
@@ -140,6 +142,7 @@ namespace baml.panics:
   class MapKeyNotFound { methods: [to_json, from_json] }
   class NegativeBitShift { methods: [to_json, from_json] }
   type Panic
+  class SdkPanic { methods: [to_json, from_json] }
   class StackOverflow { methods: [to_json, from_json] }
   class Unreachable { methods: [to_json, from_json] }
   class UserPanic { methods: [to_json, from_json] }

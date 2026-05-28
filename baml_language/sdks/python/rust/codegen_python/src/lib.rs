@@ -511,6 +511,7 @@ mod tests {
                 default: None,
             }],
             return_type: Ty::Int,
+            throws: None,
             watchers: vec![],
             origin: origin(file, span),
         }
@@ -1651,6 +1652,7 @@ mod tests {
                 })
                 .collect(),
             return_type: Ty::Int,
+            throws: None,
             watchers: vec![],
             origin: origin(file, span),
         }
@@ -1785,6 +1787,7 @@ mod tests {
                     },
                 ],
                 return_type: Ty::String,
+                throws: None,
                 watchers: vec![],
                 origin: origin("x.baml", 0),
             }),
@@ -1844,6 +1847,7 @@ mod tests {
                     },
                 ],
                 return_type: Ty::String,
+                throws: None,
                 watchers: vec![],
                 origin: origin("x.baml", 0),
             }),
@@ -2048,6 +2052,7 @@ mod tests {
                 })
                 .collect(),
             return_type: Ty::Int,
+            throws: None,
             watchers: vec![],
             origin: origin(file, span),
         }
@@ -2321,6 +2326,7 @@ mod tests {
                     default: None,
                 }],
                 return_type: Ty::Class(resume, vec![]),
+                throws: None,
                 watchers: vec![],
                 origin: origin("x.baml", 100),
             }),
@@ -2368,6 +2374,7 @@ mod tests {
                     default: None,
                 }],
                 return_type: Ty::Class(resume.clone(), vec![]),
+                throws: None,
                 watchers: vec![],
                 // Companions share the parent's span so they cluster.
                 origin: origin("x.baml", 100),
@@ -2386,6 +2393,7 @@ mod tests {
                     default: None,
                 }],
                 return_type: Ty::Class(resume, vec![]),
+                throws: None,
                 watchers: vec![],
                 origin: origin("x.baml", 100),
             }),
@@ -2986,6 +2994,7 @@ mod tests {
                     default: None,
                 }],
                 return_type: Ty::Enum(sentiment),
+                throws: None,
                 watchers: vec![],
                 origin: origin("x.baml", 100),
             }),
@@ -3159,6 +3168,7 @@ mod tests {
                     default: None,
                 }],
                 return_type: Ty::TypeVar(BaseName::new("T")),
+                throws: None,
                 watchers: vec![],
                 origin: origin("echo.baml", 0),
             }),

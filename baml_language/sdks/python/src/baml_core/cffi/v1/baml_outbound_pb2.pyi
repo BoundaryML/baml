@@ -23,6 +23,36 @@ PDF: MediaTypeEnum
 VIDEO: MediaTypeEnum
 OTHER: MediaTypeEnum
 
+class BamlOutboundResult(_message.Message):
+    __slots__ = ("ok", "error", "panic")
+    OK_FIELD_NUMBER: _ClassVar[int]
+    ERROR_FIELD_NUMBER: _ClassVar[int]
+    PANIC_FIELD_NUMBER: _ClassVar[int]
+    ok: BamlOutboundValue
+    error: BamlOutboundError
+    panic: BamlOutboundPanic
+    def __init__(self, ok: _Optional[_Union[BamlOutboundValue, _Mapping]] = ..., error: _Optional[_Union[BamlOutboundError, _Mapping]] = ..., panic: _Optional[_Union[BamlOutboundPanic, _Mapping]] = ...) -> None: ...
+
+class BamlOutboundError(_message.Message):
+    __slots__ = ("value", "trace")
+    VALUE_FIELD_NUMBER: _ClassVar[int]
+    TRACE_FIELD_NUMBER: _ClassVar[int]
+    value: BamlOutboundValue
+    trace: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, value: _Optional[_Union[BamlOutboundValue, _Mapping]] = ..., trace: _Optional[_Iterable[str]] = ...) -> None: ...
+
+class BamlOutboundPanic(_message.Message):
+    __slots__ = ("value", "trace", "is_exit_panic", "exit_code")
+    VALUE_FIELD_NUMBER: _ClassVar[int]
+    TRACE_FIELD_NUMBER: _ClassVar[int]
+    IS_EXIT_PANIC_FIELD_NUMBER: _ClassVar[int]
+    EXIT_CODE_FIELD_NUMBER: _ClassVar[int]
+    value: BamlOutboundValue
+    trace: _containers.RepeatedScalarFieldContainer[str]
+    is_exit_panic: bool
+    exit_code: int
+    def __init__(self, value: _Optional[_Union[BamlOutboundValue, _Mapping]] = ..., trace: _Optional[_Iterable[str]] = ..., is_exit_panic: bool = ..., exit_code: _Optional[int] = ...) -> None: ...
+
 class BamlOutboundValue(_message.Message):
     __slots__ = ("null_value", "string_value", "int_value", "float_value", "bool_value", "class_value", "enum_value", "literal_value", "list_value", "map_value", "union_variant_value", "handle_value", "media_value", "prompt_ast_value", "uint8array_value", "bigint_value")
     NULL_VALUE_FIELD_NUMBER: _ClassVar[int]
