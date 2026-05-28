@@ -1114,9 +1114,11 @@ fn match_without_catchall_on_interface_is_compile_error() {
 
 #[test]
 fn match_narrows_interface_to_concrete_class() {
-    // Inside `d: Dog`, the binding `d` should be typed as `Dog`, letting
-    // class-specific fields like `breed` be accessed.
-    assert_no_interface_errors(
+    // Inside `let d: Dog`, the binding `d` is typed as `Dog`, letting
+    // class-specific fields like `breed` be accessed. Uses `assert_zero_compile_errors`
+    // (not the interface-range-only helper) so a parse error in the match arm
+    // can't slip through — see finding #30.
+    assert_zero_compile_errors(
         r#"
         interface Animal {
             function speak(self) -> string
@@ -1130,7 +1132,7 @@ fn match_narrows_interface_to_concrete_class() {
 
         function describe(a: Animal) -> string {
             return match (a) {
-                d: Dog => d.breed
+                let d: Dog => d.breed
                 _ => "other"
             }
         }
@@ -6228,7 +6230,7 @@ fn bounded_type_var_rule_conservatively_overlaps_in_body_generic_class_rule() {
 // _plan/baml_interface_findings.md. Positive cases run the program end-to-end and
 // assert the concrete result; "must-reject" cases assert the diagnostic that
 // should fire. Finding #30 (a too-weak existing test) is covered by
-// `fuzz_bug29_*` below, which asserts the `d: Dog =>` form actually runs.
+// `fuzz_bug29_*` below, which asserts the canonical `let d: Dog =>` form narrows.
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// Finding #1 [crash]: Interface method reference on required (abstract) method crashes at runtime
@@ -6932,9 +6934,12 @@ function main() -> string {
     );
 }
 
-/// Finding #29 [wrong-result]: `d: Dog =>` binding form (without `let`) fails to parse
+/// Findings #29/#30: the canonical `let d: Dog =>` match-binding form narrows an
+/// interface to a concrete class and binds it. (The no-`let` `d: Dog =>` form is
+/// intentionally not valid syntax; the existing
+/// `match_narrows_interface_to_concrete_class` test was corrected to use `let`.)
 #[tokio::test]
-async fn fuzz_bug29_match_binding_form_without_let_parses() {
+async fn fuzz_bug29_match_binding_form_narrows_to_concrete() {
     let output = baml_test!(r##"interface Animal {
     function speak(self) -> string
 }
@@ -6947,7 +6952,7 @@ class Dog {
 
 function describe(a: Animal) -> string {
     return match (a) {
-        d: Dog => d.breed
+        let d: Dog => d.breed
         _ => "other"
     }
 }
