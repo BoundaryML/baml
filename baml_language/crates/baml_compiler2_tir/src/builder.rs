@@ -11718,6 +11718,16 @@ impl TypeInferenceBuilder<'_> {
             }
             // Never has no values, so it doesn't overlap with anything.
             (Ty::Never { .. }, _) | (_, Ty::Never { .. }) => false,
+            // BEP-044: an interface atom overlaps a value whose runtime class
+            // could satisfy it — the same/`requires`-related interface, or a
+            // class that nominally implements it. This is genuine runtime-tag
+            // overlap (a `Dog` value IS matched by an `Animal` pattern), so it's
+            // sound here unlike the numeric-tower subtype bridge guarded against
+            // above. Without it, `let a: Animal` against `Animal | string`
+            // targets no union member and degrades to a catch-all.
+            (Ty::Interface(..), _) | (_, Ty::Interface(..)) => {
+                self.is_subtype(a, b) || self.is_subtype(b, a)
+            }
             // Self-overlap for atoms that aren't covered above. These have a
             // single inhabited "kind" that's identified by discriminant —
             // `type` (the type-of-types), `void`, builtin-unknown sentinel,
