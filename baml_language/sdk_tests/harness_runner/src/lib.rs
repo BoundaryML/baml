@@ -10,6 +10,7 @@
 //! ```text
 //! // OUT_DIR/<generator>_tests.rs (emitted by sdk_test_harness_setup)
 //! ::sdk_test_harness_runner::build_diagnostics!();          // or: !(ignore = "…")
+//! ::sdk_test_harness_runner::setup_guard!("SDK_TEST_…_SETUP"); // asserts setup.sh ran
 //!
 //! mod docstrings_etc {
 //!     #[test] fn ruff()    { ::sdk_test_harness_runner::run_test_cmd(…); }
@@ -20,7 +21,8 @@
 //!
 //! Each per-generator `<generator>::test_suite!` macro
 //! (`include!`s the scaffold) lives below, alongside
-//! [`build_diagnostics!`] (the shared diagnostics test) and
+//! [`build_diagnostics!`] (the shared diagnostics test),
+//! [`setup_guard!`] (asserts the crate's setup.sh ran this run), and
 //! [`run_test_cmd`] (the toolchain-command runner).
 
 use std::{
@@ -168,6 +170,74 @@ pub fn __check_build_diagnostics(out_dir: &str) {
         let count = contents.matches("\n---\n").count() + 1;
         panic!("sdk-test build.rs recorded {count} diagnostic record(s):\n\n{contents}");
     }
+}
+
+/// Panic unless the per-generator setup script ran *this* test run.
+///
+/// Each `crates/<generator>/setup.sh` appends `<env_var>=1` to the
+/// file at `$NEXTEST_ENV` (a nextest setup-script feature): nextest
+/// then injects that var into the matched tests' processes for that
+/// run only. So presence of the var is a per-run breadcrumb proving
+/// the setup script executed — not a stale on-disk marker, and not
+/// the weaker "are we under nextest at all" check (`NEXTEST=1` is set
+/// regardless of which scripts ran).
+///
+/// Under plain `cargo test` the script never runs, `$NEXTEST_ENV`
+/// doesn't exist, and the var is absent → we fail here with a hint
+/// instead of letting the fixtures fail later with a confusing stale
+/// `.so` / missing `node_modules` error. Called from the
+/// `mod setup_guard { #[test] fn ran }` block the [`setup_guard!`]
+/// macro expands to.
+#[doc(hidden)]
+pub fn __check_setup_ran(env_var: &str) {
+    if env::var_os(env_var).is_none() {
+        panic!(
+            "sdk-test setup script did not run for this test run \
+             (env var `{env_var}` is unset).\n\n\
+             These tests require their `crates/<generator>/setup.sh` (uv sync / \
+             pnpm install + native build) to have run first, which sets `{env_var}` \
+             via $NEXTEST_ENV.\n\n\
+             Fix: run the tests with `cargo nextest run` — it fires setup.sh \
+             automatically — or, for plain `cargo test`, run the crate's setup.sh \
+             manually after `cargo test --no-run`."
+        );
+    }
+}
+
+/// Emit the `mod setup_guard { #[test] fn ran }` test that asserts
+/// the per-generator setup script ran this test run (via
+/// [`__check_setup_ran`]). `sdk_test_harness_setup`'s scaffold
+/// emitter stamps one invocation per generator scaffold, passing the
+/// env var that generator's `setup.sh` writes to `$NEXTEST_ENV`:
+///
+/// ```text
+/// // Default — fail loudly if setup.sh didn't run.
+/// ::sdk_test_harness_runner::setup_guard!("SDK_TEST_PYTHON_PYDANTIC2_SETUP");
+///
+/// // Ignored while the generator's other tests are (nodejs_typescript
+/// // is `#[ignore]`d wholesale until codegen_nodejs lands).
+/// ::sdk_test_harness_runner::setup_guard!(
+///     ignore = "codegen_nodejs is a stub", "SDK_TEST_NODEJS_TYPESCRIPT_SETUP");
+/// ```
+#[macro_export]
+macro_rules! setup_guard {
+    ($env:literal) => {
+        mod setup_guard {
+            #[test]
+            fn ran() {
+                $crate::__check_setup_ran($env);
+            }
+        }
+    };
+    (ignore = $reason:literal, $env:literal) => {
+        mod setup_guard {
+            #[test]
+            #[ignore = $reason]
+            fn ran() {
+                $crate::__check_setup_ran($env);
+            }
+        }
+    };
 }
 
 /// Emit the shared `mod build_diagnostics { #[test] fn

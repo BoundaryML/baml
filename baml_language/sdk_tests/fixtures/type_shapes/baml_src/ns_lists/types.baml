@@ -9,18 +9,18 @@ class ListContainer {
   union_list (int | string)[]
 }
 
-function RoundTripInts(xs: int[]) -> int[] {
+function round_trip_ints(xs: int[]) -> int[] {
   xs
 }
 
-function RoundTripOptionalStrings(xs: string?[]) -> string?[] {
+function round_trip_optional_strings(xs: string?[]) -> string?[] {
   xs
 }
 
-function RoundTripUnionList(xs: (int | string)[]) -> (int | string)[] {
+function round_trip_union_list(xs: (int | string)[]) -> (int | string)[] {
   xs
 }
 
-function RoundTripListContainer(c: ListContainer) -> ListContainer {
+function round_trip_list_container(c: ListContainer) -> ListContainer {
   c
 }

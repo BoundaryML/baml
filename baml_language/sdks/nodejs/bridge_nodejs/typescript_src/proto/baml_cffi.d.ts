@@ -1147,6 +1147,336 @@ export namespace baml_core {
                 public static getTypeUrl(typeUrlPrefix?: string): string;
             }
 
+            /** Properties of a BamlOutboundResult. */
+            interface IBamlOutboundResult {
+
+                /** BamlOutboundResult ok */
+                ok?: (baml_core.cffi.v1.IBamlOutboundValue|null);
+
+                /** BamlOutboundResult error */
+                error?: (baml_core.cffi.v1.IBamlOutboundError|null);
+
+                /** BamlOutboundResult panic */
+                panic?: (baml_core.cffi.v1.IBamlOutboundPanic|null);
+            }
+
+            /** Represents a BamlOutboundResult. */
+            class BamlOutboundResult implements IBamlOutboundResult {
+
+                /**
+                 * Constructs a new BamlOutboundResult.
+                 * @param [properties] Properties to set
+                 */
+                constructor(properties?: baml_core.cffi.v1.IBamlOutboundResult);
+
+                /** BamlOutboundResult ok. */
+                public ok?: (baml_core.cffi.v1.IBamlOutboundValue|null);
+
+                /** BamlOutboundResult error. */
+                public error?: (baml_core.cffi.v1.IBamlOutboundError|null);
+
+                /** BamlOutboundResult panic. */
+                public panic?: (baml_core.cffi.v1.IBamlOutboundPanic|null);
+
+                /** BamlOutboundResult result. */
+                public result?: ("ok"|"error"|"panic");
+
+                /**
+                 * Creates a new BamlOutboundResult instance using the specified properties.
+                 * @param [properties] Properties to set
+                 * @returns BamlOutboundResult instance
+                 */
+                public static create(properties?: baml_core.cffi.v1.IBamlOutboundResult): baml_core.cffi.v1.BamlOutboundResult;
+
+                /**
+                 * Encodes the specified BamlOutboundResult message. Does not implicitly {@link baml_core.cffi.v1.BamlOutboundResult.verify|verify} messages.
+                 * @param message BamlOutboundResult message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encode(message: baml_core.cffi.v1.IBamlOutboundResult, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Encodes the specified BamlOutboundResult message, length delimited. Does not implicitly {@link baml_core.cffi.v1.BamlOutboundResult.verify|verify} messages.
+                 * @param message BamlOutboundResult message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encodeDelimited(message: baml_core.cffi.v1.IBamlOutboundResult, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Decodes a BamlOutboundResult message from the specified reader or buffer.
+                 * @param reader Reader or buffer to decode from
+                 * @param [length] Message length if known beforehand
+                 * @returns BamlOutboundResult
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml_core.cffi.v1.BamlOutboundResult;
+
+                /**
+                 * Decodes a BamlOutboundResult message from the specified reader or buffer, length delimited.
+                 * @param reader Reader or buffer to decode from
+                 * @returns BamlOutboundResult
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml_core.cffi.v1.BamlOutboundResult;
+
+                /**
+                 * Verifies a BamlOutboundResult message.
+                 * @param message Plain object to verify
+                 * @returns `null` if valid, otherwise the reason why it is not
+                 */
+                public static verify(message: { [k: string]: any }): (string|null);
+
+                /**
+                 * Creates a BamlOutboundResult message from a plain object. Also converts values to their respective internal types.
+                 * @param object Plain object
+                 * @returns BamlOutboundResult
+                 */
+                public static fromObject(object: { [k: string]: any }): baml_core.cffi.v1.BamlOutboundResult;
+
+                /**
+                 * Creates a plain object from a BamlOutboundResult message. Also converts values to other types if specified.
+                 * @param message BamlOutboundResult
+                 * @param [options] Conversion options
+                 * @returns Plain object
+                 */
+                public static toObject(message: baml_core.cffi.v1.BamlOutboundResult, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+                /**
+                 * Converts this BamlOutboundResult to JSON.
+                 * @returns JSON object
+                 */
+                public toJSON(): { [k: string]: any };
+
+                /**
+                 * Gets the default type url for BamlOutboundResult
+                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns The default type url
+                 */
+                public static getTypeUrl(typeUrlPrefix?: string): string;
+            }
+
+            /** Properties of a BamlOutboundError. */
+            interface IBamlOutboundError {
+
+                /** BamlOutboundError value */
+                value?: (baml_core.cffi.v1.IBamlOutboundValue|null);
+
+                /** BamlOutboundError trace */
+                trace?: (string[]|null);
+            }
+
+            /** Represents a BamlOutboundError. */
+            class BamlOutboundError implements IBamlOutboundError {
+
+                /**
+                 * Constructs a new BamlOutboundError.
+                 * @param [properties] Properties to set
+                 */
+                constructor(properties?: baml_core.cffi.v1.IBamlOutboundError);
+
+                /** BamlOutboundError value. */
+                public value?: (baml_core.cffi.v1.IBamlOutboundValue|null);
+
+                /** BamlOutboundError trace. */
+                public trace: string[];
+
+                /**
+                 * Creates a new BamlOutboundError instance using the specified properties.
+                 * @param [properties] Properties to set
+                 * @returns BamlOutboundError instance
+                 */
+                public static create(properties?: baml_core.cffi.v1.IBamlOutboundError): baml_core.cffi.v1.BamlOutboundError;
+
+                /**
+                 * Encodes the specified BamlOutboundError message. Does not implicitly {@link baml_core.cffi.v1.BamlOutboundError.verify|verify} messages.
+                 * @param message BamlOutboundError message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encode(message: baml_core.cffi.v1.IBamlOutboundError, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Encodes the specified BamlOutboundError message, length delimited. Does not implicitly {@link baml_core.cffi.v1.BamlOutboundError.verify|verify} messages.
+                 * @param message BamlOutboundError message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encodeDelimited(message: baml_core.cffi.v1.IBamlOutboundError, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Decodes a BamlOutboundError message from the specified reader or buffer.
+                 * @param reader Reader or buffer to decode from
+                 * @param [length] Message length if known beforehand
+                 * @returns BamlOutboundError
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml_core.cffi.v1.BamlOutboundError;
+
+                /**
+                 * Decodes a BamlOutboundError message from the specified reader or buffer, length delimited.
+                 * @param reader Reader or buffer to decode from
+                 * @returns BamlOutboundError
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml_core.cffi.v1.BamlOutboundError;
+
+                /**
+                 * Verifies a BamlOutboundError message.
+                 * @param message Plain object to verify
+                 * @returns `null` if valid, otherwise the reason why it is not
+                 */
+                public static verify(message: { [k: string]: any }): (string|null);
+
+                /**
+                 * Creates a BamlOutboundError message from a plain object. Also converts values to their respective internal types.
+                 * @param object Plain object
+                 * @returns BamlOutboundError
+                 */
+                public static fromObject(object: { [k: string]: any }): baml_core.cffi.v1.BamlOutboundError;
+
+                /**
+                 * Creates a plain object from a BamlOutboundError message. Also converts values to other types if specified.
+                 * @param message BamlOutboundError
+                 * @param [options] Conversion options
+                 * @returns Plain object
+                 */
+                public static toObject(message: baml_core.cffi.v1.BamlOutboundError, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+                /**
+                 * Converts this BamlOutboundError to JSON.
+                 * @returns JSON object
+                 */
+                public toJSON(): { [k: string]: any };
+
+                /**
+                 * Gets the default type url for BamlOutboundError
+                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns The default type url
+                 */
+                public static getTypeUrl(typeUrlPrefix?: string): string;
+            }
+
+            /** Properties of a BamlOutboundPanic. */
+            interface IBamlOutboundPanic {
+
+                /** BamlOutboundPanic value */
+                value?: (baml_core.cffi.v1.IBamlOutboundValue|null);
+
+                /** BamlOutboundPanic trace */
+                trace?: (string[]|null);
+
+                /** BamlOutboundPanic isExitPanic */
+                isExitPanic?: (boolean|null);
+
+                /** BamlOutboundPanic exitCode */
+                exitCode?: (number|Long|null);
+            }
+
+            /** Represents a BamlOutboundPanic. */
+            class BamlOutboundPanic implements IBamlOutboundPanic {
+
+                /**
+                 * Constructs a new BamlOutboundPanic.
+                 * @param [properties] Properties to set
+                 */
+                constructor(properties?: baml_core.cffi.v1.IBamlOutboundPanic);
+
+                /** BamlOutboundPanic value. */
+                public value?: (baml_core.cffi.v1.IBamlOutboundValue|null);
+
+                /** BamlOutboundPanic trace. */
+                public trace: string[];
+
+                /** BamlOutboundPanic isExitPanic. */
+                public isExitPanic: boolean;
+
+                /** BamlOutboundPanic exitCode. */
+                public exitCode: (number|Long);
+
+                /**
+                 * Creates a new BamlOutboundPanic instance using the specified properties.
+                 * @param [properties] Properties to set
+                 * @returns BamlOutboundPanic instance
+                 */
+                public static create(properties?: baml_core.cffi.v1.IBamlOutboundPanic): baml_core.cffi.v1.BamlOutboundPanic;
+
+                /**
+                 * Encodes the specified BamlOutboundPanic message. Does not implicitly {@link baml_core.cffi.v1.BamlOutboundPanic.verify|verify} messages.
+                 * @param message BamlOutboundPanic message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encode(message: baml_core.cffi.v1.IBamlOutboundPanic, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Encodes the specified BamlOutboundPanic message, length delimited. Does not implicitly {@link baml_core.cffi.v1.BamlOutboundPanic.verify|verify} messages.
+                 * @param message BamlOutboundPanic message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encodeDelimited(message: baml_core.cffi.v1.IBamlOutboundPanic, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Decodes a BamlOutboundPanic message from the specified reader or buffer.
+                 * @param reader Reader or buffer to decode from
+                 * @param [length] Message length if known beforehand
+                 * @returns BamlOutboundPanic
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml_core.cffi.v1.BamlOutboundPanic;
+
+                /**
+                 * Decodes a BamlOutboundPanic message from the specified reader or buffer, length delimited.
+                 * @param reader Reader or buffer to decode from
+                 * @returns BamlOutboundPanic
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml_core.cffi.v1.BamlOutboundPanic;
+
+                /**
+                 * Verifies a BamlOutboundPanic message.
+                 * @param message Plain object to verify
+                 * @returns `null` if valid, otherwise the reason why it is not
+                 */
+                public static verify(message: { [k: string]: any }): (string|null);
+
+                /**
+                 * Creates a BamlOutboundPanic message from a plain object. Also converts values to their respective internal types.
+                 * @param object Plain object
+                 * @returns BamlOutboundPanic
+                 */
+                public static fromObject(object: { [k: string]: any }): baml_core.cffi.v1.BamlOutboundPanic;
+
+                /**
+                 * Creates a plain object from a BamlOutboundPanic message. Also converts values to other types if specified.
+                 * @param message BamlOutboundPanic
+                 * @param [options] Conversion options
+                 * @returns Plain object
+                 */
+                public static toObject(message: baml_core.cffi.v1.BamlOutboundPanic, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+                /**
+                 * Converts this BamlOutboundPanic to JSON.
+                 * @returns JSON object
+                 */
+                public toJSON(): { [k: string]: any };
+
+                /**
+                 * Gets the default type url for BamlOutboundPanic
+                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns The default type url
+                 */
+                public static getTypeUrl(typeUrlPrefix?: string): string;
+            }
+
             /** Properties of a BamlOutboundValue. */
             interface IBamlOutboundValue {
 

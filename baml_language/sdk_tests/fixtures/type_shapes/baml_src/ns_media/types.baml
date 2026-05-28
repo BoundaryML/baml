@@ -11,38 +11,38 @@ class Media {
   pdf_field pdf
 }
 
-function ReturnImage(url: string, mime: string?) -> image {
+function return_image(url: string, mime: string?) -> image {
   image.from_url(url, mime)
 }
 
-function ReturnAudio(url: string, mime: string?) -> audio {
+function return_audio(url: string, mime: string?) -> audio {
   audio.from_url(url, mime)
 }
 
-function ReturnVideo(url: string, mime: string?) -> video {
+function return_video(url: string, mime: string?) -> video {
   video.from_url(url, mime)
 }
 
-function ReturnPdf(url: string, mime: string?) -> pdf {
+function return_pdf(url: string, mime: string?) -> pdf {
   pdf.from_url(url, mime)
 }
 
-function RoundTripImage(x: image) -> image {
+function round_trip_image(x: image) -> image {
   x
 }
 
-function RoundTripAudio(x: audio) -> audio {
+function round_trip_audio(x: audio) -> audio {
   x
 }
 
-function RoundTripVideo(x: video) -> video {
+function round_trip_video(x: video) -> video {
   x
 }
 
-function RoundTripPdf(x: pdf) -> pdf {
+function round_trip_pdf(x: pdf) -> pdf {
   x
 }
 
-function RoundTripMedia(m: Media) -> Media {
+function round_trip_media(m: Media) -> Media {
   m
 }
