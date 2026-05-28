@@ -726,7 +726,53 @@ pub enum Expr {
     OptionalChain {
         expr: ExprId,
     },
+    /// Tagged template literal site, per BEP-049 §10. Held as a
+    /// first-class HIR node through TIR so type checking can apply
+    /// tag-aware rules: the tag's body parameter brings extra bindings
+    /// into scope for interpolation expressions, and errors point at the
+    /// original segment span. MIR lowers this to the equivalent
+    /// `tag(body = (...) -> TaggedString { TaggedString { parts, values } })`
+    /// call form.
+    TaggedTemplate {
+        /// The tag expression — usually a bare identifier referring to a
+        /// fn marked `//baml:tagged_string`. Stored as an `ExprId` so
+        /// paths and future curry forms compose without grammar changes.
+        tag: ExprId,
+        /// Structured template body. Mirrors `BacktickSegment` from the
+        /// CST but each interp/condition/collection is already a lowered
+        /// `ExprId`, and for-bindings are lowered `PatId`s. Lets TIR walk
+        /// the tree without re-touching the CST.
+        segments: Vec<TaggedSegment>,
+    },
     Missing,
+}
+
+/// One segment of a `TaggedTemplate` body. Parallel to `BacktickSegment`
+/// in the CST layer, but every sub-expression is already lowered.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TaggedSegment {
+    /// Literal text between interpolations / block tags.
+    Text(std::string::String),
+    /// A `${expr}` interpolation. The wrapped `ExprId` is the lowered
+    /// inner expression (already a block expression per BEP §4).
+    Interp(ExprId),
+    /// A `${for (let p in c)}...${endfor}` block.
+    For {
+        binding: PatId,
+        collection: ExprId,
+        body: Vec<TaggedSegment>,
+    },
+    /// A `${if (c)}...${else if (c)}...${else}...${endif}` chain.
+    If {
+        branches: Vec<TaggedIfBranch>,
+        else_body: Option<Vec<TaggedSegment>>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaggedIfBranch {
+    pub condition: ExprId,
+    pub body: Vec<TaggedSegment>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

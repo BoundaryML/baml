@@ -2430,6 +2430,14 @@ impl LoweringContext<'_> {
                 self.emit_panic_call("parse error", expr_id);
             }
 
+            AstExpr::TaggedTemplate { .. } => {
+                // M4e.1 placeholder: tagged-template lowering to a
+                // Call+Lambda+TaggedString form lands in a follow-up.
+                // Treat as an unimplemented runtime panic for now so the
+                // workspace compiles end-to-end.
+                self.emit_panic_call("tagged templates not yet implemented", expr_id);
+            }
+
             AstExpr::Spawn { name, body } => {
                 self.lower_spawn(expr_id, name, body, dest);
             }

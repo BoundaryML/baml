@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use baml_base::Name;
-use baml_compiler2_ast::{Expr, ExprBody, ExprId, Stmt, StmtId};
+use baml_compiler2_ast::{self as ast, Expr, ExprBody, ExprId, Stmt, StmtId};
 
 use crate::{
     throw_inference::flatten_ty_to_facts,
@@ -303,11 +303,51 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
         Expr::Await { future } => {
             collect_from_expr(context, *future, body, out);
         }
+        Expr::TaggedTemplate { tag, segments } => {
+            collect_from_expr(context, *tag, body, out);
+            collect_from_tagged_segments(context, segments, body, out);
+        }
         Expr::Lambda(_)
         | Expr::Literal(_)
         | Expr::ByteStringLiteral(_)
         | Expr::Null
         | Expr::Path(_)
         | Expr::Missing => {}
+    }
+}
+
+/// Recursive walk of a tagged-template segment tree collecting throw facts
+/// from each interp/condition/iter expression and any nested for/if bodies.
+fn collect_from_tagged_segments<C: ThrowsAnalysisContext>(
+    context: &C,
+    segments: &[ast::TaggedSegment],
+    body: &ExprBody,
+    out: &mut BTreeSet<Ty>,
+) {
+    for seg in segments {
+        match seg {
+            ast::TaggedSegment::Text(_) => {}
+            ast::TaggedSegment::Interp(e) => collect_from_expr(context, *e, body, out),
+            ast::TaggedSegment::For {
+                collection,
+                body: inner,
+                ..
+            } => {
+                collect_from_expr(context, *collection, body, out);
+                collect_from_tagged_segments(context, inner, body, out);
+            }
+            ast::TaggedSegment::If {
+                branches,
+                else_body,
+            } => {
+                for branch in branches {
+                    collect_from_expr(context, branch.condition, body, out);
+                    collect_from_tagged_segments(context, &branch.body, body, out);
+                }
+                if let Some(eb) = else_body {
+                    collect_from_tagged_segments(context, eb, body, out);
+                }
+            }
+        }
     }
 }

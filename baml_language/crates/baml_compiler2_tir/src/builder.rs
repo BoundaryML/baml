@@ -2112,7 +2112,103 @@ impl<'db> TypeInferenceBuilder<'db> {
                     refs,
                 );
             }
+            Expr::TaggedTemplate { tag, segments } => {
+                Self::collect_default_expr_forward_references(
+                    *tag,
+                    body,
+                    later_params,
+                    shadowed,
+                    refs,
+                );
+                Self::collect_default_expr_forward_references_in_tagged_segments(
+                    segments,
+                    body,
+                    later_params,
+                    shadowed,
+                    refs,
+                );
+            }
             Expr::Literal(_) | Expr::ByteStringLiteral(_) | Expr::Null | Expr::Missing => {}
+        }
+    }
+
+    /// Recursive walk over a tagged-template segment tree. Same forward-reference
+    /// collection as `collect_default_expr_forward_references` but threads
+    /// through nested for-bodies and if-branches, pushing for-bindings onto the
+    /// shadowed stack.
+    fn collect_default_expr_forward_references_in_tagged_segments(
+        segments: &[ast::TaggedSegment],
+        body: &ExprBody,
+        later_params: &FxHashSet<Name>,
+        shadowed: &mut Vec<Name>,
+        refs: &mut Vec<Name>,
+    ) {
+        for seg in segments {
+            match seg {
+                ast::TaggedSegment::Text(_) => {}
+                ast::TaggedSegment::Interp(e) => {
+                    Self::collect_default_expr_forward_references(
+                        *e,
+                        body,
+                        later_params,
+                        shadowed,
+                        refs,
+                    );
+                }
+                ast::TaggedSegment::For {
+                    binding,
+                    collection,
+                    body: inner,
+                } => {
+                    Self::collect_default_expr_forward_references(
+                        *collection,
+                        body,
+                        later_params,
+                        shadowed,
+                        refs,
+                    );
+                    let saved_len = shadowed.len();
+                    Self::push_pattern_bindings(*binding, body, shadowed);
+                    Self::collect_default_expr_forward_references_in_tagged_segments(
+                        inner,
+                        body,
+                        later_params,
+                        shadowed,
+                        refs,
+                    );
+                    shadowed.truncate(saved_len);
+                }
+                ast::TaggedSegment::If {
+                    branches,
+                    else_body,
+                } => {
+                    for branch in branches {
+                        Self::collect_default_expr_forward_references(
+                            branch.condition,
+                            body,
+                            later_params,
+                            shadowed,
+                            refs,
+                        );
+                        Self::collect_default_expr_forward_references_in_tagged_segments(
+                            &branch.body,
+                            body,
+                            later_params,
+                            shadowed,
+                            refs,
+                        );
+                    }
+                    if let Some(eb) = else_body {
+                        Self::collect_default_expr_forward_references_in_tagged_segments(
+                            eb,
+                            body,
+                            later_params,
+                            shadowed,
+                            refs,
+                        );
+                    }
+                }
+            }
         }
     }
 
@@ -3257,6 +3353,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                             attr: TyAttr::default(),
                         }
                     }
+                }
+            }
+            Expr::TaggedTemplate { .. } => {
+                // M4d.4 placeholder: tag-aware type inference still TODO.
+                // For now, surface as Unknown so downstream layers don't see
+                // a missing entry in `self.expressions`.
+                Ty::Unknown {
+                    attr: TyAttr::default(),
                 }
             }
             Expr::Missing => Ty::Unknown {
@@ -5644,12 +5748,55 @@ impl<'db> TypeInferenceBuilder<'db> {
                     out.extend(crate::throw_inference::flatten_ty_to_facts(error));
                 }
             }
+            Expr::TaggedTemplate { tag, segments } => {
+                self.collect_throw_facts_from_expr(*tag, body, out);
+                Self::collect_throw_facts_from_tagged_segments(self, segments, body, out);
+            }
             Expr::Lambda(_)
             | Expr::Literal(_)
             | Expr::ByteStringLiteral(_)
             | Expr::Null
             | Expr::Path(_)
             | Expr::Missing => {}
+        }
+    }
+
+    /// Recursive walk of a tagged-template segment tree collecting throw
+    /// facts from interpolated/condition/iter expressions and any nested
+    /// for/if bodies.
+    fn collect_throw_facts_from_tagged_segments(
+        &self,
+        segments: &[ast::TaggedSegment],
+        body: &ExprBody,
+        out: &mut BTreeSet<Ty>,
+    ) {
+        for seg in segments {
+            match seg {
+                ast::TaggedSegment::Text(_) => {}
+                ast::TaggedSegment::Interp(e) => {
+                    self.collect_throw_facts_from_expr(*e, body, out);
+                }
+                ast::TaggedSegment::For {
+                    collection,
+                    body: inner,
+                    ..
+                } => {
+                    self.collect_throw_facts_from_expr(*collection, body, out);
+                    self.collect_throw_facts_from_tagged_segments(inner, body, out);
+                }
+                ast::TaggedSegment::If {
+                    branches,
+                    else_body,
+                } => {
+                    for branch in branches {
+                        self.collect_throw_facts_from_expr(branch.condition, body, out);
+                        self.collect_throw_facts_from_tagged_segments(&branch.body, body, out);
+                    }
+                    if let Some(eb) = else_body {
+                        self.collect_throw_facts_from_tagged_segments(eb, body, out);
+                    }
+                }
+            }
         }
     }
 

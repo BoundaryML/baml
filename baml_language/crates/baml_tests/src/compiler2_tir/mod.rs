@@ -317,6 +317,7 @@ pub(crate) mod support {
                 format!("spawn {{ {} }}", expr_desc(*spawn_body, body))
             }
             Expr::Await { future } => format!("await {}", expr_desc(*future, body)),
+            Expr::TaggedTemplate { tag, .. } => format!("{}`...`", expr_desc(*tag, body)),
             Expr::Missing => "<missing>".into(),
         }
     }
@@ -1699,6 +1700,10 @@ pub(crate) mod support {
                 Expr::Await { future } => format!(
                     "await {}",
                     expr_desc_hir(*future, body, prefix, local_type_names)
+                ),
+                Expr::TaggedTemplate { tag, .. } => format!(
+                    "{}`...`",
+                    expr_desc_hir(*tag, body, prefix, local_type_names)
                 ),
                 Expr::Missing => "<missing>".into(),
             }

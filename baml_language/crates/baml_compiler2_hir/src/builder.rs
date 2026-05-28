@@ -530,6 +530,12 @@ impl<'db> SemanticIndexBuilder<'db> {
                 self.walk_expr(*lhs, body, source_map, true);
                 self.walk_expr(*rhs, body, source_map, true);
             }
+            ast::Expr::TaggedTemplate { tag, segments } => {
+                self.walk_expr(*tag, body, source_map, true);
+                for seg in segments {
+                    self.walk_tagged_segment(seg, body, source_map);
+                }
+            }
             ast::Expr::Unary { expr, .. } | ast::Expr::OptionalChain { expr } => {
                 self.walk_expr(*expr, body, source_map, true);
             }
@@ -583,6 +589,60 @@ impl<'db> SemanticIndexBuilder<'db> {
             | ast::Expr::Block { .. }
             | ast::Expr::Lambda(_)
             | ast::Expr::Missing => {}
+        }
+    }
+
+    /// Recursively walk a tagged-template segment, registering any
+    /// for-binding patterns and walking interpolated/conditional/iter
+    /// expressions. Mirrors `walk_expr`'s recursion shape.
+    fn walk_tagged_segment(
+        &mut self,
+        seg: &ast::TaggedSegment,
+        body: &ast::ExprBody,
+        source_map: &ast::AstSourceMap,
+    ) {
+        match seg {
+            ast::TaggedSegment::Text(_) => {}
+            ast::TaggedSegment::Interp(expr_id) => {
+                self.walk_expr(*expr_id, body, source_map, true);
+            }
+            ast::TaggedSegment::For {
+                binding,
+                collection,
+                body: inner,
+            } => {
+                self.walk_expr(*collection, body, source_map, true);
+                // Mirror Stmt::For: push a block scope for the binding.
+                let span = source_map.pattern_span(*binding);
+                self.push_scope(ScopeKind::Block, None, span);
+                self.register_local_pattern(
+                    *binding,
+                    DefinitionSite::PatternBinding(*binding),
+                    body,
+                    source_map,
+                    source_map.pattern_span(*binding).start(),
+                );
+                for inner_seg in inner {
+                    self.walk_tagged_segment(inner_seg, body, source_map);
+                }
+                self.pop_scope();
+            }
+            ast::TaggedSegment::If {
+                branches,
+                else_body,
+            } => {
+                for branch in branches {
+                    self.walk_expr(branch.condition, body, source_map, true);
+                    for inner_seg in &branch.body {
+                        self.walk_tagged_segment(inner_seg, body, source_map);
+                    }
+                }
+                if let Some(eb) = else_body {
+                    for inner_seg in eb {
+                        self.walk_tagged_segment(inner_seg, body, source_map);
+                    }
+                }
+            }
         }
     }
 
