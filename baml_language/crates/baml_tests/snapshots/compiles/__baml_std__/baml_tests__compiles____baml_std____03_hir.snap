@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 4158
 ---
 === HIR2 ===
 
@@ -80,8 +81,18 @@ function baml.unshift(self: ?, item: baml.T) -> int  [builtin]
 function baml.values(self: ?) -> baml.V[]  [builtin]
 
 --- <builtin>/baml/core.baml ---
+class baml.TaggedString {
+  parts: string[]
+  values: unknown[]
+}
 function baml.deep_copy(value: baml.T) -> baml.T  [builtin]
 function baml.deep_equals(a: baml.T, b: baml.T) -> bool  [builtin]
+function baml.from_json(j: baml.json.json) -> baml.TaggedString  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function baml.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
 
 --- <builtin>/baml/float.baml ---
 class baml.Float {

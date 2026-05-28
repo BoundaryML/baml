@@ -209,6 +209,11 @@ pub enum SyntaxKind {
     UNARY_EXPR,
     CALL_EXPR,
     INDEX_EXPR,
+    /// Tagged template literal: a tag identifier immediately followed by
+    /// a backtick string literal (BEP-049 §10). Structure: tag-expr child
+    /// plus `BACKTICK_STRING_LITERAL` child. Lowered to a call where the
+    /// body becomes a lambda producing a `TaggedString` value.
+    TAGGED_TEMPLATE_EXPR,
     /// Optional call: `func?.(args)` — short-circuits to null if callee is null.
     OPTIONAL_CALL_EXPR,
     /// Optional index: `obj?.[expr]` — short-circuits to null if base is null.

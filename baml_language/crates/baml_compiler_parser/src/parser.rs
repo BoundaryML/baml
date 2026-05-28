@@ -4766,6 +4766,24 @@ impl<'a> Parser<'a> {
                 self.wrap_events_in_node(lhs_start, SyntaxKind::CALL_EXPR);
                 self.parse_call_args();
                 self.finish_node();
+            } else if op == TokenKind::Backtick && !self.has_newline_ahead() {
+                // Tagged template: `tag` ` … ` ` lowers at HIR time to a call
+                // where the body becomes a lambda producing `TaggedString`
+                // (BEP-049 §10). Recognised as a postfix on any expression so
+                // `sql`…`` parses; further restrictions (the target must be a
+                // function marked `//baml:tagged_string`) are enforced later.
+                //
+                // We require no newline between the tag expression and the
+                // backtick — otherwise statement-terminating layouts like
+                //   let name = "world"
+                //   `Hello, ${name}!`
+                // would wrongly absorb the standalone backtick literal as a
+                // postfix on `"world"`. JS uses the same `no-LineTerminator`
+                // restriction here for the same reason.
+                let lhs_start = self.find_previous_expr_start_after(expr_start);
+                self.wrap_events_in_node(lhs_start, SyntaxKind::TAGGED_TEMPLATE_EXPR);
+                self.parse_backtick_string();
+                self.finish_node();
             } else if op == TokenKind::LBracket {
                 // Index expression
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
@@ -8519,6 +8537,58 @@ function Demo(n: int) -> string {
         assert!(
             root.descendants()
                 .any(|n| n.kind() == SyntaxKind::BACKTICK_ENDIF)
+        );
+    }
+
+    #[test]
+    fn backtick_m4_tagged_template_wraps_backtick() {
+        // BEP-049 §10. `name` immediately preceding a backtick parses as
+        // a TAGGED_TEMPLATE_EXPR; the inner BACKTICK_STRING_LITERAL is a
+        // child of the new node so HIR lowering has both the tag callee
+        // and the body in one shape.
+        let source = "
+function Demo() -> string {
+    let q = sql`SELECT * FROM t WHERE id = ${1}`
+    q
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let tagged = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::TAGGED_TEMPLATE_EXPR)
+            .expect("expected TAGGED_TEMPLATE_EXPR");
+        // Tag identifier sits at the start of the tagged expr's text.
+        assert!(tagged.text().to_string().starts_with("sql`"));
+        // The wrapper must enclose a BACKTICK_STRING_LITERAL.
+        assert!(
+            tagged
+                .descendants()
+                .any(|n| n.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
+        );
+    }
+
+    #[test]
+    fn backtick_m4_untagged_backtick_stays_unwrapped() {
+        // A bare backtick literal — no preceding identifier — should NOT
+        // become a TAGGED_TEMPLATE_EXPR. Guards against the postfix branch
+        // misfiring on prefix-only expressions.
+        let source = "
+function Demo() -> string {
+    `hello`
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert!(
+            !root
+                .descendants()
+                .any(|n| n.kind() == SyntaxKind::TAGGED_TEMPLATE_EXPR),
+            "untagged backtick must not wrap in TAGGED_TEMPLATE_EXPR"
+        );
+        assert!(
+            root.descendants()
+                .any(|n| n.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
         );
     }
 

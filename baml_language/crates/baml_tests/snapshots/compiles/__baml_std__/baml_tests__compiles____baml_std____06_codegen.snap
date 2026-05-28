@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 4386
 ---
 function baml.Array.at(self: null, index: int) -> void? {
 }
@@ -535,6 +536,24 @@ function baml.String.trim_end(self: null) -> string {
 }
 
 function baml.String.trim_start(self: null) -> string {
+}
+
+function baml.TaggedString.from_json(j: baml.json.json) -> baml.TaggedString {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type baml.TaggedString
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function baml.TaggedString.to_json(self: null) -> baml.json.json {
+    load_type baml.TaggedString
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
 }
 
 function baml.TypeValue.from_json(j: baml.json.json) -> baml.TypeValue {

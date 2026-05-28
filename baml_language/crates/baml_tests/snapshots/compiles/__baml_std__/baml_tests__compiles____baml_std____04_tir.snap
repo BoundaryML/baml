@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 4198
 ---
 === TIR2 ===
 
@@ -40,6 +41,20 @@ class baml.Map$stream {
 }
 
 --- <builtin>/baml/core.baml ---
+class baml.TaggedString {
+  parts: string[]
+  values: unknown[]
+}
+function baml.TaggedString.to_json(self: baml.TaggedString) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<TaggedString>(self)) : baml.json.json
+}
+function baml.TaggedString.from_json(j: baml.json.json) -> baml.TaggedString throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : baml.TaggedString
+}
+class baml.TaggedString$stream {
+  parts: string[]
+  values: unknown[]
+}
 
 --- <builtin>/baml/float.baml ---
 class baml.Float {
