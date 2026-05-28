@@ -39,6 +39,9 @@ jobs:
         with:
           workspaces: "baml_language -> target"
           shared-key: "linux-cargo"
+          # Read-only consumer. The canary saver lives in
+          # cargo-tests.reusable.yaml; see the cache strategy comment there.
+          save-if: false
 
       - name: "Run size-gate check"
         id: check
@@ -84,6 +87,9 @@ jobs:
         with:
           workspaces: "baml_language -> target"
           shared-key: "macos-cargo"
+          # Read-only consumer. The canary saver lives in
+          # cargo-tests.reusable.yaml; see the cache strategy comment there.
+          save-if: false
 
       - name: "Run size-gate check"
         id: check
@@ -136,6 +142,9 @@ jobs:
         with:
           workspaces: "baml_language -> target"
           shared-key: "windows-cargo"
+          # Read-only consumer. The canary saver lives in
+          # cargo-tests.reusable.yaml; see the cache strategy comment there.
+          save-if: false
 
       - name: "Run size-gate check"
         id: check
@@ -183,6 +192,9 @@ jobs:
         with:
           workspaces: "baml_language -> target"
           shared-key: "linux-wasm"
+          # Read-only consumer. The canary saver lives in
+          # cargo-tests.reusable.yaml; see the cache strategy comment there.
+          save-if: false
 
       - name: "Run size-gate check"
         id: check
