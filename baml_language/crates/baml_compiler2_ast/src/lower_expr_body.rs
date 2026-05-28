@@ -16,7 +16,8 @@ use crate::{
         ArrayRestPat, AssignOp, AstSourceMap, BinaryOp, CallArg, CatchArm, CatchArmId, CatchClause,
         CatchClauseKind, DefaultExprId, Expr, ExprBody, ExprId, FieldPat, FunctionBodyDef,
         FunctionDef, FunctionDefaults, LetOrigin, Literal, LoopOrigin, MatchArm, MatchArmId, Param,
-        PatId, Pattern, SpannedTypeExpr, SpreadField, Stmt, StmtId, TypeAnnotId, TypeExpr, UnaryOp,
+        PatId, Pattern, SpannedTypeExpr, SpreadField, Stmt, StmtId, TaggedIfBranch, TaggedSegment,
+        TypeAnnotId, TypeExpr, UnaryOp,
     },
 };
 
@@ -641,6 +642,7 @@ impl LoweringContext {
             SyntaxKind::INDEX_EXPR => self.lower_index_expr(node),
             SyntaxKind::OPTIONAL_INDEX_EXPR => self.lower_optional_index_expr(node),
             SyntaxKind::OPTIONAL_CALL_EXPR => self.lower_optional_call_expr(node),
+            SyntaxKind::TAGGED_TEMPLATE_EXPR => self.lower_tagged_template_expr(node),
             SyntaxKind::PAREN_EXPR => {
                 if let Some(inner) = node.children().next() {
                     self.lower_expr(&inner)
@@ -2740,6 +2742,180 @@ impl LoweringContext {
             );
         }
         current_else
+    }
+
+    /// Lower a `TAGGED_TEMPLATE_EXPR` (BEP-049 §10) — a tag expression
+    /// immediately followed by a backtick string — to a first-class
+    /// [`Expr::TaggedTemplate`].
+    ///
+    /// CST shape (see the `parse_backtick_string` call site in the parser):
+    /// the tag expression is wrapped as the first child, followed by the
+    /// `BACKTICK_STRING_LITERAL`. Unlike the untagged path
+    /// (`lower_backtick_string_literal`), we do **not** desugar `${for}` /
+    /// `${if}` into an accumulator block or concatenate text — the structure
+    /// is kept as [`TaggedSegment`]s so TIR can apply tag-aware rules and
+    /// point diagnostics at the original `${…}` spans.
+    fn lower_tagged_template_expr(&mut self, node: &SyntaxNode) -> ExprId {
+        use baml_compiler_syntax::BacktickStringLiteral;
+
+        let span = node.text_range();
+
+        // The backtick literal child; the tag is the first *other* child node.
+        let backtick_node = node
+            .children()
+            .find(|n| n.kind() == SyntaxKind::BACKTICK_STRING_LITERAL);
+        let tag = node
+            .children()
+            .find(|n| n.kind() != SyntaxKind::BACKTICK_STRING_LITERAL)
+            .map(|n| self.lower_expr(&n))
+            .or_else(|| {
+                // Defensive: if the parser ever leaves a bare-token tag
+                // (a lone identifier/literal) un-wrapped, lower it directly.
+                node.children_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .find_map(|t| self.try_lower_bare_token(&t))
+            })
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, span));
+
+        let segments = backtick_node
+            .and_then(BacktickStringLiteral::cast)
+            .map(|lit| self.lower_tagged_segments(lit.segments()))
+            .unwrap_or_default();
+
+        self.alloc_expr(Expr::TaggedTemplate { tag, segments }, span)
+    }
+
+    /// Walk backtick segments into [`TaggedSegment`]s, preserving `${for}` /
+    /// `${if}` structure (no accumulator desugaring). Mirrors the iteration
+    /// shape of `lower_backtick_segments` but keeps each construct as data.
+    fn lower_tagged_segments(
+        &mut self,
+        segments: Vec<baml_compiler_syntax::BacktickSegment>,
+    ) -> Vec<TaggedSegment> {
+        use baml_compiler_syntax::BacktickSegment;
+
+        let mut out = Vec::with_capacity(segments.len());
+        for seg in segments {
+            match seg {
+                BacktickSegment::Text(s) => out.push(TaggedSegment::Text(s)),
+                BacktickSegment::Interp(interp_node) => {
+                    out.push(TaggedSegment::Interp(
+                        self.lower_tagged_interp(&interp_node),
+                    ));
+                }
+                BacktickSegment::For(for_seg) => {
+                    if let Some(s) = self.lower_tagged_for(for_seg) {
+                        out.push(s);
+                    }
+                }
+                BacktickSegment::If(if_seg) => {
+                    out.push(self.lower_tagged_if(if_seg));
+                }
+            }
+        }
+        out
+    }
+
+    /// Lower a `${expr}` interpolation for the tagged path. Per BEP §10 the
+    /// `TaggedSegment::Interp` payload is the raw lowered block expression —
+    /// NOT the `.to_string()`-wrapped form used by the untagged concat path
+    /// (`lower_backtick_interp`). The tag's body decides how each value is
+    /// rendered, so we hand it the unmodified inner expression.
+    fn lower_tagged_interp(&mut self, interp_node: &SyntaxNode) -> ExprId {
+        match interp_node
+            .children()
+            .find(|c| c.kind() == SyntaxKind::BLOCK_EXPR)
+        {
+            Some(b) => self.lower_expr(&b),
+            None => self.alloc_expr(Expr::Missing, interp_node.text_range()),
+        }
+    }
+
+    /// Lower a `${for (let p in c)}…${endfor}` block, keeping structure.
+    ///
+    /// The header extraction is identical to `lower_backtick_for`, but we stop
+    /// before the accumulator desugaring and emit `TaggedSegment::For`. The
+    /// HIR walker (`walk_tagged_segment`) pushes the loop scope and registers
+    /// the binding itself, so a plain `lower_pattern` `PatId` is all we emit
+    /// here — none of the `" __m3_for"` accumulator / span tricks apply.
+    /// A malformed header (missing binding or collection) drops the segment.
+    fn lower_tagged_for(
+        &mut self,
+        for_seg: baml_compiler_syntax::BacktickForSegment,
+    ) -> Option<TaggedSegment> {
+        let mut pattern_node = None;
+        let mut collection: Option<ExprId> = None;
+        let mut seen_in = false;
+        for elem in for_seg.open.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Token(t) => match t.kind() {
+                    SyntaxKind::KW_IN => seen_in = true,
+                    _ => {
+                        if seen_in && collection.is_none() {
+                            collection = self.try_lower_bare_token(&t);
+                        }
+                    }
+                },
+                rowan::NodeOrToken::Node(child) => {
+                    if !seen_in && pattern_node.is_none() && child.kind() == SyntaxKind::LET_STMT {
+                        pattern_node = child.children().find(|n| n.kind() == SyntaxKind::PATTERN);
+                    } else if seen_in && collection.is_none() {
+                        collection = Some(self.lower_expr(&child));
+                    }
+                }
+            }
+        }
+
+        let pattern_node = pattern_node?;
+        let collection = collection?;
+        let binding = self.lower_pattern(&pattern_node);
+        let body = self.lower_tagged_segments(for_seg.body);
+
+        Some(TaggedSegment::For {
+            binding,
+            collection,
+            body,
+        })
+    }
+
+    /// Lower a `${if (c)}…${else if (c)}…${else}…${endif}` chain, keeping
+    /// structure. Condition extraction is identical to `lower_backtick_if`;
+    /// bodies recurse via `lower_tagged_segments`. The host if-chain fold is
+    /// deliberately NOT performed — TIR/MIR consume the branch structure.
+    fn lower_tagged_if(
+        &mut self,
+        if_seg: baml_compiler_syntax::BacktickIfSegment,
+    ) -> TaggedSegment {
+        let mut branches = Vec::with_capacity(if_seg.branches.len());
+        for branch in if_seg.branches {
+            let header_span = branch.header.text_range();
+            let mut cond: Option<ExprId> = None;
+            for elem in branch.header.children_with_tokens() {
+                match elem {
+                    rowan::NodeOrToken::Node(c) if c.kind() != SyntaxKind::PATTERN => {
+                        cond = Some(self.lower_expr(&c));
+                        break;
+                    }
+                    rowan::NodeOrToken::Node(_) => {}
+                    rowan::NodeOrToken::Token(t) => {
+                        if let Some(expr) = self.try_lower_bare_token(&t) {
+                            cond = Some(expr);
+                            break;
+                        }
+                    }
+                }
+            }
+            let condition = cond.unwrap_or_else(|| self.alloc_expr(Expr::Missing, header_span));
+            let body = self.lower_tagged_segments(branch.body);
+            branches.push(TaggedIfBranch { condition, body });
+        }
+
+        let else_body = if_seg.else_body.map(|b| self.lower_tagged_segments(b));
+
+        TaggedSegment::If {
+            branches,
+            else_body,
+        }
     }
 
     fn lower_byte_string_literal(&mut self, node: &SyntaxNode) -> ExprId {

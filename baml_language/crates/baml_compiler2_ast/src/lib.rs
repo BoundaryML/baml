@@ -382,6 +382,94 @@ function Search(query: string, max_results: int = 10) -> int {
     }
 
     #[test]
+    fn ast_tagged_template_lowers_to_tagged_template_expr() {
+        // BEP-049 §10 / M4d.2. `tag`...`` lowers to a first-class
+        // `Expr::TaggedTemplate`, PRESERVING segment structure (text /
+        // interp / for / if) rather than desugaring into a string-concat
+        // the way an untagged backtick literal does. The tag itself lowers
+        // as an ordinary expression (here the bare path `sql`).
+        use crate::ast::{TaggedIfBranch, TaggedSegment};
+        let source = r#"
+function Demo(items: string[]) -> string {
+  sql`a ${1} ${for (let x in items)}${x},${endfor}${if (true)}w${else}e${endif}`
+}
+"#;
+        let function = first_function(parse_and_lower(source));
+        let Some(FunctionBodyDef::Expr(body, _source_map)) = &function.body else {
+            panic!("expected expression body");
+        };
+        let root = body.root_expr.expect("expected body root expression");
+        let Expr::Block {
+            tail_expr: Some(tail),
+            ..
+        } = &body.exprs[root]
+        else {
+            panic!("expected block root, got {:?}", &body.exprs[root]);
+        };
+        let Expr::TaggedTemplate { tag, segments } = &body.exprs[*tail] else {
+            panic!("expected TaggedTemplate tail, got {:?}", &body.exprs[*tail]);
+        };
+
+        // Tag lowers to the bare path `sql` (M4d.3 will validate it resolves
+        // to a `//baml:tagged_string` fn; M4d.2 only lowers it structurally).
+        assert!(
+            matches!(&body.exprs[*tag], Expr::Path(p) if p.len() == 1 && p[0].as_str() == "sql"),
+            "tag should lower to Path([sql]), got {:?}",
+            &body.exprs[*tag]
+        );
+
+        // Top-level segments include a leading Text, an Interp, a For block
+        // and an If chain (whitespace Text segments interleave them).
+        assert!(
+            matches!(segments.first(), Some(TaggedSegment::Text(_))),
+            "first segment should be literal text, got {:?}",
+            segments.first()
+        );
+        assert!(
+            segments
+                .iter()
+                .any(|s| matches!(s, TaggedSegment::Interp(_))),
+            "expected a top-level Interp segment"
+        );
+
+        let TaggedSegment::For { body: for_body, .. } = segments
+            .iter()
+            .find(|s| matches!(s, TaggedSegment::For { .. }))
+            .expect("expected a For segment")
+        else {
+            unreachable!()
+        };
+        assert!(
+            for_body
+                .iter()
+                .any(|s| matches!(s, TaggedSegment::Interp(_))),
+            "for body should contain the ${{x}} interpolation, got {for_body:?}"
+        );
+
+        let TaggedSegment::If {
+            branches,
+            else_body,
+        } = segments
+            .iter()
+            .find(|s| matches!(s, TaggedSegment::If { .. }))
+            .expect("expected an If segment")
+        else {
+            unreachable!()
+        };
+        assert_eq!(branches.len(), 1, "expected a single if-branch");
+        let TaggedIfBranch {
+            body: then_body, ..
+        } = &branches[0];
+        assert!(
+            then_body
+                .iter()
+                .any(|s| matches!(s, TaggedSegment::Text(_))),
+            "then-branch should contain text"
+        );
+        assert!(else_body.is_some(), "if should carry an else body");
+    }
+
+    #[test]
     fn ast_default_indices_survive_recovered_parameter() {
         let source = r#"
 function Broken(: int = 1, value: int = 2) -> int {

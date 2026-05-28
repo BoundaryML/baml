@@ -2931,6 +2931,7 @@ impl LetStmt {
                     | SyntaxKind::INDEX_EXPR
                     | SyntaxKind::OPTIONAL_INDEX_EXPR
                     | SyntaxKind::OPTIONAL_CALL_EXPR
+                    | SyntaxKind::TAGGED_TEMPLATE_EXPR
                     | SyntaxKind::IF_EXPR
                     | SyntaxKind::IF_LET_EXPR
                     | SyntaxKind::MATCH_EXPR
@@ -3131,7 +3132,8 @@ impl BlockExpr {
                         | SyntaxKind::MAP_LITERAL
                         | SyntaxKind::STRING_LITERAL
                         | SyntaxKind::RAW_STRING_LITERAL
-                        | SyntaxKind::BACKTICK_STRING_LITERAL => Some(BlockElement::ExprNode(n)),
+                        | SyntaxKind::BACKTICK_STRING_LITERAL
+                        | SyntaxKind::TAGGED_TEMPLATE_EXPR => Some(BlockElement::ExprNode(n)),
                         _ => None,
                     }
                 }
