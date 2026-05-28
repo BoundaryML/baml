@@ -484,8 +484,9 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
 pub fn file_semantic_index(db: &dyn Db, file: SourceFile) -> FileSemanticIndex<'_> {
     let tree = baml_compiler_parser::syntax_tree(db, file);
     let file_range = tree.text_range();
+    let path = file.path(db);
     let (mut items, lowering_diags, env_var_refs) =
-        ast::lower_file_with_file_id(&tree, file.file_id(db));
+        ast::lower_file_with_path(&tree, Some(path.as_path()));
 
     // Merge synthetic *$stream items
     let expansion = ppir_expansion_items(db, file);
