@@ -1,6 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 6208
+assertion_line: 7402
 ---
 === MIR2 ===
 fn user.apply(f: (int, int) -> int throws never, a: int, b: int) -> int {
@@ -281,7 +281,7 @@ fn user.Box.from_json(j: baml.json.json) -> Box<void> {
     }
 
     bb2: {
-        _0 = user.Box<TypeArgRef(0)> { copy _2 };
+        _0 = user.Box<#0> { copy _2 };
         goto -> bb3;
     }
 
@@ -538,7 +538,7 @@ fn user.test_generic_bind() -> int {
     let _3: () -> int throws never
 
     bb0: {
-        _1 = user.Box<Concrete(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } })> { const 42_i64 };
+        _1 = user.Box<int> { const 42_i64 };
         _2 = make_bound_method user.Box.unwrap(copy _1);
         _3 = copy _2;
         _0 = call copy _3() -> [bb1];

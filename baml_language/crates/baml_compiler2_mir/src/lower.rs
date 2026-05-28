@@ -21,7 +21,7 @@ use crate::{
 /// type tags, using `Rvalue::TypeTag` for the switch operand.
 enum SwitchKind {
     Integer,
-    EnumDiscriminant(Name),
+    EnumDiscriminant(QualifiedTypeName),
     TypeTag,
 }
 
@@ -698,7 +698,7 @@ use rustc_hash::FxHashMap;
 
 type ClassFieldIndices = IndexMap<TypeName, IndexMap<String, usize>>;
 type ClassFieldTypes = IndexMap<TypeName, IndexMap<String, Ty>>;
-type EnumVariantIndices = IndexMap<Name, IndexMap<String, usize>>;
+type EnumVariantIndices = IndexMap<QualifiedTypeName, IndexMap<String, usize>>;
 type InterfaceImplementors = IndexMap<TypeName, Vec<TypeName>>;
 #[derive(Clone)]
 struct InterfaceTypeImplementor {
@@ -922,13 +922,11 @@ struct LoweringContext<'db> {
     // Schema maps built from PackageItems.
     // class_fields and class_type_tags are keyed by TypeName (name + module_path)
     // so that e.g. baml.http.Request and a user-defined Request are distinct.
-    // enum_variants is keyed by Name (short name only) because match-arm lowering
-    // (PatternKind::EnumVariant) only provides the enum's short Name, not a full
-    // TypeName with module_path. Upgrading to TypeName would require resolving the
-    // enum's package at each match site.
+    // enum_variants is keyed by QualifiedTypeName for the same reason: distinct
+    // namespaces can define enums with the same short name.
     class_fields: IndexMap<TypeName, IndexMap<String, usize>>,
     class_field_types: IndexMap<TypeName, IndexMap<String, Ty>>,
-    enum_variants: IndexMap<Name, IndexMap<String, usize>>,
+    enum_variants: EnumVariantIndices,
     /// Pre-computed type tags for class types, used by `SwitchKind::TypeTag`
     /// for union-type switch optimization (ported from MIR 1).
     class_type_tags: IndexMap<TypeName, i64>,
@@ -1111,12 +1109,17 @@ impl<'db> LoweringContext<'db> {
                         let efile = enum_loc.file(db);
                         let eitree = file_item_tree(db, efile);
                         let enum_data = &eitree[enum_loc.id(db)];
+                        let enum_qtn = QualifiedTypeName::new(
+                            pkg_name.clone(),
+                            ns_names.iter().cloned().collect(),
+                            enum_data.name.clone(),
+                        );
 
                         let mut variants = IndexMap::new();
                         for (idx, variant) in enum_data.variants.iter().enumerate() {
                             variants.insert(variant.name.to_string(), idx);
                         }
-                        out.enum_variants.insert(enum_data.name.clone(), variants);
+                        out.enum_variants.insert(enum_qtn, variants);
                     }
                     _ => {}
                 }
@@ -8174,19 +8177,19 @@ impl LoweringContext<'_> {
                         else {
                             unreachable!("guarded by matches! above");
                         };
-                        let short_name = qtn.name().clone();
+                        let enum_name = qtn.clone();
                         let variant = variant.clone();
                         match switch_kind.as_ref() {
                             None => {
                                 *switch_kind =
-                                    Some(SwitchKind::EnumDiscriminant(short_name.clone()));
+                                    Some(SwitchKind::EnumDiscriminant(enum_name.clone()));
                             }
-                            Some(SwitchKind::EnumDiscriminant(n)) if *n == short_name => {}
+                            Some(SwitchKind::EnumDiscriminant(n)) if *n == enum_name => {}
                             _ => return false,
                         }
                         let idx = this
                             .enum_variants
-                            .get(&short_name)
+                            .get(&enum_name)
                             .and_then(|m| m.get(variant.as_str()))
                             .copied();
                         let Some(idx) = idx else { return false };
@@ -8381,7 +8384,7 @@ impl LoweringContext<'_> {
                         .filter_map(|(val, _)| {
                             reverse
                                 .get(val)
-                                .map(|vname| (*val, format!("{enum_name}.{vname}")))
+                                .map(|vname| (*val, format!("{}.{vname}", enum_name.name())))
                         })
                         .collect()
                 } else {

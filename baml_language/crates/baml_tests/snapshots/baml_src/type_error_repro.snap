@@ -192,7 +192,7 @@ function type_error_repro.BoardMinimal.new() -> type_error_repro.BoardMinimal {
     return
 }
 
-function type_error_repro.BoardMinimal.play(self: null, player: string, row: int, col: int) -> null {
+function type_error_repro.BoardMinimal.play(self: type_error_repro.BoardMinimal, player: string, row: int, col: int) -> null {
     load_var self
     load_field .cells
     load_var row
@@ -204,7 +204,7 @@ function type_error_repro.BoardMinimal.play(self: null, player: string, row: int
     return
 }
 
-function type_error_repro.BoardRead.get(self: null, row: int, col: int) -> string {
+function type_error_repro.BoardRead.get(self: type_error_repro.BoardRead, row: int, col: int) -> string {
     load_var self
     load_field .cells
     load_var row
@@ -232,7 +232,7 @@ function type_error_repro.BoardRead.new() -> type_error_repro.BoardRead {
     return
 }
 
-function type_error_repro.BoardWrite.get(self: null, row: int, col: int) -> string {
+function type_error_repro.BoardWrite.get(self: type_error_repro.BoardWrite, row: int, col: int) -> string {
     load_var self
     load_field .cells
     load_var row
@@ -260,7 +260,7 @@ function type_error_repro.BoardWrite.new() -> type_error_repro.BoardWrite {
     return
 }
 
-function type_error_repro.BoardWrite.play(self: null, player: string, row: int, col: int) -> null {
+function type_error_repro.BoardWrite.play(self: type_error_repro.BoardWrite, player: string, row: int, col: int) -> null {
     load_var self
     load_field .cells
     load_var row
@@ -272,7 +272,7 @@ function type_error_repro.BoardWrite.play(self: null, player: string, row: int, 
     return
 }
 
-function type_error_repro.BytecodeContainer.set(self: null, idx: int, val: string) -> null {
+function type_error_repro.BytecodeContainer.set(self: type_error_repro.BytecodeContainer, idx: int, val: string) -> null {
     load_var self
     load_field .items
     load_var idx
@@ -282,7 +282,7 @@ function type_error_repro.BytecodeContainer.set(self: null, idx: int, val: strin
     return
 }
 
-function type_error_repro.BytecodeContainerRead.get(self: null, idx: int) -> string {
+function type_error_repro.BytecodeContainerRead.get(self: type_error_repro.BytecodeContainerRead, idx: int) -> string {
     load_var self
     load_field .items
     load_var idx
@@ -290,7 +290,7 @@ function type_error_repro.BytecodeContainerRead.get(self: null, idx: int) -> str
     return
 }
 
-function type_error_repro.BytecodeGrid.set(self: null, row: int, col: int, val: string) -> null {
+function type_error_repro.BytecodeGrid.set(self: type_error_repro.BytecodeGrid, row: int, col: int, val: string) -> null {
     load_var self
     load_field .cells
     load_var row
@@ -302,7 +302,7 @@ function type_error_repro.BytecodeGrid.set(self: null, row: int, col: int, val: 
     return
 }
 
-function type_error_repro.BytecodeScores.set(self: null, key: string, val: int) -> null {
+function type_error_repro.BytecodeScores.set(self: type_error_repro.BytecodeScores, key: string, val: int) -> null {
     load_var self
     load_field .data
     load_var key
@@ -312,7 +312,7 @@ function type_error_repro.BytecodeScores.set(self: null, key: string, val: int) 
     return
 }
 
-function type_error_repro.ContainerSelf.get(self: null, idx: int) -> string {
+function type_error_repro.ContainerSelf.get(self: type_error_repro.ContainerSelf, idx: int) -> string {
     load_var self
     load_field .items
     load_var idx
@@ -329,7 +329,7 @@ function type_error_repro.ContainerSelf.new() -> type_error_repro.ContainerSelf 
     return
 }
 
-function type_error_repro.ContainerSelf.set(self: null, idx: int, val: string) -> null {
+function type_error_repro.ContainerSelf.set(self: type_error_repro.ContainerSelf, idx: int, val: string) -> null {
     load_var self
     load_field .items
     load_var idx
@@ -339,7 +339,7 @@ function type_error_repro.ContainerSelf.set(self: null, idx: int, val: string) -
     return
 }
 
-function type_error_repro.Cube.get(self: null, x: int, y: int, z: int) -> int {
+function type_error_repro.Cube.get(self: type_error_repro.Cube, x: int, y: int, z: int) -> int {
     load_var self
     load_field .data
     load_var x
@@ -371,7 +371,7 @@ function type_error_repro.Cube.new() -> type_error_repro.Cube {
     return
 }
 
-function type_error_repro.Cube.set(self: null, x: int, y: int, z: int, val: int) -> null {
+function type_error_repro.Cube.set(self: type_error_repro.Cube, x: int, y: int, z: int, val: int) -> null {
     load_var self
     load_field .data
     load_var x
@@ -385,7 +385,7 @@ function type_error_repro.Cube.set(self: null, x: int, y: int, z: int, val: int)
     return
 }
 
-function type_error_repro.GridSelf.get(self: null, row: int, col: int) -> string {
+function type_error_repro.GridSelf.get(self: type_error_repro.GridSelf, row: int, col: int) -> string {
     load_var self
     load_field .cells
     load_var row
@@ -413,7 +413,7 @@ function type_error_repro.GridSelf.new() -> type_error_repro.GridSelf {
     return
 }
 
-function type_error_repro.GridSelf.set(self: null, row: int, col: int, val: string) -> null {
+function type_error_repro.GridSelf.set(self: type_error_repro.GridSelf, row: int, col: int, val: string) -> null {
     load_var self
     load_field .cells
     load_var row
@@ -425,7 +425,7 @@ function type_error_repro.GridSelf.set(self: null, row: int, col: int, val: stri
     return
 }
 
-function type_error_repro.OuterItems.get(self: null, idx: int) -> string {
+function type_error_repro.OuterItems.get(self: type_error_repro.OuterItems, idx: int) -> string {
     load_var self
     load_field .inner
     load_field .items
@@ -444,7 +444,7 @@ function type_error_repro.OuterItems.new() -> type_error_repro.OuterItems {
     return
 }
 
-function type_error_repro.OuterItems.set(self: null, idx: int, val: string) -> null {
+function type_error_repro.OuterItems.set(self: type_error_repro.OuterItems, idx: int, val: string) -> null {
     load_var self
     load_field .inner
     load_field .items
@@ -455,7 +455,7 @@ function type_error_repro.OuterItems.set(self: null, idx: int, val: string) -> n
     return
 }
 
-function type_error_repro.Registry.get(self: null, key: string, idx: int) -> int {
+function type_error_repro.Registry.get(self: type_error_repro.Registry, key: string, idx: int) -> int {
     load_var self
     load_field .data
     load_var key
@@ -476,7 +476,7 @@ function type_error_repro.Registry.new() -> type_error_repro.Registry {
     return
 }
 
-function type_error_repro.Registry.set(self: null, key: string, idx: int, val: int) -> null {
+function type_error_repro.Registry.set(self: type_error_repro.Registry, key: string, idx: int, val: int) -> null {
     load_var self
     load_field .data
     load_var key
@@ -488,7 +488,7 @@ function type_error_repro.Registry.set(self: null, key: string, idx: int, val: i
     return
 }
 
-function type_error_repro.ScoresSelf.get(self: null, key: string) -> int {
+function type_error_repro.ScoresSelf.get(self: type_error_repro.ScoresSelf, key: string) -> int {
     load_var self
     load_field .data
     load_var key
@@ -502,7 +502,7 @@ function type_error_repro.ScoresSelf.new() -> type_error_repro.ScoresSelf {
     return
 }
 
-function type_error_repro.ScoresSelf.set(self: null, key: string, val: int) -> null {
+function type_error_repro.ScoresSelf.set(self: type_error_repro.ScoresSelf, key: string, val: int) -> null {
     load_var self
     load_field .data
     load_var key
@@ -518,7 +518,7 @@ function type_error_repro.Stack.new() -> type_error_repro.Stack {
     return
 }
 
-function type_error_repro.Stack.peek(self: null) -> int {
+function type_error_repro.Stack.peek(self: type_error_repro.Stack) -> int {
     load_var self
     load_field .items
     load_const 0
@@ -526,7 +526,7 @@ function type_error_repro.Stack.peek(self: null) -> int {
     return
 }
 
-function type_error_repro.Stack.push(self: null, val: int) -> null {
+function type_error_repro.Stack.push(self: type_error_repro.Stack, val: int) -> null {
     load_var self
     load_field .items
     load_var val

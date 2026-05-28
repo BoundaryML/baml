@@ -1,6 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 4227
+assertion_line: 4386
 ---
 function baml.Array.at(self: baml.Array, index: int) -> void? {
 }
@@ -86,10 +86,10 @@ function baml.Array.to_json(self: baml.Array) -> baml.json.json {
 function baml.Array.unshift(self: baml.Array, item: void) -> int {
 }
 
-function baml.Bigint.abs(self: null) -> bigint {
+function baml.Bigint.abs(self: baml.Bigint) -> bigint {
 }
 
-function baml.Bigint.clamp(self: null, min: bigint, max: bigint) -> bigint {
+function baml.Bigint.clamp(self: baml.Bigint, min: bigint, max: bigint) -> bigint {
 }
 
 function baml.Bigint.from_json(j: baml.json.json) -> baml.Bigint {
@@ -97,28 +97,28 @@ function baml.Bigint.from_json(j: baml.json.json) -> baml.Bigint {
     return
 }
 
-function baml.Bigint.ilog(self: null, base: bigint) -> bigint {
+function baml.Bigint.ilog(self: baml.Bigint, base: bigint) -> bigint {
 }
 
-function baml.Bigint.isqrt(self: null) -> bigint {
+function baml.Bigint.isqrt(self: baml.Bigint) -> bigint {
 }
 
-function baml.Bigint.max(self: null, other: bigint) -> bigint {
+function baml.Bigint.max(self: baml.Bigint, other: bigint) -> bigint {
 }
 
-function baml.Bigint.min(self: null, other: bigint) -> bigint {
+function baml.Bigint.min(self: baml.Bigint, other: bigint) -> bigint {
 }
 
 function baml.Bigint.parse(text: string) -> bigint {
 }
 
-function baml.Bigint.pow(self: null, exp: bigint) -> bigint {
+function baml.Bigint.pow(self: baml.Bigint, exp: bigint) -> bigint {
 }
 
 function baml.Bigint.random(lower: bigint, upper: bigint) -> bigint {
 }
 
-function baml.Bigint.to_json(self: null) -> baml.json.json {
+function baml.Bigint.to_json(self: baml.Bigint) -> baml.json.json {
 }
 
 function baml.Bool.from_json(j: baml.json.json) -> baml.Bool {
@@ -716,7 +716,7 @@ function baml.errors.HostCallable.from_json(j: baml.json.json) -> baml.errors.Ho
     return
 }
 
-function baml.errors.HostCallable.to_json(self: null) -> baml.json.json {
+function baml.errors.HostCallable.to_json(self: baml.errors.HostCallable) -> baml.json.json {
     load_var self
     load_field .message
     call baml.String.to_json
@@ -1202,9 +1202,7 @@ function baml.future.Future.cancel(self: baml.future.Future) -> bool {
 }
 
 function baml.future.Future.from_json(j: baml.json.json) -> future<void, void> {
-    load_type #0
-    load_type #1
-    alloc_instance<2> baml.future.Future
+    alloc_instance Future
     return
 }
 
@@ -1444,7 +1442,7 @@ function baml.host.HostValue.from_json(j: baml.json.json) -> baml.host.HostValue
     return
 }
 
-function baml.host.HostValue.to_json(self: null) -> baml.json.json {
+function baml.host.HostValue.to_json(self: baml.host.HostValue) -> baml.json.json {
     alloc_map 0
     return
 }
@@ -4408,7 +4406,7 @@ function baml.panics.NegativeBitShift.from_json(j: baml.json.json) -> baml.panic
     return
 }
 
-function baml.panics.NegativeBitShift.to_json(self: null) -> baml.json.json {
+function baml.panics.NegativeBitShift.to_json(self: baml.panics.NegativeBitShift) -> baml.json.json {
     load_var self
     load_field .message
     call baml.String.to_json

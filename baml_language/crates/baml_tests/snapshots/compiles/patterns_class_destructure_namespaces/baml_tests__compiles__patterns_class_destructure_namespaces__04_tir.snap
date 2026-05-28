@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 24012
 ---
 === TIR2 ===
 function user.DestructureQualifiedLet() -> int throws never {
@@ -66,21 +67,21 @@ function user.TypePatternNamespaceQualifiedMatch() -> int throws never {
 }
 function user.GenericDestructureQualifiedLet() -> int throws never {
   { : int
-    let boxed: root.llm.openai.Box<int> = _ { value: 49 } : user.llm.openai.Box<int>
+    let boxed: root.llm.openai.Box<int> = root.llm.openai.Box { value: 49 } : user.llm.openai.Box<int>
     let root.llm.openai.Box<int> { value: value } = boxed : user.llm.openai.Box<int>
     value : int
   }
 }
 function user.GenericDestructureNamespaceQualifiedLet() -> int throws never {
   { : int
-    let boxed: llm.openai.Box<string> = _ { value: "ok" } : user.llm.openai.Box<string>
+    let boxed: llm.openai.Box<string> = llm.openai.Box { value: "ok" } : user.llm.openai.Box<string>
     let llm.openai.Box<string> { value: value } = boxed : user.llm.openai.Box<string>
     value.length() : int
   }
 }
 function user.GenericTypePatternQualifiedMatch() -> int throws never {
   { : 0 | 50
-    let boxed: root.llm.openai.Box<int> | root.llm.openai.Box<string> = _ { value: 50 } : unknown -> user.llm.openai.Box<int> | user.llm.openai.Box<string>
+    let boxed: root.llm.openai.Box<int> | root.llm.openai.Box<string> = root.llm.openai.Box { value: 50 } : user.llm.openai.Box<int> -> user.llm.openai.Box<int> | user.llm.openai.Box<string>
     match (boxed : user.llm.openai.Box<int> | user.llm.openai.Box<string>) : 0 | 50
       root.llm.openai.Box<string> =>
         0 : 0
@@ -90,7 +91,7 @@ function user.GenericTypePatternQualifiedMatch() -> int throws never {
 }
 function user.GenericTypePatternNamespaceQualifiedMatch() -> int throws never {
   { : 0 | 51
-    let boxed: llm.openai.Box<int> | llm.openai.Box<string> = _ { value: "ready" } : unknown -> user.llm.openai.Box<int> | user.llm.openai.Box<string>
+    let boxed: llm.openai.Box<int> | llm.openai.Box<string> = llm.openai.Box { value: "ready" } : user.llm.openai.Box<string> -> user.llm.openai.Box<int> | user.llm.openai.Box<string>
     match (boxed : user.llm.openai.Box<int> | user.llm.openai.Box<string>) : 0 | 51
       llm.openai.Box<int> =>
         0 : 0
@@ -100,14 +101,14 @@ function user.GenericTypePatternNamespaceQualifiedMatch() -> int throws never {
 }
 function user.DeepGenericDestructureQualifiedLet() -> int throws never {
   { : int
-    let outer: root.llm.openai.Outer<int> = _ { inner: _ { value: 52 } } : user.llm.openai.Outer<int>
+    let outer: root.llm.openai.Outer<int> = root.llm.openai.Outer { inner: root.llm.openai.Box { value: 52 } } : user.llm.openai.Outer<int>
     let root.llm.openai.Outer<int> { inner: root.llm.openai.Box<int> { value: value } } = outer : user.llm.openai.Outer<int>
     value : int
   }
 }
 function user.DeepGenericDestructureNamespaceQualifiedLet() -> int throws never {
   { : int
-    let outer: llm.openai.Outer<string> = _ { inner: _ { value: "done" } } : user.llm.openai.Outer<string>
+    let outer: llm.openai.Outer<string> = llm.openai.Outer { inner: llm.openai.Box { value: "done" } } : user.llm.openai.Outer<string>
     let llm.openai.Outer<string> { inner: llm.openai.Box<string> { value: value } } = outer : user.llm.openai.Outer<string>
     value.length() : int
   }

@@ -1,6 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 6346
+assertion_line: 7540
 ---
 function user.Box.from_json(j: baml.json.json) -> Box<void> {
     load_var j
@@ -359,10 +359,9 @@ function user.test_field_chain_bind(cfg: Config) -> string {
 }
 
 function user.test_generic_bind() -> int {
-    load_type int
-    alloc_instance<1> user.Box
     load_const 42
-    init_instance user.Box .value
+    load_type int
+    init_instance<1> user.Box .value
     make_bound_method user.Box.unwrap
     call_indirect
     return

@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 41421
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] error: unresolved name: x
@@ -22,12 +23,12 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0003
 ────╯
 
-  [type] error: Or-pattern alternatives bind `x` with conflicting types: `int` vs `string`
+  [type] error: or-pattern binding `x` has conflicting types: int and string
     ╭─[ main.baml:23:34 ]
     │
  23 │     let _ = v is (let x: int) | (let x: string)
     │                                  ──────┬──────  
-    │                                        ╰──────── Or-pattern alternatives bind `x` with conflicting types: `int` vs `string`
+    │                                        ╰──────── or-pattern binding `x` has conflicting types: int and string
     │ 
     │ Note: Error code: E0001
 ────╯

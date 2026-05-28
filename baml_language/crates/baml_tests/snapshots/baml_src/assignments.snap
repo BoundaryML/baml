@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
+assertion_line: 140
 ---
 function assignments.$init_test_36(registry: testing.TestCollector) -> null {
     load_var registry
@@ -132,7 +133,7 @@ function assignments.$init_test_36(registry: testing.TestCollector) -> null {
     return
 }
 
-function assignments.Factory.get_counter(self: null) -> assignments.Counter {
+function assignments.Factory.get_counter(self: assignments.Factory) -> assignments.Counter {
     load_var self
     load_field .counter
     return

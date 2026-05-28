@@ -1,6 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 18344
+assertion_line: 19882
 ---
 function user.Config.from_json(j: baml.json.json) -> Config {
     load_var j
@@ -81,17 +81,17 @@ function user.RootConstruct(key: string) -> Config {
 
 function user.RootEnumMatch(s: Status) -> string {
     load_var s
-    load_const user.Status.Ok
-    alloc_variant user.Status
-    cmp_op ==
+    discriminant
+    load_const Status.Ok
+    cmp_int_op ==
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var s
-    load_const user.Status.Failed
-    alloc_variant user.Status
-    cmp_op ==
+    discriminant
+    load_const Status.Failed
+    cmp_int_op ==
     pop_jump_if_false L1
     jump L2
 
@@ -415,17 +415,17 @@ function user.auth.AuthMatchesLlmStatus(s: llm.Status) -> string {
 
 function user.auth.AuthMatchesRootStatus(s: Status) -> string {
     load_var s
-    load_const user.Status.Ok
-    alloc_variant user.Status
-    cmp_op ==
+    discriminant
+    load_const Status.Ok
+    cmp_int_op ==
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var s
-    load_const user.Status.Failed
-    alloc_variant user.Status
-    cmp_op ==
+    discriminant
+    load_const Status.Failed
+    cmp_int_op ==
     pop_jump_if_false L1
     jump L2
 
@@ -764,17 +764,17 @@ function user.llm.LlmIdentity(cfg: llm.Config) -> llm.Config {
 
 function user.llm.LlmMatchesRootStatus(s: Status) -> string {
     load_var s
-    load_const user.Status.Ok
-    alloc_variant user.Status
-    cmp_op ==
+    discriminant
+    load_const Status.Ok
+    cmp_int_op ==
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var s
-    load_const user.Status.Failed
-    alloc_variant user.Status
-    cmp_op ==
+    discriminant
+    load_const Status.Failed
+    cmp_int_op ==
     pop_jump_if_false L1
     jump L2
 
@@ -1276,17 +1276,17 @@ function user.llm.openai.OpenAIMatchesLlmStatus(s: llm.Status) -> string {
 
 function user.llm.openai.OpenAIMatchesRootStatus(s: Status) -> string {
     load_var s
-    load_const user.Status.Ok
-    alloc_variant user.Status
-    cmp_op ==
+    discriminant
+    load_const Status.Ok
+    cmp_int_op ==
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var s
-    load_const user.Status.Failed
-    alloc_variant user.Status
-    cmp_op ==
+    discriminant
+    load_const Status.Failed
+    cmp_int_op ==
     pop_jump_if_false L1
     jump L2
 

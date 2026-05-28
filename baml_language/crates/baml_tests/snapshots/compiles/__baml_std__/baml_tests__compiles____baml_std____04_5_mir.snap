@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 4252
 ---
 === MIR2 ===
 
@@ -84,7 +85,7 @@ fn baml.Map.from_json(j: baml.json.json) -> baml.Map<void, void> {
     let _1: baml.json.json // j // param
 
     bb0: {
-        _0 = baml.Map<TypeArgRef(0), TypeArgRef(1)> {  };
+        _0 = baml.Map<#0, #1> {  };
         goto -> bb1;
     }
 
@@ -99,7 +100,7 @@ fn baml.Array.from_json(j: baml.json.json) -> baml.Array<void> {
     let _1: baml.json.json // j // param
 
     bb0: {
-        _0 = baml.Array<TypeArgRef(0)> {  };
+        _0 = baml.Array<#0> {  };
         goto -> bb1;
     }
 
@@ -1585,7 +1586,7 @@ fn baml.future.Future.from_json(j: baml.json.json) -> future<void, void> {
     let _1: baml.json.json // j // param
 
     bb0: {
-        _0 = baml.future.Future<TypeArgRef(0), TypeArgRef(1)> {  };
+        _0 = Future {  };
         goto -> bb1;
     }
 
@@ -3001,7 +3002,7 @@ fn baml.llm.Client.__make_stream(self: baml.llm.Client, sse: baml.http.SseStream
         _11 = copy _4;
         _12 = copy _7;
         _13 = copy _8;
-        _0 = baml.llm.Stream<TypeArgRef(0), TypeArgRef(1)> { copy _11, copy _12, copy _2, copy _13 };
+        _0 = baml.llm.Stream<#0, #1> { copy _11, copy _12, copy _2, copy _13 };
         goto -> bb6;
     }
 
@@ -4255,7 +4256,7 @@ fn baml.llm.Stream.from_json(j: baml.json.json) -> baml.llm.Stream<void, void> {
     }
 
     bb8: {
-        _0 = baml.llm.Stream<TypeArgRef(0), TypeArgRef(1)> { copy _2, copy _5, copy _8, copy _11 };
+        _0 = baml.llm.Stream<#0, #1> { copy _2, copy _5, copy _8, copy _11 };
         goto -> bb9;
     }
 

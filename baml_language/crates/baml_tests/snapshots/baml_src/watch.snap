@@ -180,7 +180,7 @@ function watch.$init_test_86(registry: testing.TestCollector) -> null {
     return
 }
 
-function watch.WPointWithSet.set(self: null, x: int, y: int) -> watch.WPointWithSet {
+function watch.WPointWithSet.set(self: watch.WPointWithSet, x: int, y: int) -> watch.WPointWithSet {
     load_var self
     load_var x
     store_field .x

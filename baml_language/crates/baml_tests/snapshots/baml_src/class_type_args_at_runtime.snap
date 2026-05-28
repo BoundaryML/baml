@@ -66,13 +66,13 @@ function class_type_args_at_runtime.$init_test_41(registry: testing.TestCollecto
     return
 }
 
-function class_type_args_at_runtime.Box.describe(self: null) -> string {
+function class_type_args_at_runtime.Box.describe(self: class_type_args_at_runtime.Box) -> string {
     load_type #0
     call baml.TypeValue.to_string
     return
 }
 
-function class_type_args_at_runtime.Box2.make_describer(self: null) -> () -> string throws never {
+function class_type_args_at_runtime.Box2.make_describer(self: class_type_args_at_runtime.Box2) -> () -> string throws never {
     load_type #0
     make_closure .<lambda(Box2.make_describer, 0)>, captures=0, ntypeargs=1
     return

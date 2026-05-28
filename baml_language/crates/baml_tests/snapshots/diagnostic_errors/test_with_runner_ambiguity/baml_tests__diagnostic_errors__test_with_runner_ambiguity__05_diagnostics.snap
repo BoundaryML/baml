@@ -1,6 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 46886
+assertion_line: 49606
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] error: unresolved name: my_runner
@@ -23,12 +23,12 @@ assertion_line: 46886
     │ Note: Error code: E0003
 ────╯
 
-  [type] error: type mismatch: expected testing.TestRunner?, got user.MyRunner
+  [type] error: type mismatch: expected testing.TestRunner?, got MyRunner
     ╭─[ main.baml:23:32 ]
     │
  23 │ test "constructor runner" with MyRunner { threshold: 0.5 } {
     │                                ─────────────┬─────────────  
-    │                                             ╰─────────────── type mismatch: expected testing.TestRunner?, got user.MyRunner
+    │                                             ╰─────────────── type mismatch: expected testing.TestRunner?, got MyRunner
     │ 
     │ Note: Error code: E0001
 ────╯
