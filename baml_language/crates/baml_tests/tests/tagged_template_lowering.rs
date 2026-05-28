@@ -192,3 +192,102 @@ function Demo() -> string { sql`hi ${1}` }
         errors.join("\n")
     );
 }
+
+// ── M4d.4: segment typing in body-lambda param scope ────────────────────────
+
+/// A valid tag whose body lambda has a distinctly-named param (`role`) so the
+/// for-binding tests can use `x` without colliding with the body param.
+const ROLE_TAG: &str = r#"
+//baml:tagged_string
+function chat(body: (role: string) -> baml.TaggedString) -> string {
+  "ok"
+}
+"#;
+
+#[test]
+fn tagged_interp_resolves_body_lambda_param() {
+    // `${role}` resolves to the tag's body-lambda param `role: string`.
+    let source = format!("{ROLE_TAG}\nfunction Demo() -> string {{ chat`hello ${{role}}` }}\n");
+    let errors = front_end_errors(&source);
+    assert!(
+        errors.is_empty(),
+        "the body-lambda param `role` should resolve inside the interpolation, got:\n{}",
+        errors.join("\n")
+    );
+}
+
+#[test]
+fn tagged_interp_unknown_name_reports_unresolved() {
+    let source =
+        format!("{ROLE_TAG}\nfunction Demo() -> string {{ chat`hello ${{nonexistent}}` }}\n");
+    let errors = front_end_errors(&source);
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.contains("unresolved name: nonexistent")),
+        "an unknown interpolation name must report UnresolvedName, got:\n{}",
+        errors.join("\n")
+    );
+}
+
+#[test]
+fn tagged_for_binding_in_scope_inside_for_body() {
+    // `x` is bound inside the `${for}` body (items: int[] → x: int). No errors.
+    let source = format!(
+        "{ROLE_TAG}\nfunction Demo(items: int[]) -> string {{ \
+         chat`${{for (let x in items)}}col_${{x}}, ${{endfor}}` }}\n"
+    );
+    let errors = front_end_errors(&source);
+    assert!(
+        errors.is_empty(),
+        "for-binding `x` should resolve inside the for body, got:\n{}",
+        errors.join("\n")
+    );
+}
+
+#[test]
+fn tagged_for_binding_out_of_scope_after_endfor() {
+    // `x` must NOT leak past `${endfor}` — the trailing `${x}` is unresolved.
+    let source = format!(
+        "{ROLE_TAG}\nfunction Demo(items: int[]) -> string {{ \
+         chat`${{for (let x in items)}}a${{endfor}}${{x}}` }}\n"
+    );
+    let errors = front_end_errors(&source);
+    assert!(
+        errors.iter().any(|e| e.contains("unresolved name: x")),
+        "for-binding `x` must be out of scope after endfor, got:\n{}",
+        errors.join("\n")
+    );
+}
+
+#[test]
+fn tagged_for_non_iterable_collection_reports_not_iterable() {
+    // Iterating a non-list value reports NotIterable.
+    let source = format!(
+        "{ROLE_TAG}\nfunction Demo(n: int) -> string {{ \
+         chat`${{for (let x in n)}}a${{endfor}}` }}\n"
+    );
+    let errors = front_end_errors(&source);
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.contains("cannot iterate over type")),
+        "iterating an int must report NotIterable, got:\n{}",
+        errors.join("\n")
+    );
+}
+
+#[test]
+fn tagged_body_param_does_not_leak_after_template() {
+    // The body-lambda param `role` is in scope only inside the template's
+    // interpolations — a reference to `role` after the template is unresolved.
+    let source = format!(
+        "{ROLE_TAG}\nfunction Demo() -> string {{\n  let r = chat`hi ${{role}}`\n  role\n}}\n"
+    );
+    let errors = front_end_errors(&source);
+    assert!(
+        errors.iter().any(|e| e.contains("unresolved name: role")),
+        "the body-lambda param `role` must not leak past the template, got:\n{}",
+        errors.join("\n")
+    );
+}

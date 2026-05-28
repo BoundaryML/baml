@@ -3355,18 +3355,19 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 }
             }
-            Expr::TaggedTemplate { tag, .. } => {
-                // M4d.3: resolve the tag and validate it is a
-                // `//baml:tagged_string` function whose first parameter is
-                // `body: (...) -> baml.TaggedString`. On success the whole
-                // template's type is the tag fn's return type.
+            Expr::TaggedTemplate { tag, segments } => {
+                // M4d.3 validated the tag (a `//baml:tagged_string` function
+                // whose first parameter is `body: (...) -> baml.TaggedString`);
+                // M4d.4 type-checks the `segments` with the tag's body-lambda
+                // parameters — and any `${for}` bindings — in scope.
                 //
-                // Segment/interpolation typing — binding the body-lambda
-                // params and `${for}` bindings into scope and type-checking
-                // `${expr}` sites — is M4d.4, so we deliberately do NOT walk
-                // `segments` here (walking now would emit spurious
-                // `UnresolvedName` for `${for}` bindings before their scope
-                // handling lands).
+                // The template's RESULT type is the tag fn's return type
+                // (`Unknown` on any tag error, exactly as M4d.3). Walking the
+                // segments is side-effecting only — it surfaces interpolation
+                // diagnostics and records each `${expr}` type — so it never
+                // changes the result. We always walk (even on a tag error) so
+                // interps are still checked; the body-lambda params are bound
+                // only when the tag validated.
                 let tag_ty = self.infer_expr(*tag, body);
                 let tag_name = match &body.exprs[*tag] {
                     Expr::Path(segs) => segs.last().cloned(),
@@ -3374,25 +3375,64 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
                 .unwrap_or_else(|| Name::new("<tag>"));
 
-                match &tag_ty {
+                let (result_ty, body_lambda_params): (Ty, Vec<FunctionParamTy>) = match &tag_ty {
                     // Unresolved: `infer_path` already reported `UnresolvedName`
                     // for a bare-path tag — stay quiet to avoid double-reporting.
-                    Ty::Unknown { .. } => Ty::Unknown {
-                        attr: TyAttr::default(),
-                    },
+                    Ty::Unknown { .. } => (
+                        Ty::Unknown {
+                            attr: TyAttr::default(),
+                        },
+                        Vec::new(),
+                    ),
                     Ty::Function { params, ret, .. } => {
-                        self.validate_tagged_tag(*tag, &tag_name, params, ret)
+                        let validated = self.validate_tagged_tag(*tag, &tag_name, params, ret);
+                        // A non-`Unknown` return means validation succeeded, so
+                        // the first param is `body: (lambda_params) -> ...`; those
+                        // lambda params scope into the interpolations.
+                        let lambda_params = if matches!(validated, Ty::Unknown { .. }) {
+                            Vec::new()
+                        } else {
+                            match params.first().map(|p| &p.ty) {
+                                Some(Ty::Function { params: lp, .. }) => lp.clone(),
+                                _ => Vec::new(),
+                            }
+                        };
+                        (validated, lambda_params)
                     }
                     _ => {
                         self.context.report_simple(
                             TirTypeError::TaggedTagNotAFunction { name: tag_name },
                             *tag,
                         );
-                        Ty::Unknown {
-                            attr: TyAttr::default(),
-                        }
+                        (
+                            Ty::Unknown {
+                                attr: TyAttr::default(),
+                            },
+                            Vec::new(),
+                        )
+                    }
+                };
+
+                // Bind the body-lambda params, walk the segments, then restore.
+                // Mirrors `infer_lambda_body`'s param binding (direct insert,
+                // `pattern: None`) wrapped in `Stmt::For`-style scope save/restore.
+                let snapshot = self.snapshot_scoped_locals();
+                for param in &body_lambda_params {
+                    if let Some(name) = &param.name {
+                        self.locals.insert(
+                            name.clone(),
+                            LocalBinding {
+                                current_ty: param.ty.clone(),
+                                declared_ty: Some(param.ty.clone()),
+                                pattern: None,
+                            },
+                        );
                     }
                 }
+                self.infer_tagged_segments(segments, body);
+                self.restore_scoped_locals(&snapshot);
+
+                result_ty
             }
             Expr::Missing => Ty::Unknown {
                 attr: TyAttr::default(),
@@ -6647,6 +6687,101 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         // Valid tag: the template evaluates to the tag fn's return type.
         ret.clone()
+    }
+
+    /// BEP-049 §10 (M4d.4): type-check a tagged template's segments. Mirrors
+    /// the HIR `walk_tagged_segment` shape and reuses the `Stmt::For` pipeline.
+    ///
+    /// Interpolations are unconstrained — `TaggedString.values` is `unknown[]`,
+    /// so each `${expr}` is merely inferred (for its diagnostics and to record
+    /// its type). `${for (let p in c)}` binds `p` into a fresh scope for its
+    /// body; `${if (cond)}` infers each condition with no bool coercion, matching
+    /// `Expr::If`. The caller binds the tag's body-lambda params before calling
+    /// this and restores scope afterwards.
+    fn infer_tagged_segments(&mut self, segments: &[ast::TaggedSegment], body: &ExprBody) {
+        for seg in segments {
+            match seg {
+                ast::TaggedSegment::Text(_) => {}
+                ast::TaggedSegment::Interp(expr_id) => {
+                    self.infer_expr(*expr_id, body);
+                }
+                ast::TaggedSegment::For {
+                    binding,
+                    collection,
+                    body: inner,
+                } => {
+                    // Mirror `Stmt::For`: infer the collection, derive the
+                    // element type, bind the loop pattern into a fresh scope,
+                    // recurse, then restore.
+                    let coll_ty = self.infer_expr(*collection, body);
+                    let elem_ty = match &coll_ty {
+                        Ty::List(elem, _) => *elem.clone(),
+                        Ty::EvolvingList(elem, _) => *elem.clone(),
+                        _ => {
+                            self.context.report_simple(
+                                TirTypeError::NotIterable { ty: coll_ty },
+                                *collection,
+                            );
+                            Ty::Unknown {
+                                attr: TyAttr::default(),
+                            }
+                        }
+                    };
+
+                    let expected = self.pattern_expected_ty(*binding, body);
+                    let is_structural_pattern =
+                        Self::pattern_contains_structural_syntax(*binding, body);
+                    let (flow_ty, declared_for_scope) =
+                        if let Some(PatternExpectedTy::Full(expected)) = expected
+                            && !is_structural_pattern
+                        {
+                            if !self.is_subtype(&elem_ty, &expected) {
+                                let err = TirTypeError::TypeMismatch {
+                                    expected: expected.clone(),
+                                    got: elem_ty,
+                                };
+                                self.report_at_pat_or_expr(err, *binding, *collection);
+                            }
+                            (expected.clone(), Some(expected))
+                        } else {
+                            (elem_ty, None)
+                        };
+
+                    let snapshot = self.snapshot_scoped_locals();
+                    // `*collection` is only a diagnostic anchor for the pattern
+                    // check (unused for the bare `let x` form, which short-
+                    // circuits) — the segment body has no single `ExprId`.
+                    let result = self.analyze_and_lower(*binding, &flow_ty, body, *collection);
+                    self.finalize_pattern_lowering(
+                        *binding,
+                        &result,
+                        declared_for_scope.as_ref(),
+                        Some(IrrefutablePatternContext {
+                            context: IrrefutableContextKind::ForLet,
+                            fallback_expr: Some(*collection),
+                        }),
+                        &flow_ty,
+                    );
+
+                    self.infer_tagged_segments(inner, body);
+                    self.restore_scoped_locals(&snapshot);
+                }
+                ast::TaggedSegment::If {
+                    branches,
+                    else_body,
+                } => {
+                    for branch in branches {
+                        // Match `Expr::If`: infer the condition without
+                        // enforcing a bool expectation.
+                        self.infer_expr(branch.condition, body);
+                        self.infer_tagged_segments(&branch.body, body);
+                    }
+                    if let Some(eb) = else_body {
+                        self.infer_tagged_segments(eb, body);
+                    }
+                }
+            }
+        }
     }
 
     /// Resolve a member access on a known base type.
