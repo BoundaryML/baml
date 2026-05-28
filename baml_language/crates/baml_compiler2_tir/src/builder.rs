@@ -1254,18 +1254,32 @@ impl<'db> TypeInferenceBuilder<'db> {
         let effective = self.collect_effective_throws(body);
         let has_open_slot = Self::throws_surface_has_open_slot(&declared);
 
+        // BEP-044: an effective throw is covered by the declared surface when
+        // it is a *subtype* of some declared fact, not only when it is equal.
+        // Throwing a concrete class that implements `throws SomeInterface` is
+        // therefore allowed (nominal subtyping), so we filter by `is_subtype`
+        // rather than a raw set difference.
         let extra_facts: BTreeSet<Ty> = if has_open_slot {
             BTreeSet::new()
         } else {
-            effective.difference(&declared).cloned().collect()
+            effective
+                .iter()
+                .filter(|eff| !declared.iter().any(|decl| self.is_subtype(eff, decl)))
+                .cloned()
+                .collect()
         };
         let mut extra: Vec<String> = extra_facts
             .iter()
             .map(std::string::ToString::to_string)
             .collect();
         let mut extraneous: Vec<String> = if warn_extraneous && !has_open_slot {
+            // A declared fact is extraneous only when *nothing* thrown is a
+            // subtype of it — otherwise `throws IError` with a thrown
+            // `NetworkError` (which implements `IError`) would be wrongly
+            // reported as unused.
             declared
-                .difference(&effective)
+                .iter()
+                .filter(|decl| !effective.iter().any(|eff| self.is_subtype(eff, decl)))
                 .map(std::string::ToString::to_string)
                 .collect()
         } else {
@@ -9850,6 +9864,33 @@ impl<'db> TypeInferenceBuilder<'db> {
             if self.interface_requires_instantiation(a_qtn, a_args, b_qtn, b_args) {
                 return true;
             }
+        }
+        // BEP-044: nominal interface subtyping must also hold when the target
+        // is an *optional* or *union* type. `normalize::is_subtype_of` has no
+        // interface arm, so without this a `Dog` (which implements `Animal`)
+        // would be rejected for `Animal?` or `Animal | string` even though it
+        // is a subtype of the wrapped interface. We only short-circuit on a
+        // positive result here — a negative falls through to the structural
+        // check below, so non-interface optional/union behaviour is unchanged.
+        match sup {
+            Ty::Optional(inner, _) => {
+                // `null <: T?` and other non-interface optional rules are
+                // handled by the structural check below; here we only add the
+                // nominal interface case for the unwrapped payload.
+                let sub_inner = match sub {
+                    Ty::Optional(si, _) => si.as_ref(),
+                    other => other,
+                };
+                if self.is_subtype(sub_inner, inner) {
+                    return true;
+                }
+            }
+            Ty::Union(members, _) => {
+                if members.iter().any(|m| self.is_subtype(sub, m)) {
+                    return true;
+                }
+            }
+            _ => {}
         }
         // Interface-to-interface subtyping: `Interface A <: Interface B` iff
         // A extends B (transitively). The registry doesn't carry that
