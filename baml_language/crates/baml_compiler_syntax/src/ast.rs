@@ -1396,8 +1396,11 @@ fn apply_block_tag_whitespace_rule(parts: &mut Vec<FlatPart>) {
         Some((back, fwd))
     }
 
-    // Compute strips per tag first (immutable scan), then apply in reverse
-    // index order so earlier strips don't shift later positions.
+    // Compute strips per tag first (immutable scan), then apply in
+    // reverse. Adjacent tags can share a Text segment (tag1's forward
+    // strip = tag2's back strip on the same index); applying last-to-first
+    // means each strip's recorded byte count still references the
+    // original content at the edge it's trimming.
     let mut plans: Vec<StripPlan> = Vec::new();
     for i in 0..parts.len() {
         if !is_block_tag(&parts[i]) {
@@ -1408,7 +1411,7 @@ fn apply_block_tag_whitespace_rule(parts: &mut Vec<FlatPart>) {
         }
     }
 
-    for (back, fwd) in plans {
+    for (back, fwd) in plans.into_iter().rev() {
         if let Some((idx, n)) = back {
             if let Some(FlatPart::Text(s)) = parts.get_mut(idx) {
                 let new_len = s.len().saturating_sub(n);
