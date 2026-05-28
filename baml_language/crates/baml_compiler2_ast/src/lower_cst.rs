@@ -283,6 +283,7 @@ fn lower_function(
 
     let attributes = lower_attributes_from_node(node);
     let docstring = crate::docstring::extract_docstring(node);
+    let is_tagged_template_tag = crate::docstring::has_baml_marker(node, "tagged_string");
 
     Some(FunctionDef {
         name,
@@ -296,6 +297,7 @@ fn lower_function(
         origin: crate::ast::FunctionOrigin::UserDefined,
         attributes,
         docstring,
+        is_tagged_template_tag,
         span: node.text_range(),
         name_span,
     })
@@ -1239,6 +1241,7 @@ fn synthesize_init_test_function(
         origin: crate::ast::FunctionOrigin::Internal,
         attributes: vec![],
         docstring: None,
+        is_tagged_template_tag: false,
         span,
         name_span: span,
     }
@@ -1280,6 +1283,7 @@ fn synthesize_register_call(
                 origin: crate::ast::FunctionOrigin::Internal,
                 attributes: vec![],
                 docstring: None,
+                is_tagged_template_tag: false,
                 span,
                 name_span: span,
             };
@@ -1357,6 +1361,7 @@ fn synthesize_register_call(
                 origin: crate::ast::FunctionOrigin::Internal,
                 attributes: vec![],
                 docstring: None,
+                is_tagged_template_tag: false,
                 span,
                 name_span: span,
             };
@@ -2069,6 +2074,7 @@ fn synthesize_client_new_companion(
         origin: crate::ast::FunctionOrigin::Internal,
         attributes: vec![],
         docstring: None,
+        is_tagged_template_tag: false,
         span,
         name_span: name_token.text_range(),
     }

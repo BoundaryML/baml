@@ -710,6 +710,7 @@ impl LoweringContext {
                         origin: crate::ast::FunctionOrigin::Internal,
                         attributes: Vec::new(),
                         docstring: None,
+                        is_tagged_template_tag: false,
                         span: child.text_range(),
                         name_span: child.text_range(),
                     }
@@ -3047,6 +3048,7 @@ impl LoweringContext {
             origin: crate::ast::FunctionOrigin::Internal,
             attributes: Vec::new(),
             docstring: None,
+            is_tagged_template_tag: false,
             span: node.text_range(),
             name_span: node.text_range(), // synthetic: use the lambda span
         };
@@ -3520,6 +3522,7 @@ impl LoweringContext {
             origin: crate::ast::FunctionOrigin::Internal,
             attributes: vec![],
             docstring: None,
+            is_tagged_template_tag: false,
             span,
             name_span: span,
         };
@@ -3616,6 +3619,7 @@ impl LoweringContext {
             origin: crate::ast::FunctionOrigin::Internal,
             attributes: vec![],
             docstring: None,
+            is_tagged_template_tag: false,
             span,
             name_span: span,
         };

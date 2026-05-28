@@ -106,6 +106,7 @@ fn llm_parse(parent: &FunctionDef) -> Option<FunctionDef> {
         origin: crate::ast::FunctionOrigin::Companion,
         attributes: vec![],
         docstring: parent.docstring.clone(),
+        is_tagged_template_tag: parent.is_tagged_template_tag,
         span: parent.span,
         name_span: parent.name_span,
     })
@@ -151,6 +152,7 @@ fn make_llm_companion(
         origin: crate::ast::FunctionOrigin::Companion,
         attributes: vec![],
         docstring: parent.docstring.clone(),
+        is_tagged_template_tag: parent.is_tagged_template_tag,
         span: parent.span,
         name_span: parent.name_span,
     }
