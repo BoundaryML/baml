@@ -157,6 +157,9 @@ jobs:
 
   cargo-test-macos:
     name: "cargo test (macos)"
+    # Skip in the merge queue: macos already ran on the PR. The merge_group
+    # event is inherited from ci.yaml through the workflow_call boundary.
+    if: ${{ github.event_name != 'merge_group' }}
     runs-on: macos-latest
     timeout-minutes: 35
     steps:
@@ -208,6 +211,9 @@ jobs:
 
   cargo-test-windows:
     name: "cargo test (windows)"
+    # Skip in the merge queue: windows already ran on the PR. The merge_group
+    # event is inherited from ci.yaml through the workflow_call boundary.
+    if: ${{ github.event_name != 'merge_group' }}
     runs-on: blacksmith-4vcpu-windows-2025
     # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
     # Right now it needs to download our repo every time which is very slow
@@ -274,20 +280,17 @@ jobs:
     name: "sdk tests (${{ matrix.os-label }})"
     strategy:
       fail-fast: false
+      # In the merge queue (`merge_group`) only the linux leg runs — the
+      # macos/windows legs already ran on the PR. The matrix is built from a
+      # `fromJSON` literal because matrix `include` entries can't carry their
+      # own `if:`. The merge_group event is inherited from ci.yaml through the
+      # workflow_call boundary. Keep these entries in sync with the standalone
+      # cargo-test-macos/windows jobs above.
       matrix:
-        include:
-          - os-label: linux
-            runs-on: blacksmith-16vcpu-ubuntu-2404
-            rust-cache-key: linux-cargo
-            timeout: 30
-          - os-label: macos
-            runs-on: macos-latest
-            rust-cache-key: macos-cargo
-            timeout: 40
-          - os-label: windows
-            runs-on: blacksmith-4vcpu-windows-2025
-            rust-cache-key: windows-cargo
-            timeout: 60
+        include: >-
+          ${{ fromJSON(github.event_name == 'merge_group'
+          && '[{"os-label":"linux","runs-on":"blacksmith-16vcpu-ubuntu-2404","rust-cache-key":"linux-cargo","timeout":30}]'
+          || '[{"os-label":"linux","runs-on":"blacksmith-16vcpu-ubuntu-2404","rust-cache-key":"linux-cargo","timeout":30},{"os-label":"macos","runs-on":"macos-latest","rust-cache-key":"macos-cargo","timeout":40},{"os-label":"windows","runs-on":"blacksmith-4vcpu-windows-2025","rust-cache-key":"windows-cargo","timeout":60}]') }}
     runs-on: ${{ matrix.runs-on }}
     timeout-minutes: ${{ matrix.timeout }}
     steps:
