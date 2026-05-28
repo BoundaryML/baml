@@ -119,7 +119,14 @@ fn interface_tir_type_args_match_preserving_typevars(
             .iter()
             .zip(iface_type_args.iter())
             .all(|(impl_arg, iface_arg)| {
-                baml_compiler2_tir::normalize::is_same_normalized_type(impl_arg, iface_arg, aliases)
+                // A requested type-var (e.g. dispatching `b.get()` where
+                // `b: Box<T>` inside `fn read<T>(..)`) is unconstrained at this
+                // site — it matches any implementor instantiation, and the
+                // runtime `IsType` guard on the concrete instance discriminates.
+                matches!(iface_arg, Tir2Ty::TypeVar(_, _))
+                    || baml_compiler2_tir::normalize::is_same_normalized_type(
+                        impl_arg, iface_arg, aliases,
+                    )
             })
 }
 
@@ -151,6 +158,11 @@ fn infer_interface_class_bindings(
         (Tir2Ty::TypeVar(name, _), _) if class_params.contains(name) => {
             bind_interface_class_type_arg(name, actual, bindings, aliases)
         }
+        // The *requested* arg is an opaque type-var (an enclosing generic
+        // function's param, not a class param): it can't constrain a class
+        // type-arg, so it matches without binding — leaving that class position
+        // a wildcard for the runtime guard.
+        (_, Tir2Ty::TypeVar(name, _)) if !class_params.contains(name) => true,
         (Tir2Ty::List(f, _), Tir2Ty::List(a, _))
         | (Tir2Ty::EvolvingList(f, _), Tir2Ty::EvolvingList(a, _))
         | (Tir2Ty::Optional(f, _), Tir2Ty::Optional(a, _))
