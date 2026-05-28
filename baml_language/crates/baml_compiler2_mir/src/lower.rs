@@ -8740,6 +8740,33 @@ impl LoweringContext<'_> {
         success: BlockId,
         failure: BlockId,
     ) {
+        // BEP-044: testing a value against an *interface* type means "is its
+        // runtime class an implementor". Interfaces lower to `Ty::Class`, so an
+        // interface name shows up here as a class whose `TypeName` is a key in
+        // the implementor table. Expand it to a disjunction over the concrete
+        // implementors and reuse the class-identity `IsType` path below — this
+        // is what lets `catch (e) { let err: IError => ... }` match a thrown
+        // class that implements `IError`.
+        if let Ty::Class(tn, _, _) = &ty
+            && let Some(impls) = self.interface_implementors.get(tn).cloned()
+        {
+            if impls.is_empty() {
+                // No class implements the interface — the test can never hold.
+                self.builder.goto(failure);
+                return;
+            }
+            let members: Vec<Ty> = impls
+                .into_iter()
+                .map(|cn| Ty::Class(cn, Vec::new(), TyAttr::default()))
+                .collect();
+            self.emit_is_type_branch(
+                scrutinee,
+                Ty::Union(members, TyAttr::default()),
+                success,
+                failure,
+            );
+            return;
+        }
         if let Ty::Union(members, _) = ty {
             // For union A | B | C: check A → success, else check B → success,
             // else check C → success, else failure.
