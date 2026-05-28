@@ -106,29 +106,9 @@ impl BamlClassString for PackageBamlImpl {
 
     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
     fn substring(string: &BexStr, start: i64, end: i64) -> Result<BexStr, VmRustFnError> {
-        let char_len = string.char_count();
-        // Clamp negatives to 0; out-of-range to char_count.
-        let start = usize::try_from(start.max(0))
-            .unwrap_or(usize::MAX)
-            .min(char_len);
-        let end = usize::try_from(end.max(0))
-            .unwrap_or(usize::MAX)
-            .min(char_len)
-            .max(start);
-
-        if start == end {
-            return Ok(BexStr::empty());
-        }
-
-        // Convert codepoint indices to byte offsets.
-        let s = string.as_str();
-        let mut char_indices = s.char_indices();
-        let byte_start = char_indices.nth(start).map_or(s.len(), |(i, _)| i);
-        let byte_end = char_indices
-            .nth(end - start - 1)
-            .map_or(s.len(), |(i, _)| i);
-
-        Ok(string.substring(byte_start, byte_end))
+        let start = usize::try_from(start.max(0)).unwrap_or(usize::MAX);
+        let end = usize::try_from(end.max(0)).unwrap_or(usize::MAX);
+        Ok(string.substring_by_char(start, end))
     }
 
     fn replace(string: &BexStr, search: &BexStr, replacement: &BexStr) -> BexStr {
@@ -142,32 +122,25 @@ impl BamlClassString for PackageBamlImpl {
     #[allow(clippy::cast_possible_wrap)]
     fn index_of(string: &BexStr, search: &BexStr) -> i64 {
         string
-            .as_str()
-            .find(search.as_str())
-            .map(|byte_idx| bytecount::num_chars(&string.as_str().as_bytes()[..byte_idx]) as i64)
-            .unwrap_or(-1)
+            .char_index_of(search.as_str())
+            .map_or(-1, |i| i as i64)
     }
 
     fn char_at(string: &BexStr, index: i64) -> Result<BexStr, VmRustFnError> {
-        let char_len = string.char_count();
         let Ok(index) = usize::try_from(index) else {
             return Err(VmBamlError::InvalidArgument {
                 message: format!("at: index {index} is negative"),
             }
             .into());
         };
-        if index >= char_len {
-            return Ok(BexStr::empty());
-        }
-        let s = string.as_str();
-        let (byte_idx, ch) = s.char_indices().nth(index).unwrap();
-        let ch_len = ch.len_utf8();
-        Ok(string.substring(byte_idx, byte_idx + ch_len))
+        Ok(string
+            .char_at_codepoint(index)
+            .unwrap_or_else(BexStr::empty))
     }
 
     fn repeat(string: &BexStr, count: i64) -> BexStr {
         let count = usize::try_from(count.max(0)).unwrap_or(0);
-        BexStr::from(string.as_str().repeat(count))
+        string.repeat(count)
     }
 
     fn matches(string: &BexStr, pattern: &BexStr) -> bool {

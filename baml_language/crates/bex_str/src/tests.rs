@@ -166,3 +166,51 @@ fn mixed_variant_concat() {
     assert_eq!(&c.as_str()[..2], "hi");
     assert_eq!(&c.as_str()[2..], &"a".repeat(40));
 }
+
+#[test]
+fn char_count_ascii() {
+    let s = BexStr::from("hello");
+    assert_eq!(s.char_count(), 5);
+    assert_eq!(s.len(), 5);
+}
+
+#[test]
+fn char_count_multibyte() {
+    let s = BexStr::from("héllo");
+    assert_eq!(s.char_count(), 5);
+    assert_eq!(s.len(), 6); // é is 2 bytes
+}
+
+#[test]
+fn char_count_emoji() {
+    let s = BexStr::from("😀hello");
+    assert_eq!(s.char_count(), 6);
+    assert_eq!(s.len(), 9); // 😀 is 4 bytes + "hello" is 5
+}
+
+#[test]
+fn char_count_flat() {
+    let s = BexStr::from("a".repeat(100) + "😀");
+    assert_eq!(s.char_count(), 101);
+    assert_eq!(s.len(), 104);
+}
+
+#[test]
+fn char_count_slice() {
+    // substring takes BYTE offsets at the BexStr level
+    let s = BexStr::from("hello 😀 world");
+    // "hello " = 6 bytes, "😀" = 4 bytes, " world" = 6 bytes → 16 bytes total
+    let slice = s.substring(6, 16); // "😀 world"
+    assert_eq!(slice.as_str(), "😀 world");
+    assert_eq!(slice.char_count(), 7); // 😀 + " world" = 7 codepoints
+    assert_eq!(slice.len(), 10); // 4 + 6 bytes
+}
+
+#[test]
+fn char_count_concat() {
+    let a = BexStr::from("hello");
+    let b = BexStr::from("😀");
+    let c = BexStr::concat(a, b);
+    assert_eq!(c.char_count(), 6);
+    assert_eq!(c.len(), 9);
+}

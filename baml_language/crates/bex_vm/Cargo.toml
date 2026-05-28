@@ -26,7 +26,6 @@ bex_resource_types = { workspace = true }
 bex_str = { workspace = true }
 bex_vm_types = { workspace = true }
 base64 = { workspace = true }
-bytecount = { workspace = true }
 console = { workspace = true }
 getrandom = { workspace = true }
 indexmap = { workspace = true }

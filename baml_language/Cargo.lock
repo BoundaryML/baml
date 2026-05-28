@@ -1741,7 +1741,6 @@ dependencies = [
  "bex_resource_types",
  "bex_str",
  "bex_vm_types",
- "bytecount",
  "codspeed-divan-compat",
  "console",
  "getrandom 0.2.17",
