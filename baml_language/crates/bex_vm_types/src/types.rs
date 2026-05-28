@@ -2338,6 +2338,21 @@ impl std::fmt::Debug for Future {
     }
 }
 
+/// Runtime payload behind a `baml.spawn.SpawnConfig` instance's `_handle`
+/// (`Object::RustData`). Produced by `baml.spawn.options(...)` and read by the
+/// engine when dispatching a `spawn ... with` clause to derive the spawned
+/// task's effective cancel token. BEP-034 "spawn options".
+///
+/// PR1 carries only the optional cancel token; `group` (rate limiting) and
+/// `detach` are added as those features are wired, so the engine's downcast
+/// target stays stable across PRs.
+#[derive(Debug, Clone, Default)]
+pub struct SpawnConfigData {
+    /// User-provided cancel token from `options(cancel = ...)`, if any. Linked
+    /// into the spawn's effective token by the engine.
+    pub cancel: Option<CancellationToken>,
+}
+
 /// A pending user `spawn { body }` request that the engine still has to
 /// dispatch on a fresh `BexThread`.
 ///
@@ -2354,6 +2369,13 @@ pub struct UnscheduledFuture {
     /// the GC keeps the underlying string alive while the unscheduled
     /// future is on the heap.
     pub name: Option<HeapPtr>,
+    /// Optional `baml.spawn.SpawnConfig` instance from a `spawn ... with
+    /// baml.spawn.options(...)` clause (BEP-034 "spawn options"). Held as a
+    /// `HeapPtr` — like `name` — so the GC keeps the config (and the
+    /// `CancelToken`/`TaskGroup` it references) alive while this slot is on the
+    /// heap. `None` when the spawn had no `with` clause. The engine reads the
+    /// config's `_handle` (`SpawnConfigData`) when dispatching the spawn.
+    pub config: Option<HeapPtr>,
 }
 
 /// A unique identifier for a future.

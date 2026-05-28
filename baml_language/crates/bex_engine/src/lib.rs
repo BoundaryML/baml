@@ -92,7 +92,7 @@ pub use bex_heap::{ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapP
 use bex_vm::{BexVm, SpanNotification, VmExecState};
 use bex_vm_types::{
     FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp, Value,
-    VmGlobals,
+    VmGlobals, types::SpawnConfigData,
 };
 pub use conversion::test_arg_to_external;
 // Re-export CancellationToken for callers.
@@ -1920,6 +1920,25 @@ impl BexEngine {
         }
     }
 
+    /// Read the user `CancelToken` out of a `baml.spawn.SpawnConfig` instance
+    /// (BEP-034 spawn options). `config` points at the `SpawnConfig` heap
+    /// instance produced by `baml.spawn.options(...)`; its field 0 (`_handle`)
+    /// is an `Object::RustData(Arc<SpawnConfigData>)`. Returns the configured
+    /// cancel token, or `None` when there was no `cancel = ...` argument.
+    ///
+    /// Safe to deref the pointers because the caller holds the active heap
+    /// permit and `config` is rooted by the `UnscheduledFuture` being handled.
+    fn read_spawn_config_cancel(config: HeapPtr) -> Option<CancellationToken> {
+        let Object::Instance(instance) = (unsafe { config.get() }) else {
+            return None;
+        };
+        let handle_ptr = instance.load_field(0).as_object_ptr()?;
+        match unsafe { handle_ptr.get() } {
+            Object::RustData(data) => data.downcast_ref::<SpawnConfigData>()?.cancel.clone(),
+            _ => None,
+        }
+    }
+
     /// Spawn a fresh `BexThread` that runs the body packaged in `closure`
     /// and settles a newly-allocated future when the body terminates.
     ///
@@ -1940,6 +1959,7 @@ impl BexEngine {
         parent_pending_errors: Arc<ChildErrorQueue>,
         closure: HeapPtr,
         name: Option<String>,
+        user_cancel: Option<CancellationToken>,
         call_id: CallId,
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<HeapPtr, EngineError>> + Send + 'static>,
@@ -1949,6 +1969,7 @@ impl BexEngine {
             parent_pending_errors,
             closure,
             name,
+            user_cancel,
             call_id,
         ))
     }
@@ -1959,12 +1980,33 @@ impl BexEngine {
         parent_pending_errors: Arc<ChildErrorQueue>,
         closure: HeapPtr,
         name: Option<String>,
+        user_cancel: Option<CancellationToken>,
         call_id: CallId,
     ) -> Result<HeapPtr, EngineError> {
         // Each spawned thread gets a child cancel token so parent → child
         // cascade falls out of the token tree without bespoke tracking.
         let child_cancel = parent_cancel.child_token();
         drop(parent_cancel);
+
+        // BEP-034 spawn options: link a user-provided `CancelToken`
+        // (`with baml.spawn.options(cancel = ...)`) into this spawn's effective
+        // token. Firing the user token cancels the child; the watcher
+        // self-terminates when `child_cancel` fires (body done / cancelled
+        // / parent cascade) so it never outlives the spawn.
+        if let Some(user) = user_cancel {
+            let linked = child_cancel.clone();
+            let watcher = async move {
+                tokio::select! {
+                    biased;
+                    () = user.cancelled() => linked.cancel(),
+                    () = linked.cancelled() => {}
+                }
+            };
+            #[cfg(not(target_arch = "wasm32"))]
+            tokio::spawn(watcher);
+            #[cfg(target_arch = "wasm32")]
+            wasm_bindgen_futures::spawn_local(watcher);
+        }
 
         // Build the child VM up-front (synchronously) so the await on the
         // permit only holds Send values across yield points.
@@ -2483,18 +2525,22 @@ impl BexEngine {
                     // child also inherits a clone of our pending-child-
                     // errors queue so it can push back to us if it
                     // terminates fire-and-forget with a throw.
-                    let (closure, name_ptr) = {
+                    let (closure, name_ptr, config_ptr) = {
                         let unscheduled = thread
                             .vm
                             .unscheduled_future(unscheduled)
                             .map_err(EngineError::VmInternalError)?;
-                        (unscheduled.closure, unscheduled.name)
+                        (unscheduled.closure, unscheduled.name, unscheduled.config)
                     };
                     let spawn_name: Option<String> =
                         name_ptr.and_then(|ptr| match unsafe { ptr.get() } {
                             Object::String(s) => Some(s.clone()),
                             _ => None,
                         });
+                    // BEP-034 spawn options: if a `with baml.spawn.options(...)`
+                    // clause supplied a `cancel` token, read it out of the
+                    // `SpawnConfig` and link it into the child's effective token.
+                    let user_cancel = config_ptr.and_then(Self::read_spawn_config_cancel);
                     let parent_errors_arc = thread.vm_thread_pending_errors_arc();
                     let future_ptr = Arc::clone(self)
                         .spawn_thread(
@@ -2502,6 +2548,7 @@ impl BexEngine {
                             parent_errors_arc,
                             closure,
                             spawn_name,
+                            user_cancel,
                             call_id,
                         )
                         .await?;

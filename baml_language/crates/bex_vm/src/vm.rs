@@ -3911,6 +3911,11 @@ impl BexVm {
 
                 // ── Spawn (BEP-034) ────────────────────────────────────────────
                 OpCode::Spawn => {
+                    // Stack layout (pushed by emit in this order): closure, name,
+                    // config. So pop in reverse: config (top), name, closure.
+                    // `config` is the optional `baml.spawn.SpawnConfig` from a
+                    // `with baml.spawn.options(...)` clause, or null.
+                    let config_value = self.stack.ensure_pop();
                     let name_value = self.stack.ensure_pop();
                     let closure_value = self.stack.ensure_pop();
                     let closure_ptr =
@@ -3926,9 +3931,21 @@ impl BexVm {
                         }
                         .into());
                     };
+                    let config_ptr = if config_value.is_null() {
+                        None
+                    } else if let Some(ptr) = config_value.as_object_ptr() {
+                        Some(ptr)
+                    } else {
+                        return Err(VmInternalError::TypeError {
+                            expected: Type::Object(ObjectType::Instance),
+                            got: self.type_of(&config_value),
+                        }
+                        .into());
+                    };
                     let pending_future = bex_vm_types::types::UnscheduledFuture {
                         closure: closure_ptr,
                         name: name_ptr,
+                        config: config_ptr,
                     };
                     let object_index = self.tlab.alloc(Object::UnscheduledFuture(pending_future));
                     return Ok(Some(VmExecState::Spawn(object_index)));

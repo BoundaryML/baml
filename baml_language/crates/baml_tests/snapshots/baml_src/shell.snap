@@ -1,46 +1,46 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function shell.$init_test_75(registry: testing.TestCollector) -> null {
+function shell.$init_test_77(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "shell_echo"
-    make_closure .<lambda($init_test_75, 0)>, 0
+    make_closure .<lambda($init_test_77, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "shell_failing_command"
-    make_closure .<lambda($init_test_75, 1)>, 0
+    make_closure .<lambda($init_test_77, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "shell_with_variable"
-    make_closure .<lambda($init_test_75, 2)>, 0
+    make_closure .<lambda($init_test_77, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "shell_ok_method_success"
-    make_closure .<lambda($init_test_75, 3)>, 0
+    make_closure .<lambda($init_test_77, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "shell_ok_method_failure"
-    make_closure .<lambda($init_test_75, 4)>, 0
+    make_closure .<lambda($init_test_77, 4)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "shell_stdout_bytes"
-    make_closure .<lambda($init_test_75, 5)>, 0
+    make_closure .<lambda($init_test_77, 5)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "exec_echo"
-    make_closure .<lambda($init_test_75, 6)>, 0
+    make_closure .<lambda($init_test_77, 6)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1

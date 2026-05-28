@@ -313,6 +313,7 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
         Terminator::Spawn {
             closure,
             name,
+            config,
             future,
             resume,
         } => {
@@ -320,6 +321,10 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             write_operand(f, closure)?;
             write!(f, " name=")?;
             write_operand(f, name)?;
+            if let Some(config) = config {
+                write!(f, " config=")?;
+                write_operand(f, config)?;
+            }
             write!(f, " -> {resume};")
         }
         Terminator::Await {

@@ -4533,6 +4533,75 @@ function baml.panics.UserPanic.to_json(self: null) -> baml.json.json {
     return
 }
 
+function baml.spawn.CancelToken.any(tokens: baml.spawn.CancelToken[]) -> baml.spawn.CancelToken {
+}
+
+function baml.spawn.CancelToken.cancel(self: null) -> int {
+}
+
+function baml.spawn.CancelToken.from_json(j: baml.json.json) -> baml.spawn.CancelToken {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type baml.spawn.CancelToken
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function baml.spawn.CancelToken.is_cancelled(self: null) -> bool {
+}
+
+function baml.spawn.CancelToken.new() -> baml.spawn.CancelToken {
+}
+
+function baml.spawn.CancelToken.to_json(self: null) -> baml.json.json {
+    load_type baml.spawn.CancelToken
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
+function baml.spawn.SpawnConfig.from_json(j: baml.json.json) -> baml.spawn.SpawnConfig {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type baml.spawn.SpawnConfig
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function baml.spawn.SpawnConfig.to_json(self: null) -> baml.json.json {
+    load_type baml.spawn.SpawnConfig
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
+function baml.spawn.TaskGroup.from_json(j: baml.json.json) -> baml.spawn.TaskGroup {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type baml.spawn.TaskGroup
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function baml.spawn.TaskGroup.to_json(self: null) -> baml.json.json {
+    load_type baml.spawn.TaskGroup
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
+function baml.spawn.options(group: baml.spawn.TaskGroup?, cancel: baml.spawn.CancelToken?) -> baml.spawn.SpawnConfig {
+}
+
 function baml.stream.StreamFinished.from_json(j: baml.json.json) -> baml.stream.StreamFinished {
     alloc_instance baml.stream.StreamFinished
     return

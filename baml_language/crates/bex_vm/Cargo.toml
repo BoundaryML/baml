@@ -32,7 +32,17 @@ log = { workspace = true }
 num-bigint = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true, features = [ "macros" ] }
+tokio-util = { workspace = true }
 web-time = { workspace = true }
+
+# Native-only: tokio runtime so CancelToken.any can `tokio::spawn` its watcher.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { workspace = true, features = [ "rt", "macros" ] }
+
+# WASM-only: wasm-bindgen-futures for spawning the watcher.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen-futures = { workspace = true }
 
 [build-dependencies]
 baml_builtins2_codegen = { workspace = true }

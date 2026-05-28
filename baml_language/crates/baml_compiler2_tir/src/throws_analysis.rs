@@ -288,15 +288,20 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
         }
         Expr::Spawn {
             name,
+            with_exprs,
             body: spawn_body,
         } => {
             // Throws from a spawned body do NOT escape the spawning
             // function — they are captured into the resulting
             // `Future<T, E>`'s E parameter and only re-thrown at an
-            // `await` site. The name expression itself can throw, so
-            // walk it; do not walk spawn_body.
+            // `await` site. The name and `with` expressions are evaluated
+            // eagerly in the spawning function, so their throws DO escape —
+            // walk them; do not walk spawn_body.
             if let Some(name_id) = name {
                 collect_from_expr(context, *name_id, body, out);
+            }
+            for with_id in with_exprs {
+                collect_from_expr(context, *with_id, body, out);
             }
             let _ = spawn_body;
         }

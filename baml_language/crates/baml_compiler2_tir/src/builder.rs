@@ -2084,11 +2084,21 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             Expr::Spawn {
                 name,
+                with_exprs,
                 body: spawn_body,
             } => {
                 if let Some(name_id) = name {
                     Self::collect_default_expr_forward_references(
                         *name_id,
+                        body,
+                        later_params,
+                        shadowed,
+                        refs,
+                    );
+                }
+                for with_id in with_exprs {
+                    Self::collect_default_expr_forward_references(
+                        *with_id,
                         body,
                         later_params,
                         shadowed,
@@ -3190,9 +3200,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             Expr::Spawn {
                 name,
+                with_exprs,
                 body: spawn_body,
             } => {
-                // BEP-034: `spawn name? { body } : Future<T, E>` where
+                // BEP-034: `spawn name? with? { body } : Future<T, E>` where
                 // `body` has type `T throws E`. After AST lowering the
                 // body is wrapped in a synthetic 0-arg lambda; we infer
                 // the lambda's type, peel out its return as `T`, and
@@ -3200,6 +3211,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // `infer_lambda_body`) as `E`.
                 if let Some(name_id) = name {
                     let _ = self.infer_expr(*name_id, body);
+                }
+                // Spawn options: type-check each `with` expression — it is
+                // evaluated eagerly in the spawning function. In v1 the only
+                // useful form is a single `baml.spawn.options(...)` call
+                // producing a `SpawnConfig`, which MIR lowers into the spawn's
+                // config operand.
+                // TODO(spawn-options PR4): reject `with` expressions that are
+                // not a `baml.spawn.options(...)` call, and forbid more than
+                // one config.
+                for with_id in with_exprs {
+                    let _ = self.infer_expr(*with_id, body);
                 }
                 let lambda_ty = self.infer_expr(*spawn_body, body);
                 let value_ty = match &lambda_ty {
@@ -5622,15 +5644,20 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             Expr::Spawn {
                 name,
+                with_exprs,
                 body: spawn_body,
             } => {
                 // Spawn-body throws do NOT escape the spawning function
                 // — they are captured into the resulting `Future<T, E>`'s
                 // E parameter and only re-thrown at an `await` site. The
-                // name expression itself can throw, so walk it; do not
-                // walk spawn_body.
+                // name and `with` expressions are evaluated eagerly in the
+                // spawning function, so their throws DO escape — walk them;
+                // do not walk spawn_body.
                 if let Some(name_id) = name {
                     self.collect_throw_facts_from_expr(*name_id, body, out);
+                }
+                for with_id in with_exprs {
+                    self.collect_throw_facts_from_expr(*with_id, body, out);
                 }
                 let _ = spawn_body;
             }

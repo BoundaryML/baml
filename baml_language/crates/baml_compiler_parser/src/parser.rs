@@ -4512,23 +4512,42 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse `spawn name_expr? { body }`. The name expression is optional
-    /// and is parsed until we see `{` (v1 has no `with` clause). The body
-    /// is always a brace-delimited block.
+    /// Parse `spawn name_expr? (with expr (, expr)*)? { body }`. The name
+    /// expression is optional and is parsed until we see `with` or `{`. The
+    /// optional `with` clause (BEP-034 spawn options) is a comma-separated
+    /// list of expressions; in v1 the only accepted form is a single
+    /// `baml.spawn.options(...)` call, enforced later in TIR. The body is
+    /// always a brace-delimited block.
     fn parse_spawn_expr(&mut self) {
         self.with_node(SyntaxKind::SPAWN_EXPR, |p| {
             p.bump(); // `spawn`
             // Optional name expression: anything that can lead an
-            // expression and is not `{`. We parse the name with a binding
-            // power of 0 (no infix beyond what naturally terminates at
-            // `{`), then the brace-block.
-            if !p.at(TokenKind::LBrace) {
+            // expression and is not `{` or `with`. We parse the name with a
+            // binding power of 1 (`with` is a bare Word with no infix binding
+            // power, so the name naturally terminates before it), then the
+            // optional `with` clause, then the brace-block.
+            if !p.at(TokenKind::LBrace) && !p.at_contextual_kw("with") {
                 // Suppress object-literal postfix so the body brace
                 // isn't consumed as a struct constructor — without
                 // this, `spawn nm { y: 1 }` parses `nm { y: 1 }` as
                 // an OBJECT_LITERAL and the body is missing.
                 p.suppress_object_literal_depth += 1;
                 p.parse_expr_bp(1);
+                p.suppress_object_literal_depth -= 1;
+            }
+            // Optional `with expr (, expr)*` clause. Suppress object literals
+            // for the same reason as the name: keep the body brace available.
+            if p.at_contextual_kw("with") {
+                p.bump_contextual_with();
+                p.suppress_object_literal_depth += 1;
+                p.parse_expr_bp(1);
+                while p.eat(TokenKind::Comma) {
+                    // Tolerate a trailing comma before the body brace.
+                    if p.at(TokenKind::LBrace) {
+                        break;
+                    }
+                    p.parse_expr_bp(1);
+                }
                 p.suppress_object_literal_depth -= 1;
             }
             if p.at(TokenKind::LBrace) {
@@ -5067,7 +5086,17 @@ impl<'a> Parser<'a> {
             return;
         }
 
-        let segment = |k: TokenKind| matches!(k, TokenKind::Word | TokenKind::Client);
+        // `spawn` / `await` are reserved keywords but are valid as path
+        // segments after a `.` (e.g. the `baml.spawn` namespace). They are
+        // unambiguous in segment position — a leading `spawn`/`await` is
+        // handled before this point. `is_ident_token` in
+        // `baml_compiler2_ast::lower_expr_body` must mirror this set.
+        let segment = |k: TokenKind| {
+            matches!(
+                k,
+                TokenKind::Word | TokenKind::Client | TokenKind::Spawn | TokenKind::Await
+            )
+        };
 
         // Check if this looks like a path (ident.client followed by dot and another ident)
         if self.peek(1).map(|t| t.kind) == Some(TokenKind::Dot)
@@ -5079,7 +5108,7 @@ impl<'a> Parser<'a> {
 
                 // Parse remaining segments
                 while p.eat(TokenKind::Dot) {
-                    if p.at(TokenKind::Word) || p.at(TokenKind::Client) {
+                    if p.current().map(|t| segment(t.kind)).unwrap_or(false) {
                         p.bump(); // Next segment
                     } else {
                         p.error_unexpected_token("path segment after '.'".to_string());

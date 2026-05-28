@@ -638,6 +638,7 @@ fn expr_desc_spans<'db>(
         }
         Expr::Spawn {
             name,
+            with_exprs: _,
             body: spawn_body,
         } => {
             spans.push(DetailSpan::Code("spawn ".into()));

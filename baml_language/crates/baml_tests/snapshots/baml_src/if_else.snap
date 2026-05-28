@@ -1,196 +1,196 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function if_else.$init_test_55(registry: testing.TestCollector) -> null {
+function if_else.$init_test_57(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "if_else_true_branch"
-    make_closure .<lambda($init_test_55, 0)>, 0
+    make_closure .<lambda($init_test_57, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "if_else_false_branch"
-    make_closure .<lambda($init_test_55, 1)>, 0
+    make_closure .<lambda($init_test_57, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "if_else_comparison"
-    make_closure .<lambda($init_test_55, 2)>, 0
+    make_closure .<lambda($init_test_57, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "if_else_equality"
-    make_closure .<lambda($init_test_55, 3)>, 0
+    make_closure .<lambda($init_test_57, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "if_else_assign_to_variable"
-    make_closure .<lambda($init_test_55, 4)>, 0
+    make_closure .<lambda($init_test_57, 4)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "if_else_with_local_in_branches"
-    make_closure .<lambda($init_test_55, 5)>, 0
+    make_closure .<lambda($init_test_57, 5)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "if_else_with_parameter"
-    make_closure .<lambda($init_test_55, 6)>, 0
+    make_closure .<lambda($init_test_57, 6)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "if_else_return_expr_with_locals"
-    make_closure .<lambda($init_test_55, 7)>, 0
+    make_closure .<lambda($init_test_57, 7)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "if_else_assignment_with_param"
-    make_closure .<lambda($init_test_55, 8)>, 0
+    make_closure .<lambda($init_test_57, 8)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "if_else_assignment_with_locals"
-    make_closure .<lambda($init_test_55, 9)>, 0
+    make_closure .<lambda($init_test_57, 9)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "if_else_nested"
-    make_closure .<lambda($init_test_55, 10)>, 0
+    make_closure .<lambda($init_test_57, 10)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "else_if_chain"
-    make_closure .<lambda($init_test_55, 11)>, 0
+    make_closure .<lambda($init_test_57, 11)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "else_if_with_comparisons"
-    make_closure .<lambda($init_test_55, 12)>, 0
+    make_closure .<lambda($init_test_57, 12)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "else_if_with_parameter"
-    make_closure .<lambda($init_test_55, 13)>, 0
+    make_closure .<lambda($init_test_57, 13)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "else_if_assignment"
-    make_closure .<lambda($init_test_55, 14)>, 0
+    make_closure .<lambda($init_test_57, 14)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "else_if_return_expr_with_locals"
-    make_closure .<lambda($init_test_55, 15)>, 0
+    make_closure .<lambda($init_test_57, 15)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "else_if_assignment_with_locals"
-    make_closure .<lambda($init_test_55, 16)>, 0
+    make_closure .<lambda($init_test_57, 16)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "if_else_function_call_in_branch"
-    make_closure .<lambda($init_test_55, 17)>, 0
+    make_closure .<lambda($init_test_57, 17)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "if_else_arithmetic_condition"
-    make_closure .<lambda($init_test_55, 18)>, 0
+    make_closure .<lambda($init_test_57, 18)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "if_else_logical_and"
-    make_closure .<lambda($init_test_55, 19)>, 0
+    make_closure .<lambda($init_test_57, 19)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "if_else_logical_or"
-    make_closure .<lambda($init_test_55, 20)>, 0
+    make_closure .<lambda($init_test_57, 20)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "if_else_in_arithmetic"
-    make_closure .<lambda($init_test_55, 21)>, 0
+    make_closure .<lambda($init_test_57, 21)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "if_else_as_function_arg"
-    make_closure .<lambda($init_test_55, 22)>, 0
+    make_closure .<lambda($init_test_57, 22)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "if_else_assigned_then_passed_to_call"
-    make_closure .<lambda($init_test_55, 23)>, 0
+    make_closure .<lambda($init_test_57, 23)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "parenthesized_if_else_in_arithmetic"
-    make_closure .<lambda($init_test_55, 24)>, 0
+    make_closure .<lambda($init_test_57, 24)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "chained_if_else_in_arithmetic"
-    make_closure .<lambda($init_test_55, 25)>, 0
+    make_closure .<lambda($init_test_57, 25)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "if_without_else"
-    make_closure .<lambda($init_test_55, 26)>, 0
+    make_closure .<lambda($init_test_57, 26)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "if_without_else_with_local"
-    make_closure .<lambda($init_test_55, 27)>, 0
+    make_closure .<lambda($init_test_57, 27)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "consecutive_if_without_else"
-    make_closure .<lambda($init_test_55, 28)>, 0
+    make_closure .<lambda($init_test_57, 28)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "block_expression"
-    make_closure .<lambda($init_test_55, 29)>, 0
+    make_closure .<lambda($init_test_57, 29)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "if_else_statement"
-    make_closure .<lambda($init_test_55, 30)>, 0
+    make_closure .<lambda($init_test_57, 30)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "nested_block_with_if"
-    make_closure .<lambda($init_test_55, 31)>, 0
+    make_closure .<lambda($init_test_57, 31)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1

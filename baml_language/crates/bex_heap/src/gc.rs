@@ -385,6 +385,9 @@ impl BexHeap {
                 if let Some(name_ptr) = future.name {
                     worklist.push(name_ptr);
                 }
+                if let Some(config_ptr) = future.config {
+                    worklist.push(config_ptr);
+                }
                 worklist.push(future.closure);
             }
             // Primitives have no references
@@ -522,6 +525,11 @@ impl BexHeap {
                     && let Some(&new_ptr) = forwarding.get(name_ptr)
                 {
                     *name_ptr = new_ptr;
+                }
+                if let Some(config_ptr) = &mut future.config
+                    && let Some(&new_ptr) = forwarding.get(config_ptr)
+                {
+                    *config_ptr = new_ptr;
                 }
                 if let Some(&new_ptr) = forwarding.get(&future.closure) {
                     future.closure = new_ptr;
@@ -783,6 +791,11 @@ impl BexHeap {
                     && self.generation_of(name_ptr).is_young()
                 {
                     worklist.push(name_ptr);
+                }
+                if let Some(config_ptr) = future.config
+                    && self.generation_of(config_ptr).is_young()
+                {
+                    worklist.push(config_ptr);
                 }
                 if self.generation_of(future.closure).is_young() {
                     worklist.push(future.closure);
@@ -1891,6 +1904,7 @@ mod tests {
         let future_ptr = tlab.alloc(Object::UnscheduledFuture(UnscheduledFuture {
             closure,
             name: Some(name),
+            config: None,
         }));
 
         let roots = vec![future_ptr];
@@ -2407,6 +2421,7 @@ mod tests {
         let future_container = tlab.alloc(Object::UnscheduledFuture(UnscheduledFuture {
             closure: leaf_for_future,
             name: None,
+            config: None,
         }));
 
         // --- Container: Object::Instance ---

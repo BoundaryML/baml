@@ -1,64 +1,64 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function typed_inputs.$init_test_84(registry: testing.TestCollector) -> null {
+function typed_inputs.$init_test_86(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "int_input"
-    make_closure .<lambda($init_test_84, 0)>, 0
+    make_closure .<lambda($init_test_86, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_input"
-    make_closure .<lambda($init_test_84, 1)>, 0
+    make_closure .<lambda($init_test_86, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "multiple_inputs"
-    make_closure .<lambda($init_test_84, 2)>, 0
+    make_closure .<lambda($init_test_86, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "bool_input"
-    make_closure .<lambda($init_test_84, 3)>, 0
+    make_closure .<lambda($init_test_86, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "float_input"
-    make_closure .<lambda($init_test_84, 4)>, 0
+    make_closure .<lambda($init_test_86, 4)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "array_input"
-    make_closure .<lambda($init_test_84, 5)>, 0
+    make_closure .<lambda($init_test_86, 5)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "class_input"
-    make_closure .<lambda($init_test_84, 6)>, 0
+    make_closure .<lambda($init_test_86, 6)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "map_input"
-    make_closure .<lambda($init_test_84, 7)>, 0
+    make_closure .<lambda($init_test_86, 7)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "null_input"
-    make_closure .<lambda($init_test_84, 8)>, 0
+    make_closure .<lambda($init_test_86, 8)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "mixed_types_inputs"
-    make_closure .<lambda($init_test_84, 9)>, 0
+    make_closure .<lambda($init_test_86, 9)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1

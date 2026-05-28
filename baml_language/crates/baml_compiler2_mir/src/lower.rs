@@ -2430,8 +2430,12 @@ impl LoweringContext<'_> {
                 self.emit_panic_call("parse error", expr_id);
             }
 
-            AstExpr::Spawn { name, body } => {
-                self.lower_spawn(expr_id, name, body, dest);
+            AstExpr::Spawn {
+                name,
+                with_exprs,
+                body,
+            } => {
+                self.lower_spawn(expr_id, name, &with_exprs, body, dest);
             }
 
             AstExpr::Await { future } => {
@@ -2442,14 +2446,17 @@ impl LoweringContext<'_> {
         self.builder.current_source_span = prev_span;
     }
 
-    /// Lower `spawn name? { body }` into:
+    /// Lower `spawn name? with? { body }` into:
     ///   1. A `MakeClosure` for the body wrapped as a 0-arg lambda.
     ///   2. A name temp (string operand or null constant).
-    ///   3. A `Terminator::Spawn` writing the resulting Future handle.
+    ///   3. An optional config operand from the `with baml.spawn.options(...)`
+    ///      clause (BEP-034 spawn options).
+    ///   4. A `Terminator::Spawn` writing the resulting Future handle.
     fn lower_spawn(
         &mut self,
         expr_id: AstExprId,
         name: Option<AstExprId>,
+        with_exprs: &[AstExprId],
         body: AstExprId,
         dest: Place,
     ) {
@@ -2470,6 +2477,13 @@ impl LoweringContext<'_> {
             None => Operand::Constant(Constant::Null),
         };
 
+        // Lower the optional `with` config (BEP-034 spawn options). In v1
+        // the only useful form is a single `baml.spawn.options(...)` call,
+        // which yields a `SpawnConfig` value; lower the first one into the
+        // config operand. (Additional `with` expressions are type-checked in
+        // TIR but ignored at runtime until the full middleware design lands.)
+        let config_op = with_exprs.first().map(|&cfg| self.lower_to_operand(cfg));
+
         // Allocate the future temp. Phase C uses a defaulted `Null` type
         // for the future local; the TIR-tracked value/error types flow
         // through to runtime via the surrounding context. A follow-up
@@ -2482,7 +2496,7 @@ impl LoweringContext<'_> {
 
         let resume = self.builder.create_block();
         self.builder
-            .spawn(closure_op, name_op, future_place.clone(), resume);
+            .spawn(closure_op, name_op, config_op, future_place.clone(), resume);
         self.builder.set_current_block(resume);
         // The result of `spawn` is the Future handle.
         self.builder

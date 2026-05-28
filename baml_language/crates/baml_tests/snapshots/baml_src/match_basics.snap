@@ -1,244 +1,244 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function match_basics.$init_test_65(registry: testing.TestCollector) -> null {
+function match_basics.$init_test_67(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "match_catch_all_underscore"
-    make_closure .<lambda($init_test_65, 0)>, 0
+    make_closure .<lambda($init_test_67, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_catch_all_named_binding"
-    make_closure .<lambda($init_test_65, 1)>, 0
+    make_closure .<lambda($init_test_67, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_catch_all_with_variable"
-    make_closure .<lambda($init_test_65, 2)>, 0
+    make_closure .<lambda($init_test_67, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_literal_int_first_arm"
-    make_closure .<lambda($init_test_65, 3)>, 0
+    make_closure .<lambda($init_test_67, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_literal_int_second_arm"
-    make_closure .<lambda($init_test_65, 4)>, 0
+    make_closure .<lambda($init_test_67, 4)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_literal_int_fallback"
-    make_closure .<lambda($init_test_65, 5)>, 0
+    make_closure .<lambda($init_test_67, 5)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_literal_int_single_arm"
-    make_closure .<lambda($init_test_65, 6)>, 0
+    make_closure .<lambda($init_test_67, 6)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_literal_null"
-    make_closure .<lambda($init_test_65, 7)>, 0
+    make_closure .<lambda($init_test_67, 7)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_literal_bool_true"
-    make_closure .<lambda($init_test_65, 8)>, 0
+    make_closure .<lambda($init_test_67, 8)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_literal_bool_false"
-    make_closure .<lambda($init_test_65, 9)>, 0
+    make_closure .<lambda($init_test_67, 9)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_literal_bool_exhaustive_constant"
-    make_closure .<lambda($init_test_65, 10)>, 0
+    make_closure .<lambda($init_test_67, 10)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_union_literal_first"
-    make_closure .<lambda($init_test_65, 11)>, 0
+    make_closure .<lambda($init_test_67, 11)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_union_literal_second"
-    make_closure .<lambda($init_test_65, 12)>, 0
+    make_closure .<lambda($init_test_67, 12)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_union_large"
-    make_closure .<lambda($init_test_65, 13)>, 0
+    make_closure .<lambda($init_test_67, 13)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_union_client_error"
-    make_closure .<lambda($init_test_65, 14)>, 0
+    make_closure .<lambda($init_test_67, 14)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_union_with_duplicates"
-    make_closure .<lambda($init_test_65, 15)>, 0
+    make_closure .<lambda($init_test_67, 15)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_as_expression_in_arithmetic"
-    make_closure .<lambda($init_test_65, 16)>, 0
+    make_closure .<lambda($init_test_67, 16)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_nested"
-    make_closure .<lambda($init_test_65, 17)>, 0
+    make_closure .<lambda($init_test_67, 17)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_string_literal_first_arm"
-    make_closure .<lambda($init_test_65, 18)>, 0
+    make_closure .<lambda($init_test_67, 18)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_string_literal_second_arm"
-    make_closure .<lambda($init_test_65, 19)>, 0
+    make_closure .<lambda($init_test_67, 19)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_string_literal_fallback"
-    make_closure .<lambda($init_test_65, 20)>, 0
+    make_closure .<lambda($init_test_67, 20)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_string_four_arms"
-    make_closure .<lambda($init_test_65, 21)>, 0
+    make_closure .<lambda($init_test_67, 21)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_string_literal_with_typed_fallback"
-    make_closure .<lambda($init_test_65, 22)>, 0
+    make_closure .<lambda($init_test_67, 22)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_catch_all_binding_with_int_patterns"
-    make_closure .<lambda($init_test_65, 23)>, 0
+    make_closure .<lambda($init_test_67, 23)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_negative_int_with_variable"
-    make_closure .<lambda($init_test_65, 24)>, 0
+    make_closure .<lambda($init_test_67, 24)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_negative_int_first_arm"
-    make_closure .<lambda($init_test_65, 25)>, 0
+    make_closure .<lambda($init_test_67, 25)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_three_levels_nested"
-    make_closure .<lambda($init_test_65, 26)>, 0
+    make_closure .<lambda($init_test_67, 26)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_three_levels_nested_middle"
-    make_closure .<lambda($init_test_65, 27)>, 0
+    make_closure .<lambda($init_test_67, 27)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_optional_null_pattern"
-    make_closure .<lambda($init_test_65, 28)>, 0
+    make_closure .<lambda($init_test_67, 28)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_optional_value_pattern"
-    make_closure .<lambda($init_test_65, 29)>, 0
+    make_closure .<lambda($init_test_67, 29)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_optional_with_literal_and_typed"
-    make_closure .<lambda($init_test_65, 30)>, 0
+    make_closure .<lambda($init_test_67, 30)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_arithmetic_scrutinee"
-    make_closure .<lambda($init_test_65, 31)>, 0
+    make_closure .<lambda($init_test_67, 31)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_function_call_scrutinee"
-    make_closure .<lambda($init_test_65, 32)>, 0
+    make_closure .<lambda($init_test_67, 32)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_computed_discriminant"
-    make_closure .<lambda($init_test_65, 33)>, 0
+    make_closure .<lambda($init_test_67, 33)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_in_loop"
-    make_closure .<lambda($init_test_65, 34)>, 0
+    make_closure .<lambda($init_test_67, 34)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_dense_with_catch_all_via_call"
-    make_closure .<lambda($init_test_65, 35)>, 0
+    make_closure .<lambda($init_test_67, 35)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_mixed_instanceof_and_literal"
-    make_closure .<lambda($init_test_65, 36)>, 0
+    make_closure .<lambda($init_test_67, 36)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_bool_variable_exhaustive"
-    make_closure .<lambda($init_test_65, 37)>, 0
+    make_closure .<lambda($init_test_67, 37)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_or_wildcard_bool_is_exhaustive"
-    make_closure .<lambda($init_test_65, 38)>, 0
+    make_closure .<lambda($init_test_67, 38)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_string_many_arms"
-    make_closure .<lambda($init_test_65, 39)>, 0
+    make_closure .<lambda($init_test_67, 39)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1

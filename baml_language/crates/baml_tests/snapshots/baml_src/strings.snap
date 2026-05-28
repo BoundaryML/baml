@@ -1,898 +1,898 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function strings.$init_test_81(registry: testing.TestCollector) -> null {
+function strings.$init_test_83(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "concat_strings"
-    make_closure .<lambda($init_test_81, 0)>, 0
+    make_closure .<lambda($init_test_83, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_equality_true"
-    make_closure .<lambda($init_test_81, 1)>, 0
+    make_closure .<lambda($init_test_83, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_equality_false"
-    make_closure .<lambda($init_test_81, 2)>, 0
+    make_closure .<lambda($init_test_83, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_not_equal_true"
-    make_closure .<lambda($init_test_81, 3)>, 0
+    make_closure .<lambda($init_test_83, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_less_than"
-    make_closure .<lambda($init_test_81, 4)>, 0
+    make_closure .<lambda($init_test_83, 4)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_less_than_or_equal"
-    make_closure .<lambda($init_test_81, 5)>, 0
+    make_closure .<lambda($init_test_83, 5)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_greater_than"
-    make_closure .<lambda($init_test_81, 6)>, 0
+    make_closure .<lambda($init_test_83, 6)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_greater_than_or_equal"
-    make_closure .<lambda($init_test_81, 7)>, 0
+    make_closure .<lambda($init_test_83, 7)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_length"
-    make_closure .<lambda($init_test_81, 8)>, 0
+    make_closure .<lambda($init_test_83, 8)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_to_lower_case"
-    make_closure .<lambda($init_test_81, 9)>, 0
+    make_closure .<lambda($init_test_83, 9)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_to_upper_case"
-    make_closure .<lambda($init_test_81, 10)>, 0
+    make_closure .<lambda($init_test_83, 10)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_trim"
-    make_closure .<lambda($init_test_81, 11)>, 0
+    make_closure .<lambda($init_test_83, 11)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_includes"
-    make_closure .<lambda($init_test_81, 12)>, 0
+    make_closure .<lambda($init_test_83, 12)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_starts_with"
-    make_closure .<lambda($init_test_81, 13)>, 0
+    make_closure .<lambda($init_test_83, 13)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_ends_with"
-    make_closure .<lambda($init_test_81, 14)>, 0
+    make_closure .<lambda($init_test_83, 14)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_split"
-    make_closure .<lambda($init_test_81, 15)>, 0
+    make_closure .<lambda($init_test_83, 15)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_substring"
-    make_closure .<lambda($init_test_81, 16)>, 0
+    make_closure .<lambda($init_test_83, 16)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_substring_bounds"
-    make_closure .<lambda($init_test_81, 17)>, 0
+    make_closure .<lambda($init_test_83, 17)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_length_is_bytes_for_non_ascii"
-    make_closure .<lambda($init_test_81, 18)>, 0
+    make_closure .<lambda($init_test_83, 18)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_length_is_bytes_for_emoji"
-    make_closure .<lambda($init_test_81, 19)>, 0
+    make_closure .<lambda($init_test_83, 19)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_substring_byte_indexed_keeps_multibyte_char"
-    make_closure .<lambda($init_test_81, 20)>, 0
+    make_closure .<lambda($init_test_83, 20)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_substring_mid_codepoint_throws"
-    make_closure .<lambda($init_test_81, 21)>, 0
+    make_closure .<lambda($init_test_83, 21)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_substring_negative_clamps_to_zero"
-    make_closure .<lambda($init_test_81, 22)>, 0
+    make_closure .<lambda($init_test_83, 22)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_substring_empty_when_start_past_end"
-    make_closure .<lambda($init_test_81, 23)>, 0
+    make_closure .<lambda($init_test_83, 23)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_char_at_byte_indexed_returns_multibyte_char"
-    make_closure .<lambda($init_test_81, 24)>, 0
+    make_closure .<lambda($init_test_83, 24)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_char_at_byte_indexed_after_multibyte"
-    make_closure .<lambda($init_test_81, 25)>, 0
+    make_closure .<lambda($init_test_83, 25)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_char_at_mid_codepoint_throws"
-    make_closure .<lambda($init_test_81, 26)>, 0
+    make_closure .<lambda($init_test_83, 26)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_char_at_end_returns_empty"
-    make_closure .<lambda($init_test_81, 27)>, 0
+    make_closure .<lambda($init_test_83, 27)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_char_at_past_end_throws"
-    make_closure .<lambda($init_test_81, 28)>, 0
+    make_closure .<lambda($init_test_83, 28)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_char_at_negative_throws"
-    make_closure .<lambda($init_test_81, 29)>, 0
+    make_closure .<lambda($init_test_83, 29)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_index_of_returns_byte_offset"
-    make_closure .<lambda($init_test_81, 30)>, 0
+    make_closure .<lambda($init_test_83, 30)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_char_count_ascii"
-    make_closure .<lambda($init_test_81, 31)>, 0
+    make_closure .<lambda($init_test_83, 31)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_char_count_multibyte"
-    make_closure .<lambda($init_test_81, 32)>, 0
+    make_closure .<lambda($init_test_83, 32)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_char_count_emoji"
-    make_closure .<lambda($init_test_81, 33)>, 0
+    make_closure .<lambda($init_test_83, 33)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_char_count_empty"
-    make_closure .<lambda($init_test_81, 34)>, 0
+    make_closure .<lambda($init_test_83, 34)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_trim_start_removes_leading_only"
-    make_closure .<lambda($init_test_81, 35)>, 0
+    make_closure .<lambda($init_test_83, 35)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_trim_end_removes_trailing_only"
-    make_closure .<lambda($init_test_81, 36)>, 0
+    make_closure .<lambda($init_test_83, 36)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_trim_start_handles_newlines_and_tabs"
-    make_closure .<lambda($init_test_81, 37)>, 0
+    make_closure .<lambda($init_test_83, 37)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_trim_end_no_whitespace_unchanged"
-    make_closure .<lambda($init_test_81, 38)>, 0
+    make_closure .<lambda($init_test_83, 38)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_trim_start_empty"
-    make_closure .<lambda($init_test_81, 39)>, 0
+    make_closure .<lambda($init_test_83, 39)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_lines_lf"
-    make_closure .<lambda($init_test_81, 40)>, 0
+    make_closure .<lambda($init_test_83, 40)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_lines_crlf"
-    make_closure .<lambda($init_test_81, 41)>, 0
+    make_closure .<lambda($init_test_83, 41)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_lines_trailing_newline_no_empty"
-    make_closure .<lambda($init_test_81, 42)>, 0
+    make_closure .<lambda($init_test_83, 42)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_lines_empty_string"
-    make_closure .<lambda($init_test_81, 43)>, 0
+    make_closure .<lambda($init_test_83, 43)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_lines_just_newline"
-    make_closure .<lambda($init_test_81, 44)>, 0
+    make_closure .<lambda($init_test_83, 44)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_code_point_at_ascii"
-    make_closure .<lambda($init_test_81, 45)>, 0
+    make_closure .<lambda($init_test_83, 45)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_code_point_at_multibyte"
-    make_closure .<lambda($init_test_81, 46)>, 0
+    make_closure .<lambda($init_test_83, 46)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_code_point_at_emoji"
-    make_closure .<lambda($init_test_81, 47)>, 0
+    make_closure .<lambda($init_test_83, 47)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_code_point_at_mid_codepoint_throws"
-    make_closure .<lambda($init_test_81, 48)>, 0
+    make_closure .<lambda($init_test_83, 48)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_code_point_at_at_end_throws"
-    make_closure .<lambda($init_test_81, 49)>, 0
+    make_closure .<lambda($init_test_83, 49)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_code_point_at_negative_throws"
-    make_closure .<lambda($init_test_81, 50)>, 0
+    make_closure .<lambda($init_test_83, 50)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_to_utf8_ascii"
-    make_closure .<lambda($init_test_81, 51)>, 0
+    make_closure .<lambda($init_test_83, 51)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_to_utf8_multibyte"
-    make_closure .<lambda($init_test_81, 52)>, 0
+    make_closure .<lambda($init_test_83, 52)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_to_utf8_empty"
-    make_closure .<lambda($init_test_81, 53)>, 0
+    make_closure .<lambda($init_test_83, 53)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_from_utf8_ascii_round_trip"
-    make_closure .<lambda($init_test_81, 54)>, 0
+    make_closure .<lambda($init_test_83, 54)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_from_utf8_multibyte_round_trip"
-    make_closure .<lambda($init_test_81, 55)>, 0
+    make_closure .<lambda($init_test_83, 55)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_from_utf8_invalid_throws"
-    make_closure .<lambda($init_test_81, 56)>, 0
+    make_closure .<lambda($init_test_83, 56)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_from_utf8_empty"
-    make_closure .<lambda($init_test_81, 57)>, 0
+    make_closure .<lambda($init_test_83, 57)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_from_code_points_ascii"
-    make_closure .<lambda($init_test_81, 58)>, 0
+    make_closure .<lambda($init_test_83, 58)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_from_code_points_multibyte"
-    make_closure .<lambda($init_test_81, 59)>, 0
+    make_closure .<lambda($init_test_83, 59)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_from_code_points_emoji"
-    make_closure .<lambda($init_test_81, 60)>, 0
+    make_closure .<lambda($init_test_83, 60)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_from_code_points_empty"
-    make_closure .<lambda($init_test_81, 61)>, 0
+    make_closure .<lambda($init_test_83, 61)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_from_code_points_negative_throws"
-    make_closure .<lambda($init_test_81, 62)>, 0
+    make_closure .<lambda($init_test_83, 62)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_from_code_points_surrogate_throws"
-    make_closure .<lambda($init_test_81, 63)>, 0
+    make_closure .<lambda($init_test_83, 63)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_from_code_points_too_large_throws"
-    make_closure .<lambda($init_test_81, 64)>, 0
+    make_closure .<lambda($init_test_83, 64)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_numeric_ascii_digits"
-    make_closure .<lambda($init_test_81, 65)>, 0
+    make_closure .<lambda($init_test_83, 65)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_numeric_unicode_roman"
-    make_closure .<lambda($init_test_81, 66)>, 0
+    make_closure .<lambda($init_test_83, 66)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_numeric_mixed_false"
-    make_closure .<lambda($init_test_81, 67)>, 0
+    make_closure .<lambda($init_test_83, 67)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_numeric_letters_false"
-    make_closure .<lambda($init_test_81, 68)>, 0
+    make_closure .<lambda($init_test_83, 68)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_numeric_empty_true"
-    make_closure .<lambda($init_test_81, 69)>, 0
+    make_closure .<lambda($init_test_83, 69)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_alphabetic_ascii"
-    make_closure .<lambda($init_test_81, 70)>, 0
+    make_closure .<lambda($init_test_83, 70)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_alphabetic_accented"
-    make_closure .<lambda($init_test_81, 71)>, 0
+    make_closure .<lambda($init_test_83, 71)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_alphabetic_cjk"
-    make_closure .<lambda($init_test_81, 72)>, 0
+    make_closure .<lambda($init_test_83, 72)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_alphabetic_with_digit_false"
-    make_closure .<lambda($init_test_81, 73)>, 0
+    make_closure .<lambda($init_test_83, 73)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_alphabetic_with_space_false"
-    make_closure .<lambda($init_test_81, 74)>, 0
+    make_closure .<lambda($init_test_83, 74)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_alphabetic_empty_true"
-    make_closure .<lambda($init_test_81, 75)>, 0
+    make_closure .<lambda($init_test_83, 75)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_alphanumeric_letters_and_digits"
-    make_closure .<lambda($init_test_81, 76)>, 0
+    make_closure .<lambda($init_test_83, 76)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_alphanumeric_accented_with_digit"
-    make_closure .<lambda($init_test_81, 77)>, 0
+    make_closure .<lambda($init_test_83, 77)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_alphanumeric_with_space_false"
-    make_closure .<lambda($init_test_81, 78)>, 0
+    make_closure .<lambda($init_test_83, 78)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_alphanumeric_with_punct_false"
-    make_closure .<lambda($init_test_81, 79)>, 0
+    make_closure .<lambda($init_test_83, 79)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_alphanumeric_empty_true"
-    make_closure .<lambda($init_test_81, 80)>, 0
+    make_closure .<lambda($init_test_83, 80)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_uppercase_all_upper"
-    make_closure .<lambda($init_test_81, 81)>, 0
+    make_closure .<lambda($init_test_83, 81)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_uppercase_mixed_false"
-    make_closure .<lambda($init_test_81, 82)>, 0
+    make_closure .<lambda($init_test_83, 82)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_uppercase_digit_false"
-    make_closure .<lambda($init_test_81, 83)>, 0
+    make_closure .<lambda($init_test_83, 83)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_uppercase_empty_true"
-    make_closure .<lambda($init_test_81, 84)>, 0
+    make_closure .<lambda($init_test_83, 84)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_lowercase_all_lower"
-    make_closure .<lambda($init_test_81, 85)>, 0
+    make_closure .<lambda($init_test_83, 85)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_lowercase_mixed_false"
-    make_closure .<lambda($init_test_81, 86)>, 0
+    make_closure .<lambda($init_test_83, 86)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_lowercase_accented_lower"
-    make_closure .<lambda($init_test_81, 87)>, 0
+    make_closure .<lambda($init_test_83, 87)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_lowercase_empty_true"
-    make_closure .<lambda($init_test_81, 88)>, 0
+    make_closure .<lambda($init_test_83, 88)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_whitespace_spaces"
-    make_closure .<lambda($init_test_81, 89)>, 0
+    make_closure .<lambda($init_test_83, 89)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_whitespace_mixed_ws"
-    make_closure .<lambda($init_test_81, 90)>, 0
+    make_closure .<lambda($init_test_83, 90)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_whitespace_unicode_nbsp"
-    make_closure .<lambda($init_test_81, 91)>, 0
+    make_closure .<lambda($init_test_83, 91)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_whitespace_with_letter_false"
-    make_closure .<lambda($init_test_81, 92)>, 0
+    make_closure .<lambda($init_test_83, 92)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_whitespace_empty_true"
-    make_closure .<lambda($init_test_81, 93)>, 0
+    make_closure .<lambda($init_test_83, 93)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_control_newline_tab"
-    make_closure .<lambda($init_test_81, 94)>, 0
+    make_closure .<lambda($init_test_83, 94)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_control_letter_false"
-    make_closure .<lambda($init_test_81, 95)>, 0
+    make_closure .<lambda($init_test_83, 95)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_control_empty_true"
-    make_closure .<lambda($init_test_81, 96)>, 0
+    make_closure .<lambda($init_test_83, 96)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_graphic_letters"
-    make_closure .<lambda($init_test_81, 97)>, 0
+    make_closure .<lambda($init_test_83, 97)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_graphic_accented"
-    make_closure .<lambda($init_test_81, 98)>, 0
+    make_closure .<lambda($init_test_83, 98)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_graphic_with_space_false"
-    make_closure .<lambda($init_test_81, 99)>, 0
+    make_closure .<lambda($init_test_83, 99)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_graphic_with_newline_false"
-    make_closure .<lambda($init_test_81, 100)>, 0
+    make_closure .<lambda($init_test_83, 100)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_graphic_empty_true"
-    make_closure .<lambda($init_test_81, 101)>, 0
+    make_closure .<lambda($init_test_83, 101)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_pure_ascii"
-    make_closure .<lambda($init_test_81, 102)>, 0
+    make_closure .<lambda($init_test_83, 102)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_with_accent_false"
-    make_closure .<lambda($init_test_81, 103)>, 0
+    make_closure .<lambda($init_test_83, 103)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_with_emoji_false"
-    make_closure .<lambda($init_test_81, 104)>, 0
+    make_closure .<lambda($init_test_83, 104)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_control_chars"
-    make_closure .<lambda($init_test_81, 105)>, 0
+    make_closure .<lambda($init_test_83, 105)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_empty_true"
-    make_closure .<lambda($init_test_81, 106)>, 0
+    make_closure .<lambda($init_test_83, 106)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_numeric_digits"
-    make_closure .<lambda($init_test_81, 107)>, 0
+    make_closure .<lambda($init_test_83, 107)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_numeric_unicode_numeral_false"
-    make_closure .<lambda($init_test_81, 108)>, 0
+    make_closure .<lambda($init_test_83, 108)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_numeric_letter_false"
-    make_closure .<lambda($init_test_81, 109)>, 0
+    make_closure .<lambda($init_test_83, 109)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_numeric_empty_true"
-    make_closure .<lambda($init_test_81, 110)>, 0
+    make_closure .<lambda($init_test_83, 110)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_alphabetic_letters"
-    make_closure .<lambda($init_test_81, 111)>, 0
+    make_closure .<lambda($init_test_83, 111)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_alphabetic_accented_false"
-    make_closure .<lambda($init_test_81, 112)>, 0
+    make_closure .<lambda($init_test_83, 112)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_alphabetic_with_digit_false"
-    make_closure .<lambda($init_test_81, 113)>, 0
+    make_closure .<lambda($init_test_83, 113)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_alphabetic_empty_true"
-    make_closure .<lambda($init_test_81, 114)>, 0
+    make_closure .<lambda($init_test_83, 114)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_alphanumeric_basic"
-    make_closure .<lambda($init_test_81, 115)>, 0
+    make_closure .<lambda($init_test_83, 115)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_alphanumeric_accented_false"
-    make_closure .<lambda($init_test_81, 116)>, 0
+    make_closure .<lambda($init_test_83, 116)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_alphanumeric_with_space_false"
-    make_closure .<lambda($init_test_81, 117)>, 0
+    make_closure .<lambda($init_test_83, 117)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_alphanumeric_empty_true"
-    make_closure .<lambda($init_test_81, 118)>, 0
+    make_closure .<lambda($init_test_83, 118)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_uppercase_pure_upper"
-    make_closure .<lambda($init_test_81, 119)>, 0
+    make_closure .<lambda($init_test_83, 119)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_uppercase_mixed_false"
-    make_closure .<lambda($init_test_81, 120)>, 0
+    make_closure .<lambda($init_test_83, 120)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_uppercase_with_accent_false"
-    make_closure .<lambda($init_test_81, 121)>, 0
+    make_closure .<lambda($init_test_83, 121)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_uppercase_empty_true"
-    make_closure .<lambda($init_test_81, 122)>, 0
+    make_closure .<lambda($init_test_83, 122)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_lowercase_pure_lower"
-    make_closure .<lambda($init_test_81, 123)>, 0
+    make_closure .<lambda($init_test_83, 123)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_lowercase_mixed_false"
-    make_closure .<lambda($init_test_81, 124)>, 0
+    make_closure .<lambda($init_test_83, 124)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_lowercase_with_accent_false"
-    make_closure .<lambda($init_test_81, 125)>, 0
+    make_closure .<lambda($init_test_83, 125)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_lowercase_empty_true"
-    make_closure .<lambda($init_test_81, 126)>, 0
+    make_closure .<lambda($init_test_83, 126)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_whitespace_basic"
-    make_closure .<lambda($init_test_81, 127)>, 0
+    make_closure .<lambda($init_test_83, 127)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_whitespace_form_feed"
-    make_closure .<lambda($init_test_81, 128)>, 0
+    make_closure .<lambda($init_test_83, 128)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_whitespace_nbsp_false"
-    make_closure .<lambda($init_test_81, 129)>, 0
+    make_closure .<lambda($init_test_83, 129)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_whitespace_letter_false"
-    make_closure .<lambda($init_test_81, 130)>, 0
+    make_closure .<lambda($init_test_83, 130)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_whitespace_empty_true"
-    make_closure .<lambda($init_test_81, 131)>, 0
+    make_closure .<lambda($init_test_83, 131)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_control_low_range"
-    make_closure .<lambda($init_test_81, 132)>, 0
+    make_closure .<lambda($init_test_83, 132)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_control_del"
-    make_closure .<lambda($init_test_81, 133)>, 0
+    make_closure .<lambda($init_test_83, 133)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_control_letter_false"
-    make_closure .<lambda($init_test_81, 134)>, 0
+    make_closure .<lambda($init_test_83, 134)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_control_empty_true"
-    make_closure .<lambda($init_test_81, 135)>, 0
+    make_closure .<lambda($init_test_83, 135)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_graphic_letters"
-    make_closure .<lambda($init_test_81, 136)>, 0
+    make_closure .<lambda($init_test_83, 136)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_graphic_punctuation"
-    make_closure .<lambda($init_test_81, 137)>, 0
+    make_closure .<lambda($init_test_83, 137)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_graphic_space_false"
-    make_closure .<lambda($init_test_81, 138)>, 0
+    make_closure .<lambda($init_test_83, 138)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_graphic_control_false"
-    make_closure .<lambda($init_test_81, 139)>, 0
+    make_closure .<lambda($init_test_83, 139)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_graphic_accented_false"
-    make_closure .<lambda($init_test_81, 140)>, 0
+    make_closure .<lambda($init_test_83, 140)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_graphic_empty_true"
-    make_closure .<lambda($init_test_81, 141)>, 0
+    make_closure .<lambda($init_test_83, 141)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_hex_lower"
-    make_closure .<lambda($init_test_81, 142)>, 0
+    make_closure .<lambda($init_test_83, 142)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_hex_upper"
-    make_closure .<lambda($init_test_81, 143)>, 0
+    make_closure .<lambda($init_test_83, 143)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_hex_mixed_case_with_digits"
-    make_closure .<lambda($init_test_81, 144)>, 0
+    make_closure .<lambda($init_test_83, 144)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_hex_g_false"
-    make_closure .<lambda($init_test_81, 145)>, 0
+    make_closure .<lambda($init_test_83, 145)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_hex_x_prefix_false"
-    make_closure .<lambda($init_test_81, 146)>, 0
+    make_closure .<lambda($init_test_83, 146)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_is_ascii_hex_empty_true"
-    make_closure .<lambda($init_test_81, 147)>, 0
+    make_closure .<lambda($init_test_83, 147)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_replace"
-    make_closure .<lambda($init_test_81, 148)>, 0
+    make_closure .<lambda($init_test_83, 148)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1

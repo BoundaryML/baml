@@ -418,6 +418,7 @@ impl MirBuilder {
         &mut self,
         closure: Operand,
         name: Operand,
+        config: Option<Operand>,
         future: Place,
         resume: BlockId,
     ) {
@@ -428,6 +429,7 @@ impl MirBuilder {
         self.set_terminator(Terminator::Spawn {
             closure,
             name,
+            config,
             future,
             resume,
         });

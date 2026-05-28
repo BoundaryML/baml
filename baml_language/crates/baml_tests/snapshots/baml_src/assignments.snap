@@ -1,130 +1,130 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function assignments.$init_test_36(registry: testing.TestCollector) -> null {
+function assignments.$init_test_37(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "block_expr"
-    make_closure .<lambda($init_test_36, 0)>, 0
+    make_closure .<lambda($init_test_37, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "mutable_var_in_function"
-    make_closure .<lambda($init_test_36, 1)>, 0
+    make_closure .<lambda($init_test_37, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "mutable_param"
-    make_closure .<lambda($init_test_36, 2)>, 0
+    make_closure .<lambda($init_test_37, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "virtual_cross_block_soundness"
-    make_closure .<lambda($init_test_36, 3)>, 0
+    make_closure .<lambda($init_test_37, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "virtual_cross_block_param_mutation_soundness"
-    make_closure .<lambda($init_test_36, 4)>, 0
+    make_closure .<lambda($init_test_37, 4)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "copy_of_mutable_param_soundness"
-    make_closure .<lambda($init_test_36, 5)>, 0
+    make_closure .<lambda($init_test_37, 5)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "virtual_cross_block_transitive_param_mutation_soundness"
-    make_closure .<lambda($init_test_36, 6)>, 0
+    make_closure .<lambda($init_test_37, 6)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "field_assignment_add_assign"
-    make_closure .<lambda($init_test_36, 7)>, 0
+    make_closure .<lambda($init_test_37, 7)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "field_assignment_sub_assign"
-    make_closure .<lambda($init_test_36, 8)>, 0
+    make_closure .<lambda($init_test_37, 8)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "field_assignment_mul_assign"
-    make_closure .<lambda($init_test_36, 9)>, 0
+    make_closure .<lambda($init_test_37, 9)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "field_assignment_div_assign"
-    make_closure .<lambda($init_test_36, 10)>, 0
+    make_closure .<lambda($init_test_37, 10)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "field_assignment_mod_assign"
-    make_closure .<lambda($init_test_36, 11)>, 0
+    make_closure .<lambda($init_test_37, 11)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "field_assignment_simple"
-    make_closure .<lambda($init_test_36, 12)>, 0
+    make_closure .<lambda($init_test_37, 12)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "field_assignment_multiple_ops"
-    make_closure .<lambda($init_test_36, 13)>, 0
+    make_closure .<lambda($init_test_37, 13)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "nested_field_assignment_simple"
-    make_closure .<lambda($init_test_36, 14)>, 0
+    make_closure .<lambda($init_test_37, 14)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "nested_field_assignment_compound"
-    make_closure .<lambda($init_test_36, 15)>, 0
+    make_closure .<lambda($init_test_37, 15)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "field_assignment_object_field"
-    make_closure .<lambda($init_test_36, 16)>, 0
+    make_closure .<lambda($init_test_37, 16)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "array_element_field_assignment"
-    make_closure .<lambda($init_test_36, 17)>, 0
+    make_closure .<lambda($init_test_37, 17)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "method_call_field_assignment_with_copy"
-    make_closure .<lambda($init_test_36, 18)>, 0
+    make_closure .<lambda($init_test_37, 18)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "virtual_multiple_defs_preserve_side_effects"
-    make_closure .<lambda($init_test_36, 19)>, 0
+    make_closure .<lambda($init_test_37, 19)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "parenthesized_assignment_in_expr_position_is_bug"
-    make_closure .<lambda($init_test_36, 20)>, 0
+    make_closure .<lambda($init_test_37, 20)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1

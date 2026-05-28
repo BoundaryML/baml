@@ -111,6 +111,7 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_llm/llm.baml"),
     builtin!("baml", "ns_stream/stream.baml"),
     builtin!("baml", "ns_future/future.baml"),
+    builtin!("baml", "ns_spawn/spawn.baml"),
     builtin!("baml", "ns_host/host.baml"),
     // --- reflect package (standalone, accessible as `reflect.type_of(...)`) ---
     builtin!("reflect", "reflect.baml"),

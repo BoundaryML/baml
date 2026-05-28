@@ -581,6 +581,7 @@ fn simulate_terminator_stack(
         Terminator::Spawn {
             closure,
             name,
+            config,
             future,
             ..
         } => {
@@ -596,7 +597,14 @@ fn simulate_terminator_stack(
             if pull_semantics::walk_operand_pull(&mut sink, name).is_err() {
                 return false;
             }
-            if !sim.pop_n(2) {
+            // Config operand is pushed last (null when there is no `with`
+            // clause). Mirror `emit`: always push three, pop three.
+            let null_config = Operand::Constant(Constant::Null);
+            let config_op = config.as_ref().unwrap_or(&null_config);
+            if pull_semantics::walk_operand_pull(&mut sink, config_op).is_err() {
+                return false;
+            }
+            if !sim.pop_n(3) {
                 return false;
             }
             sim.push();

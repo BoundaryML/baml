@@ -9,16 +9,16 @@ function $init_test(registry: unknown) -> null {
     return
 }
 
-function user.$init_test_35(registry: testing.TestCollector) -> null {
+function user.$init_test_36(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "simple test"
-    make_closure .<lambda($init_test_35, 0)>, 0
+    make_closure .<lambda($init_test_36, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "with not_null"
-    make_closure .<lambda($init_test_35, 1)>, 0
+    make_closure .<lambda($init_test_36, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1

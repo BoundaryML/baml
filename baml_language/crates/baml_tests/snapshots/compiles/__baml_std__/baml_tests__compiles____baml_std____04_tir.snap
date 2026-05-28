@@ -1489,6 +1489,44 @@ class baml.panics.SdkPanic$stream {
 }
 type baml.panics.Panic$stream = baml.panics.DivisionByZero$stream | baml.panics.IndexOutOfBounds$stream | baml.panics.MapKeyNotFound$stream | baml.panics.StackOverflow$stream | baml.panics.AssertionFailed$stream | baml.panics.Unreachable$stream | baml.panics.Cancelled$stream | baml.panics.UserPanic$stream | baml.panics.Exit$stream | baml.panics.AllocFailure$stream | baml.panics.HostUnavailable$stream | baml.panics.NegativeBitShift$stream | baml.panics.SdkPanic$stream
 
+--- <builtin>/baml/ns_spawn/spawn.baml ---
+class baml.spawn.SpawnConfig {
+  _handle: $rust_type
+}
+function baml.spawn.SpawnConfig.to_json(self: baml.spawn.SpawnConfig) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<SpawnConfig>(self)) : baml.json.json
+}
+function baml.spawn.SpawnConfig.from_json(j: baml.json.json) -> baml.spawn.SpawnConfig throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : baml.spawn.SpawnConfig
+}
+class baml.spawn.TaskGroup {
+  _handle: $rust_type
+}
+function baml.spawn.TaskGroup.to_json(self: baml.spawn.TaskGroup) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<TaskGroup>(self)) : baml.json.json
+}
+function baml.spawn.TaskGroup.from_json(j: baml.json.json) -> baml.spawn.TaskGroup throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : baml.spawn.TaskGroup
+}
+class baml.spawn.CancelToken {
+  _handle: $rust_type
+}
+function baml.spawn.CancelToken.to_json(self: baml.spawn.CancelToken) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<CancelToken>(self)) : baml.json.json
+}
+function baml.spawn.CancelToken.from_json(j: baml.json.json) -> baml.spawn.CancelToken throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : baml.spawn.CancelToken
+}
+class baml.spawn.SpawnConfig$stream {
+  _handle: $rust_type
+}
+class baml.spawn.TaskGroup$stream {
+  _handle: $rust_type
+}
+class baml.spawn.CancelToken$stream {
+  _handle: $rust_type
+}
+
 --- <builtin>/baml/ns_stream/stream.baml ---
 class baml.stream.StreamFinished {
 }

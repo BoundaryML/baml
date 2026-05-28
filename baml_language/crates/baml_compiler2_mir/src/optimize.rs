@@ -436,11 +436,15 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
                 Terminator::Spawn {
                     closure,
                     name,
+                    config,
                     future,
                     ..
                 } => {
                     scan_operand(closure, &mut set);
                     scan_operand(name, &mut set);
+                    if let Some(config) = config {
+                        scan_operand(config, &mut set);
+                    }
                     scan_place(future, &mut set);
                 }
                 Terminator::Branch { condition, .. } => scan_operand(condition, &mut set),
@@ -673,11 +677,15 @@ fn count_in_terminator(term: &Terminator, uses: &mut [usize]) {
         Terminator::Spawn {
             closure,
             name,
+            config,
             future,
             ..
         } => {
             count_in_operand(closure, uses);
             count_in_operand(name, uses);
+            if let Some(config) = config {
+                count_in_operand(config, uses);
+            }
             count_dest_place(future, uses);
         }
         Terminator::Await {
@@ -948,9 +956,17 @@ fn apply_subst_to_terminator(term: &mut Terminator, subst: &HashMap<Local, Opera
                 apply_subst_to_operand(arg, subst);
             }
         }
-        Terminator::Spawn { closure, name, .. } => {
+        Terminator::Spawn {
+            closure,
+            name,
+            config,
+            ..
+        } => {
             apply_subst_to_operand(closure, subst);
             apply_subst_to_operand(name, subst);
+            if let Some(config) = config {
+                apply_subst_to_operand(config, subst);
+            }
         }
         Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
             apply_subst_to_operand(value, subst);
@@ -1194,11 +1210,15 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
         Terminator::Spawn {
             closure,
             name,
+            config,
             future,
             ..
         } => {
             remap_operand(closure, map);
             remap_operand(name, map);
+            if let Some(config) = config {
+                remap_operand(config, map);
+            }
             remap_place(future, map);
         }
         Terminator::Await {
@@ -1405,11 +1425,15 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                 Terminator::Spawn {
                     closure,
                     name,
+                    config,
                     future,
                     ..
                 } => {
                     check_operand(closure, &blk);
                     check_operand(name, &blk);
+                    if let Some(config) = config {
+                        check_operand(config, &blk);
+                    }
                     check_place(future, &blk);
                 }
                 Terminator::Await {

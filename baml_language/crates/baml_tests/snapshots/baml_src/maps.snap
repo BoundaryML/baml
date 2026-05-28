@@ -1,160 +1,160 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function maps.$init_test_64(registry: testing.TestCollector) -> null {
+function maps.$init_test_66(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "len"
-    make_closure .<lambda($init_test_64, 0)>, 0
+    make_closure .<lambda($init_test_66, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "map_set_first_insert_returns_null"
-    make_closure .<lambda($init_test_64, 1)>, 0
+    make_closure .<lambda($init_test_66, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "map_set_replace_returns_previous"
-    make_closure .<lambda($init_test_64, 2)>, 0
+    make_closure .<lambda($init_test_66, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "map_set_then_get_reads_latest"
-    make_closure .<lambda($init_test_64, 3)>, 0
+    make_closure .<lambda($init_test_66, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "map_set_grows_length"
-    make_closure .<lambda($init_test_64, 4)>, 0
+    make_closure .<lambda($init_test_66, 4)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "map_set_replace_preserves_length"
-    make_closure .<lambda($init_test_64, 5)>, 0
+    make_closure .<lambda($init_test_66, 5)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "map_delete_returns_previous"
-    make_closure .<lambda($init_test_64, 6)>, 0
+    make_closure .<lambda($init_test_66, 6)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "map_delete_absent_returns_null"
-    make_closure .<lambda($init_test_64, 7)>, 0
+    make_closure .<lambda($init_test_66, 7)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "map_delete_already_deleted_returns_null"
-    make_closure .<lambda($init_test_64, 8)>, 0
+    make_closure .<lambda($init_test_66, 8)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "map_delete_shrinks_length"
-    make_closure .<lambda($init_test_64, 9)>, 0
+    make_closure .<lambda($init_test_66, 9)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "map_delete_does_not_affect_other_keys"
-    make_closure .<lambda($init_test_64, 10)>, 0
+    make_closure .<lambda($init_test_66, 10)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "map_get_or_insert_inserts_when_absent"
-    make_closure .<lambda($init_test_64, 11)>, 0
+    make_closure .<lambda($init_test_66, 11)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "map_get_or_insert_returns_existing_when_present"
-    make_closure .<lambda($init_test_64, 12)>, 0
+    make_closure .<lambda($init_test_66, 12)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "map_get_or_insert_does_not_overwrite"
-    make_closure .<lambda($init_test_64, 13)>, 0
+    make_closure .<lambda($init_test_66, 13)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "map_get_or_insert_persists_inserted_value"
-    make_closure .<lambda($init_test_64, 14)>, 0
+    make_closure .<lambda($init_test_66, 14)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "map_get_or_insert_grows_length_only_when_absent"
-    make_closure .<lambda($init_test_64, 15)>, 0
+    make_closure .<lambda($init_test_66, 15)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "map_clear_removes_all"
-    make_closure .<lambda($init_test_64, 16)>, 0
+    make_closure .<lambda($init_test_66, 16)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "map_clear_already_empty_is_noop"
-    make_closure .<lambda($init_test_64, 17)>, 0
+    make_closure .<lambda($init_test_66, 17)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "map_clear_then_reuse"
-    make_closure .<lambda($init_test_64, 18)>, 0
+    make_closure .<lambda($init_test_66, 18)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "map_clear_makes_get_return_null"
-    make_closure .<lambda($init_test_64, 19)>, 0
+    make_closure .<lambda($init_test_66, 19)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "map_has_after_delete_is_false"
-    make_closure .<lambda($init_test_64, 20)>, 0
+    make_closure .<lambda($init_test_66, 20)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "map_has_after_get_or_insert_is_true"
-    make_closure .<lambda($init_test_64, 21)>, 0
+    make_closure .<lambda($init_test_66, 21)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "create_and_access"
-    make_closure .<lambda($init_test_64, 22)>, 0
+    make_closure .<lambda($init_test_66, 22)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "access_no_key"
-    make_closure .<lambda($init_test_64, 23)>, 0
+    make_closure .<lambda($init_test_66, 23)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "contains"
-    make_closure .<lambda($init_test_64, 24)>, 0
+    make_closure .<lambda($init_test_66, 24)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "modify"
-    make_closure .<lambda($init_test_64, 25)>, 0
+    make_closure .<lambda($init_test_66, 25)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1

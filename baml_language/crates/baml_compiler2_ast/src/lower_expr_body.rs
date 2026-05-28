@@ -32,11 +32,16 @@ pub struct EnvVarRef {
 /// Returns true if `kind` can serve as an identifier token in expression position.
 ///
 /// The parser allows `KW_CLIENT` (and `WORD`) inside `PATH_EXPR` / `FIELD_ACCESS_EXPR`
-/// nodes when `client` is used as a variable or field name. This must match
-/// exactly what `parse_path_or_ident` accepts; adding a new keyword there
-/// requires adding it here too.
+/// nodes when `client` is used as a variable or field name. It likewise allows
+/// `KW_SPAWN` / `KW_AWAIT` as path segments (e.g. the `baml.spawn` namespace),
+/// since they are unambiguous after a `.`. This must match exactly what
+/// `parse_path_or_ident` accepts; adding a new keyword there requires adding it
+/// here too.
 fn is_ident_token(kind: SyntaxKind) -> bool {
-    kind == SyntaxKind::WORD || kind == SyntaxKind::KW_CLIENT
+    matches!(
+        kind,
+        SyntaxKind::WORD | SyntaxKind::KW_CLIENT | SyntaxKind::KW_SPAWN | SyntaxKind::KW_AWAIT
+    )
 }
 
 /// Locate the `GENERIC_ARGS` node that should be treated as the *call-site*
@@ -682,10 +687,25 @@ impl LoweringContext {
         use baml_compiler_syntax::ast as cst_ast;
 
         let mut name: Option<ExprId> = None;
+        let mut with_exprs: Vec<ExprId> = Vec::new();
         let mut body_lambda: Option<ExprId> = None;
+        // The CST is flat: `KW_SPAWN [name expr] [KW_WITH expr (COMMA expr)*]
+        // BLOCK_EXPR`. We walk children-with-tokens so the `KW_WITH` token is
+        // visible; everything after it (other than the body) is a `with` expr.
+        let mut seen_with = false;
 
-        for child in node.children() {
-            if child.kind() == SyntaxKind::BLOCK_EXPR {
+        for child in node.children_with_tokens() {
+            let kind = child.kind();
+            if kind == SyntaxKind::KW_WITH {
+                seen_with = true;
+                continue;
+            }
+            // Only expression nodes matter past here; skip `KW_SPAWN`, commas,
+            // and trivia tokens.
+            let Some(child) = child.as_node() else {
+                continue;
+            };
+            if kind == SyntaxKind::BLOCK_EXPR {
                 // Synthesize a 0-arg lambda whose body is this block —
                 // mirroring `lower_lambda_expr` so the existing
                 // capture / scope / MIR plumbing applies unchanged.
@@ -717,13 +737,22 @@ impl LoweringContext {
                     body_lambda =
                         Some(self.alloc_expr(Expr::Lambda(Box::new(fd)), child.text_range()));
                 }
+            } else if seen_with {
+                with_exprs.push(self.lower_expr(child));
             } else if name.is_none() {
-                name = Some(self.lower_expr(&child));
+                name = Some(self.lower_expr(child));
             }
         }
 
         let body = body_lambda.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
-        self.alloc_expr(Expr::Spawn { name, body }, node.text_range())
+        self.alloc_expr(
+            Expr::Spawn {
+                name,
+                with_exprs,
+                body,
+            },
+            node.text_range(),
+        )
     }
 
     /// Lower `await expr`. The CST shape is `AWAIT_EXPR [ KW_AWAIT

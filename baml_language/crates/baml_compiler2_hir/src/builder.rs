@@ -516,10 +516,14 @@ impl<'db> SemanticIndexBuilder<'db> {
             }
             ast::Expr::Spawn {
                 name,
+                with_exprs,
                 body: spawn_body,
             } => {
                 if let Some(name) = name {
                     self.walk_expr(*name, body, source_map, true);
+                }
+                for with_expr in with_exprs {
+                    self.walk_expr(*with_expr, body, source_map, true);
                 }
                 self.walk_expr(*spawn_body, body, source_map, true);
             }

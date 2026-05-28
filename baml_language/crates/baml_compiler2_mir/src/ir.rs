@@ -408,6 +408,11 @@ pub enum Terminator {
         closure: Operand,
         /// Optional name expression (string or null).
         name: Operand,
+        /// Optional `baml.spawn.options(...)` config value from a `with`
+        /// clause (BEP-034 spawn options). `None` when there is no `with`
+        /// clause; the engine reads the config's `cancel` (and later
+        /// `group`/`detach`) to derive the spawn's effective cancel token.
+        config: Option<Operand>,
         /// Where to store the resulting Future handle.
         future: Place,
         /// Block to resume after the spawn schedules.

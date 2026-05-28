@@ -1,580 +1,580 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function patterns_new_runtime.$init_test_72(registry: testing.TestCollector) -> null {
+function patterns_new_runtime.$init_test_74(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "let_or_of_same_binding"
-    make_closure .<lambda($init_test_72, 0)>, 0
+    make_closure .<lambda($init_test_74, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "let_or_of_six_same_bindings"
-    make_closure .<lambda($init_test_72, 1)>, 0
+    make_closure .<lambda($init_test_74, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_or_of_bare_bindings_uses_value"
-    make_closure .<lambda($init_test_72, 2)>, 0
+    make_closure .<lambda($init_test_74, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_or_of_chain_narrows_uses_value"
-    make_closure .<lambda($init_test_72, 3)>, 0
+    make_closure .<lambda($init_test_74, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_chain_of_bindings_aliases_scrutinee"
-    make_closure .<lambda($init_test_72, 4)>, 0
+    make_closure .<lambda($init_test_74, 4)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_chain_trailing_binding_after_array_type_aliases_value"
-    make_closure .<lambda($init_test_72, 5)>, 0
+    make_closure .<lambda($init_test_74, 5)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_chain_binding_used_in_guard"
-    make_closure .<lambda($init_test_72, 6)>, 0
+    make_closure .<lambda($init_test_74, 6)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "for_let_chain_of_bindings"
-    make_closure .<lambda($init_test_72, 7)>, 0
+    make_closure .<lambda($init_test_74, 7)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "for_let_chain_trailing_binding_after_type_aliases_iteration_value"
-    make_closure .<lambda($init_test_72, 8)>, 0
+    make_closure .<lambda($init_test_74, 8)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "for_let_chain_alias_capture_per_iteration"
-    make_closure .<lambda($init_test_72, 9)>, 0
+    make_closure .<lambda($init_test_74, 9)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "for_let_or_of_same_binding"
-    make_closure .<lambda($init_test_72, 10)>, 0
+    make_closure .<lambda($init_test_74, 10)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "for_let_or_of_six_same_bindings"
-    make_closure .<lambda($init_test_72, 11)>, 0
+    make_closure .<lambda($init_test_74, 11)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "for_array_destructure_rest_sums_rows"
-    make_closure .<lambda($init_test_72, 12)>, 0
+    make_closure .<lambda($init_test_74, 12)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "for_array_destructure_rest_capture_gets_fresh_cell_per_iteration"
-    make_closure .<lambda($init_test_72, 13)>, 0
+    make_closure .<lambda($init_test_74, 13)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "for_array_destructure_inside_class_destructure_sums_fields"
-    make_closure .<lambda($init_test_72, 14)>, 0
+    make_closure .<lambda($init_test_74, 14)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "catch_or_of_same_typed_binding"
-    make_closure .<lambda($init_test_72, 15)>, 0
+    make_closure .<lambda($init_test_74, 15)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "let_wildcard_discards_value"
-    make_closure .<lambda($init_test_72, 16)>, 0
+    make_closure .<lambda($init_test_74, 16)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_bind_with_type_ascription"
-    make_closure .<lambda($init_test_72, 17)>, 0
+    make_closure .<lambda($init_test_74, 17)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_dispatches_int_callback"
-    make_closure .<lambda($init_test_72, 18)>, 0
+    make_closure .<lambda($init_test_74, 18)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_dispatches_string_callback"
-    make_closure .<lambda($init_test_72, 20)>, 0
+    make_closure .<lambda($init_test_74, 20)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_or_of_chain_bindings_swapped"
-    make_closure .<lambda($init_test_72, 22)>, 0
+    make_closure .<lambda($init_test_74, 22)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "chain_second_binding_capture_after_reassign"
-    make_closure .<lambda($init_test_72, 23)>, 0
+    make_closure .<lambda($init_test_74, 23)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "let_class_destructure_binds_shorthand_and_ignores_omitted_fields"
-    make_closure .<lambda($init_test_72, 24)>, 0
+    make_closure .<lambda($init_test_74, 24)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "let_class_destructure_renames_field_binding"
-    make_closure .<lambda($init_test_72, 25)>, 0
+    make_closure .<lambda($init_test_74, 25)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "let_class_destructure_nested_class"
-    make_closure .<lambda($init_test_72, 26)>, 0
+    make_closure .<lambda($init_test_74, 26)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "let_nested_same_field_names_are_ok_with_distinct_bindings"
-    make_closure .<lambda($init_test_72, 27)>, 0
+    make_closure .<lambda($init_test_74, 27)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "let_generic_class_destructure_substitutes_field_types"
-    make_closure .<lambda($init_test_72, 28)>, 0
+    make_closure .<lambda($init_test_74, 28)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "empty_generic_class_destructure_uses_contextual_type"
-    make_closure .<lambda($init_test_72, 29)>, 0
+    make_closure .<lambda($init_test_74, 29)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_generic_class_type_patterns_distinguish_type_args"
-    make_closure .<lambda($init_test_72, 30)>, 0
+    make_closure .<lambda($init_test_74, 30)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_generic_class_destructure_union_tests_substituted_field_type"
-    make_closure .<lambda($init_test_72, 31)>, 0
+    make_closure .<lambda($init_test_74, 31)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "generic_class_destructure_backfills_through_wrapped_flow_types"
-    make_closure .<lambda($init_test_72, 32)>, 0
+    make_closure .<lambda($init_test_74, 32)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "empty_generic_class_destructure_covers_union_of_same_class_instantiations"
-    make_closure .<lambda($init_test_72, 33)>, 0
+    make_closure .<lambda($init_test_74, 33)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "deep_generic_class_destructure_substitutes_through_nested_fields"
-    make_closure .<lambda($init_test_72, 34)>, 0
+    make_closure .<lambda($init_test_74, 34)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_class_destructure_tests_field_literal_and_falls_through"
-    make_closure .<lambda($init_test_72, 35)>, 0
+    make_closure .<lambda($init_test_74, 35)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_class_destructure_tests_union_field_type"
-    make_closure .<lambda($init_test_72, 36)>, 0
+    make_closure .<lambda($init_test_74, 36)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_top_level_class_destructure_tests_union_scrutinee"
-    make_closure .<lambda($init_test_72, 37)>, 0
+    make_closure .<lambda($init_test_74, 37)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_or_class_destructure_same_binding_name_compatible_types"
-    make_closure .<lambda($init_test_72, 38)>, 0
+    make_closure .<lambda($init_test_74, 38)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_or_class_destructure_same_binding_name_different_depths"
-    make_closure .<lambda($init_test_72, 39)>, 0
+    make_closure .<lambda($init_test_74, 39)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_array_destructure_empty_and_prefix_rest"
-    make_closure .<lambda($init_test_72, 40)>, 0
+    make_closure .<lambda($init_test_74, 40)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_array_destructure_exact_length"
-    make_closure .<lambda($init_test_72, 41)>, 0
+    make_closure .<lambda($init_test_74, 41)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_array_destructure_binds_rest_copy"
-    make_closure .<lambda($init_test_72, 42)>, 0
+    make_closure .<lambda($init_test_74, 42)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_array_destructure_suffix_rest"
-    make_closure .<lambda($init_test_72, 43)>, 0
+    make_closure .<lambda($init_test_74, 43)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "let_array_destructure_binds_whole_rest"
-    make_closure .<lambda($init_test_72, 44)>, 0
+    make_closure .<lambda($init_test_74, 44)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "let_array_destructure_nested_rest_only_is_irrefutable"
-    make_closure .<lambda($init_test_72, 45)>, 0
+    make_closure .<lambda($init_test_74, 45)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_array_destructure_entire_alphabet_of_bindings"
-    make_closure .<lambda($init_test_72, 46)>, 0
+    make_closure .<lambda($init_test_74, 46)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_or_binding_from_class_field_or_nested_array_position"
-    make_closure .<lambda($init_test_72, 47)>, 0
+    make_closure .<lambda($init_test_74, 47)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_wildcard_inside_chained_binding_type_array_pattern"
-    make_closure .<lambda($init_test_72, 48)>, 0
+    make_closure .<lambda($init_test_74, 48)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_array_destructure_shadows_outer_local_only_inside_arm"
-    make_closure .<lambda($init_test_72, 49)>, 0
+    make_closure .<lambda($init_test_74, 49)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "for_array_destructure_nested_rest_only_is_irrefutable"
-    make_closure .<lambda($init_test_72, 50)>, 0
+    make_closure .<lambda($init_test_74, 50)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_array_destructure_literal_and_type_element_patterns"
-    make_closure .<lambda($init_test_72, 51)>, 0
+    make_closure .<lambda($init_test_74, 51)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_array_destructure_or_patterns_share_bindings"
-    make_closure .<lambda($init_test_72, 52)>, 0
+    make_closure .<lambda($init_test_74, 52)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_array_destructure_or_patterns_nested_arrays_share_bindings"
-    make_closure .<lambda($init_test_72, 53)>, 0
+    make_closure .<lambda($init_test_74, 53)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_array_destructure_nested_array_binding_projects_inner_element"
-    make_closure .<lambda($init_test_72, 54)>, 0
+    make_closure .<lambda($init_test_74, 54)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_array_destructure_or_patterns_nested_class_array_fields"
-    make_closure .<lambda($init_test_72, 55)>, 0
+    make_closure .<lambda($init_test_74, 55)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_array_destructure_outer_chain_applies_to_whole_array"
-    make_closure .<lambda($init_test_72, 56)>, 0
+    make_closure .<lambda($init_test_74, 56)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_alternating_class_array_five_levels_or_flipped_traversal"
-    make_closure .<lambda($init_test_72, 57)>, 0
+    make_closure .<lambda($init_test_74, 57)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_or_four_alternates_same_name_different_paths"
-    make_closure .<lambda($init_test_72, 58)>, 0
+    make_closure .<lambda($init_test_74, 58)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_deep_class_array_or_picks_deep_cell"
-    make_closure .<lambda($init_test_72, 59)>, 0
+    make_closure .<lambda($init_test_74, 59)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_or_2d_array_vs_class_with_2d_field"
-    make_closure .<lambda($init_test_72, 60)>, 0
+    make_closure .<lambda($init_test_74, 60)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_array_destructure_two_prefix_rest_suffix_binding"
-    make_closure .<lambda($init_test_72, 61)>, 0
+    make_closure .<lambda($init_test_74, 61)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_array_destructure_prefix_rest_two_suffix_bindings"
-    make_closure .<lambda($init_test_72, 62)>, 0
+    make_closure .<lambda($init_test_74, 62)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_array_destructure_inside_class_destructure_empty_field"
-    make_closure .<lambda($init_test_72, 63)>, 0
+    make_closure .<lambda($init_test_74, 63)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_array_destructure_with_class_elements"
-    make_closure .<lambda($init_test_72, 64)>, 0
+    make_closure .<lambda($init_test_74, 64)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_array_destructure_wildcard_elements_and_rest"
-    make_closure .<lambda($init_test_72, 65)>, 0
+    make_closure .<lambda($init_test_74, 65)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_array_destructure_wildcard_length_shapes"
-    make_closure .<lambda($init_test_72, 66)>, 0
+    make_closure .<lambda($init_test_74, 66)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_array_destructure_wildcards_nested_in_class_fields"
-    make_closure .<lambda($init_test_72, 67)>, 0
+    make_closure .<lambda($init_test_74, 67)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_array_destructure_wildcard_class_fields_and_rest"
-    make_closure .<lambda($init_test_72, 68)>, 0
+    make_closure .<lambda($init_test_74, 68)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "for_array_destructure_rest_wildcard_is_irrefutable"
-    make_closure .<lambda($init_test_72, 69)>, 0
+    make_closure .<lambda($init_test_74, 69)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "class_destructure_shorthand_field_same_name_as_class_binds_field"
-    make_closure .<lambda($init_test_72, 70)>, 0
+    make_closure .<lambda($init_test_74, 70)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_class_destructure_binds_nested_field"
-    make_closure .<lambda($init_test_72, 71)>, 0
+    make_closure .<lambda($init_test_74, 71)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "let_deep_class_destructure_binds_inner_field"
-    make_closure .<lambda($init_test_72, 72)>, 0
+    make_closure .<lambda($init_test_74, 72)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_deep_class_destructure_falls_through_to_binding_arm"
-    make_closure .<lambda($init_test_72, 73)>, 0
+    make_closure .<lambda($init_test_74, 73)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_or_deep_class_destructure_binds_when_second_alt_matches"
-    make_closure .<lambda($init_test_72, 74)>, 0
+    make_closure .<lambda($init_test_74, 74)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "for_deep_class_destructure_sums_fields"
-    make_closure .<lambda($init_test_72, 75)>, 0
+    make_closure .<lambda($init_test_74, 75)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "for_deep_class_destructure_capture_gets_fresh_cell_per_iteration"
-    make_closure .<lambda($init_test_72, 76)>, 0
+    make_closure .<lambda($init_test_74, 76)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "let_class_destructure_binds_inner_zip"
-    make_closure .<lambda($init_test_72, 77)>, 0
+    make_closure .<lambda($init_test_74, 77)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_class_destructure_binds_inner_zip"
-    make_closure .<lambda($init_test_72, 78)>, 0
+    make_closure .<lambda($init_test_74, 78)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "for_class_destructure_binds_inner_zip"
-    make_closure .<lambda($init_test_72, 79)>, 0
+    make_closure .<lambda($init_test_74, 79)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_class_field_pattern_should_refine_parent_union_scrutinee"
-    make_closure .<lambda($init_test_72, 80)>, 0
+    make_closure .<lambda($init_test_74, 80)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_class_destructure_union_field_int_arm"
-    make_closure .<lambda($init_test_72, 81)>, 0
+    make_closure .<lambda($init_test_74, 81)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_class_destructure_union_field_float_arm"
-    make_closure .<lambda($init_test_72, 82)>, 0
+    make_closure .<lambda($init_test_74, 82)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_class_destructure_union_field_bool_arm"
-    make_closure .<lambda($init_test_72, 83)>, 0
+    make_closure .<lambda($init_test_74, 83)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_array_element_pattern_should_refine_parent_union_scrutinee"
-    make_closure .<lambda($init_test_72, 84)>, 0
+    make_closure .<lambda($init_test_74, 84)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_or_class_patterns_should_refine_parent_union_scrutinee"
-    make_closure .<lambda($init_test_72, 85)>, 0
+    make_closure .<lambda($init_test_74, 85)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_or_array_patterns_should_refine_parent_union_scrutinee"
-    make_closure .<lambda($init_test_72, 86)>, 0
+    make_closure .<lambda($init_test_74, 86)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "rustc_port_nested_class_optional_full_coverage_true_present"
-    make_closure .<lambda($init_test_72, 87)>, 0
+    make_closure .<lambda($init_test_74, 87)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "rustc_port_nested_class_optional_full_coverage_false_null"
-    make_closure .<lambda($init_test_72, 88)>, 0
+    make_closure .<lambda($init_test_74, 88)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "rustc_port_slice_prefix_dispatch"
-    make_closure .<lambda($init_test_72, 89)>, 0
+    make_closure .<lambda($init_test_74, 89)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "rustc_port_slice_suffix_dispatch"
-    make_closure .<lambda($init_test_72, 90)>, 0
+    make_closure .<lambda($init_test_74, 90)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "rustc_port_enum_full_variant_dispatch_north"
-    make_closure .<lambda($init_test_72, 91)>, 0
+    make_closure .<lambda($init_test_74, 91)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "rustc_port_enum_full_variant_dispatch_west"
-    make_closure .<lambda($init_test_72, 92)>, 0
+    make_closure .<lambda($init_test_74, 92)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "rustc_port_or_pattern_in_class_field_first_alt"
-    make_closure .<lambda($init_test_72, 93)>, 0
+    make_closure .<lambda($init_test_74, 93)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "rustc_port_or_pattern_in_class_field_falls_to_wildcard"
-    make_closure .<lambda($init_test_72, 94)>, 0
+    make_closure .<lambda($init_test_74, 94)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "rustc_port_optional_literal_or_arm_zero"
-    make_closure .<lambda($init_test_72, 95)>, 0
+    make_closure .<lambda($init_test_74, 95)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "rustc_port_optional_literal_or_arm_null"
-    make_closure .<lambda($init_test_72, 96)>, 0
+    make_closure .<lambda($init_test_74, 96)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "rustc_port_optional_literal_or_arm_other"
-    make_closure .<lambda($init_test_72, 97)>, 0
+    make_closure .<lambda($init_test_74, 97)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1

@@ -28,6 +28,7 @@ mod math;
 mod media;
 mod primitives;
 mod root;
+mod spawn;
 mod stack_trace;
 mod string;
 mod sys;
@@ -116,7 +117,11 @@ pub trait Continuation: Send {
     clippy::used_underscore_binding,
     clippy::elidable_lifetime_names,
     clippy::needless_lifetimes,
-    clippy::redundant_closure_call
+    clippy::redundant_closure_call,
+    // Static builtin constructors (e.g. `baml.spawn.CancelToken.new`) are
+    // generated as trait methods returning `Value` (the heap instance), not
+    // `Self` — that is the codegen contract, not a smell.
+    clippy::new_ret_no_self
 )]
 mod generated {
     use super::*;

@@ -1,58 +1,58 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function while_loops.$init_test_87(registry: testing.TestCollector) -> null {
+function while_loops.$init_test_89(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "while_loop_gcd"
-    make_closure .<lambda($init_test_87, 0)>, 0
+    make_closure .<lambda($init_test_89, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "while_with_scope"
-    make_closure .<lambda($init_test_87, 1)>, 0
+    make_closure .<lambda($init_test_89, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "while_with_break"
-    make_closure .<lambda($init_test_87, 2)>, 0
+    make_closure .<lambda($init_test_89, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "break_factorial"
-    make_closure .<lambda($init_test_87, 3)>, 0
+    make_closure .<lambda($init_test_89, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "break_nested"
-    make_closure .<lambda($init_test_87, 4)>, 0
+    make_closure .<lambda($init_test_89, 4)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "break_nested_with_variable_conditions"
-    make_closure .<lambda($init_test_87, 5)>, 0
+    make_closure .<lambda($init_test_89, 5)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "while_with_conditional_break"
-    make_closure .<lambda($init_test_87, 6)>, 0
+    make_closure .<lambda($init_test_89, 6)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "continue_factorial"
-    make_closure .<lambda($init_test_87, 7)>, 0
+    make_closure .<lambda($init_test_89, 7)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "continue_nested"
-    make_closure .<lambda($init_test_87, 8)>, 0
+    make_closure .<lambda($init_test_89, 8)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
