@@ -1292,6 +1292,28 @@ async fn backtick_m3_if_else_one_branch_has_for() -> anyhow::Result<()> {
     .await
 }
 
+#[tokio::test]
+async fn backtick_m3_if_no_parens_bare_identifier_cond() -> anyhow::Result<()> {
+    // Paren-optional grammar: `${if enabled}` with a bare identifier as the
+    // condition. Previously the if-lowering's children-only scan skipped
+    // bare-token conditions and silently fell through to `Expr::Missing`.
+    let src = r#"
+        function gate(enabled: bool) -> string {
+            `${if enabled}on${else}off${endif}`
+        }
+        function main() -> string {
+            gate(true) + "|" + gate(false)
+        }
+    "#;
+    assert_engine_executes(EngineProgram {
+        source: src,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("on|off".into())),
+        ..Default::default()
+    })
+    .await
+}
+
 // ── M1 tests retained below ───────────────────────────────────────────────
 
 #[tokio::test]

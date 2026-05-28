@@ -2689,14 +2689,28 @@ impl LoweringContext {
         let mut lowered_branches: Vec<(ExprId, ExprId, TextRange)> = Vec::new();
         for branch in if_seg.branches {
             let header_span = branch.header.text_range();
-            let cond_node = branch
-                .header
-                .children()
-                .find(|c| c.kind() != SyntaxKind::PATTERN);
-            let cond = match cond_node {
-                Some(c) => self.lower_expr(&c),
-                None => self.alloc_expr(Expr::Missing, header_span),
-            };
+            // The condition is the first non-PATTERN child of the header.
+            // For bare identifiers / literals (paren-less form), the parser
+            // emits the operand as a token rather than a node, so we must
+            // scan tokens too — otherwise `${if enabled}` silently falls
+            // through to `Expr::Missing`.
+            let mut cond: Option<ExprId> = None;
+            for elem in branch.header.children_with_tokens() {
+                match elem {
+                    rowan::NodeOrToken::Node(c) if c.kind() != SyntaxKind::PATTERN => {
+                        cond = Some(self.lower_expr(&c));
+                        break;
+                    }
+                    rowan::NodeOrToken::Node(_) => {}
+                    rowan::NodeOrToken::Token(t) => {
+                        if let Some(expr) = self.try_lower_bare_token(&t) {
+                            cond = Some(expr);
+                            break;
+                        }
+                    }
+                }
+            }
+            let cond = cond.unwrap_or_else(|| self.alloc_expr(Expr::Missing, header_span));
             let body_string = self.lower_backtick_segments(branch.body, outer_span);
             lowered_branches.push((cond, body_string, header_span));
         }
