@@ -71,6 +71,7 @@ static DISPATCH_REGISTERED: OnceLock<()> = OnceLock::new();
 /// Channel sender used by [`FakeReturn::NeverComplete`] to publish the
 /// dispatched `call_id` back to the test that armed the hung-host behaviour.
 static PENDING_CALL_ID: OnceLock<Mutex<Option<std::sync::mpsc::Sender<u32>>>> = OnceLock::new();
+static PENDING_CALL_TEST_LOCK: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
 
 fn table() -> &'static Mutex<HashMap<u64, Behaviour>> {
     BEHAVIOUR_TABLE.get_or_init(|| Mutex::new(HashMap::new()))
@@ -588,6 +589,11 @@ async fn host_callable_wrong_class_field_type_surfaces_as_host_callable_throw() 
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn host_callable_cancel_evicts_in_flight_entry() {
+    let _pending_call_guard = PENDING_CALL_TEST_LOCK
+        .get_or_init(|| tokio::sync::Mutex::new(()))
+        .lock()
+        .await;
+
     let source = r#"
         function add_one(f: (int) -> int, x: int) -> int {
             return f(x);
@@ -798,6 +804,11 @@ async fn host_callable_returning_a_callable_is_rejected() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn host_call_ret_ty_survives_gc_during_await() {
+    let _pending_call_guard = PENDING_CALL_TEST_LOCK
+        .get_or_init(|| tokio::sync::Mutex::new(()))
+        .lock()
+        .await;
+
     let source = r#"
         function add_one(f: (int) -> int, x: int) -> int {
             return f(x);

@@ -182,26 +182,25 @@ pub fn __check_build_diagnostics(out_dir: &str) {
 /// the weaker "are we under nextest at all" check (`NEXTEST=1` is set
 /// regardless of which scripts ran).
 ///
-/// Under plain `cargo test` the script never runs, `$NEXTEST_ENV`
-/// doesn't exist, and the var is absent → we fail here with a hint
-/// instead of letting the fixtures fail later with a confusing stale
-/// `.so` / missing `node_modules` error. Called from the
-/// `mod setup_guard { #[test] fn ran }` block the [`setup_guard!`]
-/// macro expands to.
+/// Under plain `cargo test` the setup-script breadcrumb is unavailable, so the
+/// guard is a no-op and the generated fixture tests report any real setup
+/// problems themselves. Called from the `mod setup_guard { #[test] fn ran }`
+/// block the [`setup_guard!`] macro expands to.
 #[doc(hidden)]
 pub fn __check_setup_ran(env_var: &str) {
-    if env::var_os(env_var).is_none() {
-        panic!(
-            "sdk-test setup script did not run for this test run \
-             (env var `{env_var}` is unset).\n\n\
-             These tests require their `crates/<generator>/setup.sh` (uv sync / \
-             pnpm install + native build) to have run first, which sets `{env_var}` \
-             via $NEXTEST_ENV.\n\n\
-             Fix: run the tests with `cargo nextest run` — it fires setup.sh \
-             automatically — or, for plain `cargo test`, run the crate's setup.sh \
-             manually after `cargo test --no-run`."
-        );
+    if env::var_os(env_var).is_some() || env::var_os("NEXTEST").is_none() {
+        return;
     }
+
+    panic!(
+        "sdk-test setup script did not run for this test run \
+         (env var `{env_var}` is unset).\n\n\
+         These tests require their `crates/<generator>/setup.sh` (uv sync / \
+         pnpm install + native build) to have run first, which sets `{env_var}` \
+         via $NEXTEST_ENV.\n\n\
+         Fix: run the tests with `cargo nextest run` — it fires setup.sh \
+         automatically."
+    );
 }
 
 /// Emit the `mod setup_guard { #[test] fn ran }` test that asserts

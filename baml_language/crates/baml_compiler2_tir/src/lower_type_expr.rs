@@ -43,7 +43,7 @@ pub fn lower_type_expr(
 /// Use this when lowering type expressions from a function/class signature
 /// that lives in a sub-namespace of its package. For example, `File` in
 /// `baml/fs.baml` (namespace `["fs"]`) resolves via `lookup_type(&["fs", "File"])`.
-/// Public wrapper for [`substitute_self`] so callers in other crates
+/// Public wrapper for `substitute_self` so callers in other crates
 /// can pre-resolve `Self` before invoking [`lower_type_expr_in_ns`].
 pub fn substitute_self_in(type_expr: &TypeExpr, replacement: &TypeExpr) -> TypeExpr {
     substitute_self(type_expr, replacement)
@@ -223,7 +223,7 @@ fn substitute_self(type_expr: &TypeExpr, replacement: &TypeExpr) -> TypeExpr {
 }
 
 /// Build a `TypeExpr::Path` referring to a single named type, so
-/// [`substitute_self`] can swap `Self` for the enclosing class /
+/// `substitute_self` can swap `Self` for the enclosing class /
 /// interface name.
 pub fn type_expr_for_name(name: baml_base::Name) -> TypeExpr {
     TypeExpr::Path {
