@@ -70,8 +70,10 @@ async fn fs_file_write_on_readonly_errors() {
         return
     }
     "#);
-    let Err(bex_engine::EngineError::ExternalOpFailed(op_err)) = &output.result else {
-        panic!("expected ExternalOpFailed, got: {:?}", output.result);
+    let op_err = match &output.result {
+        Err(bex_engine::EngineError::ExternalOpFailed(op_err)) => op_err,
+        Err(bex_engine::EngineError::ExternalOpFailedWithTrace { source, .. }) => source,
+        other => panic!("expected external op failure, got: {other:?}"),
     };
     assert_eq!(op_err.fn_name, sys_types::SysOp::BamlFsFileWrite);
     let sys_types::OpErrorKind::Other(msg) = &op_err.kind else {

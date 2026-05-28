@@ -23,7 +23,7 @@ def cmd_compare(args):
         sys.exit(1)
 
     return _render_md(args, a, b)
-    b_git = b.get("cli", {}).get("git", {})
+    b_git = b.get("cli", {}).get("git") or {}
     a_commit = a_git.get("commit", "?")[:7]
     b_commit = b_git.get("commit", "?")[:7]
     a_label = args.a
@@ -145,8 +145,8 @@ def cmd_compare(args):
 
 def _render_md(args, a, b):
     """Render comparison as a markdown table."""
-    a_git = a.get("cli", {}).get("git", {})
-    b_git = b.get("cli", {}).get("git", {})
+    a_git = a.get("cli", {}).get("git") or {}
+    b_git = b.get("cli", {}).get("git") or {}
     a_commit = a_git.get("commit", "?")[:7]
     b_commit = b_git.get("commit", "?")[:7]
 

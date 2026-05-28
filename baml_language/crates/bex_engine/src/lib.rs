@@ -2575,22 +2575,14 @@ impl BexEngine {
                             }
                         }
                         Err(op_err) => {
-                            // A host-callable error. On a **root** thread it
-                            // surfaces to the host as a `HostCallable` instance
-                            // via `EngineError::UnhandledThrow`. NOTE: a root
-                            // thread's throw exits `run_thread_event_loop`
-                            // WITHOUT re-entering the VM, so an in-BAML
-                            // `try { f(x) } catch (e: root.errors.HostCallable)`
-                            // does NOT catch it today even though the compiler
-                            // folds the param's `throws` and emits a handler —
-                            // that becomes catchable once sys-op calls are
-                            // awaited explicitly (a known, documented limitation;
-                            // see the `host_value_callable` test and the SDK
-                            // `call_with_throwing` xfail). On a **spawned child**
-                            // thread, `deliver_host_call_throw` settles the
-                            // child's future (errored) so the awaiter resolves
-                            // with the throw instead of hanging on a `Pending`
-                            // future.
+                            // A host-callable error. Catchable errors are
+                            // thrown back through the active sys-op frame, so
+                            // caller bytecode handlers can match them. If no
+                            // handler catches the throw, root threads surface
+                            // `EngineError::UnhandledThrow`; spawned child
+                            // threads settle their future as errored so the
+                            // awaiter resolves with the throw instead of
+                            // hanging on a `Pending` future.
                             if let Some(outcome) =
                                 self.deliver_host_call_throw(&mut thread, op_err).await?
                             {
