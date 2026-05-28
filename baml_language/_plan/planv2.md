@@ -438,3 +438,30 @@ Fixed (28): 3,5,7,8,9,10,12,13,14,16,17,18,20,21,23,25,26,27,29,30,33,34,35,36,3
   into diagnostic payloads (`AmbiguousInterfaceField`, projection hints) to suggest
   `.as<Box<int>>` etc.
 - **6** — `interface X requires <non-interface>` needs a new per-interface validation pass.
+
+---
+
+## Progress update 5 — 32/44 (exhaustiveness cluster nailed)
+
++4 since update 4, zero regressions (1576 lib + 248 existing interface tests green):
+- **32, 41, 45** — single root cause: `atoms_overlap` had no interface arm, so an
+  interface pattern targeted no union/optional member and degraded to a catch-all. Now an
+  interface atom overlaps a member when one nominally subtypes the other.
+- **18** (class method vs aliased field view), **39** (interface-typed catch/match).
+
+Fixed (32): 3,5,7,8,9,10,12,13,14,16,17,18,20,21,23,25,26,27,29,30,32,33,34,35,36,38,39,40,41,42,43,44,45.
+
+### Remaining 12 — heterogeneous, each a fresh change
+- **Union-of-concrete method dispatch** (4, 31): `(if … {Dog} else {Cat}).speak()` and the
+  match-arm equivalent crash (`expected Map, got Instance`). No dispatch path for a
+  `Dog | Cat` receiver calling a common method — needs a union-receiver switch (analogous to
+  `emit_interface_dispatch_switch`, IsType per member → that member's method).
+- **Method-reference thunks** (1, 2): `let f = Interface.method; f(recv)` must lower to a
+  receiver-dispatching closure.
+- **Generic subst through default dispatch** (15, 24): interface-self repr in default bodies
+  + return-type `T` substitution via a `Container<int>`-typed receiver.
+- **Diagnostic wording** (11, 19, 22, 28): thread interface type-args / interface-field names
+  into the diagnostic payloads (`AmbiguousInterfaceField`, `DeprecatedInterfaceProjection`,
+  E0116) so hints read `.as<Box<int>>` and name the interface field.
+- **6**: per-interface `requires <non-interface>` validation (new diagnostic pass).
+- **37**: `implementors()` declaration order — sort by source span (`LocalItemId` is hash-based).
