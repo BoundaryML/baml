@@ -4473,11 +4473,20 @@ impl BexVm {
                                             } else {
                                                 vec![]
                                             };
-                                        let expected_args: Vec<baml_type::Ty> = type_args_templates
-                                            .iter()
-                                            .map(|t| t.substitute(&frame_type_args))
-                                            .collect();
-                                        expected_args == inst.class_type_args
+                                        // Position-wise match so a `Wildcard`
+                                        // template arg (BEP-044 partial guard)
+                                        // matches any concrete arg, while
+                                        // pinned positions must compare equal.
+                                        type_args_templates.len() == inst.class_type_args.len()
+                                            && type_args_templates.iter().zip(&inst.class_type_args).all(
+                                                |(template, actual)| {
+                                                    matches!(
+                                                        template,
+                                                        baml_type::TyTemplate::Wildcard
+                                                    ) || template.substitute(&frame_type_args)
+                                                        == *actual
+                                                },
+                                            )
                                     }
                                     _ => false,
                                 },

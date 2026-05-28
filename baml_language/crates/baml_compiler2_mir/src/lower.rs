@@ -244,14 +244,18 @@ fn interface_class_guard_for_args(
     if class_params.is_empty() {
         return Some(InterfaceClassGuard::Any);
     }
-    let class_args: Option<Vec<_>> = class_params
+    // Per class type-param: `Some` when the requested interface args pinned it,
+    // `None` (wildcard) otherwise. Crucially we no longer collapse to `Any` when
+    // *some* params are unbound — that's exactly the `Pair<L,R>` case where one
+    // block pins `L` and the other pins `R`; a partial guard keeps them distinct.
+    let class_args: Vec<Option<Tir2Ty>> = class_params
         .iter()
         .map(|param| bindings.get(param).cloned())
         .collect();
-    Some(match class_args {
-        Some(args) => InterfaceClassGuard::Exact(args),
-        None => InterfaceClassGuard::Any,
-    })
+    if class_args.iter().all(Option::is_none) {
+        return Some(InterfaceClassGuard::Any);
+    }
+    Some(InterfaceClassGuard::Exact(class_args))
 }
 
 pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
@@ -827,7 +831,11 @@ struct InterfaceDispatchCall<'a> {
 #[derive(Clone)]
 enum InterfaceClassGuard {
     Any,
-    Exact(Vec<Tir2Ty>),
+    /// One entry per class type-param. `Some(ty)` pins that position; `None`
+    /// is a wildcard (BEP-044: a partial guard, e.g. `implements Getter<L>`
+    /// requested as `Getter<string>` pins `L` but leaves `R` free, so two
+    /// blocks on the same class instantiate to distinguishable guards).
+    Exact(Vec<Option<Tir2Ty>>),
 }
 
 #[derive(Clone)]
@@ -6575,7 +6583,9 @@ impl<'db> LoweringContext<'db> {
                                 {
                                     InterfaceClassGuard::Any
                                 } else {
-                                    InterfaceClassGuard::Exact(args.clone())
+                                    InterfaceClassGuard::Exact(
+                                        args.iter().cloned().map(Some).collect(),
+                                    )
                                 }
                             }
                             Tir2Ty::TypeVar(..) => InterfaceClassGuard::Any,
@@ -7105,7 +7115,12 @@ impl<'db> LoweringContext<'db> {
                 TyTemplate::Class(
                     impl_tn.clone(),
                     args.iter()
-                        .map(|arg| tir2_to_template(arg, &self.resolved_aliases, &generic_params))
+                        .map(|arg| match arg {
+                            Some(arg) => {
+                                tir2_to_template(arg, &self.resolved_aliases, &generic_params)
+                            }
+                            None => TyTemplate::Wildcard,
+                        })
                         .collect(),
                 )
             }
