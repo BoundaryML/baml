@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 4386
 ---
 function baml.Array.at(self: baml.Array, index: int) -> void? {
 }
@@ -667,7 +666,7 @@ function baml.errors.CompilationError.from_json(j: baml.json.json) -> baml.error
     return
 }
 
-function baml.errors.CompilationError.to_json(self: null) -> baml.json.json {
+function baml.errors.CompilationError.to_json(self: baml.errors.CompilationError) -> baml.json.json {
     load_var self
     load_field .message
     call baml.String.to_json
@@ -709,7 +708,7 @@ function baml.errors.GenericSdkError.from_json(j: baml.json.json) -> baml.errors
     return
 }
 
-function baml.errors.GenericSdkError.to_json(self: null) -> baml.json.json {
+function baml.errors.GenericSdkError.to_json(self: baml.errors.GenericSdkError) -> baml.json.json {
     load_var self
     load_field .message
     call baml.String.to_json
@@ -4469,7 +4468,7 @@ function baml.panics.SdkPanic.from_json(j: baml.json.json) -> baml.panics.SdkPan
     return
 }
 
-function baml.panics.SdkPanic.to_json(self: null) -> baml.json.json {
+function baml.panics.SdkPanic.to_json(self: baml.panics.SdkPanic) -> baml.json.json {
     load_var self
     load_field .message
     call baml.String.to_json
