@@ -5,10 +5,10 @@ class Bar {
   count int
 }
 
-function MakeFooBar(label: string, count: int) -> Bar {
+function make_foo_bar(label: string, count: int) -> Bar {
   Bar { label: label, count: count }
 }
 
-function RoundTripFooBar(b: Bar) -> Bar {
+function round_trip_foo_bar(b: Bar) -> Bar {
   b
 }

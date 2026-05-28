@@ -14,6 +14,7 @@ caller's declared Python return type plays no runtime role.
 from __future__ import annotations
 
 import enum
+import os
 import typing
 from typing import Any, Dict, List, Optional
 
@@ -28,7 +29,7 @@ from .baml_py import (
     release_host_callable,
 )
 from ._stream import BamlStream
-from .errors import BamlError
+from .errors import BamlError, BamlPanic, attach_baml_traceback
 from .typemap import BamlTypeMap, get_type_map
 
 def _is_pydantic_model(value: Any) -> bool:
@@ -186,6 +187,12 @@ def _set_inbound_value(
         return
     if isinstance(value, (list, tuple)):
         list_val = inbound_value.list_value
+        # Mark the `list_value` oneof arm present even for an empty list.
+        # Merely reading `inbound_value.list_value` doesn't set the oneof
+        # case; without an `add()` (empty list) the arm stays unset, which
+        # the engine reads as null (see `value is None` above) — so an
+        # empty list would round-trip back as `None`.
+        list_val.SetInParent()
         for item in value:
             _set_inbound_value(
                 list_val.values.add(), item, kwarg_name=kwarg_name, registered=registered
@@ -193,6 +200,9 @@ def _set_inbound_value(
         return
     if isinstance(value, dict):
         map_val = inbound_value.map_value
+        # Same as the empty-list case above: set the oneof arm so an empty
+        # dict encodes as an empty map rather than an unset (null) value.
+        map_val.SetInParent()
         for k, v in value.items():
             _set_inbound_map_entry(
                 map_val.entries.add(), k, v, kwarg_name=kwarg_name, registered=registered
@@ -672,8 +682,67 @@ def decode_value(holder, type_map: BamlTypeMap) -> Any:
     return None
 
 
+def _outbound_class_fqn(holder) -> Optional[str]:
+    """The BAML FQN of a `BamlOutboundValue` that is a class instance (e.g.
+    `baml.json.JsonParseError`), else `None`. Used only to build a readable
+    `BamlError` / `BamlPanic` message."""
+    if holder.WhichOneof("value") == "class_value":
+        return holder.class_value.name.name
+    return None
+
+
 def decode_call_result(data: bytes) -> Any:
-    """Decode a `BamlOutboundValue` protobuf to a Python value."""
-    holder = baml_outbound_pb2.BamlOutboundValue()
-    holder.ParseFromString(data)
-    return decode_value(holder, get_type_map())
+    """Decode a `BamlOutboundResult` envelope to a Python value, raising
+    `BamlError` / `BamlPanic` for the thrown arms (31c / 31f).
+
+    - `ok` → the decoded return value.
+    - `error` → `raise BamlError` with `.value` = decoded value,
+      `.baml_trace` = the pre-rendered frame lines.
+    - `panic` → if `is_exit_panic`, flush telemetry and `os._exit(exit_code)`
+      (a clean `baml.sys.exit` — terminate the whole process from any
+      thread/task, *not* a catchable `SystemExit`); otherwise
+      `raise BamlPanic` likewise.
+    """
+    result = baml_outbound_pb2.BamlOutboundResult()
+    result.ParseFromString(data)
+    which = result.WhichOneof("result")
+    type_map = get_type_map()
+
+    if which == "error":
+        msg = result.error
+        raise attach_baml_traceback(
+            BamlError(
+                decode_value(msg.value, type_map),
+                baml_trace=list(msg.trace),
+                class_name=_outbound_class_fqn(msg.value),
+            )
+        )
+
+    if which == "panic":
+        msg = result.panic
+        # Check the discriminator *before* decoding — an exit doesn't need its
+        # `baml.panics.Exit` payload decoded to act.
+        if msg.is_exit_panic:
+            _flush_for_exit()
+            os._exit(msg.exit_code)
+        raise attach_baml_traceback(
+            BamlPanic(
+                decode_value(msg.value, type_map),
+                baml_trace=list(msg.trace),
+                class_name=_outbound_class_fqn(msg.value),
+            )
+        )
+
+    # `ok` (or an absent oneof — an all-default envelope is a null `ok`).
+    return decode_value(result.ok, type_map)
+
+
+def _flush_for_exit() -> None:
+    """Best-effort flush of buffered telemetry before `os._exit`, which
+    bypasses `atexit` / buffer flushing. Never raises — exit must proceed."""
+    try:
+        from .baml_py import flush_events
+
+        flush_events()
+    except Exception:
+        pass

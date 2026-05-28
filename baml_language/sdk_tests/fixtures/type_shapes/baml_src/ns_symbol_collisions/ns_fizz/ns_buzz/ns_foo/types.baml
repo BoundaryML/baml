@@ -6,10 +6,10 @@ class Bar {
   active bool
 }
 
-function MakeFizzBuzzFooBar(flavor: string, weight: float, active: bool) -> Bar {
+function make_fizz_buzz_foo_bar(flavor: string, weight: float, active: bool) -> Bar {
   Bar { flavor: flavor, weight: weight, active: active }
 }
 
-function RoundTripFizzBuzzFooBar(b: Bar) -> Bar {
+function round_trip_fizz_buzz_foo_bar(b: Bar) -> Bar {
   b
 }

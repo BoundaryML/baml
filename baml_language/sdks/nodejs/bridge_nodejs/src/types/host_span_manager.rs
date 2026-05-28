@@ -12,7 +12,7 @@ pub struct HostSpanManager {
 
 impl HostSpanManager {
     pub fn new_internal() -> Self {
-        let sink = bridge_cffi::engine::get_event_sink();
+        let sink = bridge_cffi::get_event_sink();
         Self {
             inner: bridge_cffi::host_spans::HostSpanManager::new(sink),
         }

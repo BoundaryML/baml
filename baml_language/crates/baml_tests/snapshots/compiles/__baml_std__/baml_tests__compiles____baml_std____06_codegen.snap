@@ -645,6 +645,27 @@ function baml.errors.AccessError.to_json(self: null) -> baml.json.json {
     return
 }
 
+function baml.errors.CompilationError.from_json(j: baml.json.json) -> baml.errors.CompilationError {
+    load_var j
+    load_const "message"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    init_instance baml.errors.CompilationError .message
+    return
+}
+
+function baml.errors.CompilationError.to_json(self: null) -> baml.json.json {
+    load_var self
+    load_field .message
+    call baml.String.to_json
+    load_const "message"
+    alloc_map 1
+    return
+}
+
 function baml.errors.DevOther.from_json(j: baml.json.json) -> baml.errors.DevOther {
     load_var j
     load_const "message"
@@ -658,6 +679,27 @@ function baml.errors.DevOther.from_json(j: baml.json.json) -> baml.errors.DevOth
 }
 
 function baml.errors.DevOther.to_json(self: null) -> baml.json.json {
+    load_var self
+    load_field .message
+    call baml.String.to_json
+    load_const "message"
+    alloc_map 1
+    return
+}
+
+function baml.errors.GenericSdkError.from_json(j: baml.json.json) -> baml.errors.GenericSdkError {
+    load_var j
+    load_const "message"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    init_instance baml.errors.GenericSdkError .message
+    return
+}
+
+function baml.errors.GenericSdkError.to_json(self: null) -> baml.json.json {
     load_var self
     load_field .message
     call baml.String.to_json
@@ -4399,6 +4441,27 @@ function baml.panics.NegativeBitShift.from_json(j: baml.json.json) -> baml.panic
 }
 
 function baml.panics.NegativeBitShift.to_json(self: null) -> baml.json.json {
+    load_var self
+    load_field .message
+    call baml.String.to_json
+    load_const "message"
+    alloc_map 1
+    return
+}
+
+function baml.panics.SdkPanic.from_json(j: baml.json.json) -> baml.panics.SdkPanic {
+    load_var j
+    load_const "message"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    init_instance baml.panics.SdkPanic .message
+    return
+}
+
+function baml.panics.SdkPanic.to_json(self: null) -> baml.json.json {
     load_var self
     load_field .message
     call baml.String.to_json

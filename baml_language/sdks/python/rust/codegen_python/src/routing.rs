@@ -168,6 +168,7 @@ mod tests {
                 default: None,
             }],
             return_type: Ty::Int,
+            throws: None,
             watchers: Vec::new(),
             origin: origin(),
         })

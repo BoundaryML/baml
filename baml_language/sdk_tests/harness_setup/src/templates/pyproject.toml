@@ -23,6 +23,11 @@ baml_core = { path = "../../../../../sdks/python", editable = true }
 
 [tool.pytest.ini_options]
 testpaths = ["."]
+# Put the generated tree root (where `baml_sdk/` lives) on sys.path so
+# test modules in nested dirs (e.g. `roundtrip_tests/`) can still
+# `import baml_sdk`. Top-level test modules already get this via the
+# default `prepend` import mode; this makes it hold for subdirs too.
+pythonpath = ["."]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]

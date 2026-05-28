@@ -18,7 +18,7 @@ import weakref
 import pytest
 
 import baml_sdk  # noqa: F401  — initializes the BAML runtime
-from baml_sdk import (
+from baml_sdk.host_callable_tests import (
     Person,
     call_int_callback,
     call_repeatedly,

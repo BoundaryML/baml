@@ -143,6 +143,31 @@ pub(crate) fn format_class_docstring(
     Some(out)
 }
 
+/// Compose a function/method docstring body from an optional `///` summary
+/// and the unqualified names of its thrown types (32d). Returns the raw
+/// docstring *text* (no `"""` fences — the caller wraps it via
+/// [`format_docstring`]).
+///
+/// - no summary, no raises → `None` (omit the docstring entirely)
+/// - summary, no raises     → just the summary (unchanged behavior)
+/// - no summary, raises      → `"Raises:\n    E1, E2"`
+/// - summary + raises        → `"<summary>\n\nRaises:\n    E1, E2"`
+///
+/// Names are joined `", "` on one indented line; the `Raises:` label follows
+/// Google-style docstring convention so `inspect.getdoc` renders cleanly (the
+/// summary line keeps the names' leading indent intact under `cleandoc`).
+pub(crate) fn build_function_docstring(summary: Option<&str>, raises: &[String]) -> Option<String> {
+    let summary = summary.filter(|s| !s.is_empty());
+    if raises.is_empty() {
+        return summary.map(std::string::ToString::to_string);
+    }
+    let raises_block = format!("Raises:\n    {}", raises.join(", "));
+    Some(match summary {
+        Some(s) => format!("{s}\n\n{raises_block}"),
+        None => raises_block,
+    })
+}
+
 /// Escape `\` and `"""` so they don't break the surrounding
 /// `"""…"""` fence. `\` first so a later `\"""` substitution isn't
 /// itself doubled.

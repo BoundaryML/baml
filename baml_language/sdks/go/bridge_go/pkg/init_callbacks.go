@@ -7,7 +7,7 @@ package pkg
 // Forward-declare the exported Go functions so we can take their addresses.
 // `baml_callback` is defined (via //export) in callbacks.go. `bamlHostDispatch`
 // and `bamlHostRelease` are defined (via //export) in host_value.go.
-extern void baml_callback(uint32_t id, int32_t is_error, const int8_t *content, size_t length);
+extern void baml_callback(uint32_t id, const int8_t *content, size_t length);
 extern void bamlHostDispatch(uint64_t host_value_key, uint32_t call_id, const uint8_t *args, size_t length);
 extern void bamlHostRelease(uint64_t host_value_key);
 */

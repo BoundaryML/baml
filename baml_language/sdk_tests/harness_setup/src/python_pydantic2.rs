@@ -5,16 +5,20 @@
 //! each into `crates/python_pydantic2/<fixture>/generated/baml_sdk/`,
 //! symlinks `crates/python_pydantic2/<fixture>/customizable/*`
 //! overlays into the generated tree, writes a per-fixture
-//! `pyproject.toml`, runs `uv sync` per fixture (which triggers the
-//! maturin build of `baml_core`'s editable install), and emits
-//! `OUT_DIR/python_pydantic2_tests.rs` — the per-fixture `#[test]`
-//! scaffold the `sdk_test_harness_runner::python_pydantic2::test_suite!()`
-//! macro `include!`s.
+//! `pyproject.toml`, and emits `OUT_DIR/python_pydantic2_tests.rs` —
+//! the per-fixture `#[test]` scaffold the
+//! `sdk_test_harness_runner::python_pydantic2::test_suite!()` macro
+//! `include!`s.
 //!
-//! `uv sync` (and the maturin build it kicks off) runs in build.rs
-//! rather than from each `#[test]`; that mirrors the
-//! nodejs_typescript target's `pnpm install` placement and avoids
-//! re-syncing once per test.
+//! `uv sync` is NOT run here. It lives in
+//! `crates/python_pydantic2/setup.sh`, invoked by `cargo nextest run`
+//! via the setup-script binding in `.config/nextest.toml` (and run
+//! manually after `cargo test --no-run` for plain `cargo test`). This
+//! mirrors the nodejs_typescript target's `pnpm install` placement,
+//! keeps codegen deps the only thing build.rs pulls in, and — most
+//! importantly — lets setup.sh pass `--reinstall-package baml_core`
+//! so the maturin-built `.so` is rebuilt on incremental Rust edits
+//! (which a plain `uv sync` skips, leaving a stale `.so`).
 //!
 //! The macro-via-include indirection means adding a new fixture is
 //! just `mkdir sdk_tests/fixtures/<name>/baml_src/` + dropping a
@@ -23,18 +27,15 @@
 //! or `src/lib.rs` needed.
 
 use std::{
-    env, fs,
-    io::ErrorKind,
-    panic,
+    env, fs, panic,
     path::{Path, PathBuf},
-    process::Command,
 };
 
 use codegen_python::NamingConvention;
 
 use crate::{
     BuildDiagnostics, discover_fixtures, fixtures_root_from_manifest, load_fixture,
-    symlink_customizable, watch_dir, workspace_root_from_manifest,
+    symlink_customizable, watch_dir,
 };
 
 /// uv-friendly pyproject template. Each fixture's pyproject gets a
@@ -51,6 +52,12 @@ const PYPROJECT_TEMPLATE: &str = include_str!("templates/pyproject.toml");
 
 const CACHE_SUBDIR: &str = "uv-cache";
 const CACHE_ENV_VAR: &str = "UV_CACHE_DIR";
+
+/// Env var the setup scripts write to `$NEXTEST_ENV` and the emitted
+/// `setup_guard::ran` test checks for — the per-run breadcrumb that
+/// the `uv sync` step actually ran. Must stay in sync with both
+/// `crates/python_pydantic2/setup.sh` and `setup.ps1`.
+const SETUP_ENV_VAR: &str = "SDK_TEST_PYTHON_PYDANTIC2_SETUP";
 
 /// Entry point for `crates/python_pydantic2/build.rs`. Drives codegen
 /// across every fixture and emits the per-fixture test scaffold to
@@ -73,24 +80,10 @@ pub fn run_all() {
         codegen_fixture(&fixtures_root, fixture, &manifest_dir, &mut diagnostics);
     }
 
-    // `uv sync` is done here in build.rs, serially per fixture,
-    // mirroring the nodejs_typescript target's `pnpm install`
-    // placement. uv's editable install of `baml_core` (declared in
-    // `[tool.uv.sources]`) invokes the maturin build backend, which
-    // compiles `bridge_python` once per fixture into the fixture's
-    // venv. Tests then only run ruff / pyright / pytest against an
-    // already-synced tree.
-    let cache_dir = workspace_root_from_manifest(&manifest_dir)
-        .join("target")
-        .join(CACHE_SUBDIR);
-    fs::create_dir_all(&cache_dir).unwrap();
-    for fixture in &fixtures {
-        let generated_dir = manifest_dir.join(fixture).join("generated");
-        if let Err(msg) = uv_sync(&generated_dir, &cache_dir) {
-            diagnostics.record("uv_sync", fixture, msg);
-        }
-    }
-
+    // `uv sync` is NOT run here — it lives in
+    // `crates/python_pydantic2/setup.sh`, fired by `cargo nextest run`
+    // (see module docs). build.rs only codegens + writes pyproject +
+    // emits the scaffold, so it stays uv-free like `cargo check`.
     write_fixtures_tests_rs(&out_dir, &fixtures);
     diagnostics.finalize();
 
@@ -99,38 +92,6 @@ pub fn run_all() {
     for fixture in &fixtures {
         watch_dir(&manifest_dir.join(fixture).join("customizable"));
     }
-}
-
-fn uv_sync(generated_fixture_dir: &Path, cache_dir: &Path) -> Result<(), String> {
-    let spawn = Command::new("uv")
-        .arg("sync")
-        .current_dir(generated_fixture_dir)
-        .env(CACHE_ENV_VAR, cache_dir)
-        .output();
-    let output = match spawn {
-        Ok(o) => o,
-        Err(e) if e.kind() == ErrorKind::NotFound => {
-            return Err(format!(
-                "spawn failed: `uv` not on PATH ({e})\nhint: install uv (https://astral.sh/uv) or via mise/asdf"
-            ));
-        }
-        Err(e) => {
-            return Err(format!(
-                "failed to spawn `uv sync` in {}: {e}",
-                generated_fixture_dir.display()
-            ));
-        }
-    };
-    if !output.status.success() {
-        return Err(format!(
-            "uv sync failed in {} (exit {}):\nstdout: {}\nstderr: {}",
-            generated_fixture_dir.display(),
-            output.status,
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-    Ok(())
 }
 
 fn codegen_fixture(
@@ -228,6 +189,9 @@ fn write_fixtures_tests_rs(out_dir: &Path, fixtures: &[String]) {
         "// Generated by sdk_test_harness_setup::python_pydantic2::run_all — do not edit.\n",
     );
     buf.push_str("::sdk_test_harness_runner::build_diagnostics!();\n");
+    buf.push_str(&format!(
+        "::sdk_test_harness_runner::setup_guard!({SETUP_ENV_VAR:?});\n"
+    ));
     for fixture in fixtures {
         buf.push_str(&format!(
             r#"

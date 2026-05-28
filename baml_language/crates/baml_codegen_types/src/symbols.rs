@@ -34,6 +34,14 @@ pub struct Function {
     pub arguments: Vec<FunctionArgument>,
     pub return_type: super::Ty,
 
+    /// The function's inferred throws contract as a resolved `Ty`, or `None`
+    /// when the function throws nothing (`callable_throws` → `Never`). A
+    /// declared `throws` clause, when present, wins over inference; otherwise
+    /// this is the inferred escaping-throws set. A `throws A | B` resolves to
+    /// `Ty::Union([A, B])`. Generators derive the unqualified leaf names from
+    /// this for the `Raises:` docstring block (32d).
+    pub throws: Option<super::Ty>,
+
     // TODO: add other APIs here that impact code-gen
     pub watchers: Vec<(baml_base::Name, super::Ty)>,
 

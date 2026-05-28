@@ -18,26 +18,26 @@ class MapContainer {
   list_valued map<string, int[]>
 }
 
-function RoundTripSimpleMap(m: map<string, int>) -> map<string, int> {
+function round_trip_simple_map(m: map<string, int>) -> map<string, int> {
   m
 }
 
-function RoundTripEnumKeyedMap(m: map<Sentiment, Resume>) -> map<Sentiment, Resume> {
+function round_trip_enum_keyed_map(m: map<Sentiment, Resume>) -> map<Sentiment, Resume> {
   m
 }
 
-function RoundTripListValuedMap(m: map<string, int[]>) -> map<string, int[]> {
+function round_trip_list_valued_map(m: map<string, int[]>) -> map<string, int[]> {
   m
 }
 
-function RoundTripSentiment(s: Sentiment) -> Sentiment {
+function round_trip_sentiment(s: Sentiment) -> Sentiment {
   s
 }
 
-function RoundTripResume(r: Resume) -> Resume {
+function round_trip_resume(r: Resume) -> Resume {
   r
 }
 
-function RoundTripMapContainer(c: MapContainer) -> MapContainer {
+function round_trip_map_container(c: MapContainer) -> MapContainer {
   c
 }
