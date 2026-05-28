@@ -313,7 +313,7 @@ def cmd_run(args):
         runners_used.append("bun")
 
     rdir = results_dir(args)
-    data = build_run_data(args, results, runners_used)
+    data = build_run_data(args, results, runners_used, baml_cli=baml_cli)
 
     run_path = save_run(rdir, data, profile_files)
 
@@ -321,8 +321,7 @@ def cmd_run(args):
     tag = getattr(args, 'tag', None)
     bl_dir = save_baseline(rdir, run_path, data, tag=tag)
 
-    cli_info = data.get("cli", {})
-    branch = cli_info.get("git", {}).get("branch", "unknown")
+    branch = bl_dir.name
 
     print(f"\nResults saved to {branch}/latest", file=sys.stderr)
     if tag:
