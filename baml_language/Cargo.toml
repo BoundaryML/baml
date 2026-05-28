@@ -247,6 +247,7 @@ vfs = "0.12"
 wasm-logger = "0.2.0"
 web-time = "1.1.0"
 getrandom = { version = "0.2" }
+getrandom_03 = { package = "getrandom", version = "0.3", features = [ "wasm_js" ] }
 num-bigint = { version = "0.4", features = [ "rand", "serde" ] }
 rsa = { version = "0.9", default-features = false, features = [ "std", "pem" ] }
 sha2 = { version = "0.10", features = [ "oid" ] }

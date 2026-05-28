@@ -1724,6 +1724,7 @@ dependencies = [
  "ahash",
  "bytecount",
  "codspeed-divan-compat",
+ "getrandom 0.3.4",
  "indexmap 2.14.0",
 ]
 

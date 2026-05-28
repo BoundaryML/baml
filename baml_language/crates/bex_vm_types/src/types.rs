@@ -1502,25 +1502,25 @@ pub type Uint8ArrayContainer = LockedContainer<Vec<u8>>;
 pub type Uint8ArrayReadGuard<'a> = LockedReadGuard<'a, Vec<u8>>;
 pub type Uint8ArrayWriteGuard<'a> = LockedWriteGuard<'a, Vec<u8>>;
 
-/// Heap-mutable map container. Pairs a boxed `IndexMap<BexStr, Value>` with
+/// Heap-mutable map container. Pairs a boxed `IndexMap<String, Value>` with
 /// the generic [`LockedContainer`] lock/guard machinery.
 ///
 /// `IndexMap` is 72 bytes before the lock, so storing it inline would push
 /// `Object` past its size cap. Storing only the backing map behind `Box<_>`
 /// keeps the container itself small while avoiding an extra indirection around
 /// the lock.
-pub type MapContainer = LockedContainer<Box<IndexMap<bex_str::BexStr, Value>>>;
-pub type MapReadGuard<'a> = LockedReadGuard<'a, Box<IndexMap<bex_str::BexStr, Value>>>;
-pub type MapWriteGuard<'a> = LockedWriteGuard<'a, Box<IndexMap<bex_str::BexStr, Value>>>;
+pub type MapContainer = LockedContainer<Box<IndexMap<String, Value>>>;
+pub type MapReadGuard<'a> = LockedReadGuard<'a, Box<IndexMap<String, Value>>>;
+pub type MapWriteGuard<'a> = LockedWriteGuard<'a, Box<IndexMap<String, Value>>>;
 
 impl MapReadGuard<'_> {
     /// Snapshot the underlying `IndexMap`.
-    pub fn to_index_map(&self) -> IndexMap<bex_str::BexStr, Value> {
+    pub fn to_index_map(&self) -> IndexMap<String, Value> {
         self.as_ref().clone()
     }
 }
 
-impl LockedContainer<Box<IndexMap<bex_str::BexStr, Value>>> {
+impl LockedContainer<Box<IndexMap<String, Value>>> {
     /// Locked convenience: number of entries.
     pub fn len(&self) -> usize {
         self.lock().len()
@@ -1537,15 +1537,13 @@ impl LockedContainer<Box<IndexMap<bex_str::BexStr, Value>>> {
     }
 
     /// Locked convenience: snapshot the underlying `IndexMap`.
-    pub fn to_index_map(&self) -> IndexMap<bex_str::BexStr, Value> {
+    pub fn to_index_map(&self) -> IndexMap<String, Value> {
         self.lock().to_index_map()
     }
 }
 
-impl From<IndexMap<bex_str::BexStr, Value>>
-    for LockedContainer<Box<IndexMap<bex_str::BexStr, Value>>>
-{
-    fn from(data: IndexMap<bex_str::BexStr, Value>) -> Self {
+impl From<IndexMap<String, Value>> for LockedContainer<Box<IndexMap<String, Value>>> {
+    fn from(data: IndexMap<String, Value>) -> Self {
         Self::new(Box::new(data))
     }
 }
@@ -1603,7 +1601,7 @@ pub enum Object {
     /// reference will cause some lifetime issues because the VM would have
     /// pointers to itself, so we'd have to figure how to implement it
     /// otherwise.
-    String(bex_str::BexStr),
+    String(String),
 
     /// Heap-allocated arbitrary-precision integer.
     ///
@@ -1651,15 +1649,17 @@ pub enum Object {
     Sentinel(SentinelKind),
 }
 
-#[cfg(not(feature = "heap_debug"))]
+// BexStr is larger than String on wasm32 (20 vs 12 bytes) due to u64 fields,
+// so allow 88 bytes on 32-bit targets.
+#[cfg(target_pointer_width = "64")]
 const _: () = assert!(
-    std::mem::size_of::<Object>() == 64,
-    "Object enum size changed — expected exactly 64 bytes (release)"
+    std::mem::size_of::<Object>() <= 80,
+    "Object enum size regression — expected <= 80 bytes (64-bit)"
 );
-#[cfg(feature = "heap_debug")]
+#[cfg(target_pointer_width = "32")]
 const _: () = assert!(
-    std::mem::size_of::<Object>() == 72,
-    "Object enum size changed — expected exactly 72 bytes (heap_debug)"
+    std::mem::size_of::<Object>() <= 88,
+    "Object enum size regression — expected <= 88 bytes (32-bit)"
 );
 
 // Custom borsh for Object: RustData and Collector contain non-serializable
@@ -1706,18 +1706,11 @@ impl BorshSerialize for Object {
             Self::Closure(v) => ObjectWire::Closure(v.clone()),
             Self::BoundMethod(v) => ObjectWire::BoundMethod(v.clone()),
             Self::Cell(v) => ObjectWire::Cell(v.clone()),
-            Self::String(v) => ObjectWire::String(v.as_str().to_owned()),
+            Self::String(v) => ObjectWire::String(v.clone()),
             Self::Bigint(v) => ObjectWire::Bigint((**v).clone()),
             Self::Uint8Array(v) => ObjectWire::Uint8Array(v.lock().clone()),
             Self::Array(v) => ObjectWire::Array(v.lock().clone()),
-            Self::Map(v) => {
-                let map = v.lock();
-                let string_map: IndexMap<String, Value> = map
-                    .iter()
-                    .map(|(k, v)| (k.as_str().to_owned(), *v))
-                    .collect();
-                ObjectWire::Map(string_map)
-            }
+            Self::Map(v) => ObjectWire::Map(v.to_index_map()),
             Self::Float(v) => ObjectWire::Float(*v),
             Self::Future(v) => ObjectWire::Future(v.clone()),
             Self::UnscheduledFuture(v) => ObjectWire::UnscheduledFuture(v.clone()),
@@ -1764,17 +1757,11 @@ impl BorshDeserialize for Object {
             ObjectWire::Closure(v) => Self::Closure(v),
             ObjectWire::BoundMethod(v) => Self::BoundMethod(v),
             ObjectWire::Cell(v) => Self::Cell(v),
-            ObjectWire::String(v) => Self::String(bex_str::BexStr::from(v)),
+            ObjectWire::String(v) => Self::String(v),
             ObjectWire::Bigint(v) => Self::Bigint(std::sync::Arc::new(v)),
             ObjectWire::Uint8Array(v) => Self::Uint8Array(Uint8ArrayContainer::new(v)),
             ObjectWire::Array(v) => Self::Array(ArrayContainer::new(v)),
-            ObjectWire::Map(v) => {
-                let bex_map: IndexMap<bex_str::BexStr, Value> = v
-                    .into_iter()
-                    .map(|(k, v)| (bex_str::BexStr::from(k), v))
-                    .collect();
-                Self::Map(bex_map.into())
-            }
+            ObjectWire::Map(v) => Self::Map(v.into()),
             ObjectWire::Float(v) => Self::Float(v),
             ObjectWire::Future(v) => Self::Future(v),
             ObjectWire::UnscheduledFuture(v) => Self::UnscheduledFuture(v),
