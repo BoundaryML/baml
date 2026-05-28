@@ -397,13 +397,13 @@ function baml.Null.from_json(j: baml.json.json) -> baml.Null {
 function baml.Null.to_json(self: null) -> baml.json.json {
 }
 
+function baml.String.byte_length(self: null) -> int {
+}
+
 function baml.String.char_at(self: null, index: int) -> string {
 }
 
 function baml.String.char_count(self: null) -> int {
-}
-
-function baml.String.code_point_at(self: null, index: int) -> int {
 }
 
 function baml.String.ends_with(self: null, suffix: string) -> bool {
@@ -487,6 +487,9 @@ function baml.String.lines(self: null) -> string[] {
 }
 
 function baml.String.matches(self: null, substring: string) -> bool {
+}
+
+function baml.String.repeat(self: null, count: int) -> string {
 }
 
 function baml.String.replace(self: null, search: string, replacement: string) -> string {

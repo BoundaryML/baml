@@ -17,12 +17,17 @@ impl BamlClassString for PackageBamlImpl {
 
     #[allow(clippy::cast_possible_wrap)]
     fn length(string: &BexStr) -> i64 {
-        string.len() as i64
+        string.char_count() as i64
     }
 
     #[allow(clippy::cast_possible_wrap)]
     fn char_count(string: &BexStr) -> i64 {
-        string.as_str().chars().count() as i64
+        string.char_count() as i64
+    }
+
+    #[allow(clippy::cast_possible_wrap)]
+    fn byte_length(string: &BexStr) -> i64 {
+        string.len() as i64
     }
 
     fn to_lower_case(string: &BexStr) -> BexStr {
@@ -101,30 +106,29 @@ impl BamlClassString for PackageBamlImpl {
 
     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
     fn substring(string: &BexStr, start: i64, end: i64) -> Result<BexStr, VmRustFnError> {
-        let len = string.len();
-        // Clamp negatives to 0; out-of-range to len.
-        let start = start.max(0) as usize;
-        let end = end.max(0) as usize;
-        let start = start.min(len);
-        let end = end.min(len).max(start);
+        let char_len = string.char_count();
+        // Clamp negatives to 0; out-of-range to char_count.
+        let start = usize::try_from(start.max(0))
+            .unwrap_or(usize::MAX)
+            .min(char_len);
+        let end = usize::try_from(end.max(0))
+            .unwrap_or(usize::MAX)
+            .min(char_len)
+            .max(start);
+
+        if start == end {
+            return Ok(BexStr::empty());
+        }
+
+        // Convert codepoint indices to byte offsets.
         let s = string.as_str();
-        if !s.is_char_boundary(start) {
-            return Err(VmBamlError::InvalidArgument {
-                message: format!(
-                    "substring: start byte offset {start} is not a UTF-8 character boundary"
-                ),
-            }
-            .into());
-        }
-        if !s.is_char_boundary(end) {
-            return Err(VmBamlError::InvalidArgument {
-                message: format!(
-                    "substring: end byte offset {end} is not a UTF-8 character boundary"
-                ),
-            }
-            .into());
-        }
-        Ok(string.substring(start, end)) // zero-copy Slice
+        let mut char_indices = s.char_indices();
+        let byte_start = char_indices.nth(start).map_or(s.len(), |(i, _)| i);
+        let byte_end = char_indices
+            .nth(end - start - 1)
+            .map_or(s.len(), |(i, _)| i);
+
+        Ok(string.substring(byte_start, byte_end))
     }
 
     fn replace(string: &BexStr, search: &BexStr, replacement: &BexStr) -> BexStr {
@@ -140,71 +144,30 @@ impl BamlClassString for PackageBamlImpl {
         string
             .as_str()
             .find(search.as_str())
-            .map(|i| i as i64)
+            .map(|byte_idx| bytecount::num_chars(&string.as_str().as_bytes()[..byte_idx]) as i64)
             .unwrap_or(-1)
     }
 
     fn char_at(string: &BexStr, index: i64) -> Result<BexStr, VmRustFnError> {
-        let len = string.len();
+        let char_len = string.char_count();
         let Ok(index) = usize::try_from(index) else {
             return Err(VmBamlError::InvalidArgument {
-                message: format!("char_at: byte offset {index} is negative"),
+                message: format!("at: index {index} is negative"),
             }
             .into());
         };
-        if index == len {
+        if index >= char_len {
             return Ok(BexStr::empty());
         }
-        if index > len {
-            return Err(VmBamlError::InvalidArgument {
-                message: format!("char_at: byte offset {index} is beyond the string length {len}"),
-            }
-            .into());
-        }
         let s = string.as_str();
-        if !s.is_char_boundary(index) {
-            return Err(VmBamlError::InvalidArgument {
-                message: format!("char_at: byte offset {index} is not a UTF-8 character boundary"),
-            }
-            .into());
-        }
-        // Safe because `index` is < len and on a char boundary.
-        let ch = s[index..].chars().next().unwrap_or_else(|| {
-            unreachable!("char_at: char boundary at index < len must yield a char")
-        });
+        let (byte_idx, ch) = s.char_indices().nth(index).unwrap();
         let ch_len = ch.len_utf8();
-        Ok(string.substring(index, index + ch_len)) // zero-copy
+        Ok(string.substring(byte_idx, byte_idx + ch_len))
     }
 
-    fn code_point_at(string: &BexStr, index: i64) -> Result<i64, VmRustFnError> {
-        let len = string.len();
-        let Ok(index) = usize::try_from(index) else {
-            return Err(VmBamlError::InvalidArgument {
-                message: format!("code_point_at: byte offset {index} is negative"),
-            }
-            .into());
-        };
-        if index >= len {
-            return Err(VmBamlError::InvalidArgument {
-                message: format!(
-                    "code_point_at: byte offset {index} is beyond the last code point (length {len})"
-                ),
-            }
-            .into());
-        }
-        let s = string.as_str();
-        if !s.is_char_boundary(index) {
-            return Err(VmBamlError::InvalidArgument {
-                message: format!(
-                    "code_point_at: byte offset {index} is not a UTF-8 character boundary"
-                ),
-            }
-            .into());
-        }
-        let ch = s[index..].chars().next().unwrap_or_else(|| {
-            unreachable!("code_point_at: char boundary at index < len must yield a char")
-        });
-        Ok(i64::from(ch as u32))
+    fn repeat(string: &BexStr, count: i64) -> BexStr {
+        let count = usize::try_from(count.max(0)).unwrap_or(0);
+        BexStr::from(string.as_str().repeat(count))
     }
 
     fn matches(string: &BexStr, pattern: &BexStr) -> bool {

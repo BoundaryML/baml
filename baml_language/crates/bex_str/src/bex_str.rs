@@ -26,8 +26,9 @@ pub enum BexStr {
     /// parent is ALWAYS Flat, never Slice or Concat.
     Slice {
         parent: Arc<FlatStr>,
-        offset: u32,
-        len: u32,
+        offset: u64,
+        len: u64,
+        char_count: u64,
         hash: AtomicU64,
     },
     /// Deferred concatenation. Flattened on first byte-level access.
@@ -38,13 +39,15 @@ pub enum BexStr {
 pub struct FlatStr {
     /// 0 = not yet computed. Set atomically on first hash() call.
     pub(crate) hash: AtomicU64,
+    /// Number of Unicode codepoints. Computed once at construction.
+    pub(crate) char_count: u64,
     /// UTF-8 byte data. Tight allocation (no excess capacity).
     pub(crate) data: Box<[u8]>,
 }
 
 /// Deferred concatenation node.
 pub struct ConcatNode {
-    pub(crate) total_len: u32,
+    pub(crate) total_len: u64,
     pub(crate) state: Mutex<ConcatState>,
 }
 
@@ -78,13 +81,30 @@ impl BexStr {
         self.len() == 0
     }
 
-    /// O(1) for all variants.
+    /// Byte length. O(1) for all variants.
     pub fn len(&self) -> usize {
         match self {
             BexStr::Inline { len, .. } => *len as usize,
             BexStr::Flat(f) => f.data.len(),
             BexStr::Slice { len, .. } => *len as usize,
             BexStr::Concat(c) => c.total_len as usize,
+        }
+    }
+
+    /// Number of Unicode codepoints. O(1) for all variants except
+    /// unflattened Concat (O(depth) tree walk).
+    pub fn char_count(&self) -> usize {
+        match self {
+            BexStr::Inline { len, data } => bytecount::num_chars(&data[..*len as usize]),
+            BexStr::Flat(f) => f.char_count as usize,
+            BexStr::Slice { char_count, .. } => *char_count as usize,
+            BexStr::Concat(c) => {
+                let guard = c.state.lock().unwrap();
+                match &*guard {
+                    ConcatState::Flattened(f) => f.char_count as usize,
+                    ConcatState::Deferred { left, right } => left.char_count() + right.char_count(),
+                }
+            }
         }
     }
 
@@ -151,6 +171,7 @@ impl BexStr {
         }
 
         // Long result → Slice (depth-1 invariant)
+        let slice_char_count = bytecount::num_chars(&self.as_bytes()[start..end]) as u64;
         match self {
             BexStr::Inline { .. } => {
                 // Can't reach here: INLINE_CAPACITY < slice_len
@@ -159,16 +180,18 @@ impl BexStr {
             }
             BexStr::Flat(f) => BexStr::Slice {
                 parent: f.clone(),
-                offset: start as u32,
-                len: slice_len as u32,
+                offset: start as u64,
+                len: slice_len as u64,
+                char_count: slice_char_count,
                 hash: AtomicU64::new(0),
             },
             BexStr::Slice { parent, offset, .. } => {
                 // Re-slice: point at SAME parent, adjust offset. Depth stays 1.
                 BexStr::Slice {
                     parent: parent.clone(),
-                    offset: *offset + start as u32,
-                    len: slice_len as u32,
+                    offset: *offset + start as u64,
+                    len: slice_len as u64,
+                    char_count: slice_char_count,
                     hash: AtomicU64::new(0),
                 }
             }
@@ -177,8 +200,9 @@ impl BexStr {
                 let flat = c.flatten();
                 BexStr::Slice {
                     parent: flat,
-                    offset: start as u32,
-                    len: slice_len as u32,
+                    offset: start as u64,
+                    len: slice_len as u64,
+                    char_count: slice_char_count,
                     hash: AtomicU64::new(0),
                 }
             }
@@ -209,7 +233,7 @@ impl BexStr {
         }
 
         BexStr::Concat(Arc::new(ConcatNode {
-            total_len: total_len as u32,
+            total_len: total_len as u64,
             state: Mutex::new(ConcatState::Deferred { left, right }),
         }))
     }
@@ -297,6 +321,7 @@ impl ConcatNode {
             &mut *guard,
             ConcatState::Flattened(Arc::new(FlatStr {
                 hash: AtomicU64::new(0),
+                char_count: 0,
                 data: Box::new([]),
             })),
         );
@@ -341,6 +366,7 @@ impl ConcatNode {
                                 &mut *inner_guard,
                                 ConcatState::Flattened(Arc::new(FlatStr {
                                     hash: AtomicU64::new(0),
+                                    char_count: 0,
                                     data: Box::new([]),
                                 })),
                             );
@@ -355,8 +381,10 @@ impl ConcatNode {
             }
         }
 
+        let char_count = bytecount::num_chars(&buf) as u64;
         let flat = Arc::new(FlatStr {
             hash: AtomicU64::new(0),
+            char_count,
             data: buf.into_boxed_slice(),
         });
         *guard = ConcatState::Flattened(flat.clone());
@@ -372,6 +400,7 @@ impl Drop for ConcatNode {
                 s,
                 ConcatState::Flattened(Arc::new(FlatStr {
                     hash: AtomicU64::new(0),
+                    char_count: 0,
                     data: Box::new([]),
                 })),
             ),
@@ -395,6 +424,7 @@ impl Drop for ConcatNode {
                         s,
                         ConcatState::Flattened(Arc::new(FlatStr {
                             hash: AtomicU64::new(0),
+                            char_count: 0,
                             data: Box::new([]),
                         })),
                     ),
@@ -424,11 +454,13 @@ impl Clone for BexStr {
                 parent,
                 offset,
                 len,
+                char_count,
                 hash,
             } => BexStr::Slice {
                 parent: parent.clone(),
                 offset: *offset,
                 len: *len,
+                char_count: *char_count,
                 hash: AtomicU64::new(hash.load(Ordering::Relaxed)),
             },
             BexStr::Concat(c) => BexStr::Concat(c.clone()),
@@ -521,8 +553,10 @@ impl From<String> for BexStr {
                 data,
             }
         } else {
+            let char_count = bytecount::num_chars(s.as_bytes()) as u64;
             BexStr::Flat(Arc::new(FlatStr {
                 hash: AtomicU64::new(0),
+                char_count,
                 data: s.into_bytes().into_boxed_slice(),
             }))
         }
@@ -539,8 +573,10 @@ impl From<&str> for BexStr {
                 data,
             }
         } else {
+            let char_count = bytecount::num_chars(s.as_bytes()) as u64;
             BexStr::Flat(Arc::new(FlatStr {
                 hash: AtomicU64::new(0),
+                char_count,
                 data: s.as_bytes().into(),
             }))
         }

@@ -1065,9 +1065,9 @@ function baml.to_json(self: ?) -> baml.json.json  [builtin]
 --- <builtin>/baml/string.baml ---
 class baml.String {
 }
+function baml.byte_length(self: ?) -> int  [builtin]
 function baml.char_at(self: ?, index: int) -> string  [builtin]
 function baml.char_count(self: ?) -> int  [builtin]
-function baml.code_point_at(self: ?, index: int) -> int  [builtin]
 function baml.ends_with(self: ?, suffix: string) -> bool  [builtin]
 function baml.from_code_points(unicode: int[]) -> string  [builtin]
 function baml.from_json(j: baml.json.json) -> baml.String  [expr] {
@@ -1097,6 +1097,7 @@ function baml.is_whitespace(self: ?) -> bool  [builtin]
 function baml.length(self: ?) -> int  [builtin]
 function baml.lines(self: ?) -> string[]  [builtin]
 function baml.matches(self: ?, substring: string) -> bool  [builtin]
+function baml.repeat(self: ?, count: int) -> string  [builtin]
 function baml.replace(self: ?, search: string, replacement: string) -> string  [builtin]
 function baml.replace_all(self: ?, search: string, replacement: string) -> string  [builtin]
 function baml.split(self: ?, delimiter: string) -> string[]  [builtin]
