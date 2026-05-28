@@ -15,11 +15,12 @@
 #      same shared `sdks/python/src/baml_core/baml_py.abi3.so`.
 #
 #   2. `maturin develop` (once) rebuilds that shared `.so` from the
-#      current Rust sources. We use the `sdks/python` pyproject to sync
-#      its dev tools into a STABLE build venv under target/ so maturin
-#      always sees the same interpreter path — that keeps pyo3's
-#      build-config fingerprint valid, so cargo's incremental cache hits
-#      and steady-state rebuilds are ~7s.
+#      current Rust sources. We target `sdks/python`'s own `.venv` —
+#      populated from `sdks/python/pyproject.toml`'s dev group via
+#      `uv sync --group dev --no-install-project`. That venv path is
+#      stable across runs, which keeps pyo3's build-config fingerprint
+#      valid, so cargo's incremental cache hits and steady-state
+#      rebuilds are ~7s.
 #
 # Why not `uv sync --reinstall-package baml_core` (the old approach)?
 # That was strictly slower, ~70s EVERY run even when nothing changed.
@@ -73,16 +74,17 @@ for fixture_dir in */generated; do
 done
 
 # 2. Rebuild the shared baml_core extension incrementally via maturin.
-#    The build venv is pinned at a fixed path so its interpreter never
-#    moves (see the --reinstall-package note above for why that matters).
-#    abi3 wheels are interpreter-version-agnostic, so any >=3.10 works.
-#    `sdks/python/pyproject.toml` owns the maturin version constraint; the
-#    sync below installs dev tools without installing/building baml_core.
-BUILD_VENV="$WORKSPACE_ROOT/target/maturin-build-venv"
-echo "==> syncing maturin build venv at $BUILD_VENV"
-(cd "$SDK_PY" && UV_PROJECT_ENVIRONMENT="$BUILD_VENV" "$uv_bin" sync --group dev --no-install-project)
+#    The build venv is `sdks/python/.venv` — uv's default project venv,
+#    at a stable path (see the --reinstall-package note above for why
+#    that matters). abi3 wheels are interpreter-version-agnostic, so
+#    any >=3.10 works. `sdks/python/pyproject.toml` owns the maturin
+#    version constraint; the sync below installs dev tools without
+#    installing/building baml_core (`maturin develop` does that).
+SDK_PY_VENV="$SDK_PY/.venv"
+echo "==> uv sync (dev) in $SDK_PY"
+(cd "$SDK_PY" && UV_PROJECT_ENVIRONMENT="$SDK_PY_VENV" "$uv_bin" sync --group dev --no-install-project)
 echo "==> maturin develop (shared baml_core extension)"
-(cd "$SDK_PY" && VIRTUAL_ENV="$BUILD_VENV" "$BUILD_VENV/bin/maturin" develop)
+(cd "$SDK_PY" && VIRTUAL_ENV="$SDK_PY_VENV" "$SDK_PY_VENV/bin/maturin" develop)
 
 # Per-run breadcrumb for the in-test guard. nextest reads $NEXTEST_ENV
 # after this script and injects these vars into the matched tests'
