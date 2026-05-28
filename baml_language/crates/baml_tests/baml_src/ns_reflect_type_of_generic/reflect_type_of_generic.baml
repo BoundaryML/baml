@@ -297,3 +297,12 @@ function type_of_depth4_path_picks_prefix_class_args_fn() -> string {
 test "type_of_depth4_path_picks_prefix_class_args" {
     assert.is_true(baml.deep_equals(type_of_depth4_path_picks_prefix_class_args_fn(), "int"))
 }
+
+
+function foo<T1, T2>(a: T1, b: T2) -> {
+    bar(b, a)
+}
+
+function boo<S1, S2>(c: S1, d: S2) -> {
+    reflect.type_of<S1>().to_string() + reflect.type_of<S2>().to_string()
+}

@@ -170,12 +170,43 @@ impl RootHaver for NativeCallFrame {
     }
 }
 
-/// Call frame — either a bytecode frame, native activation frame, or native
-/// continuation frame.
+/// Sys-op activation frame — pushed when a `$rust_io_function` is invoked.
+///
+/// The VM does not execute the sys-op body. The frame exists while the engine
+/// runs the external operation so args remain GC roots and stack traces include
+/// the builtin call site.
+pub struct SysOpCallFrame {
+    pub(crate) function: HeapPtr,
+    pub(crate) operation: bex_vm_types::SysOp,
+    pub(crate) args: Vec<Value>,
+    #[allow(dead_code)]
+    pub(crate) type_args: Vec<baml_type::Ty>,
+    pub(crate) running: bool,
+}
+
+impl RootHaver for SysOpCallFrame {
+    fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
+        roots.push(self.function);
+        roots.extend(self.args.iter().filter_map(Value::as_object_ptr));
+    }
+    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
+        self.function = roots.get(&self.function).copied().unwrap_or(self.function);
+        for value in &mut self.args {
+            if let Some(ptr) = value.as_object_ptr()
+                && let Some(&new_ptr) = roots.get(&ptr)
+            {
+                *value = Value::object(new_ptr);
+            }
+        }
+    }
+}
+
+/// Call frame — bytecode, native activation/continuation, or active sys-op.
 pub enum Frame {
     Bytecode(BytecodeFrame),
     NativeCall(NativeCallFrame),
     NativeContinuation(NativeContinuationFrame),
+    SysOpCall(SysOpCallFrame),
 }
 
 impl Frame {
@@ -185,6 +216,7 @@ impl Frame {
             Frame::Bytecode(f) => f.function,
             Frame::NativeCall(f) => f.function,
             Frame::NativeContinuation(f) => f.function,
+            Frame::SysOpCall(f) => f.function,
         }
     }
 }
@@ -346,6 +378,7 @@ impl RootHaver for Frame {
             Frame::Bytecode(f) => f.collect_roots(roots),
             Frame::NativeCall(f) => f.collect_roots(roots),
             Frame::NativeContinuation(f) => f.collect_roots(roots),
+            Frame::SysOpCall(f) => f.collect_roots(roots),
         }
     }
     fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
@@ -353,6 +386,7 @@ impl RootHaver for Frame {
             Frame::Bytecode(f) => f.forward_roots(roots),
             Frame::NativeCall(f) => f.forward_roots(roots),
             Frame::NativeContinuation(f) => f.forward_roots(roots),
+            Frame::SysOpCall(f) => f.forward_roots(roots),
         }
     }
 }
@@ -571,7 +605,7 @@ pub enum VmExecState {
     Spawn(HeapPtr),
 
     /// BEP-034 phase D′: VM is invoking a sys-op and wants its return
-    /// value pushed back on the stack.
+    /// value completed through the active [`SysOpCallFrame`].
     ///
     /// Replaces the two-yield `ScheduleFuture` → `Await` dance the old
     /// MIR emitted for every sys-op call. The engine runs the op
@@ -582,15 +616,12 @@ pub enum VmExecState {
     /// `EngineError::UnhandledThrow` exactly like today's sys-op
     /// fulfillment path.
     ///
-    /// - Input: the `SysOp` to run plus its `args`, popped from the
-    ///   eval stack by the `OpCode::SysOp` handler.
+    /// - Input: an active top-of-stack `Frame::SysOpCall` whose args are
+    ///   owned by the frame.
     /// - Output: a single `Value` on the VM stack.
     /// - No `Object::Future` is allocated; no `FutureManager` entry
     ///   is created.
-    SysOp {
-        operation: bex_vm_types::SysOp,
-        args: Vec<Value>,
-    },
+    SysOp,
 
     /// VM has completed the execution of all available bytecode.
     Complete(Value),
@@ -617,6 +648,21 @@ pub enum VmExecState {
 
     /// We are still executing, but we should yield to allow other threads or the GC to run.
     EarlyYield,
+}
+
+/// Borrowed sys-op request data for the engine.
+pub struct SysOpRequest<'a> {
+    pub operation: bex_vm_types::SysOp,
+    pub args: &'a [Value],
+}
+
+/// Result of completing a sys-op frame.
+#[derive(Debug, PartialEq)]
+pub enum SysOpCompletion {
+    /// A bytecode caller remains. The result was pushed to the eval stack.
+    Resume,
+    /// The sys-op was the root entry frame.
+    Complete(Value),
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -969,12 +1015,7 @@ impl BexVm {
     pub fn collect_frame_roots(&self) -> Vec<HeapPtr> {
         let mut roots = Vec::new();
         for frame in &self.frames {
-            roots.push(frame.function());
-            if let Frame::NativeContinuation(nf) = frame {
-                if let Some(continuation) = &nf.continuation {
-                    roots.extend(continuation.gc_roots());
-                }
-            }
+            frame.collect_roots(&mut roots);
         }
         roots
     }
@@ -1003,6 +1044,7 @@ impl BexVm {
                         continuation.apply_forwarding(forwarding);
                     }
                 }
+                Frame::SysOpCall(sf) => sf.forward_roots(forwarding),
             }
         }
     }
@@ -1289,8 +1331,9 @@ impl BexVm {
     /// `type_args` slot. Use when the host invokes a generic function
     /// (e.g. a user function with `<T>`) and needs to thread `T` through.
     ///
-    /// Entry points may be bytecode or native functions. SysOps still require
-    /// the engine yield/resume contract and are rejected at the engine boundary.
+    /// Entry points here may be bytecode or native callables. Sys-op entry uses
+    /// [`Self::set_sysop_entry_point_with_type_args`] so the builtin has a
+    /// real frame but the engine still owns execution of the IO operation.
     pub fn set_entry_point_with_type_args(
         &mut self,
         function: HeapPtr,
@@ -1349,6 +1392,45 @@ impl BexVm {
         }
     }
 
+    /// Seed the VM with a root sys-op call frame.
+    pub fn set_sysop_entry_point_with_type_args(
+        &mut self,
+        function: HeapPtr,
+        args: &[Value],
+        type_args: Vec<baml_type::Ty>,
+    ) -> Result<(), VmError> {
+        let Object::Function(func) = self.get_object(function) else {
+            return Err(VmInternalError::TypeError {
+                expected: FunctionType::SysOp.into(),
+                got: ObjectType::of(self.get_object(function)).into(),
+            }
+            .into());
+        };
+        let FunctionKind::SysOp(operation) = func.kind else {
+            return Err(VmInternalError::TypeError {
+                expected: FunctionType::SysOp.into(),
+                got: FunctionType::from(&func.kind).into(),
+            }
+            .into());
+        };
+        if args.len() != func.arity {
+            return Err(VmInternalError::InvalidArgumentCount {
+                expected: func.arity,
+                got: args.len(),
+            }
+            .into());
+        }
+
+        self.frames.push(Frame::SysOpCall(SysOpCallFrame {
+            function,
+            operation,
+            args: args.to_vec(),
+            type_args,
+            running: false,
+        }));
+        Ok(())
+    }
+
     /// Restores the VM state and prepares it for the next execution.
     ///
     /// This is used to clear the stack and frames after execution.
@@ -1357,6 +1439,69 @@ impl BexVm {
         // stack and call stack should be empty.
         self.stack.clear();
         self.frames.clear();
+    }
+
+    /// Return the active sys-op request and mark its frame as running.
+    pub fn active_sysop_request(&mut self) -> Result<SysOpRequest<'_>, VmError> {
+        let Some(Frame::SysOpCall(frame)) = self.frames.last_mut() else {
+            return Err(VmInternalError::ExpectedActiveSysOp.into());
+        };
+        if frame.running {
+            return Err(VmInternalError::SysOpReentered {
+                operation: frame.operation,
+            }
+            .into());
+        }
+        frame.running = true;
+        Ok(SysOpRequest {
+            operation: frame.operation,
+            args: &frame.args,
+        })
+    }
+
+    /// Complete the active sys-op frame with a result value.
+    pub fn complete_sysop(&mut self, value: Value) -> Result<SysOpCompletion, VmError> {
+        let Some(Frame::SysOpCall(_)) = self.frames.last() else {
+            return Err(VmInternalError::ExpectedActiveSysOp.into());
+        };
+        self.frames.pop();
+        if self.frames.is_empty() {
+            Ok(SysOpCompletion::Complete(value))
+        } else {
+            self.stack.push(value);
+            Ok(SysOpCompletion::Resume)
+        }
+    }
+
+    /// Throw from the active sys-op frame, preserving it in the captured trace.
+    pub fn throw_from_active_sysop(&mut self, value: Value) -> Result<SysOpCompletion, VmError> {
+        let Some(Frame::SysOpCall(_)) = self.frames.last() else {
+            return Err(VmInternalError::ExpectedActiveSysOp.into());
+        };
+        let Some(bytecode_idx) = self
+            .frames
+            .iter()
+            .rposition(|frame| matches!(frame, Frame::Bytecode(_)))
+        else {
+            return Err(VmError::ThrownUnhandled {
+                value,
+                trace: self.capture_stack_trace(),
+            });
+        };
+        let mut frame_idx = self.frames.len() - 1;
+        // SAFETY: bytecode frames point at compile-time functions.
+        let mut function = unsafe { self.load_function(bytecode_idx)? };
+        self.try_unwind_exception(&mut frame_idx, &mut function, value)?;
+        if self.frames.is_empty() {
+            Ok(SysOpCompletion::Complete(Value::NULL))
+        } else {
+            Ok(SysOpCompletion::Resume)
+        }
+    }
+
+    /// Stack trace for fatal engine errors while a sys-op frame is still active.
+    pub fn capture_stack_trace_for_active_error(&self) -> Vec<StackFrame> {
+        self.capture_stack_trace()
     }
 
     /// Returns a reference to the unscheduled future at `future_ptr`.
@@ -2196,6 +2341,12 @@ impl BexVm {
                         function_span: func.span,
                         error_line: 0,
                     }),
+                    Frame::SysOpCall(_) => Some(StackFrame {
+                        function_name: func.name.clone(),
+                        file_path: func.source_file.clone(),
+                        function_span: func.span,
+                        error_line: 0,
+                    }),
                 }
             })
             .collect()
@@ -2220,10 +2371,13 @@ impl BexVm {
             let depth = self.frames.len() - 1;
             let frame = &self.frames[depth];
 
-            // Native frames have no exception handlers. Native activation
-            // frames own their argument stack region; continuation frames do
-            // not.
-            if matches!(frame, Frame::NativeCall(_) | Frame::NativeContinuation(_)) {
+            // Native and sys-op frames have no exception handlers. Native
+            // activation frames own their argument stack region; continuations
+            // and sys-op frames do not.
+            if matches!(
+                frame,
+                Frame::NativeCall(_) | Frame::NativeContinuation(_) | Frame::SysOpCall(_)
+            ) {
                 if self.frames.len() <= 1 {
                     return Err(VmError::ThrownUnhandled {
                         value: exception_value,
@@ -2329,7 +2483,9 @@ impl BexVm {
                 Frame::NativeCall(nf) => {
                     self.stack.drain(nf.locals_offset..);
                 }
-                Frame::NativeContinuation(_) => {} // continuation frames own no stack region
+                Frame::NativeContinuation(_) | Frame::SysOpCall(_) => {
+                    // continuation/sys-op frames own no stack region
+                }
             }
 
             // Clean up tracing / interrupt bookkeeping for popped frames.
@@ -2448,14 +2604,18 @@ impl BexVm {
         );
         let args_array_ptr = self.tlab.alloc(Object::Array(user_args.into()));
         let ret_ty_ptr = self.tlab.alloc(Object::Type(Box::new(ret_ty)));
-        VmExecState::SysOp {
+        self.frames.push(Frame::SysOpCall(SysOpCallFrame {
+            function: closure_ptr,
             operation: bex_vm_types::SysOp::BamlHostCallHostValue,
             args: vec![
                 Value::object(closure_ptr),
                 Value::object(args_array_ptr),
                 Value::object(ret_ty_ptr),
             ],
-        }
+            type_args: Vec::new(),
+            running: false,
+        }));
+        VmExecState::SysOp
     }
 
     fn execute_call_from_locals_offset(
@@ -3029,6 +3189,9 @@ impl BexVm {
         if self.frames.is_empty() {
             return Ok(VmExecState::Complete(Value::NULL));
         }
+        if matches!(self.frames.last(), Some(Frame::SysOpCall(_))) {
+            return Ok(VmExecState::SysOp);
+        }
         self.exec_compact()
     }
 
@@ -3284,6 +3447,9 @@ impl BexVm {
         if self.frames.is_empty() {
             return Ok(VmExecState::Complete(Value::NULL));
         }
+        if matches!(self.frames.last(), Some(Frame::SysOpCall(_))) {
+            return Ok(VmExecState::SysOp);
+        }
 
         let mut frame_idx = self.frames.len() - 1;
         let mut function = unsafe { self.load_function(frame_idx)? };
@@ -3353,7 +3519,7 @@ impl BexVm {
                                 self.stack.truncate(frame.locals_offset.raw());
                             }
                             Frame::NativeContinuation(_) => {}
-                            Frame::Bytecode(_) => {
+                            Frame::Bytecode(_) | Frame::SysOpCall(_) => {
                                 unreachable!("native result handler requires native frame")
                             }
                         }
@@ -3387,7 +3553,7 @@ impl BexVm {
                                 self.stack.truncate(frame.locals_offset.raw());
                             }
                             Frame::NativeContinuation(_) => {}
-                            Frame::Bytecode(_) => {
+                            Frame::Bytecode(_) | Frame::SysOpCall(_) => {
                                 unreachable!("native yield handler requires native frame")
                             }
                         }
@@ -3439,6 +3605,9 @@ impl BexVm {
 
             if self.frames.is_empty() {
                 return Ok(VmExecState::Complete(self.stack.ensure_pop()));
+            }
+            if matches!(self.frames.last(), Some(Frame::SysOpCall(_))) {
+                return Ok(VmExecState::SysOp);
             }
 
             frame_idx = self.frames.len() - 1;
@@ -3992,10 +4161,14 @@ impl BexVm {
                     )?;
                     let args_offset = StackIndex::from_raw(args_offset);
                     let call_args: Vec<Value> = self.stack.drain(args_offset..).collect();
-                    return Ok(Some(VmExecState::SysOp {
+                    self.frames.push(Frame::SysOpCall(SysOpCallFrame {
+                        function: callee_ptr,
                         operation: sys_op,
                         args: call_args,
+                        type_args: Vec::new(),
+                        running: false,
                     }));
+                    return Ok(Some(VmExecState::SysOp));
                 }
 
                 // ── Spawn (BEP-034) ────────────────────────────────────────────

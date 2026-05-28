@@ -89,7 +89,7 @@ use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
 pub use bex_heap::{ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapPermit};
-use bex_vm::{BexVm, SpanNotification, VmExecState};
+use bex_vm::{BexVm, SpanNotification, SysOpCompletion, VmExecState};
 use bex_vm_types::{
     FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp, Value,
     VmGlobals,
@@ -255,6 +255,12 @@ pub enum EngineError {
     #[error("{0}")]
     ExternalOpFailed(#[from] OpError),
 
+    #[error("{}", format_external_op_failed_with_trace(source, trace))]
+    ExternalOpFailedWithTrace {
+        source: OpError,
+        trace: Vec<bex_vm::StackFrame>,
+    },
+
     #[error("VM internal error: {0}")]
     VmInternalError(bex_vm::errors::VmInternalError),
 
@@ -312,6 +318,17 @@ fn format_vm_internal_error(
             .map(|f| (f.file_path.as_str(), f.error_line, f.function_name.as_str())),
     );
     write!(out, "VM internal error: {err}").unwrap();
+    out
+}
+
+fn format_external_op_failed_with_trace(err: &OpError, trace: &[bex_vm::StackFrame]) -> String {
+    use std::fmt::Write;
+    let mut out = bex_vm::format_traceback(
+        trace
+            .iter()
+            .map(|f| (f.file_path.as_str(), f.error_line, f.function_name.as_str())),
+    );
+    write!(out, "{err}").unwrap();
     out
 }
 
@@ -1256,14 +1273,11 @@ impl BexEngine {
             return Err(cancelled_unhandled_throw());
         }
 
-        let (function_index, kind) = self.lookup_function(function_name)?;
-        if matches!(
-            kind,
-            bex_vm_types::FunctionKind::SysOp(_) | bex_vm_types::FunctionKind::NativeUnresolved
-        ) {
+        let (function_index, function_kind) = self.lookup_function(function_name)?;
+        if matches!(function_kind, bex_vm_types::FunctionKind::NativeUnresolved) {
             return Err(EngineError::NotInvokableAsEntry {
                 name: function_name.to_string(),
-                kind: format!("{kind:?}"),
+                kind: format!("{function_kind:?}"),
             });
         }
         self.validate_bound_args(function_name, &args)?;
@@ -1360,9 +1374,25 @@ impl BexEngine {
         // Canary moved the root VM into `thread.vm` for BEP-034 spawn
         // threading; pack/run still needs the generic-function type-args
         // path. Combine both: typed-args setter on the threaded VM.
-        thread
-            .vm
-            .set_entry_point_with_type_args(function_index, &vm_args, type_args);
+        match function_kind {
+            bex_vm_types::FunctionKind::SysOp(_) => {
+                thread
+                    .vm
+                    .set_sysop_entry_point_with_type_args(function_index, &vm_args, type_args)
+                    .map_err(|err| match err {
+                        bex_vm::errors::VmError::InternalError(err) => {
+                            EngineError::VmInternalError(err)
+                        }
+                        bex_vm::errors::VmError::TracedInternalError { source, trace } => {
+                            EngineError::TracedVmInternalError { source, trace }
+                        }
+                        other => EngineError::Other(other.to_string()),
+                    })?;
+            }
+            _ => thread
+                .vm
+                .set_entry_point_with_type_args(function_index, &vm_args, type_args),
+        }
 
         // Initialize span tracking for the root call.
         // If host context is provided, nest under the host's span tree.
@@ -1874,30 +1904,78 @@ impl BexEngine {
     /// Deliver a host-callable error (a `HostCallable` throw, or another op
     /// error) at a `SysOp` terminal site.
     ///
-    /// A spawned child **settles its future** (errored) so the awaiter resolves
-    /// with the throw instead of hanging forever on a `Pending` future — exactly
-    /// as the VM-throw arms do. Only a root thread surfaces the throw to the
-    /// host as an `UnhandledThrow`. (Whether an in-BAML `try/catch` can catch a
-    /// host throw is a separate, deferred concern; this only fixes the spawned
-    /// child never settling.) A non-`HostCallable` op error has no throw value
-    /// and falls back to a fatal `EngineError`.
+    /// Catchable host-callable errors are thrown back through the active sys-op
+    /// frame, so caller bytecode handlers can catch them. If no handler catches
+    /// the throw, spawned children settle their future and root threads surface
+    /// `EngineError::UnhandledThrow`. Non-catchable op errors attach the active
+    /// VM trace and remain fatal engine errors.
     async fn deliver_host_call_throw(
         &self,
         thread: &mut ActiveHeapPermit<BexThread>,
         op_err: OpError,
-    ) -> Result<ThreadOutcome, EngineError> {
+    ) -> Result<Option<ThreadOutcome>, EngineError> {
         if let Some(throw_value) = op_error_to_catchable_throw(&op_err) {
-            if let Some(future_id) = thread.vm_thread_settles_future() {
-                let value = self.convert_external_to_vm_value(thread, throw_value)?;
-                self.settle_child_errored(thread, future_id, value).await?;
-                return Ok(ThreadOutcome::SettledChild);
+            let value = self.convert_external_to_vm_value(thread, throw_value.clone())?;
+            match thread.vm.throw_from_active_sysop(value) {
+                Ok(SysOpCompletion::Resume) => return Ok(None),
+                Ok(SysOpCompletion::Complete(_)) => {
+                    return Err(EngineError::Other(
+                        "sys-op throw unexpectedly completed with a value".to_string(),
+                    ));
+                }
+                Err(bex_vm::errors::VmError::ThrownUnhandled { value, trace }) => {
+                    if let Some(future_id) = thread.vm_thread_settles_future() {
+                        self.settle_child_errored(thread, future_id, value).await?;
+                        return Ok(Some(ThreadOutcome::SettledChild));
+                    }
+                    let external = self.vm_value_to_owned(thread.proof(), value);
+                    return Err(EngineError::UnhandledThrow {
+                        value: Box::new(external),
+                        trace,
+                    });
+                }
+                Err(bex_vm::errors::VmError::Thrown(value)) => {
+                    if let Some(future_id) = thread.vm_thread_settles_future() {
+                        self.settle_child_errored(thread, future_id, value).await?;
+                        return Ok(Some(ThreadOutcome::SettledChild));
+                    }
+                    let external = self.vm_value_to_owned(thread.proof(), value);
+                    return Err(EngineError::UnhandledThrow {
+                        value: Box::new(external),
+                        trace: Vec::new(),
+                    });
+                }
+                Err(bex_vm::errors::VmError::InternalError(err)) => {
+                    if let Some(future_id) = thread.vm_thread_settles_future() {
+                        let mut guard = self.futures.acquire(thread.proof()).await;
+                        guard
+                            .internal_error_future(future_id, EngineError::VmInternalError(err))?;
+                        drop(guard);
+                        thread.vm_thread_cancel().cancel();
+                        return Ok(Some(ThreadOutcome::SettledChild));
+                    }
+                    return Err(EngineError::VmInternalError(err));
+                }
+                Err(bex_vm::errors::VmError::TracedInternalError { source, trace }) => {
+                    if let Some(future_id) = thread.vm_thread_settles_future() {
+                        let mut guard = self.futures.acquire(thread.proof()).await;
+                        guard.internal_error_future(
+                            future_id,
+                            EngineError::TracedVmInternalError { source, trace },
+                        )?;
+                        drop(guard);
+                        thread.vm_thread_cancel().cancel();
+                        return Ok(Some(ThreadOutcome::SettledChild));
+                    }
+                    return Err(EngineError::TracedVmInternalError { source, trace });
+                }
             }
-            return Err(EngineError::UnhandledThrow {
-                value: Box::new(throw_value),
-                trace: Vec::new(),
-            });
         }
-        Err(EngineError::from(op_err))
+        let trace = thread.vm.capture_stack_trace_for_active_error();
+        Err(EngineError::ExternalOpFailedWithTrace {
+            source: op_err,
+            trace,
+        })
     }
 
     /// True if `value` is an `Object::Instance` whose class is
@@ -2339,7 +2417,7 @@ impl BexEngine {
                     return Ok(ThreadOutcome::RootValue(return_value));
                 }
 
-                VmExecState::SysOp { operation, args } => {
+                VmExecState::SysOp => {
                     // Single round-trip sys-op call. Convert args, race
                     // the op against the active cancel token, and push the
                     // resulting value back on the VM stack. No
@@ -2352,8 +2430,24 @@ impl BexEngine {
                         Result(Result<BexExternalValue, OpError>),
                     }
 
-                    let bex_args: Vec<BexExternalValue> =
-                        args.iter().map(|v| self.vm_arg_to_bex_value(*v)).collect();
+                    let (operation, vm_args) = {
+                        let request =
+                            thread.vm.active_sysop_request().map_err(|err| match err {
+                                bex_vm::errors::VmError::InternalError(err) => {
+                                    EngineError::VmInternalError(err)
+                                }
+                                bex_vm::errors::VmError::TracedInternalError { source, trace } => {
+                                    EngineError::TracedVmInternalError { source, trace }
+                                }
+                                other => EngineError::Other(other.to_string()),
+                            })?;
+                        (request.operation, request.args.to_vec())
+                    };
+
+                    let bex_args: Vec<BexExternalValue> = vm_args
+                        .iter()
+                        .map(|v| self.vm_arg_to_bex_value(*v))
+                        .collect();
 
                     // Capture the host-call return type as an OWNED `Ty` now,
                     // while the heap permit is still held and `args[2]` (the
@@ -2365,7 +2459,7 @@ impl BexEngine {
                     // use-after-free. Cloning the `Ty` here sidesteps that.
                     let host_ret_ty: Option<baml_type::Ty> =
                         if operation == SysOp::BamlHostCallHostValue {
-                            host_call_return_ty(args.get(2).copied())
+                            host_call_return_ty(vm_args.get(2).copied())
                         } else {
                             None
                         };
@@ -2440,7 +2534,12 @@ impl BexEngine {
                                         category: HOST_CALLABLE_INVALID_ARGUMENT,
                                     },
                                 );
-                                return self.deliver_host_call_throw(&mut thread, op_err).await;
+                                if let Some(outcome) =
+                                    self.deliver_host_call_throw(&mut thread, op_err).await?
+                                {
+                                    return Ok(outcome);
+                                }
+                                continue;
                             }
                             // Convert the external value back into a VM
                             // Value (allocating string / list / instance
@@ -2450,7 +2549,30 @@ impl BexEngine {
                             // / projection / whatever the surrounding
                             // expression expected — no implicit await.
                             let value = self.convert_external_to_vm_value(&mut thread, external)?;
-                            thread.vm.stack.push(value);
+                            match thread.vm.complete_sysop(value).map_err(|err| match err {
+                                bex_vm::errors::VmError::InternalError(err) => {
+                                    EngineError::VmInternalError(err)
+                                }
+                                bex_vm::errors::VmError::TracedInternalError { source, trace } => {
+                                    EngineError::TracedVmInternalError { source, trace }
+                                }
+                                other => EngineError::Other(other.to_string()),
+                            })? {
+                                SysOpCompletion::Resume => {}
+                                SysOpCompletion::Complete(value) => {
+                                    let external = self.convert_vm_value_to_external_with_type(
+                                        value,
+                                        &return_type,
+                                        thread.proof(),
+                                    )?;
+                                    let external =
+                                        crate::conversion::coerce_return_to_declared_type(
+                                            external,
+                                            &return_type,
+                                        )?;
+                                    return Ok(ThreadOutcome::RootValue(external));
+                                }
+                            }
                         }
                         Err(op_err) => {
                             // A host-callable error. On a **root** thread it
@@ -2469,7 +2591,12 @@ impl BexEngine {
                             // child's future (errored) so the awaiter resolves
                             // with the throw instead of hanging on a `Pending`
                             // future.
-                            return self.deliver_host_call_throw(&mut thread, op_err).await;
+                            if let Some(outcome) =
+                                self.deliver_host_call_throw(&mut thread, op_err).await?
+                            {
+                                return Ok(outcome);
+                            }
+                            continue;
                         }
                     }
                 }

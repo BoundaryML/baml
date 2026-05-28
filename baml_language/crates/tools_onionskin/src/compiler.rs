@@ -3968,7 +3968,7 @@ impl CompilerRunner {
                     ));
                     break;
                 }
-                Ok(VmExecState::SysOp { .. }) => {
+                Ok(VmExecState::SysOp) => {
                     self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(
                         "Function invoked a sys-op (not supported in VM Runner)".to_string(),
                     ));

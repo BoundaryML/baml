@@ -174,6 +174,12 @@ pub enum VmInternalError {
     /// post-init `StoreGlobal` violates that invariant.
     #[error("StoreGlobal executed outside of $init (globals are frozen post-init)")]
     StoreGlobalAfterInit,
+
+    #[error("expected an active sys-op call frame")]
+    ExpectedActiveSysOp,
+
+    #[error("sys-op {operation} was re-entered before completion")]
+    SysOpReentered { operation: bex_vm_types::SysOp },
 }
 
 /// Any kind of virtual machine error.
