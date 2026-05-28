@@ -1,7 +1,7 @@
 // Runtime host for binaries produced by `baml pack`.
 //
 // Startup:
-//   1. Extract `PackEnvelope` (bitcode) from the OS-native embedded section.
+//   1. Extract `PackEnvelope` (borsh) from the OS-native embedded section.
 //   2. Decide single-target vs multi-subcommand dispatch from
 //      `envelope.mode`.
 //   3. Initialize the BAML engine with the embedded program and the
@@ -36,7 +36,7 @@ fn extract_envelope() -> Result<PackEnvelope, String> {
         .map_err(|e| format!("Failed to read embedded section: {e}"))?
         .ok_or("No embedded BAML package found. This binary must be built with `baml pack`.")?;
 
-    bitcode::deserialize(section).map_err(|e| format!("Failed to deserialize pack envelope: {e}"))
+    borsh::from_slice(section).map_err(|e| format!("Failed to deserialize pack envelope: {e}"))
 }
 
 /// Build `baml.argv` per BEP-027 §"baml.argv in packaged binaries".

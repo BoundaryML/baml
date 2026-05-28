@@ -42,6 +42,9 @@ jobs:
           workspaces: "baml_language -> target"
           # Share cache across similar Linux WASM jobs for better hit rates
           shared-key: "linux-wasm"
+          # Read-only consumer. The canary saver lives in
+          # cargo-tests.reusable.yaml; see the cache strategy comment there.
+          save-if: false
 
       # Only wasm-pack is needed here.
       - name: "Install mise"

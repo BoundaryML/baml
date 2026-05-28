@@ -358,3 +358,70 @@ mod if_let_format_tests {
         assert_formats_to(source, source);
     }
 }
+
+#[cfg(test)]
+mod let_else_format_tests {
+    //! Formatter tests for `let PATTERN = SCRUTINEE else { ... };`.
+
+    use super::*;
+
+    fn assert_formats_to(source: &str, expected: &str) {
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed on `let … else`");
+        assert_eq!(
+            formatted, expected,
+            "formatter output didn't match expected\n--- got ---\n{formatted}\n--- want ---\n{expected}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn test_let_else_basic() {
+        // The else block is a BlockExpr — formatter canonicalises it to
+        // multi-line layout, matching the rest of the codebase's block
+        // style.
+        let source = "function f(r: int | string) -> int {\n    let v: int = r else {\n        return 0;\n    };\n    v\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_let_else_destructure() {
+        let source = "class User {\n    name: string,\n    age: int,\n}\n\nclass Admin {\n    handle: string,\n}\n\nfunction f(u: User | Admin) -> string {\n    let User { name, age } = u else {\n        return \"admin\";\n    };\n    name\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_let_else_or_pattern() {
+        let source = "class Ok {\n    value: string,\n}\n\nclass Warn {\n    value: string,\n}\n\nclass Err {\n    message: string,\n}\n\nfunction f(r: Ok | Warn | Err) -> string {\n    let s: Ok | Warn = r else {\n        return \"err\";\n    };\n    s.value\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_let_else_throw() {
+        // `throw` in the else branch is a valid diverging form. Empty
+        // class body renders multi-line by the same block-expander rule.
+        let source = "class NoMatch {\n}\n\nfunction f(r: int | string) -> int throws NoMatch {\n    let n: int = r else {\n        throw NoMatch {};\n    };\n    n\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_let_else_preserves_trivia_around_else_keyword() {
+        // Trivia between the initializer and `else` (and between `else`
+        // and the block) must round-trip — pre-fix the formatter emitted
+        // hardcoded spaces and dropped any adjacent comments. The
+        // formatter squishes whitespace around the comments but keeps
+        // the comments themselves; the output is idempotent.
+        let source = "function f(r: int | string) -> int {\n    let v: int = r /* a */ else /* b */ {\n        return 0;\n    };\n    v\n}\n";
+        let expected = "function f(r: int | string) -> int {\n    let v: int = r/* a */ else /* b */{\n        return 0;\n    };\n    v\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    #[test]
+    fn test_plain_let_unchanged() {
+        // Regression: plain `let x = …;` without an else clause must still
+        // format cleanly without picking up a stray `else { … }` tail.
+        let source = "function f() -> int {\n    let x: int = 1;\n    x\n}\n";
+        assert_formats_to(source, source);
+    }
+}

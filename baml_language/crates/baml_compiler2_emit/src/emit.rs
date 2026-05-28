@@ -346,6 +346,14 @@ struct StackifyCodegen<'ctx, 'obj> {
     /// `LoadVar`/`StoreVar`.
     captured_locals: HashSet<Local>,
 
+    /// Locals whose cell may be read or written by a spawned thread.
+    ///
+    /// This is intentionally narrower than `captured_locals`: ordinary closures
+    /// also capture cells, but they do not introduce concurrent access by
+    /// themselves. Specialized arithmetic is only unsafe when an operand reads
+    /// from a cell that can be touched by a spawned closure.
+    spawn_captured_locals: HashSet<Local>,
+
     /// When `true`, the current operand load is for a `MakeClosure` capture operand.
     /// In that case, captured locals are loaded with `LoadVar` (to pass the cell
     /// pointer itself) rather than `LoadDeref` (which would dereference the cell).
@@ -397,6 +405,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             lambda_object_indices: ctx.lambda_object_indices.to_vec(),
             lambda_names: ctx.lambda_names.to_vec(),
             captured_locals: HashSet::new(),
+            spawn_captured_locals: HashSet::new(),
             loading_for_closure_capture: false,
         }
     }
@@ -479,8 +488,131 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         }
     }
 
-    fn local_reads_captured_local(&self, local: Local, seen: &mut HashSet<Local>) -> bool {
-        if self.captured_locals.contains(&local) {
+    fn collect_spawn_captured_locals(&self) -> HashSet<Local> {
+        let mut locals = HashSet::new();
+        let mut seen = HashSet::new();
+
+        for block in &self.body.blocks {
+            let Some(Terminator::Spawn { closure, .. }) = &block.terminator else {
+                continue;
+            };
+
+            self.collect_spawn_closure_captures(closure, &mut locals, &mut seen);
+        }
+
+        locals
+    }
+
+    fn collect_spawn_closure_captures(
+        &self,
+        operand: &Operand,
+        locals: &mut HashSet<Local>,
+        seen: &mut HashSet<Local>,
+    ) {
+        if let Some(Rvalue::MakeClosure { captures, .. }) =
+            self.local_def_rvalue_for_operand(operand)
+        {
+            for capture in captures {
+                self.collect_spawn_shared_operand(capture, locals, seen);
+            }
+            return;
+        }
+
+        self.collect_spawn_shared_operand(operand, locals, seen);
+    }
+
+    fn collect_spawn_shared_operand(
+        &self,
+        operand: &Operand,
+        locals: &mut HashSet<Local>,
+        seen: &mut HashSet<Local>,
+    ) {
+        match operand {
+            Operand::Copy(place) | Operand::Move(place) => {
+                self.collect_spawn_shared_place(place, locals, seen);
+            }
+            Operand::Constant(_) => {}
+        }
+    }
+
+    fn collect_spawn_shared_place(
+        &self,
+        place: &Place,
+        locals: &mut HashSet<Local>,
+        seen: &mut HashSet<Local>,
+    ) {
+        match place {
+            Place::Local(local) => self.collect_spawn_shared_local(*local, locals, seen),
+            Place::Capture(_) => {}
+            Place::Field { base, .. } => self.collect_spawn_shared_place(base, locals, seen),
+            Place::Index { base, index, .. } => {
+                self.collect_spawn_shared_place(base, locals, seen);
+                self.collect_spawn_shared_local(*index, locals, seen);
+            }
+        }
+    }
+
+    fn collect_spawn_shared_local(
+        &self,
+        local: Local,
+        locals: &mut HashSet<Local>,
+        seen: &mut HashSet<Local>,
+    ) {
+        let local = match self.analysis.classifications.get(&local).copied() {
+            Some(LocalClassification::CopyOf) => self.analysis.resolve_copy_source(local),
+            _ => local,
+        };
+
+        if !seen.insert(local) {
+            return;
+        }
+
+        if self.local_slots.contains_key(&local) {
+            locals.insert(local);
+        }
+
+        match self.local_def_rvalue(local) {
+            Some(Rvalue::MakeClosure { captures, .. }) => {
+                for capture in captures {
+                    self.collect_spawn_shared_operand(capture, locals, seen);
+                }
+            }
+            Some(Rvalue::Use(operand)) => self.collect_spawn_shared_operand(operand, locals, seen),
+            Some(Rvalue::MakeBoundMethod { receiver, .. }) => {
+                self.collect_spawn_shared_operand(receiver, locals, seen);
+            }
+            _ => {}
+        }
+    }
+
+    fn local_def_rvalue(&self, local: Local) -> Option<&Rvalue> {
+        self.analysis
+            .def_use
+            .get(&local)
+            .and_then(|du| du.def.as_ref())
+            .map(|def| &def.rvalue)
+    }
+
+    fn local_def_rvalue_for_operand(&self, operand: &Operand) -> Option<&Rvalue> {
+        let place = match operand {
+            Operand::Copy(place) | Operand::Move(place) => place,
+            Operand::Constant(_) => return None,
+        };
+
+        let Place::Local(local) = place else {
+            return None;
+        };
+
+        let local = match self.analysis.classifications.get(local).copied() {
+            Some(LocalClassification::CopyOf) => self.analysis.resolve_copy_source(*local),
+            _ => *local,
+        };
+
+        self.local_def_rvalue(local)
+    }
+
+    fn local_reads_spawn_captured_local(&self, local: Local, seen: &mut HashSet<Local>) -> bool {
+        if self.spawn_captured_locals.contains(&local) {
             return true;
         }
         if !seen.insert(local) {
@@ -490,76 +622,88 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         match self.analysis.classifications.get(&local).copied() {
             Some(LocalClassification::CopyOf) => {
                 let source = self.analysis.resolve_copy_source(local);
-                self.local_reads_captured_local(source, seen)
+                self.local_reads_spawn_captured_local(source, seen)
             }
             Some(LocalClassification::Virtual) => self
                 .analysis
                 .def_use
                 .get(&local)
                 .and_then(|du| du.def.as_ref())
-                .is_some_and(|def| self.rvalue_reads_captured_local(&def.rvalue, seen)),
+                .is_some_and(|def| self.rvalue_reads_spawn_captured_local(&def.rvalue, seen)),
             _ => false,
         }
     }
 
-    fn place_reads_captured_local(&self, place: &Place, seen: &mut HashSet<Local>) -> bool {
+    fn place_reads_spawn_captured_local(&self, place: &Place, seen: &mut HashSet<Local>) -> bool {
         match place {
-            Place::Local(local) => self.local_reads_captured_local(*local, seen),
+            Place::Local(local) => self.local_reads_spawn_captured_local(*local, seen),
+            // A closure body's bytecode is compiled independently from the site
+            // that creates it. Keep captured-place arithmetic generic so a
+            // closure that runs under spawn cannot observe a changed cell type
+            // through a specialized opcode.
             Place::Capture(_) => true,
-            Place::Field { base, .. } => self.place_reads_captured_local(base, seen),
+            Place::Field { base, .. } => self.place_reads_spawn_captured_local(base, seen),
             Place::Index { base, index, .. } => {
-                self.place_reads_captured_local(base, seen)
-                    || self.local_reads_captured_local(*index, seen)
+                self.place_reads_spawn_captured_local(base, seen)
+                    || self.local_reads_spawn_captured_local(*index, seen)
             }
         }
     }
 
-    fn operand_reads_captured_local(&self, operand: &Operand, seen: &mut HashSet<Local>) -> bool {
+    fn operand_reads_spawn_captured_local(
+        &self,
+        operand: &Operand,
+        seen: &mut HashSet<Local>,
+    ) -> bool {
         match operand {
             Operand::Copy(place) | Operand::Move(place) => {
-                self.place_reads_captured_local(place, seen)
+                self.place_reads_spawn_captured_local(place, seen)
             }
             Operand::Constant(_) => false,
         }
     }
 
-    fn rvalue_reads_captured_local(&self, rvalue: &Rvalue, seen: &mut HashSet<Local>) -> bool {
+    fn rvalue_reads_spawn_captured_local(
+        &self,
+        rvalue: &Rvalue,
+        seen: &mut HashSet<Local>,
+    ) -> bool {
         match rvalue {
             Rvalue::Use(operand) | Rvalue::UnaryOp { operand, .. } => {
-                self.operand_reads_captured_local(operand, seen)
+                self.operand_reads_spawn_captured_local(operand, seen)
             }
             Rvalue::BinaryOp { left, right, .. } => {
-                self.operand_reads_captured_local(left, seen)
-                    || self.operand_reads_captured_local(right, seen)
+                self.operand_reads_spawn_captured_local(left, seen)
+                    || self.operand_reads_spawn_captured_local(right, seen)
             }
             Rvalue::Array(elements)
             | Rvalue::Aggregate {
                 fields: elements, ..
             } => elements
                 .iter()
-                .any(|operand| self.operand_reads_captured_local(operand, seen)),
+                .any(|operand| self.operand_reads_spawn_captured_local(operand, seen)),
             Rvalue::Uint8Array(_) | Rvalue::LoadType(_) => false,
             Rvalue::Map(entries) => entries.iter().any(|(key, value)| {
-                self.operand_reads_captured_local(key, seen)
-                    || self.operand_reads_captured_local(value, seen)
+                self.operand_reads_spawn_captured_local(key, seen)
+                    || self.operand_reads_spawn_captured_local(value, seen)
             }),
             Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
-                self.place_reads_captured_local(place, seen)
+                self.place_reads_spawn_captured_local(place, seen)
             }
             Rvalue::IsType { operand, .. }
             | Rvalue::MakeBoundMethod {
                 receiver: operand, ..
-            } => self.operand_reads_captured_local(operand, seen),
+            } => self.operand_reads_spawn_captured_local(operand, seen),
             Rvalue::MakeClosure { captures, .. } => captures
                 .iter()
-                .any(|operand| self.operand_reads_captured_local(operand, seen)),
+                .any(|operand| self.operand_reads_spawn_captured_local(operand, seen)),
         }
     }
 
     fn binary_operands_can_use_specialized_op(&self, left: &Operand, right: &Operand) -> bool {
         let mut seen = HashSet::new();
-        !self.operand_reads_captured_local(left, &mut seen)
-            && !self.operand_reads_captured_local(right, &mut seen)
+        !self.operand_reads_spawn_captured_local(left, &mut seen)
+            && !self.operand_reads_spawn_captured_local(right, &mut seen)
     }
 
     /// Try to emit a specialized instruction for a binary operation based on
@@ -674,6 +818,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.local_slots.contains_key(&local).then_some(local)
             })
             .collect();
+        self.spawn_captured_locals = self.collect_spawn_captured_locals();
 
         // Emit cell-wrapping preamble: for each captured Real local, wrap the
         // initial value in a Cell so that lambdas can share and mutate it.

@@ -1,82 +1,11 @@
 //! BEP-034: spawn/await semantic invariants beyond the basic round-trip.
 //!
-//! Pulls in BEP requirements that aren't covered by `spawn_basic`,
-//! `spawn_parallel`, `future_methods`, `cancel_cascade`, or
-//! `spawn_throws`:
-//!   - Multiple awaits on the same future return the cached value.
-//!   - Nested spawn (spawn within a spawn body).
-//!   - Parent throw cascades cancellation to children.
+//! Only `parent_throw_cancels_running_children` remains here — it asserts on
+//! wall-clock timing, which is not expressible in a BAML test block.
 
 use std::time::{Duration, Instant};
 
 use baml_tests::baml_test;
-use bex_engine::BexExternalValue;
-
-/// BEP-034: "Multiple `await`s on the same future return the same
-/// value (or re-throw the same error)." Computation runs once.
-#[tokio::test]
-async fn multiple_awaits_on_same_future_return_cached_value() {
-    let output = baml_test!(
-        r#"
-        function compute() -> int { 42 }
-        function main() -> int {
-            let f = spawn { compute() };
-            let a = await f;
-            let b = await f;
-            let c = await f;
-            a + b + c
-        }
-        "#
-    );
-    assert_eq!(output.result, Ok(BexExternalValue::Int(126)));
-}
-
-/// Three levels of nesting — child of child of root. Sum at each level
-/// proves each spawn ran and its result reached the awaiter. Subsumes
-/// a two-level test (if 3 levels work, 2 trivially do).
-#[tokio::test]
-async fn three_level_nested_spawn_sum() {
-    let output = baml_test!(
-        r#"
-        function leaf() -> int { 1 }
-        function mid() -> int {
-            let l = spawn { leaf() };
-            (await l) + 10
-        }
-        function top() -> int {
-            let m = spawn { mid() };
-            (await m) + 100
-        }
-        function main() -> int {
-            let t = spawn { top() };
-            await t
-        }
-        "#
-    );
-    assert_eq!(output.result, Ok(BexExternalValue::Int(111)));
-}
-
-/// BEP-034: function-typed return of `Future<T, E>` — the spawning
-/// helper's return value flows through the await at the call site.
-/// Mirrors the `spawn_returns_future.rs` item from the original
-/// Phase G plan. The fully-qualified `baml.future.Future<T, E>` form
-/// resolves to `Ty::Future`; bare `Future<T, E>` would need to be in
-/// lexical scope and isn't auto-imported in v1.
-#[tokio::test]
-async fn function_can_return_future_typed_value() {
-    let output = baml_test!(
-        r#"
-        function spawn_child() -> baml.future.Future<int, null> {
-            spawn { 99 }
-        }
-        function main() -> int {
-            let f = spawn_child();
-            await f
-        }
-        "#
-    );
-    assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
-}
 
 /// BEP-034: "Parent throws still cascade-cancel children." When the
 /// parent function throws an unhandled error, the parent thread's

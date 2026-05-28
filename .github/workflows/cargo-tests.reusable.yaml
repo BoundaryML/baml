@@ -37,11 +37,13 @@
 # | --------------- | --------------------- | ----------------------------------------------- |
 # | `linux-cargo`   | `cargo-test-linux`    | `sdk-tests/linux`, `cargo-doc`,                 |
 # |                 |                       | `snapshot-tests`, `ci.yaml::prek`,              |
-# |                 |                       | `ci.yaml::proto-sync`                           |
-# | `linux-wasm`    | `cargo-test-wasm`     | —                                               |
+# |                 |                       | `ci.yaml::proto-sync`, `size-gate::linux`,      |
+# |                 |                       | `size-gate::report`                             |
+# | `linux-wasm`    | `cargo-test-wasm`     | `size-gate::wasm`, `wasm-pack-tests`,           |
+# |                 |                       | `webview-tests` (browser/unit/typecheck)        |
 # | `linux-msrv`    | `cargo-build-msrv`    | —                                               |
-# | `macos-cargo`   | `cargo-test-macos`    | `sdk-tests/macos`                               |
-# | `windows-cargo` | `cargo-test-windows`  | `sdk-tests/windows`                             |
+# | `macos-cargo`   | `cargo-test-macos`    | `sdk-tests/macos`, `size-gate::macos`           |
+# | `windows-cargo` | `cargo-test-windows`  | `sdk-tests/windows`, `size-gate::windows`       |
 #
 # `cargo-test-linux` is the saver for `linux-cargo` because it builds
 # the broadest target/ tree (`cargo test --no-run --all-features`
@@ -141,12 +143,16 @@ jobs:
             baml_language/**/*.snap.new
             baml_language/**/target/nextest/
 
+      - name: "Rename cargo timings"
+        if: always()
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-linux.html
+        working-directory: baml_language
       - name: "Upload cargo timings"
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: cargo-timings-test-linux
-          path: baml_language/target/cargo-timings/
+          path: baml_language/target/cargo-timings/cargo-timing-test-linux.html
           if-no-files-found: ignore
 
   cargo-test-macos:
@@ -188,12 +194,16 @@ jobs:
         run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/)'
         working-directory: baml_language
 
+      - name: "Rename cargo timings"
+        if: always()
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-macos.html
+        working-directory: baml_language
       - name: "Upload cargo timings"
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: cargo-timings-test-macos
-          path: baml_language/target/cargo-timings/
+          path: baml_language/target/cargo-timings/cargo-timing-test-macos.html
           if-no-files-found: ignore
 
   cargo-test-windows:
@@ -237,12 +247,16 @@ jobs:
         run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/)'
         working-directory: baml_language
 
+      - name: "Rename cargo timings"
+        if: always()
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-windows.html
+        working-directory: baml_language
       - name: "Upload cargo timings"
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: cargo-timings-test-windows
-          path: baml_language/target/cargo-timings/
+          path: baml_language/target/cargo-timings/cargo-timing-test-windows.html
           if-no-files-found: ignore
 
   # SDK tests (codegen end-to-end). The `sdk_test_*` crates each emit a
@@ -326,12 +340,16 @@ jobs:
             baml_language/target/nextest/
           if-no-files-found: ignore
 
+      - name: "Rename cargo timings"
+        if: always()
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-sdk-tests-${{ matrix.os-label }}.html
+        working-directory: baml_language
       - name: "Upload cargo timings"
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: cargo-timings-sdk-tests-${{ matrix.os-label }}
-          path: baml_language/target/cargo-timings/
+          path: baml_language/target/cargo-timings/cargo-timing-sdk-tests-${{ matrix.os-label }}.html
           if-no-files-found: ignore
 
   cargo-test-wasm:
@@ -369,12 +387,16 @@ jobs:
         run: ls -lh target/wasm32-unknown-unknown/release/*.wasm || true
         working-directory: baml_language
 
+      - name: "Rename cargo timings"
+        if: always()
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-wasm.html
+        working-directory: baml_language
       - name: "Upload cargo timings"
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: cargo-timings-test-wasm
-          path: baml_language/target/cargo-timings/
+          path: baml_language/target/cargo-timings/cargo-timing-test-wasm.html
           if-no-files-found: ignore
 
   # Size-gate jobs live in size-gate.reusable.yaml — they are intentionally
@@ -419,12 +441,16 @@ jobs:
         run: cargo "+${MSRV}" test --no-run --all-features --timings
         working-directory: baml_language
 
+      - name: "Rename cargo timings"
+        if: always()
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-msrv.html
+        working-directory: baml_language
       - name: "Upload cargo timings"
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: cargo-timings-msrv
-          path: baml_language/target/cargo-timings/
+          path: baml_language/target/cargo-timings/cargo-timing-msrv.html
           if-no-files-found: ignore
 
   cargo-doc:
@@ -455,12 +481,16 @@ jobs:
         env:
           RUSTDOCFLAGS: "-D warnings"
 
+      - name: "Rename cargo timings"
+        if: always()
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-doc.html
+        working-directory: baml_language
       - name: "Upload cargo timings"
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: cargo-timings-doc
-          path: baml_language/target/cargo-timings/
+          path: baml_language/target/cargo-timings/cargo-timing-doc.html
           if-no-files-found: ignore
 
   snapshot-tests:
@@ -528,12 +558,16 @@ jobs:
             baml_language/**/*.snap
             baml_language/**/*.snap.new
 
+      - name: "Rename cargo timings"
+        if: always()
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-snapshot.html
+        working-directory: baml_language
       - name: "Upload cargo timings"
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: cargo-timings-snapshot
-          path: baml_language/target/cargo-timings/
+          path: baml_language/target/cargo-timings/cargo-timing-snapshot.html
           if-no-files-found: ignore
 
   cargo-timings:

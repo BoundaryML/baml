@@ -1,0 +1,119 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function shell.$init_test_75(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "shell_echo"
+    make_closure .<lambda($init_test_75, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "shell_failing_command"
+    make_closure .<lambda($init_test_75, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "shell_with_variable"
+    make_closure .<lambda($init_test_75, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "shell_ok_method_success"
+    make_closure .<lambda($init_test_75, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "shell_ok_method_failure"
+    make_closure .<lambda($init_test_75, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "shell_stdout_bytes"
+    make_closure .<lambda($init_test_75, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "exec_echo"
+    make_closure .<lambda($init_test_75, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function shell.exec_echo_fn() -> bool {
+    load_const "echo"
+    load_const "Hello From Exec!"
+    alloc_array 1
+    load_const null
+    sys_op baml.sys.exec
+    load_field .stdout
+    call baml.Uint8Array.to_string
+    load_const "Hello From Exec!"
+    call baml.String.includes
+    return
+}
+
+function shell.shell_echo_fn() -> bool {
+    load_const "echo hello_from_shell"
+    load_const null
+    sys_op baml.sys.shell
+    load_field .stdout
+    call baml.Uint8Array.to_string
+    load_const "hello_from_shell"
+    call baml.String.includes
+    return
+}
+
+function shell.shell_failing_command_fn() -> int {
+    load_const "exit 1"
+    load_const null
+    sys_op baml.sys.shell
+    load_field .exit_code
+    return
+}
+
+function shell.shell_ok_failure_fn() -> bool {
+    load_const "exit 1"
+    load_const null
+    sys_op baml.sys.shell
+    call baml.sys.ShellOutput.ok
+    return
+}
+
+function shell.shell_ok_success_fn() -> bool {
+    load_const "echo hi"
+    load_const null
+    sys_op baml.sys.shell
+    call baml.sys.ShellOutput.ok
+    return
+}
+
+function shell.shell_stdout_bytes_fn() -> bool {
+    load_const "echo hello"
+    load_const null
+    sys_op baml.sys.shell
+    load_field .stdout
+    call baml.Uint8Array.to_string
+    load_const "hello"
+    call baml.String.includes
+    return
+}
+
+function shell.shell_with_variable_fn() -> bool {
+    load_const "echo dynamic_value"
+    load_const null
+    sys_op baml.sys.shell
+    load_field .stdout
+    call baml.Uint8Array.to_string
+    load_const "dynamic_value"
+    call baml.String.includes
+    return
+}

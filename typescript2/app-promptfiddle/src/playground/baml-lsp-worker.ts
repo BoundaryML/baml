@@ -596,6 +596,7 @@ self.onmessage = async (event: MessageEvent) => {
           notification = mapsToRecordsDeep(notification);
           onPlaygroundNotification(notification);
         },
+        host_dispatch: () => {},
       },
       vfs.wasmVfs,
     );

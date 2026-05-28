@@ -14,8 +14,9 @@ use anyhow::{Result, anyhow};
 use bex_engine::{BexEngine, BexExternalValue, CallId, FunctionCallContextBuilder, Ty};
 
 /// Serialization format for a target's return value.
-#[derive(Copy, Clone, Debug, Default, serde::Serialize, serde::Deserialize, clap::ValueEnum)]
-#[serde(rename_all = "lowercase")]
+#[derive(
+    Copy, Clone, Debug, Default, borsh::BorshSerialize, borsh::BorshDeserialize, clap::ValueEnum,
+)]
 pub enum OutputFormat {
     /// Human-readable formatting with type annotations.
     #[default]

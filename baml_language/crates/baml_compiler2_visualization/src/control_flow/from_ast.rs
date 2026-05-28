@@ -1255,6 +1255,7 @@ mod tests {
                 initializer: Some(if_expr),
                 is_watched: false,
                 origin: ast::LetOrigin::Source,
+                else_branch: None,
             });
             Some(exprs.alloc(ast::Expr::Block {
                 stmts: vec![let_stmt],
@@ -1295,6 +1296,7 @@ mod tests {
                 initializer: Some(if_expr),
                 is_watched: false,
                 origin: ast::LetOrigin::Source,
+                else_branch: None,
             });
             Some(exprs.alloc(ast::Expr::Block {
                 stmts: vec![let_stmt],

@@ -1,0 +1,766 @@
+// Tests for the `float` builtin class (BEP-043).
+//
+// Converted from crates/baml_tests/tests/floats.rs. Each Rust test becomes a
+// `test` block with the `main()` body inlined.
+//
+// Assertion strategy:
+//   - Boolean predicates (is_nan, is_infinite, is_finite): deep_equals to true/false.
+//   - Exact float values (integer-valued results): deep_equals.
+//   - Approximate float values (transcendental results): inline epsilon check
+//     `assert.is_true(((result) - (expected)).abs() < eps)`.
+//   - NaN results: assert.is_true(result.is_nan()).
+//   - Multi-case Rust tests are split into separate BAML tests.
+//
+// Random tests use property/coverage checks (looping N samples) instead of
+// asserting exact values; they are included at the bottom of this file.
+//
+// KEPT IN RUST (tests/floats.rs) — no is_sign_positive() in BAML, so
+// sign-of-zero cannot be tested:
+//   float_abs_negative_zero  (checks n == 0.0 && n.is_sign_positive())
+
+// ─── is_nan ───────────────────────────────────────────────────────────────────
+
+test "float_is_nan_true" {
+    assert.is_true(baml.deep_equals(float.nan().is_nan(), true))
+}
+
+test "float_is_nan_false_for_zero" {
+    assert.is_true(baml.deep_equals((0.0).is_nan(), false))
+}
+
+test "float_is_nan_false_for_finite" {
+    assert.is_true(baml.deep_equals((3.14).is_nan(), false))
+}
+
+test "float_is_nan_false_for_infinity" {
+    assert.is_true(baml.deep_equals(float.inf().is_nan(), false))
+}
+
+// ─── is_infinite ──────────────────────────────────────────────────────────────
+
+test "float_is_infinite_true_positive" {
+    assert.is_true(baml.deep_equals(float.inf().is_infinite(), true))
+}
+
+test "float_is_infinite_true_negative" {
+    assert.is_true(baml.deep_equals((-float.inf()).is_infinite(), true))
+}
+
+test "float_is_infinite_false_for_large_finite" {
+    assert.is_true(baml.deep_equals((1000000.0 * 1000000.0).is_infinite(), false))
+}
+
+test "float_is_infinite_false_for_nan" {
+    assert.is_true(baml.deep_equals(float.nan().is_infinite(), false))
+}
+
+// ─── is_finite ────────────────────────────────────────────────────────────────
+
+test "float_is_finite_true_for_zero" {
+    assert.is_true(baml.deep_equals((0.0).is_finite(), true))
+}
+
+test "float_is_finite_true_for_normal" {
+    assert.is_true(baml.deep_equals((3.14).is_finite(), true))
+}
+
+test "float_is_finite_true_for_negative_zero" {
+    assert.is_true(baml.deep_equals((-0.0).is_finite(), true))
+}
+
+test "float_is_finite_false_for_nan" {
+    assert.is_true(baml.deep_equals(float.nan().is_finite(), false))
+}
+
+test "float_is_finite_false_for_infinity" {
+    assert.is_true(baml.deep_equals(float.inf().is_finite(), false))
+}
+
+test "float_is_finite_false_for_negative_infinity" {
+    assert.is_true(baml.deep_equals((-float.inf()).is_finite(), false))
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+// Verify pi via the identity cos(π) == -1 (cos is computed independently of the
+// pi constant). Original asserted float.pi() ≈ std::f64::consts::PI.
+test "float_pi_value" {
+    assert.is_true(((float.pi().cos()) - (-1.0)).abs() < 0.000000000001)
+}
+
+// e has no simple algebraic identity among the available float ops (no exp/ln,
+// and log_base(base) == 1 for any base), so compare against the constant.
+// Original asserted float.e() ≈ std::f64::consts::E.
+test "float_e_value" {
+    assert.is_true(((float.e()) - 2.718281828459045).abs() < 0.000000000001)
+}
+
+// golden_ratio = (1 + sqrt(5)) / 2.
+test "float_golden_ratio_value" {
+    assert.is_true(((float.golden_ratio()) - ((1.0 + (5.0).sqrt()) / 2.0)).abs() < 0.000000000001)
+}
+
+test "float_nan_is_a_nan" {
+    assert.is_true(float.nan().is_nan())
+}
+
+test "float_inf_is_positive_infinity" {
+    assert.is_true(float.inf().is_infinite())
+}
+
+test "float_inf_is_positive_not_negative" {
+    assert.is_true(baml.deep_equals(float.inf() > 0.0, true))
+}
+
+test "float_negative_inf_via_unary_minus" {
+    assert.is_true((-float.inf()).is_infinite())
+}
+
+test "float_negative_inf_is_negative" {
+    assert.is_true(baml.deep_equals(-float.inf() < 0.0, true))
+}
+
+// ─── abs ──────────────────────────────────────────────────────────────────────
+
+test "float_abs_negative" {
+    assert.is_true(((-3.5).abs() - 3.5).abs() < 0.000000000001)
+}
+
+test "float_abs_positive" {
+    assert.is_true(((3.5).abs() - 3.5).abs() < 0.000000000001)
+}
+
+// Note: float_abs_negative_zero is kept in tests/floats.rs — requires
+// is_sign_positive() which is not available in BAML.
+
+test "float_abs_nan_is_nan" {
+    assert.is_true(float.nan().abs().is_nan())
+}
+
+test "float_abs_inf_is_inf" {
+    assert.is_true((-float.inf()).abs().is_infinite())
+}
+
+test "float_abs_inf_becomes_positive" {
+    assert.is_true(baml.deep_equals((-float.inf()).abs() > 0.0, true))
+}
+
+// ─── min / max ────────────────────────────────────────────────────────────────
+
+test "float_min_basic" {
+    assert.is_true(((3.0).min(5.0) - 3.0).abs() < 0.000000000001)
+}
+
+// f.min(NaN) suppresses NaN and returns f.
+test "float_min_with_nan_suppresses_nan" {
+    assert.is_true(baml.deep_equals((3.0).min(float.nan()), 3.0))
+}
+
+// NaN.min(f) suppresses NaN and returns f.
+test "float_min_nan_receiver_suppresses_nan" {
+    assert.is_true(baml.deep_equals(float.nan().min(3.0), 3.0))
+}
+
+test "float_min_both_nan_is_nan" {
+    assert.is_true(float.nan().min(float.nan()).is_nan())
+}
+
+test "float_max_basic" {
+    assert.is_true(((3.0).max(5.0) - 5.0).abs() < 0.000000000001)
+}
+
+test "float_max_with_nan_suppresses_nan" {
+    assert.is_true(baml.deep_equals((3.0).max(float.nan()), 3.0))
+}
+
+test "float_max_nan_receiver_suppresses_nan" {
+    assert.is_true(baml.deep_equals(float.nan().max(3.0), 3.0))
+}
+
+// ─── clamp ────────────────────────────────────────────────────────────────────
+
+test "float_clamp_in_range" {
+    assert.is_true(((5.0).clamp(0.0, 10.0) - 5.0).abs() < 0.000000000001)
+}
+
+test "float_clamp_below" {
+    assert.is_true(((-3.0).clamp(0.0, 10.0) - 0.0).abs() < 0.000000000001)
+}
+
+test "float_clamp_above" {
+    assert.is_true(((15.0).clamp(0.0, 10.0) - 10.0).abs() < 0.000000000001)
+}
+
+// ─── floor / ceil / round / trunc / fract ─────────────────────────────────────
+
+test "float_floor_positive_fraction" {
+    assert.is_true(((3.7).floor() - 3.0).abs() < 0.000000000001)
+}
+
+test "float_floor_negative_fraction" {
+    assert.is_true(((-1.5).floor() - (-2.0)).abs() < 0.000000000001)
+}
+
+test "float_floor_integer_unchanged" {
+    assert.is_true(((3.0).floor() - 3.0).abs() < 0.000000000001)
+}
+
+test "float_ceil_positive_fraction" {
+    assert.is_true(((3.2).ceil() - 4.0).abs() < 0.000000000001)
+}
+
+test "float_ceil_negative_fraction" {
+    assert.is_true(((-1.5).ceil() - (-1.0)).abs() < 0.000000000001)
+}
+
+test "float_round_half_up" {
+    assert.is_true(((1.5).round() - 2.0).abs() < 0.000000000001)
+}
+
+test "float_round_negative_half_away_from_zero" {
+    assert.is_true(((-1.5).round() - (-2.0)).abs() < 0.000000000001)
+}
+
+test "float_round_below_half" {
+    assert.is_true(((1.4).round() - 1.0).abs() < 0.000000000001)
+}
+
+test "float_round_above_half" {
+    assert.is_true(((1.6).round() - 2.0).abs() < 0.000000000001)
+}
+
+// Half-away-from-zero: 2.5 → 3.0 (not banker's rounding 2.0).
+test "float_round_two_point_five_is_three" {
+    assert.is_true(((2.5).round() - 3.0).abs() < 0.000000000001)
+}
+
+test "float_round_negative_two_point_five_is_neg_three" {
+    assert.is_true(((-2.5).round() - (-3.0)).abs() < 0.000000000001)
+}
+
+test "float_trunc_positive" {
+    assert.is_true(((3.7).trunc() - 3.0).abs() < 0.000000000001)
+}
+
+test "float_trunc_negative" {
+    assert.is_true(((-3.7).trunc() - (-3.0)).abs() < 0.000000000001)
+}
+
+test "float_fract_positive" {
+    assert.is_true(((3.75).fract() - 0.75).abs() < 0.000000000001)
+}
+
+test "float_fract_negative" {
+    assert.is_true(((-3.75).fract() - (-0.75)).abs() < 0.000000000001)
+}
+
+test "float_fract_integer_is_zero" {
+    assert.is_true(((5.0).fract() - 0.0).abs() < 0.000000000001)
+}
+
+test "float_floor_nan_propagates" {
+    assert.is_true(float.nan().floor().is_nan())
+}
+
+// ─── ifloor / iceil / iround / itrunc ─────────────────────────────────────────
+// Multi-case Rust tests are split into one BAML test per case.
+
+test "float_ifloor_positive" {
+    assert.is_true(baml.deep_equals((3.7).ifloor(), 3))
+}
+
+test "float_ifloor_negative" {
+    assert.is_true(baml.deep_equals((-1.5).ifloor(), -2))
+}
+
+test "float_iceil_positive" {
+    assert.is_true(baml.deep_equals((3.2).iceil(), 4))
+}
+
+test "float_iceil_negative" {
+    assert.is_true(baml.deep_equals((-1.5).iceil(), -1))
+}
+
+test "float_iround_half_up" {
+    assert.is_true(baml.deep_equals((1.5).iround(), 2))
+}
+
+test "float_iround_negative_half" {
+    assert.is_true(baml.deep_equals((-1.5).iround(), -2))
+}
+
+test "float_iround_below_half" {
+    assert.is_true(baml.deep_equals((1.4).iround(), 1))
+}
+
+test "float_itrunc_positive" {
+    assert.is_true(baml.deep_equals((3.7).itrunc(), 3))
+}
+
+test "float_itrunc_negative" {
+    assert.is_true(baml.deep_equals((-3.7).itrunc(), -3))
+}
+
+// -2^62 (BAML int.min_value()) is exactly representable as f64.
+test "float_iround_at_i63_min_is_ok" {
+    assert.is_true(baml.deep_equals((-4611686018427387904.0).iround(), -4611686018427387904))
+}
+
+test "float_iround_too_large_throws" {
+    {
+        (9223372036854775808.0).iround();
+        baml.sys.panic("expected (9223372036854775808.0).iround() to throw")
+    } catch (e) {
+        baml.errors.InvalidArgument => null
+    }
+}
+
+test "float_iround_too_small_throws" {
+    {
+        (-9223372036854775808.0 * 2.0).iround();
+        baml.sys.panic("expected overflow iround to throw")
+    } catch (e) {
+        baml.errors.InvalidArgument => null
+    }
+}
+
+test "float_itrunc_nan_throws" {
+    {
+        float.nan().itrunc();
+        baml.sys.panic("expected float.nan().itrunc() to throw")
+    } catch (e) {
+        baml.errors.InvalidArgument => null
+    }
+}
+
+test "float_itrunc_inf_throws" {
+    {
+        float.inf().itrunc();
+        baml.sys.panic("expected float.inf().itrunc() to throw")
+    } catch (e) {
+        baml.errors.InvalidArgument => null
+    }
+}
+
+test "float_iround_nan_throws" {
+    {
+        float.nan().iround();
+        baml.sys.panic("expected float.nan().iround() to throw")
+    } catch (e) {
+        baml.errors.InvalidArgument => null
+    }
+}
+
+test "float_iround_inf_throws" {
+    {
+        float.inf().iround();
+        baml.sys.panic("expected float.inf().iround() to throw")
+    } catch (e) {
+        baml.errors.InvalidArgument => null
+    }
+}
+
+test "float_ifloor_nan_throws" {
+    {
+        float.nan().ifloor();
+        baml.sys.panic("expected float.nan().ifloor() to throw")
+    } catch (e) {
+        baml.errors.InvalidArgument => null
+    }
+}
+
+test "float_ifloor_inf_throws" {
+    {
+        float.inf().ifloor();
+        baml.sys.panic("expected float.inf().ifloor() to throw")
+    } catch (e) {
+        baml.errors.InvalidArgument => null
+    }
+}
+
+test "float_ifloor_neg_inf_throws" {
+    {
+        (-float.inf()).ifloor();
+        baml.sys.panic("expected (-float.inf()).ifloor() to throw")
+    } catch (e) {
+        baml.errors.InvalidArgument => null
+    }
+}
+
+test "float_iceil_nan_throws" {
+    {
+        float.nan().iceil();
+        baml.sys.panic("expected float.nan().iceil() to throw")
+    } catch (e) {
+        baml.errors.InvalidArgument => null
+    }
+}
+
+test "float_iceil_inf_throws" {
+    {
+        float.inf().iceil();
+        baml.sys.panic("expected float.inf().iceil() to throw")
+    } catch (e) {
+        baml.errors.InvalidArgument => null
+    }
+}
+
+// ─── sqrt / pow / log / hypot ─────────────────────────────────────────────────
+
+test "float_sqrt_basic_4" {
+    assert.is_true(((4.0).sqrt() - 2.0).abs() < 0.000000000001)
+}
+
+// sqrt(2) is irrational; verify the defining property sqrt(2)*sqrt(2) == 2
+// rather than a hardcoded decimal. Original asserted ≈ std::f64::consts::SQRT_2.
+test "float_sqrt_basic_2" {
+    assert.is_true(((2.0).sqrt() * (2.0).sqrt() - 2.0).abs() < 0.000000000001)
+}
+
+test "float_sqrt_zero" {
+    assert.is_true(((0.0).sqrt() - 0.0).abs() < 0.000000000001)
+}
+
+test "float_sqrt_negative_is_nan" {
+    assert.is_true((-1.0).sqrt().is_nan())
+}
+
+test "float_pow_integer" {
+    assert.is_true(((2.0).pow(10.0) - 1024.0).abs() < 0.000000001)
+}
+
+test "float_pow_negative_exp" {
+    assert.is_true(((2.0).pow(-1.0) - 0.5).abs() < 0.000000000001)
+}
+
+// (2.0)^0.5 = sqrt(2) — compare to (2.0).sqrt().
+test "float_pow_fractional_exp" {
+    assert.is_true(((2.0).pow(0.5) - (2.0).sqrt()).abs() < 0.000000000001)
+}
+
+test "float_pow_negative_base_fractional_is_nan" {
+    assert.is_true((-1.0).pow(0.5).is_nan())
+}
+
+// IEEE 754-2008: 1^anything (including NaN) is 1.
+test "float_pow_one_to_nan_is_one" {
+    assert.is_true(baml.deep_equals((1.0).pow(float.nan()), 1.0))
+}
+
+// IEEE 754-2008: x^0 (including NaN base) is 1.
+test "float_pow_nan_to_zero_is_one" {
+    assert.is_true(baml.deep_equals(float.nan().pow(0.0), 1.0))
+}
+
+test "float_pow_nan_to_one_is_nan" {
+    assert.is_true(float.nan().pow(1.0).is_nan())
+}
+
+test "float_log_base_10" {
+    assert.is_true(((1000.0).log(10.0) - 3.0).abs() < 0.000000000001)
+}
+
+test "float_log_base_2" {
+    assert.is_true(((8.0).log(2.0) - 3.0).abs() < 0.000000000001)
+}
+
+test "float_log_negative_self_is_nan" {
+    assert.is_true((-1.0).log(10.0).is_nan())
+}
+
+test "float_hypot_345" {
+    assert.is_true(((3.0).hypot(4.0) - 5.0).abs() < 0.000000000001)
+}
+
+test "float_hypot_zero" {
+    assert.is_true(((0.0).hypot(0.0) - 0.0).abs() < 0.000000000001)
+}
+
+// ─── Trig (radians) ───────────────────────────────────────────────────────────
+
+test "float_sin_zero" {
+    assert.is_true(((0.0).sin() - 0.0).abs() < 0.000000000001)
+}
+
+test "float_sin_pi_is_zero" {
+    assert.is_true((float.pi().sin() - 0.0).abs() < 0.0000000001)
+}
+
+test "float_sin_half_pi_is_one" {
+    assert.is_true(((float.pi() / 2.0).sin() - 1.0).abs() < 0.000000000001)
+}
+
+test "float_cos_zero_is_one" {
+    assert.is_true(((0.0).cos() - 1.0).abs() < 0.000000000001)
+}
+
+test "float_cos_pi_is_neg_one" {
+    assert.is_true((float.pi().cos() - (-1.0)).abs() < 0.000000000001)
+}
+
+test "float_tan_zero" {
+    assert.is_true(((0.0).tan() - 0.0).abs() < 0.000000000001)
+}
+
+test "float_tan_pi_quarter_is_one" {
+    assert.is_true(((float.pi() / 4.0).tan() - 1.0).abs() < 0.000000000001)
+}
+
+// asin(1) = π/2.
+test "float_asin_one_is_half_pi" {
+    assert.is_true(((1.0).asin() - (float.pi() / 2.0)).abs() < 0.000000000001)
+}
+
+test "float_asin_out_of_range_is_nan" {
+    assert.is_true((2.0).asin().is_nan())
+}
+
+// acos(0) = π/2.
+test "float_acos_zero_is_half_pi" {
+    assert.is_true(((0.0).acos() - (float.pi() / 2.0)).abs() < 0.000000000001)
+}
+
+test "float_acos_out_of_range_is_nan" {
+    assert.is_true((-2.0).acos().is_nan())
+}
+
+// atan(1) = π/4.
+test "float_atan_one_is_quarter_pi" {
+    assert.is_true(((1.0).atan() - (float.pi() / 4.0)).abs() < 0.000000000001)
+}
+
+// atan2 multi-case — split into separate tests.
+test "float_atan2_one_one_is_quarter_pi" {
+    assert.is_true(((1.0).atan2(1.0) - (float.pi() / 4.0)).abs() < 0.000000000001)
+}
+
+test "float_atan2_one_zero_is_half_pi" {
+    assert.is_true(((1.0).atan2(0.0) - (float.pi() / 2.0)).abs() < 0.000000000001)
+}
+
+test "float_atan2_zero_neg_one_is_pi" {
+    assert.is_true(((0.0).atan2(-1.0) - float.pi()).abs() < 0.000000000001)
+}
+
+test "float_sinh_zero" {
+    assert.is_true(((0.0).sinh() - 0.0).abs() < 0.000000000001)
+}
+
+test "float_cosh_zero_is_one" {
+    assert.is_true(((0.0).cosh() - 1.0).abs() < 0.000000000001)
+}
+
+test "float_tanh_large_input_approaches_one" {
+    assert.is_true(((10.0).tanh() - 1.0).abs() < 0.000001)
+}
+
+test "float_asinh_zero" {
+    assert.is_true(((0.0).asinh() - 0.0).abs() < 0.000000000001)
+}
+
+test "float_acosh_one_is_zero" {
+    assert.is_true(((1.0).acosh() - 0.0).abs() < 0.000000000001)
+}
+
+test "float_acosh_below_one_is_nan" {
+    assert.is_true((0.5).acosh().is_nan())
+}
+
+test "float_atanh_zero" {
+    assert.is_true(((0.0).atanh() - 0.0).abs() < 0.000000000001)
+}
+
+test "float_atanh_out_of_range_is_nan" {
+    assert.is_true((2.0).atanh().is_nan())
+}
+
+// ─── to_radians / to_degrees ──────────────────────────────────────────────────
+
+// 180° in radians = π.
+test "float_to_radians_180_is_pi" {
+    assert.is_true(((180.0).to_radians() - float.pi()).abs() < 0.000000000001)
+}
+
+test "float_to_radians_zero" {
+    assert.is_true(((0.0).to_radians() - 0.0).abs() < 0.000000000001)
+}
+
+// π radians = 180°.
+test "float_to_degrees_pi_is_180" {
+    assert.is_true((float.pi().to_degrees() - 180.0).abs() < 0.000000000001)
+}
+
+// Round trip: 90° → radians → degrees → 90°.
+test "float_to_radians_round_trip" {
+    assert.is_true(((90.0).to_radians().to_degrees() - 90.0).abs() < 0.000000000001)
+}
+
+// ─── parse ────────────────────────────────────────────────────────────────────
+
+test "float_parse_decimal" {
+    assert.is_true((float.parse("1.5") - 1.5).abs() < 0.000000000001)
+}
+
+test "float_parse_negative" {
+    assert.is_true((float.parse("-0.25") - (-0.25)).abs() < 0.000000000001)
+}
+
+test "float_parse_explicit_plus" {
+    assert.is_true((float.parse("+0.5") - 0.5).abs() < 0.000000000001)
+}
+
+test "float_parse_integer" {
+    assert.is_true((float.parse("42") - 42.0).abs() < 0.000000000001)
+}
+
+test "float_parse_zero" {
+    assert.is_true((float.parse("0") - 0.0).abs() < 0.000000000001)
+}
+
+test "float_parse_scientific_lowercase" {
+    assert.is_true((float.parse("1e3") - 1000.0).abs() < 0.000000001)
+}
+
+test "float_parse_scientific_uppercase_negative_exp" {
+    assert.is_true((float.parse("-1.5E-3") - (-0.0015)).abs() < 0.000000000001)
+}
+
+test "float_parse_inf" {
+    assert.is_true(float.parse("inf").is_infinite())
+}
+
+test "float_parse_inf_is_positive" {
+    assert.is_true(baml.deep_equals(float.parse("inf") > 0.0, true))
+}
+
+test "float_parse_infinity_word" {
+    assert.is_true(float.parse("infinity").is_infinite())
+}
+
+test "float_parse_infinity_word_is_positive" {
+    assert.is_true(baml.deep_equals(float.parse("infinity") > 0.0, true))
+}
+
+test "float_parse_negative_inf" {
+    assert.is_true(float.parse("-inf").is_infinite())
+}
+
+test "float_parse_negative_inf_is_negative" {
+    assert.is_true(baml.deep_equals(float.parse("-inf") < 0.0, true))
+}
+
+test "float_parse_nan_lowercase" {
+    assert.is_true(float.parse("nan").is_nan())
+}
+
+test "float_parse_nan_mixed_case" {
+    assert.is_true(float.parse("NaN").is_nan())
+}
+
+test "float_parse_empty_throws" {
+    {
+        float.parse("");
+        baml.sys.panic("expected float.parse(\"\") to throw")
+    } catch (e) {
+        baml.errors.ParseError => null
+    }
+}
+
+test "float_parse_alpha_throws" {
+    {
+        float.parse("hello");
+        baml.sys.panic("expected float.parse(\"hello\") to throw")
+    } catch (e) {
+        baml.errors.ParseError => null
+    }
+}
+
+test "float_parse_trailing_garbage_throws" {
+    {
+        float.parse("1.5abc");
+        baml.sys.panic("expected float.parse(\"1.5abc\") to throw")
+    } catch (e) {
+        baml.errors.ParseError => null
+    }
+}
+
+test "float_parse_whitespace_throws" {
+    {
+        float.parse(" 1.0 ");
+        baml.sys.panic("expected float.parse(\" 1.0 \") to throw")
+    } catch (e) {
+        baml.errors.ParseError => null
+    }
+}
+
+test "float_parse_just_sign_throws" {
+    {
+        float.parse("-");
+        baml.sys.panic("expected float.parse(\"-\") to throw")
+    } catch (e) {
+        baml.errors.ParseError => null
+    }
+}
+
+test "float_parse_round_trip_in_arithmetic" {
+    assert.is_true((float.parse("0.5") + float.parse("0.25") - 0.75).abs() < 0.000000000001)
+}
+
+// ─── random ───────────────────────────────────────────────────────────────────
+//
+// `float.random()` returns a uniform float in [0.0, 1.0). We can't assert on
+// exact values, so we sample many times and verify structural properties.
+// All sampling logic lives in helper functions (test-block locals are boxed).
+
+// float_random_returns_a_float: single sample, verify it's in [0.0, 1.0).
+function float_random_returns_a_float() -> bool {
+    let r = float.random();
+    r >= 0.0 && r < 1.0
+}
+
+test "float_random_returns_a_float" {
+    assert.is_true(float_random_returns_a_float())
+}
+
+// float_random_in_unit_interval_and_covers_both_halves: 1000 samples.
+// All must be in [0.0, 1.0), and at least 350 must be < 0.5 AND at least 350
+// must be >= 0.5. With 1000 uniform samples, each count is Binomial(1000, 0.5).
+// P(count < 350) = P(Z < -10) ≈ 0 — effectively impossible.
+function float_random_in_unit_interval_and_covers_both_halves() -> bool {
+    let ok = true;
+    let below = 0;
+    let above = 0;
+    let i = 0;
+    while (i < 1000) {
+        let r = float.random();
+        if (r < 0.0 || r >= 1.0) { ok = false } else { null }
+        if (r < 0.5) { below = below + 1 } else { above = above + 1 }
+        i = i + 1
+    }
+    ok && below >= 350 && above >= 350
+}
+
+test "float_random_in_unit_interval_and_covers_both_halves" {
+    assert.is_true(float_random_in_unit_interval_and_covers_both_halves())
+}
+
+// float_random_distinct_values: 100 samples should span a wide range.
+// The range (max - min) of 100 uniform samples from [0, 1) has expected value
+// ≈ 0.98; P(range < 0.5) = 2*(0.5)^100 ≈ 10^-30 — effectively impossible.
+// We use the range as a proxy for distinctness without needing float equality.
+function float_random_distinct_values() -> bool {
+    let min_seen = 1.0;
+    let max_seen = 0.0;
+    let i = 0;
+    while (i < 100) {
+        let r = float.random();
+        if (r < min_seen) { min_seen = r } else { null }
+        if (r > max_seen) { max_seen = r } else { null }
+        i = i + 1
+    }
+    (max_seen - min_seen) > 0.5
+}
+
+test "float_random_distinct_values" {
+    assert.is_true(float_random_distinct_values())
+}
