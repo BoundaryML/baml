@@ -2363,6 +2363,10 @@ pub struct SpawnConfigData {
     /// (its effective token is independent of the parent's) and its unhandled
     /// errors route to the root task rather than the spawner.
     pub detach: bool,
+    /// `TaskGroup` from `options(group = ...)`, if any. The engine acquires a
+    /// concurrency slot from it before running the spawned body (BEP-034 rate
+    /// limiting).
+    pub group: Option<std::sync::Arc<crate::task_group::TaskGroupInner>>,
 }
 
 /// A pending user `spawn { body }` request that the engine still has to

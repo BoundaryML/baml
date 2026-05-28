@@ -148,7 +148,7 @@ namespace baml.panics:
 namespace baml.spawn:
   class CancelToken { methods: [new, any, cancel, is_cancelled, to_json, from_json] }
   class SpawnConfig { methods: [to_json, from_json] }
-  class TaskGroup { methods: [to_json, from_json] }
+  class TaskGroup { methods: [new, cancel, set_limit, limit, name, active_count, queued_count, to_json, from_json] }
   function options
 namespace baml.stream:
   class StreamFinished { methods: [to_json, from_json] }

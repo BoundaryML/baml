@@ -12,11 +12,58 @@ class SpawnConfig {
   _handle $rust_type
 }
 
-/// Caps how many spawned tasks run concurrently. Rate-limiting behavior lands
-/// in a follow-up; the class is declared now so `options(group = ...)`
-/// type-checks and the surface stays stable.
+/// Caps how many spawns referencing it run concurrently. Excess spawns queue
+/// FIFO and start as earlier ones settle; the `spawn` still returns its
+/// `Future` immediately, so queueing is invisible. Two spawns share a limit iff
+/// they reference the same `TaskGroup` value — there is no global registry.
 class TaskGroup {
   _handle $rust_type
+
+  /// Create a group capping concurrency at `limit`. `name` is an optional
+  /// debug label (no semantic meaning).
+  //baml:mut_vm
+  function new(limit: int, name: string? = null) -> TaskGroup {
+    $rust_function
+  }
+
+  /// Fire the cancel tokens of the group's members. `pending` selects queued
+  /// members, `active` selects running ones (both default `true`). Returns the
+  /// number signalled. The group stays usable afterward.
+  //baml:vm
+  function cancel(self, pending: bool? = true, active: bool? = true) -> int {
+    $rust_function
+  }
+
+  /// Change the concurrency cap. Increasing admits queued members up to the new
+  /// cap immediately; decreasing never preempts running members; `0` pauses.
+  //baml:vm
+  function set_limit(self, limit: int) -> void {
+    $rust_function
+  }
+
+  /// The current concurrency cap.
+  //baml:vm
+  function limit(self) -> int {
+    $rust_function
+  }
+
+  /// The optional debug name.
+  //baml:vm
+  function name(self) -> string? {
+    $rust_function
+  }
+
+  /// Instantaneous count of running members.
+  //baml:vm
+  function active_count(self) -> int {
+    $rust_function
+  }
+
+  /// Instantaneous count of queued members.
+  //baml:vm
+  function queued_count(self) -> int {
+    $rust_function
+  }
 }
 
 /// A cooperative, one-shot cancellation handle backed by a runtime

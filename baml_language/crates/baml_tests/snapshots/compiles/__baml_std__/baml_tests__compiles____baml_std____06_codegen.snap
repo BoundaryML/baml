@@ -4581,6 +4581,12 @@ function baml.spawn.SpawnConfig.to_json(self: null) -> baml.json.json {
     return
 }
 
+function baml.spawn.TaskGroup.active_count(self: null) -> int {
+}
+
+function baml.spawn.TaskGroup.cancel(self: null, pending: bool?, active: bool?) -> int {
+}
+
 function baml.spawn.TaskGroup.from_json(j: baml.json.json) -> baml.spawn.TaskGroup {
     load_var j
     call baml.json.stringify
@@ -4589,6 +4595,21 @@ function baml.spawn.TaskGroup.from_json(j: baml.json.json) -> baml.spawn.TaskGro
     load_var _2
     call baml.json.from_string
     return
+}
+
+function baml.spawn.TaskGroup.limit(self: null) -> int {
+}
+
+function baml.spawn.TaskGroup.name(self: null) -> string? {
+}
+
+function baml.spawn.TaskGroup.new(limit: int, name: string?) -> baml.spawn.TaskGroup {
+}
+
+function baml.spawn.TaskGroup.queued_count(self: null) -> int {
+}
+
+function baml.spawn.TaskGroup.set_limit(self: null, limit: int) -> void {
 }
 
 function baml.spawn.TaskGroup.to_json(self: null) -> baml.json.json {

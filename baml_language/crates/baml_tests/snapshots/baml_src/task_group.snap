@@ -1,0 +1,237 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function task_group.$init_test_84(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "caps_active_and_queues_rest"
+    make_closure .<lambda($init_test_84, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "queues_excess_and_all_complete"
+    make_closure .<lambda($init_test_84, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "group_cancel_cancels_member"
+    make_closure .<lambda($init_test_84, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "set_limit_updates_limit"
+    make_closure .<lambda($init_test_84, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function task_group.caps_active_and_queues_rest() -> int {
+    load_const 2
+    load_const <omitted>
+    call baml.spawn.TaskGroup.new
+    store_var g
+    load_var g
+    load_const <omitted>
+    load_const <omitted>
+    call baml.spawn.options
+    store_var _3
+    make_closure .<lambda(caps_active_and_queues_rest, 0)>, 0
+    load_const null
+    load_var _3
+    spawn
+    pop 1
+    load_var g
+    load_const <omitted>
+    load_const <omitted>
+    call baml.spawn.options
+    store_var _7
+    make_closure .<lambda(caps_active_and_queues_rest, 1)>, 0
+    load_const null
+    load_var _7
+    spawn
+    pop 1
+    load_var g
+    load_const <omitted>
+    load_const <omitted>
+    call baml.spawn.options
+    store_var _11
+    make_closure .<lambda(caps_active_and_queues_rest, 2)>, 0
+    load_const null
+    load_var _11
+    spawn
+    pop 1
+    load_var g
+    load_const <omitted>
+    load_const <omitted>
+    call baml.spawn.options
+    store_var _15
+    make_closure .<lambda(caps_active_and_queues_rest, 3)>, 0
+    load_const null
+    load_var _15
+    spawn
+    pop 1
+    load_var g
+    call baml.spawn.TaskGroup.active_count
+    store_var _20
+    load_var g
+    call baml.spawn.TaskGroup.queued_count
+    store_var _21
+    load_var g
+    load_const <omitted>
+    load_const <omitted>
+    call baml.spawn.TaskGroup.cancel
+    pop 1
+    load_var _20
+    load_const 100
+    mul_int
+    load_var _21
+    add_int
+    return
+}
+
+function task_group.group_cancel_cancels_member() -> int {
+    load_const 5
+    load_const <omitted>
+    call baml.spawn.TaskGroup.new
+    store_var g
+    load_var g
+    load_const <omitted>
+    load_const <omitted>
+    call baml.spawn.options
+    store_var _4
+    make_closure .<lambda(group_cancel_cancels_member, 0)>, 0
+    load_const null
+    load_var _4
+    spawn
+    store_var _6
+    load_var g
+    load_const <omitted>
+    load_const <omitted>
+    call baml.spawn.TaskGroup.cancel
+    pop 1
+    load_var _6
+    await
+    jump L2
+    load_var e
+    is_type baml.panics.Cancelled
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    throw
+
+  L1:
+    load_const 0
+
+  L2:
+    return
+}
+
+function task_group.queues_excess_and_all_complete() -> int {
+    load_const 2
+    load_const <omitted>
+    call baml.spawn.TaskGroup.new
+    store_var g
+    load_var g
+    load_const <omitted>
+    load_const <omitted>
+    call baml.spawn.options
+    store_var _4
+    make_closure .<lambda(queues_excess_and_all_complete, 0)>, 0
+    load_const null
+    load_var _4
+    spawn
+    store_var _6
+    load_var g
+    load_const <omitted>
+    load_const <omitted>
+    call baml.spawn.options
+    store_var _9
+    make_closure .<lambda(queues_excess_and_all_complete, 1)>, 0
+    load_const null
+    load_var _9
+    spawn
+    store_var _11
+    load_var g
+    load_const <omitted>
+    load_const <omitted>
+    call baml.spawn.options
+    store_var _14
+    make_closure .<lambda(queues_excess_and_all_complete, 2)>, 0
+    load_const null
+    load_var _14
+    spawn
+    store_var _16
+    load_var g
+    load_const <omitted>
+    load_const <omitted>
+    call baml.spawn.options
+    store_var _19
+    make_closure .<lambda(queues_excess_and_all_complete, 3)>, 0
+    load_const null
+    load_var _19
+    spawn
+    store_var _21
+    load_var g
+    load_const <omitted>
+    load_const <omitted>
+    call baml.spawn.options
+    store_var _24
+    make_closure .<lambda(queues_excess_and_all_complete, 4)>, 0
+    load_const null
+    load_var _24
+    spawn
+    store_var _26
+    load_var _6
+    await
+    store_var _30
+    load_var _11
+    await
+    store_var _32
+    load_var _16
+    await
+    store_var _34
+    load_var _21
+    await
+    store_var _36
+    load_var _26
+    await
+    store_var _38
+    load_var _30
+    load_var _32
+    add_int
+    load_var _34
+    add_int
+    load_var _36
+    add_int
+    load_var _38
+    add_int
+    return
+}
+
+function task_group.set_limit_updates_limit() -> int {
+    load_const 3
+    load_const <omitted>
+    call baml.spawn.TaskGroup.new
+    store_var g
+    load_var g
+    call baml.spawn.TaskGroup.limit
+    store_var before
+    load_var g
+    load_const 7
+    call baml.spawn.TaskGroup.set_limit
+    pop 1
+    load_var g
+    call baml.spawn.TaskGroup.limit
+    store_var _5
+    load_var before
+    load_var _5
+    add_int
+    return
+}

@@ -1,178 +1,178 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function watch.$init_test_88(registry: testing.TestCollector) -> null {
+function watch.$init_test_89(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "watch_primitive"
-    make_closure .<lambda($init_test_88, 0)>, 0
+    make_closure .<lambda($init_test_89, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "watch_primitive_nested_scope"
-    make_closure .<lambda($init_test_88, 1)>, 0
+    make_closure .<lambda($init_test_89, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "watch_class_destructure_initializes_and_unwatches_binding"
-    make_closure .<lambda($init_test_88, 2)>, 0
+    make_closure .<lambda($init_test_89, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "watch_default_filter"
-    make_closure .<lambda($init_test_88, 3)>, 0
+    make_closure .<lambda($init_test_89, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "watch_alias"
-    make_closure .<lambda($init_test_88, 4)>, 0
+    make_closure .<lambda($init_test_89, 4)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "watch_alias_nested_scope"
-    make_closure .<lambda($init_test_88, 5)>, 0
+    make_closure .<lambda($init_test_89, 5)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "watch_scope_exit"
-    make_closure .<lambda($init_test_88, 6)>, 0
+    make_closure .<lambda($init_test_89, 6)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "watch_break_unwatches"
-    make_closure .<lambda($init_test_88, 7)>, 0
+    make_closure .<lambda($init_test_89, 7)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "watch_continue_unwatches"
-    make_closure .<lambda($init_test_88, 8)>, 0
+    make_closure .<lambda($init_test_89, 8)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "watch_early_return_unwatches"
-    make_closure .<lambda($init_test_88, 9)>, 0
+    make_closure .<lambda($init_test_89, 9)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "watch_throw_unwatches"
-    make_closure .<lambda($init_test_88, 10)>, 0
+    make_closure .<lambda($init_test_89, 10)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "watch_for_throw_unwatches"
-    make_closure .<lambda($init_test_88, 11)>, 0
+    make_closure .<lambda($init_test_89, 11)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "watch_while_throw_unwatches"
-    make_closure .<lambda($init_test_88, 12)>, 0
+    make_closure .<lambda($init_test_89, 12)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "watch_match_arm_throw_unwatches"
-    make_closure .<lambda($init_test_88, 13)>, 0
+    make_closure .<lambda($init_test_89, 13)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "watch_catch_arm_throw_unwatches"
-    make_closure .<lambda($init_test_88, 14)>, 0
+    make_closure .<lambda($init_test_89, 14)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "watch_match_arm_fallthrough_unwatches"
-    make_closure .<lambda($init_test_88, 15)>, 0
+    make_closure .<lambda($init_test_89, 15)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "watch_switch_arm_fallthrough_unwatches"
-    make_closure .<lambda($init_test_88, 16)>, 0
+    make_closure .<lambda($init_test_89, 16)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "watch_catch_arm_fallthrough_unwatches"
-    make_closure .<lambda($init_test_88, 17)>, 0
+    make_closure .<lambda($init_test_89, 17)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "watch_function_call_modifications"
-    make_closure .<lambda($init_test_88, 18)>, 0
+    make_closure .<lambda($init_test_89, 18)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "watch_nested_object_added"
-    make_closure .<lambda($init_test_88, 19)>, 0
+    make_closure .<lambda($init_test_89, 19)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "watch_nested_object_removed"
-    make_closure .<lambda($init_test_88, 20)>, 0
+    make_closure .<lambda($init_test_89, 20)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "watch_cyclic_graph"
-    make_closure .<lambda($init_test_88, 21)>, 0
+    make_closure .<lambda($init_test_89, 21)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "block_notification_basic"
-    make_closure .<lambda($init_test_88, 22)>, 0
+    make_closure .<lambda($init_test_89, 22)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "block_notification_multiple"
-    make_closure .<lambda($init_test_88, 23)>, 0
+    make_closure .<lambda($init_test_89, 23)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "viz_header_before_if"
-    make_closure .<lambda($init_test_88, 24)>, 0
+    make_closure .<lambda($init_test_89, 24)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "viz_header_before_while"
-    make_closure .<lambda($init_test_88, 25)>, 0
+    make_closure .<lambda($init_test_89, 25)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "viz_standalone_header_no_viz_events"
-    make_closure .<lambda($init_test_88, 26)>, 0
+    make_closure .<lambda($init_test_89, 26)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "viz_multiple_headers_only_one_before_if"
-    make_closure .<lambda($init_test_88, 27)>, 0
+    make_closure .<lambda($init_test_89, 27)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "viz_if_without_header_no_viz"
-    make_closure .<lambda($init_test_88, 28)>, 0
+    make_closure .<lambda($init_test_89, 28)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1

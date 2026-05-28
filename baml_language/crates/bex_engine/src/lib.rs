@@ -91,8 +91,8 @@ pub use bex_heap::GcStats;
 pub use bex_heap::{ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapPermit};
 use bex_vm::{BexVm, SpanNotification, VmExecState};
 use bex_vm_types::{
-    FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp, Value,
-    VmGlobals, types::SpawnConfigData,
+    FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp,
+    TaskGroupInner, Value, VmGlobals, types::SpawnConfigData,
 };
 pub use conversion::test_arg_to_external;
 // Re-export CancellationToken for callers.
@@ -1964,6 +1964,7 @@ impl BexEngine {
         name: Option<String>,
         user_cancel: Option<CancellationToken>,
         detach: bool,
+        group: Option<Arc<TaskGroupInner>>,
         call_id: CallId,
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<HeapPtr, EngineError>> + Send + 'static>,
@@ -1976,6 +1977,7 @@ impl BexEngine {
             name,
             user_cancel,
             detach,
+            group,
             call_id,
         ))
     }
@@ -1990,6 +1992,7 @@ impl BexEngine {
         name: Option<String>,
         user_cancel: Option<CancellationToken>,
         detach: bool,
+        group: Option<Arc<TaskGroupInner>>,
         call_id: CallId,
     ) -> Result<HeapPtr, EngineError> {
         // Each spawned thread gets a child cancel token so parent → child
@@ -2024,6 +2027,13 @@ impl BexEngine {
             #[cfg(target_arch = "wasm32")]
             wasm_bindgen_futures::spawn_local(watcher);
         }
+
+        // BEP-034 rate limiting: register with the TaskGroup *synchronously*,
+        // here (before the body task is polled), so a `group.cancel()` /
+        // `active_count()` issued right after `spawn` already observes this
+        // member. The returned ticket is `acquire`d (parked on) inside the body
+        // task, so a queued task does not hold the heap permit while waiting.
+        let group_ticket = group.map(|group| group.register(child_cancel.clone()));
 
         // Build the child VM up-front (synchronously) so the await on the
         // permit only holds Send values across yield points.
@@ -2067,6 +2077,31 @@ impl BexEngine {
             attr: baml_type::TyAttr::default(),
         };
         let task = async move {
+            // BEP-034 rate limiting: if this spawn joined a `TaskGroup`, park
+            // here — WITHOUT the heap permit, so a queued task doesn't block GC
+            // — until a slot frees. A task cancelled while queued (group/user/
+            // parent) settles its future `Cancelled` and never runs its body.
+            // The permit is held for the body's lifetime and releases the slot
+            // (waking the next FIFO waiter) on drop.
+            let _group_permit = match group_ticket {
+                Some(ticket) => match ticket.acquire().await {
+                    Some(permit) => Some(permit),
+                    None => {
+                        let mut permit = inactive.acquire().await;
+                        if let Err(err) =
+                            engine.settle_child_cancelled(&mut permit, future_id).await
+                        {
+                            tracing::error!(
+                                ?err,
+                                ?future_id,
+                                "failed to settle queued-then-cancelled spawn"
+                            );
+                        }
+                        return;
+                    }
+                },
+                None => None,
+            };
             let permit = inactive.acquire().await;
             let mut local_span_state: Option<SpanState> = None;
             match engine
@@ -2563,15 +2598,17 @@ impl BexEngine {
                             _ => None,
                         });
                     // BEP-034 spawn options: read the `SpawnConfig` (cancel
-                    // token + detach flag) from a `with baml.spawn.options(...)`
-                    // clause. `cancel` links into the child's effective token;
-                    // `detach` decouples it from the parent and routes its
-                    // unhandled errors to the root task instead of this spawner.
+                    // token, detach flag, task group) from a
+                    // `with baml.spawn.options(...)` clause. `cancel` links into
+                    // the child's effective token; `detach` decouples it from
+                    // the parent and routes its unhandled errors to the root
+                    // task instead of this spawner; `group` rate-limits it.
                     let config = config_ptr
                         .and_then(Self::read_spawn_config)
                         .unwrap_or_default();
                     let detach = config.detach;
                     let user_cancel = config.cancel;
+                    let group = config.group;
                     let parent_errors_arc = if detach {
                         thread.vm_thread_root_errors_arc()
                     } else {
@@ -2587,6 +2624,7 @@ impl BexEngine {
                             spawn_name,
                             user_cancel,
                             detach,
+                            group,
                             call_id,
                         )
                         .await?;

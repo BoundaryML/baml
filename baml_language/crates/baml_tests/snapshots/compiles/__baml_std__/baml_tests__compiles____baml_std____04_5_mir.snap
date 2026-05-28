@@ -7091,7 +7091,11 @@ fn baml.panics.Unreachable.to_json(self: baml.panics.Unreachable) -> baml.json.j
     }
 }
 
+fn baml.spawn.TaskGroup.active_count = builtin(vm)
+
 fn baml.spawn.CancelToken.any = builtin(vm)
+
+fn baml.spawn.TaskGroup.cancel = builtin(vm)
 
 fn baml.spawn.CancelToken.cancel = builtin(vm)
 
@@ -7108,27 +7112,6 @@ fn baml.spawn.SpawnConfig.from_json(j: baml.json.json) -> baml.spawn.SpawnConfig
 
     bb1: {
         _3 = load_type(baml.spawn.SpawnConfig);
-        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn baml.spawn.CancelToken.from_json(j: baml.json.json) -> baml.spawn.CancelToken {
-    // Locals:
-    let _0: baml.spawn.CancelToken // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: string
-    let _3: type
-
-    bb0: {
-        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        _3 = load_type(baml.spawn.CancelToken);
         _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
     }
 
@@ -7158,21 +7141,52 @@ fn baml.spawn.TaskGroup.from_json(j: baml.json.json) -> baml.spawn.TaskGroup {
     }
 }
 
-fn baml.spawn.CancelToken.is_cancelled = builtin(vm)
-
-fn baml.spawn.CancelToken.new = builtin(vm)
-
-fn baml.spawn.options = builtin(vm)
-
-fn baml.spawn.TaskGroup.to_json(self: baml.spawn.TaskGroup) -> baml.json.json {
+fn baml.spawn.CancelToken.from_json(j: baml.json.json) -> baml.spawn.CancelToken {
     // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: baml.spawn.TaskGroup // self // param
+    let _0: baml.spawn.CancelToken // _0 // return
+    let _1: baml.json.json // j // param
     let _2: string
     let _3: type
 
     bb0: {
-        _3 = load_type(baml.spawn.TaskGroup);
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.spawn.CancelToken);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.spawn.CancelToken.is_cancelled = builtin(vm)
+
+fn baml.spawn.TaskGroup.limit = builtin(vm)
+
+fn baml.spawn.TaskGroup.name = builtin(vm)
+
+fn baml.spawn.CancelToken.new = builtin(vm)
+
+fn baml.spawn.TaskGroup.new = builtin(vm)
+
+fn baml.spawn.options = builtin(vm)
+
+fn baml.spawn.TaskGroup.queued_count = builtin(vm)
+
+fn baml.spawn.TaskGroup.set_limit = builtin(vm)
+
+fn baml.spawn.SpawnConfig.to_json(self: baml.spawn.SpawnConfig) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.spawn.SpawnConfig // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.spawn.SpawnConfig);
         _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
     }
 
@@ -7185,15 +7199,15 @@ fn baml.spawn.TaskGroup.to_json(self: baml.spawn.TaskGroup) -> baml.json.json {
     }
 }
 
-fn baml.spawn.SpawnConfig.to_json(self: baml.spawn.SpawnConfig) -> baml.json.json {
+fn baml.spawn.TaskGroup.to_json(self: baml.spawn.TaskGroup) -> baml.json.json {
     // Locals:
     let _0: baml.json.json // _0 // return
-    let _1: baml.spawn.SpawnConfig // self // param
+    let _1: baml.spawn.TaskGroup // self // param
     let _2: string
     let _3: type
 
     bb0: {
-        _3 = load_type(baml.spawn.SpawnConfig);
+        _3 = load_type(baml.spawn.TaskGroup);
         _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
     }
 

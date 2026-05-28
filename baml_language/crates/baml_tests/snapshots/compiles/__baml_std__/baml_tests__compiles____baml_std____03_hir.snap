@@ -1035,20 +1035,27 @@ class baml.spawn.SpawnConfig {
 class baml.spawn.TaskGroup {
   _handle: $rust_type
 }
+function baml.spawn.active_count(self: ?) -> int  [builtin]
 function baml.spawn.any(tokens: baml.spawn.CancelToken[]) -> baml.spawn.CancelToken  [builtin]
+function baml.spawn.cancel(self: ?, pending: bool? = true, active: bool? = true) -> int  [builtin]
 function baml.spawn.cancel(self: ?) -> int  [builtin]
 function baml.spawn.from_json(j: baml.json.json) -> baml.spawn.SpawnConfig  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
-}
-function baml.spawn.from_json(j: baml.json.json) -> baml.spawn.CancelToken  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
 function baml.spawn.from_json(j: baml.json.json) -> baml.spawn.TaskGroup  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
+function baml.spawn.from_json(j: baml.json.json) -> baml.spawn.CancelToken  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
 function baml.spawn.is_cancelled(self: ?) -> bool  [builtin]
+function baml.spawn.limit(self: ?) -> int  [builtin]
+function baml.spawn.name(self: ?) -> string?  [builtin]
 function baml.spawn.new() -> baml.spawn.CancelToken  [builtin]
+function baml.spawn.new(limit: int, name: string? = null) -> baml.spawn.TaskGroup  [builtin]
 function baml.spawn.options(group: baml.spawn.TaskGroup? = null, cancel: baml.spawn.CancelToken? = null, detach: bool? = null) -> baml.spawn.SpawnConfig  [builtin]
+function baml.spawn.queued_count(self: ?) -> int  [builtin]
+function baml.spawn.set_limit(self: ?, limit: int) -> void  [builtin]
 function baml.spawn.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
