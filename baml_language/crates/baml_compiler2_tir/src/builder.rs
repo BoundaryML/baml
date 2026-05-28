@@ -6884,11 +6884,19 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
 
                 // BEP-044 §"Method Disambiguation": if more than one
-                // `implements`-block method shares this name, the
-                // unqualified call site is ambiguous — emit E0121
-                // listing every contributing interface. The class
-                // declaration itself is allowed; only the call errors.
-                if let Some(sources) = self.ambiguous_class_method_sources(class_name, member) {
+                // implemented interface contributes a method of this name —
+                // whether overridden in an `implements` block, inherited as a
+                // default, or declared as a required method — the unqualified
+                // call site is ambiguous. Emit E0121 listing every contributing
+                // interface. The class declaration itself is allowed; only the
+                // call errors.
+                let method_sources: Vec<Name> = self
+                    .implemented_interface_method_sources(class_name, member)
+                    .into_iter()
+                    .map(|(name, _, _)| name)
+                    .collect();
+                if method_sources.len() >= 2 {
+                    let sources = method_sources;
                     let class_def = self
                         .package_items
                         .lookup_type(class_name.namespace(), class_name.name());
@@ -6960,6 +6968,26 @@ impl<'db> TypeInferenceBuilder<'db> {
                         );
                     }
                     return ty;
+                }
+
+                // BEP-044: a default method inherited via an empty (or partial)
+                // `implements I {}` block is callable directly on the concrete
+                // class. The method isn't in `class_data.methods` (only
+                // overrides are), so resolve it through the interface machinery
+                // — exactly as `obj.as<I>.method()` would — which records an
+                // `InterfaceDefaultMethod` resolution and dispatches to the
+                // default body. Ambiguity (≥2 sources) was already rejected
+                // above, so at most one source remains here.
+                if let [(_, iface_qtn, iface_args)] =
+                    self.implemented_interface_method_sources(class_name, member).as_slice()
+                {
+                    let iface_qtn = iface_qtn.clone();
+                    let iface_args = iface_args.clone();
+                    if let Some(ty) =
+                        self.resolve_interface_member(&iface_qtn, &iface_args, member, at, bound)
+                    {
+                        return ty;
+                    }
                 }
 
                 if self
@@ -8643,7 +8671,19 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
                     continue;
                 };
-                if &iface_data.name == member {
+                // The interface's own name (legacy projection diagnostic),
+                // plus any field or method it declares — so members inherited
+                // through `implements I {}` (e.g. default methods, interface
+                // fields) count as present on the class and route to
+                // `resolve_member` for proper resolution / disambiguation.
+                if &iface_data.name == member
+                    || iface_data.fields.iter().any(|f| &f.name == member)
+                    || iface_data.required_methods.iter().any(|s| s.name == *member)
+                    || iface_data
+                        .default_methods
+                        .iter()
+                        .any(|&fn_id| iface_tree[fn_id].name == *member)
+                {
                     return true;
                 }
             }
@@ -8823,6 +8863,99 @@ impl<'db> TypeInferenceBuilder<'db> {
         sources
     }
 
+    /// Directly-implemented interfaces (named by the `implements` clause) whose
+    /// `requires`-closure declares a method `member`, as a default *or* a
+    /// required method. Returns, per such interface, its simple name (for
+    /// diagnostics), root qualified name, and lowered type args (so an
+    /// inherited default can be resolved through the interface machinery).
+    ///
+    /// This is the method analogue of [`Self::class_interface_field_sources`].
+    /// It powers two BEP-044 rules at once: unqualified-call ambiguity (when
+    /// two interfaces contribute the same method name → E0121) and inherited
+    /// default-method visibility on the concrete class (when exactly one does).
+    fn implemented_interface_method_sources(
+        &self,
+        class_name: &crate::ty::QualifiedTypeName,
+        member: &Name,
+    ) -> Vec<(Name, crate::ty::QualifiedTypeName, Vec<Ty>)> {
+        let Some(pkg_items) = self.resolve_class_pkg_items(class_name.package()) else {
+            return Vec::new();
+        };
+        let Some(Definition::Class(class_loc)) =
+            pkg_items.lookup_type(class_name.namespace(), class_name.name())
+        else {
+            return Vec::new();
+        };
+        let db = self.context.db();
+        let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
+        let class_data = &item_tree[class_loc.id(db)];
+        let ns =
+            baml_compiler2_hir::file_package::file_package(db, class_loc.file(db)).namespace_path;
+        let mut seen = FxHashSet::default();
+        let mut sources = Vec::new();
+
+        for impl_target in &class_data.implements {
+            let Some(root_iface_loc) = crate::interfaces::resolve_path_to_interface(
+                db,
+                &impl_target.target.expr,
+                pkg_items,
+                &ns,
+            ) else {
+                continue;
+            };
+
+            let declares = crate::interfaces::interface_closure_locs(
+                db,
+                root_iface_loc,
+                pkg_items,
+                &ns,
+            )
+            .into_iter()
+            .any(|iface_loc| {
+                let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+                iface_tree
+                    .interfaces
+                    .get(&iface_loc.id(db))
+                    .is_some_and(|iface_data| {
+                        iface_data.required_methods.iter().any(|s| s.name == *member)
+                            || iface_data
+                                .default_methods
+                                .iter()
+                                .any(|&fn_id| iface_tree[fn_id].name == *member)
+                    })
+            });
+            if !declares {
+                continue;
+            }
+
+            let root_tree = baml_compiler2_hir::file_item_tree(db, root_iface_loc.file(db));
+            let Some(root_data) = root_tree.interfaces.get(&root_iface_loc.id(db)) else {
+                continue;
+            };
+            let root_name = root_data.name.clone();
+            if !seen.insert(root_name.clone()) {
+                continue;
+            }
+            // Recover the interface's qtn + type args by lowering the path the
+            // user wrote (e.g. `Container<int>`); class generics stay as type
+            // vars, which is what `resolve_interface_member` expects.
+            let mut diags = Vec::new();
+            let lowered = crate::lower_type_expr::lower_type_expr_in_ns(
+                db,
+                &impl_target.target.expr,
+                pkg_items,
+                &ns,
+                &class_data.generic_params,
+                &mut diags,
+            );
+            if let Ty::Interface(qtn, args, _) = lowered {
+                sources.push((root_name, qtn, args));
+            }
+        }
+
+        sources
+    }
+
     /// Check whether an enum has a variant with the given name.
     ///
     /// No diagnostic side-effects.
@@ -8877,51 +9010,6 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// (typically because the class declares them in different
     /// `implements I {}` blocks), return the list of contributing
     /// interface names. Returns `None` when the call is unambiguous.
-    fn ambiguous_class_method_sources(
-        &self,
-        class_name: &crate::ty::QualifiedTypeName,
-        method_name: &Name,
-    ) -> Option<Vec<Name>> {
-        let pkg_items_for_class = self.resolve_class_pkg_items(class_name.package())?;
-        let def = pkg_items_for_class.lookup_type(class_name.namespace(), class_name.name())?;
-        let Definition::Class(class_loc) = def else {
-            return None;
-        };
-        let db = self.context.db();
-        let file = class_loc.file(db);
-        let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-        let class_data = item_tree.classes.get(&class_loc.id(db))?;
-        let mut sources: Vec<Name> = Vec::new();
-        for &fn_id in &class_data.methods {
-            if item_tree[fn_id].name != *method_name {
-                continue;
-            }
-            // Resolve which `implements` block this method came from. A
-            // method without an entry in `method_to_iface_target` is a
-            // class-level (non-implements) method and counts as its own
-            // direct definition — but those don't participate in cross-
-            // interface ambiguity since they're explicitly declared as
-            // top-level class methods.
-            let iface_name = item_tree
-                .method_to_iface_target
-                .get(&fn_id)
-                .and_then(|te| match &te.expr {
-                    baml_compiler2_ast::TypeExpr::Path { segments, .. } => segments.last().cloned(),
-                    _ => None,
-                });
-            if let Some(iface) = iface_name {
-                if !sources.contains(&iface) {
-                    sources.push(iface);
-                }
-            }
-        }
-        if sources.len() >= 2 {
-            Some(sources)
-        } else {
-            None
-        }
-    }
-
     /// Look up a class method by name from the item tree.
     ///
     /// Methods are stored on the `Class` entry directly (not in the package
