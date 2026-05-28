@@ -595,11 +595,20 @@ fn enclosing_class_generic_params(
     item_tree: &ItemTree,
     function_id: baml_compiler2_hir::ids::LocalItemId<baml_compiler2_hir::ids::FunctionMarker>,
 ) -> Vec<Name> {
-    item_tree
+    if let Some(class_data) = item_tree
         .classes
         .values()
         .find(|class_data| class_data.methods.contains(&function_id))
-        .map(|class_data| class_data.generic_params.clone())
+    {
+        return class_data.generic_params.clone();
+    }
+    // BEP-044: a generic interface's default method sees the interface's type
+    // params (`interface Container<T> { function f(self) -> T { ... } }`).
+    item_tree
+        .interfaces
+        .values()
+        .find(|iface_data| iface_data.default_methods.contains(&function_id))
+        .map(|iface_data| iface_data.generic_params.clone())
         .unwrap_or_default()
 }
 

@@ -623,25 +623,45 @@ pub fn infer_scope_types<'db>(
                         let parent = &index.scopes[parent_idx.index() as usize];
                         if matches!(parent.kind, ScopeKind::Class) {
                             if let Some(class_name) = &parent.name {
+                                let mut enclosing_generics: Option<Vec<Name>> = None;
                                 for class_data in item_tree.classes.values() {
                                     if class_data.name == *class_name {
-                                        // Check for method-level type params that shadow class-level ones.
-                                        for mp in &sig.user_generic_params {
-                                            if class_data.generic_params.iter().any(|cp| cp == mp) {
-                                                builder.report_at_span(
-                                                    crate::infer_context::TirTypeError::TypeParamShadowed {
-                                                        param_name: mp.clone(),
-                                                        class_name: class_name.clone(),
-                                                    },
-                                                    func_data.span,
-                                                );
-                                            }
-                                        }
-                                        let mut merged = class_data.generic_params.clone();
-                                        merged.extend(generic_params);
-                                        generic_params = merged;
+                                        enclosing_generics =
+                                            Some(class_data.generic_params.clone());
                                         break;
                                     }
+                                }
+                                // BEP-044: interfaces also push a `Class`-kind
+                                // scope, so a *default method* body's enclosing
+                                // generics may come from a generic interface
+                                // (`interface Container<T> { function f(self) -> T
+                                // { ... } }`). Without this its `T` would be
+                                // unresolved in the default body / signature.
+                                if enclosing_generics.is_none() {
+                                    for iface_data in item_tree.interfaces.values() {
+                                        if iface_data.name == *class_name {
+                                            enclosing_generics =
+                                                Some(iface_data.generic_params.clone());
+                                            break;
+                                        }
+                                    }
+                                }
+                                if let Some(parent_generics) = enclosing_generics {
+                                    // Check for method-level type params that shadow enclosing ones.
+                                    for mp in &sig.user_generic_params {
+                                        if parent_generics.iter().any(|cp| cp == mp) {
+                                            builder.report_at_span(
+                                                crate::infer_context::TirTypeError::TypeParamShadowed {
+                                                    param_name: mp.clone(),
+                                                    class_name: class_name.clone(),
+                                                },
+                                                func_data.span,
+                                            );
+                                        }
+                                    }
+                                    let mut merged = parent_generics;
+                                    merged.extend(generic_params);
+                                    generic_params = merged;
                                 }
                             }
                         }
