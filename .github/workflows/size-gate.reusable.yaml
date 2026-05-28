@@ -119,7 +119,7 @@ jobs:
     timeout-minutes: 45
     continue-on-error: true
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 

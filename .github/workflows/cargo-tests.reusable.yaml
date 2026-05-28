@@ -203,7 +203,7 @@ jobs:
     # Right now it needs to download our repo every time which is very slow
     timeout-minutes: 50
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
