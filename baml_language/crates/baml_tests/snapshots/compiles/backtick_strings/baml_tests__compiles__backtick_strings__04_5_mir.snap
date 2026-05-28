@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 4827
 ---
 === MIR2 ===
 fn user.BacktickEquality() -> bool {
@@ -297,7 +298,7 @@ fn user.BacktickM3ForLoop(xs: string[]) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string[] // xs // param
-    let _2: string // __m3_for
+    let _2: string //  __m3_for
     let _3: string[]
     let _4: int // __for_idx
     let _5: int

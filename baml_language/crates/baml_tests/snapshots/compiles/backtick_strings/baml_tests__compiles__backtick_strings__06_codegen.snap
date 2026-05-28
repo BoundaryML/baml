@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 4965
 ---
 function user.BacktickEquality() -> bool {
     load_const true
@@ -145,7 +146,7 @@ function user.BacktickLiteralAsArg() -> string {
 
 function user.BacktickM3ForLoop(xs: string[]) -> string {
     load_const ""
-    store_var __m3_for
+    store_var  __m3_for
     load_const 0
     store_var __for_idx
 
@@ -158,11 +159,11 @@ function user.BacktickM3ForLoop(xs: string[]) -> string {
     jump L2
 
   L1:
-    load_var __m3_for
+    load_var  __m3_for
     return
 
   L2:
-    load_var __m3_for
+    load_var  __m3_for
     store_var _9
     load_var xs
     load_var __for_idx
@@ -176,7 +177,7 @@ function user.BacktickM3ForLoop(xs: string[]) -> string {
     load_const "\n"
     bin_op +
     bin_op +
-    store_var __m3_for
+    store_var  __m3_for
     load_var __for_idx
     load_const 1
     add_int

@@ -2607,10 +2607,14 @@ impl LoweringContext {
         // `${for ...}` tag) so the lookups land inside the visibility window.
         let after_let_span = TextRange::empty(open_span.end());
 
-        // Accumulator binding name. The let-binding shadowing rule
-        // makes nested for-loops safe even with a fixed name, but use
-        // a distinguishing prefix to avoid user collision.
-        let acc_name = Name::new("__m3_for");
+        // Accumulator binding name. The leading space makes this string
+        // unparseable as a user identifier (the lexer's `Word` regex
+        // requires `[a-zA-Z_]` as the first char), so a user binding —
+        // even one literally named `__m3_for` — cannot collide with the
+        // synthesized accumulator. Name equality is plain string equality,
+        // so the assignment/tail references in this block still resolve
+        // to this binding while leaving user references untouched.
+        let acc_name = Name::new(" __m3_for");
         let acc_pat = self.alloc_pattern(
             Pattern::Bind {
                 name: acc_name.clone(),

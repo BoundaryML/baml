@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 4795
 ---
 === TIR2 ===
 function user.BacktickOneLiner() -> string throws never {
@@ -129,12 +130,12 @@ function user.BacktickEscapedInterpStaysLiteral() -> string throws never {
 function user.BacktickM3ForLoop(xs: string[]) -> string throws never {
   { : string
     { : string
-      let __m3_for = "" : "" -> string
+      let  __m3_for = "" : "" -> string
       for x in xs
         { : void
-          __m3_for = __m3_for + "- " + { 0 stmts + tail }.to_string() + "\n" : string
+           __m3_for =  __m3_for + "- " + { 0 stmts + tail }.to_string() + "\n" : string
         }
-      __m3_for : string
+       __m3_for : string
     }
   }
 }

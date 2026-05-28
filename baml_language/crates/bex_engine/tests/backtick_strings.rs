@@ -1293,6 +1293,28 @@ async fn backtick_m3_if_else_one_branch_has_for() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
+async fn backtick_m3_for_accumulator_does_not_capture_user_binding() -> anyhow::Result<()> {
+    // The synthesized accumulator name must not collide with a user
+    // binding of the same name — `${user_var}` inside the body should
+    // resolve to the OUTER user value, not the inner accumulator.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function main() -> string {
+                let __m3_for = "OUTER"
+                let xs = ["a", "b"]
+                `${for (let x in xs)}<${x}:${__m3_for}>${endfor}`
+            }
+        "#,
+        entry: "main",
+        // If the accumulator captures the user's `__m3_for`, the inner
+        // `${__m3_for}` would see the growing string instead of "OUTER".
+        expected: Ok(BexExternalValue::String("<a:OUTER><b:OUTER>".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
 async fn backtick_m3_if_no_parens_bare_identifier_cond() -> anyhow::Result<()> {
     // Paren-optional grammar: `${if enabled}` with a bare identifier as the
     // condition. Previously the if-lowering's children-only scan skipped
