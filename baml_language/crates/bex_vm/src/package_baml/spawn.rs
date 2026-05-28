@@ -87,15 +87,18 @@ impl BamlClassSpawnCancelToken for PackageBamlImpl {
 }
 
 impl BamlNamespaceSpawn for PackageBamlImpl {
-    fn options(vm: &mut BexVm, _group: Option<&Value>, cancel: Option<&Value>) -> Value {
-        // PR1: only `cancel` is honored at runtime; `group` is accepted for
-        // forward compatibility and wired in a follow-up. An omitted optional
-        // argument arrives as the `OmittedArg` sentinel, which is neither null
-        // nor a `CancelToken` instance, so `as_cancellation_token` resolves it
-        // to `None` — exactly the "no cancel token" case.
+    fn options(
+        vm: &mut BexVm,
+        _group: Option<&Value>,
+        cancel: Option<&Value>,
+        detach: Option<bool>,
+    ) -> Value {
+        // `group` is accepted for forward compatibility and wired in a
+        // follow-up. Omitted optional arguments arrive as `None` here.
         let cancel = cancel.and_then(|value| as_cancellation_token(vm, *value));
+        let detach = detach.unwrap_or(false);
         let class = vm.resolve_class("baml.spawn.SpawnConfig");
-        let handle = vm.alloc_rust_data(Arc::new(SpawnConfigData { cancel }));
+        let handle = vm.alloc_rust_data(Arc::new(SpawnConfigData { cancel, detach }));
         vm.alloc_instance(class, vec![handle])
     }
 }

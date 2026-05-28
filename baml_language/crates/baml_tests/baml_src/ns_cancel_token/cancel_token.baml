@@ -48,3 +48,15 @@ function token_is_cancelled_reflects_cancel() -> bool[] {
 test "token_is_cancelled_reflects_cancel" {
     assert.is_true(baml.deep_equals(token_is_cancelled_reflects_cancel(), [false, true]))
 }
+
+// `detach = true` opts out of the parent cascade but must not break normal
+// completion (its survival/cascade-independence is verified by construction in
+// the engine: a detached spawn gets a fresh effective token).
+function detached_spawn_completes() -> int {
+    let f = spawn with baml.spawn.options(detach = true) { 42 };
+    await f
+}
+
+test "detached_spawn_completes" {
+    assert.is_true(baml.deep_equals(detached_spawn_completes(), 42))
+}

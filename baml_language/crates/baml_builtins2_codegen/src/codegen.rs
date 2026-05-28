@@ -1410,8 +1410,11 @@ fn extraction_expr(
                 extraction_expr("other", inner, false, needs_owned, arraymap_needs_owned);
             // Bind `other` so `.is_null()` (Value method) resolves through
             // the `&Value` without triggering `clippy::needless_borrow`.
+            // An omitted optional argument arrives as the `OmittedArg`
+            // sentinel; treat it the same as an explicit `null` (→ `None`) so
+            // the inner extraction (e.g. `as_bool`) never runs on it.
             format!(
-                "{{ let other = {val}; if other.is_null() {{ None }} else {{ Some({inner_expr}) }} }}"
+                "{{ let other = {val}; if other.is_null() || other.is_omitted() {{ None }} else {{ Some({inner_expr}) }} }}"
             )
         }
         BamlType::Uint8Array => {

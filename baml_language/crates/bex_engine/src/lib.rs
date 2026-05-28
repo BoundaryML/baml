@@ -1920,21 +1920,22 @@ impl BexEngine {
         }
     }
 
-    /// Read the user `CancelToken` out of a `baml.spawn.SpawnConfig` instance
-    /// (BEP-034 spawn options). `config` points at the `SpawnConfig` heap
-    /// instance produced by `baml.spawn.options(...)`; its field 0 (`_handle`)
-    /// is an `Object::RustData(Arc<SpawnConfigData>)`. Returns the configured
-    /// cancel token, or `None` when there was no `cancel = ...` argument.
+    /// Read the `SpawnConfigData` (cancel token + detach flag) out of a
+    /// `baml.spawn.SpawnConfig` instance (BEP-034 spawn options). `config`
+    /// points at the `SpawnConfig` heap instance produced by
+    /// `baml.spawn.options(...)`; its field 0 (`_handle`) is an
+    /// `Object::RustData(Arc<SpawnConfigData>)`. Returns `None` when the value
+    /// is not a well-formed `SpawnConfig` (caller defaults it).
     ///
     /// Safe to deref the pointers because the caller holds the active heap
     /// permit and `config` is rooted by the `UnscheduledFuture` being handled.
-    fn read_spawn_config_cancel(config: HeapPtr) -> Option<CancellationToken> {
+    fn read_spawn_config(config: HeapPtr) -> Option<SpawnConfigData> {
         let Object::Instance(instance) = (unsafe { config.get() }) else {
             return None;
         };
         let handle_ptr = instance.load_field(0).as_object_ptr()?;
         match unsafe { handle_ptr.get() } {
-            Object::RustData(data) => data.downcast_ref::<SpawnConfigData>()?.cancel.clone(),
+            Object::RustData(data) => data.downcast_ref::<SpawnConfigData>().cloned(),
             _ => None,
         }
     }
@@ -1953,13 +1954,16 @@ impl BexEngine {
     ///
     /// Returns the heap pointer to the allocated future so the spawning
     /// thread can push it onto its stack as the result of `spawn { ... }`.
+    #[allow(clippy::too_many_arguments)]
     fn spawn_thread(
         self: Arc<Self>,
         parent_cancel: CancellationToken,
         parent_pending_errors: Arc<ChildErrorQueue>,
+        root_pending_errors: Arc<ChildErrorQueue>,
         closure: HeapPtr,
         name: Option<String>,
         user_cancel: Option<CancellationToken>,
+        detach: bool,
         call_id: CallId,
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<HeapPtr, EngineError>> + Send + 'static>,
@@ -1967,25 +1971,38 @@ impl BexEngine {
         Box::pin(self.spawn_thread_inner(
             parent_cancel,
             parent_pending_errors,
+            root_pending_errors,
             closure,
             name,
             user_cancel,
+            detach,
             call_id,
         ))
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn spawn_thread_inner(
         self: Arc<Self>,
         parent_cancel: CancellationToken,
         parent_pending_errors: Arc<ChildErrorQueue>,
+        root_pending_errors: Arc<ChildErrorQueue>,
         closure: HeapPtr,
         name: Option<String>,
         user_cancel: Option<CancellationToken>,
+        detach: bool,
         call_id: CallId,
     ) -> Result<HeapPtr, EngineError> {
         // Each spawned thread gets a child cancel token so parent → child
-        // cascade falls out of the token tree without bespoke tracking.
-        let child_cancel = parent_cancel.child_token();
+        // cascade falls out of the token tree without bespoke tracking. A
+        // `detach = true` spawn instead gets a fresh, independent token so the
+        // parent's cancellation (and unhandled-throw cascade) does NOT reach
+        // it — it behaves like a top-level task. This must happen before the
+        // user-token watcher links in, so the watcher targets the right token.
+        let child_cancel = if detach {
+            CancellationToken::new()
+        } else {
+            parent_cancel.child_token()
+        };
         drop(parent_cancel);
 
         // BEP-034 spawn options: link a user-provided `CancelToken`
@@ -2031,7 +2048,13 @@ impl BexEngine {
         // outer-scope `.await`.
         let (future_ptr, future_id, inactive) = self
             .clone()
-            .spawn_thread_setup(child_vm, child_cancel.clone(), name, parent_pending_errors)
+            .spawn_thread_setup(
+                child_vm,
+                child_cancel.clone(),
+                name,
+                parent_pending_errors,
+                root_pending_errors,
+            )
             .await?;
 
         // Phase B note: v1 spans for spawned bodies are deferred. We pass
@@ -2122,6 +2145,7 @@ impl BexEngine {
         child_cancel: CancellationToken,
         name: Option<String>,
         parent_pending_errors: Arc<ChildErrorQueue>,
+        root_pending_errors: Arc<ChildErrorQueue>,
     ) -> Result<(HeapPtr, FutureId, InactiveHeapPermit<BexThread>), EngineError> {
         // One-shot `()` permit for the brief future-allocation window. It
         // is dropped before we create the long-lived `BexThread` permit
@@ -2140,6 +2164,7 @@ impl BexEngine {
             name,
             future_id,
             parent_pending_errors,
+            root_pending_errors,
         );
         let inactive = self.heap_permit_manager.new_permit(child_thread).await;
 
@@ -2537,18 +2562,31 @@ impl BexEngine {
                             Object::String(s) => Some(s.clone()),
                             _ => None,
                         });
-                    // BEP-034 spawn options: if a `with baml.spawn.options(...)`
-                    // clause supplied a `cancel` token, read it out of the
-                    // `SpawnConfig` and link it into the child's effective token.
-                    let user_cancel = config_ptr.and_then(Self::read_spawn_config_cancel);
-                    let parent_errors_arc = thread.vm_thread_pending_errors_arc();
+                    // BEP-034 spawn options: read the `SpawnConfig` (cancel
+                    // token + detach flag) from a `with baml.spawn.options(...)`
+                    // clause. `cancel` links into the child's effective token;
+                    // `detach` decouples it from the parent and routes its
+                    // unhandled errors to the root task instead of this spawner.
+                    let config = config_ptr
+                        .and_then(Self::read_spawn_config)
+                        .unwrap_or_default();
+                    let detach = config.detach;
+                    let user_cancel = config.cancel;
+                    let parent_errors_arc = if detach {
+                        thread.vm_thread_root_errors_arc()
+                    } else {
+                        thread.vm_thread_pending_errors_arc()
+                    };
+                    let root_errors_arc = thread.vm_thread_root_errors_arc();
                     let future_ptr = Arc::clone(self)
                         .spawn_thread(
                             cancel.clone(),
                             parent_errors_arc,
+                            root_errors_arc,
                             closure,
                             spawn_name,
                             user_cancel,
+                            detach,
                             call_id,
                         )
                         .await?;

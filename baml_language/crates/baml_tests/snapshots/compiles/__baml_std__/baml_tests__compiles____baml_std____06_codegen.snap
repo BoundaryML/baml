@@ -4599,7 +4599,7 @@ function baml.spawn.TaskGroup.to_json(self: null) -> baml.json.json {
     return
 }
 
-function baml.spawn.options(group: baml.spawn.TaskGroup?, cancel: baml.spawn.CancelToken?) -> baml.spawn.SpawnConfig {
+function baml.spawn.options(group: baml.spawn.TaskGroup?, cancel: baml.spawn.CancelToken?, detach: bool?) -> baml.spawn.SpawnConfig {
 }
 
 function baml.stream.StreamFinished.from_json(j: baml.json.json) -> baml.stream.StreamFinished {

@@ -54,10 +54,12 @@ class CancelToken {
   }
 }
 
-/// Assemble a `SpawnConfig` for a `spawn ... with` clause. In v1 only `cancel`
-/// is honored at runtime; `group` is accepted for forward compatibility and
-/// wired in a follow-up. (`detach` lands alongside its runtime support.)
+/// Assemble a `SpawnConfig` for a `spawn ... with` clause. `cancel` links a
+/// cancel token into the spawn's effective token; `detach = true` opts the
+/// spawn out of the parent→child cancel cascade and routes its unhandled
+/// errors to the root task instead of the spawner. (`group` is accepted for
+/// forward compatibility and wired in a follow-up.)
 //baml:mut_vm
-function options(group: TaskGroup? = null, cancel: CancelToken? = null) -> SpawnConfig {
+function options(group: TaskGroup? = null, cancel: CancelToken? = null, detach: bool? = null) -> SpawnConfig {
   $rust_function
 }

@@ -831,6 +831,14 @@ impl Value {
         self.0 == 0
     }
 
+    /// `true` for the `OmittedArg` sentinel — the value the VM passes for an
+    /// optional argument the caller left out. Native builtins treat an omitted
+    /// optional argument the same as an absent one (`None`).
+    #[inline(always)]
+    pub const fn is_omitted(self) -> bool {
+        self.0 == Self::OMITTED_ARG.0
+    }
+
     #[inline(always)]
     pub const fn is_int(self) -> bool {
         self.0 & 1 != 0
@@ -2351,6 +2359,10 @@ pub struct SpawnConfigData {
     /// User-provided cancel token from `options(cancel = ...)`, if any. Linked
     /// into the spawn's effective token by the engine.
     pub cancel: Option<CancellationToken>,
+    /// `detach = true`: the spawn opts out of the parent→child cancel cascade
+    /// (its effective token is independent of the parent's) and its unhandled
+    /// errors route to the root task rather than the spawner.
+    pub detach: bool,
 }
 
 /// A pending user `spawn { body }` request that the engine still has to

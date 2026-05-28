@@ -832,3 +832,88 @@ async fn spawn_with_options_cancel_token_any_composes() {
         start.elapsed()
     );
 }
+
+// ============================================================================
+// BEP-034 spawn options — `detach = true`
+// ============================================================================
+
+/// `detach = true` does not perturb normal completion.
+#[tokio::test]
+async fn spawn_with_options_detach_completes_normally() {
+    let source = r#"
+        function main() -> int {
+            let f = spawn with baml.spawn.options(detach = true) { 42 };
+            await f
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "main",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("call should succeed");
+
+    assert_eq!(result, BexExternalValue::Int(42));
+}
+
+/// A `detach = true` spawn still honors an explicit `cancel` token: detach only
+/// drops the *parent* token from the effective token, so a user token linked
+/// via `options(cancel = ...)` still cancels it.
+#[tokio::test]
+async fn spawn_with_options_detach_still_honors_cancel_token() {
+    let source = r#"
+        function main() -> int {
+            let tok = baml.spawn.CancelToken.new();
+            let f = spawn with baml.spawn.options(cancel = tok, detach = true) {
+                baml.sys.sleep(10000);
+                42
+            };
+            let _ = tok.cancel();
+            (await f) catch (e) { baml.panics.Cancelled => 0 }
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    let start = std::time::Instant::now();
+    let result = engine
+        .call_function(
+            "main",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("call should succeed (Cancelled caught)");
+
+    assert_eq!(result, BexExternalValue::Int(0));
+    assert!(
+        start.elapsed() < std::time::Duration::from_secs(2),
+        "detached cancel-token took too long: {:?}",
+        start.elapsed()
+    );
+}

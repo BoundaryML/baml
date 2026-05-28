@@ -1048,7 +1048,7 @@ function baml.spawn.from_json(j: baml.json.json) -> baml.spawn.TaskGroup  [expr]
 }
 function baml.spawn.is_cancelled(self: ?) -> bool  [builtin]
 function baml.spawn.new() -> baml.spawn.CancelToken  [builtin]
-function baml.spawn.options(group: baml.spawn.TaskGroup? = null, cancel: baml.spawn.CancelToken? = null) -> baml.spawn.SpawnConfig  [builtin]
+function baml.spawn.options(group: baml.spawn.TaskGroup? = null, cancel: baml.spawn.CancelToken? = null, detach: bool? = null) -> baml.spawn.SpawnConfig  [builtin]
 function baml.spawn.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
