@@ -405,3 +405,36 @@ Fixed so far (26): 3,5,7,8,9,10,12,13,14,16,17,20,21,23,25,26,27,33,34,35,36,38,
   so true declaration order needs sorting by source span.
 - **6**: `interface X requires <non-interface>` silently accepted — needs a new per-interface
   validation diagnostic (no such pass exists today).
+
+---
+
+## Progress update 4 — 28/44; entering the high-risk long tail
+
+Since update 3 (+2), zero regressions:
+- **18** — class method wins over an aliased interface field view on access.
+- **39** — `catch`/`match` against an interface type now tests its implementors
+  (`emit_is_type_branch` expands an interface to a disjunction over implementor classes).
+- **29/30** — corrected to the canonical `let d: Dog =>` form (per product decision: the
+  no-`let` form is not valid syntax); strengthened the pre-existing weak test.
+
+Fixed (28): 3,5,7,8,9,10,12,13,14,16,17,18,20,21,23,25,26,27,29,30,33,34,35,36,38,39,40,42,43,44.
+
+### Remaining 14 — each a distinct, deeper change (deferred for dedicated work)
+- **Exhaustiveness/usefulness matrix** (32, 41, 45) — `enumerate_ctors` (builder.rs:11139)
+  models a union as `UnionMember`s and an interface as `NonExhaustive`, but a type-ascription
+  arm `let a: Animal` against a `Animal | string` scrutinee is lowered as a catch-all, so the
+  `string` arm is flagged unreachable; `Interface?`'s null arm and `let x: I? = i` refutability
+  hit the same gap. Fix = lower an interface/class type-ascription against a union/optional
+  scrutinee to a *member-targeted type test*. HIGH RISK: this code governs all match/catch
+  exhaustiveness (1576 lib tests) — needs careful, isolated work.
+- **Method-reference dispatch thunks** (1, 2) — `let f = Interface.method; f(recv)` must lower
+  the reference to a closure that dispatches on its receiver; today it binds the interface's
+  default/`any` statically. Needs a synthesized per-(interface,method) dispatch thunk.
+- **Union-of-concrete method dispatch** (4, 31) — calling a method common to all members of a
+  `Dog | Cat` value (from `if`/`match` arms) crashes; needs a union-receiver dispatch path.
+- **Generic substitution through default dispatch** (15, 24) — interface-self repr in default
+  bodies + return-type `T` substitution through `Container<int>`-typed dispatch.
+- **Diagnostic wording** (11, 19, 22, 28) — plumb interface type-args / interface-field names
+  into diagnostic payloads (`AmbiguousInterfaceField`, projection hints) to suggest
+  `.as<Box<int>>` etc.
+- **6** — `interface X requires <non-interface>` needs a new per-interface validation pass.
