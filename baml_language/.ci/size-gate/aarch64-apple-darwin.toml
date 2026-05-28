@@ -3,9 +3,9 @@ recorded_at = "2026-05-07T02:32:44Z"
 git_sha = "f5a2a0d29"
 
 [artifacts.bridge_cffi]
-file_bytes = 11778768
-stripped_bytes = 11778808
-gzip_bytes = 5086954
+file_bytes = 12992448
+stripped_bytes = 12992488
+gzip_bytes = 5601839
 
 [artifacts.bridge_cffi-stripped]
 file_bytes = 10765904

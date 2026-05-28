@@ -1297,11 +1297,7 @@ fn compute_function_metadata_from_item_tree(
                 .map(|te| resolve(&te.expr))
                 .or_else(|| {
                     (p.name.as_str() == "self")
-                        .then(|| {
-                            self_replacement
-                                .as_ref()
-                                .map(&resolve)
-                        })
+                        .then(|| self_replacement.as_ref().map(&resolve))
                         .flatten()
                 })
                 .unwrap_or_else(null_ty)

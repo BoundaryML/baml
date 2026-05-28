@@ -452,11 +452,7 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
     }
 }
 
-fn display_surface_ty(
-    db: &dyn Db,
-    file: SourceFile,
-    ty: &baml_compiler2_tir::ty::Ty,
-) -> String {
+fn display_surface_ty(db: &dyn Db, file: SourceFile, ty: &baml_compiler2_tir::ty::Ty) -> String {
     utils::display_ty_for_file(db, file, ty)
 }
 

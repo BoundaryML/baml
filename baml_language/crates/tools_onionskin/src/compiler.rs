@@ -4842,7 +4842,10 @@ fn format_implements_for(
     write_indent(output, indent);
     writeln!(output, "IMPLEMENTS_FOR").ok();
 
-    if let Some(target) = implements_for.target().and_then(|target| target.type_expr()) {
+    if let Some(target) = implements_for
+        .target()
+        .and_then(|target| target.type_expr())
+    {
         write_indent(output, indent + 1);
         writeln!(output, "INTERFACE {}", target.syntax().text()).ok();
     }

@@ -474,9 +474,9 @@ impl fmt::Display for TirTypeError {
                 let extra_types = humanize_type_names(extra_types.iter().map(String::as_str));
                 write!(
                     f,
-                    "throws contract violation: `{}` is missing {}",
+                    "declared throws is `{}`, but this function may also throw `{}`",
                     humanize_ty(declared),
-                    extra_types.join(", ")
+                    extra_types.join(" | ")
                 )
             }
             TirTypeError::CallbackThrowsContractViolation {

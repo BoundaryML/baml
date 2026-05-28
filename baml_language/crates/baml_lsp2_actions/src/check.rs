@@ -2998,9 +2998,9 @@ fn source_aware_tir_type_error_message(
             extra_types,
         } => {
             format!(
-                "throws contract violation: `{}` is missing {}",
+                "declared throws is `{}`, but this function may also throw `{}`",
                 ty(declared),
-                extra_types.join(", ")
+                extra_types.join(" | ")
             )
         }
         TirTypeError::CallbackThrowsContractViolation {

@@ -4108,6 +4108,34 @@ fn all_required_parents_satisfied_is_ok() {
     );
 }
 
+#[test]
+fn required_parent_lookup_uses_declaring_interface_namespace() {
+    let files = &[
+        (
+            "main.baml",
+            r#"
+                interface Parent {}
+
+                class Robot {
+                    function label(self) -> string { return "robot" }
+                    implements root.contracts.Child {}
+                    implements Parent {}
+                }
+                "#,
+        ),
+        (
+            "ns_contracts/interfaces.baml",
+            r#"
+                interface Parent {
+                    function label(self) -> string
+                }
+                interface Child requires Parent {}
+                "#,
+        ),
+    ];
+    assert_compile_error_contains_multi(files, "E0125");
+}
+
 #[tokio::test]
 async fn requires_chain_exposes_parent_fields() {
     // Person requires Named — accessing `name` through a Person-typed
@@ -4220,6 +4248,35 @@ fn out_of_body_implements_for_class_compiles() {
         }
         "#,
     );
+}
+
+#[test]
+fn out_of_body_implements_for_qualified_generic_class_uses_class_methods() {
+    let files = &[
+        (
+            "main.baml",
+            r#"
+                interface Printable {
+                    function label(self) -> string
+                }
+
+                implements Printable for root.models.Box<int> {}
+                "#,
+        ),
+        (
+            "ns_models/box.baml",
+            r#"
+                class Box<T> {
+                    value: T
+
+                    function label(self) -> string {
+                        return "box"
+                    }
+                }
+                "#,
+        ),
+    ];
+    assert_no_compile_errors_multi(files);
 }
 
 #[test]
@@ -4552,6 +4609,29 @@ fn out_of_body_generic_required_parent_args_must_match() {
         implements Child<int> for int {}
         "#,
         "E0125",
+    );
+}
+
+#[test]
+fn inherited_generic_interface_field_construction_uses_parent_args() {
+    assert_compile_error_contains(
+        r#"
+        interface Parent<T> {
+            value: T
+        }
+        interface Child<T> requires Parent<T> {}
+        class Box {
+            stored: int
+            implements Child<int> {}
+            implements Parent<int> {
+                value as stored
+            }
+        }
+        function main() -> void {
+            let b = Box { value: "wrong" }
+        }
+        "#,
+        "type mismatch: expected int",
     );
 }
 
