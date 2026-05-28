@@ -6843,7 +6843,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
 
                 let field_sources = self.class_interface_field_sources(class_name, member);
-                if let [interface_name] = field_sources.as_slice() {
+                // A class's own method of the same name wins over an aliased
+                // interface *field view* — `p.name()` calls the method even when
+                // an `implements I { name as _name }` view also exists. Only
+                // surface the "needs projection" error when there's no such
+                // method to fall through to.
+                if let [interface_name] = field_sources.as_slice()
+                    && self.lookup_class_method(class_name, type_args, member).is_none()
+                {
                     self.context.report_at_member(
                         TirTypeError::InterfaceFieldRequiresProjection {
                             class_name: class_name.name().clone(),
