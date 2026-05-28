@@ -371,3 +371,37 @@ requires-closure × every impl-block, so for `B requires A` with both declaring 
 (→`a_label`) and impl-block order picks A's. Fix: resolve the field against the *most-derived*
 declaring interface in the closure (requested interface first), then only match impl-blocks for
 that view. Same shape for methods (finding 5).
+
+---
+
+## Progress update 3 — 26/44 (RC1 + requires-chain + generic-fn dispatch all landed)
+
+Since update 2 (+5), zero regressions (1576 lib + 248 existing interface tests green):
+- **E (requires-chain views):** 5, 20, 21 — field/method resolution pins the *most-derived*
+  declaring interface in the closure (`interface_declares_field`/`_method` + `method_provider_view`
+  in `mir/lower.rs`), so `.as<B>.label` and `A::foo` vs `B::foo` stay distinct.
+- **C (generic-fn interface param):** 10, 43 — a requested interface arg that is an enclosing
+  function's type-var now matches any implementor (runtime IsType discriminates), fixing the
+  `expected Map, got Instance` crash for `fn read<T>(b: Box<T>) { b.get() }`.
+
+Fixed so far (26): 3,5,7,8,9,10,12,13,14,16,17,20,21,23,25,26,27,33,34,35,36,38,40,42,43,44.
+
+### Remaining 18 — each a distinct deeper investigation
+- **Exhaustiveness/usefulness matrix vs interface↔optional** (32, 41, 45): `let x: I? = i`
+  wrongly E0111-refutable; `match` on `I?` mis-handles the null arm / union arms. Lives in
+  `exhaustiveness.rs` + the pattern matrix — needs the matrix to know `Class <: Interface` and
+  `T <: T?`.
+- **15** (default method's `self.size()` through an interface-typed var → `expected Map, got
+  Instance`) and **24** (`b.get()` on `Container<int>` → compile-time `expected T, got null`):
+  generic substitution / interface-self runtime repr in default-method dispatch.
+- **H method refs** (1, 2): `Interface.method` must lower to a polymorphic dispatch closure
+  (`mir/lower.rs` member-ref lowering), not a static `ItemRef::Method`.
+- **K parser/union** (4, 18, 29, 31): `d: Dog =>` no-`let` form is a **product decision** (support
+  in grammar, or drop it and fix the existing weak test); union-of-concrete method dispatch (4, 31)
+  needs a union-receiver dispatch path; 18 is field-view-vs-class-method precedence on `()`.
+- **J wording** (11, 19, 22, 28): diagnostics carry only simple `Name`s; suggesting `.as<Box<int>>`
+  / naming the interface field needs interface type args plumbed into the diagnostic payloads.
+- **F ordering** (37): `implementors()` order — `LocalItemId` is hash-based (position-independent),
+  so true declaration order needs sorting by source span.
+- **6**: `interface X requires <non-interface>` silently accepted — needs a new per-interface
+  validation diagnostic (no such pass exists today).
