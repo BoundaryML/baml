@@ -517,7 +517,7 @@ impl Deref for BexStr {
 }
 
 impl Hash for BexStr {
-    /// Hash raw bytes — same as `<str as Hash>` — to satisfy Borrow<str> contract.
+    /// Hash raw bytes — same as `<str as Hash>` — to satisfy `Borrow<str>` contract.
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.as_str().hash(state);
     }
