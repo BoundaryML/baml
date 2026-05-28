@@ -5,10 +5,10 @@ class Bar {
   ratio float
 }
 
-function MakeFizzFooBar(tag: string, ratio: float) -> Bar {
+function make_fizz_foo_bar(tag: string, ratio: float) -> Bar {
   Bar { tag: tag, ratio: ratio }
 }
 
-function RoundTripFizzFooBar(b: Bar) -> Bar {
+function round_trip_fizz_foo_bar(b: Bar) -> Bar {
   b
 }

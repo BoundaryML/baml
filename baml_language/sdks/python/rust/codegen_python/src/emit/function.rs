@@ -54,4 +54,9 @@ pub(crate) struct PyFunction {
     /// Surfaced only by `.pyi` rendering as a `"""..."""` body so
     /// `__doc__` resolves at runtime.
     pub(crate) docstring: Option<String>,
+    /// Unqualified leaf names of the function's inferred thrown types, in
+    /// source order (derived from `Function.throws`). Empty for non-throwing
+    /// functions. Rendered as the `Raises:` docstring block (32d) — in the
+    /// `.pyi` (always) and, for free functions, the `.py` `__doc__ =` trailer.
+    pub(crate) raises_names: Vec<String>,
 }

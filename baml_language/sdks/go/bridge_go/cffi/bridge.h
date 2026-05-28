@@ -12,7 +12,7 @@ typedef void* (*CreateBamlRuntimeFn)(const char *root_path, const char *src_file
 typedef void (*DestroyBamlRuntimeFn)(const void *runtime);
 typedef void (*FreeBufferFn)(Buffer buf);
 typedef void (*CallFunctionFn)(const char *function_name, const uint8_t *encoded_args, size_t length, uint32_t id);
-typedef void (*CallbackFn)(uint32_t call_id, int32_t is_error, const int8_t *content, size_t length);
+typedef void (*CallbackFn)(uint32_t call_id, const int8_t *content, size_t length);
 typedef void (*RegisterCallbackFn)(CallbackFn cb);
 typedef uint64_t (*CloneHandleFn)(uint64_t key);
 typedef void (*ReleaseHandleFn)(uint64_t key);

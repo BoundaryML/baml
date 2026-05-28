@@ -1142,6 +1142,7 @@ dependencies = [
  "baml_compiler_diagnostics",
  "baml_compiler_parser",
  "baml_workspace",
+ "indexmap 2.14.0",
  "la-arena",
  "rustc-hash 2.1.2",
  "salsa",

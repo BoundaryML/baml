@@ -3,8 +3,9 @@
 # Windows counterpart of setup.sh. Invoked automatically by
 # `cargo nextest run` via the setup-script binding in
 # `baml_language/.config/nextest.toml` (host = cfg(windows)).
-# For plain `cargo test` (no nextest), run this manually after
-# `cargo test --no-run` populates each fixture's `generated/package.json`.
+# Run the suite with `cargo nextest run`, not `cargo test`: plain
+# `cargo test` skips this script and can't pass `setup_guard::ran`
+# (see ..\..\README.md).
 #
 # See setup.sh for the rationale on `pnpm build:debug` + per-fixture
 # `pnpm install --ignore-workspace`; the steps are identical.
@@ -45,4 +46,12 @@ Get-ChildItem -Directory | ForEach-Object {
             Pop-Location
         }
     }
+}
+
+# Per-run breadcrumb for the `setup_guard::ran` test. See the
+# "setup.sh guard" section of ..\..\README.md for the format and
+# rationale. Keep the var name in sync with SETUP_ENV_VAR in
+# harness_setup/src/nodejs_typescript.rs.
+if ($env:NEXTEST_ENV) {
+    Add-Content -Path $env:NEXTEST_ENV -Value 'SDK_TEST_NODEJS_TYPESCRIPT_SETUP=1'
 }

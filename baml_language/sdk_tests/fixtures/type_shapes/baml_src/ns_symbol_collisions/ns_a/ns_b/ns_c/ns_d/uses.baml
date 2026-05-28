@@ -7,7 +7,7 @@ class Deep {
   nested root.symbol_collisions.lorem.Ipsum
 }
 
-function MakeDeep(
+function make_deep(
   here: root.symbol_collisions.foo.Bar,
   there: root.symbol_collisions.fizz.foo.Bar,
   further: root.symbol_collisions.fizz.buzz.foo.Bar,
@@ -16,6 +16,6 @@ function MakeDeep(
   Deep { here: here, there: there, further: further, nested: nested }
 }
 
-function RoundTripDeep(d: Deep) -> Deep {
+function round_trip_deep(d: Deep) -> Deep {
   d
 }

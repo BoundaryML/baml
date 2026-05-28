@@ -15,50 +15,50 @@ class Primitives {
   uint8array_field uint8array
 }
 
-function ReturnInt() -> int {
+function return_int() -> int {
   42
 }
 
-function ReturnFloat() -> float {
+function return_float() -> float {
   3.14
 }
 
-function ReturnString() -> string {
+function return_string() -> string {
   "hello"
 }
 
-function ReturnBool() -> bool {
+function return_bool() -> bool {
   true
 }
 
-function ReturnNull() -> null {
+function return_null() -> null {
   null
 }
 
-function RoundTripUint8Array(b: uint8array) -> uint8array {
+function round_trip_uint8_array(b: uint8array) -> uint8array {
   b
 }
 
-function RoundTripInt(x: int) -> int {
+function round_trip_int(x: int) -> int {
   x
 }
 
-function RoundTripFloat(x: float) -> float {
+function round_trip_float(x: float) -> float {
   x
 }
 
-function RoundTripString(x: string) -> string {
+function round_trip_string(x: string) -> string {
   x
 }
 
-function RoundTripBool(x: bool) -> bool {
+function round_trip_bool(x: bool) -> bool {
   x
 }
 
-function RoundTripNull(x: null) -> null {
+function round_trip_null(x: null) -> null {
   x
 }
 
-function RoundTripPrimitives(p: Primitives) -> Primitives {
+function round_trip_primitives(p: Primitives) -> Primitives {
   p
 }

@@ -7,6 +7,7 @@
 mod error;
 mod event_encode;
 mod handle_table;
+mod traceback;
 mod utils;
 mod value_decode;
 mod value_encode;
@@ -24,6 +25,7 @@ pub use event_encode::{runtime_event_to_bytes, runtime_event_to_proto};
 pub use handle_table::{
     CffiHandleTable, CffiHandleTableEntry, CffiHandleTableOptions, HANDLE_TABLE,
 };
+pub use traceback::format_traceback_lines;
 pub use utils::DecodeFromBuffer;
 pub use value_decode::{inbound_to_external, kwargs_to_bex_values};
 pub use value_encode::external_to_outbound;

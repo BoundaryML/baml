@@ -2,7 +2,7 @@
 
 use std::{collections::HashMap, ffi::CStr};
 
-use crate::{Buffer, engine::initialize_runtime, panic::ffi_safe_ptr};
+use crate::{Buffer, initialize_runtime, panic::ffi_safe_ptr};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 

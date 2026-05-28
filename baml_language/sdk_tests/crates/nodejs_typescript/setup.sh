@@ -4,9 +4,9 @@
 #
 # Invoked automatically by `cargo nextest run` via the setup-script
 # binding in `baml_language/.config/nextest.toml` — whenever the run
-# selects any sdk_test_nodejs_typescript test. For plain `cargo test`
-# (no nextest) run this manually after `cargo test --no-run` populates
-# each fixture's `generated/package.json`.
+# selects any sdk_test_nodejs_typescript test. Run the suite with
+# `cargo nextest run`, not `cargo test`: plain `cargo test` skips this
+# script and can't pass `setup_guard::ran` (see ../../README.md).
 #
 # This script turns those generated/ dirs into a real `node_modules/`
 # tree and builds the native `.node` addon each fixture `file:`-links
@@ -52,3 +52,11 @@ for fixture_dir in */generated; do
     echo "==> pnpm install in $fixture_dir"
     (cd "$fixture_dir" && pnpm install --ignore-workspace)
 done
+
+# Per-run breadcrumb for the `setup_guard::ran` test. See the
+# "setup.sh guard" section of ../../README.md for the format and
+# rationale. Keep the var name in sync with SETUP_ENV_VAR in
+# harness_setup/src/nodejs_typescript.rs.
+if [[ -n "${NEXTEST_ENV:-}" ]]; then
+    echo "SDK_TEST_NODEJS_TYPESCRIPT_SETUP=1" >> "$NEXTEST_ENV"
+fi

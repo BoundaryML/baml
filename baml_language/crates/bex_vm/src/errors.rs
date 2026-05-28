@@ -245,6 +245,10 @@ fn format_internal_error(err: &VmInternalError, trace: &[StackFrame]) -> String 
 /// ```
 ///
 /// Returns an empty string when `frames` is empty.
+///
+/// The per-frame format is intentionally mirrored by `bridge_ctypes`'s
+/// `format_traceback_lines` (the per-frame wire form for the host); keep the
+/// two in sync.
 pub fn format_traceback<'a>(frames: impl Iterator<Item = (&'a str, usize, &'a str)>) -> String {
     use std::fmt::Write;
     let mut out = String::new();

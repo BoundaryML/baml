@@ -165,7 +165,7 @@ class BamlRuntime:
         r"""
         Initialize the process-global runtime from in-memory BAML source files.
 
-        Mirrors `bridge_cffi::engine::initialize_runtime`: the same
+        Mirrors `bridge_cffi::initialize_runtime`: the same
         single-slot singleton is used, so a second call replaces the prior
         runtime.
 
