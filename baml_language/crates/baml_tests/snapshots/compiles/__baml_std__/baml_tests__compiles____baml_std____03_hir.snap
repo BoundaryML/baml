@@ -927,6 +927,10 @@ class baml.panics.IndexOutOfBounds {
   index: int
   length: int
 }
+class baml.panics.InvalidFieldAccess {
+  field_index: int
+  field_count: int
+}
 class baml.panics.MapKeyNotFound {
   key: string
 }
@@ -945,33 +949,9 @@ class baml.panics.Unreachable {
 class baml.panics.UserPanic {
   message: string
 }
-type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.Cancelled | baml.panics.UserPanic | baml.panics.Exit | baml.panics.AllocFailure | baml.panics.HostUnavailable | baml.panics.NegativeBitShift | baml.panics.SdkPanic
+type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.InvalidFieldAccess | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.Cancelled | baml.panics.UserPanic | baml.panics.Exit | baml.panics.AllocFailure | baml.panics.HostUnavailable | baml.panics.NegativeBitShift | baml.panics.SdkPanic
 function baml.panics.from_json(j: baml.json.json) -> baml.panics.DivisionByZero  [expr] {
   baml.panics.DivisionByZero { dividend: baml.json.from_json(baml.json.field(j, "dividend")) }
-}
-function baml.panics.from_json(j: baml.json.json) -> baml.panics.NegativeBitShift  [expr] {
-  baml.panics.NegativeBitShift { message: baml.json.from_json(baml.json.field(j, "message")) }
-}
-function baml.panics.from_json(j: baml.json.json) -> baml.panics.StackOverflow  [expr] {
-  baml.panics.StackOverflow { message: baml.json.from_json(baml.json.field(j, "message")) }
-}
-function baml.panics.from_json(j: baml.json.json) -> baml.panics.Cancelled  [expr] {
-  baml.panics.Cancelled { message: baml.json.from_json(baml.json.field(j, "message")) }
-}
-function baml.panics.from_json(j: baml.json.json) -> baml.panics.AllocFailure  [expr] {
-  baml.panics.AllocFailure { message: baml.json.from_json(baml.json.field(j, "message")) }
-}
-function baml.panics.from_json(j: baml.json.json) -> baml.panics.IndexOutOfBounds  [expr] {
-  baml.panics.IndexOutOfBounds { index: baml.json.from_json(baml.json.field(j, "index")), length: baml.json.from_json(baml.json.field(j, "length")) }
-}
-function baml.panics.from_json(j: baml.json.json) -> baml.panics.SdkPanic  [expr] {
-  baml.panics.SdkPanic { message: baml.json.from_json(baml.json.field(j, "message")) }
-}
-function baml.panics.from_json(j: baml.json.json) -> baml.panics.AssertionFailed  [expr] {
-  baml.panics.AssertionFailed { message: baml.json.from_json(baml.json.field(j, "message")) }
-}
-function baml.panics.from_json(j: baml.json.json) -> baml.panics.UserPanic  [expr] {
-  baml.panics.UserPanic { message: baml.json.from_json(baml.json.field(j, "message")) }
 }
 function baml.panics.from_json(j: baml.json.json) -> baml.panics.HostUnavailable  [expr] {
   baml.panics.HostUnavailable { resource: baml.json.from_json(baml.json.field(j, "resource")), message: baml.json.from_json(baml.json.field(j, "message")) }
@@ -985,23 +965,50 @@ function baml.panics.from_json(j: baml.json.json) -> baml.panics.Unreachable  [e
 function baml.panics.from_json(j: baml.json.json) -> baml.panics.Exit  [expr] {
   baml.panics.Exit { code: baml.json.from_json(baml.json.field(j, "code")) }
 }
+function baml.panics.from_json(j: baml.json.json) -> baml.panics.IndexOutOfBounds  [expr] {
+  baml.panics.IndexOutOfBounds { index: baml.json.from_json(baml.json.field(j, "index")), length: baml.json.from_json(baml.json.field(j, "length")) }
+}
+function baml.panics.from_json(j: baml.json.json) -> baml.panics.NegativeBitShift  [expr] {
+  baml.panics.NegativeBitShift { message: baml.json.from_json(baml.json.field(j, "message")) }
+}
+function baml.panics.from_json(j: baml.json.json) -> baml.panics.StackOverflow  [expr] {
+  baml.panics.StackOverflow { message: baml.json.from_json(baml.json.field(j, "message")) }
+}
+function baml.panics.from_json(j: baml.json.json) -> baml.panics.Cancelled  [expr] {
+  baml.panics.Cancelled { message: baml.json.from_json(baml.json.field(j, "message")) }
+}
+function baml.panics.from_json(j: baml.json.json) -> baml.panics.AllocFailure  [expr] {
+  baml.panics.AllocFailure { message: baml.json.from_json(baml.json.field(j, "message")) }
+}
+function baml.panics.from_json(j: baml.json.json) -> baml.panics.InvalidFieldAccess  [expr] {
+  baml.panics.InvalidFieldAccess { field_index: baml.json.from_json(baml.json.field(j, "field_index")), field_count: baml.json.from_json(baml.json.field(j, "field_count")) }
+}
+function baml.panics.from_json(j: baml.json.json) -> baml.panics.SdkPanic  [expr] {
+  baml.panics.SdkPanic { message: baml.json.from_json(baml.json.field(j, "message")) }
+}
+function baml.panics.from_json(j: baml.json.json) -> baml.panics.AssertionFailed  [expr] {
+  baml.panics.AssertionFailed { message: baml.json.from_json(baml.json.field(j, "message")) }
+}
+function baml.panics.from_json(j: baml.json.json) -> baml.panics.UserPanic  [expr] {
+  baml.panics.UserPanic { message: baml.json.from_json(baml.json.field(j, "message")) }
+}
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "code": self.code.to_json() }
+  map { "message": self.message.to_json() }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
   map { "dividend": self.dividend.to_json() }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "resource": self.resource.to_json(), "message": self.message.to_json() }
+}
+function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "key": self.key.to_json() }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
   map { "message": self.message.to_json() }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
-}
-function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "code": self.code.to_json() }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
   map { "index": self.index.to_json(), "length": self.length.to_json() }
@@ -1016,10 +1023,13 @@ function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
   map { "message": self.message.to_json() }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "resource": self.resource.to_json(), "message": self.message.to_json() }
+  map { "message": self.message.to_json() }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "key": self.key.to_json() }
+  map { "field_index": self.field_index.to_json(), "field_count": self.field_count.to_json() }
+}
+function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "message": self.message.to_json() }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
   map { "message": self.message.to_json() }

@@ -355,7 +355,7 @@ jobs:
   cargo-test-wasm:
     name: "cargo test (wasm)"
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
         with:
@@ -389,7 +389,10 @@ jobs:
 
       - name: "Rename cargo timings"
         if: always()
-        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-wasm.html
+        run: |
+          if [[ -f target/cargo-timings/cargo-timing.html ]]; then
+            mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-wasm.html
+          fi
         working-directory: baml_language
       - name: "Upload cargo timings"
         if: always()

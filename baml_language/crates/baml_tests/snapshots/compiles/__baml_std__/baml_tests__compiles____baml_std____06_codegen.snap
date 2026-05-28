@@ -4407,6 +4407,38 @@ function baml.panics.IndexOutOfBounds.to_json(self: null) -> baml.json.json {
     return
 }
 
+function baml.panics.InvalidFieldAccess.from_json(j: baml.json.json) -> baml.panics.InvalidFieldAccess {
+    load_var j
+    load_const "field_index"
+    call baml.json.field
+    store_var _3
+    load_type int
+    load_var _3
+    call baml.json.from_json
+    load_var j
+    load_const "field_count"
+    call baml.json.field
+    store_var _6
+    load_type int
+    load_var _6
+    call baml.json.from_json
+    init_instance baml.panics.InvalidFieldAccess .field_index, .field_count
+    return
+}
+
+function baml.panics.InvalidFieldAccess.to_json(self: null) -> baml.json.json {
+    load_var self
+    load_field .field_index
+    call baml.Int.to_json
+    load_var self
+    load_field .field_count
+    call baml.Int.to_json
+    load_const "field_index"
+    load_const "field_count"
+    alloc_map 2
+    return
+}
+
 function baml.panics.MapKeyNotFound.from_json(j: baml.json.json) -> baml.panics.MapKeyNotFound {
     load_var j
     load_const "key"
