@@ -2469,7 +2469,7 @@ impl LoweringContext {
                     rowan::NodeOrToken::Node(child_node) => {
                         collect_constructor_path(&child_node, path_segments, type_args);
                     }
-                    _ => {}
+                    rowan::NodeOrToken::Token(_) => {}
                 }
             }
         }

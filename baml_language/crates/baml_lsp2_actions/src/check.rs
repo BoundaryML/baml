@@ -1078,60 +1078,216 @@ fn interface_origin_matches_target_expr<'db>(
     rendered_type_args(&target_type_args) == rendered_type_args(&origin.type_args)
 }
 
-fn implements_for_targets_match<'db>(
+struct InterfaceValidationCtx<'db, 'a> {
     db: &'db dyn Db,
+    pkg_items: &'a baml_compiler2_hir::package::PackageItems<'db>,
+    namespace_path: &'a [Name],
+    aliases: &'a std::collections::HashMap<QualifiedTypeName, Ty>,
+}
+
+fn interface_target_matches_required_parent(
+    ctx: &InterfaceValidationCtx<'_, '_>,
+    candidate_target: &baml_compiler2_ast::TypeExpr,
+    required_parent: &baml_compiler2_ast::TypeExpr,
+    generic_params: &[Name],
+) -> bool {
+    let Some((candidate_loc, candidate_iface)) =
+        resolve_interface_path(ctx.db, candidate_target, ctx.pkg_items, ctx.namespace_path)
+    else {
+        return false;
+    };
+    let Some((required_loc, required_iface)) =
+        resolve_interface_path(ctx.db, required_parent, ctx.pkg_items, ctx.namespace_path)
+    else {
+        return false;
+    };
+    if interface_qtn_for_file(ctx.db, candidate_loc.file(ctx.db), &candidate_iface.name)
+        != interface_qtn_for_file(ctx.db, required_loc.file(ctx.db), &required_iface.name)
+    {
+        return false;
+    }
+
+    let candidate_args = lower_path_generic_args(
+        ctx.db,
+        candidate_target,
+        ctx.pkg_items,
+        ctx.namespace_path,
+        generic_params,
+    );
+    let required_args = lower_path_generic_args(
+        ctx.db,
+        required_parent,
+        ctx.pkg_items,
+        ctx.namespace_path,
+        generic_params,
+    );
+    candidate_args.len() == required_args.len()
+        && candidate_args
+            .iter()
+            .zip(required_args.iter())
+            .all(|(candidate_arg, required_arg)| {
+                baml_compiler2_tir::normalize::is_same_normalized_type(
+                    candidate_arg,
+                    required_arg,
+                    ctx.aliases,
+                )
+            })
+}
+
+fn implements_for_targets_match(
+    ctx: &InterfaceValidationCtx<'_, '_>,
     lhs: &baml_compiler2_ast::TypeExpr,
     lhs_generic_params: &[Name],
     rhs: &baml_compiler2_ast::TypeExpr,
     rhs_generic_params: &[Name],
-    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
-    namespace_path: &[Name],
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
 ) -> bool {
     let mut lhs_diags = Vec::new();
     let mut rhs_diags = Vec::new();
     let lhs_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-        db,
+        ctx.db,
         lhs,
-        pkg_items,
-        namespace_path,
+        ctx.pkg_items,
+        ctx.namespace_path,
         lhs_generic_params,
         &mut lhs_diags,
     );
     let rhs_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-        db,
+        ctx.db,
         rhs,
-        pkg_items,
-        namespace_path,
+        ctx.pkg_items,
+        ctx.namespace_path,
         rhs_generic_params,
         &mut rhs_diags,
     );
     lhs_diags.is_empty()
         && rhs_diags.is_empty()
-        && (baml_compiler2_tir::normalize::is_same_normalized_type(&lhs_ty, &rhs_ty, aliases)
+        && (baml_compiler2_tir::normalize::is_same_normalized_type(&lhs_ty, &rhs_ty, ctx.aliases)
             || baml_compiler2_tir::interfaces::match_ty_pattern(
                 &lhs_ty,
                 &rhs_ty,
                 lhs_generic_params,
-                aliases,
+                ctx.aliases,
             )
             .is_some()
             || baml_compiler2_tir::interfaces::match_ty_pattern(
                 &rhs_ty,
                 &lhs_ty,
                 rhs_generic_params,
-                aliases,
+                ctx.aliases,
             )
             .is_some())
 }
 
-fn has_sibling_implements_for_origin<'db>(
-    db: &'db dyn Db,
+fn implements_for_target_matches_class(
+    ctx: &InterfaceValidationCtx<'_, '_>,
+    target: &baml_compiler2_ast::TypeExpr,
+    target_generic_params: &[Name],
+    class: &baml_compiler2_ast::ClassDef,
+) -> bool {
+    use baml_compiler2_hir::contributions::Definition;
+
+    let Some(Definition::Class(class_loc)) =
+        ctx.pkg_items.lookup_type(ctx.namespace_path, &class.name)
+    else {
+        return false;
+    };
+    let class_qtn = baml_compiler2_tir::lower_type_expr::qualify_def(
+        ctx.db,
+        Definition::Class(class_loc),
+        &class.name,
+    );
+    let class_ty = Ty::Class(
+        class_qtn,
+        class
+            .generic_params
+            .iter()
+            .map(|param| Ty::TypeVar(param.clone(), TyAttr::default()))
+            .collect(),
+        TyAttr::default(),
+    );
+    let mut target_diags = Vec::new();
+    let target_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+        ctx.db,
+        target,
+        ctx.pkg_items,
+        ctx.namespace_path,
+        target_generic_params,
+        &mut target_diags,
+    );
+    target_diags.is_empty()
+        && (baml_compiler2_tir::normalize::is_same_normalized_type(
+            &target_ty,
+            &class_ty,
+            ctx.aliases,
+        ) || baml_compiler2_tir::interfaces::match_ty_pattern(
+            &class_ty,
+            &target_ty,
+            &class.generic_params,
+            ctx.aliases,
+        )
+        .is_some()
+            || baml_compiler2_tir::interfaces::match_ty_pattern(
+                &target_ty,
+                &class_ty,
+                target_generic_params,
+                ctx.aliases,
+            )
+            .is_some())
+}
+
+fn item_implements_required_parent_for_target(
+    ctx: &InterfaceValidationCtx<'_, '_>,
+    item: &baml_compiler2_ast::Item,
+    current: &baml_compiler2_ast::ImplementsForDef,
+    current_generic_params: &[Name],
+    required_parent: &baml_compiler2_ast::TypeExpr,
+) -> bool {
+    match item {
+        baml_compiler2_ast::Item::ImplementsFor(candidate) => {
+            if candidate.span == current.span {
+                return false;
+            }
+            let candidate_generic_params: Vec<Name> = candidate
+                .generic_params
+                .iter()
+                .map(|(name, _)| name.clone())
+                .collect();
+            implements_for_targets_match(
+                ctx,
+                &candidate.for_target.expr,
+                &candidate_generic_params,
+                &current.for_target.expr,
+                current_generic_params,
+            ) && interface_target_matches_required_parent(
+                ctx,
+                &candidate.interface_target.expr,
+                required_parent,
+                &candidate_generic_params,
+            )
+        }
+        baml_compiler2_ast::Item::Class(class) => {
+            implements_for_target_matches_class(
+                ctx,
+                &current.for_target.expr,
+                current_generic_params,
+                class,
+            ) && class.implements.iter().any(|candidate| {
+                interface_target_matches_required_parent(
+                    ctx,
+                    &candidate.target.expr,
+                    required_parent,
+                    &class.generic_params,
+                )
+            })
+        }
+        _ => false,
+    }
+}
+
+fn has_sibling_implements_for_origin(
+    ctx: &InterfaceValidationCtx<'_, '_>,
     current: &baml_compiler2_ast::ImplementsForDef,
     all_items: &[baml_compiler2_ast::Item],
-    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
-    namespace_path: &[Name],
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     origin: &InterfaceMemberOrigin,
 ) -> bool {
     all_items.iter().any(|item| {
@@ -1152,21 +1308,18 @@ fn has_sibling_implements_for_origin<'db>(
             .map(|(name, _)| name.clone())
             .collect();
         implements_for_targets_match(
-            db,
+            ctx,
             &candidate.for_target.expr,
             &candidate_generic_params,
             &current.for_target.expr,
             &current_generic_params,
-            pkg_items,
-            namespace_path,
-            aliases,
         ) && interface_origin_matches_target_expr(
-            db,
+            ctx.db,
             &candidate.interface_target.expr,
-            pkg_items,
-            namespace_path,
+            ctx.pkg_items,
+            ctx.namespace_path,
             &candidate_generic_params,
-            aliases,
+            ctx.aliases,
             origin,
         )
     })
@@ -1503,6 +1656,12 @@ fn validate_implements_for<'db>(
     let target_name = Name::new(format!("{}", imp.for_target.expr));
     let generic_param_names: Vec<Name> =
         imp.generic_params.iter().map(|(n, _)| n.clone()).collect();
+    let ctx = InterfaceValidationCtx {
+        db,
+        pkg_items,
+        namespace_path,
+        aliases,
+    };
     let mut target_type_errors = Vec::new();
     baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
         db,
@@ -1553,18 +1712,6 @@ fn validate_implements_for<'db>(
         return;
     };
 
-    if !iface.fields.is_empty() {
-        diagnostics.push(
-            Hir2Diagnostic::OutOfBodyImplementsFieldInterface {
-                target_name: target_name.to_string(),
-                interface_name: iface.name,
-                span: imp.interface_target.span,
-            }
-            .to_diagnostic(file_id),
-        );
-        return;
-    }
-
     let iface_file = iface_loc.file(db);
     let subst: std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr> =
         match &imp.interface_target.expr {
@@ -1585,6 +1732,18 @@ fn validate_implements_for<'db>(
         &subst,
         &[],
     );
+
+    if !members.fields.is_empty() {
+        diagnostics.push(
+            Hir2Diagnostic::OutOfBodyImplementsFieldInterface {
+                target_name: target_name.to_string(),
+                interface_name: iface.name,
+                span: imp.interface_target.span,
+            }
+            .to_diagnostic(file_id),
+        );
+        return;
+    }
 
     let mut provided_method_names: HashSet<Name> = HashSet::new();
     for method in &imp.methods {
@@ -1646,15 +1805,7 @@ fn validate_implements_for<'db>(
             continue;
         }
         if origin.qualified_name != iface_qtn
-            && has_sibling_implements_for_origin(
-                db,
-                imp,
-                all_items,
-                pkg_items,
-                namespace_path,
-                aliases,
-                origin,
-            )
+            && has_sibling_implements_for_origin(&ctx, imp, all_items, origin)
         {
             continue;
         }
@@ -1667,6 +1818,45 @@ fn validate_implements_for<'db>(
             }
             .to_diagnostic(file_id),
         );
+    }
+
+    if !iface.extends.is_empty() {
+        let missing: Vec<Name> = iface
+            .extends
+            .iter()
+            .filter_map(|parent_te| {
+                let required_parent = substitute_type_vars(&parent_te.expr, &subst);
+                let baml_compiler2_ast::TypeExpr::Path { segments, .. } = &required_parent else {
+                    return None;
+                };
+                let parent_name = segments.last()?;
+                let target_implements_it = all_items.iter().any(|item| {
+                    item_implements_required_parent_for_target(
+                        &ctx,
+                        item,
+                        imp,
+                        &generic_param_names,
+                        &required_parent,
+                    )
+                });
+                if target_implements_it {
+                    None
+                } else {
+                    Some(parent_name.clone())
+                }
+            })
+            .collect();
+        if !missing.is_empty() {
+            diagnostics.push(
+                Hir2Diagnostic::MissingRequiredInterface {
+                    class_name: target_name,
+                    interface_name: iface.name,
+                    missing_parents: missing,
+                    span: imp.interface_target.span,
+                }
+                .to_diagnostic(file_id),
+            );
+        }
     }
 }
 
@@ -1681,15 +1871,19 @@ fn validate_class_implements<'db>(
 ) {
     use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
 
+    let ctx = InterfaceValidationCtx {
+        db,
+        pkg_items,
+        namespace_path,
+        aliases,
+    };
     let mut seen_targets: IndexMap<String, (Name, Vec<TextRange>)> = IndexMap::new();
-    let mut seen_target_names: HashSet<Name> = HashSet::new();
     for block in &class.implements {
         let Some((iface_loc, iface)) =
             resolve_interface_path(db, &block.target.expr, pkg_items, namespace_path)
         else {
             continue;
         };
-        seen_target_names.insert(iface.name.clone());
         // Use the resolved interface identity plus its concrete type
         // arguments for duplicate detection. `Foo` and `ns.Foo` should
         // collide when they resolve to the same interface, but
@@ -1764,17 +1958,6 @@ fn validate_class_implements<'db>(
             baml_compiler2_hir::file_package::file_package(db, iface_file).namespace_path;
         let mut interface_generic_params = class.generic_params.clone();
         interface_generic_params.extend(iface.generic_params.clone());
-        if block.is_out_of_body && !iface.fields.is_empty() {
-            diagnostics.push(
-                Hir2Diagnostic::OutOfBodyImplementsFieldInterface {
-                    target_name: class.name.to_string(),
-                    interface_name: iface.name.clone(),
-                    span: block.target.span,
-                }
-                .to_diagnostic(file_id),
-            );
-            continue;
-        }
         // Build a T → concrete-type substitution from the implements target's
         // generic args. `implements Container<int>` gives `{T → int}` so
         // signature comparisons see the concrete shape.
@@ -1797,6 +1980,17 @@ fn validate_class_implements<'db>(
             &subst,
             &class.generic_params,
         );
+        if block.is_out_of_body && !members.fields.is_empty() {
+            diagnostics.push(
+                Hir2Diagnostic::OutOfBodyImplementsFieldInterface {
+                    target_name: class.name.to_string(),
+                    interface_name: iface.name.clone(),
+                    span: block.target.span,
+                }
+                .to_diagnostic(file_id),
+            );
+            continue;
+        }
 
         // Check that every method declared in `implements I {}` actually
         // exists on `I` (required or default), and matches the interface's
@@ -2037,12 +2231,20 @@ fn validate_class_implements<'db>(
                 .extends
                 .iter()
                 .filter_map(|parent_te| {
-                    let baml_compiler2_ast::TypeExpr::Path { segments, .. } = &parent_te.expr
+                    let required_parent = substitute_type_vars(&parent_te.expr, &subst);
+                    let baml_compiler2_ast::TypeExpr::Path { segments, .. } = &required_parent
                     else {
                         return None;
                     };
                     let parent_name = segments.last()?;
-                    let class_implements_it = seen_target_names.contains(parent_name);
+                    let class_implements_it = class.implements.iter().any(|candidate| {
+                        interface_target_matches_required_parent(
+                            &ctx,
+                            &candidate.target.expr,
+                            &required_parent,
+                            &class.generic_params,
+                        )
+                    });
                     if class_implements_it {
                         None
                     } else {
@@ -2696,7 +2898,10 @@ fn source_aware_tir_type_error_message(
             format!("type `{}` has no member `{member}`", ty(base_type))
         }
         TirTypeError::NotCallable { ty: callee_ty } => {
-            format!("`{}` is not a function — it cannot be called", ty(callee_ty))
+            format!(
+                "`{}` is not a function — it cannot be called",
+                ty(callee_ty)
+            )
         }
         TirTypeError::NotIterable { ty: iter_ty } => {
             format!("cannot iterate over type `{}`", ty(iter_ty))

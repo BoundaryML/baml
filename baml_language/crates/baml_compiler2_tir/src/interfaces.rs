@@ -304,6 +304,10 @@ fn match_ty_pattern_into(
         | (Ty::Optional(p, _), Ty::Optional(c, _)) => {
             match_ty_pattern_into(p, c, generic_params, aliases, bindings)
         }
+        (Ty::Optional(p, _), Ty::Union(c_members, _)) => {
+            let inner = union_members_without_null(c_members)?;
+            match_ty_pattern_into(p, &inner, generic_params, aliases, bindings)
+        }
         (Ty::Map(pk, pv, _), Ty::Map(ck, cv, _))
         | (Ty::EvolvingMap(pk, pv, _), Ty::EvolvingMap(ck, cv, _)) => {
             match_ty_pattern_into(pk, ck, generic_params, aliases, bindings)?;
@@ -399,6 +403,26 @@ fn match_union_members(
     }
 
     None
+}
+
+fn union_members_without_null(members: &[Ty]) -> Option<Ty> {
+    let mut non_null = Vec::new();
+    let mut saw_null = false;
+    for member in members {
+        if matches!(member, Ty::Primitive(PrimitiveType::Null, _)) {
+            saw_null = true;
+        } else {
+            non_null.push(member.clone());
+        }
+    }
+    if !saw_null || non_null.is_empty() {
+        return None;
+    }
+    if non_null.len() == 1 {
+        non_null.into_iter().next()
+    } else {
+        Some(Ty::Union(non_null, TyAttr::default()))
+    }
 }
 
 fn bind_type_var(
@@ -968,12 +992,22 @@ mod tests {
         let params = vec![Name::new("T")];
 
         assert!(
-            match_ty_pattern(&pattern, &good, &params, &std::collections::HashMap::default())
-                .is_some()
+            match_ty_pattern(
+                &pattern,
+                &good,
+                &params,
+                &std::collections::HashMap::default()
+            )
+            .is_some()
         );
         assert!(
-            match_ty_pattern(&pattern, &bad, &params, &std::collections::HashMap::default())
-                .is_none()
+            match_ty_pattern(
+                &pattern,
+                &bad,
+                &params,
+                &std::collections::HashMap::default()
+            )
+            .is_none()
         );
     }
 

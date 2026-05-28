@@ -214,6 +214,7 @@ mod tests {
             current_span_context: None,
             argv: Arc::from([]),
             pending_call_type_args: Vec::new(),
+            interface_implementors: Arc::new(indexmap::IndexMap::new()),
         }
     }
 

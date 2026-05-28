@@ -1121,9 +1121,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 baml_compiler2_ast::TypeExpr::Path { segments, .. } => segments.first().cloned(),
                 _ => None,
             };
-            if let Some(name) = scope_name {
-                self.push_scope(ScopeKind::Class, Some(name), imp.span);
-            }
+            self.push_scope(ScopeKind::Class, scope_name, imp.span);
         }
         let mut method_ids = Vec::new();
         for method in &imp.methods {

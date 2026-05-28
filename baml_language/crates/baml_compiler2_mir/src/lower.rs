@@ -6512,37 +6512,39 @@ impl<'db> LoweringContext<'db> {
                             requested_args.clone(),
                             baml_compiler2_tir::ty::TyAttr::default(),
                         );
-                        let Some(instantiation) = registry.instantiate_rule_for_requested_interface(
-                            &rule,
-                            &requested_iface_ty,
-                            candidate_ty,
-                            &self.resolved_aliases.aliases,
-                            |actual, bound| {
-                                if let Tir2Ty::Interface(..) = bound {
-                                    let pkg = match actual {
-                                        Tir2Ty::Class(qtn, _, _) => qtn.package().clone(),
-                                        _ => file_pkg_info.package.clone(),
-                                    };
-                                    let bound_registry =
+                        let Some(instantiation) = registry
+                            .instantiate_rule_for_requested_interface(
+                                &rule,
+                                &requested_iface_ty,
+                                candidate_ty,
+                                &self.resolved_aliases.aliases,
+                                |actual, bound| {
+                                    if let Tir2Ty::Interface(..) = bound {
+                                        let pkg = match actual {
+                                            Tir2Ty::Class(qtn, _, _) => qtn.package().clone(),
+                                            _ => file_pkg_info.package.clone(),
+                                        };
+                                        let bound_registry =
                                         baml_compiler2_tir::interfaces::package_implements_registry(
                                             self.db,
                                             PackageId::new(self.db, pkg),
                                         );
-                                    bound_registry.type_implements_interface_via_rule(
-                                        actual,
-                                        bound,
-                                        &self.resolved_aliases.aliases,
-                                        |_nested_actual, _nested_bound| false,
-                                    )
-                                } else {
-                                    baml_compiler2_tir::normalize::is_same_normalized_type(
-                                        actual,
-                                        bound,
-                                        &self.resolved_aliases.aliases,
-                                    )
-                                }
-                            },
-                        ) else {
+                                        bound_registry.type_implements_interface_via_rule(
+                                            actual,
+                                            bound,
+                                            &self.resolved_aliases.aliases,
+                                            |_nested_actual, _nested_bound| false,
+                                        )
+                                    } else {
+                                        baml_compiler2_tir::normalize::is_same_normalized_type(
+                                            actual,
+                                            bound,
+                                            &self.resolved_aliases.aliases,
+                                        )
+                                    }
+                                },
+                            )
+                        else {
                             continue;
                         };
                         let guard = match &instantiation.for_ty {
@@ -6576,7 +6578,8 @@ impl<'db> LoweringContext<'db> {
                                 self.db,
                                 iface_loc.file(self.db),
                             );
-                            let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(self.db))
+                            let Some(iface_data) =
+                                iface_tree.interfaces.get(&iface_loc.id(self.db))
                             else {
                                 continue;
                             };
@@ -6612,7 +6615,7 @@ impl<'db> LoweringContext<'db> {
                                     InterfaceMethodCandidate {
                                         guard: InterfaceDispatchGuard::Class {
                                             impl_tn: impl_tn.clone(),
-                                            guard: guard.clone(),
+                                            guard,
                                         },
                                         item_ref: def_to_item_ref(
                                             self.db,
@@ -6632,7 +6635,7 @@ impl<'db> LoweringContext<'db> {
                                         InterfaceMethodCandidate {
                                             guard: InterfaceDispatchGuard::Class {
                                                 impl_tn: impl_tn.clone(),
-                                                guard: guard.clone(),
+                                                guard,
                                             },
                                             item_ref: ItemRef::Method {
                                                 package: iface_pkg.package.clone(),

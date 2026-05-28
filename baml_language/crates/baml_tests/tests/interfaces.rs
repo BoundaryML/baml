@@ -45,7 +45,7 @@ fn collect_compile_errors_multi(files: &[(&str, &str)]) -> Vec<String> {
     let mut db = ProjectDatabase::new();
     db.set_project_root(std::path::Path::new("."));
     for (path, source) in files {
-        db.add_file(*path, *source);
+        db.add_file(*path, source);
     }
     collect_compile_errors_from_db(&db)
 }
@@ -55,7 +55,7 @@ fn collect_compile_errors_from_db(db: &ProjectDatabase) -> Vec<String> {
     let all_files = db.get_source_files();
     let user_file_ids: HashSet<_> = all_files.iter().map(|f| f.file_id(db)).collect();
 
-    collect_diagnostics(&db, project, &all_files)
+    collect_diagnostics(db, project, &all_files)
         .into_iter()
         .filter(|d| matches!(d.severity, Severity::Error))
         .filter(|d| {
@@ -995,6 +995,34 @@ fn three_way_unqualified_call_lists_every_source() {
             && e.contains("`C`")),
         "expected an E0121 diagnostic naming all three interfaces, got:\n  {}",
         errors.join("\n  ")
+    );
+}
+
+#[test]
+fn class_own_method_does_not_resolve_ambiguous_interface_method_call() {
+    assert_compile_error_code(
+        r#"
+        interface Serializer {
+            function encode(self) -> string
+        }
+        interface BinarySerializer {
+            function encode(self) -> string
+        }
+        class Hybrid {
+            function encode(self) -> string { return "class" }
+            implements Serializer {
+                function encode(self) -> string { return "json" }
+            }
+            implements BinarySerializer {
+                function encode(self) -> string { return "bin" }
+            }
+        }
+        function main() -> string {
+            let h = Hybrid {}
+            return h.encode()
+        }
+        "#,
+        "E0121",
     );
 }
 
@@ -3056,7 +3084,7 @@ fn as_requires_interface_target() {
             return d.as<Dog>
         }
         "#,
-        "target must be an interface",
+        "requires an interface target",
     );
 }
 
@@ -4209,6 +4237,22 @@ fn out_of_body_implements_field_bearing_interface_is_error_even_without_redeclar
     );
 }
 
+#[test]
+fn out_of_body_implements_inherited_field_bearing_interface_is_error() {
+    assert_compile_error_code(
+        r#"
+        interface Named {
+            name: string
+        }
+        interface Child requires Named {}
+        class Robot { model: string }
+
+        implements Child for Robot {}
+        "#,
+        "E0126",
+    );
+}
+
 #[tokio::test]
 async fn out_of_body_implements_is_visible_to_reflection_registry() {
     let output = baml_test!(
@@ -4360,6 +4404,65 @@ async fn out_of_body_implements_for_primitive_as_projection_runtime() {
 }
 
 #[tokio::test]
+async fn default_call_from_out_of_body_override_runtime() {
+    let output = baml_test!(
+        r#"
+        interface Logger {
+            function log(self, msg: string) -> string {
+                return "[L] " + msg
+            }
+        }
+        class PrefixLogger {
+            prefix: string
+        }
+        implements Logger for PrefixLogger {
+            function log(self, msg: string) -> string {
+                return self.prefix + default.log(msg)
+            }
+        }
+        function main() -> string {
+            let logger: Logger = PrefixLogger { prefix: "P:" }
+            return logger.log("hi")
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("P:[L] hi".into())
+    );
+}
+
+#[tokio::test]
+async fn default_call_from_generic_out_of_body_override_runtime() {
+    let output = baml_test!(
+        r#"
+        interface Logger {
+            function log(self, msg: string) -> string {
+                return "[L] " + msg
+            }
+        }
+        class Box<T> {
+            prefix: string
+            value: T
+        }
+        implements<T> Logger for Box<T> {
+            function log(self, msg: string) -> string {
+                return self.prefix + default.log(msg)
+            }
+        }
+        function main() -> string {
+            let logger: Logger = Box<int> { prefix: "P:", value: 1 }
+            return logger.log("hi")
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("P:[L] hi".into())
+    );
+}
+
+#[tokio::test]
 async fn generic_requires_parent_args_dispatch_on_class_implementor() {
     let output = baml_test!(
         r#"
@@ -4383,6 +4486,99 @@ async fn generic_requires_parent_args_dispatch_on_class_implementor() {
         output.result.unwrap(),
         BexExternalValue::String("parent-int".into())
     );
+}
+
+#[test]
+fn generic_required_parent_args_must_match() {
+    assert_compile_error_code(
+        r#"
+        interface Parent<T> {}
+        interface Child<T> requires Parent<T> {}
+
+        class Box {
+            implements Parent<string> {}
+            implements Child<int> {}
+        }
+        "#,
+        "E0125",
+    );
+}
+
+#[test]
+fn generic_required_parent_args_accept_alias_equivalent_type() {
+    assert_zero_compile_errors(
+        r#"
+        type Texty = string | int
+
+        interface Parent<T> {}
+        interface Child requires Parent<int | string> {}
+
+        class Box {
+            implements Parent<Texty> {}
+            implements Child {}
+        }
+        "#,
+    );
+}
+
+#[test]
+fn out_of_body_generic_required_parent_args_must_match() {
+    assert_compile_error_code(
+        r#"
+        interface Parent<T> {}
+        interface Child<T> requires Parent<T> {}
+
+        implements Parent<string> for int {}
+        implements Child<int> for int {}
+        "#,
+        "E0125",
+    );
+}
+
+#[tokio::test]
+async fn generic_requires_parent_field_args_runtime() {
+    let output = baml_test!(
+        r#"
+        interface Parent<T> {
+            value: T
+        }
+        interface Child<T> requires Parent<T> {}
+        class Box {
+            value: int
+            implements Parent<int> {}
+            implements Child<int> {}
+        }
+        function main() -> int {
+            let child: Child<int> = Box { value: 42 }
+            return child.value
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(42));
+}
+
+#[tokio::test]
+async fn generic_requires_parent_field_alias_runtime() {
+    let output = baml_test!(
+        r#"
+        interface Parent<T> {
+            value: T
+        }
+        interface Child<T> requires Parent<T> {}
+        class Box {
+            stored: int
+            implements Parent<int> {
+                value as stored
+            }
+            implements Child<int> {}
+        }
+        function main() -> int {
+            let child: Child<int> = Box { stored: 42 }
+            return child.value
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(42));
 }
 
 #[tokio::test]
@@ -4772,6 +4968,93 @@ async fn form1_with_generic_interface_args() {
     "#
     );
     assert_eq!(output.result.unwrap(), BexExternalValue::Int(42));
+}
+
+#[tokio::test]
+async fn generic_rule_for_list_receiver_dispatches() {
+    let output = baml_test!(
+        r#"
+        interface Label {
+            function label(self) -> string
+        }
+        implements<T> Label for T[] {
+            function label(self) -> string { return "list" }
+        }
+        function main() -> string {
+            let xs: int[] = [1, 2, 3]
+            let labelled: Label = xs
+            return labelled.label()
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("list".into())
+    );
+}
+
+#[tokio::test]
+async fn generic_rule_for_map_receiver_dispatches() {
+    let output = baml_test!(
+        r#"
+        interface Label {
+            function label(self) -> string
+        }
+        implements<T> Label for map<string, T> {
+            function label(self) -> string { return "map" }
+        }
+        function main() -> string {
+            let values: map<string, int> = { "a": 1 }
+            let labelled: Label = values
+            return labelled.label()
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("map".into())
+    );
+}
+
+#[tokio::test]
+async fn generic_rule_for_optional_receiver_dispatches() {
+    let output = baml_test!(
+        r#"
+        interface Label {
+            function label(self) -> string
+        }
+        implements<T> Label for T? {
+            function label(self) -> string { return "optional" }
+        }
+        function main() -> string {
+            let value: int? = 1
+            let labelled: Label = value
+            return labelled.label()
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("optional".into())
+    );
+}
+
+#[test]
+fn generic_rule_for_list_receiver_overlaps_concrete_list() {
+    assert_compile_error_code(
+        r#"
+        interface Label {
+            function label(self) -> string
+        }
+        implements Label for int[] {
+            function label(self) -> string { return "ints" }
+        }
+        implements<T> Label for T[] {
+            function label(self) -> string { return "list" }
+        }
+        "#,
+        "E0132",
+    );
 }
 
 #[test]
@@ -5586,7 +5869,7 @@ fn unified_rule_namespaced_classes_with_same_short_name_do_not_cross_match() {
     let files = &[
         (
             "main.baml",
-                r#"
+            r#"
                 function take(item: root.a.Printable) -> string {
                     return item.display()
                 }
@@ -5594,10 +5877,10 @@ fn unified_rule_namespaced_classes_with_same_short_name_do_not_cross_match() {
                     return take(root.b.Wrapper { value: 42 })
                 }
                 "#,
-            ),
-            (
-                "ns_a/wrapper.baml",
-                r#"
+        ),
+        (
+            "ns_a/wrapper.baml",
+            r#"
                 interface Printable {
                     function display(self) -> string
                 }
@@ -5608,16 +5891,16 @@ fn unified_rule_namespaced_classes_with_same_short_name_do_not_cross_match() {
                     function display(self) -> string { return "a" }
                 }
                 "#,
-            ),
-            (
-                "ns_b/wrapper.baml",
-                r#"
+        ),
+        (
+            "ns_b/wrapper.baml",
+            r#"
                 class Wrapper {
                     value: int
                 }
                 "#,
-            ),
-        ];
+        ),
+    ];
     assert_compile_error_contains_multi(files, "b.Wrapper");
 }
 

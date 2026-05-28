@@ -408,7 +408,7 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
                             if i > 0 {
                                 write!(f, ", ")?;
                             }
-                            write!(f, "{t:?}")?;
+                            write!(f, "{t}")?;
                         }
                         write!(f, ">")?;
                     }

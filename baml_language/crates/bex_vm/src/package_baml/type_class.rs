@@ -29,10 +29,10 @@ impl BamlClassTypeValue for PackageBamlImpl {
     /// with the transitive `extends`/`implements` closure, so transitive
     /// satisfaction is a single hash lookup.
     fn implements(vm: &BexVm, self_value: &Value, other: &Value) -> bool {
-        let Some(class_name) = ty_name(vm, self_value) else {
+        let Some(class_name) = ty_name(vm, *self_value) else {
             return false;
         };
-        let Some(iface_name) = ty_name(vm, other) else {
+        let Some(iface_name) = ty_name(vm, *other) else {
             return false;
         };
         vm.interface_implementors
@@ -56,7 +56,7 @@ impl BamlClassTypeValue for PackageBamlImpl {
     /// `Object::Array` allocation. The element `Object::Type` values are
     /// allocated here because they each require a fresh TLAB slot.
     fn implementors(vm: &mut BexVm, self_value: &Value) -> Vec<Value> {
-        let Some(iface_name) = ty_name(vm, self_value) else {
+        let Some(iface_name) = ty_name(vm, *self_value) else {
             return Vec::new();
         };
         let Some(class_names) = vm.interface_implementors.get(&iface_name).cloned() else {
@@ -77,7 +77,7 @@ impl BamlClassTypeValue for PackageBamlImpl {
 /// which round-trip through `Ty::Class` at the runtime layer; see
 /// `baml_compiler2_mir/src/lower.rs`). Returns `None` for primitive types,
 /// containers, and anything else without a stable name.
-fn ty_name(vm: &BexVm, value: &Value) -> Option<baml_type::TypeName> {
+fn ty_name(vm: &BexVm, value: Value) -> Option<baml_type::TypeName> {
     let ptr = value.as_object_ptr()?;
     let Object::Type(ty) = vm.get_object(ptr) else {
         return None;

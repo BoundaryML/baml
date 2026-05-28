@@ -4761,13 +4761,10 @@ fn format_interface(
         writeln!(output, "NAME {}", name.text()).ok();
     }
 
-    let parents: Vec<_> = if let Some(requires) = interface.requires_clause() {
-        requires.parents().collect()
-    } else if let Some(extends) = interface.extends_clause() {
-        extends.parents().collect()
-    } else {
-        Vec::new()
-    };
+    let parents: Vec<_> = interface
+        .requires_clause()
+        .map(|requires| requires.parents().collect())
+        .unwrap_or_default();
     if !parents.is_empty() {
         write_indent(output, indent + 1);
         writeln!(output, "REQUIRES").ok();
