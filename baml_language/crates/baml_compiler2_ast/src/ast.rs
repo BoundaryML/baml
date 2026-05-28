@@ -1298,8 +1298,7 @@ pub struct InterfaceDef {
     pub generic_param_bounds: Vec<Option<TypeExpr>>,
     /// Required interfaces from `requires I1, I2, ...`. Each is parsed as a
     /// `TypeExpr` so we can accept generic requirements like `Container<int>`.
-    /// Field name is retained for compatibility with existing consumers.
-    pub extends: Vec<SpannedTypeExpr>,
+    pub requires: Vec<SpannedTypeExpr>,
     /// Field signatures declared on the interface. Interface fields cannot
     /// have default values — see BEP-044 §"Interface Fields".
     pub fields: Vec<FieldDef>,

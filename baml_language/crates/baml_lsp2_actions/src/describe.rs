@@ -942,7 +942,7 @@ fn find_dependencies(
                     collect_type_expr_deps(db, file, &te.expr, &mut deps, &mut seen);
                 }
             }
-            for parent in &iface.extends {
+            for parent in &iface.requires {
                 collect_type_expr_deps(db, file, &parent.expr, &mut deps, &mut seen);
             }
         }

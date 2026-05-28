@@ -1114,7 +1114,7 @@ fn interface_closure<'db>(
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, loc.file(db));
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
         let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
-        for parent in &iface.extends {
+        for parent in &iface.requires {
             if let Some(parent_loc) =
                 resolve_path_to_interface(db, &parent.expr, pkg_items, &pkg_info.namespace_path)
             {
@@ -1153,7 +1153,7 @@ pub fn interface_closure_locs<'db>(
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, loc.file(db));
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
         let parent_pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
-        for parent in &iface.extends {
+        for parent in &iface.requires {
             if let Some(parent_loc) = resolve_path_to_interface(
                 db,
                 &parent.expr,
@@ -1207,7 +1207,7 @@ pub fn interface_closure_locs_with_args<'db>(
         let parent_pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
         let bindings = generics::bind_type_vars(&iface.generic_params, &args);
 
-        for parent in &iface.extends {
+        for parent in &iface.requires {
             let Some(parent_loc) = resolve_path_to_interface(
                 db,
                 &parent.expr,

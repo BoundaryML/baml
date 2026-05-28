@@ -261,6 +261,8 @@ pub enum DiagnosticId {
     AmbiguousInterfaceField,
     /// Two interface implementation rules can apply to the same receiver/interface.
     OverlappingImplements,
+    /// An interface `requires` a type that is not an interface (e.g. a class or enum).
+    InterfaceRequiresNonInterface,
 }
 
 impl DiagnosticId {
@@ -442,6 +444,7 @@ impl DiagnosticId {
             DiagnosticId::DuplicateInterfaceFieldLink => "E0130",
             DiagnosticId::AmbiguousInterfaceField => "E0131",
             DiagnosticId::OverlappingImplements => "E0132",
+            DiagnosticId::InterfaceRequiresNonInterface => "E0133",
         }
     }
 }

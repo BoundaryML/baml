@@ -1131,7 +1131,7 @@ fn lower_interface(
         } else {
             Vec::new()
         };
-    let extends: Vec<SpannedTypeExpr> = parent_type_nodes
+    let requires: Vec<SpannedTypeExpr> = parent_type_nodes
         .into_iter()
         .map(|te| {
             let expr = lower_type_expr::lower_type_expr_node(&te);
@@ -1206,7 +1206,7 @@ fn lower_interface(
         name: Name::new(&iface_name),
         generic_params,
         generic_param_bounds,
-        extends,
+        requires,
         fields,
         required_methods,
         default_methods,

@@ -395,7 +395,7 @@ fn check_interfaces<'db>(
     // Detect field conflicts in interface `extends` chains.
     for item in items {
         if let baml_compiler2_ast::Item::Interface(iface) = item
-            && !iface.extends.is_empty()
+            && !iface.requires.is_empty()
             && !interface_has_cycle(db, iface, pkg_items, namespace_path)
         {
             validate_interface_extends_fields(
@@ -407,6 +407,35 @@ fn check_interfaces<'db>(
                 aliases,
                 &mut diagnostics,
             );
+        }
+    }
+
+    // E0133: an interface can only `requires` other interfaces. A non-interface
+    // target (class, enum, or unknown) is rejected at the `requires` clause
+    // itself — not deferred to an implementor's `implements` site.
+    for item in items {
+        if let baml_compiler2_ast::Item::Interface(iface) = item
+            && !interface_has_cycle(db, iface, pkg_items, namespace_path)
+        {
+            for parent_te in &iface.requires {
+                if resolve_interface_path(db, &parent_te.expr, pkg_items, namespace_path).is_none() {
+                    let target_name = match &parent_te.expr {
+                        baml_compiler2_ast::TypeExpr::Path { segments, .. } => segments
+                            .last()
+                            .map(std::string::ToString::to_string)
+                            .unwrap_or_default(),
+                        other => format!("{other}"),
+                    };
+                    diagnostics.push(
+                        Hir2Diagnostic::InterfaceRequiresNonInterface {
+                            interface_name: iface.name.clone(),
+                            target_name,
+                            span: parent_te.span,
+                        }
+                        .to_diagnostic(file_id),
+                    );
+                }
+            }
         }
     }
 
@@ -542,7 +571,7 @@ fn interface_has_cycle<'db>(
     let self_loc =
         resolve_interface_path(db, &self_probe, pkg_items, namespace_path).map(|(loc, _)| loc);
     let mut frontier: Vec<Vec<Name>> = iface
-        .extends
+        .requires
         .iter()
         .filter_map(|p| match &p.expr {
             TypeExpr::Path { segments, .. } if !segments.is_empty() => Some(segments.clone()),
@@ -565,7 +594,7 @@ fn interface_has_cycle<'db>(
             if self_loc.as_ref().is_some_and(|loc| *loc == parent_loc) {
                 return true;
             }
-            for parent in &parent_iface.extends {
+            for parent in &parent_iface.requires {
                 if let TypeExpr::Path { segments, .. } = &parent.expr
                     && !segments.is_empty()
                 {
@@ -999,7 +1028,7 @@ fn collect_interface_members_with_subst<'db>(
             }
         }
 
-        for parent_te in &current.extends {
+        for parent_te in &current.requires {
             let TypeExpr::Path { segments, .. } = &parent_te.expr else {
                 continue;
             };
@@ -1693,7 +1722,7 @@ fn validate_interface_extends_fields<'db>(
     }
 
     // Walk each parent via resolve and collect its members.
-    for parent_te in &iface.extends {
+    for parent_te in &iface.requires {
         let Some((parent_loc, parent)) =
             resolve_interface_path(db, &parent_te.expr, pkg_items, namespace_path)
         else {
@@ -1933,9 +1962,9 @@ fn validate_implements_for<'db>(
         );
     }
 
-    if !iface.extends.is_empty() {
+    if !iface.requires.is_empty() {
         let missing: Vec<Name> = iface
-            .extends
+            .requires
             .iter()
             .filter_map(|parent_te| {
                 let required_parent = substitute_type_vars(&parent_te.expr, &subst);
@@ -2281,6 +2310,7 @@ fn validate_class_implements<'db>(
                         Hir2Diagnostic::InterfaceFieldTypeMismatch {
                             class_name: class.name.clone(),
                             field_name: link.class_field.clone(),
+                            interface_field_name: link.interface_field.clone(),
                             interface_name: iface.name.clone(),
                             class_type: format!("{}", class_te.expr),
                             interface_type: format!("{}", iface_te.expr),
@@ -2329,6 +2359,8 @@ fn validate_class_implements<'db>(
                         Hir2Diagnostic::InterfaceFieldTypeMismatch {
                             class_name: class.name.clone(),
                             field_name: class_field.name.clone(),
+                            // Non-aliased: the interface and class field share a name.
+                            interface_field_name: field_name.clone(),
                             interface_name: iface.name.clone(),
                             class_type: format!("{}", class_te.expr),
                             interface_type: format!("{}", iface_te.expr),
@@ -2342,9 +2374,9 @@ fn validate_class_implements<'db>(
 
         // E0125: check that all `requires` parents are explicitly
         // implemented by this class.
-        if !iface.extends.is_empty() {
+        if !iface.requires.is_empty() {
             let missing: Vec<Name> = iface
-                .extends
+                .requires
                 .iter()
                 .filter_map(|parent_te| {
                     let required_parent = substitute_type_vars(&parent_te.expr, &subst);

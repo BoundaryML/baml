@@ -44,6 +44,18 @@ use crate::{
 // `resolve_member` (mutable context) and `try_resolve_member_on_ty` (shared).
 
 /// Construct `Ty::TypeAlias` for `baml.json.json`.
+/// Render an interface instantiation for diagnostics, e.g. `Box` (no args) or
+/// `Box<int>`. Used so ambiguity/projection hints name the exact instantiation
+/// (`.as<Box<int>>`) rather than the bare interface name.
+fn format_interface_display(name: &Name, args: &[Ty]) -> String {
+    if args.is_empty() {
+        name.to_string()
+    } else {
+        let rendered: Vec<String> = args.iter().map(std::string::ToString::to_string).collect();
+        format!("{name}<{}>", rendered.join(", "))
+    }
+}
+
 fn json_alias_ty() -> Ty {
     Ty::TypeAlias(
         crate::ty::QualifiedTypeName::new(
@@ -1254,17 +1266,24 @@ impl<'db> TypeInferenceBuilder<'db> {
         let effective = self.collect_effective_throws(body);
         let has_open_slot = Self::throws_surface_has_open_slot(&declared);
 
-        // BEP-044: an effective throw is covered by the declared surface when
-        // it is a *subtype* of some declared fact, not only when it is equal.
-        // Throwing a concrete class that implements `throws SomeInterface` is
-        // therefore allowed (nominal subtyping), so we filter by `is_subtype`
-        // rather than a raw set difference.
+        // Throws tracking is otherwise *exact* (so e.g. enum-variant throws stay
+        // precise — `throws Errors` does not absorb `throws Errors.AuthError`).
+        // BEP-044 adds exactly one widening: a thrown class is covered by a
+        // declared *interface* it nominally implements. We therefore keep the
+        // original exact set difference and only additionally exempt
+        // interface-implementor coverage.
+        let covered_by_declared = |eff: &Ty| {
+            declared.contains(eff)
+                || declared
+                    .iter()
+                    .any(|decl| matches!(decl, Ty::Interface(..)) && self.is_subtype(eff, decl))
+        };
         let extra_facts: BTreeSet<Ty> = if has_open_slot {
             BTreeSet::new()
         } else {
             effective
                 .iter()
-                .filter(|eff| !declared.iter().any(|decl| self.is_subtype(eff, decl)))
+                .filter(|eff| !covered_by_declared(eff))
                 .cloned()
                 .collect()
         };
@@ -1273,13 +1292,17 @@ impl<'db> TypeInferenceBuilder<'db> {
             .map(std::string::ToString::to_string)
             .collect();
         let mut extraneous: Vec<String> = if warn_extraneous && !has_open_slot {
-            // A declared fact is extraneous only when *nothing* thrown is a
-            // subtype of it — otherwise `throws IError` with a thrown
-            // `NetworkError` (which implements `IError`) would be wrongly
-            // reported as unused.
+            // A declared fact is extraneous when nothing thrown matches it
+            // exactly — except a declared interface that some thrown class
+            // implements is genuinely used (so `throws IError` with a thrown
+            // `NetworkError` is not reported as unused).
             declared
                 .iter()
-                .filter(|decl| !effective.iter().any(|eff| self.is_subtype(eff, decl)))
+                .filter(|decl| {
+                    !effective.contains(*decl)
+                        && !(matches!(decl, Ty::Interface(..))
+                            && effective.iter().any(|eff| self.is_subtype(eff, decl)))
+                })
                 .map(std::string::ToString::to_string)
                 .collect()
         } else {
@@ -7001,9 +7024,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .lookup_implemented_interface_by_name(class_name, member)
                     .is_some()
                 {
+                    let as_target = self.implemented_interface_display(class_name, member);
                     self.context.report_at_member(
                         TirTypeError::DeprecatedInterfaceProjection {
                             interface_name: member.clone(),
+                            as_target,
                         },
                         at,
                         Vec::new(),
@@ -7521,9 +7546,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .lookup_implemented_interface_by_name(class_name, member)
                     .is_some()
                 {
+                    let as_target = self.implemented_interface_display(class_name, member);
                     self.context.report_at_segment(
                         TirTypeError::DeprecatedInterfaceProjection {
                             interface_name: member.clone(),
+                            as_target,
                         },
                         path_id,
                         seg_idx,
@@ -8852,22 +8879,84 @@ impl<'db> TypeInferenceBuilder<'db> {
             ) else {
                 continue;
             };
-            for iface_loc in
-                crate::interfaces::interface_closure_locs(db, root_iface_loc, pkg_items, &ns)
-            {
+            // Recover the instantiation the user wrote (e.g. `Box<int>`) so the
+            // source carries its type args. Two instantiations of one generic
+            // interface (`Box<int>` vs `Box<string>`) then stay distinct — the
+            // access is ambiguous, and diagnostics can suggest `as<Box<int>>`.
+            let mut diags = Vec::new();
+            let root_args = match crate::lower_type_expr::lower_type_expr_in_ns(
+                db,
+                &impl_target.target.expr,
+                pkg_items,
+                &ns,
+                &class_data.generic_params,
+                &mut diags,
+            ) {
+                Ty::Interface(_, args, _) => args,
+                _ => Vec::new(),
+            };
+            for (iface_loc, iface_args) in crate::interfaces::interface_closure_locs_with_args(
+                db,
+                root_iface_loc,
+                &root_args,
+                pkg_items,
+                &ns,
+            ) {
                 let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
                 let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
                     continue;
                 };
-                if iface_data.fields.iter().any(|field| &field.name == member)
-                    && seen.insert(iface_data.name.clone())
-                {
-                    sources.push(iface_data.name.clone());
+                if iface_data.fields.iter().any(|field| &field.name == member) {
+                    let display = format_interface_display(&iface_data.name, &iface_args);
+                    if seen.insert(display.clone()) {
+                        sources.push(Name::new(display));
+                    }
                 }
             }
         }
 
         sources
+    }
+
+    /// Render the instantiated projection target for an interface the class
+    /// implements by simple name — e.g. `Container<int>` for `implements
+    /// Container<int>`. Falls back to the bare name when no matching `implements`
+    /// is found or it carries no type args. Used to make the deprecated
+    /// `.Interface` projection hint name the exact instantiation.
+    fn implemented_interface_display(
+        &self,
+        class_name: &crate::ty::QualifiedTypeName,
+        iface_simple_name: &Name,
+    ) -> String {
+        let fallback = || iface_simple_name.to_string();
+        let Some(pkg_items) = self.resolve_class_pkg_items(class_name.package()) else {
+            return fallback();
+        };
+        let Some(Definition::Class(class_loc)) =
+            pkg_items.lookup_type(class_name.namespace(), class_name.name())
+        else {
+            return fallback();
+        };
+        let db = self.context.db();
+        let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
+        let class_data = &item_tree[class_loc.id(db)];
+        let ns =
+            baml_compiler2_hir::file_package::file_package(db, class_loc.file(db)).namespace_path;
+        for impl_target in &class_data.implements {
+            let mut diags = Vec::new();
+            if let Ty::Interface(qtn, args, _) = crate::lower_type_expr::lower_type_expr_in_ns(
+                db,
+                &impl_target.target.expr,
+                pkg_items,
+                &ns,
+                &class_data.generic_params,
+                &mut diags,
+            ) && qtn.name() == iface_simple_name
+            {
+                return format_interface_display(iface_simple_name, &args);
+            }
+        }
+        fallback()
     }
 
     /// Directly-implemented interfaces (named by the `implements` clause) whose

@@ -227,6 +227,13 @@ fn interface_class_guard_for_args(
     class_params: &[Name],
     aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
 ) -> Option<InterfaceClassGuard> {
+    // An *uninstantiated* request (no type args) matches any implementor
+    // instantiation — e.g. `self: Container` inside a generic interface's
+    // default method dispatches to `IntBox` (which implements `Container<int>`).
+    // The runtime IsType on the concrete class still discriminates.
+    if requested_iface_args.is_empty() && !impl_iface_args.is_empty() {
+        return Some(InterfaceClassGuard::Any);
+    }
     if impl_iface_args.len() != requested_iface_args.len() {
         return None;
     }
@@ -4383,6 +4390,11 @@ impl LoweringContext<'_> {
             if self.try_lower_interface_dispatch(expr_id, base_id, &member_name, args, &dest) {
                 return;
             }
+            // Receiver may be a union of concrete classes sharing the method
+            // (e.g. `(if c { Dog {} } else { Cat {} }).speak()`).
+            if self.try_lower_union_dispatch(expr_id, base_id, &member_name, args, &dest) {
+                return;
+            }
         }
         // BEP-044: `default.<method>(...)` inside an `implements I { ... }`
         // block emits a static call to `I`'s default function, with the
@@ -4480,26 +4492,8 @@ impl LoweringContext<'_> {
                         segments.len() - 1
                     };
                     let receiver_segments = &segments[..receiver_segments_end];
-                    let recv_local = if receiver_segments.len() == 1 {
-                        recv_root_local
-                    } else {
-                        let recv_ty_idx = receiver_segments.len() - 1;
-                        let recv_ty = self
-                            .path_segment_types
-                            .get(&(self.current_metadata_scope, callee, recv_ty_idx))
-                            .cloned()
-                            .map(|t| self.convert_tir_ty_for_runtime(&t))
-                            .unwrap_or_else(|| Ty::BuiltinUnknown {
-                                attr: TyAttr::default(),
-                            });
-                        let local = self.builder.temp(recv_ty);
-                        self.lower_multi_segment_path_as_field_chain(
-                            callee,
-                            receiver_segments,
-                            Place::local(local),
-                        );
-                        local
-                    };
+                    let recv_local =
+                        self.lower_path_receiver_to_local(callee, receiver_segments, recv_root_local);
                     if self.emit_interface_dispatch_switch(
                         InterfaceDispatchCall {
                             expr_id,
@@ -4509,6 +4503,29 @@ impl LoweringContext<'_> {
                             method: &method_name,
                             args,
                         },
+                        &dest,
+                    ) {
+                        return;
+                    }
+                }
+                // Parallel to the interface case: the receiver may instead be a
+                // union of concrete classes (a local or field chain bound to a
+                // `match`/`if` whose arms are different classes). Same receiver
+                // type slot, same field-chain lowering.
+                else if let Some(Tir2Ty::Union(members, _)) = self
+                    .path_segment_types
+                    .get(&(self.current_metadata_scope, callee, prefix_idx))
+                    .cloned()
+                {
+                    let receiver_segments = &segments[..segments.len() - 1];
+                    let recv_local =
+                        self.lower_path_receiver_to_local(callee, receiver_segments, recv_root_local);
+                    if self.emit_union_class_dispatch(
+                        recv_local,
+                        &members,
+                        &method_name,
+                        expr_id,
+                        args,
                         &dest,
                     ) {
                         return;
@@ -6170,6 +6187,133 @@ impl<'db> LoweringContext<'db> {
             },
             dest,
         )
+    }
+
+    /// Lower the receiver of a method-call path (`receiver_segments` — the path
+    /// up to but excluding the method/qualifier) to a single local: a bare root
+    /// local is used directly; a field chain is materialized into a temp. Shared
+    /// by the interface- and union-receiver dispatch paths.
+    fn lower_path_receiver_to_local(
+        &mut self,
+        callee: AstExprId,
+        receiver_segments: &[Name],
+        recv_root_local: Local,
+    ) -> Local {
+        if receiver_segments.len() <= 1 {
+            return recv_root_local;
+        }
+        let recv_ty_idx = receiver_segments.len() - 1;
+        let recv_ty = self
+            .path_segment_types
+            .get(&(self.current_metadata_scope, callee, recv_ty_idx))
+            .cloned()
+            .map(|t| self.convert_tir_ty_for_runtime(&t))
+            .unwrap_or_else(|| Ty::BuiltinUnknown {
+                attr: TyAttr::default(),
+            });
+        let local = self.builder.temp(recv_ty);
+        self.lower_multi_segment_path_as_field_chain(callee, receiver_segments, Place::local(local));
+        local
+    }
+
+    /// Resolve `class.method` to a callable `ItemRef` by simple name.
+    fn class_method_item_ref_by_name(&self, class_tn: &TypeName, method: &Name) -> Option<ItemRef> {
+        let class_loc = self.resolve_class_loc_by_type_name(class_tn)?;
+        let item_tree = file_item_tree(self.db, class_loc.file(self.db));
+        let class_data = &item_tree[class_loc.id(self.db)];
+        let func_id = class_data
+            .methods
+            .iter()
+            .copied()
+            .find(|&id| item_tree[id].name == *method)?;
+        let func_loc =
+            baml_compiler2_hir::loc::FunctionLoc::new(self.db, class_loc.file(self.db), func_id);
+        Some(method_item_ref(self.db, class_loc, func_loc))
+    }
+
+    /// A method call whose receiver is a *union of concrete classes* (e.g. the
+    /// `Dog | Cat` produced by `if`/`match` arms) — dispatch by runtime class.
+    /// Each member must declare `method`; otherwise this isn't a uniform call we
+    /// can lower and we fall through (the caller reports the real error).
+    fn try_lower_union_dispatch(
+        &mut self,
+        expr_id: AstExprId,
+        base: AstExprId,
+        method: &Name,
+        args: &[AstExprId],
+        dest: &Place,
+    ) -> bool {
+        let Some(Tir2Ty::Union(members, _)) =
+            self.expr_types.get(&self.expr_metadata_key(base)).cloned()
+        else {
+            return false;
+        };
+        // Lower the receiver once; copy it into every arm.
+        let receiver_op = self.lower_to_operand(base);
+        let receiver_ty = self.expr_ty(base);
+        let recv_local = self.operand_to_local(receiver_op, receiver_ty);
+        self.emit_union_class_dispatch(recv_local, &members, method, expr_id, args, dest)
+    }
+
+    /// Emit a class-tag dispatch switch for a method call whose receiver
+    /// (`recv_local`) has the union type `members`. Returns false (lowering
+    /// nothing) unless every member is a class declaring `method`.
+    fn emit_union_class_dispatch(
+        &mut self,
+        recv_local: Local,
+        members: &[Tir2Ty],
+        method: &Name,
+        expr_id: AstExprId,
+        args: &[AstExprId],
+        dest: &Place,
+    ) -> bool {
+        let mut arms: Vec<(TypeName, ItemRef)> = Vec::new();
+        for member in members {
+            let Tir2Ty::Class(qtn, _, _) = member else {
+                return false;
+            };
+            let class_tn = qtn_to_type_name(qtn);
+            let Some(item_ref) = self.class_method_item_ref_by_name(&class_tn, method) else {
+                return false;
+            };
+            arms.push((class_tn, item_ref));
+        }
+        if arms.is_empty() {
+            return false;
+        }
+
+        let arg_ops = self.lower_call_arg_operands(expr_id, args);
+        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
+
+        let bb_join = self.builder.create_block();
+        let bb_otherwise = self.builder.create_block();
+        let mut next_check = self.builder.current_block();
+        for (idx, (class_tn, item_ref)) in arms.iter().enumerate() {
+            let bb_body = self.builder.create_block();
+            let bb_next = if idx + 1 == arms.len() {
+                bb_otherwise
+            } else {
+                self.builder.create_block()
+            };
+            self.builder.set_current_block(next_check);
+            self.emit_is_type_branch(
+                recv_local,
+                Ty::Class(class_tn.clone(), Vec::new(), TyAttr::default()),
+                bb_body,
+                bb_next,
+            );
+            self.builder.set_current_block(bb_body);
+            let callee_op = Operand::Constant(Constant::Function(item_ref.clone()));
+            let mut all_args = vec![Operand::Copy(Place::Local(recv_local))];
+            all_args.extend(arg_ops.iter().cloned());
+            self.builder
+                .call(callee_op, all_args, dest.clone(), bb_join, unwind);
+            next_check = bb_next;
+        }
+        self.builder.set_current_block(bb_otherwise);
+        self.builder.unreachable();
+        self.builder.set_current_block(bb_join);
+        true
     }
 
     fn emit_interface_dispatch_switch(

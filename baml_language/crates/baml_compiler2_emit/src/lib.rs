@@ -985,6 +985,21 @@ pub fn generate_project_bytecode_with_opt(
                 }
             }
         }
+        // Order each interface's implementors deterministically (lexicographic by
+        // qualified name) so `implementors()` doesn't depend on the unordered
+        // `FxHashMap` iteration that built the rules.
+        let impl_sort_key = |tn: &baml_type::TypeName| {
+            (
+                tn.module_path
+                    .iter()
+                    .map(std::string::ToString::to_string)
+                    .collect::<Vec<_>>(),
+                tn.name.to_string(),
+            )
+        };
+        for impls in inverted.values_mut() {
+            impls.sort_by(|(a, _), (b, _)| impl_sort_key(a).cmp(&impl_sort_key(b)));
+        }
         program.interface_implementors = inverted;
     }
 

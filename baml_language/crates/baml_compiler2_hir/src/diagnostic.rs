@@ -97,6 +97,13 @@ pub enum Hir2Diagnostic {
         target_name: String,
         span: TextRange,
     },
+    /// `interface I requires X` where `X` is not an interface (a class, enum, or
+    /// unknown type). Reported at the `requires` clause, not at an implementor.
+    InterfaceRequiresNonInterface {
+        interface_name: Name,
+        target_name: String,
+        span: TextRange,
+    },
     /// A class is missing a body for a required (no-default) interface method.
     MissingInterfaceMethod {
         class_name: Name,
@@ -124,6 +131,9 @@ pub enum Hir2Diagnostic {
     InterfaceFieldTypeMismatch {
         class_name: Name,
         field_name: Name,
+        /// The interface's own field name, which differs from `field_name`
+        /// when the implements block aliases it (`name as name_count`).
+        interface_field_name: Name,
         interface_name: Name,
         /// User-rendered class type.
         class_type: String,
@@ -444,6 +454,25 @@ impl Hir2Diagnostic {
                 "not an interface",
             )
             .with_phase(DiagnosticPhase::Hir),
+            Hir2Diagnostic::InterfaceRequiresNonInterface {
+                interface_name,
+                target_name,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::InterfaceRequiresNonInterface,
+                format!(
+                    "`{target_name}` is not an interface; \
+                     interface `{interface_name}` can only require interfaces"
+                ),
+            )
+            .with_primary(
+                Span {
+                    file_id,
+                    range: *span,
+                },
+                "not an interface",
+            )
+            .with_phase(DiagnosticPhase::Hir),
             Hir2Diagnostic::MissingInterfaceMethod {
                 class_name,
                 interface_name,
@@ -518,6 +547,7 @@ impl Hir2Diagnostic {
             Hir2Diagnostic::InterfaceFieldTypeMismatch {
                 class_name,
                 field_name,
+                interface_field_name,
                 interface_name,
                 class_type,
                 interface_type,
@@ -526,7 +556,7 @@ impl Hir2Diagnostic {
                 DiagnosticId::InterfaceFieldTypeMismatch,
                 format!(
                     "class `{class_name}` declares field `{field_name}: {class_type}` but \
-                     interface `{interface_name}` requires `{field_name}: {interface_type}`"
+                     interface `{interface_name}` requires `{interface_field_name}` to have type `{interface_type}`"
                 ),
             )
             .with_primary(
