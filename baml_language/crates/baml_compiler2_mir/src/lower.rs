@@ -6374,12 +6374,24 @@ impl<'db> LoweringContext<'db> {
             let Some(target) = class_tree.method_to_iface_target.get(&method_id) else {
                 continue;
             };
-            for (requested_idx, _, guard) in self.implements_target_matches_requested_views(
-                target,
-                class_loc,
-                &requested_views,
-                &class_data.generic_params,
-            ) {
+            // BEP-044: this override only satisfies requests resolving to the
+            // interface that owns `method` within the block's closure — so a
+            // `B::foo` override never leaks into a request for `A::foo` when
+            // `B requires A` and both declare `foo`.
+            let provider_view = self.method_provider_view(target, class_loc, method);
+            for (requested_idx, matched_iface_tn, guard) in self
+                .implements_target_matches_requested_views(
+                    target,
+                    class_loc,
+                    &requested_views,
+                    &class_data.generic_params,
+                )
+            {
+                if let Some(provider) = &provider_view
+                    && matched_iface_tn != *provider
+                {
+                    continue;
+                }
                 let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(
                     self.db,
                     class_loc.file(self.db),
@@ -6399,6 +6411,7 @@ impl<'db> LoweringContext<'db> {
         }
 
         for impl_block in &class_data.implements {
+            let provider_view = self.method_provider_view(&impl_block.target, class_loc, method);
             for (requested_idx, matched_iface_tn, guard) in self
                 .implements_target_matches_requested_views(
                     &impl_block.target,
@@ -6407,6 +6420,11 @@ impl<'db> LoweringContext<'db> {
                     &class_data.generic_params,
                 )
             {
+                if let Some(provider) = &provider_view
+                    && matched_iface_tn != *provider
+                {
+                    continue;
+                }
                 let Some(item_ref) =
                     self.interface_default_method_item_ref(&matched_iface_tn, method)
                 else {
@@ -7029,6 +7047,64 @@ impl<'db> LoweringContext<'db> {
         Some((qtn_to_type_name(&target_qtn), target_args))
     }
 
+    /// True iff the interface named by `iface_tn` declares `field` directly in
+    /// its own body (not via `requires`).
+    fn interface_declares_field(&self, iface_tn: &TypeName, field: &Name) -> bool {
+        let Some(pkg_name) = iface_tn.module_path.first() else {
+            return false;
+        };
+        let pkg_items = self.resolve_class_pkg_items_by_name(pkg_name);
+        let ns: Vec<Name> = iface_tn.module_path.iter().skip(1).cloned().collect();
+        let Some(Definition::Interface(loc)) = pkg_items.lookup_type(&ns, &iface_tn.name) else {
+            return false;
+        };
+        let tree = file_item_tree(self.db, loc.file(self.db));
+        tree.interfaces
+            .get(&loc.id(self.db))
+            .is_some_and(|data| data.fields.iter().any(|f| &f.name == field))
+    }
+
+    /// True iff the interface named by `iface_tn` declares `method` directly
+    /// (as a default or required method), not via `requires`.
+    fn interface_declares_method(&self, iface_tn: &TypeName, method: &Name) -> bool {
+        let Some(pkg_name) = iface_tn.module_path.first() else {
+            return false;
+        };
+        let pkg_items = self.resolve_class_pkg_items_by_name(pkg_name);
+        let ns: Vec<Name> = iface_tn.module_path.iter().skip(1).cloned().collect();
+        let Some(Definition::Interface(loc)) = pkg_items.lookup_type(&ns, &iface_tn.name) else {
+            return false;
+        };
+        let tree = file_item_tree(self.db, loc.file(self.db));
+        tree.interfaces.get(&loc.id(self.db)).is_some_and(|data| {
+            data.required_methods.iter().any(|s| s.name == *method)
+                || data
+                    .default_methods
+                    .iter()
+                    .any(|&fn_id| tree[fn_id].name == *method)
+        })
+    }
+
+    /// The interface that "owns" `method` for an `implements <target>` block:
+    /// the most-derived interface in the target's requires-closure (root-first)
+    /// that declares `method`. A method override or default in that block only
+    /// satisfies a request resolving to this view — so `implements B { foo }`
+    /// (where `B requires A` and both declare `foo`) provides `B::foo`, never
+    /// `A::foo`, even though `A` is reachable through `B`'s closure.
+    fn method_provider_view(
+        &self,
+        target: &baml_compiler2_ast::SpannedTypeExpr,
+        class_loc: baml_compiler2_hir::loc::ClassLoc<'db>,
+        method: &Name,
+    ) -> Option<TypeName> {
+        let (target_tn, target_args) = self.resolve_implements_target_view(target, class_loc)?;
+        let views = self.interface_closure_type_name_views(&target_tn, &target_args)?;
+        views
+            .into_iter()
+            .find(|(tn, _)| self.interface_declares_method(tn, method))
+            .map(|(tn, _)| tn)
+    }
+
     fn resolve_implementor_interface_field_candidates(
         &self,
         impl_tn: &TypeName,
@@ -7046,6 +7122,16 @@ impl<'db> LoweringContext<'db> {
         else {
             return Vec::new();
         };
+        // BEP-044: when the requested interface and a `requires` parent both
+        // declare `field`, `.as<Requested>.field` must use the *most-derived*
+        // declaration. The closure is root-first, so resolve the field against
+        // the first view that declares it and ignore the others — otherwise an
+        // inherited parent view (e.g. `A` behind `B requires A`) could win by
+        // impl-block ordering and read the wrong class field.
+        let owning_view_tn: Option<TypeName> = requested_views
+            .iter()
+            .find(|(tn, _)| self.interface_declares_field(tn, field))
+            .map(|(tn, _)| tn.clone());
         let mut out = Vec::new();
 
         for impl_block in &class_data.implements {
@@ -7063,6 +7149,12 @@ impl<'db> LoweringContext<'db> {
             for (target_view_tn, target_view_args) in target_views {
                 for (requested_tn, requested_args) in &requested_views {
                     if target_view_tn != *requested_tn {
+                        continue;
+                    }
+                    // Restrict to the field's owning (most-derived) view.
+                    if let Some(owning) = &owning_view_tn
+                        && requested_tn != owning
+                    {
                         continue;
                     }
                     let Some(guard) = interface_class_guard_for_args(
