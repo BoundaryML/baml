@@ -2,8 +2,7 @@
 //! `parse`, `stringify`, `stringify_pretty`, `to_string<T>`, `from_string<T>`.
 //!
 //! `to_string<T>` and `from_string<T>` read their type-arg `T` from
-//! `vm.current_call_type_args()`, populated by the call-instruction handler
-//! from the leading `LoadType` operand.  See `BexVm::pending_call_type_args`.
+//! the active native call frame.
 
 // `path: &mut String` callees need ownership for `truncate` and `write!`.
 // Match arms that throw via the VM error helpers read clearer than
@@ -75,9 +74,24 @@ use super::{
     BamlNamespaceJson, Continuation, NativeCallResult, PackageBamlImpl, make_to_json_callee,
 };
 use crate::{
-    BexVm,
+    BexVm, Frame,
     errors::{VmInternalError, VmRustFnError},
 };
+
+fn first_native_type_arg(vm: &BexVm, name: &str) -> Result<Ty, VmRustFnError> {
+    match vm.frames.last() {
+        Some(Frame::NativeCall(frame)) => frame.type_args.first().cloned().ok_or_else(|| {
+            VmRustFnError::InternalError(VmInternalError::MissingNativeFunction {
+                name: format!("{name}: missing type argument"),
+            })
+        }),
+        _ => Err(VmRustFnError::InternalError(
+            VmInternalError::MissingNativeFunction {
+                name: format!("{name}: missing active native call frame"),
+            },
+        )),
+    }
+}
 
 /// Pass-through continuation for `baml.json.to_json(v)`. The dynamically
 /// dispatched `to_json` produces the json value directly, so we just hand it
@@ -122,28 +136,12 @@ impl BamlNamespaceJson for PackageBamlImpl {
     }
 
     fn to_string(vm: &mut BexVm, v: &Value) -> Result<bex_str::BexStr, VmRustFnError> {
-        let ty = vm
-            .current_call_type_args()
-            .first()
-            .cloned()
-            .ok_or_else(|| {
-                VmRustFnError::InternalError(VmInternalError::MissingNativeFunction {
-                    name: "baml.json.to_string: missing type argument".to_string(),
-                })
-            })?;
+        let ty = first_native_type_arg(vm, "baml.json.to_string")?;
         json_to_string_typed(vm, *v, &ty).map(bex_str::BexStr::from)
     }
 
     fn from_string(vm: &mut BexVm, s: &bex_str::BexStr) -> Result<Value, VmRustFnError> {
-        let ty = vm
-            .current_call_type_args()
-            .first()
-            .cloned()
-            .ok_or_else(|| {
-                VmRustFnError::InternalError(VmInternalError::MissingNativeFunction {
-                    name: "baml.json.from_string: missing type argument".to_string(),
-                })
-            })?;
+        let ty = first_native_type_arg(vm, "baml.json.from_string")?;
         json_from_string_typed(vm, s.as_str(), &ty)
     }
 
@@ -161,15 +159,9 @@ impl BamlNamespaceJson for PackageBamlImpl {
     }
 
     fn from_json(vm: &mut BexVm, j: &Value) -> NativeCallResult {
-        let ty = match vm.current_call_type_args().first().cloned() {
-            Some(t) => t,
-            None => {
-                return NativeCallResult::Error(VmRustFnError::InternalError(
-                    VmInternalError::MissingNativeFunction {
-                        name: "baml.json.from_json: missing type argument".to_string(),
-                    },
-                ));
-            }
+        let ty = match first_native_type_arg(vm, "baml.json.from_json") {
+            Ok(t) => t,
+            Err(e) => return NativeCallResult::Error(e),
         };
         json_from_json_dispatch(vm, *j, &ty)
     }

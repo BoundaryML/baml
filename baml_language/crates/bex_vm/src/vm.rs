@@ -126,23 +126,55 @@ pub struct NativeContinuationFrame {
     /// Pointer to the native function object (for GC roots + stack traces).
     pub(crate) function: HeapPtr,
     /// The continuation to invoke with the callback's return value.
-    pub(crate) continuation: Box<dyn crate::package_baml::Continuation>,
+    pub(crate) continuation: Option<Box<dyn crate::package_baml::Continuation>>,
+}
+
+/// Native activation frame — pushed when entering a native function.
+///
+/// Arguments remain in the eval stack at `locals_offset`, mirroring bytecode
+/// frames. The native handler may snapshot them into a temporary Vec before
+/// calling Rust code, but the VM frame owns the argument stack region until the
+/// native completes, yields, or unwinds.
+pub struct NativeCallFrame {
+    /// Pointer to the native function object.
+    pub(crate) function: HeapPtr,
+    /// Local variables offset in the eval stack.
+    pub(crate) locals_offset: StackIndex,
+    /// Number of arguments owned by this frame.
+    pub(crate) arg_count: usize,
+    /// Resolved type arguments for this native call.
+    pub(crate) type_args: Vec<baml_type::Ty>,
 }
 
 impl RootHaver for NativeContinuationFrame {
     fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
         roots.push(self.function);
-        roots.extend_from_slice(&self.continuation.gc_roots());
+        if let Some(continuation) = &self.continuation {
+            roots.extend_from_slice(&continuation.gc_roots());
+        }
     }
     fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
         self.function = roots.get(&self.function).copied().unwrap_or(self.function);
-        self.continuation.apply_forwarding(roots);
+        if let Some(continuation) = &mut self.continuation {
+            continuation.apply_forwarding(roots);
+        }
     }
 }
 
-/// Call frame — either a bytecode frame or a native continuation frame.
+impl RootHaver for NativeCallFrame {
+    fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
+        roots.push(self.function);
+    }
+    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
+        self.function = roots.get(&self.function).copied().unwrap_or(self.function);
+    }
+}
+
+/// Call frame — either a bytecode frame, native activation frame, or native
+/// continuation frame.
 pub enum Frame {
     Bytecode(BytecodeFrame),
+    NativeCall(NativeCallFrame),
     NativeContinuation(NativeContinuationFrame),
 }
 
@@ -151,6 +183,7 @@ impl Frame {
     pub(crate) fn function(&self) -> HeapPtr {
         match self {
             Frame::Bytecode(f) => f.function,
+            Frame::NativeCall(f) => f.function,
             Frame::NativeContinuation(f) => f.function,
         }
     }
@@ -235,7 +268,6 @@ mod tests {
             traced_frames: Vec::new(),
             current_span_context: None,
             argv: Arc::from([]),
-            pending_call_type_args: Vec::new(),
         }
     }
 
@@ -312,12 +344,14 @@ impl RootHaver for Frame {
     fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
         match self {
             Frame::Bytecode(f) => f.collect_roots(roots),
+            Frame::NativeCall(f) => f.collect_roots(roots),
             Frame::NativeContinuation(f) => f.collect_roots(roots),
         }
     }
     fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
         match self {
             Frame::Bytecode(f) => f.forward_roots(roots),
+            Frame::NativeCall(f) => f.forward_roots(roots),
             Frame::NativeContinuation(f) => f.forward_roots(roots),
         }
     }
@@ -496,21 +530,6 @@ pub struct BexVm {
     /// Process argv passed to the engine at startup. Exposed to BAML via
     /// `baml.sys.argv()`. Shared (cheap to clone) across VMs.
     pub argv: Arc<[String]>,
-
-    /// Type-args of the *currently dispatching* call, populated by the
-    /// `Instruction::Call` handler from the leading `ntypeargs` `Object::Type`
-    /// stack slots before invoking the callee.
-    ///
-    /// For bytecode callees this is redundant (the type-args are written into
-    /// the new frame's `type_args` field by the Call writeback), but for native
-    /// callees it is the only channel — the native dispatch path does not push
-    /// a bytecode frame, so without this slot any leading type-args would be
-    /// silently dropped.
-    ///
-    /// Saved/restored across nested `Call` instructions; native handlers that
-    /// re-enter the VM (via `YieldToCall`) therefore see their own type-args
-    /// even if the inner callback uses different ones.
-    pending_call_type_args: Vec<baml_type::Ty>,
 }
 
 /// VM execution state.
@@ -906,21 +925,7 @@ impl BexVm {
             traced_frames: Vec::new(),
             current_span_context: None,
             argv,
-            pending_call_type_args: Vec::new(),
         }
-    }
-
-    /// Type-args of the currently dispatching call.
-    ///
-    /// Populated by `Instruction::Call` when the call carries `ntypeargs > 0`.
-    /// For BAML→BAML calls these are also written into the callee's frame; for
-    /// BAML→native calls this slot is the **only** channel, since native
-    /// dispatch does not push a bytecode frame.
-    ///
-    /// Returns an empty slice for calls with `ntypeargs == 0` and from outside
-    /// any call dispatch context.
-    pub fn current_call_type_args(&self) -> &[baml_type::Ty] {
-        &self.pending_call_type_args
     }
 
     /// Read an object from the heap via `HeapPtr`.
@@ -966,7 +971,9 @@ impl BexVm {
         for frame in &self.frames {
             roots.push(frame.function());
             if let Frame::NativeContinuation(nf) = frame {
-                roots.extend(nf.continuation.gc_roots());
+                if let Some(continuation) = &nf.continuation {
+                    roots.extend(continuation.gc_roots());
+                }
             }
         }
         roots
@@ -983,11 +990,18 @@ impl BexVm {
                         bf.function = new_ptr;
                     }
                 }
+                Frame::NativeCall(nf) => {
+                    if let Some(&new_ptr) = forwarding.get(&nf.function) {
+                        nf.function = new_ptr;
+                    }
+                }
                 Frame::NativeContinuation(nf) => {
                     if let Some(&new_ptr) = forwarding.get(&nf.function) {
                         nf.function = new_ptr;
                     }
-                    nf.continuation.apply_forwarding(forwarding);
+                    if let Some(continuation) = &mut nf.continuation {
+                        continuation.apply_forwarding(forwarding);
+                    }
                 }
             }
         }
@@ -1275,16 +1289,8 @@ impl BexVm {
     /// `type_args` slot. Use when the host invokes a generic function
     /// (e.g. a user function with `<T>`) and needs to thread `T` through.
     ///
-    /// Entry points must be [`bex_vm_types::FunctionKind::Bytecode`] —
-    /// either a bare `Object::Function` or an `Object::Closure` wrapping
-    /// one (BEP-034 spawn). The engine boundary
-    /// (`bex_engine::BexEngine::call_function_bound_args` — backticks
-    /// rather than an intra-doc link because `bex_vm` doesn't depend on
-    /// `bex_engine`; the relationship goes the other way) rejects
-    /// `SysOp` / `Native` / `NativeUnresolved` callees with
-    /// `EngineError::NotInvokableAsEntry` before reaching this method,
-    /// because there's no enclosing bytecode frame for a native to
-    /// `YieldToCall` back into at the top level.
+    /// Entry points may be bytecode or native functions. SysOps still require
+    /// the engine yield/resume contract and are rejected at the engine boundary.
     pub fn set_entry_point_with_type_args(
         &mut self,
         function: HeapPtr,
@@ -1299,27 +1305,48 @@ impl BexVm {
             "expect function or closure as entry point, got {:?}",
             self.get_object(function)
         );
-        // 35d EXPERIMENT: the `FunctionKind::Bytecode`-only debug-assert
-        // that used to guard entry points has been removed alongside the
-        // engine-boundary guard, to see what happens when a native/sysop
-        // is entered directly.
-
-        self.pending_call_type_args.clone_from(&type_args);
 
         self.stack.extend(args.iter().copied());
 
-        self.frames.push(Frame::Bytecode(BytecodeFrame {
-            function,
-            instruction_ptr: 0,
-            locals_offset: StackIndex::from_raw(0),
-            type_args,
-            faulting_pc: 0,
-        }));
+        let callable_kind = match self.get_object(function) {
+            Object::Function(f) => f.kind,
+            Object::Closure(closure) => {
+                let func_obj = unsafe { closure.function.get() };
+                match func_obj {
+                    Object::Function(f) => f.kind,
+                    other => panic!("expect closure function, got {other:?}"),
+                }
+            }
+            other => panic!("expect function or closure as entry point, got {other:?}"),
+        };
 
-        // Entry functions need the same frame-local pre-allocation as normal
-        // bytecode calls now that INIT_LOCALS is gone from bytecode.
-        self.allocate_real_locals_for_frame(function)
-            .expect("entry point must be a valid function frame");
+        match callable_kind {
+            FunctionKind::Bytecode => {
+                self.frames.push(Frame::Bytecode(BytecodeFrame {
+                    function,
+                    instruction_ptr: 0,
+                    locals_offset: StackIndex::from_raw(0),
+                    type_args,
+                    faulting_pc: 0,
+                }));
+
+                // Entry functions need the same frame-local pre-allocation as normal
+                // bytecode calls now that INIT_LOCALS is gone from bytecode.
+                self.allocate_real_locals_for_frame(function)
+                    .expect("entry point must be a valid function frame");
+            }
+            FunctionKind::Native(_) => {
+                self.frames.push(Frame::NativeCall(NativeCallFrame {
+                    function,
+                    locals_offset: StackIndex::from_raw(0),
+                    arg_count: args.len(),
+                    type_args,
+                }));
+            }
+            FunctionKind::SysOp(_) | FunctionKind::NativeUnresolved => {
+                panic!("entry point kind is not directly invokable: {callable_kind:?}");
+            }
+        }
     }
 
     /// Restores the VM state and prepares it for the next execution.
@@ -2157,6 +2184,12 @@ impl BexVm {
                             error_line,
                         })
                     }
+                    Frame::NativeCall(_) => Some(StackFrame {
+                        function_name: func.name.clone(),
+                        file_path: func.source_file.clone(),
+                        function_span: func.span,
+                        error_line: 0,
+                    }),
                     Frame::NativeContinuation(_) => Some(StackFrame {
                         function_name: func.name.clone(),
                         file_path: func.source_file.clone(),
@@ -2187,13 +2220,20 @@ impl BexVm {
             let depth = self.frames.len() - 1;
             let frame = &self.frames[depth];
 
-            // Native continuation frames have no exception handlers and own
-            // no eval stack region — just pop and continue unwinding.
-            if matches!(frame, Frame::NativeContinuation(_)) {
+            // Native frames have no exception handlers. Native activation
+            // frames own their argument stack region; continuation frames do
+            // not.
+            if matches!(frame, Frame::NativeCall(_) | Frame::NativeContinuation(_)) {
                 if self.frames.len() <= 1 {
-                    return Err(VmError::Thrown(exception_value));
+                    return Err(VmError::ThrownUnhandled {
+                        value: exception_value,
+                        trace,
+                    });
                 }
-                self.frames.pop();
+                let popped = self.frames.pop().expect("frame stack is not empty");
+                if let Frame::NativeCall(nf) = popped {
+                    self.stack.drain(nf.locals_offset..);
+                }
                 // Clean up tracing / interrupt bookkeeping
                 while self
                     .traced_frames
@@ -2286,7 +2326,10 @@ impl BexVm {
                 Frame::Bytecode(bf) => {
                     self.stack.drain(bf.locals_offset..);
                 }
-                Frame::NativeContinuation(_) => {} // native frames own no stack region
+                Frame::NativeCall(nf) => {
+                    self.stack.drain(nf.locals_offset..);
+                }
+                Frame::NativeContinuation(_) => {} // continuation frames own no stack region
             }
 
             // Clean up tracing / interrupt bookkeeping for popped frames.
@@ -2420,6 +2463,7 @@ impl BexVm {
         callee_ptr: HeapPtr,
         locals_offset: StackIndex,
         arg_count: usize,
+        call_type_args: Vec<baml_type::Ty>,
         frame_idx: &mut usize,
         function: &mut &'static Function,
     ) -> Result<Option<VmExecState>, VmError> {
@@ -2525,100 +2569,14 @@ impl BexVm {
         let is_traced = callee.trace;
 
         match callee.kind {
-            FunctionKind::Native(func_ptr) => {
-                // Cast the type-erased pointer back to NativeFunction.
-                //
-                // SAFETY: The pointer was created by casting a NativeFunction to *const ()
-                // in attach_builtins, so it's safe to cast it back. We use transmute
-                // because Rust doesn't allow `as` casts from *const () to fn pointers.
-                // The explicit type parameters document exactly what we're doing.
-                let func = unsafe { std::mem::transmute::<*const (), NativeFunction>(func_ptr) };
-
-                // Native functions should manage their own gc roots (or never yield).
-                // They have no data on the stack.
-                let args: Vec<Value> = self.stack.drain(locals_offset..).collect();
-
-                // Run Rust native function, converting NativeCallResult → VmError.
-                match func(self, &args) {
-                    NativeCallResult::Done(v) => {
-                        self.stack.push(v);
-                    }
-                    NativeCallResult::Error(e) => {
-                        return Err(self.native_error_to_vm_error(e));
-                    }
-                    NativeCallResult::YieldToCall {
-                        callee,
-                        args: mut callback_args,
-                        type_args: callback_type_args,
-                        continuation,
-                    } => {
-                        // Push a Native continuation frame, then dispatch the
-                        // callback through ECFLO. The exec loop's continuation
-                        // handler (at the top of the loop) will invoke the
-                        // continuation when the callback completes.
-                        self.frames
-                            .push(Frame::NativeContinuation(NativeContinuationFrame {
-                                function: callee_ptr,
-                                continuation,
-                            }));
-
-                        // If callee is a BoundMethod, insert receiver into args.
-                        let real_callee =
-                            self.resolve_bound_method_callee(callee, &mut callback_args);
-
-                        let arg_count = callback_args.len();
-                        let cb_locals = StackIndex::from_raw(self.stack.len());
-                        self.stack.extend(callback_args);
-
-                        // Mirror the Call-instruction's type-arg plumbing
-                        // (see vm.rs:3757) so a native helper that yields with
-                        // explicit `type_args` (e.g. `baml.json.from_json`
-                        // dispatching a generic class' `from_json`) seeds the
-                        // callee's frame correctly.  Save/restore around the
-                        // dispatch matches the Call-instruction handler.
-                        let prev_pending = std::mem::replace(
-                            &mut self.pending_call_type_args,
-                            callback_type_args.clone(),
-                        );
-                        let frames_before = self.frames.len();
-
-                        let result = self.execute_call_from_locals_offset(
-                            real_callee,
-                            cb_locals,
-                            arg_count,
-                            frame_idx,
-                            function,
-                        );
-
-                        self.pending_call_type_args = prev_pending;
-
-                        // Append explicit type-args to the newly-pushed
-                        // bytecode frame's `type_args` (after class-args from
-                        // BoundMethod / Closure seeding).
-                        if !callback_type_args.is_empty() && self.frames.len() > frames_before {
-                            if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
-                                bf.type_args.extend(callback_type_args);
-                            }
-                        }
-
-                        // Update *frame_idx to point at the new topmost frame.
-                        // Required so the caller's tight inner-dispatch loop
-                        // detects the frame change (the pushed Native
-                        // continuation frame for the outer native that
-                        // yielded) and breaks out to let exec_compact's
-                        // continuation handler run it.  Without this, when the
-                        // recursive callback was itself a Native that returned
-                        // Done synchronously (no frame_idx update from the
-                        // recursion), the inner loop would continue stepping
-                        // the caller's bytecode with a stale Native frame on
-                        // top — eventually reading past the caller's code end.
-                        if !self.frames.is_empty() {
-                            *frame_idx = self.frames.len() - 1;
-                        }
-
-                        return result;
-                    }
-                }
+            FunctionKind::Native(_) => {
+                self.frames.push(Frame::NativeCall(NativeCallFrame {
+                    function: callee_ptr,
+                    locals_offset,
+                    arg_count,
+                    type_args: call_type_args,
+                }));
+                *frame_idx = self.frames.len() - 1;
             }
 
             FunctionKind::Bytecode => {
@@ -2634,23 +2592,23 @@ impl BexVm {
                 // Push the new frame.
                 // Seed frame.type_args from:
                 //  1. BoundMethod callees: the receiver's class_type_args (De
-                //     Bruijn slot 0..n_class_params).  The Call-instruction
-                //     writeback at vm.rs:3619-3629 appends explicit call-site
-                //     type args after these, preserving ordering
-                //     [class_args, fn_args].
+                //     Bruijn slot 0..n_class_params).
                 //  2. Closure callees: captured_type_args (whole-frame snapshot
                 //     taken at MakeClosure time; enclosing_generic_params()
                 //     already widened to class+fn params so the ordering is
                 //     consistent).
                 //  3. Plain Function callees: vec![] (no-op).
+                //  4. Explicit call-site type args appended after the above,
+                //     preserving ordering [class_args, fn_args].
                 //
                 // Note: BoundMethod takes priority over Closure; a method can
                 // never be both simultaneously.
-                let initial_type_args = if !bound_method_class_type_args.is_empty() {
+                let mut initial_type_args = if !bound_method_class_type_args.is_empty() {
                     bound_method_class_type_args
                 } else {
                     closure_type_args
                 };
+                initial_type_args.extend(call_type_args);
                 self.frames.push(Frame::Bytecode(BytecodeFrame {
                     function: callee_ptr,
                     instruction_ptr: 0,
@@ -3332,17 +3290,79 @@ impl BexVm {
 
         // Outer loop handles CPS continuations and frame transitions.
         loop {
-            // ── CPS continuation handler (identical to exec_inner) ────────
-            while matches!(self.frames.last(), Some(Frame::NativeContinuation(_))) {
-                let v = self.stack.ensure_pop();
-                let Some(Frame::NativeContinuation(nf)) = self.frames.pop() else {
-                    unreachable!("just matched Some(Frame::Native(_))");
-                };
-                let native_fn_ptr = nf.function;
+            // ── Native activation / CPS continuation handler ───────────────
+            while matches!(
+                self.frames.last(),
+                Some(Frame::NativeCall(_) | Frame::NativeContinuation(_))
+            ) {
+                let (native_fn_ptr, result) = match self.frames.last() {
+                    Some(Frame::NativeCall(frame)) => {
+                        let native_fn_ptr = frame.function;
+                        let locals_offset = frame.locals_offset;
+                        let arg_count = frame.arg_count;
+                        let callable = self.get_object(native_fn_ptr).as_callable()?;
+                        let FunctionKind::Native(func_ptr) = callable.kind else {
+                            return Err(VmInternalError::TypeError {
+                                expected: FunctionType::Callable.into(),
+                                got: FunctionType::from(&callable.kind).into(),
+                            }
+                            .into());
+                        };
+                        let start = locals_offset.raw();
+                        let end = start
+                            .checked_add(arg_count)
+                            .ok_or(VmInternalError::NotEnoughItemsOnStack(arg_count))?;
+                        if self.stack.len() < end {
+                            return Err(VmInternalError::NotEnoughItemsOnStack(arg_count).into());
+                        }
+                        let args = self.stack[locals_offset..StackIndex::from_raw(end)].to_vec();
 
-                match nf.continuation.call(self, v) {
+                        // SAFETY: The pointer was created by casting a NativeFunction
+                        // to *const () in attach_builtins, so it is safe to cast it back.
+                        let func =
+                            unsafe { std::mem::transmute::<*const (), NativeFunction>(func_ptr) };
+                        let result = func(self, &args);
+
+                        (native_fn_ptr, result)
+                    }
+                    Some(Frame::NativeContinuation(_)) => {
+                        let v = self.stack.ensure_pop();
+                        let native_fn_ptr = match self.frames.last() {
+                            Some(Frame::NativeContinuation(frame)) => frame.function,
+                            _ => unreachable!("native frame matched above"),
+                        };
+                        let continuation = match self.frames.last_mut() {
+                            Some(Frame::NativeContinuation(frame)) => frame
+                                .continuation
+                                .take()
+                                .expect("native continuation frame should hold a continuation"),
+                            _ => unreachable!("native frame matched above"),
+                        };
+                        let result = continuation.call(self, v);
+
+                        (native_fn_ptr, result)
+                    }
+                    _ => unreachable!("native frame matched above"),
+                };
+
+                match result {
                     NativeCallResult::Done(val) => {
-                        self.stack.push(val);
+                        let frame = self.frames.pop().expect("native frame stack is not empty");
+                        match frame {
+                            Frame::NativeCall(frame) => {
+                                self.stack.truncate(frame.locals_offset.raw());
+                            }
+                            Frame::NativeContinuation(_) => {}
+                            Frame::Bytecode(_) => {
+                                unreachable!("native result handler requires native frame")
+                            }
+                        }
+
+                        if self.frames.is_empty() {
+                            return Ok(VmExecState::Complete(val));
+                        } else {
+                            self.stack.push(val);
+                        }
                     }
                     NativeCallResult::Error(e) => match self.native_error_to_vm_error(e) {
                         VmError::Thrown(exception_value) => {
@@ -3357,44 +3377,44 @@ impl BexVm {
                     },
                     NativeCallResult::YieldToCall {
                         callee,
-                        args: mut callback_args,
+                        args: callback_args,
                         type_args: callback_type_args,
                         continuation,
                     } => {
+                        let frame = self.frames.pop().expect("native frame stack is not empty");
+                        match frame {
+                            Frame::NativeCall(frame) => {
+                                self.stack.truncate(frame.locals_offset.raw());
+                            }
+                            Frame::NativeContinuation(_) => {}
+                            Frame::Bytecode(_) => {
+                                unreachable!("native yield handler requires native frame")
+                            }
+                        }
                         self.frames
                             .push(Frame::NativeContinuation(NativeContinuationFrame {
                                 function: native_fn_ptr,
-                                continuation,
+                                continuation: Some(continuation),
                             }));
 
+                        let mut callback_args = callback_args;
                         let real_callee =
                             self.resolve_bound_method_callee(callee, &mut callback_args);
                         let arg_count = callback_args.len();
                         let cb_locals = StackIndex::from_raw(self.stack.len());
                         self.stack.extend(callback_args);
 
-                        // Mirror the Call-instruction's type-arg plumbing for
-                        // continuation-driven YieldToCall.
-                        let prev_pending = std::mem::replace(
-                            &mut self.pending_call_type_args,
-                            callback_type_args.clone(),
-                        );
-                        let frames_before = self.frames.len();
-
                         let ecflo_outcome = self.execute_call_from_locals_offset(
                             real_callee,
                             cb_locals,
                             arg_count,
+                            callback_type_args,
                             &mut frame_idx,
                             &mut function,
                         );
 
-                        self.pending_call_type_args = prev_pending;
-
-                        if !callback_type_args.is_empty() && self.frames.len() > frames_before {
-                            if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(frame_idx) {
-                                bf.type_args.extend(callback_type_args);
-                            }
+                        if !self.frames.is_empty() {
+                            frame_idx = self.frames.len() - 1;
                         }
 
                         let ecflo_result = match ecflo_outcome {
@@ -3428,9 +3448,7 @@ impl BexVm {
             // SAFETY: code is &'static because Function is &'static.
             let code: &'static [u8] = &function.bytecode.compact.as_ref().unwrap().code;
             let Frame::Bytecode(bf) = &mut self.frames[frame_idx] else {
-                unreachable!(
-                    "exec_compact loop frame is always Bytecode after continuation handler"
-                );
+                unreachable!("exec_compact loop frame is always Bytecode after native handler");
             };
             let mut pc = bf.instruction_ptr;
 
@@ -4185,26 +4203,14 @@ impl BexVm {
                     };
                     bf.instruction_ptr = *pc;
 
-                    let frames_before = self.frames.len();
-                    // Mirror the native YieldToCall plumbing: stash type_args
-                    // into `pending_call_type_args` so a native callee can
-                    // read them via `current_call_type_args()` (e.g.
-                    // `baml.json.from_json<T>` reads its `T` from there).
-                    let prev_pending =
-                        std::mem::replace(&mut self.pending_call_type_args, type_args.clone());
                     let result = self.execute_call_from_locals_offset(
                         callee_ptr,
                         locals_offset,
                         arg_count,
+                        type_args,
                         frame_idx,
                         function,
                     );
-                    self.pending_call_type_args = prev_pending;
-                    if !type_args.is_empty() && self.frames.len() > frames_before {
-                        if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
-                            bf.type_args.extend(type_args);
-                        }
-                    }
                     return result;
                 }
 
@@ -4280,6 +4286,7 @@ impl BexVm {
                             fn_ptr,
                             locals_offset,
                             full_arity,
+                            Vec::new(),
                             frame_idx,
                             function,
                         )? {
@@ -4298,6 +4305,7 @@ impl BexVm {
                             callee_ptr,
                             locals_offset,
                             arg_count,
+                            Vec::new(),
                             frame_idx,
                             function,
                         )? {

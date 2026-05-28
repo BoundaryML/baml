@@ -1256,10 +1256,16 @@ impl BexEngine {
             return Err(cancelled_unhandled_throw());
         }
 
-        let (function_index, _kind) = self.lookup_function(function_name)?;
-        // 35d EXPERIMENT: the `FunctionKind::Bytecode`-only entry-point
-        // guard that used to live here has been removed to test whether
-        // natives / sysops can be invoked directly as host entry points.
+        let (function_index, kind) = self.lookup_function(function_name)?;
+        if matches!(
+            kind,
+            bex_vm_types::FunctionKind::SysOp(_) | bex_vm_types::FunctionKind::NativeUnresolved
+        ) {
+            return Err(EngineError::NotInvokableAsEntry {
+                name: function_name.to_string(),
+                kind: format!("{kind:?}"),
+            });
+        }
         self.validate_bound_args(function_name, &args)?;
         let return_type = self
             .function_return_type(function_name)
