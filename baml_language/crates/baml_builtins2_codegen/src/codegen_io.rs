@@ -230,6 +230,13 @@ fn view_return_type(ty: &BamlType, needs_heap: &mut bool) -> TokenStream {
             quote! { Result<f64, AccessError> }
         }
         BamlType::Bool => quote! { Result<bool, AccessError> },
+        // Bigints live behind a heap pointer (`Object::Bigint`) or by value in
+        // an external value; either way `as_bigint` hands back an owned `Arc`,
+        // so the accessor needs a `PermitProof` to deref the pointer soundly.
+        BamlType::Bigint => {
+            *needs_heap = true;
+            quote! { Result<std::sync::Arc<num_bigint::BigInt>, AccessError> }
+        }
         BamlType::String => {
             *needs_heap = true;
             quote! { Result<&'a bex_str::BexStr, AccessError> }
@@ -252,6 +259,7 @@ fn view_accessor_body(field_name: &str, ty: &BamlType) -> TokenStream {
         BamlType::Int => quote! { self.cls.field(#field_lit)?.as_int() },
         BamlType::Float => quote! { self.cls.field(#field_lit)?.as_float(heap, permit) },
         BamlType::Bool => quote! { self.cls.field(#field_lit)?.as_bool() },
+        BamlType::Bigint => quote! { self.cls.field(#field_lit)?.as_bigint(heap, permit) },
         BamlType::String => quote! { self.cls.field(#field_lit)?.as_string(heap, permit) },
         BamlType::RustType => quote! { self.cls.field(#field_lit)?.as_rust_data(heap, permit) },
         _ => quote! { self.cls.field(#field_lit)?.as_owned_but_very_slow(heap, permit) },

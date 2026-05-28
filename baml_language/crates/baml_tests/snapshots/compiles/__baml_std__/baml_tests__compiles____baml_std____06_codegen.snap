@@ -4786,5 +4786,335 @@ function baml.sys.shell(command: string, options: baml.sys.ProcessOptions?) -> b
 function baml.sys.sleep(ms: int) -> null {
 }
 
+function baml.time.Duration.abs(self: null) -> baml.time.Duration {
+    load_var self
+    load_field ._nanoseconds
+    call baml.Bigint.abs
+    init_instance baml.time.Duration ._nanoseconds
+    return
+}
+
+function baml.time.Duration.from_hours(h: bigint) -> baml.time.Duration {
+    load_var h
+    load_const 3600000000000
+    mul_bigint
+    init_instance baml.time.Duration ._nanoseconds
+    return
+}
+
+function baml.time.Duration.from_json(j: baml.json.json) -> baml.time.Duration {
+    load_var j
+    load_const "_nanoseconds"
+    call baml.json.field
+    store_var _3
+    load_type bigint
+    load_var _3
+    call baml.json.from_json
+    init_instance baml.time.Duration ._nanoseconds
+    return
+}
+
+function baml.time.Duration.from_microseconds(us: bigint) -> baml.time.Duration {
+    load_var us
+    load_const 1000
+    mul_bigint
+    init_instance baml.time.Duration ._nanoseconds
+    return
+}
+
+function baml.time.Duration.from_milliseconds(ms: bigint) -> baml.time.Duration {
+    load_var ms
+    load_const 1000000
+    mul_bigint
+    init_instance baml.time.Duration ._nanoseconds
+    return
+}
+
+function baml.time.Duration.from_minutes(m: bigint) -> baml.time.Duration {
+    load_var m
+    load_const 60000000000
+    mul_bigint
+    init_instance baml.time.Duration ._nanoseconds
+    return
+}
+
+function baml.time.Duration.from_nanoseconds(ns: bigint) -> baml.time.Duration {
+    load_var ns
+    init_instance baml.time.Duration ._nanoseconds
+    return
+}
+
+function baml.time.Duration.from_seconds(s: bigint) -> baml.time.Duration {
+    load_var s
+    load_const 1000000000
+    mul_bigint
+    init_instance baml.time.Duration ._nanoseconds
+    return
+}
+
+function baml.time.Duration.to_hours(self: null) -> bigint {
+    load_var self
+    load_field ._nanoseconds
+    load_const 3600000000000
+    div_bigint
+    return
+}
+
+function baml.time.Duration.to_json(self: null) -> baml.json.json {
+    load_var self
+    load_field ._nanoseconds
+    call baml.Bigint.to_json
+    load_const "_nanoseconds"
+    alloc_map 1
+    return
+}
+
+function baml.time.Duration.to_microseconds(self: null) -> bigint {
+    load_var self
+    load_field ._nanoseconds
+    load_const 1000
+    div_bigint
+    return
+}
+
+function baml.time.Duration.to_milliseconds(self: null) -> bigint {
+    load_var self
+    load_field ._nanoseconds
+    load_const 1000000
+    div_bigint
+    return
+}
+
+function baml.time.Duration.to_minutes(self: null) -> bigint {
+    load_var self
+    load_field ._nanoseconds
+    load_const 60000000000
+    div_bigint
+    return
+}
+
+function baml.time.Duration.to_nanoseconds(self: null) -> bigint {
+    load_var self
+    load_field ._nanoseconds
+    return
+}
+
+function baml.time.Duration.to_seconds(self: null) -> bigint {
+    load_var self
+    load_field ._nanoseconds
+    load_const 1000000000
+    div_bigint
+    return
+}
+
+function baml.time.Instant.abs_diff(self: null, other: baml.time.Instant) -> baml.time.Duration {
+    load_var self
+    load_field ._nanoseconds
+    load_var other
+    load_field ._nanoseconds
+    sub_bigint
+    call baml.Bigint.abs
+    init_instance baml.time.Duration ._nanoseconds
+    return
+}
+
+function baml.time.Instant.elapsed(self: null) -> baml.time.Duration {
+    load_const null
+    sys_op baml.time.Instant.now
+    store_var _4
+    load_var _4
+    load_field ._nanoseconds
+    load_var self
+    load_field ._nanoseconds
+    sub_bigint
+    init_instance baml.time.Duration ._nanoseconds
+    return
+}
+
+function baml.time.Instant.epoch() -> baml.time.Instant {
+    load_const 0n
+    init_instance baml.time.Instant ._nanoseconds
+    return
+}
+
+function baml.time.Instant.from_json(j: baml.json.json) -> baml.time.Instant {
+    load_var j
+    is_type string
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "Expected timestamp string"
+    load_const null
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L1:
+    load_const null
+    load_var j
+    call baml.time.Instant.parse
+    jump L4
+    load_var _
+    is_type baml.errors.ParseError
+    pop_jump_if_false L2
+    load_var _
+    load_field .0
+    is_type string
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var _
+    throw
+
+  L3:
+    load_var _
+    load_field .0
+    load_const ""
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L4:
+    return
+}
+
+function baml.time.Instant.from_timestamp_microseconds(us: bigint) -> baml.time.Instant {
+    load_var us
+    load_const 1000
+    mul_bigint
+    init_instance baml.time.Instant ._nanoseconds
+    return
+}
+
+function baml.time.Instant.from_timestamp_milliseconds(ms: bigint) -> baml.time.Instant {
+    load_var ms
+    load_const 1000000
+    mul_bigint
+    init_instance baml.time.Instant ._nanoseconds
+    return
+}
+
+function baml.time.Instant.from_timestamp_nanoseconds(ns: bigint) -> baml.time.Instant {
+    load_var ns
+    init_instance baml.time.Instant ._nanoseconds
+    return
+}
+
+function baml.time.Instant.from_timestamp_seconds(s: bigint) -> baml.time.Instant {
+    load_var s
+    load_const 1000000000
+    mul_bigint
+    init_instance baml.time.Instant ._nanoseconds
+    return
+}
+
+function baml.time.Instant.max(self: null, other: baml.time.Instant) -> baml.time.Instant {
+    load_var other
+    load_field ._nanoseconds
+    load_var self
+    load_field ._nanoseconds
+    cmp_bigint_op >
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var self
+    jump L2
+
+  L1:
+    load_var other
+
+  L2:
+    return
+}
+
+function baml.time.Instant.min(self: null, other: baml.time.Instant) -> baml.time.Instant {
+    load_var other
+    load_field ._nanoseconds
+    load_var self
+    load_field ._nanoseconds
+    cmp_bigint_op <
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var self
+    jump L2
+
+  L1:
+    load_var other
+
+  L2:
+    return
+}
+
+function baml.time.Instant.now() -> baml.time.Instant {
+}
+
+function baml.time.Instant.parse(s: string) -> baml.time.Instant {
+}
+
+function baml.time.Instant.to_json(self: null) -> string {
+    load_var self
+    call baml.time.Instant.to_string
+    jump L2
+    load_var _
+    is_type baml.errors.InvalidArgument
+    pop_jump_if_false L0
+    load_var _
+    load_field .0
+    is_type string
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _
+    throw
+
+  L1:
+    load_var _
+    load_field .0
+    load_const ""
+    load_const null
+    init_instance baml.json.JsonSerializationError .message, .path, .reason
+    throw
+
+  L2:
+    return
+}
+
+function baml.time.Instant.to_string(self: null) -> string {
+}
+
+function baml.time.Instant.to_timestamp_microseconds(self: null) -> bigint {
+    load_var self
+    load_field ._nanoseconds
+    load_const 1000
+    div_bigint
+    return
+}
+
+function baml.time.Instant.to_timestamp_milliseconds(self: null) -> bigint {
+    load_var self
+    load_field ._nanoseconds
+    load_const 1000000
+    div_bigint
+    return
+}
+
+function baml.time.Instant.to_timestamp_nanoseconds(self: null) -> bigint {
+    load_var self
+    load_field ._nanoseconds
+    return
+}
+
+function baml.time.Instant.to_timestamp_seconds(self: null) -> bigint {
+    load_var self
+    load_field ._nanoseconds
+    load_const 1000000000
+    div_bigint
+    return
+}
+
 function baml.unstable.string(value: void) -> string {
 }

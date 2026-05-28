@@ -44,6 +44,31 @@ impl io::IoNamespaceEnv for NativeSysOps {
 }
 
 // ============================================================================
+// Time
+// ============================================================================
+
+impl io::IoClassTimeInstant for NativeSysOps {
+    fn now(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::time::Instant> {
+        // Wall-clock time as nanoseconds since the UNIX epoch. Per the
+        // `Instant.now()` contract, an unavailable/pre-epoch clock panics.
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_else(|_| unreachable!("system clock is set before the UNIX epoch"))
+            .as_nanos();
+        SysOpOutput::ok(owned::time::Instant {
+            _nanoseconds: Arc::new(num_bigint::BigInt::from(nanos)),
+        })
+    }
+}
+
+impl io::IoNamespaceTime for NativeSysOps {}
+
+// ============================================================================
 // IO (stdin input)
 // ============================================================================
 

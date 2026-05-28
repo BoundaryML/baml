@@ -271,6 +271,14 @@ fn extract_from_class(
         };
         let receiver = Some(Receiver {
             class_name: class_name.to_string(),
+            namespace: namespace_prefix
+                .strip_prefix("baml.")
+                .unwrap_or("")
+                .to_string(),
+            // Mirrors `extract_class_fields`: dedicated-variant types and
+            // field-less (opaque/marker) classes get no `view::` struct.
+            instance_backed: !matches!(class_name, "Array" | "Map" | "String" | "Uint8Array")
+                && !class_def.fields.is_empty(),
             class_generics: class_generics.clone(),
             receiver_type,
         });

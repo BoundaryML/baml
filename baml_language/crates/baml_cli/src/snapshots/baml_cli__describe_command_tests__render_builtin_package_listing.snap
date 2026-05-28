@@ -141,4 +141,6 @@ function         sys.panic                        <builtin>/baml/ns_sys/sys.baml
 function         sys.exit                         <builtin>/baml/ns_sys/sys.baml:48
 function         sys.now_ms                       <builtin>/baml/ns_sys/sys.baml:53
 function         sys.argv                         <builtin>/baml/ns_sys/sys.baml:59
+class            time.Duration                    <builtin>/baml/ns_time/duration.baml:4
+class            time.Instant                     <builtin>/baml/ns_time/instant.baml:2
 function         unstable.string                  <builtin>/baml/ns_unstable/unstable.baml:5

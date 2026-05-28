@@ -85,6 +85,16 @@ pub struct Param {
 pub struct Receiver {
     /// The class name (e.g. `"Array"`, `"Map"`, `"String"`, `"Pdf"`).
     pub class_name: String,
+    /// Dotted namespace of the class, relative to the `baml` package
+    /// (e.g. `"time"`, `"media"`, `""` for a root-level class). Used to build
+    /// the `view::<ns>::<Class>` path when the receiver is passed as a view.
+    pub namespace: String,
+    /// Whether the class is backed by `Object::Instance` with declared fields
+    /// (i.e. it has a generated `view::` struct). True for classes like
+    /// `time.Instant` / media classes; false for dedicated-variant types
+    /// (`Array`/`Map`/`String`/`Uint8Array`), opaque classes (`Future`), and
+    /// primitives — those keep a type-erased `&Value` receiver.
+    pub instance_backed: bool,
     /// Generic type parameters of the class (e.g. `["T"]` for `Array<T>`).
     pub class_generics: Vec<String>,
     pub receiver_type: ReceiverType,

@@ -384,6 +384,44 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 writeln!(out, "{inner2}}}").unwrap();
                 writeln!(out, "{inner}}}\n").unwrap();
             }
+            BamlType::Bigint => {
+                // Bigints live behind a heap pointer (`Object::Bigint`); clone
+                // the shared `Arc` out (cheap) so the caller gets an owned handle.
+                writeln!(
+                    out,
+                    "{inner}pub fn {field_name}(&self) -> std::sync::Arc<num_bigint::BigInt> {{"
+                )
+                .unwrap();
+                writeln!(
+                    out,
+                    "{inner2}match self.instance.load_field({}).as_object_ptr() {{",
+                    field.index
+                )
+                .unwrap();
+                writeln!(
+                    out,
+                    "{inner2}    Some(ptr) => match unsafe {{ ptr.get() }} {{"
+                )
+                .unwrap();
+                writeln!(
+                    out,
+                    "{inner2}        bex_vm_types::Object::Bigint(b) => b.clone(),"
+                )
+                .unwrap();
+                writeln!(
+                    out,
+                    "{inner2}        _ => panic!(\"{class_name}.{field_name}: expected Bigint\"),"
+                )
+                .unwrap();
+                writeln!(out, "{inner2}    }},").unwrap();
+                writeln!(
+                    out,
+                    "{inner2}    None => panic!(\"{class_name}.{field_name}: expected Bigint\"),"
+                )
+                .unwrap();
+                writeln!(out, "{inner2}}}").unwrap();
+                writeln!(out, "{inner}}}\n").unwrap();
+            }
             // Generic, Named, Media, Null — fallback to a copied Value.
             _ => {
                 writeln!(out, "{inner}pub fn {field_name}(&self) -> Value {{").unwrap();
@@ -549,6 +587,16 @@ fn copy_field_to_value(field_name: &str, ty: &BamlType) -> String {
             "Value::try_int(self.{field_name}).unwrap_or_else(|| panic!(\
                 \"`{field_name}: int` is outside BAML int range [{{}}, {{}}], got {{}}\", \
                 Value::INT_MIN, Value::INT_MAX, self.{field_name}))"
+        ),
+        // Bigints are always heap-allocated, and allocation is fallible (the
+        // value may exceed `MAX_BIGINT_BITS`). `to_value` has no error channel,
+        // so — like the `int` range case above — fail loudly rather than
+        // silently dropping the overflow. The panic reports the bit count from
+        // `VmPanic::AllocFailure` (`{p}`), never the bigint itself, which could
+        // be millions of digits long.
+        BamlType::Bigint => format!(
+            "vm.try_alloc_bigint(self.{field_name}).unwrap_or_else(|p| panic!(\
+                \"failed to allocate bigint field `{field_name}`: {{p}}\"))"
         ),
         BamlType::Float => format!("vm.alloc_float(self.{field_name})"),
         BamlType::Bool => format!("Value::bool(self.{field_name})"),
@@ -1125,6 +1173,23 @@ fn emit_immut_receiver_extraction_indented(
                 .unwrap();
             }
         }
+        // Other instance-backed receivers (e.g. `time.Instant`): wrap the heap
+        // instance in its `view::<ns>::<Class>` struct. `needs_owned` (set for
+        // `//baml:mut_vm` methods) falls through to the raw `&Value` path below,
+        // matching `receiver_input_type_with_vm_usage`.
+        _ if recv.instance_backed && !needs_owned => {
+            let view_path = receiver_view_path(recv);
+            writeln!(
+                out,
+                "{indent}let __instance = vm.as_instance(&args[{idx}])?;"
+            )
+            .unwrap();
+            writeln!(
+                out,
+                "{indent}let {name} = {view_path} {{ instance: __instance }};"
+            )
+            .unwrap();
+        }
         _ => {
             let rhs = receiver_immut_extraction_expr(
                 &format!("&args[{idx}]"),
@@ -1453,6 +1518,10 @@ fn call_arg_list(b: &NativeBuiltin, needs_owned: bool, arraymap_needs_owned: boo
                 // `let pdf = &args[0];` (a `&Value` copy).  Pass `name` directly —
                 // it is already the `&Value` the trait method expects.
                 args.push(name);
+            } else if recv.instance_backed && !needs_owned {
+                // Instance-backed receiver extracted as a `view::<ns>::<Class>`
+                // value; the trait method takes it by reference.
+                args.push(format!("&{name}"));
             } else {
                 let recv_is_ref = match recv.class_name.as_str() {
                     "Array" | "Map" | "Uint8Array" => arraymap_is_ref,
@@ -1713,6 +1782,20 @@ fn receiver_param_name(recv: &Receiver) -> String {
     recv.class_name.to_lowercase()
 }
 
+/// Path to the generated `view::` struct for an instance-backed receiver, e.g.
+/// `view::time::Instant` or (for a root-level class) `view::Foo`.
+fn receiver_view_path(recv: &Receiver) -> String {
+    if recv.namespace.is_empty() {
+        format!("view::{}", recv.class_name)
+    } else {
+        format!(
+            "view::{}::{}",
+            recv.namespace.replace('.', "::"),
+            recv.class_name
+        )
+    }
+}
+
 #[allow(dead_code)]
 fn receiver_input_type(recv: &Receiver) -> String {
     receiver_input_type_with_vm_usage(recv, VmUsage::None)
@@ -1776,6 +1859,14 @@ fn receiver_input_type_with_vm_usage(recv: &Receiver, vm_usage: VmUsage) -> Stri
                     _ => "&Value".to_string(),
                 }
             }
+        }
+        // Other instance-backed classes (e.g. `time.Instant`) are passed as a
+        // borrowed `view::<ns>::<Class>` for typed field access. As with media,
+        // `//baml:mut_vm` methods fall back to the `Copy` `&Value` because the
+        // view's `&Instance` borrow can't coexist with `&mut BexVm`. Opaque
+        // classes and primitives stay type-erased.
+        _ if recv.instance_backed && !matches!(vm_usage, VmUsage::MutRef) => {
+            format!("&{}<'_>", receiver_view_path(recv))
         }
         _ => "&Value".to_string(),
     }
