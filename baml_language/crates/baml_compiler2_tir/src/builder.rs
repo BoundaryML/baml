@@ -3213,15 +3213,31 @@ impl<'db> TypeInferenceBuilder<'db> {
                     let _ = self.infer_expr(*name_id, body);
                 }
                 // Spawn options: type-check each `with` expression — it is
-                // evaluated eagerly in the spawning function. In v1 the only
-                // useful form is a single `baml.spawn.options(...)` call
-                // producing a `SpawnConfig`, which MIR lowers into the spawn's
-                // config operand.
-                // TODO(spawn-options PR4): reject `with` expressions that are
-                // not a `baml.spawn.options(...)` call, and forbid more than
-                // one config.
-                for with_id in with_exprs {
-                    let _ = self.infer_expr(*with_id, body);
+                // evaluated eagerly in the spawning function. v1 accepts a
+                // single config producing a `baml.spawn.SpawnConfig` (i.e. a
+                // `baml.spawn.options(...)` call, or a variable bound to one).
+                for (idx, with_id) in with_exprs.iter().enumerate() {
+                    let cfg_ty = self.infer_expr(*with_id, body);
+                    if idx >= 1 {
+                        self.context
+                            .report_simple(TirTypeError::SpawnWithTooManyConfigs, *with_id);
+                        continue;
+                    }
+                    let is_spawn_config = matches!(
+                        &cfg_ty,
+                        Ty::Class(qn, _, _)
+                            if qn.package().as_str() == "baml"
+                                && qn.namespace().len() == 1
+                                && qn.namespace()[0].as_str() == "spawn"
+                                && qn.name().as_str() == "SpawnConfig"
+                    );
+                    // Don't double-report on an expression that already failed
+                    // to type-check.
+                    let unresolved = matches!(cfg_ty, Ty::Unknown { .. } | Ty::Error { .. });
+                    if !is_spawn_config && !unresolved {
+                        self.context
+                            .report_simple(TirTypeError::SpawnWithMustBeSpawnConfig, *with_id);
+                    }
                 }
                 let lambda_ty = self.infer_expr(*spawn_body, body);
                 let value_ty = match &lambda_ty {

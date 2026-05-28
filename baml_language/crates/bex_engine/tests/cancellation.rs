@@ -917,3 +917,25 @@ async fn spawn_with_options_detach_still_honors_cancel_token() {
         start.elapsed()
     );
 }
+
+/// `spawn ... with` accepts only a `baml.spawn.options(...)` config: any other
+/// expression is a compile error (BEP-034 spawn options, v1). `compile_for_engine`
+/// panics on diagnostics, so a rejected program unwinds here.
+#[test]
+fn spawn_with_non_options_is_rejected() {
+    let bad = r#"
+        function helper() -> int { 1 }
+        function main() -> int {
+            let f = spawn with helper() { 1 };
+            await f
+        }
+    "#;
+    let prev = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {})); // suppress the diagnostic backtrace
+    let compiled = std::panic::catch_unwind(|| compile_for_engine(bad));
+    std::panic::set_hook(prev);
+    assert!(
+        compiled.is_err(),
+        "`spawn with helper()` should fail to compile (with accepts only baml.spawn.options(...))"
+    );
+}
