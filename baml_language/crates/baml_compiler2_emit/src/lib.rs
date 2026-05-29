@@ -926,7 +926,13 @@ pub fn generate_project_bytecode_with_opt(
             baml_type::TypeName,
             Vec<(baml_type::TypeName, Vec<baml_type::Ty>)>,
         > = indexmap::IndexMap::new();
-        let mut seen_pairs: HashSet<(String, String, String)> = HashSet::new();
+        // Dedup key: (interface qualified name, class/primitive dedup key,
+        // interface type args). The args are keyed *structurally* (`Vec<Ty>`,
+        // which derives `Eq`/`Hash`) rather than by `format!("{:?}")` — `Debug`
+        // is not contractually unique across distinct types, so two distinct
+        // `Ty` values with a colliding `Debug` string would have silently dropped
+        // a legitimate implementor entry.
+        let mut seen_pairs: HashSet<(String, String, Vec<baml_type::Ty>)> = HashSet::new();
         for (pkg_name, cache) in &alias_caches {
             let pkg_id = PackageId::new(db, pkg_name.clone());
             let registry = baml_compiler2_tir::interfaces::package_implements_registry(db, pkg_id);
@@ -935,7 +941,7 @@ pub fn generate_project_bytecode_with_opt(
                                 dedup_key: String,
                                 iface_args: Vec<baml_type::Ty>| {
                 let iface_name = baml_compiler2_mir::qtn_to_type_name(iface_qtn);
-                if seen_pairs.insert((iface_qtn.to_string(), dedup_key, format!("{iface_args:?}"))) {
+                if seen_pairs.insert((iface_qtn.to_string(), dedup_key, iface_args.clone())) {
                     inverted
                         .entry(iface_name)
                         .or_default()

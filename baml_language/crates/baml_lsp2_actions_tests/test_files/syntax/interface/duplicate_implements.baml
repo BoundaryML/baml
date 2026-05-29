@@ -20,7 +20,7 @@ class Dog {
 
 //----
 //- diagnostics
-// error: class `Dog` has multiple `implements user.Animal` blocks; a class may implement each interface at most once
+// error: class `Dog` has multiple `implements Animal` blocks; a class may implement each interface at most once
 //     ╭─[ interface_duplicate_implements.baml:14:13 ]
 //     │
 //   8 │   implements Animal {

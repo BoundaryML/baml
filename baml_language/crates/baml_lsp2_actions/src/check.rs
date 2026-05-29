@@ -429,8 +429,9 @@ fn check_interfaces<'db>(
                     // (e.g. `root.a.Ghost`) rather than stripping to the bare
                     // leaf — matches how `implements` renders its target.
                     let target_name = format!("{}", parent_te.expr);
-                    let interface_name =
-                        Name::new(interface_qtn_for_file(db, file, &iface.name).to_string());
+                    let interface_name = Name::new(
+                        interface_qtn_for_file(db, file, &iface.name).render_user_facing(),
+                    );
                     // Distinguish "name exists but isn't an interface" (E0133)
                     // from "name doesn't exist at all" (E0112), mirroring the
                     // `implements` path. Without this, a `requires` on an
@@ -571,7 +572,7 @@ struct ResolvedInterfaceData<'db> {
 
 impl ResolvedInterfaceData<'_> {
     fn display_name(&self) -> Name {
-        Name::new(self.qtn.to_string())
+        Name::new(self.qtn.render_user_facing())
     }
 }
 
@@ -995,7 +996,7 @@ struct InterfaceMemberOrigin {
 
 impl InterfaceMemberOrigin {
     fn display_name(&self) -> Name {
-        Name::new(self.qualified_name.to_string())
+        Name::new(self.qualified_name.render_user_facing())
     }
 }
 
@@ -1931,7 +1932,8 @@ fn validate_interface_extends_fields(
                     diagnostics.push(
                         Hir2Diagnostic::InterfaceExtendsFieldConflict {
                             interface_name: Name::new(
-                                interface_qtn_for_file(ctx.db, file, &iface.name).to_string(),
+                                interface_qtn_for_file(ctx.db, file, &iface.name)
+                                    .render_user_facing(),
                             ),
                             field_name: field_name.clone(),
                             first_interface: existing_origin.clone(),

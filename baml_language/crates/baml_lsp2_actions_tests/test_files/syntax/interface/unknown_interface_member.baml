@@ -17,7 +17,7 @@ class Dog {
 
 //----
 //- diagnostics
-// error: method `bark` is not declared on interface `user.Animal`; remove it or add it to the interface
+// error: method `bark` is not declared on interface `Animal`; remove it or add it to the interface
 //     ╭─[ interface_unknown_interface_member.baml:12:14 ]
 //     │
 //  12 │     function bark(self) -> string {

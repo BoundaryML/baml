@@ -21,12 +21,12 @@ class Box {
 //    │ 
 //    │ Note: Error code: E0118
 // ───╯
-// error: class `Box` implements `user.Loop`, which requires `user.Loop`, but `Box` does not implement them
+// error: class `Box` implements `Loop`, which requires `Loop`, but `Box` does not implement them
 //    ╭─[ interface_error_generic_requires_cycle_changes_args.baml:6:13 ]
 //    │
 //  6 │   implements Loop<int> {
 //    │             ─────┬────  
-//    │                  ╰────── requires `user.Loop`
+//    │                  ╰────── requires `Loop`
 //    │ 
 //    │ Note: Error code: E0125
 // ───╯

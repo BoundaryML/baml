@@ -16,7 +16,7 @@ class Worker {
 
 //----
 //- diagnostics
-// error: method `run` in class `Worker` does not match interface `user.Fallible`: expected `() -> string throws IoError`, found `() -> string`
+// error: method `run` in class `Worker` does not match interface `Fallible`: expected `() -> string throws IoError`, found `() -> string`
 //     ╭─[ interface_error_method_throws_mismatch.baml:11:14 ]
 //     │
 //  11 │     function run(self) -> string {

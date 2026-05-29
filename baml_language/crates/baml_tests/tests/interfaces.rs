@@ -317,7 +317,7 @@ fn missing_required_method_message_names_method_and_interface() {
             implements Animal {}
         }
         "#,
-        "required method `speak` of interface `user.Animal`",
+        "required method `speak` of interface `Animal`",
     );
 }
 
@@ -569,7 +569,7 @@ fn implementing_requires_chain_satisfies_parent_required_methods() {
             implements Person {}
         }
         "#,
-        "required method `introduce` of interface `user.Person`",
+        "required method `introduce` of interface `Person`",
     );
 }
 

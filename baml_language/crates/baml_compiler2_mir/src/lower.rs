@@ -57,10 +57,10 @@ pub fn qtn_to_type_name(qtn: &QualifiedTypeName) -> TypeName {
     let module_path = std::iter::once(qtn.package().clone())
         .chain(qtn.namespace().iter().cloned())
         .collect::<Vec<_>>();
-    // For user-defined types (package = "user"), display with only the local
+    // For user-defined types (the local package), display with only the local
     // namespace path so snapshots show `Point` rather than `user.Point`.
     // For builtin types (package = "baml", etc.), keep the full FQ path.
-    let display_name = if qtn.package().as_str() == "user" {
+    let display_name = if qtn.is_local() {
         let parts: Vec<_> = qtn
             .namespace()
             .iter()
