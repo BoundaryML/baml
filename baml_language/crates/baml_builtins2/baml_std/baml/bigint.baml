@@ -25,7 +25,7 @@
 ///       cap permits.
 class Bigint {
   //baml:mut_vm
-  function to_json(self) -> baml.json.json {
+  function to_json(self) -> baml.json.json throws never {
     $rust_function
   }
   // ─── Comparisons / clamping ───────────────────────────────────────────────
@@ -37,7 +37,7 @@ class Bigint {
   /// (3n).abs()          // 3n
   /// (0n).abs()          // 0n
   /// ```
-  function abs(self) -> bigint {
+  function abs(self) -> bigint throws never {
     $rust_function
   }
 
@@ -49,7 +49,7 @@ class Bigint {
   /// (3n).min(3)   // 3n (note we cast up from `int` to `bigint` here)
   /// (-2n).min(0n)  // -2n
   /// ```
-  function min(self, other: bigint) -> bigint {
+  function min(self, other: bigint) -> bigint throws never {
     $rust_function
   }
 
@@ -61,7 +61,7 @@ class Bigint {
   /// (3n).max(3)   // 3n (note we cast up from `int` to `bigint` here)
   /// (-2n).max(0n)  // 0n
   /// ```
-  function max(self, other: bigint) -> bigint {
+  function max(self, other: bigint) -> bigint throws never {
     $rust_function
   }
 
@@ -77,7 +77,7 @@ class Bigint {
   /// (-3n).clamp(0, 10)   // 0n (note we cast up from `int` to `bigint` here)
   /// (15n).clamp(0n, 10n)   // 10n
   /// ```
-  function clamp(self, min: bigint, max: bigint) -> bigint {
+  function clamp(self, min: bigint, max: bigint) -> bigint throws never {
     $rust_function
   }
 
@@ -118,7 +118,10 @@ class Bigint {
   /// (10n).pow(100n)    // a very large number
   /// (-2n).pow(3n)      // -8n
   /// ```
-  function pow(self, exp: bigint) -> bigint {
+  // Raises `baml.panics.AllocFailure` (a panic, not a catchable `throws`) when
+  // the estimated result exceeds `MAX_BIGINT_BITS`.
+  //baml:fallible
+  function pow(self, exp: bigint) -> bigint throws never {
     $rust_function
   }
 

@@ -136,7 +136,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     let aliases = collect_type_aliases_for_resolution_context(db, res_ctx);
     let ast_items = {
         let tree = baml_compiler_parser::syntax_tree(db, file);
-        let (items, _, _) = baml_compiler2_ast::lower_file_with_file_id(&tree, file_id);
+        let (items, _, _) = baml_compiler2_ast::lower_file(&tree);
         items
     };
 

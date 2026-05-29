@@ -159,5 +159,8 @@ namespace baml.sys:
   function panic
   function shell
   function sleep
+namespace baml.time:
+  class Duration { methods: [abs, from_nanoseconds, from_microseconds, from_milliseconds, from_seconds, from_minutes, from_hours, to_nanoseconds, to_microseconds, to_milliseconds, to_seconds, to_minutes, to_hours, to_json, from_json] }
+  class Instant { methods: [now, elapsed, parse, to_string, from_json, to_json, max, min, abs_diff, from_timestamp_nanoseconds, from_timestamp_microseconds, from_timestamp_milliseconds, from_timestamp_seconds, to_timestamp_nanoseconds, to_timestamp_microseconds, to_timestamp_milliseconds, to_timestamp_seconds, epoch] }
 namespace baml.unstable:
   function string<T>

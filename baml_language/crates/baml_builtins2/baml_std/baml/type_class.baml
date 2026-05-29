@@ -9,7 +9,7 @@
 class TypeValue {
     /// Returns the type name as a human-readable string.
     //baml:vm
-    function to_string(self) -> string {
+    function to_string(self) -> string throws never {
         $rust_function
     }
 
@@ -21,7 +21,7 @@ class TypeValue {
     /// Returns `false` when `other` is not an interface, or when the
     /// receiver is not a class.
     //baml:vm
-    function implements(self, other: type) -> bool {
+    function implements(self, other: type) -> bool throws never {
         $rust_function
     }
 
@@ -29,7 +29,7 @@ class TypeValue {
     /// as `klass.implements(iface)`. Useful when the call-site naturally
     /// reads "does this interface include that class?".
     //baml:vm
-    function implemented_by(self, other: type) -> bool {
+    function implemented_by(self, other: type) -> bool throws never {
         $rust_function
     }
 
@@ -39,7 +39,7 @@ class TypeValue {
     /// `mut_vm` because each implementor is materialised as a fresh
     /// `Object::Type` allocation in the TLAB.
     //baml:mut_vm
-    function implementors(self) -> type[] {
+    function implementors(self) -> type[] throws never {
         $rust_function
     }
 }

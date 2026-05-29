@@ -25,13 +25,13 @@ function parse(s string) -> json throws JsonParseError {
 
 //baml:mut_vm
 /// Serializes a `json` value `j` to a compact JSON string.
-function stringify(j json) -> string {
+function stringify(j json) -> string throws never {
   $rust_function
 }
 
 //baml:mut_vm
 /// Serializes a `json` value `j` to a pretty-printed (indented) JSON string.
-function stringify_pretty(j json) -> string {
+function stringify_pretty(j json) -> string throws never {
   $rust_function
 }
 
@@ -116,7 +116,7 @@ function from_json<T>(j: json) -> T throws JsonParseError | JsonDecodeError {
 /// from a `json` object without requiring the caller to match-narrow the
 /// `json` union to its map arm.
 //baml:mut_vm
-function field(j: json, key: string) -> json {
+function field(j: json, key: string) -> json throws never {
   $rust_function
 }
 

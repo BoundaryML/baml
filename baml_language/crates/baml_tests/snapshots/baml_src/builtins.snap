@@ -1,28 +1,28 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function builtins.$init_test_38(registry: testing.TestCollector) -> null {
+function builtins.$init_test_ns_builtins_builtins(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "builtin_method_call"
-    make_closure .<lambda($init_test_38, 0)>, 0
+    make_closure .<lambda($init_test_ns_builtins_builtins, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "bind_method_call"
-    make_closure .<lambda($init_test_38, 1)>, 0
+    make_closure .<lambda($init_test_ns_builtins_builtins, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "any_value_to_string"
-    make_closure .<lambda($init_test_38, 2)>, 0
+    make_closure .<lambda($init_test_ns_builtins_builtins, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "float_to_string_preserves_decimal"
-    make_closure .<lambda($init_test_38, 3)>, 0
+    make_closure .<lambda($init_test_ns_builtins_builtins, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
@@ -54,7 +54,7 @@ function builtins.builtins_bind_method_call() -> int {
     load_const 2
     load_const 3
     alloc_array 3
-    call baml.Array.length
+    container_len
     return
 }
 

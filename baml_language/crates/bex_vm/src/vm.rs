@@ -16,6 +16,8 @@
 
 use std::{collections::HashMap, sync::Arc};
 
+use smallvec::SmallVec;
+
 /// Branch hint: tells the compiler this condition is almost never true.
 /// Used on the cold side of `if unlikely(cond) { ... }` in the dispatch
 /// loop's hot path — measurably faster than letting the compiler guess
@@ -2560,7 +2562,8 @@ impl BexVm {
 
                 // Native functions should manage their own gc roots (or never yield).
                 // They have no data on the stack.
-                let args: Vec<Value> = self.stack.drain(locals_offset..).collect();
+                // SmallVec avoids heap allocation for calls with ≤4 args (the common case).
+                let args: SmallVec<[Value; 4]> = self.stack.drain(locals_offset..).collect();
 
                 // Run Rust native function, converting NativeCallResult → VmError.
                 match func(self, &args) {
@@ -4880,6 +4883,32 @@ impl BexVm {
                 }
 
                 // ── Array / Map element ops ───────────────────────────────────
+                OpCode::ContainerLen => {
+                    let container = self.stack.ensure_pop();
+                    let Some(ptr) = container.as_object_ptr() else {
+                        return Err(VmInternalError::TypeError {
+                            expected: ObjectType::Array.into(),
+                            got: self.type_of(&container),
+                        }
+                        .into());
+                    };
+                    #[allow(clippy::cast_possible_wrap)]
+                    let len = match self.get_object(ptr) {
+                        Object::Array(arr) => arr.len() as i64,
+                        Object::Uint8Array(bytes) => bytes.len() as i64,
+                        Object::Map(map) => map.len() as i64,
+                        Object::String(s) => s.len() as i64,
+                        other => {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Array.into(),
+                                got: ObjectType::of(other).into(),
+                            }
+                            .into());
+                        }
+                    };
+                    self.stack.push(Value::int(len));
+                }
+
                 OpCode::LoadArrayElement => {
                     let index_value = self.stack.ensure_pop();
                     let array_value = self.stack.ensure_pop();

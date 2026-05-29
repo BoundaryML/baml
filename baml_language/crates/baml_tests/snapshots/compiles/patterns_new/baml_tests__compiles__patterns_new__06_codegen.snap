@@ -299,7 +299,7 @@ function user.for_let_ascription(items: int[]) -> int {
   L0:
     load_var __for_idx
     load_var items
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2
@@ -333,7 +333,7 @@ function user.for_let_fn_narrow(items: ((int) -> int throws never)[]) -> int {
   L0:
     load_var __for_idx
     load_var items
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2
@@ -367,7 +367,7 @@ function user.for_let_with_narrow(items: int[]) -> int {
   L0:
     load_var __for_idx
     load_var items
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2
@@ -407,7 +407,7 @@ function user.match_nested_paren_union(v: (int | string)[]) -> int {
 
 function user.nested_paren_union_array_one(items: (int | string)[]) -> int {
     load_var items
-    call baml.Array.length
+    container_len
     return
 }
 
@@ -418,13 +418,13 @@ function user.nested_paren_union_array_optional(v: (int | string)[]?) -> int {
 
 function user.nested_paren_union_array_three(v: (int | string)[][]) -> int {
     load_var v
-    call baml.Array.length
+    container_len
     return
 }
 
 function user.nested_paren_union_array_two(items: (int | string)[]) -> int {
     load_var items
-    call baml.Array.length
+    container_len
     return
 }
 

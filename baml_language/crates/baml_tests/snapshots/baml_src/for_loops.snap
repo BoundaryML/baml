@@ -1,64 +1,64 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function for_loops.$init_test_50(registry: testing.TestCollector) -> null {
+function for_loops.$init_test_ns_for_loops_for_loops(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "for_loop_sum"
-    make_closure .<lambda($init_test_50, 0)>, 0
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "for_loop_with_break"
-    make_closure .<lambda($init_test_50, 1)>, 0
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "for_loop_with_continue"
-    make_closure .<lambda($init_test_50, 2)>, 0
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "for_loop_nested"
-    make_closure .<lambda($init_test_50, 3)>, 0
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "c_for_sum_to_ten"
-    make_closure .<lambda($init_test_50, 4)>, 0
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 4)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "for_loop_over_let_variable"
-    make_closure .<lambda($init_test_50, 5)>, 0
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 5)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "for_loop_over_let_variable_no_parens"
-    make_closure .<lambda($init_test_50, 6)>, 0
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 6)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "for_loop_final_if_without_semicolon_can_return"
-    make_closure .<lambda($init_test_50, 7)>, 0
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 7)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "for_loop_final_if_else_without_semicolon_can_mutate"
-    make_closure .<lambda($init_test_50, 8)>, 0
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 8)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "nested_for_loop_final_if_without_semicolon_can_return"
-    make_closure .<lambda($init_test_50, 9)>, 0
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 9)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
@@ -102,7 +102,7 @@ function for_loops.for_loops_first_even(xs: int[]) -> int {
   L0:
     load_var __for_idx
     load_var xs
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2
@@ -147,7 +147,7 @@ function for_loops.for_loops_for_with_break(xs: int[]) -> int {
   L0:
     load_var __for_idx
     load_var xs
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L2
     load_var xs
@@ -184,7 +184,7 @@ function for_loops.for_loops_for_with_continue(xs: int[]) -> int {
   L0:
     load_var __for_idx
     load_var xs
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2
@@ -224,7 +224,7 @@ function for_loops.for_loops_has_empty_cell(grid: string[][]) -> bool {
   L0:
     load_var __for_idx
     load_var grid
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2
@@ -244,7 +244,7 @@ function for_loops.for_loops_has_empty_cell(grid: string[][]) -> bool {
   L3:
     load_var __for_idx_1
     load_var _8
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L4
     jump L5
@@ -288,7 +288,7 @@ function for_loops.for_loops_nested_for(arr_a: int[], arr_b: int[]) -> int {
   L0:
     load_var __for_idx
     load_var arr_a
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2
@@ -308,7 +308,7 @@ function for_loops.for_loops_nested_for(arr_a: int[], arr_b: int[]) -> int {
   L3:
     load_var __for_idx_1
     load_var arr_b
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L4
     jump L5
@@ -345,7 +345,7 @@ function for_loops.for_loops_render(xs: string[]) -> string {
   L0:
     load_var __for_idx
     load_var xs
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2
@@ -394,7 +394,7 @@ function for_loops.for_loops_sum(xs: int[]) -> int {
   L0:
     load_var __for_idx
     load_var xs
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2
@@ -431,7 +431,7 @@ function for_loops.for_loops_sum_let_var() -> int {
   L0:
     load_var __for_idx
     load_var _3
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2
@@ -468,7 +468,7 @@ function for_loops.for_loops_sum_let_var_no_parens() -> int {
   L0:
     load_var __for_idx
     load_var _3
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2

@@ -204,7 +204,7 @@ function testing.TestCollector.find_testset(self: testing.TestCollector, name: s
   L0:
     load_var __for_idx
     load_var _3
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2
@@ -310,7 +310,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
   L3:
     load_var __for_idx
     load_var _13
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L4
     jump L8
@@ -425,7 +425,7 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
   L3:
     load_var __for_idx
     load_var _13
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L4
     jump L8
@@ -564,7 +564,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
   L0:
     load_var __for_idx
     load_var _3
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L7
@@ -580,7 +580,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
   L2:
     load_var __for_idx_1
     load_var _28
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L3
     jump L4
@@ -717,7 +717,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
   L0:
     load_var __for_idx
     load_var _3
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L7
@@ -733,7 +733,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
   L2:
     load_var __for_idx_1
     load_var _13
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L3
     jump L4
@@ -817,7 +817,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
   L0:
     load_var __for_idx
     load_var _3
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L8
@@ -833,7 +833,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
   L2:
     load_var __for_idx_1
     load_var _12
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L3
     jump L4
