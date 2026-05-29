@@ -195,7 +195,6 @@ pub fn lower_file_with_file_id(
             if let Some(class) = target_class {
                 class.implements.push(ImplementsBlockDef {
                     target: imp.interface_target,
-                    fields: imp.fields,
                     field_links: imp.field_links,
                     methods: imp.methods,
                     is_out_of_body: true,
@@ -1340,7 +1339,6 @@ fn lower_implements_block(
 
     Some(ImplementsBlockDef {
         target,
-        fields: Vec::new(),
         field_links,
         methods,
         is_out_of_body: false,
@@ -1423,7 +1421,6 @@ fn lower_implements_for(
         generic_params,
         interface_target,
         for_target,
-        fields: Vec::new(),
         field_links,
         methods,
         span: node.text_range(),

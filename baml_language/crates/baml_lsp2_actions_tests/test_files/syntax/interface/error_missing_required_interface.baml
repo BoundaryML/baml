@@ -22,12 +22,12 @@ class Bad {
 
 //----
 //- diagnostics
-// error: class `Bad` implements `Person`, which requires `Named`, `Aged`, but `Bad` does not implement them
+// error: class `Bad` implements `user.Person`, which requires `user.Named`, `user.Aged`, but `Bad` does not implement them
 //     ╭─[ interface_error_missing_required_interface.baml:19:15 ]
 //     │
 //  19 │     implements Person {
 //     │               ───┬───  
-//     │                  ╰───── requires `Named`, `Aged`
+//     │                  ╰───── requires `user.Named`, `user.Aged`
 //     │ 
 //     │ Note: Error code: E0125
 // ────╯

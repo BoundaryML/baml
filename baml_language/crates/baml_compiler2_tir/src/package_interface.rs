@@ -598,7 +598,8 @@ impl<'db> PackageResolutionContext<'db> {
                 return Some(result);
             }
         }
-        // No bare fallback from non-root namespaces — cross-namespace requires explicit qualification
+        // No bare fallback from non-root namespaces: cross-namespace references
+        // in the same package must start with `root`.
 
         // Try package-prefixed path (first segment is package name)
         if path.len() >= 2 {
@@ -782,9 +783,7 @@ impl<'db> PackageResolutionContext<'db> {
         let ns = file_package::file_package(db, class_loc.file(db)).namespace_path;
         let mut diags = Vec::new();
         let mut fields = Vec::new();
-        let mut class_own_names: rustc_hash::FxHashSet<Name> = rustc_hash::FxHashSet::default();
         for field in &class_data.fields {
-            class_own_names.insert(field.name.clone());
             if let Some(te) = &field.type_expr {
                 let field_ty = lower_type_expr_in_ns(
                     db,
@@ -804,53 +803,6 @@ impl<'db> PackageResolutionContext<'db> {
                 ));
             }
         }
-
-        let mut alias_candidates: rustc_hash::FxHashMap<Name, Vec<Ty>> =
-            rustc_hash::FxHashMap::default();
-        for impl_target in &class_data.implements {
-            let Some(iface_loc) = crate::interfaces::resolve_path_to_interface(
-                db,
-                &impl_target.target.expr,
-                &self.own_items,
-                &ns,
-            ) else {
-                continue;
-            };
-            let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
-            let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
-                continue;
-            };
-            for field in &impl_target.fields {
-                let qualified = Name::new(format!("{}.{}", iface_data.name, field.name));
-                let field_ty = if let Some(te) = &field.type_expr {
-                    lower_type_expr_in_ns(
-                        db,
-                        &te.expr,
-                        &self.own_items,
-                        &ns,
-                        &class_data.generic_params,
-                        &mut diags,
-                    )
-                } else {
-                    Ty::Unknown {
-                        attr: TyAttr::default(),
-                    }
-                };
-                fields.push((qualified, field_ty.clone()));
-                if !class_own_names.contains(&field.name) {
-                    alias_candidates
-                        .entry(field.name.clone())
-                        .or_default()
-                        .push(field_ty);
-                }
-            }
-        }
-        for (bare_name, tys) in alias_candidates {
-            if tys.len() == 1 {
-                fields.push((bare_name, tys[0].clone()));
-            }
-        }
-
         fields
     }
 

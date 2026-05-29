@@ -140,7 +140,6 @@ pub struct Class {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImplementsBlock {
     pub target: ast::SpannedTypeExpr,
-    pub fields: Vec<ClassField>,
     pub field_links: Vec<InterfaceFieldLink>,
     pub is_out_of_body: bool,
     pub span: TextRange,
@@ -152,7 +151,6 @@ pub struct ImplementsFor {
     pub generic_param_bounds: Vec<Option<ast::TypeExpr>>,
     pub interface_target: ast::SpannedTypeExpr,
     pub for_target: ast::SpannedTypeExpr,
-    pub fields: Vec<ClassField>,
     pub field_links: Vec<InterfaceFieldLink>,
     pub methods: Vec<LocalItemId<FunctionMarker>>,
     pub span: TextRange,
@@ -479,16 +477,6 @@ impl ItemTree {
             .iter()
             .map(|b| ImplementsBlock {
                 target: b.target.clone(),
-                fields: b
-                    .fields
-                    .iter()
-                    .map(|f| ClassField {
-                        name: f.name.clone(),
-                        type_expr: f.type_expr.clone(),
-                        attributes: f.attributes.iter().map(Attribute::from).collect(),
-                        docstring: f.docstring.clone(),
-                    })
-                    .collect(),
                 field_links: b
                     .field_links
                     .iter()
@@ -536,16 +524,6 @@ impl ItemTree {
         imp: &ast::ImplementsForDef,
         methods: Vec<LocalItemId<FunctionMarker>>,
     ) {
-        let fields = imp
-            .fields
-            .iter()
-            .map(|f| ClassField {
-                name: f.name.clone(),
-                type_expr: f.type_expr.clone(),
-                attributes: f.attributes.iter().map(Attribute::from).collect(),
-                docstring: f.docstring.clone(),
-            })
-            .collect();
         let field_links = imp
             .field_links
             .iter()
@@ -562,7 +540,6 @@ impl ItemTree {
             generic_param_bounds: imp.generic_params.iter().map(|(_, b)| b.clone()).collect(),
             interface_target: imp.interface_target.clone(),
             for_target: imp.for_target.clone(),
-            fields,
             field_links,
             methods,
             span: imp.span,

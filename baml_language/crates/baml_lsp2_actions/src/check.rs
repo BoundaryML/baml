@@ -339,6 +339,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     // so cross-file interface references work.
     diagnostics.extend(check_interfaces(
         db,
+        file,
         file_id,
         &ast_items,
         pkg_items,
@@ -367,6 +368,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
 /// - Two interfaces requiring the same field with conflicting types.
 fn check_interfaces<'db>(
     db: &'db dyn Db,
+    file: SourceFile,
     file_id: FileId,
     items: &[baml_compiler2_ast::Item],
     pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
@@ -399,12 +401,15 @@ fn check_interfaces<'db>(
             && !interface_has_cycle(db, iface, pkg_items, namespace_path)
         {
             validate_interface_extends_fields(
-                db,
+                &InterfaceValidationCtx {
+                    db,
+                    pkg_items,
+                    namespace_path,
+                    aliases,
+                },
+                file,
                 file_id,
                 iface,
-                pkg_items,
-                namespace_path,
-                aliases,
                 &mut diagnostics,
             );
         }
@@ -418,7 +423,8 @@ fn check_interfaces<'db>(
             && !interface_has_cycle(db, iface, pkg_items, namespace_path)
         {
             for parent_te in &iface.requires {
-                if resolve_interface_path(db, &parent_te.expr, pkg_items, namespace_path).is_none() {
+                if resolve_interface_path(db, &parent_te.expr, pkg_items, namespace_path).is_none()
+                {
                     let target_name = match &parent_te.expr {
                         baml_compiler2_ast::TypeExpr::Path { segments, .. } => segments
                             .last()
@@ -428,7 +434,9 @@ fn check_interfaces<'db>(
                     };
                     diagnostics.push(
                         Hir2Diagnostic::InterfaceRequiresNonInterface {
-                            interface_name: iface.name.clone(),
+                            interface_name: Name::new(
+                                interface_qtn_for_file(db, file, &iface.name).to_string(),
+                            ),
                             target_name,
                             span: parent_te.span,
                         }
@@ -513,33 +521,38 @@ fn check_interfaces<'db>(
 ///
 /// Returns `None` if the path doesn't name an interface (including: name
 /// doesn't exist, or resolves to a class/enum/etc.).
+#[derive(Debug, Clone)]
+struct ResolvedInterfaceData<'db> {
+    loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+    iface: baml_compiler2_hir::item_tree::Interface,
+    qtn: QualifiedTypeName,
+}
+
+impl ResolvedInterfaceData<'_> {
+    fn display_name(&self) -> Name {
+        Name::new(self.qtn.to_string())
+    }
+}
+
 fn resolve_interface_path<'db>(
     db: &'db dyn Db,
     target: &baml_compiler2_ast::TypeExpr,
     pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
-) -> Option<(
-    baml_compiler2_hir::loc::InterfaceLoc<'db>,
-    baml_compiler2_hir::item_tree::Interface,
-)> {
-    use baml_compiler2_ast::TypeExpr;
-    use baml_compiler2_hir::contributions::Definition;
-
-    let TypeExpr::Path { segments, .. } = target else {
-        return None;
-    };
-    let (head, name) = match segments.split_last() {
-        Some((last, head)) => (head, last.clone()),
-        None => return None,
-    };
-    let lookup_ns = path_lookup_namespace(head, namespace_path);
-    let def = pkg_items.lookup_type(lookup_ns, &name)?;
-    let Definition::Interface(loc) = def else {
-        return None;
-    };
-    let item_tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
-    let iface = item_tree.interfaces.get(&loc.id(db))?.clone();
-    Some((loc, iface))
+) -> Option<ResolvedInterfaceData<'db>> {
+    let resolved = baml_compiler2_tir::interfaces::resolve_path_to_interface_identity(
+        db,
+        target,
+        pkg_items,
+        namespace_path,
+    )?;
+    let item_tree = baml_compiler2_hir::file_item_tree(db, resolved.loc.file(db));
+    let iface = item_tree.interfaces.get(&resolved.loc.id(db))?.clone();
+    Some(ResolvedInterfaceData {
+        loc: resolved.loc,
+        iface,
+        qtn: resolved.qtn,
+    })
 }
 
 fn path_lookup_namespace<'a>(head: &'a [Name], namespace_path: &'a [Name]) -> &'a [Name] {
@@ -569,7 +582,7 @@ fn interface_has_cycle<'db>(
         attrs: Vec::new(),
     };
     let self_loc =
-        resolve_interface_path(db, &self_probe, pkg_items, namespace_path).map(|(loc, _)| loc);
+        resolve_interface_path(db, &self_probe, pkg_items, namespace_path).map(|r| r.loc);
     let mut frontier: Vec<Vec<Name>> = iface
         .requires
         .iter()
@@ -588,13 +601,11 @@ fn interface_has_cycle<'db>(
             generic_args: Vec::new(),
             attrs: Vec::new(),
         };
-        if let Some((parent_loc, parent_iface)) =
-            resolve_interface_path(db, &probe, pkg_items, namespace_path)
-        {
-            if self_loc.as_ref().is_some_and(|loc| *loc == parent_loc) {
+        if let Some(parent) = resolve_interface_path(db, &probe, pkg_items, namespace_path) {
+            if self_loc.as_ref().is_some_and(|loc| *loc == parent.loc) {
                 return true;
             }
-            for parent in &parent_iface.requires {
+            for parent in &parent.iface.requires {
                 if let TypeExpr::Path { segments, .. } = &parent.expr
                     && !segments.is_empty()
                 {
@@ -826,6 +837,12 @@ struct InterfaceMemberOrigin {
     lowered_type_args: Vec<Ty>,
 }
 
+impl InterfaceMemberOrigin {
+    fn display_name(&self) -> Name {
+        Name::new(self.qualified_name.to_string())
+    }
+}
+
 type InterfaceMemberStackEntry = (
     baml_compiler2_hir::item_tree::Interface,
     baml_base::SourceFile,
@@ -971,7 +988,7 @@ fn collect_interface_members_with_subst<'db>(
                         span: te.span,
                     });
             out.fields
-                .push((current.name.clone(), field.name.clone(), substituted));
+                .push((origin.display_name(), field.name.clone(), substituted));
         }
         for sig in &current.required_methods {
             // Convert the HIR `FunctionParam` list (no AST defaults) into a
@@ -1047,7 +1064,7 @@ fn collect_interface_members_with_subst<'db>(
             let current_pkg_id =
                 baml_compiler2_hir::package::PackageId::new(db, current_pkg_info.package.clone());
             let current_pkg_items = baml_compiler2_hir::package::package_items(db, current_pkg_id);
-            if let Some((loc, parent)) = resolve_interface_path(
+            if let Some(parent) = resolve_interface_path(
                 db,
                 &probe,
                 current_pkg_items,
@@ -1061,16 +1078,17 @@ fn collect_interface_members_with_subst<'db>(
                     _ => Vec::new(),
                 };
                 let parent_subst = parent
+                    .iface
                     .generic_params
                     .iter()
                     .zip(parent_args.iter())
                     .map(|(param, arg)| (param.clone(), arg.clone()))
                     .collect();
                 let mut parent_generic_params = generic_params_in_scope.clone();
-                parent_generic_params.extend(parent.generic_params.iter().cloned());
+                parent_generic_params.extend(parent.iface.generic_params.iter().cloned());
                 stack.push((
-                    parent,
-                    loc.file(db),
+                    parent.iface,
+                    parent.loc.file(db),
                     parent_subst,
                     parent_args,
                     parent_generic_params,
@@ -1127,10 +1145,10 @@ fn interface_origin_matches_target_expr<'db>(
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     origin: &InterfaceMemberOrigin,
 ) -> bool {
-    let Some((loc, iface)) = resolve_interface_path(db, target, pkg_items, namespace_path) else {
+    let Some(resolved) = resolve_interface_path(db, target, pkg_items, namespace_path) else {
         return false;
     };
-    if interface_qtn_for_file(db, loc.file(db), &iface.name) != origin.qualified_name {
+    if resolved.qtn != origin.qualified_name {
         return false;
     }
     let target_type_args = type_args_from_target_expr(target);
@@ -1175,7 +1193,7 @@ fn interface_target_matches_required_parent(
     required_parent_namespace_path: &[Name],
     generic_params: &[Name],
 ) -> bool {
-    let Some((candidate_loc, candidate_iface)) = resolve_interface_path(
+    let Some(candidate) = resolve_interface_path(
         ctx.db,
         candidate_target,
         ctx.pkg_items,
@@ -1183,7 +1201,7 @@ fn interface_target_matches_required_parent(
     ) else {
         return false;
     };
-    let Some((required_loc, required_iface)) = resolve_interface_path(
+    let Some(required) = resolve_interface_path(
         ctx.db,
         required_parent,
         ctx.pkg_items,
@@ -1191,9 +1209,7 @@ fn interface_target_matches_required_parent(
     ) else {
         return false;
     };
-    if interface_qtn_for_file(ctx.db, candidate_loc.file(ctx.db), &candidate_iface.name)
-        != interface_qtn_for_file(ctx.db, required_loc.file(ctx.db), &required_iface.name)
-    {
+    if candidate.qtn != required.qtn {
         return false;
     }
 
@@ -1552,12 +1568,11 @@ fn collect_impl_overlap_entries<'db>(
                     TyAttr::default(),
                 );
                 for block in &class.implements {
-                    let Some((iface_loc, iface)) =
+                    let Some(resolved_iface) =
                         resolve_interface_path(db, &block.target.expr, pkg_items, namespace_path)
                     else {
                         continue;
                     };
-                    let iface_qtn = interface_qtn_for_file(db, iface_loc.file(db), &iface.name);
                     let iface_args = lower_path_generic_args(
                         db,
                         &block.target.expr,
@@ -1566,8 +1581,12 @@ fn collect_impl_overlap_entries<'db>(
                         &class.generic_params,
                     );
                     entries.push(ImplOverlapEntry {
-                        iface_qtn: iface_qtn.clone(),
-                        iface_ty: Ty::Interface(iface_qtn, iface_args, TyAttr::default()),
+                        iface_qtn: resolved_iface.qtn.clone(),
+                        iface_ty: Ty::Interface(
+                            resolved_iface.qtn.clone(),
+                            iface_args,
+                            TyAttr::default(),
+                        ),
                         for_ty: for_ty.clone(),
                         generic_params: class.generic_params.clone(),
                         span: block.target.span,
@@ -1581,7 +1600,7 @@ fn collect_impl_overlap_entries<'db>(
                     .iter()
                     .map(|(name, _)| name.clone())
                     .collect();
-                let Some((iface_loc, iface)) = resolve_interface_path(
+                let Some(resolved_iface) = resolve_interface_path(
                     db,
                     &imp.interface_target.expr,
                     pkg_items,
@@ -1601,7 +1620,6 @@ fn collect_impl_overlap_entries<'db>(
                 if !diags.is_empty() {
                     continue;
                 }
-                let iface_qtn = interface_qtn_for_file(db, iface_loc.file(db), &iface.name);
                 let iface_args = lower_path_generic_args(
                     db,
                     &imp.interface_target.expr,
@@ -1610,8 +1628,12 @@ fn collect_impl_overlap_entries<'db>(
                     &generic_params,
                 );
                 entries.push(ImplOverlapEntry {
-                    iface_qtn: iface_qtn.clone(),
-                    iface_ty: Ty::Interface(iface_qtn, iface_args, TyAttr::default()),
+                    iface_qtn: resolved_iface.qtn.clone(),
+                    iface_ty: Ty::Interface(
+                        resolved_iface.qtn.clone(),
+                        iface_args,
+                        TyAttr::default(),
+                    ),
                     for_ty,
                     generic_params,
                     span: imp.span,
@@ -1698,13 +1720,11 @@ fn impl_patterns_overlap(
         .is_some()
 }
 
-fn validate_interface_extends_fields<'db>(
-    db: &'db dyn Db,
+fn validate_interface_extends_fields(
+    ctx: &InterfaceValidationCtx<'_, '_>,
+    file: SourceFile,
     file_id: FileId,
     iface: &baml_compiler2_ast::InterfaceDef,
-    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
-    namespace_path: &[Name],
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
@@ -1723,17 +1743,17 @@ fn validate_interface_extends_fields<'db>(
 
     // Walk each parent via resolve and collect its members.
     for parent_te in &iface.requires {
-        let Some((parent_loc, parent)) =
-            resolve_interface_path(db, &parent_te.expr, pkg_items, namespace_path)
+        let Some(parent) =
+            resolve_interface_path(ctx.db, &parent_te.expr, ctx.pkg_items, ctx.namespace_path)
         else {
             continue;
         };
         let members = collect_interface_members_with_subst(
-            db,
-            &parent,
-            parent_loc.file(db),
-            pkg_items,
-            namespace_path,
+            ctx.db,
+            &parent.iface,
+            parent.loc.file(ctx.db),
+            ctx.pkg_items,
+            ctx.namespace_path,
             &std::collections::HashMap::new(),
             &iface.generic_params,
         );
@@ -1742,19 +1762,21 @@ fn validate_interface_extends_fields<'db>(
             let ty_str = format!("{}", field_te.expr);
             if let Some((existing_origin, existing_ty, existing_rendered)) = seen.get(field_name) {
                 if !type_exprs_compatible(
-                    db,
-                    pkg_items,
-                    namespace_path,
+                    ctx.db,
+                    ctx.pkg_items,
+                    ctx.namespace_path,
                     &iface.generic_params,
                     existing_ty,
-                    namespace_path,
+                    ctx.namespace_path,
                     &iface.generic_params,
                     &field_te.expr,
-                    aliases,
+                    ctx.aliases,
                 ) {
                     diagnostics.push(
                         Hir2Diagnostic::InterfaceExtendsFieldConflict {
-                            interface_name: iface.name.clone(),
+                            interface_name: Name::new(
+                                interface_qtn_for_file(ctx.db, file, &iface.name).to_string(),
+                            ),
                             field_name: field_name.clone(),
                             first_interface: existing_origin.clone(),
                             first_type: existing_rendered.clone(),
@@ -1820,7 +1842,7 @@ fn validate_implements_for<'db>(
         return;
     }
 
-    let Some((iface_loc, iface)) =
+    let Some(resolved_iface) =
         resolve_interface_path(db, &imp.interface_target.expr, pkg_items, namespace_path)
     else {
         let is_non_interface =
@@ -1847,7 +1869,10 @@ fn validate_implements_for<'db>(
         return;
     };
 
-    let iface_file = iface_loc.file(db);
+    let iface_display_name = resolved_iface.display_name();
+    let iface_qtn = resolved_iface.qtn.clone();
+    let iface_file = resolved_iface.loc.file(db);
+    let iface = resolved_iface.iface;
     let iface_namespace_path =
         baml_compiler2_hir::file_package::file_package(db, iface_file).namespace_path;
     let subst: std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr> =
@@ -1874,7 +1899,7 @@ fn validate_implements_for<'db>(
         diagnostics.push(
             Hir2Diagnostic::OutOfBodyImplementsFieldInterface {
                 target_name: target_name.to_string(),
-                interface_name: iface.name,
+                interface_name: iface_display_name,
                 span: imp.interface_target.span,
             }
             .to_diagnostic(file_id),
@@ -1906,7 +1931,7 @@ fn validate_implements_for<'db>(
         match expected_sig {
             None => diagnostics.push(
                 Hir2Diagnostic::UnknownInterfaceMember {
-                    interface_name: iface.name.clone(),
+                    interface_name: iface_display_name.clone(),
                     method_name: method.name.clone(),
                     span: method.name_span,
                 }
@@ -1924,7 +1949,7 @@ fn validate_implements_for<'db>(
                     diagnostics.push(
                         Hir2Diagnostic::InterfaceMethodSignatureMismatch {
                             class_name: target_name.clone(),
-                            interface_name: iface.name.clone(),
+                            interface_name: iface_display_name.clone(),
                             method_name: method.name.clone(),
                             actual: actual.render(),
                             expected: expected.render(),
@@ -1938,7 +1963,6 @@ fn validate_implements_for<'db>(
         provided_method_names.insert(method.name.clone());
     }
 
-    let iface_qtn = interface_qtn_for_file(db, iface_file, &iface.name);
     let target_class_method_names =
         class_method_names_for_implements_target(&ctx, &imp.for_target.expr, &generic_param_names);
     for (origin, req_name, _sig) in &members.required_methods {
@@ -1954,7 +1978,7 @@ fn validate_implements_for<'db>(
         diagnostics.push(
             Hir2Diagnostic::MissingInterfaceMethod {
                 class_name: target_name.clone(),
-                interface_name: origin.name.clone(),
+                interface_name: origin.display_name(),
                 method_name: req_name.clone(),
                 span: imp.span,
             }
@@ -1971,7 +1995,10 @@ fn validate_implements_for<'db>(
                 let baml_compiler2_ast::TypeExpr::Path { segments, .. } = &required_parent else {
                     return None;
                 };
-                let parent_name = segments.last()?;
+                let parent_name =
+                    resolve_interface_path(db, &required_parent, pkg_items, &iface_namespace_path)
+                        .map(|parent| parent.display_name())
+                        .or_else(|| segments.last().cloned())?;
                 let target_implements_it = all_items.iter().any(|item| {
                     item_implements_required_parent_for_target(
                         &ctx,
@@ -1985,7 +2012,7 @@ fn validate_implements_for<'db>(
                 if target_implements_it {
                     None
                 } else {
-                    Some(parent_name.clone())
+                    Some(parent_name)
                 }
             })
             .collect();
@@ -1993,7 +2020,7 @@ fn validate_implements_for<'db>(
             diagnostics.push(
                 Hir2Diagnostic::MissingRequiredInterface {
                     class_name: target_name,
-                    interface_name: iface.name,
+                    interface_name: iface_display_name,
                     missing_parents: missing,
                     span: imp.interface_target.span,
                 }
@@ -2022,11 +2049,12 @@ fn validate_class_implements<'db>(
     };
     let mut seen_targets: IndexMap<String, (Name, Vec<TextRange>)> = IndexMap::new();
     for block in &class.implements {
-        let Some((iface_loc, iface)) =
+        let Some(resolved_iface) =
             resolve_interface_path(db, &block.target.expr, pkg_items, namespace_path)
         else {
             continue;
         };
+        let iface_display_name = resolved_iface.display_name();
         // Use the resolved interface identity plus its concrete type
         // arguments for duplicate detection. `Foo` and `ns.Foo` should
         // collide when they resolve to the same interface, but
@@ -2041,13 +2069,13 @@ fn validate_class_implements<'db>(
         };
         let key = format!(
             "{}:{}<{}>",
-            iface_loc.file(db).file_id(db).as_u32(),
-            iface_loc.id(db).as_u32(),
+            resolved_iface.loc.file(db).file_id(db).as_u32(),
+            resolved_iface.loc.id(db).as_u32(),
             type_arg_key
         );
         seen_targets
             .entry(key)
-            .or_insert_with(|| (iface.name.clone(), Vec::new()))
+            .or_insert_with(|| (iface_display_name, Vec::new()))
             .1
             .push(block.target.span);
     }
@@ -2068,7 +2096,7 @@ fn validate_class_implements<'db>(
     let class_method_names: HashSet<Name> = class.methods.iter().map(|m| m.name.clone()).collect();
 
     for block in &class.implements {
-        let Some((iface_loc, iface)) =
+        let Some(resolved_iface) =
             resolve_interface_path(db, &block.target.expr, pkg_items, namespace_path)
         else {
             // Distinguish "name doesn't exist" (E0112) from "name exists
@@ -2096,7 +2124,10 @@ fn validate_class_implements<'db>(
             }
             continue;
         };
-        let iface_file = iface_loc.file(db);
+        let iface_display_name = resolved_iface.display_name();
+        let iface_qtn = resolved_iface.qtn.clone();
+        let iface_file = resolved_iface.loc.file(db);
+        let iface = resolved_iface.iface;
         let iface_namespace_path =
             baml_compiler2_hir::file_package::file_package(db, iface_file).namespace_path;
         let mut interface_generic_params = class.generic_params.clone();
@@ -2127,7 +2158,7 @@ fn validate_class_implements<'db>(
             diagnostics.push(
                 Hir2Diagnostic::OutOfBodyImplementsFieldInterface {
                     target_name: class.name.to_string(),
-                    interface_name: iface.name.clone(),
+                    interface_name: iface_display_name.clone(),
                     span: block.target.span,
                 }
                 .to_diagnostic(file_id),
@@ -2152,7 +2183,7 @@ fn validate_class_implements<'db>(
             match expected_sig {
                 None => diagnostics.push(
                     Hir2Diagnostic::UnknownInterfaceMember {
-                        interface_name: iface.name.clone(),
+                        interface_name: iface_display_name.clone(),
                         method_name: m.name.clone(),
                         span: m.name_span,
                     }
@@ -2170,7 +2201,7 @@ fn validate_class_implements<'db>(
                         diagnostics.push(
                             Hir2Diagnostic::InterfaceMethodSignatureMismatch {
                                 class_name: class.name.clone(),
-                                interface_name: iface.name.clone(),
+                                interface_name: iface_display_name.clone(),
                                 method_name: m.name.clone(),
                                 actual: actual.render(),
                                 expected: expected.render(),
@@ -2187,7 +2218,6 @@ fn validate_class_implements<'db>(
         // Check that every required method has a body — either provided here,
         // by a same-named class method, or by a separate `implements` block
         // that targets the originating interface.
-        let iface_qtn = interface_qtn_for_file(db, iface_file, &iface.name);
         for (origin, req_name, _sig) in &members.required_methods {
             if provided_method_names.contains(req_name) || class_method_names.contains(req_name) {
                 continue;
@@ -2213,7 +2243,7 @@ fn validate_class_implements<'db>(
             diagnostics.push(
                 Hir2Diagnostic::MissingInterfaceMethod {
                     class_name: class.name.clone(),
-                    interface_name: origin.name.clone(),
+                    interface_name: origin.display_name(),
                     method_name: req_name.clone(),
                     span: block.span,
                 }
@@ -2253,7 +2283,7 @@ fn validate_class_implements<'db>(
             if sites.len() > 1 {
                 diagnostics.push(
                     Hir2Diagnostic::DuplicateInterfaceFieldLink {
-                        interface_name: iface.name.clone(),
+                        interface_name: iface_display_name.clone(),
                         field_name: field_name.clone(),
                         sites: sites.clone(),
                     }
@@ -2268,7 +2298,7 @@ fn validate_class_implements<'db>(
             if !own_fields.contains_key(&link.interface_field) {
                 diagnostics.push(
                     Hir2Diagnostic::UnknownInterfaceFieldLink {
-                        interface_name: iface.name.clone(),
+                        interface_name: iface_display_name.clone(),
                         field_name: link.interface_field.clone(),
                         span: link.interface_field_span,
                     }
@@ -2280,7 +2310,7 @@ fn validate_class_implements<'db>(
                 diagnostics.push(
                     Hir2Diagnostic::UnknownClassFieldInInterfaceLink {
                         class_name: class.name.clone(),
-                        interface_name: iface.name.clone(),
+                        interface_name: iface_display_name.clone(),
                         field_name: link.class_field.clone(),
                         span: link.class_field_span,
                     }
@@ -2311,7 +2341,7 @@ fn validate_class_implements<'db>(
                             class_name: class.name.clone(),
                             field_name: link.class_field.clone(),
                             interface_field_name: link.interface_field.clone(),
-                            interface_name: iface.name.clone(),
+                            interface_name: iface_display_name.clone(),
                             class_type: format!("{}", class_te.expr),
                             interface_type: format!("{}", iface_te.expr),
                             span: class_te.span,
@@ -2333,7 +2363,7 @@ fn validate_class_implements<'db>(
                 diagnostics.push(
                     Hir2Diagnostic::MissingInterfaceField {
                         class_name: class.name.clone(),
-                        interface_name: iface.name.clone(),
+                        interface_name: iface_display_name.clone(),
                         field_name: field_name.clone(),
                         span: block.span,
                     }
@@ -2361,7 +2391,7 @@ fn validate_class_implements<'db>(
                             field_name: class_field.name.clone(),
                             // Non-aliased: the interface and class field share a name.
                             interface_field_name: field_name.clone(),
-                            interface_name: iface.name.clone(),
+                            interface_name: iface_display_name.clone(),
                             class_type: format!("{}", class_te.expr),
                             interface_type: format!("{}", iface_te.expr),
                             span: class_te.span,
@@ -2384,7 +2414,14 @@ fn validate_class_implements<'db>(
                     else {
                         return None;
                     };
-                    let parent_name = segments.last()?;
+                    let parent_name = resolve_interface_path(
+                        db,
+                        &required_parent,
+                        pkg_items,
+                        &iface_namespace_path,
+                    )
+                    .map(|parent| parent.display_name())
+                    .or_else(|| segments.last().cloned())?;
                     let class_implements_it = class.implements.iter().any(|candidate| {
                         interface_target_matches_required_parent(
                             &ctx,
@@ -2398,7 +2435,7 @@ fn validate_class_implements<'db>(
                     if class_implements_it {
                         None
                     } else {
-                        Some(parent_name.clone())
+                        Some(parent_name)
                     }
                 })
                 .collect();
@@ -2406,7 +2443,7 @@ fn validate_class_implements<'db>(
                 diagnostics.push(
                     Hir2Diagnostic::MissingRequiredInterface {
                         class_name: class.name.clone(),
-                        interface_name: iface.name.clone(),
+                        interface_name: iface_display_name.clone(),
                         missing_parents: missing,
                         span: block.target.span,
                     }

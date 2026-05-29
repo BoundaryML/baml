@@ -433,7 +433,8 @@ pub fn generate_project_bytecode_with_opt(
             // runtime field indices used by the Class object above. Use a
             // closure that rebuilds the same ordering.
             let rebuild_indices = || {
-                let merged = collect_class_fields_with_implements(&pkg_info.namespace_path, class_data);
+                let merged =
+                    collect_class_fields_with_implements(&pkg_info.namespace_path, class_data);
                 let mut m = HashMap::new();
                 for (idx, (name, _, _, _, _)) in merged.iter().enumerate() {
                     m.insert(name.clone(), idx);
@@ -929,23 +930,22 @@ pub fn generate_project_bytecode_with_opt(
         for (pkg_name, cache) in &alias_caches {
             let pkg_id = PackageId::new(db, pkg_name.clone());
             let registry = baml_compiler2_tir::interfaces::package_implements_registry(db, pkg_id);
-            let mut add_pair =
-                |iface_qtn: &baml_compiler2_tir::ty::QualifiedTypeName,
-                 class_qtn: &baml_compiler2_tir::ty::QualifiedTypeName,
-                 iface_args: Vec<baml_type::Ty>| {
-                    let iface_name = baml_compiler2_mir::qtn_to_type_name(iface_qtn);
-                    let class_name = baml_compiler2_mir::qtn_to_type_name(class_qtn);
-                    if seen_pairs.insert((
-                        iface_qtn.to_string(),
-                        class_qtn.to_string(),
-                        format!("{iface_args:?}"),
-                    )) {
-                        inverted
-                            .entry(iface_name)
-                            .or_default()
-                            .push((class_name, iface_args));
-                    }
-                };
+            let mut add_pair = |iface_qtn: &baml_compiler2_tir::ty::QualifiedTypeName,
+                                class_qtn: &baml_compiler2_tir::ty::QualifiedTypeName,
+                                iface_args: Vec<baml_type::Ty>| {
+                let iface_name = baml_compiler2_mir::qtn_to_type_name(iface_qtn);
+                let class_name = baml_compiler2_mir::qtn_to_type_name(class_qtn);
+                if seen_pairs.insert((
+                    iface_qtn.to_string(),
+                    class_qtn.to_string(),
+                    format!("{iface_args:?}"),
+                )) {
+                    inverted
+                        .entry(iface_name)
+                        .or_default()
+                        .push((class_name, iface_args));
+                }
+            };
 
             for rule in &registry.interface_impl_rules {
                 let baml_compiler2_tir::ty::Ty::Interface(iface_qtn, iface_type_args, _) =
@@ -1113,101 +1113,6 @@ fn compute_throws_type(
     }
 }
 
-fn erase_bound_typevars_for_runtime_metadata(
-    ty: &baml_compiler2_tir::ty::Ty,
-    bounds: &HashMap<Name, baml_compiler2_tir::ty::Ty>,
-) -> baml_compiler2_tir::ty::Ty {
-    use baml_compiler2_tir::ty::Ty as TirTy;
-
-    if !baml_compiler2_tir::generics::contains_typevar(ty) {
-        return ty.clone();
-    }
-
-    match ty {
-        TirTy::TypeVar(name, attr) if bounds.contains_key(name) => {
-            TirTy::BuiltinUnknown { attr: attr.clone() }
-        }
-        TirTy::Class(qtn, args, attr) => TirTy::Class(
-            qtn.clone(),
-            args.iter()
-                .map(|arg| erase_bound_typevars_for_runtime_metadata(arg, bounds))
-                .collect(),
-            attr.clone(),
-        ),
-        TirTy::Interface(qtn, args, attr) => TirTy::Interface(
-            qtn.clone(),
-            args.iter()
-                .map(|arg| erase_bound_typevars_for_runtime_metadata(arg, bounds))
-                .collect(),
-            attr.clone(),
-        ),
-        TirTy::List(inner, attr) => TirTy::List(
-            Box::new(erase_bound_typevars_for_runtime_metadata(inner, bounds)),
-            attr.clone(),
-        ),
-        TirTy::EvolvingList(inner, attr) => TirTy::EvolvingList(
-            Box::new(erase_bound_typevars_for_runtime_metadata(inner, bounds)),
-            attr.clone(),
-        ),
-        TirTy::Optional(inner, attr) => TirTy::Optional(
-            Box::new(erase_bound_typevars_for_runtime_metadata(inner, bounds)),
-            attr.clone(),
-        ),
-        TirTy::Map(key, value, attr) => TirTy::Map(
-            Box::new(erase_bound_typevars_for_runtime_metadata(key, bounds)),
-            Box::new(erase_bound_typevars_for_runtime_metadata(value, bounds)),
-            attr.clone(),
-        ),
-        TirTy::EvolvingMap(key, value, attr) => TirTy::EvolvingMap(
-            Box::new(erase_bound_typevars_for_runtime_metadata(key, bounds)),
-            Box::new(erase_bound_typevars_for_runtime_metadata(value, bounds)),
-            attr.clone(),
-        ),
-        TirTy::Union(members, attr) => TirTy::Union(
-            members
-                .iter()
-                .map(|member| erase_bound_typevars_for_runtime_metadata(member, bounds))
-                .collect(),
-            attr.clone(),
-        ),
-        TirTy::Future(value, error, attr) => TirTy::Future(
-            Box::new(erase_bound_typevars_for_runtime_metadata(value, bounds)),
-            Box::new(erase_bound_typevars_for_runtime_metadata(error, bounds)),
-            attr.clone(),
-        ),
-        TirTy::Function {
-            generic_params,
-            generic_param_bounds,
-            params,
-            ret,
-            throws,
-            attr,
-        } => TirTy::Function {
-            generic_params: generic_params.clone(),
-            generic_param_bounds: generic_param_bounds
-                .iter()
-                .map(|bound| {
-                    bound
-                        .as_ref()
-                        .map(|ty| erase_bound_typevars_for_runtime_metadata(ty, bounds))
-                })
-                .collect(),
-            params: params
-                .iter()
-                .map(|param| {
-                    let mut param = param.clone();
-                    param.ty = erase_bound_typevars_for_runtime_metadata(&param.ty, bounds);
-                    param
-                })
-                .collect(),
-            ret: Box::new(erase_bound_typevars_for_runtime_metadata(ret, bounds)),
-            throws: Box::new(erase_bound_typevars_for_runtime_metadata(throws, bounds)),
-            attr: attr.clone(),
-        },
-        _ => ty.clone(),
-    }
-}
-
 /// Extract param names, param types, and return type from an `item_tree` Function.
 ///
 /// Type resolution delegates to TIR's `lower_type_expr` (single source of truth)
@@ -1326,7 +1231,9 @@ fn compute_function_metadata_from_item_tree(
             &enclosing_generics,
             &mut diags,
         );
-        let runtime_ty = erase_bound_typevars_for_runtime_metadata(&tir_ty, &generic_param_bounds);
+        let runtime_ty = baml_compiler2_tir::generics::erase_typevars_matching(&tir_ty, &|name| {
+            generic_param_bounds.contains_key(name)
+        });
         cache.convert(&runtime_ty)
     };
 

@@ -123,7 +123,8 @@ fn interface_tir_type_args_match_preserving_typevars(
                 // `b: Box<T>` inside `fn read<T>(..)`) is unconstrained at this
                 // site — it matches any implementor instantiation, and the
                 // runtime `IsType` guard on the concrete instance discriminates.
-                matches!(iface_arg, Tir2Ty::TypeVar(_, _))
+                (matches!(iface_arg, Tir2Ty::TypeVar(_, _))
+                    && !matches!(impl_arg, Tir2Ty::TypeVar(_, _)))
                     || baml_compiler2_tir::normalize::is_same_normalized_type(
                         impl_arg, iface_arg, aliases,
                     )
@@ -2142,93 +2143,9 @@ impl<'db> LoweringContext<'db> {
     }
 
     fn erase_bound_typevars_for_runtime(&self, ty: &Tir2Ty) -> Tir2Ty {
-        if !baml_compiler2_tir::generics::contains_typevar(ty) {
-            return ty.clone();
-        }
-
-        match ty {
-            Tir2Ty::TypeVar(name, attr) if self.generic_param_bounds.contains_key(name) => {
-                Tir2Ty::BuiltinUnknown { attr: attr.clone() }
-            }
-            Tir2Ty::Class(qtn, args, attr) => Tir2Ty::Class(
-                qtn.clone(),
-                args.iter()
-                    .map(|arg| self.erase_bound_typevars_for_runtime(arg))
-                    .collect(),
-                attr.clone(),
-            ),
-            Tir2Ty::Interface(qtn, args, attr) => Tir2Ty::Interface(
-                qtn.clone(),
-                args.iter()
-                    .map(|arg| self.erase_bound_typevars_for_runtime(arg))
-                    .collect(),
-                attr.clone(),
-            ),
-            Tir2Ty::List(inner, attr) => Tir2Ty::List(
-                Box::new(self.erase_bound_typevars_for_runtime(inner)),
-                attr.clone(),
-            ),
-            Tir2Ty::EvolvingList(inner, attr) => Tir2Ty::EvolvingList(
-                Box::new(self.erase_bound_typevars_for_runtime(inner)),
-                attr.clone(),
-            ),
-            Tir2Ty::Optional(inner, attr) => Tir2Ty::Optional(
-                Box::new(self.erase_bound_typevars_for_runtime(inner)),
-                attr.clone(),
-            ),
-            Tir2Ty::Map(key, value, attr) => Tir2Ty::Map(
-                Box::new(self.erase_bound_typevars_for_runtime(key)),
-                Box::new(self.erase_bound_typevars_for_runtime(value)),
-                attr.clone(),
-            ),
-            Tir2Ty::EvolvingMap(key, value, attr) => Tir2Ty::EvolvingMap(
-                Box::new(self.erase_bound_typevars_for_runtime(key)),
-                Box::new(self.erase_bound_typevars_for_runtime(value)),
-                attr.clone(),
-            ),
-            Tir2Ty::Union(members, attr) => Tir2Ty::Union(
-                members
-                    .iter()
-                    .map(|member| self.erase_bound_typevars_for_runtime(member))
-                    .collect(),
-                attr.clone(),
-            ),
-            Tir2Ty::Future(value, error, attr) => Tir2Ty::Future(
-                Box::new(self.erase_bound_typevars_for_runtime(value)),
-                Box::new(self.erase_bound_typevars_for_runtime(error)),
-                attr.clone(),
-            ),
-            Tir2Ty::Function {
-                generic_params,
-                generic_param_bounds,
-                params,
-                ret,
-                throws,
-                attr,
-            } => Tir2Ty::Function {
-                generic_params: generic_params.clone(),
-                generic_param_bounds: generic_param_bounds
-                    .iter()
-                    .map(|bound| {
-                        bound
-                            .as_ref()
-                            .map(|ty| self.erase_bound_typevars_for_runtime(ty))
-                    })
-                    .collect(),
-                params: params
-                    .iter()
-                    .map(|param| {
-                        let mut param = param.clone();
-                        param.ty = self.erase_bound_typevars_for_runtime(&param.ty);
-                        param
-                    })
-                    .collect(),
-                ret: Box::new(self.erase_bound_typevars_for_runtime(ret)),
-                throws: Box::new(self.erase_bound_typevars_for_runtime(throws)),
-                attr: attr.clone(),
-            },
-            _ => ty.clone(),
-        }
+        baml_compiler2_tir::generics::erase_typevars_matching(ty, &|name| {
+            self.generic_param_bounds.contains_key(name)
+        })
     }
 
     fn convert_tir_ty_for_runtime(&self, ty: &Tir2Ty) -> Ty {
@@ -4492,8 +4409,11 @@ impl LoweringContext<'_> {
                         segments.len() - 1
                     };
                     let receiver_segments = &segments[..receiver_segments_end];
-                    let recv_local =
-                        self.lower_path_receiver_to_local(callee, receiver_segments, recv_root_local);
+                    let recv_local = self.lower_path_receiver_to_local(
+                        callee,
+                        receiver_segments,
+                        recv_root_local,
+                    );
                     if self.emit_interface_dispatch_switch(
                         InterfaceDispatchCall {
                             expr_id,
@@ -4518,8 +4438,11 @@ impl LoweringContext<'_> {
                     .cloned()
                 {
                     let receiver_segments = &segments[..segments.len() - 1];
-                    let recv_local =
-                        self.lower_path_receiver_to_local(callee, receiver_segments, recv_root_local);
+                    let recv_local = self.lower_path_receiver_to_local(
+                        callee,
+                        receiver_segments,
+                        recv_root_local,
+                    );
                     if self.emit_union_class_dispatch(
                         recv_local,
                         &members,
@@ -6212,7 +6135,11 @@ impl<'db> LoweringContext<'db> {
                 attr: TyAttr::default(),
             });
         let local = self.builder.temp(recv_ty);
-        self.lower_multi_segment_path_as_field_chain(callee, receiver_segments, Place::local(local));
+        self.lower_multi_segment_path_as_field_chain(
+            callee,
+            receiver_segments,
+            Place::local(local),
+        );
         local
     }
 

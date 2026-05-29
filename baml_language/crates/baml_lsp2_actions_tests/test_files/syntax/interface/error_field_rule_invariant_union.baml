@@ -12,7 +12,7 @@ class Count {
 
 //----
 //- diagnostics
-// error: class `Count` declares field `value: int` but interface `Measured` requires `value` to have type `int | string`
+// error: class `Count` declares field `value: int` but interface `user.Measured` requires `value` to have type `int | string`
 //    ╭─[ interface_error_field_rule_invariant_union.baml:9:9 ]
 //    │
 //  9 │   value: int

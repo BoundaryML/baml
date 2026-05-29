@@ -162,6 +162,21 @@ pub struct ImplementsRegistry {
     pub interface_requires: FxHashMap<QualifiedTypeName, FxHashSet<QualifiedTypeName>>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedInterface<'db> {
+    pub loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+    pub qtn: QualifiedTypeName,
+}
+
+#[derive(Debug, Default)]
+struct RegistryCompatibilityViews {
+    class_implements: FxHashMap<QualifiedTypeName, FxHashSet<QualifiedTypeName>>,
+    type_implements: FxHashMap<Ty, FxHashSet<QualifiedTypeName>>,
+    blanket_class_implements: Vec<BlanketClassImpl>,
+    implements_type_args: FxHashMap<(QualifiedTypeName, QualifiedTypeName), Vec<Ty>>,
+    type_implements_type_args: FxHashMap<(Ty, QualifiedTypeName), Vec<Ty>>,
+}
+
 impl ImplementsRegistry {
     /// True iff `class_qtn` nominally implements `iface_qtn`.
     ///
@@ -394,6 +409,94 @@ impl ImplementsRegistry {
             interface_ty: generics::substitute_ty(&rule.interface_ty, &bindings),
         })
     }
+}
+
+fn derive_compatibility_views(
+    rules: &[InterfaceImplRule],
+    all_class_qtns: &[QualifiedTypeName],
+) -> RegistryCompatibilityViews {
+    let mut views = RegistryCompatibilityViews::default();
+    for class_qtn in all_class_qtns {
+        views.class_implements.entry(class_qtn.clone()).or_default();
+    }
+
+    for rule in rules {
+        let Ty::Interface(iface_qtn, interface_type_args, _) = &rule.interface_ty else {
+            continue;
+        };
+
+        match &rule.for_ty_pattern {
+            Ty::Class(class_qtn, class_args, _)
+                if matches!(rule.origin, InterfaceImplOrigin::OutOfBody)
+                    && class_args.iter().any(|arg| matches!(arg, Ty::TypeVar(..))) =>
+            {
+                views.blanket_class_implements.push(BlanketClassImpl {
+                    class_qtn: class_qtn.clone(),
+                    generic_params: rule.generic_params.clone(),
+                    generic_param_bounds: rule.generic_param_bounds.clone(),
+                    interface_qtn: iface_qtn.clone(),
+                    interface_type_args: interface_type_args.clone(),
+                    for_target_ty: rule.for_ty_pattern.clone(),
+                });
+            }
+            Ty::Class(class_qtn, _, _) => {
+                views
+                    .class_implements
+                    .entry(class_qtn.clone())
+                    .or_default()
+                    .insert(iface_qtn.clone());
+                if !interface_type_args.is_empty() {
+                    views.implements_type_args.insert(
+                        (class_qtn.clone(), iface_qtn.clone()),
+                        interface_type_args.clone(),
+                    );
+                }
+            }
+            target_ty => {
+                let Some(target_key) = implementation_key_for_ty(target_ty) else {
+                    continue;
+                };
+                views
+                    .type_implements
+                    .entry(target_key.clone())
+                    .or_default()
+                    .insert(iface_qtn.clone());
+                if !interface_type_args.is_empty() {
+                    views
+                        .type_implements_type_args
+                        .insert((target_key, iface_qtn.clone()), interface_type_args.clone());
+                }
+            }
+        }
+    }
+
+    views
+}
+
+fn lower_path_generic_args(
+    db: &dyn crate::Db,
+    expr: &baml_compiler2_ast::TypeExpr,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    namespace_path: &[Name],
+    generic_params: &[Name],
+    diagnostics: &mut Vec<crate::infer_context::TirTypeError>,
+) -> Vec<Ty> {
+    let baml_compiler2_ast::TypeExpr::Path { generic_args, .. } = expr else {
+        return Vec::new();
+    };
+    generic_args
+        .iter()
+        .map(|arg| {
+            crate::lower_type_expr::lower_type_expr_in_ns(
+                db,
+                arg,
+                pkg_items,
+                namespace_path,
+                generic_params,
+                diagnostics,
+            )
+        })
+        .collect()
 }
 
 fn validate_rule_bounds(
@@ -813,14 +916,7 @@ pub fn package_implements_registry<'db>(
 ) -> ImplementsRegistry {
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
     let mut interface_impl_rules: Vec<InterfaceImplRule> = Vec::new();
-    let mut class_implements: FxHashMap<QualifiedTypeName, FxHashSet<QualifiedTypeName>> =
-        FxHashMap::default();
-    let mut type_implements: FxHashMap<Ty, FxHashSet<QualifiedTypeName>> = FxHashMap::default();
-    let mut blanket_class_implements: Vec<BlanketClassImpl> = Vec::new();
-    let mut implements_type_args: FxHashMap<(QualifiedTypeName, QualifiedTypeName), Vec<Ty>> =
-        FxHashMap::default();
-    let mut type_implements_type_args: FxHashMap<(Ty, QualifiedTypeName), Vec<Ty>> =
-        FxHashMap::default();
+    let mut all_class_qtns: Vec<QualifiedTypeName> = Vec::new();
     // Multiple classes often implement the same interface (or an interface
     // higher up the extends chain). Cache the transitive closure per
     // `InterfaceLoc` so we only walk each chain once per query invocation.
@@ -839,8 +935,8 @@ pub fn package_implements_registry<'db>(
                 continue;
             };
             let class_qtn = qualify_def(db, *def, &class_data.name);
+            all_class_qtns.push(class_qtn.clone());
 
-            let mut implemented: FxHashSet<QualifiedTypeName> = FxHashSet::default();
             let class_ns = baml_compiler2_hir::file_package::file_package(db, class_loc.file(db))
                 .namespace_path
                 .clone();
@@ -855,32 +951,14 @@ pub fn package_implements_registry<'db>(
                     let iface_qtn =
                         qualify_def(db, Definition::Interface(iface_loc), &iface_data.name);
                     let mut diags = Vec::new();
-                    let interface_args = match &target.target.expr {
-                        baml_compiler2_ast::TypeExpr::Path { generic_args, .. }
-                            if !generic_args.is_empty() =>
-                        {
-                            generic_args
-                                .iter()
-                                .map(|ga| {
-                                    crate::lower_type_expr::lower_type_expr_in_ns(
-                                        db,
-                                        ga,
-                                        pkg_items,
-                                        &class_ns,
-                                        &class_data.generic_params,
-                                        &mut diags,
-                                    )
-                                })
-                                .collect::<Vec<_>>()
-                        }
-                        _ => Vec::new(),
-                    };
-                    if !interface_args.is_empty() {
-                        implements_type_args.insert(
-                            (class_qtn.clone(), iface_qtn.clone()),
-                            interface_args.clone(),
-                        );
-                    }
+                    let interface_args = lower_path_generic_args(
+                        db,
+                        &target.target.expr,
+                        pkg_items,
+                        &class_ns,
+                        &class_data.generic_params,
+                        &mut diags,
+                    );
                     let for_ty_pattern = Ty::Class(
                         class_qtn.clone(),
                         class_data
@@ -903,11 +981,8 @@ pub fn package_implements_registry<'db>(
                             class_qtn: class_qtn.clone(),
                         },
                     });
-                    implemented.insert(iface_qtn);
                 }
             }
-
-            class_implements.insert(class_qtn, implemented);
         }
     }
 
@@ -940,26 +1015,14 @@ pub fn package_implements_registry<'db>(
                 &imp.generic_params,
                 &mut diags,
             );
-            let interface_args = match &imp.interface_target.expr {
-                baml_compiler2_ast::TypeExpr::Path { generic_args, .. }
-                    if !generic_args.is_empty() =>
-                {
-                    generic_args
-                        .iter()
-                        .map(|ga| {
-                            crate::lower_type_expr::lower_type_expr_in_ns(
-                                db,
-                                ga,
-                                pkg_items,
-                                &pkg_info.namespace_path,
-                                &imp.generic_params,
-                                &mut diags,
-                            )
-                        })
-                        .collect::<Vec<_>>()
-                }
-                _ => Vec::new(),
-            };
+            let interface_args = lower_path_generic_args(
+                db,
+                &imp.interface_target.expr,
+                pkg_items,
+                &pkg_info.namespace_path,
+                &imp.generic_params,
+                &mut diags,
+            );
             let interface_ty =
                 Ty::Interface(iface_qtn.clone(), interface_args.clone(), TyAttr::default());
             let bounds: Vec<Option<Ty>> = imp
@@ -985,42 +1048,6 @@ pub fn package_implements_registry<'db>(
                 interface_ty,
                 origin: InterfaceImplOrigin::OutOfBody,
             });
-
-            if let Ty::Class(class_qtn, class_args, _) = &target_ty {
-                // Check if any type arg is a TypeVar — if so, this is a blanket impl.
-                if class_args.iter().any(|a| matches!(a, Ty::TypeVar(..))) {
-                    blanket_class_implements.push(BlanketClassImpl {
-                        class_qtn: class_qtn.clone(),
-                        generic_params: imp.generic_params.clone(),
-                        generic_param_bounds: bounds,
-                        interface_qtn: iface_qtn,
-                        interface_type_args: interface_args,
-                        for_target_ty: target_ty.clone(),
-                    });
-                    continue;
-                }
-                if !interface_args.is_empty() {
-                    implements_type_args
-                        .insert((class_qtn.clone(), iface_qtn.clone()), interface_args);
-                }
-                class_implements
-                    .entry(class_qtn.clone())
-                    .or_default()
-                    .insert(iface_qtn);
-                continue;
-            }
-
-            let Some(target_key) = implementation_key_for_ty(&target_ty) else {
-                continue;
-            };
-            if !interface_args.is_empty() {
-                type_implements_type_args
-                    .insert((target_key.clone(), iface_qtn.clone()), interface_args);
-            }
-            type_implements
-                .entry(target_key)
-                .or_default()
-                .insert(iface_qtn);
         }
     }
 
@@ -1043,49 +1070,59 @@ pub fn package_implements_registry<'db>(
     }
 
     let interface_impl_rule_index = InterfaceImplRuleIndex::from_rules(&interface_impl_rules);
+    let compatibility_views = derive_compatibility_views(&interface_impl_rules, &all_class_qtns);
 
     ImplementsRegistry {
         interface_impl_rules,
         interface_impl_rule_index,
-        class_implements,
-        type_implements,
-        blanket_class_implements,
-        implements_type_args,
-        type_implements_type_args,
+        class_implements: compatibility_views.class_implements,
+        type_implements: compatibility_views.type_implements,
+        blanket_class_implements: compatibility_views.blanket_class_implements,
+        implements_type_args: compatibility_views.implements_type_args,
+        type_implements_type_args: compatibility_views.type_implements_type_args,
         interface_requires,
     }
 }
 
+/// Resolve a `TypeExpr::Path` to an interface declaration and its fully
+/// qualified identity. Returns `None` when the path doesn't resolve to an
+/// interface.
+pub fn resolve_path_to_interface_identity<'db>(
+    db: &'db dyn crate::Db,
+    target: &baml_compiler2_ast::TypeExpr,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    current_ns: &[Name],
+) -> Option<ResolvedInterface<'db>> {
+    let mut diagnostics = Vec::new();
+    let Ty::Interface(qtn, _, _) = crate::lower_type_expr::lower_type_expr_in_ns(
+        db,
+        target,
+        pkg_items,
+        current_ns,
+        &[],
+        &mut diagnostics,
+    ) else {
+        return None;
+    };
+    let pkg_id = PackageId::new(db, qtn.package().clone());
+    let resolved_pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    let Definition::Interface(loc) = resolved_pkg_items.lookup_type(qtn.namespace(), qtn.name())?
+    else {
+        return None;
+    };
+    Some(ResolvedInterface { loc, qtn })
+}
+
 /// Resolve a `TypeExpr::Path` to an interface declaration. Returns `None`
-/// when the path doesn't resolve to an interface in the package.
+/// when the path doesn't resolve to an interface.
 pub fn resolve_path_to_interface<'db>(
     db: &'db dyn crate::Db,
     target: &baml_compiler2_ast::TypeExpr,
     pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
     current_ns: &[Name],
 ) -> Option<baml_compiler2_hir::loc::InterfaceLoc<'db>> {
-    use baml_compiler2_ast::TypeExpr;
-    let TypeExpr::Path { segments, .. } = target else {
-        return None;
-    };
-    let (head, name) = segments
-        .split_last()
-        .map(|(last, head)| (head, last.clone()))?;
-    let lookup_ns: &[Name] = if head.is_empty() {
-        current_ns
-    } else if head
-        .first()
-        .is_some_and(|segment| segment.as_str() == "root")
-    {
-        &head[1..]
-    } else {
-        head
-    };
-    let _ = db;
-    let Definition::Interface(loc) = pkg_items.lookup_type(lookup_ns, &name)? else {
-        return None;
-    };
-    Some(loc)
+    resolve_path_to_interface_identity(db, target, pkg_items, current_ns)
+        .map(|resolved| resolved.loc)
 }
 
 /// Transitive `extends` closure for one interface, including itself. Result

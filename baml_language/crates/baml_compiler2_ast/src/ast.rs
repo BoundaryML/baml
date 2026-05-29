@@ -1337,8 +1337,6 @@ pub struct ImplementsBlockDef {
     /// parameterization like `implements Container<int>`. The path's first
     /// segment is the interface name.
     pub target: SpannedTypeExpr,
-    /// Field redeclarations inside this `implements` block (BEP-044).
-    pub fields: Vec<FieldDef>,
     /// Explicit mappings from interface fields to class fields:
     /// `interface_field as class_field`.
     pub field_links: Vec<InterfaceFieldLinkDef>,
@@ -1378,8 +1376,6 @@ pub struct ImplementsForDef {
     pub interface_target: SpannedTypeExpr,
     /// The type the interface is being implemented for.
     pub for_target: SpannedTypeExpr,
-    /// Field redeclarations inside the block.
-    pub fields: Vec<FieldDef>,
     /// Explicit mappings from interface fields to class fields.
     pub field_links: Vec<InterfaceFieldLinkDef>,
     /// Method definitions inside the block.

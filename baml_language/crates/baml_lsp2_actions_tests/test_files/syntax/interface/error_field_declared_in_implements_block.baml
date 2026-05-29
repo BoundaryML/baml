@@ -24,7 +24,7 @@ class Server {
 //     │     
 //     │     Note: Error code: E0127
 // ────╯
-// error: class `Server` does not provide field `port` required by interface `Config`
+// error: class `Server` does not provide field `port` required by interface `user.Config`
 //     ╭─[ interface_error_field_declared_in_implements_block.baml:9:15 ]
 //     │
 //   9 │ ╭─▶ class Server {

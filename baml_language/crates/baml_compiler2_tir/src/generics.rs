@@ -396,7 +396,9 @@ pub fn contains_typevar(ty: &Ty) -> bool {
                 || contains_typevar(ret)
                 || contains_typevar(throws)
         }
-        Ty::Class(_, type_args, _) => type_args.iter().any(contains_typevar),
+        Ty::Class(_, type_args, _) | Ty::Interface(_, type_args, _) => {
+            type_args.iter().any(contains_typevar)
+        }
         _ => false,
     }
 }
@@ -455,7 +457,10 @@ fn infer_bindings_inner(
             infer_bindings_inner(fr, ar, bindings, allow_typevar_actuals);
             infer_bindings_inner(fth, ath, bindings, allow_typevar_actuals);
         }
-        (Ty::Class(fn_name, f_args, _), Ty::Class(an_name, a_args, _)) if fn_name == an_name => {
+        (Ty::Class(fn_name, f_args, _), Ty::Class(an_name, a_args, _))
+        | (Ty::Interface(fn_name, f_args, _), Ty::Interface(an_name, a_args, _))
+            if fn_name == an_name =>
+        {
             for (ft, at) in f_args.iter().zip(a_args.iter()) {
                 infer_bindings_inner(ft, at, bindings, allow_typevar_actuals);
             }
@@ -597,5 +602,98 @@ pub fn erase_unresolved_typevars(
             attr.clone(),
         ),
         other => other.clone(),
+    }
+}
+
+/// Replace selected type variables with `unknown` for runtime-facing metadata.
+///
+/// Bounded generic parameters are compile-time evidence, not concrete runtime
+/// type tags. MIR and bytecode metadata both need the same erasure behavior, so
+/// keep the recursive shape walk here beside the other generic utilities.
+pub fn erase_typevars_matching(ty: &Ty, should_erase: &impl Fn(&Name) -> bool) -> Ty {
+    if !contains_typevar(ty) {
+        return ty.clone();
+    }
+
+    match ty {
+        Ty::TypeVar(name, attr) if should_erase(name) => Ty::BuiltinUnknown { attr: attr.clone() },
+        Ty::Class(qtn, args, attr) => Ty::Class(
+            qtn.clone(),
+            args.iter()
+                .map(|arg| erase_typevars_matching(arg, should_erase))
+                .collect(),
+            attr.clone(),
+        ),
+        Ty::Interface(qtn, args, attr) => Ty::Interface(
+            qtn.clone(),
+            args.iter()
+                .map(|arg| erase_typevars_matching(arg, should_erase))
+                .collect(),
+            attr.clone(),
+        ),
+        Ty::List(inner, attr) => Ty::List(
+            Box::new(erase_typevars_matching(inner, should_erase)),
+            attr.clone(),
+        ),
+        Ty::EvolvingList(inner, attr) => Ty::EvolvingList(
+            Box::new(erase_typevars_matching(inner, should_erase)),
+            attr.clone(),
+        ),
+        Ty::Optional(inner, attr) => Ty::Optional(
+            Box::new(erase_typevars_matching(inner, should_erase)),
+            attr.clone(),
+        ),
+        Ty::Map(key, value, attr) => Ty::Map(
+            Box::new(erase_typevars_matching(key, should_erase)),
+            Box::new(erase_typevars_matching(value, should_erase)),
+            attr.clone(),
+        ),
+        Ty::EvolvingMap(key, value, attr) => Ty::EvolvingMap(
+            Box::new(erase_typevars_matching(key, should_erase)),
+            Box::new(erase_typevars_matching(value, should_erase)),
+            attr.clone(),
+        ),
+        Ty::Union(members, attr) => Ty::Union(
+            members
+                .iter()
+                .map(|member| erase_typevars_matching(member, should_erase))
+                .collect(),
+            attr.clone(),
+        ),
+        Ty::Future(value, error, attr) => Ty::Future(
+            Box::new(erase_typevars_matching(value, should_erase)),
+            Box::new(erase_typevars_matching(error, should_erase)),
+            attr.clone(),
+        ),
+        Ty::Function {
+            generic_params,
+            generic_param_bounds,
+            params,
+            ret,
+            throws,
+            attr,
+        } => Ty::Function {
+            generic_params: generic_params.clone(),
+            generic_param_bounds: generic_param_bounds
+                .iter()
+                .map(|bound| {
+                    bound
+                        .as_ref()
+                        .map(|ty| erase_typevars_matching(ty, should_erase))
+                })
+                .collect(),
+            params: params
+                .iter()
+                .map(|param| FunctionParamTy {
+                    name: param.name.clone(),
+                    ty: erase_typevars_matching(&param.ty, should_erase),
+                    mode: param.mode,
+                })
+                .collect(),
+            ret: Box::new(erase_typevars_matching(ret, should_erase)),
+            throws: Box::new(erase_typevars_matching(throws, should_erase)),
+            attr: attr.clone(),
+        },
+        _ => ty.clone(),
     }
 }

@@ -15,7 +15,7 @@ class Robot {
 
 //----
 //- diagnostics
-// error: method `speak` in class `Robot` does not match interface `Animal`: expected `() -> string`, found `() -> int`
+// error: method `speak` in class `Robot` does not match interface `user.Animal`: expected `() -> string`, found `() -> int`
 //     ╭─[ interface_method_signature_mismatch.baml:10:14 ]
 //     │
 //  10 │     function speak(self) -> int {

@@ -89,7 +89,7 @@ use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
 pub use bex_heap::{ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapPermit};
-use bex_vm::{BexVm, SpanNotification, VmExecState};
+use bex_vm::{BexVm, SpanNotification, VmExecState, vm::InterfaceImplementors};
 use bex_vm_types::{
     FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp, Value,
     VmGlobals,
@@ -517,7 +517,7 @@ pub struct BexEngine {
     /// Per-program interface implementors registry (BEP-044), kept here so
     /// every spawned VM (including post-`$init` workers) sees the same map
     /// without cloning the underlying `IndexMap`.
-    interface_implementors: Arc<indexmap::IndexMap<baml_type::TypeName, Vec<(baml_type::TypeName, Vec<baml_type::Ty>)>>>,
+    interface_implementors: Arc<InterfaceImplementors>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -755,9 +755,8 @@ impl BexEngine {
         #[cfg(not(target_arch = "wasm32"))]
         let park_requested = Arc::new(AtomicBool::new(false));
 
-        let interface_implementors: Arc<
-            indexmap::IndexMap<baml_type::TypeName, Vec<(baml_type::TypeName, Vec<baml_type::Ty>)>>,
-        > = Arc::new(bytecode.interface_implementors.clone());
+        let interface_implementors: Arc<InterfaceImplementors> =
+            Arc::new(bytecode.interface_implementors.clone());
 
         // Run $init for each package in dependency order.
         // $init evaluates top-level let-binding initializers and stores their

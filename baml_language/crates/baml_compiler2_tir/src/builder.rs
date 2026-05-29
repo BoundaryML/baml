@@ -1299,8 +1299,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             declared
                 .iter()
                 .filter(|decl| {
-                    !effective.contains(*decl)
-                        && !(matches!(decl, Ty::Interface(..))
+                    !(effective.contains(*decl)
+                        || matches!(decl, Ty::Interface(..))
                             && effective.iter().any(|eff| self.is_subtype(eff, decl)))
                 })
                 .map(std::string::ToString::to_string)
