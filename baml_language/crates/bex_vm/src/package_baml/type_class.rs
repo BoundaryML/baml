@@ -91,8 +91,30 @@ fn ty_name_and_args(vm: &BexVm, value: Value) -> Option<(baml_type::TypeName, Ve
     match ty.as_ref() {
         baml_type::Ty::Class(name, args, _) => Some((name.clone(), args.clone())),
         baml_type::Ty::Enum(name, _) => Some((name.clone(), Vec::new())),
-        _ => None,
+        other => primitive_type_name(other).map(|name| (name, Vec::new())),
     }
+}
+
+/// BEP-044 wf3 #G19: a synthetic `TypeName` for a primitive type so an
+/// out-of-body `implements I for int` is visible to reflection
+/// (`reflect.type_of<int>().implements(...)` / `I.implementors()`). Must match
+/// the naming used by `baml_compiler2_emit`'s Pass 7.6 when it bakes the
+/// implementor table.
+fn primitive_type_name(ty: &baml_type::Ty) -> Option<baml_type::TypeName> {
+    let name = match ty {
+        baml_type::Ty::Int { .. } => "int",
+        baml_type::Ty::Bigint { .. } => "bigint",
+        baml_type::Ty::Float { .. } => "float",
+        baml_type::Ty::String { .. } => "string",
+        baml_type::Ty::Bool { .. } => "bool",
+        baml_type::Ty::Null { .. } => "null",
+        _ => return None,
+    };
+    Some(baml_type::TypeName {
+        name: baml_type::Name::new(name),
+        module_path: Vec::new(),
+        display_name: baml_type::Name::new(name),
+    })
 }
 
 /// Project a `Value::Object(Object::Type)` to its underlying `TypeName`,
@@ -107,6 +129,6 @@ fn ty_name(vm: &BexVm, value: Value) -> Option<baml_type::TypeName> {
     };
     match ty.as_ref() {
         baml_type::Ty::Class(name, _, _) | baml_type::Ty::Enum(name, _) => Some(name.clone()),
-        _ => None,
+        other => primitive_type_name(other),
     }
 }

@@ -465,6 +465,45 @@ pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
 /// Free function counterpart to `MirLowerer::ty_to_template`, exposed so
 /// that callers outside of MIR (e.g. `baml_compiler2_emit`'s class-field
 /// type lowering) can build the same templates.
+/// Depth cap for recursive blanket-impl bound checking (guards pathological
+/// `requires`/blanket cycles; real chains are short).
+const BLANKET_BOUND_DEPTH: u32 = 16;
+
+/// Recursively decide whether `actual` satisfies `bound`. For an interface
+/// `bound` this re-enters `type_implements_interface_via_rule` so a blanket
+/// impl whose bound is itself satisfied by *another* blanket impl verifies
+/// (BEP-044 wf3 #2 `blanket-on-blanket`). Previously the bound callback was a
+/// hard `|_,_| false`, which made `implements<T: Printable> Loud for T` fail to
+/// see a blanket-provided `Printable` and crash the VM. Non-interface bounds
+/// fall back to normalized-type equality, matching TIR's subtyping.
+fn type_satisfies_bound(
+    db: &dyn crate::Db,
+    actual: &Tir2Ty,
+    bound: &Tir2Ty,
+    aliases: &std::collections::HashMap<QualifiedTypeName, Tir2Ty>,
+    default_pkg: &baml_base::Name,
+    depth: u32,
+) -> bool {
+    if depth == 0 {
+        return false;
+    }
+    if let Tir2Ty::Interface(..) = bound {
+        let pkg = match actual {
+            Tir2Ty::Class(qtn, _, _) => qtn.package().clone(),
+            _ => default_pkg.clone(),
+        };
+        let registry = baml_compiler2_tir::interfaces::package_implements_registry(
+            db,
+            baml_compiler2_hir::package::PackageId::new(db, pkg),
+        );
+        registry.type_implements_interface_via_rule(actual, bound, aliases, |na, nb| {
+            type_satisfies_bound(db, na, nb, aliases, default_pkg, depth - 1)
+        })
+    } else {
+        baml_compiler2_tir::normalize::is_same_normalized_type(actual, bound, aliases)
+    }
+}
+
 pub fn tir2_to_template(
     ty: &Tir2Ty,
     resolved: &ResolvedAliases,
@@ -497,6 +536,34 @@ pub fn tir2_to_template(
                 .collect(),
         ),
         Tir2Ty::Class(qtn, type_args, attr) => {
+            if type_args
+                .iter()
+                .any(baml_compiler2_tir::generics::contains_typevar)
+            {
+                let template_args: Vec<TyTemplate> = type_args
+                    .iter()
+                    .map(|a| tir2_to_template(a, resolved, generic_params))
+                    .collect();
+                TyTemplate::Class(qtn_to_type_name(qtn), template_args)
+            } else {
+                let resolved_args: Vec<Ty> = type_args
+                    .iter()
+                    .map(|a| convert_tir2_ty(a, resolved))
+                    .collect();
+                TyTemplate::Concrete(Ty::Class(
+                    qtn_to_type_name(qtn),
+                    resolved_args,
+                    attr.clone(),
+                ))
+            }
+        }
+        // Interfaces lower to `Class` at the MIR/runtime layer (see
+        // `convert_tir2_ty`). Mirror the `Class` arm exactly so a generic
+        // interface instantiation like `Box<U>` keeps a `TypeArgRef` for the
+        // per-frame `TyTemplate::substitute(type_args)` to fill in. Without
+        // this arm the value fell through to `other` and `convert_tir2_ty`
+        // voided the type var, baking `Box<void>` (BEP-044 wf3 #6/#7).
+        Tir2Ty::Interface(qtn, type_args, attr) => {
             if type_args
                 .iter()
                 .any(baml_compiler2_tir::generics::contains_typevar)
@@ -1261,7 +1328,16 @@ impl<'db> LoweringContext<'db> {
                                 &actual,
                                 &bound_ty,
                                 &resolved_aliases.aliases,
-                                |_nested_actual, _nested_bound| false,
+                                |nested_actual, nested_bound| {
+                                    type_satisfies_bound(
+                                        db,
+                                        nested_actual,
+                                        nested_bound,
+                                        &resolved_aliases.aliases,
+                                        &pkg_info.package,
+                                        BLANKET_BOUND_DEPTH,
+                                    )
+                                },
                             ) {
                                 continue;
                             }
@@ -2170,6 +2246,90 @@ impl<'db> LoweringContext<'db> {
             }
             _ => None,
         }
+    }
+
+    /// BEP-044 wf3 #G7: for a *concrete* receiver (class or primitive) whose
+    /// method is provided by a blanket / out-of-body `implements … for …` rule
+    /// (not an in-body block), find the single interface that provides `method`
+    /// so a direct `recv.method()` dispatches through the normal interface
+    /// switch. Returns the interface `(TypeName, type_args)`. TIR has already
+    /// rejected the ambiguous (>1 interface) case with E0121, so the first
+    /// declaring match is unambiguous for a compiling program.
+    fn registry_dispatch_target_for_concrete(
+        &self,
+        recv_ty: &Tir2Ty,
+        method: &Name,
+    ) -> Option<(TypeName, Vec<Tir2Ty>)> {
+        // Only concrete receivers — interfaces/type-vars dispatch via the
+        // arms above.
+        if !matches!(recv_ty, Tir2Ty::Class(..) | Tir2Ty::Primitive(..)) {
+            return None;
+        }
+        let pkg = baml_compiler2_hir::file_package::file_package(self.db, self.file)
+            .package
+            .clone();
+        let registry = baml_compiler2_tir::interfaces::package_implements_registry(
+            self.db,
+            baml_compiler2_hir::package::PackageId::new(self.db, pkg),
+        );
+        for rule in &registry.interface_impl_rules {
+            let Some(bindings) = baml_compiler2_tir::interfaces::match_ty_pattern(
+                &rule.for_ty_pattern,
+                recv_ty,
+                &rule.generic_params,
+                &self.resolved_aliases.aliases,
+            ) else {
+                continue;
+            };
+            let iface_ty =
+                baml_compiler2_tir::generics::substitute_ty(&rule.interface_ty, &bindings);
+            let Tir2Ty::Interface(iface_qtn, iface_args, _) = iface_ty else {
+                continue;
+            };
+            if self.mir_interface_declares_method(&iface_qtn, method) {
+                return Some((qtn_to_type_name(&iface_qtn), iface_args));
+            }
+        }
+        None
+    }
+
+    /// Whether `iface_qtn` or any interface in its `requires` closure declares a
+    /// method named `method`. Mirrors the TIR-side check; used by
+    /// `registry_dispatch_target_for_concrete`.
+    fn mir_interface_declares_method(
+        &self,
+        iface_qtn: &QualifiedTypeName,
+        method: &Name,
+    ) -> bool {
+        let pkg_id =
+            baml_compiler2_hir::package::PackageId::new(self.db, iface_qtn.package().clone());
+        let pkg_items = baml_compiler2_hir::package::package_items(self.db, pkg_id);
+        let Some(baml_compiler2_hir::contributions::Definition::Interface(root_loc)) =
+            pkg_items.lookup_type(iface_qtn.namespace(), iface_qtn.name())
+        else {
+            return false;
+        };
+        let root_pkg = baml_compiler2_hir::file_package::file_package(self.db, root_loc.file(self.db));
+        baml_compiler2_tir::interfaces::interface_closure_locs(
+            self.db,
+            root_loc,
+            pkg_items,
+            &root_pkg.namespace_path,
+        )
+        .into_iter()
+        .any(|iface_loc| {
+            let iface_tree = baml_compiler2_hir::file_item_tree(self.db, iface_loc.file(self.db));
+            iface_tree
+                .interfaces
+                .get(&iface_loc.id(self.db))
+                .is_some_and(|iface_data| {
+                    iface_data.required_methods.iter().any(|s| s.name == *method)
+                        || iface_data
+                            .default_methods
+                            .iter()
+                            .any(|&fn_id| iface_tree[fn_id].name == *method)
+                })
+        })
     }
 
     fn expr_ty(&self, expr_id: AstExprId) -> Ty {
@@ -3287,6 +3447,16 @@ impl LoweringContext<'_> {
 // ─── Literal helper ───────────────────────────────────────────────────────────
 
 impl LoweringContext<'_> {
+    /// Whether `segments` is rooted at the BEP-044 `default` receiver keyword
+    /// and that keyword is not shadowed by a local of the same name. See
+    /// [`baml_compiler2_ast::DEFAULT_RECEIVER_KEYWORD`].
+    fn is_default_receiver_root(&self, segments: &[Name]) -> bool {
+        segments
+            .first()
+            .is_some_and(|s| s.as_str() == baml_compiler2_ast::DEFAULT_RECEIVER_KEYWORD)
+            && !self.locals.contains_key(&segments[0])
+    }
+
     fn lower_literal(lit: &AstLiteral) -> Constant {
         use baml_base::Literal;
         match lit {
@@ -3461,6 +3631,11 @@ impl<'db> LoweringContext<'db> {
                 || self
                     .capture_index_for_name_at(expr_id, &segments[0])
                     .is_some()
+                // BEP-044 wf3 #4: `default.<field>` as a value — the field-chain
+                // lowerer maps the `default` root to `self`-viewed-as-interface.
+                // (The `default.method(...)` call form is intercepted earlier in
+                // `lower_call`, so this only catches the value/field form.)
+                || self.is_default_receiver_root(segments)
             {
                 self.lower_multi_segment_path_as_field_chain(expr_id, segments, dest);
                 return;
@@ -3586,6 +3761,20 @@ impl<'db> LoweringContext<'db> {
                     .unwrap_or_else(|| Ty::BuiltinUnknown {
                         attr: TyAttr::default(),
                     });
+                (place, ty)
+            } else if self.is_default_receiver_root(segments)
+                && let Some(&self_local) = self.locals.get(&Name::new("self"))
+            {
+                // BEP-044 wf3 #4: `default.<field>` denotes the enclosing `self`
+                // viewed at the declaring interface. TIR typed the root as
+                // `Ty::Interface`, so reuse that and let the interface-prefix
+                // routing below resolve the field view (same path as
+                // `self.as<I>.field`). Without this the `default` root is not a
+                // local → null → `string + null` VM crash.
+                let place = Place::Local(self_local);
+                let ty = self
+                    .path_root_ty(expr_id)
+                    .unwrap_or_else(|| self.builder.local_ty(self_local));
                 (place, ty)
             } else {
                 // Root not found as a local or capture — emit null.
@@ -4319,8 +4508,7 @@ impl LoweringContext<'_> {
         // the override is being deliberately bypassed.
         if let AstExpr::Path(segments) = &callee_expr
             && segments.len() == 2
-            && segments[0].as_str() == "default"
-            && !self.locals.contains_key(&segments[0])
+            && self.is_default_receiver_root(segments)
             && let Some(target_te) = self.implements_block_iface_target()
             && let baml_compiler2_ast::TypeExpr::Path { .. } = &target_te.expr
         {
@@ -4378,10 +4566,14 @@ impl LoweringContext<'_> {
             {
                 let method_name = segments.last().unwrap().clone();
                 let prefix_idx = segments.len() - 2;
+                let recv_seg_idx = if segments.len() == 2 { 0 } else { prefix_idx };
+                let recv_tir_ty = self
+                    .path_segment_types
+                    .get(&(self.current_metadata_scope, callee, recv_seg_idx))
+                    .cloned();
                 let iface_dispatch_opt: Option<(TypeName, Vec<Tir2Ty>)> = if segments.len() == 2 {
-                    if let Some(target) = self
-                        .path_segment_types
-                        .get(&(self.current_metadata_scope, callee, 0))
+                    if let Some(target) = recv_tir_ty
+                        .as_ref()
                         .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty))
                     {
                         Some(target)
@@ -4394,10 +4586,18 @@ impl LoweringContext<'_> {
                         }
                     }
                 } else {
-                    self.path_segment_types
-                        .get(&(self.current_metadata_scope, callee, prefix_idx))
+                    recv_tir_ty
+                        .as_ref()
                         .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty))
-                };
+                }
+                // BEP-044 wf3 #G7: concrete receiver whose method comes from a
+                // blanket / out-of-body impl — find the providing interface via
+                // the registry and dispatch through the normal switch.
+                .or_else(|| {
+                    recv_tir_ty
+                        .as_ref()
+                        .and_then(|ty| self.registry_dispatch_target_for_concrete(ty, &method_name))
+                });
                 if let Some((iface_tn, iface_type_args)) = iface_dispatch_opt {
                     // Decide how many leading segments form the receiver
                     // value (the rest are type qualifiers).
@@ -5209,72 +5409,11 @@ impl LoweringContext<'_> {
     /// `generic_params` maps to `TyTemplate::TypeArgRef(N)`.  All other types
     /// recurse structurally and bottom out at `TyTemplate::Concrete(...)`.
     fn ty_to_template(&self, ty: &Tir2Ty, generic_params: &[baml_base::Name]) -> TyTemplate {
-        match ty {
-            Tir2Ty::TypeVar(name, _) => {
-                // Find the de Bruijn index in the enclosing function's param list.
-                if let Some(n) = generic_params.iter().position(|p| p == name) {
-                    TyTemplate::TypeArgRef(
-                        u32::try_from(n).expect("generic param index fits in u32"),
-                    )
-                } else {
-                    // TypeVar not found in enclosing params — defensive fallback.
-                    // This should not happen for well-typed programs.
-                    TyTemplate::Concrete(Ty::Void {
-                        attr: baml_type::TyAttr::default(),
-                    })
-                }
-            }
-            Tir2Ty::List(inner, _) => {
-                TyTemplate::Array(Box::new(self.ty_to_template(inner, generic_params)))
-            }
-            Tir2Ty::Optional(inner, _) => {
-                TyTemplate::Optional(Box::new(self.ty_to_template(inner, generic_params)))
-            }
-            Tir2Ty::Map(k, v, _) => TyTemplate::Map(
-                Box::new(self.ty_to_template(k, generic_params)),
-                Box::new(self.ty_to_template(v, generic_params)),
-            ),
-            Tir2Ty::Union(parts, _) => TyTemplate::Union(
-                parts
-                    .iter()
-                    .map(|p| self.ty_to_template(p, generic_params))
-                    .collect(),
-            ),
-            Tir2Ty::Class(qtn, type_args, attr) => {
-                if type_args
-                    .iter()
-                    .any(baml_compiler2_tir::generics::contains_typevar)
-                {
-                    // Generic class instantiation with type-variable args.
-                    let template_args: Vec<TyTemplate> = type_args
-                        .iter()
-                        .map(|a| self.ty_to_template(a, generic_params))
-                        .collect();
-                    TyTemplate::Class(qtn_to_type_name(qtn), template_args)
-                } else {
-                    // Monomorphic class — no TypeVars in args.
-                    let resolved_args: Vec<Ty> = type_args
-                        .iter()
-                        .map(|a| convert_tir2_ty(a, &self.resolved_aliases))
-                        .collect();
-                    TyTemplate::Concrete(Ty::Class(
-                        qtn_to_type_name(qtn),
-                        resolved_args,
-                        attr.clone(),
-                    ))
-                }
-            }
-            // EvolvingList and EvolvingMap: treat like their non-evolving counterparts.
-            Tir2Ty::EvolvingList(inner, _) => {
-                TyTemplate::Array(Box::new(self.ty_to_template(inner, generic_params)))
-            }
-            Tir2Ty::EvolvingMap(k, v, _) => TyTemplate::Map(
-                Box::new(self.ty_to_template(k, generic_params)),
-                Box::new(self.ty_to_template(v, generic_params)),
-            ),
-            // All remaining concrete leaf types.
-            other => TyTemplate::Concrete(convert_tir2_ty(other, &self.resolved_aliases)),
-        }
+        // Delegate to the free `tir2_to_template` so the two routines can never
+        // drift apart again (C1). They were previously byte-for-byte twins; a
+        // missing `Tir2Ty::Interface` arm in both voided generic interface args
+        // to `Box<void>` (BEP-044 wf3 #6/#7).
+        tir2_to_template(ty, &self.resolved_aliases, generic_params)
     }
 
     /// Return the list of generic parameter names in scope for the
@@ -6674,29 +6813,14 @@ impl<'db> LoweringContext<'db> {
                                 candidate_ty,
                                 &self.resolved_aliases.aliases,
                                 |actual, bound| {
-                                    if let Tir2Ty::Interface(..) = bound {
-                                        let pkg = match actual {
-                                            Tir2Ty::Class(qtn, _, _) => qtn.package().clone(),
-                                            _ => file_pkg_info.package.clone(),
-                                        };
-                                        let bound_registry =
-                                        baml_compiler2_tir::interfaces::package_implements_registry(
-                                            self.db,
-                                            PackageId::new(self.db, pkg),
-                                        );
-                                        bound_registry.type_implements_interface_via_rule(
-                                            actual,
-                                            bound,
-                                            &self.resolved_aliases.aliases,
-                                            |_nested_actual, _nested_bound| false,
-                                        )
-                                    } else {
-                                        baml_compiler2_tir::normalize::is_same_normalized_type(
-                                            actual,
-                                            bound,
-                                            &self.resolved_aliases.aliases,
-                                        )
-                                    }
+                                    type_satisfies_bound(
+                                        self.db,
+                                        actual,
+                                        bound,
+                                        &self.resolved_aliases.aliases,
+                                        &file_pkg_info.package,
+                                        BLANKET_BOUND_DEPTH,
+                                    )
                                 },
                             )
                         else {

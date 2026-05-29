@@ -34,7 +34,7 @@ fn union_normalization_alias() {
       { : never
         return x : user.A
       }
-      !! 58..59: type mismatch: expected string, got user.A
+      !! 58..59: type mismatch: expected string, got A
     }
     type user.A$stream = int | string
     ");
@@ -354,7 +354,7 @@ fn calling_class_as_function() {
       { : never
         return Foo(1) : unknown
       }
-      !! 55..61: `user.Foo` is not a function — it cannot be called
+      !! 55..61: `Foo` is not a function — it cannot be called
     }
     class user.Foo$stream {
       name: null | string
@@ -768,7 +768,7 @@ function f(x: Cat | Dog) -> int { return x.whiskers; }"#,
       { : never
         return x.whiskers : unknown
       }
-      !! 118..126: type `user.Dog` has no member `whiskers`
+      !! 118..126: type `Dog` has no member `whiskers`
     }
     class user.Cat$stream {
       name: null | string
@@ -824,7 +824,7 @@ function f(x: A | B | C) -> string { return x.name; }"#,
       { : never
         return x.name : unknown
       }
-      !! 114..118: type `user.C` has no member `name`
+      !! 114..118: type `C` has no member `name`
     }
     class user.A$stream {
       name: null | string
@@ -881,8 +881,8 @@ function f(x: A | B | C) -> string { return x.name; }"#,
       { : never
         return x.name : unknown
       }
-      !! 113..117: type `user.B` has no member `name`
-      !! 113..117: type `user.C` has no member `name`
+      !! 113..117: type `B` has no member `name`
+      !! 113..117: type `C` has no member `name`
     }
     class user.A$stream {
       name: null | string

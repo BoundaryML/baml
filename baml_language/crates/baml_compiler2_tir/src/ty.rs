@@ -46,6 +46,14 @@ impl QualifiedTypeName {
         &self.pkg
     }
 
+    /// Whether this type lives in the user's own (implicit root) package — the
+    /// "current" package for everything a user writes. User-facing rendering
+    /// omits the package for these; only dependency types carry a package
+    /// qualifier. Use this instead of comparing `package()` to `"user"`.
+    pub fn is_local(&self) -> bool {
+        self.pkg.as_str() == RESERVED_USER_PACKAGE
+    }
+
     pub fn namespace(&self) -> &Vec<Name> {
         &self.namespace
     }
@@ -73,19 +81,49 @@ impl QualifiedTypeName {
     }
 }
 
-impl fmt::Display for QualifiedTypeName {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+/// The reserved implicit root package for user-authored code. It is the
+/// *current* package for everything a user writes, so it must never be shown in
+/// user-facing output (`user.Dog` → `Dog`). The canonical `Display` keeps it
+/// (for dumps/identity); only the user-facing path elides it.
+pub const RESERVED_USER_PACKAGE: &str = "user";
+
+/// Prefix of synthetic effect-polymorphism type parameters. These are an
+/// internal encoding (`__effect_param_0`, …); user-facing rendering shows them
+/// as `callback`. Single source of truth — use [`is_synthetic_effect_param`]
+/// rather than re-deriving this prefix check.
+pub const SYNTHETIC_EFFECT_PARAM_PREFIX: &str = "__effect_param_";
+
+/// Whether `name` is a synthesized effect-polymorphism type parameter
+/// (`__effect_param_N`). The single source of truth for this check — TIR, MIR,
+/// and the LSP all call here instead of re-implementing the prefix match.
+pub fn is_synthetic_effect_param(name: &Name) -> bool {
+    name.as_str()
+        .strip_prefix(SYNTHETIC_EFFECT_PARAM_PREFIX)
+        .is_some_and(|rest| !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit()))
+}
+
+impl QualifiedTypeName {
+    /// Write `package.namespace.name`, omitting the `package` segment when
+    /// `user_facing` is set and the package is the reserved [`RESERVED_USER_PACKAGE`].
+    fn fmt_name(&self, f: &mut fmt::Formatter<'_>, user_facing: bool) -> fmt::Result {
         let namespace = self
             .namespace
             .iter()
             .map(std::string::ToString::to_string)
             .collect::<Vec<_>>()
             .join(".");
-        if !namespace.is_empty() {
-            write!(f, "{}.{}.{}", self.pkg, namespace, self.name)?;
-        } else {
-            write!(f, "{}.{}", self.pkg, self.name)?;
+        let elide = user_facing && self.is_local();
+        match (elide, namespace.is_empty()) {
+            (true, true) => write!(f, "{}", self.name),
+            (true, false) => write!(f, "{}.{}", namespace, self.name),
+            (false, true) => write!(f, "{}.{}", self.pkg, self.name),
+            (false, false) => write!(f, "{}.{}.{}", self.pkg, namespace, self.name),
         }
+    }
+
+    /// Like [`fmt_name`] plus the declared `<generic_params>` suffix.
+    fn fmt_qtn(&self, f: &mut fmt::Formatter<'_>, user_facing: bool) -> fmt::Result {
+        self.fmt_name(f, user_facing)?;
         if !self.generic_params.is_empty() {
             let params: Vec<_> = self
                 .generic_params
@@ -95,6 +133,12 @@ impl fmt::Display for QualifiedTypeName {
             write!(f, "<{}>", params.join(", "))?;
         }
         Ok(())
+    }
+}
+
+impl fmt::Display for QualifiedTypeName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.fmt_qtn(f, false)
     }
 }
 
@@ -504,7 +548,34 @@ impl Ty {
 
 // ── Display impls ────────────────────────────────────────────────────────────
 
+/// Adapter that renders a [`Ty`] through [`Ty::fmt_with`] with a chosen
+/// `user_facing` setting, so the recursive cases can format nested types without
+/// re-deriving the canonical-vs-user-facing choice at each call site.
+struct TyDisplay<'a> {
+    ty: &'a Ty,
+    user_facing: bool,
+}
+
+impl fmt::Display for TyDisplay<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.ty.fmt_with(f, self.user_facing)
+    }
+}
+
 impl Ty {
+    /// User-facing rendering: identical to the canonical [`Display`] except the
+    /// reserved implicit `user` package is elided ([`RESERVED_USER_PACKAGE`]).
+    /// This is the single structural source of the "no `user.` in messages"
+    /// rule — diagnostics render through here instead of post-processing the
+    /// canonical string.
+    pub fn render_user_facing(&self) -> String {
+        TyDisplay {
+            ty: self,
+            user_facing: true,
+        }
+        .to_string()
+    }
+
     /// Whether this type needs parentheses when a postfix modifier (`[]`, `?`)
     /// is applied. Unions must be grouped because postfix binds tighter than `|`.
     fn needs_postfix_parens(&self) -> bool {
@@ -518,44 +589,45 @@ impl Ty {
     }
 
     /// Format with parentheses if needed for postfix context.
-    fn fmt_as_postfix_base(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt_as_postfix_base(&self, f: &mut fmt::Formatter<'_>, user_facing: bool) -> fmt::Result {
+        let inner = TyDisplay {
+            ty: self,
+            user_facing,
+        };
         if self.needs_postfix_parens() {
-            write!(f, "({self})")
+            write!(f, "({inner})")
         } else {
-            write!(f, "{self}")
+            write!(f, "{inner}")
         }
     }
 
     /// Format with parentheses if needed in a function return position.
-    fn fmt_as_function_result(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt_as_function_result(&self, f: &mut fmt::Formatter<'_>, user_facing: bool) -> fmt::Result {
+        let inner = TyDisplay {
+            ty: self,
+            user_facing,
+        };
         if self.needs_function_result_parens() {
-            write!(f, "({self})")
+            write!(f, "({inner})")
         } else {
-            write!(f, "{self}")
+            write!(f, "{inner}")
         }
     }
 }
 
-impl fmt::Display for Ty {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Ty {
+    /// Canonical-vs-user-facing rendering core. `user_facing` drops the reserved
+    /// implicit `user` package from class/interface/enum/alias names; it is
+    /// threaded through every recursive position so nested types render
+    /// consistently. `Display` calls this with `false` (canonical);
+    /// [`Ty::render_user_facing`] calls it with `true`.
+    fn fmt_with(&self, f: &mut fmt::Formatter<'_>, user_facing: bool) -> fmt::Result {
+        let sub = |ty| TyDisplay { ty, user_facing };
         match self {
             Ty::Class(qn, type_args, _) => {
-                let namespace = qn
-                    .namespace()
-                    .iter()
-                    .map(std::string::ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join(".");
-                if !namespace.is_empty() {
-                    write!(f, "{}.{}.{}", qn.package(), namespace, qn.name())?;
-                } else {
-                    write!(f, "{}.{}", qn.package(), qn.name())?;
-                }
+                qn.fmt_name(f, user_facing)?;
                 if !type_args.is_empty() {
-                    let args: Vec<_> = type_args
-                        .iter()
-                        .map(std::string::ToString::to_string)
-                        .collect();
+                    let args: Vec<_> = type_args.iter().map(|a| sub(a).to_string()).collect();
                     write!(f, "<{}>", args.join(", "))?;
                 } else if !qn.generic_params.is_empty() {
                     // Unspecialized generic class — show `_` placeholders, one per declared param.
@@ -565,22 +637,9 @@ impl fmt::Display for Ty {
                 Ok(())
             }
             Ty::Interface(qn, type_args, _) => {
-                let namespace = qn
-                    .namespace()
-                    .iter()
-                    .map(std::string::ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join(".");
-                if !namespace.is_empty() {
-                    write!(f, "{}.{}.{}", qn.package(), namespace, qn.name())?;
-                } else {
-                    write!(f, "{}.{}", qn.package(), qn.name())?;
-                }
+                qn.fmt_name(f, user_facing)?;
                 if !type_args.is_empty() {
-                    let args: Vec<_> = type_args
-                        .iter()
-                        .map(std::string::ToString::to_string)
-                        .collect();
+                    let args: Vec<_> = type_args.iter().map(|a| sub(a).to_string()).collect();
                     write!(f, "<{}>", args.join(", "))?;
                 } else if !qn.generic_params.is_empty() {
                     let placeholders = vec!["_"; qn.generic_params.len()];
@@ -588,20 +647,23 @@ impl fmt::Display for Ty {
                 }
                 Ok(())
             }
-            Ty::Enum(qn, _) => write!(f, "{qn}"),
-            Ty::EnumVariant(qn, v, _) => write!(f, "{qn}.{v}"),
-            Ty::TypeAlias(qn, _) => write!(f, "{qn}"),
+            Ty::Enum(qn, _) => qn.fmt_qtn(f, user_facing),
+            Ty::EnumVariant(qn, v, _) => {
+                qn.fmt_qtn(f, user_facing)?;
+                write!(f, ".{v}")
+            }
+            Ty::TypeAlias(qn, _) => qn.fmt_qtn(f, user_facing),
             Ty::Primitive(p, _) => write!(f, "{p}"),
             Ty::List(inner, _) => {
-                inner.fmt_as_postfix_base(f)?;
+                inner.fmt_as_postfix_base(f, user_facing)?;
                 write!(f, "[]")
             }
-            Ty::Map(k, v, _) => write!(f, "map<{k}, {v}>"),
+            Ty::Map(k, v, _) => write!(f, "map<{}, {}>", sub(k), sub(v)),
             Ty::EvolvingList(inner, _) => {
                 if matches!(**inner, Ty::Never { .. }) {
                     write!(f, "_[]")
                 } else {
-                    inner.fmt_as_postfix_base(f)?;
+                    inner.fmt_as_postfix_base(f, user_facing)?;
                     write!(f, "[] (evolving)")
                 }
             }
@@ -609,18 +671,15 @@ impl fmt::Display for Ty {
                 if matches!(**k, Ty::Never { .. }) && matches!(**v, Ty::Never { .. }) {
                     write!(f, "map<_, _>")
                 } else {
-                    write!(f, "map<{k}, {v}> (evolving)")
+                    write!(f, "map<{}, {}> (evolving)", sub(k), sub(v))
                 }
             }
             Ty::Union(members, _) => {
-                let parts: Vec<_> = members
-                    .iter()
-                    .map(std::string::ToString::to_string)
-                    .collect();
+                let parts: Vec<_> = members.iter().map(|m| sub(m).to_string()).collect();
                 write!(f, "{}", parts.join(" | "))
             }
             Ty::Optional(inner, _) => {
-                inner.fmt_as_postfix_base(f)?;
+                inner.fmt_as_postfix_base(f, user_facing)?;
                 write!(f, "?")
             }
             Ty::Literal(lit, _freshness, _) => write!(f, "{lit}"),
@@ -640,7 +699,7 @@ impl fmt::Display for Ty {
                         }
                         write!(f, "{param}")?;
                         if let Some(bound) = generic_param_bounds.get(i).and_then(Option::as_ref) {
-                            write!(f, " extends {bound}")?;
+                            write!(f, " extends {}", sub(bound))?;
                         }
                     }
                     write!(f, ">")?;
@@ -648,7 +707,7 @@ impl fmt::Display for Ty {
                 let ps: Vec<String> = params
                     .iter()
                     .map(|param| {
-                        let ty = &param.ty;
+                        let ty = sub(&param.ty);
                         match (&param.name, param.mode) {
                             (Some(name), FunctionParamMode::Optional) => {
                                 format!("{name}?: {ty}")
@@ -659,10 +718,19 @@ impl fmt::Display for Ty {
                     })
                     .collect();
                 write!(f, "({}) -> ", ps.join(", "))?;
-                ret.fmt_as_function_result(f)?;
-                write!(f, " throws {throws}")
+                ret.fmt_as_function_result(f, user_facing)?;
+                write!(f, " throws {}", sub(throws))
             }
-            Ty::TypeVar(name, _) => write!(f, "{name}"),
+            Ty::TypeVar(name, _) => {
+                // A synthetic effect parameter (`__effect_param_N`) is an
+                // implementation detail of effect-polymorphic callbacks; show it
+                // as `callback` in user-facing output.
+                if user_facing && is_synthetic_effect_param(name) {
+                    write!(f, "callback")
+                } else {
+                    write!(f, "{name}")
+                }
+            }
             Ty::Never { .. } => write!(f, "never"),
             Ty::Void { .. } => write!(f, "void"),
             Ty::BuiltinUnknown { .. } => write!(f, "unknown"),
@@ -670,8 +738,14 @@ impl fmt::Display for Ty {
             Ty::Type { .. } => write!(f, "type"),
             Ty::Unknown { .. } => write!(f, "unknown"),
             Ty::Error { .. } => write!(f, "!error"),
-            Ty::Future(value, error, _) => write!(f, "Future<{value}, {error}>"),
+            Ty::Future(value, error, _) => write!(f, "Future<{}, {}>", sub(value), sub(error)),
         }
+    }
+}
+
+impl fmt::Display for Ty {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.fmt_with(f, false)
     }
 }
 

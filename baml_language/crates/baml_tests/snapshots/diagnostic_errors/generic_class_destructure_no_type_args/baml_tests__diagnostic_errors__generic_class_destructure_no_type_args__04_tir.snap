@@ -17,7 +17,7 @@ function user.main() -> int throws never {
     let Box { value: value } = boxed : user.Box<int> -> user.Box
     value : T
   }
-  !! 350..372: type mismatch: expected user.Box<int>, got user.Box
+  !! 350..372: type mismatch: expected Box<int>, got Box
   !! 375..380: generic class destructure `Box { ... }` must specify type arguments
   !! 386..391: type mismatch: expected int, got T
 }

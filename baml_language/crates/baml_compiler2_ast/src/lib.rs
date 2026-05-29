@@ -27,6 +27,15 @@ pub use lower_cst::{
 pub use lower_expr_body::EnvVarRef;
 pub use lowering_diagnostic::LoweringDiagnostic;
 
+/// The BEP-044 `default` receiver keyword. Inside an `implements` block,
+/// `default.method(...)` invokes the interface's *default* method body,
+/// deliberately bypassing the class's override. It is a **contextual** keyword:
+/// the lexer produces an ordinary identifier, and TIR/MIR recognize it by name
+/// at the root of a path — so a local named `default` shadows it. This constant
+/// is the single source of truth for that spelling; prefer the
+/// `is_default_receiver_root` helpers over comparing the literal string.
+pub const DEFAULT_RECEIVER_KEYWORD: &str = "default";
+
 /// Parse the digit body of a `bigint` literal into a [`num_bigint::BigInt`].
 ///
 /// The lexer (`baml_compiler_lexer`) guarantees one-or-more ASCII decimal

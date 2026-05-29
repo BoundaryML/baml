@@ -25,12 +25,12 @@ function server(req: int) -> bool throws never {
 //     │ 
 //     │ Note: Error code: E0063
 // ────╯
-// error: declared throws is `never`, but this function may also throw `user.Errors.AuthenticationError`
+// error: declared throws is `never`, but this function may also throw `Errors.AuthenticationError`
 //     ╭─[ throw_throws_never_unreachable_rethrow.baml:11:41 ]
 //     │
 //  11 │ function server(req: int) -> bool throws never {
 //     │                                         ───┬──  
-//     │                                            ╰──── declared throws is `never`, but this function may also throw `user.Errors.AuthenticationError`
+//     │                                            ╰──── declared throws is `never`, but this function may also throw `Errors.AuthenticationError`
 //     │ 
 //     │ Note: Error code: E0096
 // ────╯

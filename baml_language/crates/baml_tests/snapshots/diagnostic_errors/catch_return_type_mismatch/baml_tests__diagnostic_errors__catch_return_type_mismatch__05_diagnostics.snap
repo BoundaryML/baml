@@ -1,14 +1,13 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 35598
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] warning: extraneous throws declaration: user.Errors
+  [type] warning: extraneous throws declaration: Errors
     ╭─[ catch_return_type_mismatch.baml:10:33 ]
     │
  10 │ function callee() -> bool throws Errors {
     │                                 ───┬───  
-    │                                    ╰───── extraneous throws declaration: user.Errors
+    │                                    ╰───── extraneous throws declaration: Errors
     │ 
     │ Note: Error code: E0097
 ────╯

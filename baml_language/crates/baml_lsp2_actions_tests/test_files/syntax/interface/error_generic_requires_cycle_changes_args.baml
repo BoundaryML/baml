@@ -12,7 +12,7 @@ class Box {
 
 //----
 //- diagnostics
-// error: interface `requires` chain forms a cycle: Loop
+// error: interface `requires` chain forms a cycle: Loop -> Loop
 //    ╭─[ interface_error_generic_requires_cycle_changes_args.baml:1:11 ]
 //    │
 //  1 │ interface Loop<T> requires Loop<T[]> {

@@ -39,7 +39,7 @@ function user.fail_hidden() -> int throws never {
   { : int
     accept_hidden(risky) : int
   }
-  !! 417..422: type mismatch: expected user.HiddenHandler, got (value: int) -> int throws string
+  !! 417..422: type mismatch: expected HiddenHandler, got (value: int) -> int throws string
 }
 function user.fail_stored() -> user.Holder throws never {
   { : user.Holder

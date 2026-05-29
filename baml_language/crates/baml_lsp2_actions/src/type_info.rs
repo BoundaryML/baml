@@ -464,12 +464,6 @@ fn display_local_binding_ty(
     utils::display_ty_for_file(db, file, ty)
 }
 
-fn is_synthetic_effect_param_name(name: &Name) -> bool {
-    name.as_str()
-        .strip_prefix("__effect_param_")
-        .is_some_and(|suffix| !suffix.is_empty() && suffix.bytes().all(|b| b.is_ascii_digit()))
-}
-
 fn function_param_matches_effect_slot(ty: &baml_compiler2_tir::ty::Ty, effect_name: &Name) -> bool {
     use baml_compiler2_tir::ty::Ty;
 
@@ -513,7 +507,7 @@ fn callback_forwarding_note(
     let Ty::TypeVar(effect_name, _) = only_fact else {
         return None;
     };
-    if !is_synthetic_effect_param_name(effect_name) {
+    if !baml_compiler2_tir::ty::is_synthetic_effect_param(effect_name) {
         return None;
     }
 

@@ -256,6 +256,59 @@ impl ImplementsRegistry {
         })
     }
 
+    /// When `actual_ty` *almost* implements `requested_iface_ty` via a blanket
+    /// rule — the receiver shape matches but a generic bound fails — return the
+    /// first failing `(param, required_bound, actual_arg)`. Used to turn a bare
+    /// "type mismatch" into a message naming the unsatisfied bound (wf3 #G18).
+    pub fn first_failing_bound(
+        &self,
+        actual_ty: &Ty,
+        requested_iface_ty: &Ty,
+        aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+        mut is_subtype: impl FnMut(&Ty, &Ty) -> bool,
+    ) -> Option<(Name, Ty, Ty)> {
+        for rule in &self.interface_impl_rules {
+            let mut bindings = TypeBindings::default();
+            if match_ty_pattern_into(
+                &rule.for_ty_pattern,
+                actual_ty,
+                &rule.generic_params,
+                aliases,
+                &mut bindings,
+            )
+            .is_none()
+            {
+                continue;
+            }
+            if match_ty_pattern_into(
+                &rule.interface_ty,
+                requested_iface_ty,
+                &rule.generic_params,
+                aliases,
+                &mut bindings,
+            )
+            .is_none()
+            {
+                continue;
+            }
+            for (param, bound) in rule
+                .generic_params
+                .iter()
+                .zip(rule.generic_param_bounds.iter())
+            {
+                let Some(bound) = bound else { continue };
+                let Some(actual) = bindings.get(param) else {
+                    continue;
+                };
+                let substituted_bound = generics::substitute_ty(bound, &bindings);
+                if !is_subtype(actual, &substituted_bound) {
+                    return Some((param.clone(), substituted_bound, actual.clone()));
+                }
+            }
+        }
+        None
+    }
+
     pub fn type_implements_interface_via_rule(
         &self,
         actual_ty: &Ty,

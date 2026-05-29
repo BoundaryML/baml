@@ -241,6 +241,13 @@ pub enum DiagnosticId {
     InterfaceExtendsFieldConflict,
     /// `default.method()` references a required method that has no default body.
     DefaultOnRequiredMethod,
+    /// Bare `default` used as a value rather than `default.method(...)`.
+    BareDefaultKeyword,
+    /// An out-of-body `implements<T> …` declares a generic parameter not
+    /// determined by the implementor (`for`) type — an unconstrained/phantom param.
+    UnconstrainedImplTypeParam,
+    /// `Self` used in an interface FIELD type (only valid in method signatures).
+    SelfInInterfaceField,
     /// An `implements` block is missing a required interface field.
     MissingInterfaceField,
     /// A class implements an interface that `requires` other interfaces,
@@ -445,6 +452,9 @@ impl DiagnosticId {
             DiagnosticId::AmbiguousInterfaceField => "E0131",
             DiagnosticId::OverlappingImplements => "E0132",
             DiagnosticId::InterfaceRequiresNonInterface => "E0133",
+            DiagnosticId::BareDefaultKeyword => "E0134",
+            DiagnosticId::UnconstrainedImplTypeParam => "E0135",
+            DiagnosticId::SelfInInterfaceField => "E0136",
         }
     }
 }

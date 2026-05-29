@@ -1,7 +1,10 @@
-use crate::ty::Ty;
+use crate::ty::SYNTHETIC_EFFECT_PARAM_PREFIX;
 
-const SYNTHETIC_EFFECT_PARAM_PREFIX: &str = "__effect_param_";
-
+/// String-path humanizer: rewrites synthetic effect-param names
+/// (`__effect_param_N` → `callback`) in an already-rendered type string. Used
+/// only by the LSP display path, which renders via its own (context-aware)
+/// formatter; the structural [`Ty::render_user_facing`] handles this case
+/// directly for TIR diagnostics. (Step 2 folds the LSP path in and retires this.)
 pub fn humanize_type_string(raw: &str) -> String {
     let mut out = String::with_capacity(raw.len());
     let bytes = raw.as_bytes();
@@ -27,14 +30,6 @@ pub fn humanize_type_string(raw: &str) -> String {
     }
 
     out
-}
-
-pub fn humanize_ty(ty: &Ty) -> String {
-    humanize_type_string(&ty.to_string())
-}
-
-pub fn humanize_type_names<'a>(names: impl IntoIterator<Item = &'a str>) -> Vec<String> {
-    names.into_iter().map(humanize_type_string).collect()
 }
 
 #[cfg(test)]

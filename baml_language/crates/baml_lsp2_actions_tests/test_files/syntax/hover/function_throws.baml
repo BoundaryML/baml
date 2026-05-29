@@ -9,21 +9,21 @@ function MayFail<[CURSOR](x: int) -> string throws Errors {
 
 //----
 //- diagnostics
-// error: declared throws is `Errors`, but this function may also throw `user.Errors.AuthError`
+// error: declared throws is `Errors`, but this function may also throw `Errors.AuthError`
 //    ╭─[ hover_function_throws.baml:6:42 ]
 //    │
 //  6 │ function MayFail(x: int) -> string throws Errors {
 //    │                                          ───┬───  
-//    │                                             ╰───── declared throws is `Errors`, but this function may also throw `user.Errors.AuthError`
+//    │                                             ╰───── declared throws is `Errors`, but this function may also throw `Errors.AuthError`
 //    │ 
 //    │ Note: Error code: E0096
 // ───╯
-// warning: extraneous throws declaration: user.Errors
+// warning: extraneous throws declaration: Errors
 //    ╭─[ hover_function_throws.baml:6:42 ]
 //    │
 //  6 │ function MayFail(x: int) -> string throws Errors {
 //    │                                          ───┬───  
-//    │                                             ╰───── extraneous throws declaration: user.Errors
+//    │                                             ╰───── extraneous throws declaration: Errors
 //    │ 
 //    │ Note: Error code: E0097
 // ───╯

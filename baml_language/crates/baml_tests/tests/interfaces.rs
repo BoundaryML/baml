@@ -7786,3 +7786,1112 @@ fn ambiguous_method_namespace_qualified_fix_compiles() {
     ];
     assert_no_compile_errors_multi(files);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// wf3 design-audit regression suite — derived from a 12-area workflow sweep.
+//
+// Each program was authored as a well-formed, `root.`-qualified BAML snippet and
+// run through `baml-cli`; findings are recorded in `_plan/wf3/FINDINGS.md`, and
+// every test below names the originating `_plan/wf3/<area>/<file>` repro.
+//
+// Like the `fuzz_*` suite above, the bug / desired-direction tests pin the
+// CORRECT behavior and are expected to FAIL on current code (reproducing the
+// defect) and to start passing as each is fixed. Tests suffixed `_pins` pin
+// behavior that is correct today (sometimes subtle or surprising) so a
+// regression is caught.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── Crashes (type-checker-accepted code that panics the VM) ──────────────────
+
+/// wf3 #1 [crash]: generic `Sub<T> requires Base<T>` whose default method calls
+/// the parent's required method via `self` crashes the VM when dispatched
+/// through an interface-typed var. `_plan/wf3/generics-core/gen_requires_generic.baml`
+#[tokio::test]
+async fn wf3_generic_requires_chain_default_delegation_runtime() {
+    let output = baml_test!(
+        r#"
+        interface Base<T> {
+            function base_get(self) -> T
+        }
+        interface Sub<T> requires Base<T> {
+            function sub_get(self) -> T {
+                return self.base_get()
+            }
+        }
+        class IntThing {
+            value: int
+            implements Base<int> {
+                function base_get(self) -> int { return self.value }
+            }
+            implements Sub<int> {}
+        }
+        function main() -> int {
+            let t = IntThing { value: 77 }
+            let s: Sub<int> = t
+            return s.sub_get()
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(77));
+}
+
+/// wf3 #2 [crash]: chained Form2 blanket impls (`Loud for T where T: Printable`,
+/// `Printable for T where T: Named`) crash the VM.
+/// `_plan/wf3/generics-bounds-blanket/p8b_blanket_on_blanket_min.baml`
+#[tokio::test]
+async fn wf3_blanket_on_blanket_chain_runtime() {
+    let output = baml_test!(
+        r#"
+        interface Named { name: string }
+        interface Printable { function display(self) -> string }
+        interface Loud { function shout(self) -> string }
+        class Person { name: string  implements Named {} }
+        implements<T extends Named> Printable for T {
+            function display(self) -> string { return self.name }
+        }
+        implements<T extends Printable> Loud for T {
+            function shout(self) -> string { return "loud" }
+        }
+        function main() -> string {
+            let p: Loud = Person { name: "Ada" }
+            return p.shout()
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("loud".into()));
+}
+
+/// wf3 #3 [crash/unsound]: a phantom impl type param
+/// (`implements<T> Tagged<T> for Holder` where `T` appears only in the interface
+/// args) must be rejected at compile time — today it compiles, is accepted as
+/// `Tagged<int|string|bool>`, and crashes the VM.
+/// `_plan/wf3/generics-bounds-blanket/p13c_phantom_single.baml`
+#[test]
+fn wf3_phantom_impl_type_param_is_rejected() {
+    let errors = collect_compile_errors(
+        r#"
+        interface Tagged<T> { function tag(self) -> string }
+        class Holder { v: int }
+        implements<T> Tagged<T> for Holder {
+            function tag(self) -> string { return "h" }
+        }
+        function main() -> string {
+            let a: Tagged<int> = Holder { v: 1 }
+            return a.tag()
+        }
+        "#,
+    );
+    assert!(
+        !errors.is_empty(),
+        "an unconstrained phantom type param in an `implements` (`T` only in the \
+         interface args) is unsound and must be a compile error; got none"
+    );
+}
+
+/// wf3 #4 [crash]: `default.<field>` type-checks as `string` but reads `null`,
+/// then `string + any` crashes the VM. Expected: `default.name` resolves to the
+/// field like `self.name`/`self.as<Named>.name` do (all read "Bob"). (If the
+/// language instead restricts `default` to call position — see
+/// `wf3_default_as_bare_value_is_rejected` — this should become a compile error,
+/// not a crash.) `_plan/wf3/default-methods/p6d_default_vs_self_field.baml`
+#[tokio::test]
+async fn wf3_default_field_access_does_not_crash() {
+    let output = baml_test!(
+        r#"
+        interface Named {
+            name: string
+            function describe(self) -> string { return "x" }
+        }
+        class P {
+            name: string
+            implements Named {
+                function describe(self) -> string {
+                    return "default.name=[" + default.name + "] self.name=[" + self.name + "] as=[" + self.as<Named>.name + "]"
+                }
+            }
+        }
+        function main() -> string {
+            let p = P { name: "Bob" }
+            return p.describe()
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("default.name=[Bob] self.name=[Bob] as=[Bob]".into())
+    );
+}
+
+// ── High-severity wrong-result / soundness ───────────────────────────────────
+
+/// wf3 #5 [high]: a generic interface's default method calling `self.get()` must
+/// dispatch to the interface VIEW it was reached through, not the first impl
+/// block. Through `Slot<string>` it must return "seven", not 7.
+/// `_plan/wf3/generics-core/gen_pair_default_selfcall.baml`
+#[tokio::test]
+async fn wf3_generic_default_method_self_call_respects_interface_view_runtime() {
+    let output = baml_test!(
+        r#"
+        interface Slot<T> {
+            function get(self) -> T
+            function describe(self) -> T {
+                return self.get()
+            }
+        }
+        class GenPair<L, R> {
+            left: L
+            right: R
+            implements Slot<L> {
+                function get(self) -> L { return self.left }
+            }
+            implements Slot<R> {
+                function get(self) -> R { return self.right }
+            }
+        }
+        function main() -> string {
+            let p: GenPair<int, string> = GenPair { left: 7, right: "seven" }
+            let s: Slot<string> = p
+            return s.describe()
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("seven".into()));
+}
+
+/// wf3 #6 [high]: `reflect.type_of<Box<U>>()` inside a generic fn must substitute
+/// the outer type param `U` into the interface arg — rendering `Box<int>`, not
+/// `Box<void>`. `_plan/wf3/generics-reflection/gen_reflect_naked_vs_wrapped.baml`
+#[tokio::test]
+async fn wf3_reflect_type_of_wrapped_generic_substitutes_param_runtime() {
+    let output = baml_test!(
+        r#"
+        interface Box<T> {
+            function get(self) -> T
+        }
+        function names<U>() -> string {
+            let naked = reflect.type_of<U>().to_string()
+            let wrapped = reflect.type_of<Box<U>>().to_string()
+            return "naked=" + naked + " wrapped=" + wrapped
+        }
+        function main() -> string {
+            return names<int>()
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("naked=int wrapped=Box<int>".into())
+    );
+}
+
+/// wf3 #7 [high]: consequence of #6 — `implemented_by`/`implementors` of
+/// `Box<U>` are wrong inside a generic fn because the param substitution is
+/// dropped. `_plan/wf3/generics-reflection/gen_reflect_boxT.baml`
+#[tokio::test]
+async fn wf3_reflect_implemented_by_generic_arg_substitution_runtime() {
+    let output = baml_test!(
+        r#"
+        interface Box<T> {
+            function get(self) -> T
+        }
+        class IntBox {
+            implements Box<int> {
+                function get(self) -> int { return 1 }
+            }
+        }
+        class StringBox {
+            implements Box<string> {
+                function get(self) -> string { return "hi" }
+            }
+        }
+        function box_impls_intbox<T>() -> bool {
+            return reflect.type_of<Box<T>>().implemented_by(reflect.type_of<IntBox>())
+        }
+        function box_impls_stringbox<T>() -> bool {
+            return reflect.type_of<Box<T>>().implemented_by(reflect.type_of<StringBox>())
+        }
+        function main() -> bool {
+            return box_impls_intbox<int>()
+                && box_impls_intbox<string>() == false
+                && box_impls_stringbox<string>()
+                && box_impls_stringbox<int>() == false
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
+}
+
+/// wf3 #8 [high/soundness]: a `-> Self` method in `Box`'s implements block has
+/// `Self = Box`; returning a `Cup` must be a compile error. Today it compiles and
+/// a `Box`-typed value backed by a runtime `Cup` reads a non-existent field.
+/// `_plan/wf3/self-types/self_wrong_class_field_access.baml`
+#[test]
+fn wf3_self_return_wrong_concrete_class_is_rejected() {
+    let errors = collect_compile_errors(
+        r#"
+        interface Cloneable {
+            function clone(self) -> Self
+        }
+        class Box {
+            boxField: int
+            implements Cloneable {
+                function clone(self) -> Self {
+                    return Cup { cupField: 99 }
+                }
+            }
+        }
+        class Cup {
+            cupField: int
+            implements Cloneable {
+                function clone(self) -> Self {
+                    return Cup { cupField: self.cupField }
+                }
+            }
+        }
+        function main() -> int {
+            let b = Box { boxField: 1 }
+            let c = b.clone()
+            return c.boxField
+        }
+        "#,
+    );
+    assert!(
+        !errors.is_empty(),
+        "returning a different concrete class (`Cup`) from a `Box` block's \
+         `-> Self` method must be rejected — `Self` is `Box` there; got no errors"
+    );
+}
+
+/// wf3 #9 [high]: `Self` in an interface FIELD type produces contradictory
+/// diagnostics. With the concrete class field (`next: LinkedItem?`), E0116
+/// demands the field be `Self?`; but following that advice (`next: Self?`)
+/// errors E0002 `unresolved type: Self`. The fix must break this loop — either
+/// accept the concrete field as satisfying `Self?`, or reject `Self`-in-field
+/// cleanly without pointing at the unsatisfiable `Self?` form.
+/// `_plan/wf3/self-types/self_in_field.baml`
+#[test]
+fn wf3_self_in_field_type_has_no_contradictory_diagnostics() {
+    // Variant A: class declares the field with its concrete type.
+    let errors_concrete = collect_compile_errors(
+        r#"
+        interface Node {
+            value: int
+            next: Self?
+        }
+        class LinkedItem {
+            value: int
+            next: LinkedItem?
+            implements Node {}
+        }
+        function main() -> int {
+            let tail = LinkedItem { value: 2, next: null }
+            let head = LinkedItem { value: 1, next: tail }
+            return match (head.next) {
+                let n: LinkedItem => n.value,
+                _ => -1,
+            }
+        }
+        "#,
+    );
+    // Variant B: class follows the E0116 advice and writes `Self?` verbatim.
+    let errors_self = collect_compile_errors(
+        r#"
+        interface Node {
+            value: int
+            next: Self?
+        }
+        class LinkedItem {
+            value: int
+            next: Self?
+            implements Node {}
+        }
+        function main() -> int { return 0 }
+        "#,
+    );
+    let advice_is_self_opt = errors_concrete
+        .iter()
+        .any(|e| e.starts_with("[E0116]") && e.contains("Self?"));
+    let self_opt_is_unresolved = errors_self
+        .iter()
+        .any(|e| e.contains("unresolved type: Self"));
+    assert!(
+        !(advice_is_self_opt && self_opt_is_unresolved),
+        "contradictory `Self`-in-field diagnostics: E0116 told the class to use \
+         `Self?`, but writing `Self?` is itself E0002 `unresolved type: Self`.\n\
+         concrete-field errors:\n  {}\nself?-field errors:\n  {}",
+        errors_concrete.join("\n  "),
+        errors_self.join("\n  ")
+    );
+}
+
+// ── Medium-severity ──────────────────────────────────────────────────────────
+
+/// wf3 #10 [medium]: when an ambiguous method call sits INSIDE a namespace, the
+/// E0121 `as<...>` suggestion must be `root.`-qualified so it actually resolves
+/// from that namespace — a bare `as<zoo.Animal>` reads as `birds.zoo.Animal`.
+/// `_plan/wf3/namespace-collisions/ambig_inside_via_method`
+#[test]
+fn wf3_ambiguous_method_suggestion_resolvable_inside_namespace() {
+    let files = &[
+        (
+            "main.baml",
+            r#"function main() -> string { let p = birds.Parrot {} return p.run() }"#,
+        ),
+        (
+            "ns_birds/birds.baml",
+            r#"
+            class Parrot {
+                implements root.zoo.Animal { function speak(self) -> string { return "squawk" } }
+                implements root.farm.Animal { function speak(self) -> string { return "cluck" } }
+                function run(self) -> string { return self.speak() }
+            }
+            "#,
+        ),
+        (
+            "ns_zoo/zoo.baml",
+            r#"interface Animal { function speak(self) -> string }"#,
+        ),
+        (
+            "ns_farm/farm.baml",
+            r#"interface Animal { function speak(self) -> string }"#,
+        ),
+    ];
+    assert_compile_error_contains_multi(files, "root.zoo.Animal");
+}
+
+/// wf3 #11 [medium]: a single method declared once but transitively required by
+/// several interfaces (a pure diamond, no overrides) must NOT be flagged
+/// ambiguous on a bare call. `_plan/wf3/requires-diamond/p2_diamond_base_method.baml`
+#[tokio::test]
+async fn wf3_pure_diamond_single_method_dispatches_runtime() {
+    let output = baml_test!(
+        r#"
+        interface Base { function id(self) -> string { return "base" } }
+        interface Left requires Base {}
+        interface Right requires Base {}
+        class D {
+            implements Base {}
+            implements Left {}
+            implements Right {}
+        }
+        function main() -> string {
+            let d = D {}
+            return d.id()
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("base".into()));
+}
+
+/// wf3 #11b [medium]: same defect across namespaces — `W` provides `f` once (via
+/// `root.a.Base`) but `requires`-reachability reports it from multiple
+/// interfaces and rejects the bare call. `_plan/wf3/namespace-resolution/p3c_root_ok`
+#[test]
+fn wf3_pure_diamond_single_method_across_namespaces_no_false_ambiguity() {
+    let files = &[
+        (
+            "main.baml",
+            r#"function main() -> string { let w = b.W {} return w.f() }"#,
+        ),
+        ("ns_a/a.baml", r#"interface Base { function f(self) -> string }"#),
+        (
+            "ns_b/b.baml",
+            r#"
+            interface Derived requires root.a.Base {}
+            class W {
+                implements root.b.Derived {}
+                implements root.a.Base { function f(self) -> string { return "from-base" } }
+            }
+            "#,
+        ),
+    ];
+    assert_no_compile_errors_multi(files);
+}
+
+/// wf3 #11c [medium]: three-level requires chain (`C requires B requires A`),
+/// `f` declared once on `A` — bare `w.f()` must resolve, not E0121.
+/// `_plan/wf3/namespace-resolution/p6c_bare`
+#[test]
+fn wf3_three_level_requires_chain_single_method_no_false_ambiguity() {
+    let files = &[
+        (
+            "main.baml",
+            r#"function main() -> string { let w = c.W {} return w.f() }"#,
+        ),
+        ("ns_a/a.baml", r#"interface A { function f(self) -> string }"#),
+        ("ns_b/b.baml", r#"interface B requires root.a.A {}"#),
+        (
+            "ns_c/c.baml",
+            r#"
+            interface C requires root.b.B {}
+            class W {
+                implements root.c.C {}
+                implements root.b.B {}
+                implements root.a.A { function f(self) -> string { return "deep" } }
+            }
+            "#,
+        ),
+    ];
+    assert_no_compile_errors_multi(files);
+}
+
+/// wf3 #12 [medium]: a union whose every member implements `Animal` must be
+/// assignable to `Animal` (single `Dog` already is). `Dog | Cat` -> `Animal`.
+/// `_plan/wf3/subtyping-optional-union-match/union_assign_to_iface.baml`
+#[tokio::test]
+async fn wf3_union_of_implementors_assignable_to_interface_runtime() {
+    let output = baml_test!(
+        r#"
+        interface Animal {
+            function speak(self) -> string
+        }
+        class Dog {
+            implements Animal {
+                function speak(self) -> string { return "Woof!" }
+            }
+        }
+        class Cat {
+            implements Animal {
+                function speak(self) -> string { return "Meow." }
+            }
+        }
+        function as_animal(x: Dog | Cat) -> Animal {
+            return x
+        }
+        function main() -> string {
+            let c: Cat = Cat {}
+            let a = as_animal(c)
+            return a.speak()
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("Meow.".into()));
+}
+
+/// wf3 #13 [medium]: calling `.speak()` on `Animal | Swimmer` must be rejected
+/// (a `Swimmer` need not be an `Animal`) — but the diagnostic must blame the arm
+/// that lacks `speak` (`Swimmer`), NOT falsely claim `Animal` has no `speak`.
+/// `_plan/wf3/subtyping-optional-union-match/union_method_on_iface_union.baml`
+#[test]
+fn wf3_method_on_interface_union_blames_correct_member() {
+    let errors = collect_compile_errors(
+        r#"
+        interface Animal {
+            function speak(self) -> string
+        }
+        interface Swimmer {
+            function swim(self) -> string
+        }
+        class Dog {
+            implements Animal {
+                function speak(self) -> string { return "Woof!" }
+            }
+            implements Swimmer {
+                function swim(self) -> string { return "splash" }
+            }
+        }
+        function describe(x: Animal | Swimmer) -> string {
+            return x.speak()
+        }
+        function main() -> string {
+            let a: Animal = Dog {}
+            return describe(a)
+        }
+        "#,
+    );
+    assert!(
+        !errors.is_empty(),
+        "`.speak()` on `Animal | Swimmer` must be rejected"
+    );
+    assert!(
+        !errors.iter().any(|e| e.contains("Animal")
+            && e.to_lowercase().contains("no member")
+            && e.contains("speak")),
+        "diagnostic must not claim `Animal` lacks `speak` — it declares it; \
+         should blame `Swimmer`. Got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
+/// wf3 #15 [medium]: an out-of-body impl for a PRIMITIVE
+/// (`implements Debuggable for int`) must be visible to the reflection registry.
+/// The program encodes `implements()==true` as +1000; expect 1001 (1 implementor).
+/// `_plan/wf3/out-of-body-throws/oob_primitive_refl_split.baml`
+#[tokio::test]
+async fn wf3_out_of_body_primitive_impl_visible_to_reflection_runtime() {
+    let output = baml_test!(
+        r#"
+        interface Debuggable {
+            function debug(self) -> string
+        }
+        implements Debuggable for int {
+            function debug(self) -> string { return "int" }
+        }
+        function main() -> int {
+            let a = reflect.type_of<int>().implements(reflect.type_of<Debuggable>())
+            let impls = reflect.type_of<Debuggable>().implementors()
+            if a { return 1000 + impls.length() }
+            return impls.length()
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(1001));
+}
+
+/// wf3 #16 [medium]: `throws A | B` and `throws B | A` must be equivalent in
+/// signature matching (field-position union order already is — see
+/// `interface_field_union_order_is_exactly_equivalent`).
+/// `_plan/wf3/out-of-body-throws/oob_throws_union.baml`
+#[test]
+fn wf3_throws_union_order_is_equivalent() {
+    assert_no_compile_errors(
+        r#"
+        class A { a: string }
+        class B { b: string }
+        interface Fallible {
+            function run(self) -> string throws A | B
+        }
+        class Worker {}
+        implements Fallible for Worker {
+            function run(self) -> string throws B | A {
+                throw A { a: "x" }
+            }
+        }
+        function main() -> string { return "ok" }
+        "#,
+    );
+}
+
+/// wf3 #17 [medium]: `throws`/return signature matching must resolve type
+/// aliases — `throws Err` (alias of `IoError`) is satisfied by `throws IoError`.
+/// `_plan/wf3/out-of-body-throws/oob_throws_alias.baml`
+#[test]
+fn wf3_throws_alias_is_resolved_in_signature_match() {
+    assert_no_compile_errors(
+        r#"
+        class IoError { message: string }
+        type Err = IoError
+        interface Fallible {
+            function run(self) -> string throws Err
+        }
+        class Worker {}
+        implements Fallible for Worker {
+            function run(self) -> string throws IoError {
+                throw IoError { message: "x" }
+            }
+        }
+        function main() -> string { return "ok" }
+        "#,
+    );
+}
+
+/// wf3 #18 [medium]: when `Pair<int, int>` collapses both `Getter<L>` and
+/// `Getter<R>` to `Getter<int>`, the duplicate must be diagnosed (an explicit
+/// duplicate impl is E0114) — not silently resolved to the first block.
+/// `_plan/wf3/generics-core/gen_same_typearg_collision.baml`
+#[test]
+fn wf3_monomorph_collision_assignment_is_diagnosed() {
+    let errors = collect_compile_errors(
+        r#"
+        interface Getter<T> {
+            function get(self) -> T
+        }
+        class Pair<L, R> {
+            left: L
+            right: R
+            implements Getter<L> {
+                function get(self) -> L { return self.left }
+            }
+            implements Getter<R> {
+                function get(self) -> R { return self.right }
+            }
+        }
+        function main() -> int {
+            let p: Pair<int, int> = Pair { left: 7, right: 99 }
+            let g: Getter<int> = p
+            return g.get()
+        }
+        "#,
+    );
+    assert!(
+        !errors.is_empty(),
+        "`Pair<int, int>` collapses both `Getter<L>` and `Getter<R>` to \
+         `Getter<int>`; the collision must be diagnosed, not silently resolved \
+         to the first impl block"
+    );
+}
+
+/// wf3 #20 [low]: the E0121 suggestion for a monomorphized generic collision
+/// must use the concrete instantiation (`as<Getter<int>>`), not the
+/// uninstantiated `as<Getter<L>>` (which fails E0002 `unresolved type: L`).
+/// `_plan/wf3/generics-core/gen_mono_collision_unqualified.baml`
+#[test]
+fn wf3_monomorph_collision_unqualified_suggestion_uses_concrete_args() {
+    assert_compile_error_contains(
+        r#"
+        interface Getter<T> {
+            function get(self) -> T
+        }
+        class Pair<L, R> {
+            left: L
+            right: R
+            implements Getter<L> {
+                function get(self) -> L { return self.left }
+            }
+            implements Getter<R> {
+                function get(self) -> R { return self.right }
+            }
+        }
+        function main() -> int {
+            let p: Pair<int, int> = Pair { left: 7, right: 99 }
+            return p.get()
+        }
+        "#,
+        "Getter<int>",
+    );
+}
+
+// ── Low-severity / diagnostic quality (desired direction) ────────────────────
+
+/// wf3 #19 [low]: a `requires <unknown>` E0112 must echo the user-written
+/// qualifier (`root.a.Ghost`), not strip it to the bare leaf `Ghost` — note that
+/// `implements` already preserves the qualifier.
+/// `_plan/wf3/namespace-resolution/p3b_root_requires`
+#[test]
+fn wf3_bare_cross_ns_requires_unknown_echoes_qualifier() {
+    let files = &[
+        ("main.baml", r#"function main() -> string { return "ok" }"#),
+        (
+            "ns_a/a.baml",
+            r#"interface Base { function f(self) -> string }"#,
+        ),
+        ("ns_b/b.baml", r#"interface Derived requires root.a.Ghost {}"#),
+    ];
+    assert_compile_error_contains_multi(files, "root.a.Ghost");
+}
+
+/// wf3 [medium]: an unsatisfied blanket bound must name the failed bound — e.g.
+/// `Box<Rock>` against `implements<T extends Named> Printable for Box<T>` should
+/// mention `Named`, not a bare `type mismatch: expected Printable, got Box<Rock>`.
+/// `_plan/wf3/generics-bounds-blanket/p12_bound_fail_msg.baml`
+#[test]
+fn wf3_unsatisfied_blanket_bound_message_names_bound() {
+    assert_compile_error_contains(
+        r#"
+        interface Named { name: string }
+        interface Printable { function display(self) -> string }
+        class Rock { label: string }
+        class Box<T> { value: T }
+        implements<T extends Named> Printable for Box<T> {
+            function display(self) -> string { return self.value.name }
+        }
+        function main() -> string {
+            let item: Printable = Box<Rock> { value: Rock { label: "ig" } }
+            return item.display()
+        }
+        "#,
+        "Named",
+    );
+}
+
+/// wf3 [low]: `.as<I>` to an interface the receiver does not implement should
+/// say so (mention "implement"), not a generic `type mismatch: expected I, got C`.
+/// `_plan/wf3/dispatch-as-projection/as_to_unimplemented.baml`
+#[test]
+fn wf3_as_to_unimplemented_interface_message_mentions_implement() {
+    assert_compile_error_contains(
+        r#"
+        interface Animal {
+            function speak(self) -> string
+        }
+        interface Vehicle {
+            function drive(self) -> string
+        }
+        class Cat {
+            implements Animal {
+                function speak(self) -> string { return "Meow." }
+            }
+        }
+        function main() -> string {
+            let c = Cat {}
+            return c.as<Vehicle>.drive()
+        }
+        "#,
+        "implement",
+    );
+}
+
+/// wf3 [low/design]: `let x = default` (using `default` as a bare value) should
+/// be a compile error — `default` is only meaningful in call position
+/// (`default.method(...)`). `_plan/wf3/default-methods/p5_default_bare.baml`
+#[test]
+fn wf3_default_as_bare_value_is_rejected() {
+    assert_compile_error_contains(
+        r#"
+        interface Logger {
+            function log(self, msg: string) -> string { return msg }
+        }
+        class C {
+            implements Logger {
+                function log(self, msg: string) -> string {
+                    let x = default
+                    return msg
+                }
+            }
+        }
+        function main() -> string {
+            let c = C {}
+            return c.log("hi")
+        }
+        "#,
+        "default",
+    );
+}
+
+/// wf3 [low/limitation]: inside an interface's own `implements` block, an
+/// *aliased* interface field (`name as title`) accessed by its interface name
+/// (`self.name`) requires the explicit `self.as<Named>.name` projection — a bare
+/// `self.name` is a clean E0007 directing to it. (Resolving the bare form would
+/// need MIR field-link lowering of `self.<view>`; the projection form is the
+/// supported spelling, and `self.title` — the real class field — also works.)
+/// `_plan/wf3/field-views/self_field_access_in_method.baml`
+#[test]
+fn wf3_self_interface_field_access_in_method_requires_projection() {
+    // The bare `self.name` (aliased view) is rejected with a projection hint.
+    assert_compile_error_contains(
+        r#"
+        interface Named {
+            name: string
+            function greet(self) -> string
+        }
+        class Person {
+            title: string
+            implements Named {
+                name as title
+                function greet(self) -> string {
+                    return "Hi " + self.name
+                }
+            }
+        }
+        "#,
+        "as<Named>",
+    );
+}
+
+/// Companion to the above: the supported `self.as<Named>.name` projection
+/// resolves and runs.
+#[tokio::test]
+async fn wf3_self_interface_field_access_via_projection_runtime() {
+    let output = baml_test!(
+        r#"
+        interface Named {
+            name: string
+            function greet(self) -> string
+        }
+        class Person {
+            title: string
+            implements Named {
+                name as title
+                function greet(self) -> string {
+                    return "Hi " + self.as<Named>.name
+                }
+            }
+        }
+        function main() -> string {
+            let p = Person { title: "Ada" }
+            let n: Named = p
+            return n.greet()
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("Hi Ada".into()));
+}
+
+/// wf3 [low/design]: a `throws` narrower than the interface's declaration
+/// (`throws NetworkError` where `NetworkError implements IError` and the
+/// interface declares `throws IError`) should be allowed by covariance — today
+/// it is rejected E0120 even though throwing a subtype at a throw-site is fine.
+/// `_plan/wf3/out-of-body-throws/oob_throws_subset.baml`
+#[test]
+fn wf3_throws_covariant_narrower_is_allowed() {
+    assert_no_compile_errors(
+        r#"
+        interface IError {
+            function describe(self) -> string
+        }
+        class NetworkError {
+            msg: string
+            implements IError {
+                function describe(self) -> string { return "net" }
+            }
+        }
+        interface Fallible {
+            function run(self) -> string throws IError
+        }
+        class Worker {}
+        implements Fallible for Worker {
+            function run(self) -> string throws NetworkError {
+                throw NetworkError { msg: "x" }
+            }
+        }
+        function main() -> string { return "ok" }
+        "#,
+    );
+}
+
+/// wf3 [design decision O2]: `implements B {}` where `B requires A` requires an
+/// explicit `implements A {}` even when `A` is all-default and field-less. The
+/// BEP contradicts itself here (§772 requires named impls; §1381 says all-default
+/// ⇒ valid); we keep E0125 STRICT — every `requires` parent must be named — so a
+/// class's contract is always explicit at its declaration. (Decided with the
+/// user; the relaxation was the alternative.)
+/// `_plan/wf3/requires-diamond/p9_implicit_parent_all_defaults.baml`
+#[test]
+fn wf3_all_default_requires_parent_still_needs_explicit_implements() {
+    assert_compile_error_code(
+        r#"
+        interface A {
+            function greet(self) -> string { return "hi" }
+        }
+        interface B requires A {
+            function bye(self) -> string { return "bye" }
+        }
+        class C {
+            implements B {}
+        }
+        function main() -> string {
+            let c: B = C {}
+            return c.bye()
+        }
+        "#,
+        "E0125",
+    );
+}
+
+/// wf3 [low]: a `requires` cycle diagnostic should report the full path
+/// (`A -> B -> A`), not one node per error.
+/// `_plan/wf3/requires-diamond/p7_requires_cycle.baml`
+#[test]
+fn wf3_requires_cycle_reports_full_path() {
+    assert_compile_error_contains(
+        r#"
+        interface A requires B { function fa(self) -> string }
+        interface B requires A { function fb(self) -> string }
+        class C {
+            implements A { function fa(self) -> string { return "a" } }
+            implements B { function fb(self) -> string { return "b" } }
+        }
+        function main() -> string {
+            let c: A = C {}
+            return c.fa()
+        }
+        "#,
+        "A -> B",
+    );
+}
+
+/// wf3 [low]: out-of-body / blanket method must be callable directly on an
+/// instance (`x.debug()`), not only through an interface binding. In-body impls
+/// already allow the direct call.
+/// `_plan/wf3/generics-bounds-blanket/p16_outofbody_concrete_direct.baml`
+#[tokio::test]
+async fn wf3_out_of_body_method_callable_directly_runtime() {
+    let output = baml_test!(
+        r#"
+        interface Debuggable { function debug(self) -> string }
+        implements Debuggable for int {
+            function debug(self) -> string { return "int" }
+        }
+        function main() -> string {
+            let x: int = 5
+            return x.debug()
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("int".into()));
+}
+
+/// wf3 [low]: a blanket method on a generic class must be callable directly on
+/// an instance (`b.display()`).
+/// `_plan/wf3/generics-bounds-blanket/p15_direct_call_no_annotation.baml`
+#[tokio::test]
+async fn wf3_blanket_method_callable_directly_runtime() {
+    let output = baml_test!(
+        r#"
+        interface Printable { function display(self) -> string }
+        class Box<T> { value: T }
+        implements<T> Printable for Box<T> {
+            function display(self) -> string { return "box" }
+        }
+        function main() -> string {
+            let b = Box<int> { value: 42 }
+            return b.display()
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("box".into()));
+}
+
+// ── Correct-today behavior pinned against regression (works-confirmations) ───
+
+/// wf3 pin: out-of-body impl for a field-bearing interface on a primitive is
+/// correctly rejected (E0126). `_plan/wf3/out-of-body-throws/oob_primitive_field_diag.baml`
+#[test]
+fn wf3_out_of_body_primitive_field_bearing_is_e0126_pins() {
+    assert_compile_error_code(
+        r#"
+        interface Named {
+            name: string
+            function display(self) -> string
+        }
+        implements Named for int {
+            function display(self) -> string { return "int" }
+        }
+        function main() -> string { return "ok" }
+        "#,
+        "E0126",
+    );
+}
+
+/// wf3 pin: when a value matches two blanket rules (`int[]?` satisfies both
+/// `for T[]` and `for T?`), the innermost structural (list) match wins. Pins the
+/// (currently undocumented) precedence so a change is noticed.
+/// `_plan/wf3/generics-bounds-blanket/p2_optional_list_ambiguous.baml`
+#[tokio::test]
+async fn wf3_two_blanket_rules_list_wins_pins() {
+    let output = baml_test!(
+        r#"
+        interface Label {
+            function label(self) -> string
+        }
+        implements<T> Label for T[] {
+            function label(self) -> string { return "list" }
+        }
+        implements<T> Label for T? {
+            function label(self) -> string { return "optional" }
+        }
+        function main() -> string {
+            let xs: int[]? = [1, 2, 3]
+            let labelled: Label = xs
+            return labelled.label()
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("list".into()));
+}
+
+/// wf3 pin: a method present on every member of a concrete-class union is
+/// callable directly on the union (`(Dog | Cat).speak()`). Pinned to highlight
+/// the inconsistency with `wf3_union_of_implementors_assignable_to_interface`
+/// (#12): you can call the method but cannot up-cast the union to the interface.
+/// `_plan/wf3/subtyping-optional-union-match/union_dog_cat_method_in_arms.baml`
+#[tokio::test]
+async fn wf3_union_member_method_call_works_pins() {
+    let output = baml_test!(
+        r#"
+        interface Animal {
+            function speak(self) -> string
+        }
+        class Dog {
+            implements Animal {
+                function speak(self) -> string { return "Woof!" }
+            }
+        }
+        class Cat {
+            implements Animal {
+                function speak(self) -> string { return "Meow." }
+            }
+        }
+        function describe(x: Dog | Cat) -> string {
+            return x.speak()
+        }
+        function main() -> string {
+            let c: Cat = Cat {}
+            return describe(c)
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("Meow.".into()));
+}
+
+/// wf3 pin: a class's own concrete field shadows same-named interface-field
+/// views — unqualified `i.name` reads the concrete field. Correct per the Group D
+/// shadow rule; pinned because the outcome silently flips based on whether a
+/// concrete field exists. `_plan/wf3/field-views/ambig_mixed_autolink_alias.baml`
+#[tokio::test]
+async fn wf3_concrete_field_shadows_interface_views_pins() {
+    let output = baml_test!(
+        r#"
+        interface Named { name: string }
+        interface Labeled { name: string }
+        class Item {
+            name: string
+            other: string
+            implements Named {}
+            implements Labeled { name as other }
+        }
+        function main() -> string {
+            let i = Item { name: "N", other: "O" }
+            return i.name
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("N".into()));
+}
+
+/// wf3 pin: a bare generic interface in reflection (`reflect.type_of<Box>()`,
+/// no type args) currently acts as an undocumented wildcard matching every
+/// instantiation's implementors. Pinned to flag the behavior.
+/// `_plan/wf3/generics-reflection/gen_bare_impl_both.baml`
+#[tokio::test]
+async fn wf3_bare_generic_interface_reflection_is_wildcard_pins() {
+    let output = baml_test!(
+        r#"
+        interface Box<T> {
+            function get(self) -> T
+        }
+        class IntBox {
+            implements Box<int> {
+                function get(self) -> int { return 1 }
+            }
+        }
+        class StringBox {
+            implements Box<string> {
+                function get(self) -> string { return "hi" }
+            }
+        }
+        function main() -> bool {
+            let bare = reflect.type_of<Box>()
+            return bare.implemented_by(reflect.type_of<IntBox>())
+                && bare.implemented_by(reflect.type_of<StringBox>())
+                && bare.implementors().length() == 2
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
+}
+
+/// wf3 pin: a blanket impl's implementor is reported by reflection as the bare
+/// generic class name (`Box`), not a concrete `Box<int>`.
+/// `_plan/wf3/generics-reflection/gen_blanket_id.baml`
+#[tokio::test]
+async fn wf3_blanket_implementor_identity_is_bare_class_pins() {
+    let output = baml_test!(
+        r#"
+        interface Printable {
+            function display(self) -> string
+        }
+        class Box<T> {
+            value: T
+        }
+        implements<T> Printable for Box<T> {
+            function display(self) -> string { return "box" }
+        }
+        function main() -> string {
+            let p = reflect.type_of<Printable>()
+            return p.implementors()[0].to_string()
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("Box".into()));
+}

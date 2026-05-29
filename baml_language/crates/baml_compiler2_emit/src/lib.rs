@@ -930,16 +930,12 @@ pub fn generate_project_bytecode_with_opt(
         for (pkg_name, cache) in &alias_caches {
             let pkg_id = PackageId::new(db, pkg_name.clone());
             let registry = baml_compiler2_tir::interfaces::package_implements_registry(db, pkg_id);
-            let mut add_pair = |iface_qtn: &baml_compiler2_tir::ty::QualifiedTypeName,
-                                class_qtn: &baml_compiler2_tir::ty::QualifiedTypeName,
+            let mut add_impl = |iface_qtn: &baml_compiler2_tir::ty::QualifiedTypeName,
+                                class_name: baml_type::TypeName,
+                                dedup_key: String,
                                 iface_args: Vec<baml_type::Ty>| {
                 let iface_name = baml_compiler2_mir::qtn_to_type_name(iface_qtn);
-                let class_name = baml_compiler2_mir::qtn_to_type_name(class_qtn);
-                if seen_pairs.insert((
-                    iface_qtn.to_string(),
-                    class_qtn.to_string(),
-                    format!("{iface_args:?}"),
-                )) {
+                if seen_pairs.insert((iface_qtn.to_string(), dedup_key, format!("{iface_args:?}"))) {
                     inverted
                         .entry(iface_name)
                         .or_default()
@@ -959,7 +955,40 @@ pub fn generate_project_bytecode_with_opt(
                     .collect();
                 match &rule.for_ty_pattern {
                     baml_compiler2_tir::ty::Ty::Class(class_qtn, _, _) => {
-                        add_pair(iface_qtn, class_qtn, converted_iface_args);
+                        add_impl(
+                            iface_qtn,
+                            baml_compiler2_mir::qtn_to_type_name(class_qtn),
+                            class_qtn.to_string(),
+                            converted_iface_args,
+                        );
+                    }
+                    // BEP-044 wf3 #G19: an out-of-body `implements I for <primitive>`
+                    // is visible to reflection via a synthetic primitive TypeName
+                    // (the name MUST match `bex_vm`'s `primitive_type_name`).
+                    baml_compiler2_tir::ty::Ty::Primitive(prim, _) => {
+                        use baml_compiler2_tir::ty::PrimitiveType;
+                        let prim_name = match prim {
+                            PrimitiveType::Int => Some("int"),
+                            PrimitiveType::Bigint => Some("bigint"),
+                            PrimitiveType::Float => Some("float"),
+                            PrimitiveType::String => Some("string"),
+                            PrimitiveType::Bool => Some("bool"),
+                            PrimitiveType::Null => Some("null"),
+                            _ => None,
+                        };
+                        if let Some(prim_name) = prim_name {
+                            let tn = baml_type::TypeName {
+                                name: Name::new(prim_name),
+                                module_path: Vec::new(),
+                                display_name: Name::new(prim_name),
+                            };
+                            add_impl(
+                                iface_qtn,
+                                tn,
+                                format!("prim:{prim_name}"),
+                                converted_iface_args,
+                            );
+                        }
                     }
                     baml_compiler2_tir::ty::Ty::TypeVar(type_var, _) => {
                         let Some(bound) = rule
@@ -989,7 +1018,12 @@ pub fn generate_project_bytecode_with_opt(
                                 // Blanket impl: the concrete interface args
                                 // aren't known here, so leave them empty
                                 // (matches any instantiation at reflection time).
-                                add_pair(iface_qtn, class_qtn, Vec::new());
+                                add_impl(
+                                    iface_qtn,
+                                    baml_compiler2_mir::qtn_to_type_name(class_qtn),
+                                    class_qtn.to_string(),
+                                    Vec::new(),
+                                );
                             }
                         }
                     }

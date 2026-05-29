@@ -838,7 +838,28 @@ pub fn infer_scope_types<'db>(
                                                     crate::lower_type_expr::qualify_def(db, def, cn);
                                                 match def {
                                                     baml_compiler2_hir::contributions::Definition::Interface(_) => {
-                                                        Ty::Interface(qtn, vec![], TyAttr::default())
+                                                        // BEP-044 wf3 #1/#5: a generic interface's
+                                                        // default method must type `self` as
+                                                        // `Interface<T..>` carrying its own params as
+                                                        // TypeVars — empty args dropped `T`, so a
+                                                        // `self.method()` call lost the reached view's
+                                                        // concrete arg (first impl block wins) and
+                                                        // cross-`requires` calls found no MIR candidate.
+                                                        let iface_args: Vec<Ty> = item_tree
+                                                            .interfaces
+                                                            .values()
+                                                            .find(|i| &i.name == cn)
+                                                            .map(|i| {
+                                                                i.generic_params
+                                                                    .iter()
+                                                                    .map(|p| Ty::TypeVar(
+                                                                        p.clone(),
+                                                                        TyAttr::default(),
+                                                                    ))
+                                                                    .collect()
+                                                            })
+                                                            .unwrap_or_default();
+                                                        Ty::Interface(qtn, iface_args, TyAttr::default())
                                                     }
                                                     _ => Ty::Class(qtn, vec![], TyAttr::default()),
                                                 }

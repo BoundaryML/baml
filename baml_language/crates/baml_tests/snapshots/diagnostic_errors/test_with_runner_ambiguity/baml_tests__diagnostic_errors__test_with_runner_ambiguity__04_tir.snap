@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 46831
 ---
 === TIR2 ===
 class user.MyRunner {
@@ -33,7 +32,7 @@ function user.$init_test_main(registry: testing.TestCollector) -> ? throws never
   }
   !! 384..393: unresolved name: my_runner
   !! 512..527: unresolved name: Quorum
-  !! 770..797: type mismatch: expected testing.TestRunner?, got user.MyRunner
+  !! 770..797: type mismatch: expected testing.TestRunner?, got MyRunner
 }
 lambda user.$init_test_main {
 }

@@ -1094,15 +1094,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         })
     }
 
-    fn is_synthetic_effect_param_name(name: &Name) -> bool {
-        name.as_str()
-            .strip_prefix("__effect_param_")
-            .is_some_and(|suffix| !suffix.is_empty() && suffix.bytes().all(|b| b.is_ascii_digit()))
-    }
-
     fn synthetic_effect_param_name(fact: &Ty) -> Option<&Name> {
         match fact {
-            Ty::TypeVar(name, _) if Self::is_synthetic_effect_param_name(name) => Some(name),
+            Ty::TypeVar(name, _) if crate::ty::is_synthetic_effect_param(name) => Some(name),
             _ => None,
         }
     }
@@ -1289,7 +1283,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         };
         let mut extra: Vec<String> = extra_facts
             .iter()
-            .map(std::string::ToString::to_string)
+            .map(crate::ty::Ty::render_user_facing)
             .collect();
         let mut extraneous: Vec<String> = if warn_extraneous && !has_open_slot {
             // A declared fact is extraneous when nothing thrown matches it
@@ -1303,7 +1297,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         || matches!(decl, Ty::Interface(..))
                             && effective.iter().any(|eff| self.is_subtype(eff, decl)))
                 })
-                .map(std::string::ToString::to_string)
+                .map(crate::ty::Ty::render_user_facing)
                 .collect()
         } else {
             Vec::new()
@@ -1333,7 +1327,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     {
                         format!(
                             "this callback throws `{}`",
-                            crate::user_facing::humanize_ty(&concrete_throws)
+                            concrete_throws.render_user_facing()
                         )
                     } else {
                         "this callback may throw".to_string()
@@ -3043,13 +3037,30 @@ impl<'db> TypeInferenceBuilder<'db> {
                     && !matches!(base_ty, Ty::Unknown { .. } | Ty::Error { .. })
                     && !matches!(target_ty, Ty::Unknown { .. } | Ty::Error { .. })
                 {
-                    self.context.report_simple(
-                        TirTypeError::TypeMismatch {
-                            expected: target_ty.clone(),
-                            got: base_ty,
-                        },
-                        expr_id,
-                    );
+                    // BEP-044 wf3 #G9d: when a *concrete* value is projected to
+                    // an interface it doesn't implement, say so directly rather
+                    // than emitting a generic `type mismatch`. (Interface→sibling
+                    // projections keep the type-mismatch form, which names both
+                    // interfaces.)
+                    if let (Ty::Interface(iface_qtn, _, _), false) =
+                        (&target_ty, matches!(base_ty, Ty::Interface(..)))
+                    {
+                        self.context.report_simple(
+                            TirTypeError::TypeDoesNotImplementInterface {
+                                value_type: base_ty.clone(),
+                                interface_name: iface_qtn.name().clone(),
+                            },
+                            expr_id,
+                        );
+                    } else {
+                        self.context.report_simple(
+                            TirTypeError::TypeMismatch {
+                                expected: target_ty.clone(),
+                                got: base_ty,
+                            },
+                            expr_id,
+                        );
+                    }
                 }
                 target_ty
             }
@@ -3731,7 +3742,50 @@ impl<'db> TypeInferenceBuilder<'db> {
             // (e.g. an `int` field expression against a `bigint` field — `int`
             // is not a subtype of `bigint`, and the runtime does no field-level
             // widening, so it must be written `1n`).
-            Expr::Object { fields, .. } => {
+            Expr::Object {
+                fields, type_name, ..
+            } => {
+                // BEP-044 wf3 #G15: when the literal explicitly names a concrete
+                // class that differs from the expected class, it must be a
+                // subtype. `return Cup {}` where `Box` (or `Self` = the enclosing
+                // class) is expected is a genuine type error — not a silent
+                // coercion that records the wrong concrete shape. Resolve the
+                // literal's own class first; only the different-class case is
+                // diverted (same-class keeps the bidirectional field/generic
+                // inference path below).
+                if let (Ty::Class(expected_qtn, _, _), Some(path)) = (expected, type_name.as_ref()) {
+                    let mut diags = Vec::new();
+                    let lit_ty = crate::lower_type_expr::lower_type_expr_in_ns(
+                        self.context.db(),
+                        &TypeExpr::Path {
+                            segments: path.segments().to_vec(),
+                            generic_args: Vec::new(),
+                            attrs: Vec::new(),
+                        },
+                        self.package_items,
+                        &self.ns_context,
+                        &self.generic_params,
+                        &mut diags,
+                    );
+                    if let Ty::Class(lit_qtn, _, _) = &lit_ty
+                        && lit_qtn != expected_qtn
+                    {
+                        let inferred = self.infer_expr(expr_id, body);
+                        if !matches!(inferred, Ty::Unknown { .. } | Ty::Error { .. })
+                            && !self.is_subtype(&inferred, expected)
+                        {
+                            self.context.report(
+                                TirTypeError::TypeMismatch {
+                                    expected: expected.clone(),
+                                    got: inferred.clone(),
+                                },
+                                expr_id,
+                                Vec::new(),
+                            );
+                        }
+                        return inferred;
+                    }
+                }
                 if let Ty::Class(class_name, type_args, _) = expected {
                     let field_types: FxHashMap<Name, Ty> = self
                         .class_actual_fields_ordered(class_name, type_args)
@@ -3786,14 +3840,42 @@ impl<'db> TypeInferenceBuilder<'db> {
                     if !matches!(expected, Ty::Unknown { .. } | Ty::Error { .. })
                         && !self.is_subtype(&inferred, expected)
                     {
-                        self.context.report(
-                            TirTypeError::TypeMismatch {
-                                expected: expected.clone(),
-                                got: inferred.clone(),
-                            },
-                            expr_id,
-                            Vec::new(),
-                        );
+                        // BEP-044 wf3 #G18: if the value almost implements the
+                        // expected interface via a blanket rule but a generic
+                        // bound fails, name the unsatisfied bound rather than
+                        // emitting a bare `type mismatch`.
+                        let bound_failure = if matches!(expected, Ty::Interface(..)) {
+                            let db = self.context.db();
+                            let registry =
+                                crate::interfaces::package_implements_registry(db, self.package_id);
+                            registry.first_failing_bound(
+                                &inferred,
+                                expected,
+                                &self.aliases,
+                                |a, b| self.is_subtype(a, b),
+                            )
+                        } else {
+                            None
+                        };
+                        if let Some((_param, bound, _actual_arg)) = bound_failure {
+                            self.context.report(
+                                TirTypeError::BlanketBoundNotSatisfied {
+                                    value_type: inferred.clone(),
+                                    bound,
+                                },
+                                expr_id,
+                                Vec::new(),
+                            );
+                        } else {
+                            self.context.report(
+                                TirTypeError::TypeMismatch {
+                                    expected: expected.clone(),
+                                    got: inferred.clone(),
+                                },
+                                expr_id,
+                                Vec::new(),
+                            );
+                        }
                     }
                     inferred
                 }
@@ -4148,6 +4230,22 @@ impl<'db> TypeInferenceBuilder<'db> {
                         Vec::new(),
                     );
                 } else {
+                    // BEP-044 wf3 #18: coercing a concrete class to an interface
+                    // it provides via >1 in-body block at this instantiation is
+                    // ambiguous (`Getter<L>`+`Getter<R>` collapse at `Pair<int,int>`).
+                    if let (Ty::Class(cqtn, ctargs, _), Ty::Interface(iqtn, iargs, _)) =
+                        (&inferred, expected)
+                        && self.class_interface_instantiation_count(cqtn, ctargs, iqtn, iargs) > 1
+                    {
+                        self.context.report(
+                            TirTypeError::AmbiguousInterfaceInstantiation {
+                                class_name: cqtn.name().clone(),
+                                interface: expected.clone(),
+                            },
+                            expr_id,
+                            Vec::new(),
+                        );
+                    }
                     self.record_function_coercion_if_needed(expr_id, &inferred, expected);
                 }
                 inferred
@@ -6161,17 +6259,32 @@ impl<'db> TypeInferenceBuilder<'db> {
         Ty::Literal(lit.clone(), Freshness::Fresh, TyAttr::default())
     }
 
+    /// Whether `segments` is rooted at the BEP-044 `default` receiver keyword
+    /// and that keyword is not shadowed by a local of the same name. See
+    /// [`baml_compiler2_ast::DEFAULT_RECEIVER_KEYWORD`].
+    fn is_default_receiver_root(&self, segments: &[Name]) -> bool {
+        segments
+            .first()
+            .is_some_and(|s| s.as_str() == baml_compiler2_ast::DEFAULT_RECEIVER_KEYWORD)
+            && !self.locals.contains_key(&segments[0])
+    }
+
     fn infer_path(&mut self, segments: &[Name], _body: &ExprBody, expr_id: ExprId) -> Ty {
         // BEP-044: `default.<method>(...)` inside an `implements I { ... }`
         // block resolves to `I`'s default body. Treat `default` as a
         // syntactic alias for an `I`-typed receiver and chain the rest of
         // the path through the interface's member contract.
-        if segments.first().is_some_and(|s| s.as_str() == "default")
-            && !self.locals.contains_key(&segments[0])
+        if self.is_default_receiver_root(segments)
             && let Some(iface_qtn) = self.implements_block_interface.clone()
         {
             if segments.len() == 1 {
-                return Ty::Interface(iface_qtn, Vec::new(), TyAttr::default());
+                // BEP-044 wf3: bare `default` as a value is not allowed; it is
+                // only meaningful in call position (`default.method(...)`).
+                self.context
+                    .report(TirTypeError::BareDefaultKeyword, expr_id, Vec::new());
+                return Ty::Unknown {
+                    attr: TyAttr::default(),
+                };
             }
             // BEP-044 §"default keyword scoping rules": `default.method()`
             // on a required method (no default body) is a compile error.
@@ -6927,24 +7040,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // different namespaces are distinguishable and the suggested
                 // `as<…>` projection actually resolves. Root-namespace
                 // interfaces stay bare (`Named`).
-                let method_sources: Vec<String> = self
-                    .implemented_interface_method_sources(class_name, member)
-                    .into_iter()
-                    .map(|(name, qtn, args)| {
-                        let base = format_interface_display(&name, &args);
-                        if qtn.namespace().is_empty() {
-                            base
-                        } else {
-                            let ns = qtn
-                                .namespace()
-                                .iter()
-                                .map(std::string::ToString::to_string)
-                                .collect::<Vec<_>>()
-                                .join(".");
-                            format!("{ns}.{base}")
-                        }
-                    })
-                    .collect();
+                let method_sources: Vec<String> = self.format_interface_method_sources(
+                    self.implemented_interface_method_sources(class_name, type_args, member)
+                        .into_iter()
+                        .map(|(_, qtn, args)| (qtn, args)),
+                );
                 if method_sources.len() >= 2 {
                     let sources = method_sources;
                     let class_def = self
@@ -7029,7 +7129,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // default body. Ambiguity (≥2 sources) was already rejected
                 // above, so at most one source remains here.
                 if let [(_, iface_qtn, iface_args)] = self
-                    .implemented_interface_method_sources(class_name, member)
+                    .implemented_interface_method_sources(class_name, type_args, member)
                     .as_slice()
                 {
                     let iface_qtn = iface_qtn.clone();
@@ -7039,6 +7139,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                     {
                         return ty;
                     }
+                }
+
+                // BEP-044 wf3 #G7: blanket / out-of-body impls aren't in the
+                // class's in-body `implements` blocks, so a direct
+                // `obj.method()` call misses them above. Consult the registry.
+                if let Some(ty) =
+                    self.try_registry_member(base_ty, class_name.name().clone(), member, at, bound)
+                {
+                    return ty;
                 }
 
                 if self
@@ -7252,6 +7361,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             Ty::Primitive(PrimitiveType::Int, _)
             | Ty::Literal(baml_base::Literal::Int(_), _, _) => self
                 .resolve_builtin_member(&["Int"], &[], member, at)
+                .or_else(|| self.try_registry_member(base_ty, Name::new("int"), member, at, bound))
                 .unwrap_or_else(|| {
                     self.context.report_at_member_simple(
                         TirTypeError::UnresolvedMember {
@@ -7561,6 +7671,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if self.class_has_member(class_name, member) {
                     // Field/method found — delegate to resolve_member which stores
                     // the resolution and handles field-type diagnostics once.
+                    return self.resolve_member(base_ty, member, path_id, bound);
+                }
+                // BEP-044 wf3 #G7: blanket / out-of-body impls aren't class
+                // members, but a direct `obj.method()` should still resolve.
+                // resolve_member's registry fallback handles single/ambiguous.
+                if !self
+                    .registry_interface_method_sources(base_ty, member)
+                    .is_empty()
+                {
                     return self.resolve_member(base_ty, member, path_id, bound);
                 }
                 if self
@@ -7883,6 +8002,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                     attr: TyAttr::default(),
                 })
             }
+            // BEP-044 wf3 #G9c: read-only probe for an interface member, so a
+            // union like `Animal | Swimmer` attributes a missing `.speak()` only
+            // to the arm that actually lacks it (`Swimmer`) instead of falsely
+            // blaming `Animal` too. The only caller is union-member resolution,
+            // which needs Some/None; a precise member type isn't required here.
+            Ty::Interface(iface_qtn, _, _) => (self
+                .interface_closure_declares_method(iface_qtn, member)
+                || self.interface_closure_declares_field(iface_qtn, member))
+            .then(|| Ty::Unknown {
+                attr: TyAttr::default(),
+            }),
             _ => None,
         }
     }
@@ -8996,6 +9126,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn implemented_interface_method_sources(
         &self,
         class_name: &crate::ty::QualifiedTypeName,
+        type_args: &[Ty],
         member: &Name,
     ) -> Vec<(Name, crate::ty::QualifiedTypeName, Vec<Ty>)> {
         let Some(pkg_items) = self.resolve_class_pkg_items(class_name.package()) else {
@@ -9011,6 +9142,13 @@ impl<'db> TypeInferenceBuilder<'db> {
         let class_data = &item_tree[class_loc.id(db)];
         let ns =
             baml_compiler2_hir::file_package::file_package(db, class_loc.file(db)).namespace_path;
+        // Map the receiver's concrete class type args onto the class's generic
+        // params so a declaring interface's args (which carry the class's type
+        // vars, e.g. `Getter<L>`) render and dispatch with the concrete
+        // instantiation (`Getter<int>`). Dedup still keys on the pre-substitution
+        // form so `Pair<int,int>`'s `Getter<L>`/`Getter<R>` stay two sources
+        // (genuine ambiguity) rather than collapsing (BEP-044 wf3 #20).
+        let bindings = crate::generics::bind_type_vars(&class_data.generic_params, type_args);
         let mut seen = FxHashSet::default();
         let mut sources = Vec::new();
 
@@ -9024,35 +9162,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 continue;
             };
 
-            let declares =
-                crate::interfaces::interface_closure_locs(db, root_iface_loc, pkg_items, &ns)
-                    .into_iter()
-                    .any(|iface_loc| {
-                        let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
-                        iface_tree
-                            .interfaces
-                            .get(&iface_loc.id(db))
-                            .is_some_and(|iface_data| {
-                                iface_data
-                                    .required_methods
-                                    .iter()
-                                    .any(|s| s.name == *member)
-                                    || iface_data
-                                        .default_methods
-                                        .iter()
-                                        .any(|&fn_id| iface_tree[fn_id].name == *member)
-                            })
-                    });
-            if !declares {
-                continue;
-            }
-
-            let root_tree = baml_compiler2_hir::file_item_tree(db, root_iface_loc.file(db));
-            let Some(root_data) = root_tree.interfaces.get(&root_iface_loc.id(db)) else {
-                continue;
-            };
-            let root_name = root_data.name.clone();
-            // Recover the interface's qtn + type args by lowering the path the
+            // Recover the block root's qtn + type args by lowering the path the
             // user wrote (e.g. `Container<int>`); class generics stay as type
             // vars, which is what `resolve_interface_member` expects.
             let mut diags = Vec::new();
@@ -9064,19 +9174,314 @@ impl<'db> TypeInferenceBuilder<'db> {
                 &class_data.generic_params,
                 &mut diags,
             );
-            if let Ty::Interface(qtn, args, _) = lowered {
-                // Dedup by (interface, type args): the same instantiation
-                // reached twice (e.g. via `requires`) collapses, but two
-                // distinct instantiations of one generic interface
-                // (`Converter<int>` vs `Converter<float>`) stay separate so an
-                // unqualified call is correctly ambiguous (E0121).
-                if seen.insert((qtn.clone(), args.clone())) {
-                    sources.push((root_name, qtn, args));
+            let Ty::Interface(_root_qtn, root_args, _) = lowered else {
+                continue;
+            };
+
+            // BEP-044 wf3 #11: record the interface that actually DECLARES
+            // `member`, not the block root. Walk the `requires` closure in
+            // BFS order (most-derived first) and take the first declarer — its
+            // own declaration shadows inherited ones, and a method declared
+            // once but reached via several `requires` paths (`Left`/`Right`
+            // both `requires Base`) collapses to a single source instead of
+            // spuriously appearing as N (which produced a false E0121). A real
+            // override (e.g. both `Base` and `Left` declare `id`) still yields
+            // two distinct declarers across the two blocks → genuine E0121.
+            let closure = crate::interfaces::interface_closure_locs_with_args(
+                db,
+                root_iface_loc,
+                &root_args,
+                pkg_items,
+                &ns,
+            );
+            let mut declarer: Option<(Name, crate::ty::QualifiedTypeName, Vec<Ty>)> = None;
+            for (iface_loc, iface_args) in &closure {
+                let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+                let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
+                    continue;
+                };
+                let declares_here = iface_data
+                    .required_methods
+                    .iter()
+                    .any(|s| s.name == *member)
+                    || iface_data
+                        .default_methods
+                        .iter()
+                        .any(|&fn_id| iface_tree[fn_id].name == *member);
+                if declares_here {
+                    let iface_pkg =
+                        baml_compiler2_hir::file_package::file_package(db, iface_loc.file(db));
+                    let qtn = crate::ty::QualifiedTypeName::new(
+                        iface_pkg.package.clone(),
+                        iface_pkg.namespace_path.clone(),
+                        iface_data.name.clone(),
+                    );
+                    declarer = Some((iface_data.name.clone(), qtn, iface_args.clone()));
+                    break;
                 }
+            }
+
+            // Dedup by (declaring interface, type args): the same declaration
+            // reached via multiple `requires` paths collapses, but two distinct
+            // instantiations of one generic interface (`Converter<int>` vs
+            // `Converter<float>`) stay separate so an unqualified call is
+            // correctly ambiguous (E0121).
+            if let Some((name, qtn, args)) = declarer
+                && seen.insert((qtn.clone(), args.clone()))
+            {
+                let subst_args = args
+                    .iter()
+                    .map(|a| crate::generics::substitute_ty(a, &bindings))
+                    .collect();
+                sources.push((name, qtn, subst_args));
             }
         }
 
         sources
+    }
+
+    /// Whether `iface_qtn` or any interface in its `requires` closure declares a
+    /// method named `member` (required or default). Side-effect-free; used by the
+    /// registry fallback in `resolve_member` to find blanket / out-of-body impls.
+    fn interface_closure_declares_method(
+        &self,
+        iface_qtn: &crate::ty::QualifiedTypeName,
+        member: &Name,
+    ) -> bool {
+        let db = self.context.db();
+        let Some(pkg_items) = self.resolve_class_pkg_items(iface_qtn.package()) else {
+            return false;
+        };
+        let Some(Definition::Interface(root_loc)) =
+            pkg_items.lookup_type(iface_qtn.namespace(), iface_qtn.name())
+        else {
+            return false;
+        };
+        let root_pkg = baml_compiler2_hir::file_package::file_package(db, root_loc.file(db));
+        crate::interfaces::interface_closure_locs(db, root_loc, pkg_items, &root_pkg.namespace_path)
+            .into_iter()
+            .any(|iface_loc| {
+                let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+                iface_tree
+                    .interfaces
+                    .get(&iface_loc.id(db))
+                    .is_some_and(|iface_data| {
+                        iface_data.required_methods.iter().any(|s| s.name == *member)
+                            || iface_data
+                                .default_methods
+                                .iter()
+                                .any(|&fn_id| iface_tree[fn_id].name == *member)
+                    })
+            })
+    }
+
+    /// Count how many of `class`'s in-body `implements` blocks resolve to the
+    /// SAME interface instantiation `target` once the class's concrete
+    /// `type_args` are substituted. `>1` means distinct generic blocks collapsed
+    /// (e.g. `Getter<L>`+`Getter<R>` at `Pair<int,int>`), so coercing to that
+    /// interface is ambiguous (BEP-044 wf3 #18). Per-instantiation, so
+    /// `Pair<int,string>` with `Slot<L,R>`/`Slot<R,L>` is fine (counts 1).
+    fn class_interface_instantiation_count(
+        &self,
+        class_name: &crate::ty::QualifiedTypeName,
+        type_args: &[Ty],
+        target_iface_qtn: &crate::ty::QualifiedTypeName,
+        target_iface_args: &[Ty],
+    ) -> usize {
+        let Some(pkg_items) = self.resolve_class_pkg_items(class_name.package()) else {
+            return 0;
+        };
+        let Some(Definition::Class(class_loc)) =
+            pkg_items.lookup_type(class_name.namespace(), class_name.name())
+        else {
+            return 0;
+        };
+        let db = self.context.db();
+        let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
+        let class_data = &item_tree[class_loc.id(db)];
+        let ns =
+            baml_compiler2_hir::file_package::file_package(db, class_loc.file(db)).namespace_path;
+        let bindings = crate::generics::bind_type_vars(&class_data.generic_params, type_args);
+        let mut count = 0;
+        for impl_target in &class_data.implements {
+            let mut diags = Vec::new();
+            let lowered = crate::lower_type_expr::lower_type_expr_in_ns(
+                db,
+                &impl_target.target.expr,
+                pkg_items,
+                &ns,
+                &class_data.generic_params,
+                &mut diags,
+            );
+            if let Ty::Interface(qtn, args, _) = lowered
+                && &qtn == target_iface_qtn
+            {
+                let subst: Vec<Ty> = args
+                    .iter()
+                    .map(|a| crate::generics::substitute_ty(a, &bindings))
+                    .collect();
+                if subst.len() == target_iface_args.len()
+                    && subst.iter().zip(target_iface_args).all(|(a, b)| {
+                        crate::normalize::is_same_normalized_type(a, b, &self.aliases)
+                    })
+                {
+                    count += 1;
+                }
+            }
+        }
+        count
+    }
+
+    /// Whether `iface_qtn` or any interface in its `requires` closure declares a
+    /// field named `member`. Side-effect-free (G9c union-member probing).
+    fn interface_closure_declares_field(
+        &self,
+        iface_qtn: &crate::ty::QualifiedTypeName,
+        member: &Name,
+    ) -> bool {
+        let db = self.context.db();
+        let Some(pkg_items) = self.resolve_class_pkg_items(iface_qtn.package()) else {
+            return false;
+        };
+        let Some(Definition::Interface(root_loc)) =
+            pkg_items.lookup_type(iface_qtn.namespace(), iface_qtn.name())
+        else {
+            return false;
+        };
+        let root_pkg = baml_compiler2_hir::file_package::file_package(db, root_loc.file(db));
+        crate::interfaces::interface_closure_locs(db, root_loc, pkg_items, &root_pkg.namespace_path)
+            .into_iter()
+            .any(|iface_loc| {
+                let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+                iface_tree
+                    .interfaces
+                    .get(&iface_loc.id(db))
+                    .is_some_and(|iface_data| iface_data.fields.iter().any(|f| f.name == *member))
+            })
+    }
+
+    /// Find interfaces the receiver `base_ty` implements via a blanket /
+    /// out-of-body registry rule (not an in-body `implements` block) that
+    /// declare `member`. Returns deduped `(interface qtn, concrete args)` so a
+    /// direct `obj.method()` call can resolve and dispatch (BEP-044 wf3 #G7).
+    fn registry_interface_method_sources(
+        &self,
+        base_ty: &Ty,
+        member: &Name,
+    ) -> Vec<(crate::ty::QualifiedTypeName, Vec<Ty>)> {
+        let db = self.context.db();
+        let registry = crate::interfaces::package_implements_registry(db, self.package_id);
+        let mut seen = FxHashSet::default();
+        let mut out: Vec<(crate::ty::QualifiedTypeName, Vec<Ty>)> = Vec::new();
+        for rule in &registry.interface_impl_rules {
+            let Some(b) = crate::interfaces::match_ty_pattern(
+                &rule.for_ty_pattern,
+                base_ty,
+                &rule.generic_params,
+                &self.aliases,
+            ) else {
+                continue;
+            };
+            let iface_ty = crate::generics::substitute_ty(&rule.interface_ty, &b);
+            let Ty::Interface(iface_qtn, iface_args, _) = iface_ty else {
+                continue;
+            };
+            if !self.interface_closure_declares_method(&iface_qtn, member) {
+                continue;
+            }
+            // Confirm via the full rule check so generic bounds are honored
+            // (e.g. `implements<T extends Named> Printable for Box<T>`).
+            let requested =
+                Ty::Interface(iface_qtn.clone(), iface_args.clone(), TyAttr::default());
+            if !registry.type_implements_interface_via_rule(
+                base_ty,
+                &requested,
+                &self.aliases,
+                |a, c| self.is_subtype(a, c),
+            ) {
+                continue;
+            }
+            if seen.insert((iface_qtn.clone(), iface_args.clone())) {
+                out.push((iface_qtn, iface_args));
+            }
+        }
+        out
+    }
+
+    /// Render interface method/field sources for an E0121 message: each as a
+    /// namespace-qualified, type-arg-instantiated display (`zoo.Animal`,
+    /// `Getter<int>`) so two same-simple-name interfaces are distinguishable and
+    /// the suggested `as<…>` projection actually compiles. Root-namespace
+    /// interfaces stay bare. Shared by the in-body and registry E0121 sites (C6).
+    fn format_interface_method_sources(
+        &self,
+        sources: impl Iterator<Item = (crate::ty::QualifiedTypeName, Vec<Ty>)>,
+    ) -> Vec<String> {
+        sources
+            .map(|(qtn, args)| {
+                let base = format_interface_display(qtn.name(), &args);
+                if qtn.namespace().is_empty() {
+                    base
+                } else {
+                    let ns = qtn
+                        .namespace()
+                        .iter()
+                        .map(std::string::ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(".");
+                    // BEP-044 wf3 #10: when the call site is itself inside a
+                    // namespace, a bare `zoo.Animal` resolves relative-first
+                    // (→ `birds.zoo.Animal`) and the suggested `as<…>` fix
+                    // wouldn't compile. Use the absolute `root.`-qualified form
+                    // there; at the root namespace keep the bare relative form.
+                    if self.ns_context.is_empty() {
+                        format!("{ns}.{base}")
+                    } else {
+                        format!("root.{ns}.{base}")
+                    }
+                }
+            })
+            .collect()
+    }
+
+    /// Resolve `member` on `base_ty` through blanket / out-of-body registry
+    /// impls (BEP-044 wf3 #G7). Returns `Some(ty)` when exactly one matching
+    /// interface declares it (resolved as `obj.as<I>.member`), `Some(Unknown)`
+    /// after emitting E0121 when two or more do, and `None` when none match
+    /// (caller falls through to its own "no member" error). `receiver_name` is
+    /// used only for the E0121 message.
+    fn try_registry_member(
+        &mut self,
+        base_ty: &Ty,
+        receiver_name: Name,
+        member: &Name,
+        at: ExprId,
+        bound: bool,
+    ) -> Option<Ty> {
+        let reg = self.registry_interface_method_sources(base_ty, member);
+        match reg.as_slice() {
+            [] => None,
+            [(iface_qtn, iface_args)] => {
+                let iface_qtn = iface_qtn.clone();
+                let iface_args = iface_args.clone();
+                self.resolve_interface_member(&iface_qtn, &iface_args, member, at, bound)
+            }
+            _ => {
+                let sources = self.format_interface_method_sources(reg.iter().cloned());
+                self.context.report_at_member(
+                    TirTypeError::AmbiguousInterfaceMethod {
+                        class_name: receiver_name,
+                        method_name: member.clone(),
+                        sources,
+                    },
+                    at,
+                    Vec::new(),
+                );
+                Some(Ty::Unknown {
+                    attr: TyAttr::default(),
+                })
+            }
+        }
     }
 
     /// Check whether an enum has a variant with the given name.
@@ -10038,6 +10443,17 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
         if let Some(result) = self.function_subtype_with_generic_binders(sub, sup) {
             return result;
+        }
+        // BEP-044 wf3 #12: a union is a subtype of `sup` iff *every* member is
+        // (join-of-subtypes). Checked before the interface/structural branches
+        // because those assume a non-union `sub` and would reject `Dog | Cat`
+        // against `Animal` early. `Dog?` (= `Dog | null`) is still rejected
+        // because `null` is not a subtype of the interface.
+        if let Ty::Union(members, _) = sub
+            && !members.is_empty()
+            && members.iter().all(|m| self.is_subtype(m, sup))
+        {
+            return true;
         }
         if let Ty::Interface(iface_qtn, iface_args, _) = sup
             && !matches!(sub, Ty::Interface(..))
