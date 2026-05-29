@@ -590,6 +590,21 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
+      # Restore the cargo home (crates.io index + git dependency checkouts) that
+      # benchmarks-build populates on the same `linux-arm-bench` lane. WITHOUT
+      # this, `cargo codspeed run`'s implicit `cargo metadata` re-clones every
+      # git dependency (minijinja, the aws-sdk-rust fork, …) from scratch on the
+      # bare codspeed-macro runner — ~24 min of silence before a single bench
+      # runs. Reader only: benchmarks-build is the canary saver for this lane,
+      # and same aarch64-unknown-linux-gnu triple ⇒ the key matches.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          save-if: false
+          cache-all-crates: true
+          cache-workspace-crates: true
+          shared-key: "linux-arm-bench"
+
       - name: "Install cargo-codspeed"
         uses: taiki-e/install-action@v2
         with:
