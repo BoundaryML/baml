@@ -178,7 +178,7 @@ impl QualifiedTypeName {
     }
 
     /// User-facing rendering of the qualified name: identical to the canonical
-    /// [`Display`] except the reserved implicit `user` package is elided.
+    /// [`fmt::Display`] except the reserved implicit `user` package is elided.
     /// Call this instead of post-processing the canonical string.
     pub fn render_user_facing(&self) -> String {
         self.render_qualified(true)
@@ -622,7 +622,7 @@ impl Ty {
 /// presentation choices. A single recursive renderer ([`Ty::render_with`])
 /// walks the structure; everything package-, type-var-, or context-specific
 /// lives behind this trait. This is the one place type *structure* is turned
-/// into text — the canonical [`Display`], user-facing diagnostics, and the
+/// into text — the canonical [`fmt::Display`], user-facing diagnostics, and the
 /// LSP's context-aware hover all implement this trait instead of re-walking
 /// `Ty` (the former "~10 renderers").
 pub trait TyRenderStrategy {
@@ -651,7 +651,7 @@ pub trait TyRenderStrategy {
 }
 
 impl Ty {
-    /// User-facing rendering: identical to the canonical [`Display`] except the
+    /// User-facing rendering: identical to the canonical [`fmt::Display`] except the
     /// reserved implicit `user` package is elided ([`RESERVED_USER_PACKAGE`])
     /// and synthetic effect params show as `callback`. This is the single
     /// structural source of the "no `user.` in messages" rule — diagnostics
@@ -802,7 +802,7 @@ impl Ty {
 /// `user_facing`, the reserved implicit `user` package is elided and synthetic
 /// effect params show as `callback`; otherwise everything renders verbatim (for
 /// dumps and identity). Both keep `(evolving)` annotations and `<_>`
-/// placeholders. Canonical [`Display`] uses `user_facing = false`;
+/// placeholders. Canonical [`fmt::Display`] uses `user_facing = false`;
 /// [`Ty::render_user_facing`] uses `true`.
 struct CanonicalTyRender {
     user_facing: bool,
