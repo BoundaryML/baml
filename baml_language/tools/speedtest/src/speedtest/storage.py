@@ -11,9 +11,9 @@ Storage layout:
 
 import json
 import os
+import re
 import shutil
 import subprocess
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -33,7 +33,8 @@ def _git_info_for_path(path):
     if not path or not os.path.exists(path):
         return {"commit": None, "branch": None, "message": None, "in_repo": False}
 
-    cwd = os.path.dirname(os.path.abspath(path))
+    path = os.path.abspath(path)
+    cwd = path if os.path.isdir(path) else os.path.dirname(path)
 
     def _run(cmd):
         try:
@@ -55,10 +56,93 @@ def _git_info_for_path(path):
     }
 
 
+def _jj_info_for_path(path):
+    """Return jj info for the repo containing the given file path."""
+    if not path or not os.path.exists(path):
+        return {"commit": None, "branch": None, "message": None, "in_repo": False}
+
+    path = os.path.abspath(path)
+    cwd = path if os.path.isdir(path) else os.path.dirname(path)
+
+    def _run(args):
+        try:
+            return subprocess.run(
+                ["jj", "--no-pager", *args],
+                capture_output=True,
+                text=True,
+                cwd=cwd,
+                timeout=5,
+            )
+        except Exception:
+            return None
+
+    root = _run(["root"])
+    if not root or root.returncode != 0:
+        return {"commit": None, "branch": None, "message": None, "in_repo": False}
+
+    def _template(rev, expr):
+        result = _run(["log", "-r", rev, "--no-graph", "--template", expr])
+        if not result or result.returncode != 0:
+            return ""
+        return result.stdout.strip()
+
+    def _is_empty_change(rev):
+        result = _run(["diff", "-r", rev, "--summary"])
+        return bool(result and result.returncode == 0 and not result.stdout.strip())
+
+    rev = "@"
+    description = _template(rev, "description.first_line()")
+    parent_exists = _run(["log", "-r", "@-", "--no-graph", "--template", "commit_id.short()"])
+    if not description and _is_empty_change(rev) and parent_exists and parent_exists.returncode == 0:
+        rev = "@-"
+        description = _template(rev, "description.first_line()")
+
+    commit = _template(rev, "commit_id.short()")
+    commit_full = _template(rev, "commit_id")
+    change = _template(rev, "change_id.short()")
+    change_full = _template(rev, "change_id")
+    bookmarks = _template(rev, 'bookmarks.join(" ")')
+    author = _template(rev, "author.name()")
+    commit_date = _template(rev, "committer.timestamp()")
+
+    # Prefer a bookmark on the current change. Anonymous jj changes fall back to
+    # their change id so every run still gets a stable, human-usable baseline ref.
+    bookmark = bookmarks.split()[0] if bookmarks else ""
+    branch = bookmark or change or "unknown"
+
+    return {
+        "system": "jj",
+        "commit": commit or "unknown",
+        "commit_full": commit_full or "unknown",
+        "change": change or "unknown",
+        "change_full": change_full or "unknown",
+        "bookmark": bookmark,
+        "bookmarks": bookmarks.split() if bookmarks else [],
+        "branch": branch,
+        "message": description,
+        "commit_date": commit_date,
+        "author": author,
+        "root": root.stdout.strip(),
+        "in_repo": True,
+    }
+
+
+def _vcs_info_for_path(path):
+    jj = _jj_info_for_path(path)
+    if jj.get("in_repo"):
+        return jj
+
+    git = _git_info_for_path(path)
+    if git.get("in_repo"):
+        return {"system": "git", **git}
+
+    return {"system": None, "commit": None, "branch": None, "message": None, "in_repo": False}
+
+
 def _cli_info(cli_path):
-    """Get version, build time, and git info for a baml-cli binary."""
+    """Get version, build time, and VCS info for a baml-cli binary."""
     if not cli_path or not os.path.isfile(cli_path):
-        return {"path": None, "version": None, "built_at": None, "git": None}
+        return {"path": None, "version": None, "built_at": None, "git": None, "vcs": None}
     version = None
     try:
         r = subprocess.run([cli_path, "--version"], capture_output=True, text=True, timeout=5)
@@ -71,29 +155,29 @@ def _cli_info(cli_path):
         built_at = datetime.fromtimestamp(mtime, tz=timezone.utc).isoformat()
     except Exception:
         built_at = None
-    git = _git_info_for_path(cli_path)
+    vcs = _vcs_info_for_path(cli_path)
     return {
         "path": os.path.abspath(cli_path),
         "version": version,
         "built_at": built_at,
-        "git": git,
+        "git": vcs,
+        "vcs": vcs,
     }
 
 
 def _branch_slug(cli_info):
-    """Get the branch name for baseline storage. Returns 'NO_BRANCH' if not in a repo."""
-    git = cli_info.get("git") or {}
-    if not git or not git.get("in_repo"):
+    """Get the current VCS ref name for baseline storage."""
+    vcs = cli_info.get("vcs") or cli_info.get("git") or {}
+    if not vcs or not vcs.get("in_repo"):
         return "NO_BRANCH"
-    branch = git.get("branch", "unknown")
-    # Sanitize for filesystem
-    return branch.replace("/", "_").replace(" ", "_")
+    branch = vcs.get("branch") or vcs.get("bookmark") or vcs.get("change") or "unknown"
+    return re.sub(r"[^A-Za-z0-9_.@-]+", "_", branch).strip("_") or "unknown"
 
 
 def generate_run_id():
     now = datetime.now(timezone.utc)
-    git = _git_info_for_path(os.getcwd())
-    commit = git.get("commit", "unknown")
+    vcs = _vcs_info_for_path(os.getcwd())
+    commit = vcs.get("commit", "unknown")
     return now.strftime("%Y%m%d-%H%M%S") + f"-{commit}"
 
 
@@ -276,8 +360,8 @@ def cmd_baselines(args):
     print("-" * 91)
     for ref, typ, data in entries:
         cli = data.get("cli", {})
-        git = cli.get("git", {})
-        commit = git.get("commit", "?") if git else "?"
+        vcs = cli.get("vcs") or cli.get("git") or {}
+        commit = vcs.get("commit", "?") if vcs else "?"
         ts = data.get("timestamp", "?")[:19]
         n_workloads = len(data.get("workloads", []))
         print(f"{typ:<10s} {ref:<40s} {commit:<10s} {n_workloads:>9d} {ts:<22s}")
