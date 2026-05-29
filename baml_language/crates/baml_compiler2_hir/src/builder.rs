@@ -1657,6 +1657,8 @@ impl<'db> SemanticIndexBuilder<'db> {
                     Self::collect_invalid_builtin_throw_types(ty, allowed_generic_params, invalid);
                 }
             }
+            // `throws never` is the explicit "infallible" marker — always valid.
+            ast::TypeExpr::Never { .. } => {}
             _ => invalid.push(Self::render_type_expr(type_expr)),
         }
     }

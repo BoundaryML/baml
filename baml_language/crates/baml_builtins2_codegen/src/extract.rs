@@ -157,6 +157,19 @@ pub fn extract_native_builtins()
         }
     }
 
+    // Every host-bound builtin must declare a `throws` clause (use `throws never`
+    // if it cannot fail). A missing clause is a contract gap, not a silent
+    // "infallible" default — reject it so fallibility is always explicit.
+    for b in vm_builtins.iter().chain(io_builtins.iter()) {
+        if b.throws.is_none() {
+            diagnostic_lines.push(format!(
+                "  {}: builtin `{}` is missing a `throws` clause \
+                 (declare `throws never` if it cannot fail)",
+                b.source_file, b.path
+            ));
+        }
+    }
+
     if !diagnostic_lines.is_empty() {
         return Err(ExtractNativeBuiltinsError {
             message: format!(
@@ -218,6 +231,7 @@ fn extract_from_class(
         let has_vm = has_method_directive(cst_root, class_name, method_name, "//baml:vm");
         let has_mut_vm = has_method_directive(cst_root, class_name, method_name, "//baml:mut_vm");
         let may_yield = has_method_directive(cst_root, class_name, method_name, "//baml:may_yield");
+        let fallible = has_method_directive(cst_root, class_name, method_name, "//baml:fallible");
 
         assert!(
             !(has_vm && has_mut_vm),
@@ -257,6 +271,14 @@ fn extract_from_class(
         };
         let receiver = Some(Receiver {
             class_name: class_name.to_string(),
+            namespace: namespace_prefix
+                .strip_prefix("baml.")
+                .unwrap_or("")
+                .to_string(),
+            // Mirrors `extract_class_fields`: dedicated-variant types and
+            // field-less (opaque/marker) classes get no `view::` struct.
+            instance_backed: !matches!(class_name, "Array" | "Map" | "String" | "Uint8Array")
+                && !class_def.fields.is_empty(),
             class_generics: class_generics.clone(),
             receiver_type,
         });
@@ -292,6 +314,7 @@ fn extract_from_class(
             receiver,
             vm_usage,
             may_yield,
+            fallible,
             pipeline,
             throws,
             source_file: source_file.to_string(),
@@ -383,6 +406,7 @@ fn extract_from_free_function(
     let has_vm = has_free_fn_directive(cst_root, func_def.name.as_str(), "//baml:vm");
     let has_mut_vm = has_free_fn_directive(cst_root, func_def.name.as_str(), "//baml:mut_vm");
     let may_yield = has_free_fn_directive(cst_root, func_def.name.as_str(), "//baml:may_yield");
+    let fallible = has_free_fn_directive(cst_root, func_def.name.as_str(), "//baml:fallible");
 
     assert!(
         !(has_vm && has_mut_vm),
@@ -433,6 +457,7 @@ fn extract_from_free_function(
         receiver: None,
         vm_usage,
         may_yield,
+        fallible,
         pipeline,
         throws,
         source_file: source_file.to_string(),
@@ -459,11 +484,14 @@ fn extract_builtin_pipeline(func: &FunctionDef) -> Option<BuiltinPipeline> {
 /// `throws root.errors.Io`, it's `TypeExpr::Path(["root", "errors", "Io"])`.
 /// For multiple errors like `throws root.errors.Io | root.errors.Timeout`,
 /// it's `TypeExpr::Union([Path(...), Path(...)])`.
-fn extract_throws(func: &FunctionDef) -> Vec<String> {
-    let Some(throws_expr) = &func.throws else {
-        return vec![];
-    };
-    extract_throw_categories(&throws_expr.expr)
+/// Extract the `throws` clause of a builtin.
+///
+/// - `None` — no `throws` clause (rejected by the missing-throws check).
+/// - `Some([])` — `throws never` (the `Never` type yields no categories).
+/// - `Some([cats])` — one or more error categories; the builtin is fallible.
+fn extract_throws(func: &FunctionDef) -> Option<Vec<String>> {
+    let throws_expr = func.throws.as_ref()?;
+    Some(extract_throw_categories(&throws_expr.expr))
 }
 
 #[allow(clippy::redundant_closure_for_method_calls)]
@@ -724,6 +752,16 @@ fn function_node_has_leading_directive(func_node: &SyntaxNode, directive: &str) 
 mod tests {
     use super::*;
 
+    /// Build the expected `throws` value (`Some([cats])`) for assertions.
+    /// `throws(&[])` is `throws never`.
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "mirrors the Option<Vec<String>> `throws` field so assertions read naturally"
+    )]
+    fn throws(cats: &[&str]) -> Option<Vec<String>> {
+        Some(cats.iter().map(|s| (*s).to_string()).collect())
+    }
+
     #[test]
     fn test_extract_class_fields() {
         let (_vm, _io, class_defs) = extract_native_builtins().unwrap();
@@ -845,8 +883,9 @@ mod tests {
             receiver: None,
             vm_usage: VmUsage::None,
             may_yield: false,
+            fallible: false,
             pipeline: BuiltinPipeline::Io,
-            throws: vec![],
+            throws: Some(vec![]),
             source_file: String::new(),
         };
         assert_eq!(make("baml.fs.open").sys_op_variant_name(), "BamlFsOpen");
@@ -894,9 +933,9 @@ mod tests {
         assert_eq!(array_length.fn_name, "baml_array_length");
         assert!(array_length.receiver.is_some());
         assert_eq!(array_length.params.len(), 0);
-        // Non-throwing builtin must have empty throws (otherwise codegen would
-        // wrap it in a spurious `Result`).
-        assert!(array_length.throws.is_empty());
+        // Infallible builtin declares `throws never` -> `Some([])` (otherwise
+        // codegen would wrap it in a spurious `Result`).
+        assert_eq!(array_length.throws, throws(&[]));
 
         // Concrete-error throws: `Uint8Array.from_hex` rejects malformed input
         // with `InvalidArgument`. Pin this so a regression in throws extraction
@@ -906,7 +945,7 @@ mod tests {
             .iter()
             .find(|b| b.path == "baml.Uint8Array.from_hex")
             .expect("missing Uint8Array.from_hex");
-        assert_eq!(from_hex.throws, vec!["InvalidArgument"]);
+        assert_eq!(from_hex.throws, throws(&["InvalidArgument"]));
 
         // Generic-throws: `Array.map<U, E>(... throws E)` carries the callback's
         // error type through. The extractor records the generic name verbatim.
@@ -914,7 +953,7 @@ mod tests {
             .iter()
             .find(|b| b.path == "baml.Array.map")
             .expect("missing Array.map");
-        assert_eq!(array_map.throws, vec!["E"]);
+        assert_eq!(array_map.throws, throws(&["E"]));
 
         let deep_copy = vm_builtins
             .iter()
@@ -977,30 +1016,30 @@ mod tests {
             .iter()
             .find(|b| b.path == "baml.fs.open")
             .unwrap();
-        assert_eq!(fs_open.throws, vec!["Io"]);
+        assert_eq!(fs_open.throws, throws(&["Io"]));
 
         let net_connect = io_builtins
             .iter()
             .find(|b| b.path == "baml.net.connect")
             .unwrap();
-        assert_eq!(net_connect.throws, vec!["Io", "Timeout"]);
+        assert_eq!(net_connect.throws, throws(&["Io", "Timeout"]));
 
         let http_fetch = io_builtins
             .iter()
             .find(|b| b.path == "baml.http.fetch")
             .unwrap();
-        assert_eq!(http_fetch.throws, vec!["Io", "Timeout"]);
+        assert_eq!(http_fetch.throws, throws(&["Io", "Timeout"]));
 
         let render_prompt = io_builtins
             .iter()
             .find(|b| b.path == "baml.llm.PrimitiveClient.render_prompt")
             .unwrap();
-        assert_eq!(render_prompt.throws, vec!["RenderPrompt"]);
+        assert_eq!(render_prompt.throws, throws(&["RenderPrompt"]));
 
         let specialize = io_builtins
             .iter()
             .find(|b| b.path == "baml.llm.PrimitiveClient.specialize_prompt")
             .unwrap();
-        assert_eq!(specialize.throws, vec!["RenderPrompt", "LlmClient"]);
+        assert_eq!(specialize.throws, throws(&["RenderPrompt", "LlmClient"]));
     }
 }

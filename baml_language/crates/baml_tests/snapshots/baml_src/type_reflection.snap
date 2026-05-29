@@ -1,40 +1,40 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function type_reflection.$init_test_83(registry: testing.TestCollector) -> null {
+function type_reflection.$init_test_ns_type_reflection_type_reflection(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "eq_type_values_same"
-    make_closure .<lambda($init_test_83, 0)>, 0
+    make_closure .<lambda($init_test_ns_type_reflection_type_reflection, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "eq_type_values_different"
-    make_closure .<lambda($init_test_83, 1)>, 0
+    make_closure .<lambda($init_test_ns_type_reflection_type_reflection, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "neq_type_values_same"
-    make_closure .<lambda($init_test_83, 2)>, 0
+    make_closure .<lambda($init_test_ns_type_reflection_type_reflection, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "neq_type_values_different"
-    make_closure .<lambda($init_test_83, 3)>, 0
+    make_closure .<lambda($init_test_ns_type_reflection_type_reflection, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "deep_equals_type_values_same"
-    make_closure .<lambda($init_test_83, 4)>, 0
+    make_closure .<lambda($init_test_ns_type_reflection_type_reflection, 4)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "deep_equals_type_values_different"
-    make_closure .<lambda($init_test_83, 5)>, 0
+    make_closure .<lambda($init_test_ns_type_reflection_type_reflection, 5)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1

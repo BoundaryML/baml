@@ -15,6 +15,7 @@ bex_str = { workspace = true }
 bex_vm_types = { workspace = true }
 async-trait = { workspace = true }
 indexmap = { workspace = true }
+num-bigint = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "sync" ] }
 tokio-util = { workspace = true }

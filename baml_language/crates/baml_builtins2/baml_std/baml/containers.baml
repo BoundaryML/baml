@@ -1,7 +1,7 @@
 /// An ordered, growable collection of elements of type T.
 class Array<T> {
   /// Returns the number of elements in the array.
-  function length(self) -> int {
+  function length(self) -> int throws never {
     $rust_function
   }
 
@@ -15,29 +15,29 @@ class Array<T> {
   /// [10, 20, 30].at(-1)   // 30
   /// [10, 20, 30].at(99)   // null
   /// ```
-  function at(self, index: int) -> T? {
+  function at(self, index: int) -> T? throws never {
     $rust_function
   }
 
   /// Appends `item` to the end of the array. Returns the new length. Mutates `self`.
   //baml:mut_self
-  function push(self, item: T) -> int {
+  function push(self, item: T) -> int throws never {
     $rust_function
   }
 
   /// Removes and returns the last element, or `null` if the array is empty. Mutates `self`.
   //baml:mut_self
-  function pop(self) -> T? {
+  function pop(self) -> T? throws never {
     $rust_function
   }
 
   /// Returns a new array with the elements of `self` followed by the elements of `other`.
-  function concat(self, other: T[]) -> T[] {
+  function concat(self, other: T[]) -> T[] throws never {
     $rust_function
   }
 
   /// Returns a new array with the elements in reverse order. Does not mutate `self`.
-  function reverse(self) -> T[] {
+  function reverse(self) -> T[] throws never {
     $rust_function
   }
 
@@ -50,13 +50,13 @@ class Array<T> {
   /// [1, 2, 3, 4].slice(1, 3)   // [2, 3]
   /// [1, 2, 3].slice(-2, 3)     // [2, 3]
   /// ```
-  function slice(self, start: int, end: int) -> T[] {
+  function slice(self, start: int, end: int) -> T[] throws never {
     $rust_function
   }
 
   /// Joins all elements into a string, separated by `separator`. Each element is converted to a string via its `to_string` representation.
   //baml:vm
-  function join(self, separator: string) -> string {
+  function join(self, separator: string) -> string throws never {
     $rust_function
   }
 
@@ -178,7 +178,7 @@ class Array<T> {
   /// ["a", "b"].includes("b")           // true
   /// ```
   //baml:vm
-  function includes(self, item: T) -> bool {
+  function includes(self, item: T) -> bool throws never {
     $rust_function
   }
 
@@ -191,7 +191,7 @@ class Array<T> {
   /// [10, 20].index_of(99)       // null
   /// ```
   //baml:vm
-  function index_of(self, item: T) -> int? {
+  function index_of(self, item: T) -> int? throws never {
     $rust_function
   }
 
@@ -204,7 +204,7 @@ class Array<T> {
   /// [10, 20].last_index_of(99)       // null
   /// ```
   //baml:vm
-  function last_index_of(self, item: T) -> int? {
+  function last_index_of(self, item: T) -> int? throws never {
     $rust_function
   }
 
@@ -252,7 +252,7 @@ class Array<T> {
   /// xs.length()  // 0
   /// ```
   //baml:mut_self
-  function clear(self) -> null {
+  function clear(self) -> null throws never {
     $rust_function
   }
 
@@ -270,7 +270,7 @@ class Array<T> {
   /// [].shift()      // null
   /// ```
   //baml:mut_self
-  function shift(self) -> T? {
+  function shift(self) -> T? throws never {
     $rust_function
   }
 
@@ -288,7 +288,7 @@ class Array<T> {
   /// xs              // [1, 2, 3]
   /// ```
   //baml:mut_self
-  function unshift(self, item: T) -> int {
+  function unshift(self, item: T) -> int throws never {
     $rust_function
   }
 
@@ -338,24 +338,24 @@ class Array<T> {
 /// An unordered collection of key-value pairs.
 class Map<K, V> {
   /// Returns the number of entries in the map.
-  function length(self) -> int {
+  function length(self) -> int throws never {
     $rust_function
   }
 
   /// Returns `true` if the map contains an entry for `key`.
   //baml:vm
-  function has(self, key: K) -> bool {
+  function has(self, key: K) -> bool throws never {
     $rust_function
   }
 
   /// Returns an array of all keys in the map. Order is not guaranteed.
   //baml:mut_vm
-  function keys(self) -> K[] {
+  function keys(self) -> K[] throws never {
     $rust_function
   }
 
   /// Returns an array of all values in the map. Order matches `keys()`.
-  function values(self) -> V[] {
+  function values(self) -> V[] throws never {
     $rust_function
   }
 
@@ -370,7 +370,7 @@ class Map<K, V> {
   /// m.get("a")            // 2
   /// ```
   //baml:mut_self
-  function set(self, key: K, value: V) -> V? {
+  function set(self, key: K, value: V) -> V? throws never {
     $rust_function
   }
 
@@ -384,7 +384,7 @@ class Map<K, V> {
   /// m.get("b")     // null
   /// ```
   //baml:vm
-  function get(self, key: K) -> V? {
+  function get(self, key: K) -> V? throws never {
     $rust_function
   }
 
@@ -406,7 +406,7 @@ class Map<K, V> {
   /// m.length()        // 1
   /// ```
   //baml:mut_self
-  function delete(self, key: K) -> V? {
+  function delete(self, key: K) -> V? throws never {
     $rust_function
   }
 
@@ -423,7 +423,7 @@ class Map<K, V> {
   /// m.get_or_insert("k", 99)   // 10  (existing — `99` ignored)
   /// ```
   //baml:mut_self
-  function get_or_insert(self, key: K, default: V) -> V {
+  function get_or_insert(self, key: K, default: V) -> V throws never {
     $rust_function
   }
 
@@ -437,7 +437,7 @@ class Map<K, V> {
   /// m.length()    // 0
   /// ```
   //baml:mut_self
-  function clear(self) -> null {
+  function clear(self) -> null throws never {
     $rust_function
   }
 }

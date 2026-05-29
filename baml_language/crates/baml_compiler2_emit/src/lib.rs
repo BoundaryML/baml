@@ -709,14 +709,14 @@ pub fn generate_project_bytecode_with_opt(
     }
 
     // --- Pass 4.6: Synthesize $init_test chainer per package ---
-    // Cross-file aggregation of per-file $init_test_<N> functions.
+    // Cross-file aggregation of per-file $init_test_<path> functions.
     // This must happen at emit level because:
-    //   - AST layer (lower_file_with_file_id) is per-file only
+    //   - AST layer (lower_file_with_path) is per-file only
     //   - MIR (lower_function) is per-function only
     //   - Only emit iterates all_files and has the compiled program
     // Follows the exact $init pattern at Pass 4.5 above.
     {
-        // Discover per-file $init_test_<N> functions using structured
+        // Discover per-file $init_test_<path> functions using structured
         // compiler metadata (HIR item trees), group by package.
         let mut pkg_init_tests: HashMap<String, Vec<(String, usize)>> = HashMap::new();
 
@@ -726,16 +726,16 @@ pub fn generate_project_bytecode_with_opt(
             for local_id in item_tree.functions.keys() {
                 let func_loc = FunctionLoc::new(db, *file, *local_id);
                 let fq_name = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
-                // Match per-file $init_test_<N> functions synthesized by
-                // lower_cst.rs:912-972. The trailing underscore in the filter
-                // is intentional: all real files produce `$init_test_{file_id}`
-                // with a numeric suffix. The sentinel FileId path in lower_cst.rs
-                // produces bare `$init_test` (no suffix), but that only runs in
-                // unit tests, PPIR intermediate processing, and codegen — none of
-                // which produce functions that reach program.function_indices at
-                // emit time. So `contains("$init_test_")` safely matches only
-                // per-file functions without risk of collision with the chainer
-                // name we're about to synthesize.
+                // Match per-file $init_test_<path> functions synthesized by
+                // `synthesize_init_test_function`. The trailing underscore in the
+                // filter is intentional: all real files produce a path-derived
+                // suffix. The no-path branch in lower_cst.rs produces bare
+                // `$init_test` (no suffix), but that only runs in unit tests, PPIR
+                // intermediate processing, and codegen — none of which produce
+                // functions that reach program.function_indices at emit time. So
+                // `contains("$init_test_")` safely matches only per-file functions
+                // without risk of collision with the chainer name we're about to
+                // synthesize.
                 if fq_name.contains("$init_test_") {
                     if let Some(&global_slot) = program.function_global_indices.get(&fq_name) {
                         pkg_init_tests

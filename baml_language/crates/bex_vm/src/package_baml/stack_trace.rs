@@ -1,5 +1,3 @@
-use bex_vm_types::Value;
-
 use super::{BamlClassErrorsStackTrace, BamlNamespaceErrors, PackageBamlImpl, view};
 use crate::{BexVm, errors::format_traceback};
 
@@ -7,12 +5,8 @@ impl BamlNamespaceErrors for PackageBamlImpl {}
 
 impl BamlClassErrorsStackTrace for PackageBamlImpl {
     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-    fn to_string(vm: &BexVm, stacktrace: &Value) -> bex_str::BexStr {
-        let instance = vm
-            .as_instance(stacktrace)
-            .expect("StackTrace: expected Instance");
-        let st = view::errors::StackTrace { instance };
-        let frames = st.frames(vm);
+    fn to_string(vm: &BexVm, stacktrace: &view::errors::StackTrace<'_>) -> bex_str::BexStr {
+        let frames = stacktrace.frames(vm);
 
         let frame_views: Vec<_> = frames
             .iter()

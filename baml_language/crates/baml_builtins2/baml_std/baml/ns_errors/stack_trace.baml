@@ -10,7 +10,7 @@ class StackTrace {
   frames StackFrame[]
 
   //baml:vm
-  function to_string(self) -> string {
+  function to_string(self) -> string throws never {
     $rust_function
   }
 }

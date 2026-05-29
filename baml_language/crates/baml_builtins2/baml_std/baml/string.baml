@@ -5,7 +5,7 @@
 class String {
   /// Serializes this string to a JSON value.
   //baml:mut_vm
-  function to_json(self) -> baml.json.json {
+  function to_json(self) -> baml.json.json throws never {
     $rust_function
   }
 
@@ -22,12 +22,12 @@ class String {
   /// "😀".length()     // 1
   /// "".length()       // 0
   /// ```
-  function length(self) -> int {
+  function length(self) -> int throws never {
     $rust_function
   }
 
   /// Alias for `length()`.
-  function char_count(self) -> int {
+  function char_count(self) -> int throws never {
     $rust_function
   }
 
@@ -42,17 +42,17 @@ class String {
   /// "héllo".byte_length()  // 6
   /// "😀".byte_length()     // 4
   /// ```
-  function byte_length(self) -> int {
+  function byte_length(self) -> int throws never {
     $rust_function
   }
 
   /// Returns the string with all Unicode characters converted to lowercase.
-  function to_lower_case(self) -> string {
+  function to_lower_case(self) -> string throws never {
     $rust_function
   }
 
   /// Returns the string with all Unicode characters converted to uppercase.
-  function to_upper_case(self) -> string {
+  function to_upper_case(self) -> string throws never {
     $rust_function
   }
 
@@ -67,7 +67,7 @@ class String {
   /// "\n\thi\n".trim()  // "hi"
   /// "hi".trim()        // "hi"
   /// ```
-  function trim(self) -> string {
+  function trim(self) -> string throws never {
     $rust_function
   }
 
@@ -79,7 +79,7 @@ class String {
   /// "  hi  ".trim_start()  // "hi  "
   /// "\nhi".trim_start()    // "hi"
   /// ```
-  function trim_start(self) -> string {
+  function trim_start(self) -> string throws never {
     $rust_function
   }
 
@@ -91,22 +91,22 @@ class String {
   /// "  hi  ".trim_end()  // "  hi"
   /// "hi\n".trim_end()    // "hi"
   /// ```
-  function trim_end(self) -> string {
+  function trim_end(self) -> string throws never {
     $rust_function
   }
 
   /// Returns true if `search` appears anywhere in the string.
-  function includes(self, search: string) -> bool {
+  function includes(self, search: string) -> bool throws never {
     $rust_function
   }
 
   /// Returns true if the string starts with `prefix`.
-  function starts_with(self, prefix: string) -> bool {
+  function starts_with(self, prefix: string) -> bool throws never {
     $rust_function
   }
 
   /// Returns true if the string ends with `suffix`.
-  function ends_with(self, suffix: string) -> bool {
+  function ends_with(self, suffix: string) -> bool throws never {
     $rust_function
   }
 
@@ -118,7 +118,7 @@ class String {
   /// "hello".split("")      // ["h", "e", "l", "l", "o"]
   /// "no match".split(",")  // ["no match"]
   /// ```
-  function split(self, delimiter: string) -> string[] {
+  function split(self, delimiter: string) -> string[] throws never {
     $rust_function
   }
 
@@ -134,7 +134,7 @@ class String {
   /// "".lines()           // []
   /// "\n".lines()         // [""]
   /// ```
-  function lines(self) -> string[] {
+  function lines(self) -> string[] throws never {
     $rust_function
   }
 
@@ -157,7 +157,7 @@ class String {
   }
 
   /// Replaces the first occurrence of `search` with `replacement`.
-  function replace(self, search: string, replacement: string) -> string {
+  function replace(self, search: string, replacement: string) -> string throws never {
     $rust_function
   }
 
@@ -171,7 +171,7 @@ class String {
   /// "😀hello".index_of("h")          // 1
   /// "abc".index_of("z")              // -1
   /// ```
-  function index_of(self, search: string) -> int {
+  function index_of(self, search: string) -> int throws never {
     $rust_function
   }
 
@@ -202,17 +202,17 @@ class String {
   /// "hi".repeat(0)   // ""
   /// "hi".repeat(-1)  // ""
   /// ```
-  function repeat(self, count: int) -> string {
+  function repeat(self, count: int) -> string throws never {
     $rust_function
   }
 
   /// Returns true if the string contains the given `substring`.
-  function matches(self, substring: string) -> bool {
+  function matches(self, substring: string) -> bool throws never {
     $rust_function
   }
 
   /// Replaces all occurrences of `search` with `replacement`.
-  function replace_all(self, search: string, replacement: string) -> string {
+  function replace_all(self, search: string, replacement: string) -> string throws never {
     $rust_function
   }
 
@@ -234,7 +234,7 @@ class String {
   /// "12a".is_numeric()    // false
   /// "".is_numeric()       // true (vacuous)
   /// ```
-  function is_numeric(self) -> bool {
+  function is_numeric(self) -> bool throws never {
     $rust_function
   }
 
@@ -247,7 +247,7 @@ class String {
   /// "漢字".is_alphabetic()    // true
   /// "abc1".is_alphabetic()   // false
   /// ```
-  function is_alphabetic(self) -> bool {
+  function is_alphabetic(self) -> bool throws never {
     $rust_function
   }
 
@@ -261,7 +261,7 @@ class String {
   /// "héllo7".is_alphanumeric()  // true
   /// "a b".is_alphanumeric()     // false (space is not)
   /// ```
-  function is_alphanumeric(self) -> bool {
+  function is_alphanumeric(self) -> bool throws never {
     $rust_function
   }
 
@@ -276,7 +276,7 @@ class String {
   /// "Hello".is_uppercase()  // false
   /// "123".is_uppercase()    // false (digits aren't uppercase)
   /// ```
-  function is_uppercase(self) -> bool {
+  function is_uppercase(self) -> bool throws never {
     $rust_function
   }
 
@@ -289,7 +289,7 @@ class String {
   /// "hello".is_lowercase()  // true
   /// "Hello".is_lowercase()  // false
   /// ```
-  function is_lowercase(self) -> bool {
+  function is_lowercase(self) -> bool throws never {
     $rust_function
   }
 
@@ -303,7 +303,7 @@ class String {
   /// " \t\n".is_whitespace()    // true
   /// "a b".is_whitespace()      // false
   /// ```
-  function is_whitespace(self) -> bool {
+  function is_whitespace(self) -> bool throws never {
     $rust_function
   }
 
@@ -315,7 +315,7 @@ class String {
   /// "\n\t".is_control()  // true
   /// "a".is_control()     // false
   /// ```
-  function is_control(self) -> bool {
+  function is_control(self) -> bool throws never {
     $rust_function
   }
 
@@ -332,7 +332,7 @@ class String {
   /// "a b".is_graphic()      // false (space is not graphic)
   /// "a\n".is_graphic()      // false (newline is control)
   /// ```
-  function is_graphic(self) -> bool {
+  function is_graphic(self) -> bool throws never {
     $rust_function
   }
 
@@ -349,7 +349,7 @@ class String {
   /// "hello".is_ascii()    // true
   /// "héllo".is_ascii()    // false (`é` is U+00E9)
   /// ```
-  function is_ascii(self) -> bool {
+  function is_ascii(self) -> bool throws never {
     $rust_function
   }
 
@@ -362,31 +362,31 @@ class String {
   /// "12345".is_ascii_numeric()  // true
   /// "Ⅷ".is_ascii_numeric()      // false (Roman numeral)
   /// ```
-  function is_ascii_numeric(self) -> bool {
+  function is_ascii_numeric(self) -> bool throws never {
     $rust_function
   }
 
   /// Returns true if every character is an ASCII letter (`A`..=`Z` or
   /// `a`..=`z`). Empty string returns true.
-  function is_ascii_alphabetic(self) -> bool {
+  function is_ascii_alphabetic(self) -> bool throws never {
     $rust_function
   }
 
   /// Returns true if every character is an ASCII letter or digit. Empty
   /// string returns true.
-  function is_ascii_alphanumeric(self) -> bool {
+  function is_ascii_alphanumeric(self) -> bool throws never {
     $rust_function
   }
 
   /// Returns true if every character is an ASCII uppercase letter
   /// (`A`..=`Z`). Empty string returns true.
-  function is_ascii_uppercase(self) -> bool {
+  function is_ascii_uppercase(self) -> bool throws never {
     $rust_function
   }
 
   /// Returns true if every character is an ASCII lowercase letter
   /// (`a`..=`z`). Empty string returns true.
-  function is_ascii_lowercase(self) -> bool {
+  function is_ascii_lowercase(self) -> bool throws never {
     $rust_function
   }
 
@@ -394,20 +394,20 @@ class String {
   /// horizontal tab (`\t`), line feed (`\n`), form feed (`\x0C`), or
   /// carriage return (`\r`). Note this is narrower than `is_whitespace`,
   /// which accepts Unicode whitespace like NBSP.
-  function is_ascii_whitespace(self) -> bool {
+  function is_ascii_whitespace(self) -> bool throws never {
     $rust_function
   }
 
   /// Returns true if every character is an ASCII control character — code
   /// points `[0x00, 0x1F]` plus DEL (`0x7F`). Empty string returns true.
-  function is_ascii_control(self) -> bool {
+  function is_ascii_control(self) -> bool throws never {
     $rust_function
   }
 
   /// Returns true if every character is an ASCII "graphic" character —
   /// printable, non-space, non-control: code points `[0x21, 0x7E]`. Note
   /// the ASCII space is *not* graphic. Empty string returns true.
-  function is_ascii_graphic(self) -> bool {
+  function is_ascii_graphic(self) -> bool throws never {
     $rust_function
   }
 
@@ -419,13 +419,13 @@ class String {
   /// "deadBEEF".is_ascii_hex()  // true
   /// "0x123".is_ascii_hex()     // false (`x` is not a hex digit)
   /// ```
-  function is_ascii_hex(self) -> bool {
+  function is_ascii_hex(self) -> bool throws never {
     $rust_function
   }
 
   /// Returns the string encoded as a `uint8array` of UTF-8 bytes.
   ///
-  /// The resulting byte array has length `self.length()`. Inverse of the
+  /// The resulting byte array has length `self.byte_length()`. Inverse of the
   /// static `string.from_utf8(bytes)`.
   ///
   /// # Examples
@@ -434,7 +434,7 @@ class String {
   /// "é".to_utf8()      // [0xC3, 0xA9]
   /// "".to_utf8()       // []
   /// ```
-  function to_utf8(self) -> uint8array {
+  function to_utf8(self) -> uint8array throws never {
     $rust_function
   }
 

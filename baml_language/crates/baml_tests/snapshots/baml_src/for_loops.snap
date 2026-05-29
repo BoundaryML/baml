@@ -1,64 +1,64 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function for_loops.$init_test_50(registry: testing.TestCollector) -> null {
+function for_loops.$init_test_ns_for_loops_for_loops(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "for_loop_sum"
-    make_closure .<lambda($init_test_50, 0)>, 0
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "for_loop_with_break"
-    make_closure .<lambda($init_test_50, 1)>, 0
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "for_loop_with_continue"
-    make_closure .<lambda($init_test_50, 2)>, 0
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "for_loop_nested"
-    make_closure .<lambda($init_test_50, 3)>, 0
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "c_for_sum_to_ten"
-    make_closure .<lambda($init_test_50, 4)>, 0
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 4)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "for_loop_over_let_variable"
-    make_closure .<lambda($init_test_50, 5)>, 0
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 5)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "for_loop_over_let_variable_no_parens"
-    make_closure .<lambda($init_test_50, 6)>, 0
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 6)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "for_loop_final_if_without_semicolon_can_return"
-    make_closure .<lambda($init_test_50, 7)>, 0
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 7)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "for_loop_final_if_else_without_semicolon_can_mutate"
-    make_closure .<lambda($init_test_50, 8)>, 0
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 8)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "nested_for_loop_final_if_without_semicolon_can_return"
-    make_closure .<lambda($init_test_50, 9)>, 0
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 9)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1

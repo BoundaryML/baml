@@ -1,64 +1,64 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function closures.$init_test_43(registry: testing.TestCollector) -> null {
+function closures.$init_test_ns_closures_closures(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "bound_formatter_mapper"
-    make_closure .<lambda($init_test_43, 0)>, 0
+    make_closure .<lambda($init_test_ns_closures_closures, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "unbound_in_map"
-    make_closure .<lambda($init_test_43, 1)>, 0
+    make_closure .<lambda($init_test_ns_closures_closures, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "bound_validator_mapped"
-    make_closure .<lambda($init_test_43, 2)>, 0
+    make_closure .<lambda($init_test_ns_closures_closures, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "mutation_after_bind"
-    make_closure .<lambda($init_test_43, 3)>, 0
+    make_closure .<lambda($init_test_ns_closures_closures, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "repeated_bound_calls"
-    make_closure .<lambda($init_test_43, 4)>, 0
+    make_closure .<lambda($init_test_ns_closures_closures, 4)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "field_chain_bind"
-    make_closure .<lambda($init_test_43, 5)>, 0
+    make_closure .<lambda($init_test_ns_closures_closures, 5)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "strategy_swap"
-    make_closure .<lambda($init_test_43, 6)>, 0
+    make_closure .<lambda($init_test_ns_closures_closures, 6)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "generic_unwrap"
-    make_closure .<lambda($init_test_43, 7)>, 0
+    make_closure .<lambda($init_test_ns_closures_closures, 7)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "bound_in_lambda"
-    make_closure .<lambda($init_test_43, 8)>, 0
+    make_closure .<lambda($init_test_ns_closures_closures, 8)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "bound_throwing_method_reference_catches_error"
-    make_closure .<lambda($init_test_43, 9)>, 0
+    make_closure .<lambda($init_test_ns_closures_closures, 9)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1

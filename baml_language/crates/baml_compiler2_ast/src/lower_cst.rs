@@ -29,7 +29,7 @@ use crate::{
 /// Intermediate representation of a test/testset block before synthesis.
 ///
 /// Collected during file lowering, then passed to `synthesize_init_test_function`
-/// which emits a per-file `$init_test_<file_id>` function containing
+/// which emits a per-file `$init_test_<path>` function containing
 /// `registry.register_test(...)` / `registry.register_test_set(...)` calls.
 enum TestRegistrationItem {
     Test {
@@ -64,12 +64,12 @@ enum TestRegistrationItem {
 pub fn lower_file(
     root: &SyntaxNode,
 ) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
-    lower_file_with_file_id(root, baml_base::FileId::sentinel())
+    lower_file_with_path(root, None)
 }
 
-pub fn lower_file_with_file_id(
+pub fn lower_file_with_path(
     root: &SyntaxNode,
-    file_id: baml_base::FileId,
+    file_path: Option<&std::path::Path>,
 ) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
     let mut diags = Vec::new();
     let mut env_var_refs = Vec::new();
@@ -147,11 +147,12 @@ pub fn lower_file_with_file_id(
     }
 
     // Synthesize a per-file $init_test function for all collected test/testset registrations.
-    // The file_id suffix ensures uniqueness when multiple files contain tests.
+    // The path-derived suffix keeps the name unique across files while staying
+    // stable across compilations (unlike a load-order file id).
     if !test_registrations.is_empty() {
         let init_fn = synthesize_init_test_function(
             &test_registrations,
-            file_id,
+            file_path,
             &mut diags,
             &mut env_var_refs,
         );
@@ -1172,19 +1173,43 @@ fn lower_testset(node: &SyntaxNode) -> Option<TestRegistrationItem> {
 ///
 /// Lambda bodies are lowered from the original CST `BLOCK_EXPR` nodes.
 ///
-/// The function is named `"$init_test_<file_id>"` to avoid collisions when
-/// multiple files contain tests. For the sentinel `FileId` (PPIR), uses plain
-/// `"$init_test"` since PPIR processes files individually.
+/// Derive the `$init_test_<key>` suffix from a file path.
+///
+/// Strips the extension and replaces every character that isn't a letter,
+/// digit, or `_` (notably the path separators and `.`, which would otherwise
+/// break the `.`-delimited namespace routing of function names). The result is
+/// stable across compilations and unique per file, e.g.
+/// `ns_arrays/arrays.baml` -> `ns_arrays_arrays`.
+fn init_test_key_from_path(path: &std::path::Path) -> String {
+    path.with_extension("")
+        .to_string_lossy()
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
+/// The function is named `"$init_test_<sanitized_path>"` to avoid collisions
+/// when multiple files contain tests. The suffix is derived from the file path
+/// rather than its `FileId`: a `FileId` is a load-order index that shifts
+/// whenever an earlier file is added (e.g. a new stdlib file), which would
+/// churn every snapshot referencing the name. The path is stable across
+/// compilations. When no path is available (e.g. PPIR, which processes files
+/// individually), uses plain `"$init_test"`.
 fn synthesize_init_test_function(
     registrations: &[TestRegistrationItem],
-    file_id: baml_base::FileId,
+    file_path: Option<&std::path::Path>,
     diags: &mut Vec<LoweringDiagnostic>,
     env_var_refs: &mut Vec<crate::EnvVarRef>,
 ) -> FunctionDef {
-    let fn_name = if file_id == baml_base::FileId::sentinel() {
-        "$init_test".to_string()
-    } else {
-        format!("$init_test_{}", file_id.as_u32())
+    let fn_name = match file_path {
+        Some(path) => format!("$init_test_{}", init_test_key_from_path(path)),
+        None => "$init_test".to_string(),
     };
     let span = text_size::TextRange::default();
 

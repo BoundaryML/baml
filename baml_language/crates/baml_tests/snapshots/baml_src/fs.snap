@@ -1,202 +1,202 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function fs.$init_test_51(registry: testing.TestCollector) -> null {
+function fs.$init_test_ns_fs_fs(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "fs_open_and_read"
-    make_closure .<lambda($init_test_51, 0)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_open_and_read_bytes"
-    make_closure .<lambda($init_test_51, 1)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_write_string"
-    make_closure .<lambda($init_test_51, 2)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_write_bytes"
-    make_closure .<lambda($init_test_51, 3)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_write_creates_parent_dirs"
-    make_closure .<lambda($init_test_51, 4)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 4)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_write_overwrites_existing"
-    make_closure .<lambda($init_test_51, 5)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 5)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_roundtrip_write_and_read"
-    make_closure .<lambda($init_test_51, 6)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 6)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_file_rw_seek_and_read"
-    make_closure .<lambda($init_test_51, 7)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 7)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_file_rw_write_and_read_back"
-    make_closure .<lambda($init_test_51, 8)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 8)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_file_rw_write_bytes"
-    make_closure .<lambda($init_test_51, 9)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 9)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_exists_returns_true"
-    make_closure .<lambda($init_test_51, 10)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 10)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_exists_returns_false"
-    make_closure .<lambda($init_test_51, 11)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 11)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_remove_deletes_file"
-    make_closure .<lambda($init_test_51, 12)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 12)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_size_returns_length"
-    make_closure .<lambda($init_test_51, 13)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 13)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_file_read_n_bytes"
-    make_closure .<lambda($init_test_51, 14)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 14)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_file_read_truncates_at_eof"
-    make_closure .<lambda($init_test_51, 15)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 15)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_file_read_bytes_n"
-    make_closure .<lambda($init_test_51, 16)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 16)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_file_read_advances_cursor"
-    make_closure .<lambda($init_test_51, 17)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 17)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_open_append_creates_and_appends"
-    make_closure .<lambda($init_test_51, 18)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 18)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_open_append_creates_missing_file"
-    make_closure .<lambda($init_test_51, 19)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 19)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_open_append_plus_can_read"
-    make_closure .<lambda($init_test_51, 20)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 20)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_file_close_is_idempotent"
-    make_closure .<lambda($init_test_51, 21)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 21)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_read_returns_contents"
-    make_closure .<lambda($init_test_51, 22)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 22)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_open_w_truncates_existing"
-    make_closure .<lambda($init_test_51, 23)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 23)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_open_w_creates_missing_file"
-    make_closure .<lambda($init_test_51, 24)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 24)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_open_w_plus_reads_after_write"
-    make_closure .<lambda($init_test_51, 25)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 25)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_open_w_creates_parent_dirs"
-    make_closure .<lambda($init_test_51, 26)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 26)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_read_dir_returns_entries"
-    make_closure .<lambda($init_test_51, 27)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 27)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_read_dir_type_flags"
-    make_closure .<lambda($init_test_51, 28)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 28)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_read_dir_empty_dir"
-    make_closure .<lambda($init_test_51, 29)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 29)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_mkdir_creates_directory"
-    make_closure .<lambda($init_test_51, 30)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 30)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_mkdir_recursive_creates_parents"
-    make_closure .<lambda($init_test_51, 31)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 31)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "fs_mkdir_recursive_is_idempotent"
-    make_closure .<lambda($init_test_51, 32)>, 0
+    make_closure .<lambda($init_test_ns_fs_fs, 32)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1

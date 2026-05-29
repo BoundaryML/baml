@@ -1,64 +1,64 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function null_handling.$init_test_68(registry: testing.TestCollector) -> null {
+function null_handling.$init_test_ns_null_handling_null_handling(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "safe_assign_null_skips"
-    make_closure .<lambda($init_test_68, 0)>, 0
+    make_closure .<lambda($init_test_ns_null_handling_null_handling, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "safe_assign_non_null_writes"
-    make_closure .<lambda($init_test_68, 1)>, 0
+    make_closure .<lambda($init_test_ns_null_handling_null_handling, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "compound_assign_null_skips"
-    make_closure .<lambda($init_test_68, 2)>, 0
+    make_closure .<lambda($init_test_ns_null_handling_null_handling, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "compound_assign_non_null_increments"
-    make_closure .<lambda($init_test_68, 3)>, 0
+    make_closure .<lambda($init_test_ns_null_handling_null_handling, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "safe_assign_index_null_skips"
-    make_closure .<lambda($init_test_68, 4)>, 0
+    make_closure .<lambda($init_test_ns_null_handling_null_handling, 4)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "safe_assign_index_non_null_writes"
-    make_closure .<lambda($init_test_68, 5)>, 0
+    make_closure .<lambda($init_test_ns_null_handling_null_handling, 5)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "null_coalesce_lazy_rhs_skips_side_effects"
-    make_closure .<lambda($init_test_68, 6)>, 0
+    make_closure .<lambda($init_test_ns_null_handling_null_handling, 6)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "null_coalesce_null_lhs_evaluates_rhs"
-    make_closure .<lambda($init_test_68, 7)>, 0
+    make_closure .<lambda($init_test_ns_null_handling_null_handling, 7)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "combined_compound_assign_rhs_null_uses_fallback"
-    make_closure .<lambda($init_test_68, 8)>, 0
+    make_closure .<lambda($init_test_ns_null_handling_null_handling, 8)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "combined_compound_assign_lhs_null_skips"
-    make_closure .<lambda($init_test_68, 9)>, 0
+    make_closure .<lambda($init_test_ns_null_handling_null_handling, 9)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1

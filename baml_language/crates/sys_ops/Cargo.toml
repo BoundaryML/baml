@@ -27,6 +27,7 @@ bex_vm_types = { workspace = true }
 sys_llm = { workspace = true }
 sys_types = { workspace = true }
 indexmap = { workspace = true }
+num-bigint = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = [ "rt", "macros" ] }

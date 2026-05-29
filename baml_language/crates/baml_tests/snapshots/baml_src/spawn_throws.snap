@@ -1,16 +1,16 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function spawn_throws.$init_test_80(registry: testing.TestCollector) -> null {
+function spawn_throws.$init_test_ns_spawn_throws_spawn_throws(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "await_uncaught_bubbles_to_host"
-    make_closure .<lambda($init_test_80, 0)>, 0
+    make_closure .<lambda($init_test_ns_spawn_throws_spawn_throws, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "await_rethrows_caught_by_user_catch"
-    make_closure .<lambda($init_test_80, 1)>, 0
+    make_closure .<lambda($init_test_ns_spawn_throws_spawn_throws, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1

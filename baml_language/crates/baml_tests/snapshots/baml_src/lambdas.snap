@@ -1,172 +1,172 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function lambdas.$init_test_62(registry: testing.TestCollector) -> null {
+function lambdas.$init_test_ns_lambdas_lambdas(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "iife_single_param_returns_correct_value"
-    make_closure .<lambda($init_test_62, 0)>, 0
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "zero_param_lambda_returns_constant"
-    make_closure .<lambda($init_test_62, 1)>, 0
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "multi_param_lambda_returns_sum"
-    make_closure .<lambda($init_test_62, 2)>, 0
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "annotated_lambda_doubles_value"
-    make_closure .<lambda($init_test_62, 3)>, 0
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "inferred_return_type_lambda"
-    make_closure .<lambda($init_test_62, 4)>, 0
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 4)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "lambda_captures_local_variable"
-    make_closure .<lambda($init_test_62, 5)>, 0
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 5)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "lambda_captures_function_parameter"
-    make_closure .<lambda($init_test_62, 6)>, 0
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 6)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "lambda_captures_multiple_variables"
-    make_closure .<lambda($init_test_62, 7)>, 0
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 7)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "shared_cell_mutation_counter"
-    make_closure .<lambda($init_test_62, 8)>, 0
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 8)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "nested_lambda_transitive_capture"
-    make_closure .<lambda($init_test_62, 9)>, 0
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 9)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "iife_returns_closure_counter"
-    make_closure .<lambda($init_test_62, 10)>, 0
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 10)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "closure_in_map_with_captured_offset"
-    make_closure .<lambda($init_test_62, 11)>, 0
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 11)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "multiple_closures_share_cell"
-    make_closure .<lambda($init_test_62, 12)>, 0
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 12)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "multiple_closures_share_cell_deep_copy"
-    make_closure .<lambda($init_test_62, 13)>, 0
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 13)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "explicit_throwing_lambda_catches_error"
-    make_closure .<lambda($init_test_62, 14)>, 0
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 14)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "lambda_inside_catch_base_keeps_parameter_scope"
-    make_closure .<lambda($init_test_62, 15)>, 0
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 15)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "deep_nesting_three_levels"
-    make_closure .<lambda($init_test_62, 16)>, 0
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 16)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "lambda_captures_loop_variable_accumulation"
-    make_closure .<lambda($init_test_62, 17)>, 0
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 17)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "issue_e_method_resolution_different_types"
-    make_closure .<lambda($init_test_62, 18)>, 0
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 18)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "issue_f_shadowing_capture_correct_binding"
-    make_closure .<lambda($init_test_62, 19)>, 0
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 19)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "issue_f_shadowing_capture_independent_cells"
-    make_closure .<lambda($init_test_62, 20)>, 0
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 20)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "issue_a_capture_read_after_mutation"
-    make_closure .<lambda($init_test_62, 21)>, 0
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 21)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "issue_a_interleaved_capture_reads_writes"
-    make_closure .<lambda($init_test_62, 22)>, 0
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 22)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "issue_d_capture_as_call_destination"
-    make_closure .<lambda($init_test_62, 23)>, 0
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 23)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "issue_b_captured_variable_mutation_visible"
-    make_closure .<lambda($init_test_62, 24)>, 0
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 24)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "issue_b_watch_let_captured_by_lambda"
-    make_closure .<lambda($init_test_62, 25)>, 0
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 25)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "issue_b_watch_let_mutated_by_parent_and_lambda"
-    make_closure .<lambda($init_test_62, 26)>, 0
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 26)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "lambda_param_shadows_annotated_outer_local"
-    make_closure .<lambda($init_test_62, 27)>, 0
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 27)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1

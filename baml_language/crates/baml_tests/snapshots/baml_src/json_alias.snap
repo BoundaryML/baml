@@ -1,46 +1,46 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function json_alias.$init_test_58(registry: testing.TestCollector) -> null {
+function json_alias.$init_test_ns_json_alias_json_alias(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "field_of_type_json_lowers_cleanly"
-    make_closure .<lambda($init_test_58, 0)>, 0
+    make_closure .<lambda($init_test_ns_json_alias_json_alias, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "let_json_null"
-    make_closure .<lambda($init_test_58, 1)>, 0
+    make_closure .<lambda($init_test_ns_json_alias_json_alias, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "let_json_int"
-    make_closure .<lambda($init_test_58, 2)>, 0
+    make_closure .<lambda($init_test_ns_json_alias_json_alias, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "let_json_string"
-    make_closure .<lambda($init_test_58, 3)>, 0
+    make_closure .<lambda($init_test_ns_json_alias_json_alias, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "let_json_array"
-    make_closure .<lambda($init_test_58, 4)>, 0
+    make_closure .<lambda($init_test_ns_json_alias_json_alias, 4)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "let_json_map"
-    make_closure .<lambda($init_test_58, 5)>, 0
+    make_closure .<lambda($init_test_ns_json_alias_json_alias, 5)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_json_arms_exhaustive"
-    make_closure .<lambda($init_test_58, 6)>, 0
+    make_closure .<lambda($init_test_ns_json_alias_json_alias, 6)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
