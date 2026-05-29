@@ -72,7 +72,7 @@ function json_alias.json_array_len() -> int {
 
   L1:
     load_var arr
-    call baml.Array.length
+    container_len
 
   L2:
     return
@@ -93,7 +93,7 @@ function json_alias.json_map_has_key() -> bool {
 
   L1:
     load_var m
-    call baml.Map.length
+    container_len
     load_const 1
     cmp_int_op ==
 

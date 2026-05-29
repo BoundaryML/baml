@@ -32,6 +32,7 @@ indexmap = { workspace = true }
 log = { workspace = true }
 num-bigint = { workspace = true }
 serde_json = { workspace = true }
+smallvec = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true }
 web-time = { workspace = true }

@@ -276,6 +276,6 @@ function byte_strings.byte_strings_zeroes_basic() -> uint8array {
 
 function byte_strings.get_len(data: uint8array) -> int {
     load_var data
-    call baml.Uint8Array.length
+    container_len
     return
 }

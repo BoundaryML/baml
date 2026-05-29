@@ -3737,6 +3737,32 @@ impl LoweringContext<'_> {
             return;
         }
 
+        // Check if callee is `.length()` on a container — emit Rvalue::Len instead of Call.
+        if let Operand::Constant(Constant::Function(ref item)) = callee_operand {
+            let name = item.to_string();
+            if name == "baml.Array.length"
+                || name == "baml.Map.length"
+                || name == "baml.string.length"
+                || name == "baml.Uint8Array.length"
+            {
+                if let Some(receiver_operand) = arg_operands.first() {
+                    let place = match receiver_operand {
+                        Operand::Copy(p) | Operand::Move(p) => p.clone(),
+                        Operand::Constant(_) => {
+                            let tmp = self.builder.temp(baml_type::Ty::unknown());
+                            self.builder
+                                .assign(Place::Local(tmp), Rvalue::Use(receiver_operand.clone()));
+                            Place::Local(tmp)
+                        }
+                    };
+                    self.builder.assign(dest, Rvalue::Len(place));
+                    self.builder.goto(target);
+                    self.builder.set_current_block(target);
+                    return;
+                }
+            }
+        }
+
         // Check if callee is a compiler intrinsic (log.*, baml.events.send).
         // Intrinsics are void side effects — emit as a statement, not a call.
         if let Some(op) = self.check_intrinsic(callee) {
