@@ -28,22 +28,15 @@ use crate::types::{BamlType, NativeBuiltin, NativeClassDef, Receiver, VmUsage};
 /// `baml.unstable.string` can fail at runtime on certain values, and the
 /// random methods can raise a `HostUnavailable` panic if the OS entropy source
 /// is inaccessible).
+/// A builtin is fallible (its trait method returns `Result<T, VmRustFnError>`) when
+/// it declares a non-empty `throws` clause, or is explicitly `//baml:fallible`.
+///
+/// `//baml:fallible` covers builtins that raise a *panic* (e.g. `AllocFailure`)
+/// rather than a catchable `throws` error, so `throws never` wouldn't flag them on
+/// its own. A missing `throws` clause (`None`) is rejected during extraction
+/// (`extract_native_builtins`), so here it's treated as infallible.
 fn is_fallible(b: &NativeBuiltin) -> bool {
-    !b.throws.is_empty()
-        || b.path.starts_with("baml.unstable.")
-        || matches!(
-            b.path.as_str(),
-            "baml.sys.panic"
-                | "baml.sys.exit"
-                | "baml.media.Pdf.to_json"
-                | "baml.media.Audio.to_json"
-                | "baml.media.Video.to_json"
-                | "baml.media.Image.to_json"
-                | "baml.Float.random"
-                // `bigint.pow` raises `AllocFailure` (a panic, not in `throws`) when
-                // the estimated result size exceeds `MAX_BIGINT_BITS`.
-                | "baml.Bigint.pow"
-        )
+    b.fallible || matches!(&b.throws, Some(cats) if !cats.is_empty())
 }
 
 // ============================================================================
@@ -391,6 +384,44 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 writeln!(out, "{inner2}}}").unwrap();
                 writeln!(out, "{inner}}}\n").unwrap();
             }
+            BamlType::Bigint => {
+                // Bigints live behind a heap pointer (`Object::Bigint`); clone
+                // the shared `Arc` out (cheap) so the caller gets an owned handle.
+                writeln!(
+                    out,
+                    "{inner}pub fn {field_name}(&self) -> std::sync::Arc<num_bigint::BigInt> {{"
+                )
+                .unwrap();
+                writeln!(
+                    out,
+                    "{inner2}match self.instance.load_field({}).as_object_ptr() {{",
+                    field.index
+                )
+                .unwrap();
+                writeln!(
+                    out,
+                    "{inner2}    Some(ptr) => match unsafe {{ ptr.get() }} {{"
+                )
+                .unwrap();
+                writeln!(
+                    out,
+                    "{inner2}        bex_vm_types::Object::Bigint(b) => b.clone(),"
+                )
+                .unwrap();
+                writeln!(
+                    out,
+                    "{inner2}        _ => panic!(\"{class_name}.{field_name}: expected Bigint\"),"
+                )
+                .unwrap();
+                writeln!(out, "{inner2}    }},").unwrap();
+                writeln!(
+                    out,
+                    "{inner2}    None => panic!(\"{class_name}.{field_name}: expected Bigint\"),"
+                )
+                .unwrap();
+                writeln!(out, "{inner2}}}").unwrap();
+                writeln!(out, "{inner}}}\n").unwrap();
+            }
             // Generic, Named, Media, Null — fallback to a copied Value.
             _ => {
                 writeln!(out, "{inner}pub fn {field_name}(&self) -> Value {{").unwrap();
@@ -556,6 +587,16 @@ fn copy_field_to_value(field_name: &str, ty: &BamlType) -> String {
             "Value::try_int(self.{field_name}).unwrap_or_else(|| panic!(\
                 \"`{field_name}: int` is outside BAML int range [{{}}, {{}}], got {{}}\", \
                 Value::INT_MIN, Value::INT_MAX, self.{field_name}))"
+        ),
+        // Bigints are always heap-allocated, and allocation is fallible (the
+        // value may exceed `MAX_BIGINT_BITS`). `to_value` has no error channel,
+        // so — like the `int` range case above — fail loudly rather than
+        // silently dropping the overflow. The panic reports the bit count from
+        // `VmPanic::AllocFailure` (`{p}`), never the bigint itself, which could
+        // be millions of digits long.
+        BamlType::Bigint => format!(
+            "vm.try_alloc_bigint(self.{field_name}).unwrap_or_else(|p| panic!(\
+                \"failed to allocate bigint field `{field_name}`: {{p}}\"))"
         ),
         BamlType::Float => format!("vm.alloc_float(self.{field_name})"),
         BamlType::Bool => format!("Value::bool(self.{field_name})"),
@@ -1132,6 +1173,23 @@ fn emit_immut_receiver_extraction_indented(
                 .unwrap();
             }
         }
+        // Other instance-backed receivers (e.g. `time.Instant`): wrap the heap
+        // instance in its `view::<ns>::<Class>` struct. `needs_owned` (set for
+        // `//baml:mut_vm` methods) falls through to the raw `&Value` path below,
+        // matching `receiver_input_type_with_vm_usage`.
+        _ if recv.instance_backed && !needs_owned => {
+            let view_path = receiver_view_path(recv);
+            writeln!(
+                out,
+                "{indent}let __instance = vm.as_instance(&args[{idx}])?;"
+            )
+            .unwrap();
+            writeln!(
+                out,
+                "{indent}let {name} = {view_path} {{ instance: __instance }};"
+            )
+            .unwrap();
+        }
         _ => {
             let rhs = receiver_immut_extraction_expr(
                 &format!("&args[{idx}]"),
@@ -1463,6 +1521,10 @@ fn call_arg_list(b: &NativeBuiltin, needs_owned: bool, arraymap_needs_owned: boo
                 // `let pdf = &args[0];` (a `&Value` copy).  Pass `name` directly —
                 // it is already the `&Value` the trait method expects.
                 args.push(name);
+            } else if recv.instance_backed && !needs_owned {
+                // Instance-backed receiver extracted as a `view::<ns>::<Class>`
+                // value; the trait method takes it by reference.
+                args.push(format!("&{name}"));
             } else {
                 let recv_is_ref = match recv.class_name.as_str() {
                     "Array" | "Map" | "Uint8Array" => arraymap_is_ref,
@@ -1505,19 +1567,18 @@ fn call_arg_for_type(name: &str, ty: &BamlType, is_ref: bool) -> String {
         }
         BamlType::Optional(inner) => {
             if is_ref {
-                // Extraction returned Option<&T> — convert to match clean method signature
+                // Extraction returned Option<&T> — pass through (already the right type)
                 match inner.as_ref() {
-                    BamlType::String => format!("{name}.map(String::as_str)"),
                     BamlType::Uint8Array => format!("{name}.as_deref().map(Vec::as_slice)"),
                     BamlType::List(_) => format!("{name}.as_deref().map(Vec::as_slice)"),
                     BamlType::Map(_, _) => format!("{name}.as_deref().map(Box::as_ref)"),
-                    // Option<&MediaValue> — already correct
+                    // Option<&BexStr>, Option<&MediaValue> — already correct
                     _ => name.to_string(),
                 }
             } else {
                 // Extraction returned Option<T> (owned) — current behavior
                 match inner.as_ref() {
-                    BamlType::String => format!("{name}.as_deref()"),
+                    BamlType::String => format!("{name}.as_ref()"),
                     BamlType::List(_) => format!("{name}.as_deref()"),
                     BamlType::Uint8Array => format!("{name}.as_deref()"),
                     _ => {
@@ -1652,9 +1713,9 @@ fn baml_type_to_input(ty: &BamlType, is_mut: bool) -> String {
     match ty {
         BamlType::String => {
             if is_mut {
-                "&mut String".to_string()
+                "&mut bex_str::BexStr".to_string()
             } else {
-                "&str".to_string()
+                "&bex_str::BexStr".to_string()
             }
         }
         BamlType::Int => "i64".to_string(),
@@ -1671,9 +1732,9 @@ fn baml_type_to_input(ty: &BamlType, is_mut: bool) -> String {
         }
         BamlType::Map(_, _) => {
             if is_mut {
-                "&mut IndexMap<String, Value>".to_string()
+                "&mut IndexMap<bex_str::BexStr, Value>".to_string()
             } else {
-                "&IndexMap<String, Value>".to_string()
+                "&IndexMap<bex_str::BexStr, Value>".to_string()
             }
         }
         BamlType::Optional(inner) => {
@@ -1694,17 +1755,17 @@ fn baml_type_to_input(ty: &BamlType, is_mut: bool) -> String {
 
 fn baml_type_to_output(ty: &BamlType) -> String {
     match ty {
-        BamlType::String => "String".to_string(),
+        BamlType::String => "bex_str::BexStr".to_string(),
         BamlType::Int => "i64".to_string(),
         BamlType::Bigint => "std::sync::Arc<num_bigint::BigInt>".to_string(),
         BamlType::Float => "f64".to_string(),
         BamlType::Bool => "bool".to_string(),
         BamlType::Null => "()".to_string(),
         BamlType::List(inner) => match inner.as_ref() {
-            BamlType::String => "Vec<String>".to_string(),
+            BamlType::String => "Vec<bex_str::BexStr>".to_string(),
             _ => "Vec<Value>".to_string(),
         },
-        BamlType::Map(_, _) => "IndexMap<String, Value>".to_string(),
+        BamlType::Map(_, _) => "IndexMap<bex_str::BexStr, Value>".to_string(),
         BamlType::Optional(inner) => {
             let inner_str = baml_type_to_output(inner);
             format!("Option<{inner_str}>")
@@ -1722,6 +1783,20 @@ fn baml_type_to_output(ty: &BamlType) -> String {
 
 fn receiver_param_name(recv: &Receiver) -> String {
     recv.class_name.to_lowercase()
+}
+
+/// Path to the generated `view::` struct for an instance-backed receiver, e.g.
+/// `view::time::Instant` or (for a root-level class) `view::Foo`.
+fn receiver_view_path(recv: &Receiver) -> String {
+    if recv.namespace.is_empty() {
+        format!("view::{}", recv.class_name)
+    } else {
+        format!(
+            "view::{}::{}",
+            recv.namespace.replace('.', "::"),
+            recv.class_name
+        )
+    }
 }
 
 #[allow(dead_code)]
@@ -1745,16 +1820,16 @@ fn receiver_input_type_with_vm_usage(recv: &Receiver, vm_usage: VmUsage) -> Stri
         }
         "Map" => {
             if recv.receiver_type.is_mut() {
-                "&mut IndexMap<String, Value>".to_string()
+                "&mut IndexMap<bex_str::BexStr, Value>".to_string()
             } else {
-                "&IndexMap<String, Value>".to_string()
+                "&IndexMap<bex_str::BexStr, Value>".to_string()
             }
         }
         "String" => {
             if recv.receiver_type.is_mut() {
-                "&mut String".to_string()
+                "&mut bex_str::BexStr".to_string()
             } else {
-                "&str".to_string()
+                "&bex_str::BexStr".to_string()
             }
         }
         "Uint8Array" => {
@@ -1787,6 +1862,14 @@ fn receiver_input_type_with_vm_usage(recv: &Receiver, vm_usage: VmUsage) -> Stri
                     _ => "&Value".to_string(),
                 }
             }
+        }
+        // Other instance-backed classes (e.g. `time.Instant`) are passed as a
+        // borrowed `view::<ns>::<Class>` for typed field access. As with media,
+        // `//baml:mut_vm` methods fall back to the `Copy` `&Value` because the
+        // view's `&Instance` borrow can't coexist with `&mut BexVm`. Opaque
+        // classes and primitives stay type-erased.
+        _ if recv.instance_backed && !matches!(vm_usage, VmUsage::MutRef) => {
+            format!("&{}<'_>", receiver_view_path(recv))
         }
         _ => "&Value".to_string(),
     }
@@ -1926,7 +2009,7 @@ mod tests {
             "BamlClassArray should have bare `length` method:\n{output}"
         );
         assert!(
-            output.contains("fn to_lower_case(string: &str) -> String;"),
+            output.contains("fn to_lower_case(string: &bex_str::BexStr) -> bex_str::BexStr;"),
             "BamlClassString should have bare `to_lower_case` method:\n{output}"
         );
         assert!(
@@ -2110,7 +2193,7 @@ mod tests {
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
-            output.contains("fn from_url(url: &str, mime_type: Option<&str>) -> copy::media::Pdf;"),
+            output.contains("fn from_url(url: &bex_str::BexStr, mime_type: Option<&bex_str::BexStr>) -> copy::media::Pdf;"),
             "BamlClassMediaPdf should have from_url static constructor returning copy::media::Pdf:\n{output}"
         );
     }

@@ -57,6 +57,7 @@ mod wasm_io_glob;
 mod wasm_lsp;
 mod wasm_playground;
 mod wasm_sys;
+mod wasm_time;
 
 pub use bridge_ctypes::{HANDLE_TABLE, baml_core, external_to_outbound, kwargs_to_bex_values};
 pub use error::BridgeError;
@@ -262,6 +263,7 @@ impl BamlWasmRuntime {
             .with_glob_instance(std::sync::Arc::new(wasm_io_glob::WasmIoGlob::new(
                 std::sync::Arc::clone(&wasm_vfs_arc),
             )))
+            .with_time_instance(std::sync::Arc::new(wasm_time::WasmTime))
             // One `WasmHost` per runtime, holding *this* runtime's JS
             // `host_dispatch` callback so a BAML→host call dispatches through
             // the correct wrapper (a process-global callback would let a second

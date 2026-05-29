@@ -25,7 +25,7 @@ async fn env_get_or_panic_existing_var() {
     "#);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("panic_value".to_string()))
+        Ok(BexExternalValue::String("panic_value".to_string().into()))
     );
 }
 
@@ -49,7 +49,7 @@ async fn env_get_existing_var() {
     "#);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("hello_env".to_string()))
+        Ok(BexExternalValue::String("hello_env".to_string().into()))
     );
 }
 
@@ -73,6 +73,6 @@ async fn env_sugar_existing_var() {
     "#);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("sugar_value".to_string()))
+        Ok(BexExternalValue::String("sugar_value".to_string().into()))
     );
 }

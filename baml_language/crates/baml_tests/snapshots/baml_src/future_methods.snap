@@ -1,28 +1,28 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function future_methods.$init_test_55(registry: testing.TestCollector) -> null {
+function future_methods.$init_test_ns_future_methods_future_methods(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "methods_after_successful_settle"
-    make_closure .<lambda($init_test_55, 0)>, 0
+    make_closure .<lambda($init_test_ns_future_methods_future_methods, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "methods_on_pending_future"
-    make_closure .<lambda($init_test_55, 1)>, 0
+    make_closure .<lambda($init_test_ns_future_methods_future_methods, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "methods_after_cancel"
-    make_closure .<lambda($init_test_55, 2)>, 0
+    make_closure .<lambda($init_test_ns_future_methods_future_methods, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "methods_on_errored_future"
-    make_closure .<lambda($init_test_55, 3)>, 0
+    make_closure .<lambda($init_test_ns_future_methods_future_methods, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
@@ -39,7 +39,6 @@ function future_methods.fail_io() -> int {
 function future_methods.methods_after_cancel() -> baml.future.FutureState {
     make_closure .<lambda(methods_after_cancel, 0)>, 0
     load_const null
-    load_const null
     spawn
     store_var _3
     load_var _3
@@ -53,7 +52,6 @@ function future_methods.methods_after_cancel() -> baml.future.FutureState {
 
 function future_methods.methods_after_successful_settle() -> bool[] {
     make_closure .<lambda(methods_after_successful_settle, 0)>, 0
-    load_const null
     load_const null
     spawn
     store_var _3
@@ -77,7 +75,6 @@ function future_methods.methods_after_successful_settle() -> bool[] {
 
 function future_methods.methods_on_errored_future() -> baml.future.FutureState {
     make_closure .<lambda(methods_on_errored_future, 0)>, 0
-    load_const null
     load_const null
     spawn
     store_var _3
@@ -103,7 +100,6 @@ function future_methods.methods_on_errored_future() -> baml.future.FutureState {
 
 function future_methods.methods_on_pending_future() -> baml.future.FutureState {
     make_closure .<lambda(methods_on_pending_future, 0)>, 0
-    load_const null
     load_const null
     spawn
     store_var _3

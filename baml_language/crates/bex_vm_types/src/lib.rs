@@ -18,6 +18,7 @@ mod roots;
 pub mod task_group;
 pub mod types;
 
+pub use bex_str::BexStr;
 pub use bytecode::{
     BinOp, Bytecode, CmpOp, Instruction, JumpTableData, UnaryOp, VizExecDelta, VizExecEvent,
     VizNodeMeta, VizNodeType,

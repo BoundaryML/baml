@@ -33,38 +33,38 @@ class Future<T, E> {
   ///
   /// Returns `true` if a transition to the Cancelled state was
   /// performed, `false` if the future was already settled.
-  function cancel(self) -> bool {
+  function cancel(self) -> bool throws never {
     $rust_function
   }
 
   /// `true` if the future has reached a terminal state (Ready, Error,
   /// or Cancelled). Once `true`, this method's result never changes.
-  function is_settled(self) -> bool {
+  function is_settled(self) -> bool throws never {
     $rust_function
   }
 
   /// `true` if the future was cancelled before producing a value.
   /// Implies `is_settled() == true`.
-  function is_cancelled(self) -> bool {
+  function is_cancelled(self) -> bool throws never {
     $rust_function
   }
 
   /// `true` if the future settled with a successful value. Implies
   /// `is_settled() == true`.
-  function is_result(self) -> bool {
+  function is_result(self) -> bool throws never {
     $rust_function
   }
 
   /// `true` if the future settled with an error. Implies
   /// `is_settled() == true`.
-  function is_error(self) -> bool {
+  function is_error(self) -> bool throws never {
     $rust_function
   }
 
   /// Return the current state of the future as a [`FutureState`]
   /// variant.
   //baml:mut_vm
-  function state(self) -> FutureState {
+  function state(self) -> FutureState throws never {
     $rust_function
   }
 }

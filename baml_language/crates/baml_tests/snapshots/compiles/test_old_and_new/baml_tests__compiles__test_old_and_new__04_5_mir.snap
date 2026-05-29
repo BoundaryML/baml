@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.$init_test_36(registry: testing.TestCollector) -> null {
+fn user.$init_test_main(registry: testing.TestCollector) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.TestCollector // registry // param
@@ -25,7 +25,7 @@ fn user.$init_test_36(registry: testing.TestCollector) -> null {
 }
 
 // lambda[0]
-fn .<lambda($init_test_36, 0)>() -> null {
+fn .<lambda($init_test_main, 0)>() -> null {
     // Locals:
     let _0: null // _0 // return
 

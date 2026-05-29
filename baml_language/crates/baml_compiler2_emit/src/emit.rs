@@ -254,6 +254,12 @@ enum PendingJumpTarget {
     Trap,
 }
 
+#[derive(Default)]
+struct SpawnCaptures {
+    locals: HashSet<Local>,
+    capture_indices: HashSet<usize>,
+}
+
 /// MIR to bytecode compiler with stackification.
 struct StackifyCodegen<'ctx, 'obj> {
     /// MIR body being compiled.
@@ -340,11 +346,26 @@ struct StackifyCodegen<'ctx, 'obj> {
     /// Used for debug metadata in `MakeClosure` instructions.
     lambda_names: Vec<String>,
 
+    /// Compile-time types for this function's closure captures, indexed by
+    /// `Place::Capture`.
+    capture_types: Vec<Ty>,
+
     /// Set of locals that are captured by child lambdas and need cell wrapping.
     /// Derived from `LocalDecl.is_captured` during `compile()`.
     /// Reads/writes of these locals use `LoadDeref`/`StoreDeref` instead of
     /// `LoadVar`/`StoreVar`.
     captured_locals: HashSet<Local>,
+
+    /// Locals whose cell may be read or written by a spawned thread.
+    ///
+    /// This is intentionally narrower than `captured_locals`: ordinary closures
+    /// also capture cells, but they do not introduce concurrent access by
+    /// themselves. Specialized arithmetic is only unsafe when an operand reads
+    /// from a cell that can be touched by a spawned closure.
+    spawn_captured_locals: HashSet<Local>,
+
+    /// Capture slots whose cell may be read or written by a spawned thread.
+    spawn_captured_captures: HashSet<usize>,
 
     /// When `true`, the current operand load is for a `MakeClosure` capture operand.
     /// In that case, captured locals are loaded with `LoadVar` (to pass the cell
@@ -396,7 +417,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             slot_names: Vec::new(),
             lambda_object_indices: ctx.lambda_object_indices.to_vec(),
             lambda_names: ctx.lambda_names.to_vec(),
+            capture_types: ctx.capture_types.to_vec(),
             captured_locals: HashSet::new(),
+            spawn_captured_locals: HashSet::new(),
+            spawn_captured_captures: ctx.spawn_capture_indices.clone(),
             loading_for_closure_capture: false,
         }
     }
@@ -414,7 +438,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     fn resolve_place_type(&self, place: &Place) -> Option<Ty> {
         match place {
             Place::Local(local) => self.local_types.get(local).cloned(),
-            Place::Capture(_) => None, // Capture type not tracked in local_types
+            Place::Capture(idx) => self.capture_types.get(*idx).cloned(),
             Place::Field { base, field } => {
                 let base_ty = self.resolve_place_type(base)?;
                 match &base_ty {
@@ -479,6 +503,229 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         }
     }
 
+    fn collect_spawn_captures(&self) -> SpawnCaptures {
+        let mut captures = SpawnCaptures::default();
+        let mut seen = HashSet::new();
+
+        for block in &self.body.blocks {
+            let Some(Terminator::Spawn { closure, .. }) = &block.terminator else {
+                continue;
+            };
+
+            self.collect_spawn_closure_captures(closure, &mut captures, &mut seen);
+        }
+
+        captures
+    }
+
+    fn collect_spawn_closure_captures(
+        &self,
+        operand: &Operand,
+        captures: &mut SpawnCaptures,
+        seen: &mut HashSet<Local>,
+    ) {
+        if let Some(Rvalue::MakeClosure {
+            captures: closure_captures,
+            ..
+        }) = self.local_def_rvalue_for_operand(operand)
+        {
+            for capture in closure_captures {
+                self.collect_spawn_shared_operand(capture, captures, seen);
+            }
+            return;
+        }
+
+        self.collect_spawn_shared_operand(operand, captures, seen);
+    }
+
+    fn collect_spawn_shared_operand(
+        &self,
+        operand: &Operand,
+        captures: &mut SpawnCaptures,
+        seen: &mut HashSet<Local>,
+    ) {
+        match operand {
+            Operand::Copy(place) | Operand::Move(place) => {
+                self.collect_spawn_shared_place(place, captures, seen);
+            }
+            Operand::Constant(_) => {}
+        }
+    }
+
+    fn collect_spawn_shared_place(
+        &self,
+        place: &Place,
+        captures: &mut SpawnCaptures,
+        seen: &mut HashSet<Local>,
+    ) {
+        match place {
+            Place::Local(local) => self.collect_spawn_shared_local(*local, captures, seen),
+            Place::Capture(idx) => {
+                captures.capture_indices.insert(*idx);
+            }
+            Place::Field { base, .. } => self.collect_spawn_shared_place(base, captures, seen),
+            Place::Index { base, index, .. } => {
+                self.collect_spawn_shared_place(base, captures, seen);
+                self.collect_spawn_shared_local(*index, captures, seen);
+            }
+        }
+    }
+
+    fn collect_spawn_shared_local(
+        &self,
+        local: Local,
+        captures: &mut SpawnCaptures,
+        seen: &mut HashSet<Local>,
+    ) {
+        let local = match self.analysis.classifications.get(&local).copied() {
+            Some(LocalClassification::CopyOf) => self.analysis.resolve_copy_source(local),
+            _ => local,
+        };
+
+        if !seen.insert(local) {
+            return;
+        }
+
+        if self.local_slots.contains_key(&local) {
+            captures.locals.insert(local);
+        }
+
+        match self.local_def_rvalue(local) {
+            Some(Rvalue::MakeClosure {
+                captures: closure_captures,
+                ..
+            }) => {
+                for capture in closure_captures {
+                    self.collect_spawn_shared_operand(capture, captures, seen);
+                }
+            }
+            Some(Rvalue::Use(operand)) => {
+                self.collect_spawn_shared_operand(operand, captures, seen);
+            }
+            Some(Rvalue::MakeBoundMethod { receiver, .. }) => {
+                self.collect_spawn_shared_operand(receiver, captures, seen);
+            }
+            _ => {}
+        }
+    }
+
+    fn local_def_rvalue(&self, local: Local) -> Option<&Rvalue> {
+        self.analysis
+            .def_use
+            .get(&local)
+            .and_then(|du| du.def.as_ref())
+            .map(|def| &def.rvalue)
+    }
+
+    fn local_def_rvalue_for_operand(&self, operand: &Operand) -> Option<&Rvalue> {
+        let place = match operand {
+            Operand::Copy(place) | Operand::Move(place) => place,
+            Operand::Constant(_) => return None,
+        };
+
+        let Place::Local(local) = place else {
+            return None;
+        };
+
+        let local = match self.analysis.classifications.get(local).copied() {
+            Some(LocalClassification::CopyOf) => self.analysis.resolve_copy_source(*local),
+            _ => *local,
+        };
+
+        self.local_def_rvalue(local)
+    }
+
+    fn local_reads_spawn_captured_local(&self, local: Local, seen: &mut HashSet<Local>) -> bool {
+        if self.spawn_captured_locals.contains(&local) {
+            return true;
+        }
+        if !seen.insert(local) {
+            return false;
+        }
+
+        match self.analysis.classifications.get(&local).copied() {
+            Some(LocalClassification::CopyOf) => {
+                let source = self.analysis.resolve_copy_source(local);
+                self.local_reads_spawn_captured_local(source, seen)
+            }
+            Some(LocalClassification::Virtual) => self
+                .analysis
+                .def_use
+                .get(&local)
+                .and_then(|du| du.def.as_ref())
+                .is_some_and(|def| self.rvalue_reads_spawn_captured_local(&def.rvalue, seen)),
+            _ => false,
+        }
+    }
+
+    fn place_reads_spawn_captured_local(&self, place: &Place, seen: &mut HashSet<Local>) -> bool {
+        match place {
+            Place::Local(local) => self.local_reads_spawn_captured_local(*local, seen),
+            Place::Capture(idx) => self.spawn_captured_captures.contains(idx),
+            Place::Field { base, .. } => self.place_reads_spawn_captured_local(base, seen),
+            Place::Index { base, index, .. } => {
+                self.place_reads_spawn_captured_local(base, seen)
+                    || self.local_reads_spawn_captured_local(*index, seen)
+            }
+        }
+    }
+
+    fn operand_reads_spawn_captured_local(
+        &self,
+        operand: &Operand,
+        seen: &mut HashSet<Local>,
+    ) -> bool {
+        match operand {
+            Operand::Copy(place) | Operand::Move(place) => {
+                self.place_reads_spawn_captured_local(place, seen)
+            }
+            Operand::Constant(_) => false,
+        }
+    }
+
+    fn rvalue_reads_spawn_captured_local(
+        &self,
+        rvalue: &Rvalue,
+        seen: &mut HashSet<Local>,
+    ) -> bool {
+        match rvalue {
+            Rvalue::Use(operand) | Rvalue::UnaryOp { operand, .. } => {
+                self.operand_reads_spawn_captured_local(operand, seen)
+            }
+            Rvalue::BinaryOp { left, right, .. } => {
+                self.operand_reads_spawn_captured_local(left, seen)
+                    || self.operand_reads_spawn_captured_local(right, seen)
+            }
+            Rvalue::Array(elements)
+            | Rvalue::Aggregate {
+                fields: elements, ..
+            } => elements
+                .iter()
+                .any(|operand| self.operand_reads_spawn_captured_local(operand, seen)),
+            Rvalue::Uint8Array(_) | Rvalue::LoadType(_) => false,
+            Rvalue::Map(entries) => entries.iter().any(|(key, value)| {
+                self.operand_reads_spawn_captured_local(key, seen)
+                    || self.operand_reads_spawn_captured_local(value, seen)
+            }),
+            Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
+                self.place_reads_spawn_captured_local(place, seen)
+            }
+            Rvalue::IsType { operand, .. }
+            | Rvalue::MakeBoundMethod {
+                receiver: operand, ..
+            } => self.operand_reads_spawn_captured_local(operand, seen),
+            Rvalue::MakeClosure { captures, .. } => captures
+                .iter()
+                .any(|operand| self.operand_reads_spawn_captured_local(operand, seen)),
+        }
+    }
+
+    fn binary_operands_can_use_specialized_op(&self, left: &Operand, right: &Operand) -> bool {
+        let mut seen = HashSet::new();
+        !self.operand_reads_spawn_captured_local(left, &mut seen)
+            && !self.operand_reads_spawn_captured_local(right, &mut seen)
+    }
+
     /// Try to emit a specialized instruction for a binary operation based on
     /// static operand types. Returns `None` when types can't be resolved or
     /// don't match a specialized form (mixed int/float, strings, bitwise, etc.).
@@ -488,6 +735,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         left: &Operand,
         right: &Operand,
     ) -> Option<Instruction> {
+        if !self.binary_operands_can_use_specialized_op(left, right) {
+            return None;
+        }
+
         let left_ty = self.resolve_operand_type(left)?;
         let right_ty = self.resolve_operand_type(right)?;
 
@@ -587,6 +838,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.local_slots.contains_key(&local).then_some(local)
             })
             .collect();
+        let spawn_captures = self.collect_spawn_captures();
+        self.spawn_captured_locals = spawn_captures.locals;
+        self.spawn_captured_captures
+            .extend(spawn_captures.capture_indices);
 
         // Emit cell-wrapping preamble: for each captured Real local, wrap the
         // initial value in a Cell so that lambdas can share and mutate it.
@@ -1161,7 +1416,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
                         // 1. Push event name "$baml_log"
                         let log_str_idx = self.objects.len();
-                        self.objects.push(Object::String("$baml_log".to_string()));
+                        self.objects.push(Object::String("$baml_log".into()));
                         let log_const_idx = self
                             .add_constant(ConstValue::Object(ObjectIndex::from_raw(log_str_idx)));
                         let inst = self.emit(Instruction::LoadConst(log_const_idx));
@@ -1178,7 +1433,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                             LogLevel::Error => "error",
                         };
                         let level_val_idx = self.objects.len();
-                        self.objects.push(Object::String(level_str.to_string()));
+                        self.objects.push(Object::String(level_str.into()));
                         let level_val_const_idx = self
                             .add_constant(ConstValue::Object(ObjectIndex::from_raw(level_val_idx)));
                         let inst = self.emit(Instruction::LoadConst(level_val_const_idx));
@@ -1192,7 +1447,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
                         // 4. Push key "level"
                         let level_key_idx = self.objects.len();
-                        self.objects.push(Object::String("level".to_string()));
+                        self.objects.push(Object::String("level".into()));
                         let level_key_const_idx = self
                             .add_constant(ConstValue::Object(ObjectIndex::from_raw(level_key_idx)));
                         let inst = self.emit(Instruction::LoadConst(level_key_const_idx));
@@ -1203,7 +1458,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
                         // 5. Push key "data"
                         let data_key_idx = self.objects.len();
-                        self.objects.push(Object::String("data".to_string()));
+                        self.objects.push(Object::String("data".into()));
                         let data_key_const_idx = self
                             .add_constant(ConstValue::Object(ObjectIndex::from_raw(data_key_idx)));
                         let inst = self.emit(Instruction::LoadConst(data_key_const_idx));
@@ -1565,7 +1820,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Constant::String(s) => {
                 let display = Self::display_string_operand(s);
                 let obj_idx = self.objects.len();
-                self.objects.push(Object::String(s.clone()));
+                self.objects.push(Object::String(s.as_str().into()));
                 let idx = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(obj_idx)));
                 let inst = self.emit(Instruction::LoadConst(idx));
                 self.set_operand(inst, OperandMeta::Const(display));
@@ -2730,18 +2985,9 @@ impl PullSink for StackifyCodegen<'_, '_> {
     }
 
     fn len_of_place(&mut self, place: &Place) -> Result<(), Self::Error> {
-        // MIR `Rvalue::Len` is array length.
-        let global_idx = self
-            .globals
-            .get("baml.Array.length")
-            .copied()
-            .unwrap_or_else(|| panic!("undefined function: baml.Array.length"));
+        // MIR `Rvalue::Len` → dedicated ContainerLen opcode (no function call overhead).
         pull_semantics::walk_place_pull(self, place)?;
-        let inst = self.emit(Instruction::Call {
-            callee: GlobalIndex::from_raw(global_idx),
-            ntypeargs: 0,
-        });
-        self.set_operand(inst, OperandMeta::Callable("baml.Array.length".to_string()));
+        self.emit(Instruction::ContainerLen);
         Ok(())
     }
 
@@ -2949,7 +3195,7 @@ impl StackEffectSink for StackifyCodegen<'_, '_> {
             .unwrap_or_else(|| panic!("watched local {local} must have a user-visible name"))
             .to_string();
         let channel_obj_idx = self.objects.len();
-        self.objects.push(Object::String(channel.clone()));
+        self.objects.push(Object::String(channel.as_str().into()));
         let channel_const_idx =
             self.add_constant(ConstValue::Object(ObjectIndex::from_raw(channel_obj_idx)));
         let inst = self.emit(Instruction::LoadConst(channel_const_idx));

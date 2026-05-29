@@ -153,7 +153,7 @@ mod tests {
                     bex_external_types::BexExternalValue::Float(n.as_f64().unwrap())
                 }
             }
-            serde_json::Value::String(v) => bex_external_types::BexExternalValue::String(v),
+            serde_json::Value::String(v) => bex_external_types::BexExternalValue::String(v.into()),
             serde_json::Value::Array(items) => bex_external_types::BexExternalValue::Array {
                 element_type: baml_type::Ty::unknown(),
                 items: items.into_iter().map(json_to_bex).collect(),

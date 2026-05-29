@@ -1,556 +1,556 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function ints.$init_test_58(registry: testing.TestCollector) -> null {
+function ints.$init_test_ns_ints_ints(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "int_abs_positive"
-    make_closure .<lambda($init_test_58, 0)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_abs_negative"
-    make_closure .<lambda($init_test_58, 1)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_abs_zero"
-    make_closure .<lambda($init_test_58, 2)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_abs_min_value_throws"
-    make_closure .<lambda($init_test_58, 3)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_abs_near_min_value_succeeds"
-    make_closure .<lambda($init_test_58, 4)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 4)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_min_basic"
-    make_closure .<lambda($init_test_58, 5)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 5)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_min_other_smaller"
-    make_closure .<lambda($init_test_58, 6)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 6)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_min_equal"
-    make_closure .<lambda($init_test_58, 7)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 7)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_min_negative"
-    make_closure .<lambda($init_test_58, 8)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 8)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_max_basic"
-    make_closure .<lambda($init_test_58, 9)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 9)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_max_other_smaller"
-    make_closure .<lambda($init_test_58, 10)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 10)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_max_negative"
-    make_closure .<lambda($init_test_58, 11)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 11)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_clamp_in_range"
-    make_closure .<lambda($init_test_58, 12)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 12)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_clamp_below_min"
-    make_closure .<lambda($init_test_58, 13)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 13)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_clamp_above_max"
-    make_closure .<lambda($init_test_58, 14)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 14)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_clamp_at_min_boundary"
-    make_closure .<lambda($init_test_58, 15)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 15)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_clamp_at_max_boundary"
-    make_closure .<lambda($init_test_58, 16)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 16)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_max_value_returns_i63_max"
-    make_closure .<lambda($init_test_58, 17)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 17)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_min_value_returns_i63_min"
-    make_closure .<lambda($init_test_58, 18)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 18)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_max_min_inverse"
-    make_closure .<lambda($init_test_58, 19)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 19)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_parse_basic"
-    make_closure .<lambda($init_test_58, 20)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 20)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_parse_zero"
-    make_closure .<lambda($init_test_58, 21)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 21)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_parse_negative"
-    make_closure .<lambda($init_test_58, 22)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 22)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_parse_explicit_plus_sign"
-    make_closure .<lambda($init_test_58, 23)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 23)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_parse_max_value"
-    make_closure .<lambda($init_test_58, 24)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 24)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_parse_min_value"
-    make_closure .<lambda($init_test_58, 25)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 25)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_parse_leading_zeros_ok"
-    make_closure .<lambda($init_test_58, 26)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 26)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_parse_empty_throws"
-    make_closure .<lambda($init_test_58, 27)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 27)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_parse_non_digit_throws"
-    make_closure .<lambda($init_test_58, 28)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 28)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_parse_alpha_throws"
-    make_closure .<lambda($init_test_58, 29)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 29)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_parse_whitespace_throws"
-    make_closure .<lambda($init_test_58, 30)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 30)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_parse_overflow_throws"
-    make_closure .<lambda($init_test_58, 31)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 31)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_parse_underflow_throws"
-    make_closure .<lambda($init_test_58, 32)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 32)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_parse_just_sign_throws"
-    make_closure .<lambda($init_test_58, 33)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 33)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_parse_underscore_throws"
-    make_closure .<lambda($init_test_58, 34)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 34)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_parse_round_trip_via_to_string"
-    make_closure .<lambda($init_test_58, 35)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 35)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_random_in_range_and_covers_endpoints"
-    make_closure .<lambda($init_test_58, 36)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 36)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_random_negative_range"
-    make_closure .<lambda($init_test_58, 37)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 37)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_random_single_element_range"
-    make_closure .<lambda($init_test_58, 38)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 38)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_random_full_range_returns_some_int"
-    make_closure .<lambda($init_test_58, 39)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 39)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_random_distinct_values_in_wide_range"
-    make_closure .<lambda($init_test_58, 40)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 40)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_random_lower_equals_upper_throws"
-    make_closure .<lambda($init_test_58, 41)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 41)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_random_lower_greater_than_upper_throws"
-    make_closure .<lambda($init_test_58, 42)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 42)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_isqrt_perfect_square"
-    make_closure .<lambda($init_test_58, 43)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 43)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_isqrt_non_square_rounds_down"
-    make_closure .<lambda($init_test_58, 44)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 44)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_isqrt_zero"
-    make_closure .<lambda($init_test_58, 45)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 45)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_isqrt_one"
-    make_closure .<lambda($init_test_58, 46)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 46)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_isqrt_large"
-    make_closure .<lambda($init_test_58, 47)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 47)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_isqrt_max_value"
-    make_closure .<lambda($init_test_58, 48)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 48)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_isqrt_negative_throws"
-    make_closure .<lambda($init_test_58, 49)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 49)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_isqrt_min_value_throws"
-    make_closure .<lambda($init_test_58, 50)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 50)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_pow_basic"
-    make_closure .<lambda($init_test_58, 51)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 51)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_pow_zero_exponent"
-    make_closure .<lambda($init_test_58, 52)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 52)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_pow_zero_to_zero_is_one"
-    make_closure .<lambda($init_test_58, 53)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 53)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_pow_zero_to_positive_is_zero"
-    make_closure .<lambda($init_test_58, 54)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 54)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_pow_negative_exponent_returns_zero"
-    make_closure .<lambda($init_test_58, 55)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 55)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_pow_negative_base_odd_exp"
-    make_closure .<lambda($init_test_58, 56)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 56)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_pow_negative_base_even_exp"
-    make_closure .<lambda($init_test_58, 57)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 57)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_pow_one_anything"
-    make_closure .<lambda($init_test_58, 58)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 58)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_pow_negative_one_even"
-    make_closure .<lambda($init_test_58, 59)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 59)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_pow_negative_one_odd"
-    make_closure .<lambda($init_test_58, 60)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 60)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_pow_negative_one_huge_even_exp"
-    make_closure .<lambda($init_test_58, 61)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 61)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_pow_overflow_positive_saturates"
-    make_closure .<lambda($init_test_58, 62)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 62)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_pow_overflow_negative_odd_saturates_to_min"
-    make_closure .<lambda($init_test_58, 63)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 63)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_pow_overflow_negative_even_saturates_to_max"
-    make_closure .<lambda($init_test_58, 64)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 64)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_ilog_base_10"
-    make_closure .<lambda($init_test_58, 65)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 65)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_ilog_base_2_power_of_two"
-    make_closure .<lambda($init_test_58, 66)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 66)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_ilog_rounds_down"
-    make_closure .<lambda($init_test_58, 67)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 67)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_ilog_one_is_zero"
-    make_closure .<lambda($init_test_58, 68)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 68)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_ilog_self_zero_throws"
-    make_closure .<lambda($init_test_58, 69)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 69)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_ilog_self_negative_throws"
-    make_closure .<lambda($init_test_58, 70)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 70)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_ilog_base_one_throws"
-    make_closure .<lambda($init_test_58, 71)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 71)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_ilog_base_zero_throws"
-    make_closure .<lambda($init_test_58, 72)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 72)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_ilog_base_negative_throws"
-    make_closure .<lambda($init_test_58, 73)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 73)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_leading_zeros_zero"
-    make_closure .<lambda($init_test_58, 74)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 74)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_leading_zeros_one"
-    make_closure .<lambda($init_test_58, 75)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 75)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_leading_zeros_negative_one_is_zero"
-    make_closure .<lambda($init_test_58, 76)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 76)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_leading_zeros_large_power_of_two"
-    make_closure .<lambda($init_test_58, 77)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 77)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_leading_ones_zero"
-    make_closure .<lambda($init_test_58, 78)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 78)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_leading_ones_negative_one"
-    make_closure .<lambda($init_test_58, 79)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 79)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_trailing_zeros_zero"
-    make_closure .<lambda($init_test_58, 80)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 80)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_trailing_zeros_one"
-    make_closure .<lambda($init_test_58, 81)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 81)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_trailing_zeros_eight"
-    make_closure .<lambda($init_test_58, 82)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 82)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_trailing_ones_zero"
-    make_closure .<lambda($init_test_58, 83)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 83)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_trailing_ones_seven"
-    make_closure .<lambda($init_test_58, 84)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 84)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_trailing_ones_negative_one"
-    make_closure .<lambda($init_test_58, 85)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 85)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_count_zeros_of_zero"
-    make_closure .<lambda($init_test_58, 86)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 86)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_count_zeros_of_negative_one"
-    make_closure .<lambda($init_test_58, 87)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 87)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_count_ones_of_zero"
-    make_closure .<lambda($init_test_58, 88)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 88)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_count_ones_of_seven"
-    make_closure .<lambda($init_test_58, 89)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 89)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_count_ones_of_negative_one"
-    make_closure .<lambda($init_test_58, 90)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 90)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_count_zeros_plus_count_ones_equals_64"
-    make_closure .<lambda($init_test_58, 91)>, 0
+    make_closure .<lambda($init_test_ns_ints_ints, 91)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1

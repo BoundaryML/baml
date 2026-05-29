@@ -8,7 +8,7 @@ class user.Foo {
 class user.HasWith {
   with: int
 }
-function user.$init_test_36(registry: testing.TestCollector) -> ?  [expr] {
+function user.$init_test_main(registry: testing.TestCollector) -> ?  [expr] {
   { registry.register_test("with as field", () -> void { { let h = user.HasWith { with: 1 } } assert.equal(h.with, 1) }, null) } null
 }
 function user.from_json(j: baml.json.json) -> user.Foo  [expr] {

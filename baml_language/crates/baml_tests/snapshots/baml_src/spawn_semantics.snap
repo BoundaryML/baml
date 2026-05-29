@@ -1,22 +1,22 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function spawn_semantics.$init_test_81(registry: testing.TestCollector) -> null {
+function spawn_semantics.$init_test_ns_spawn_semantics_spawn_semantics(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "multiple_awaits_on_same_future_return_cached_value"
-    make_closure .<lambda($init_test_81, 0)>, 0
+    make_closure .<lambda($init_test_ns_spawn_semantics_spawn_semantics, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "three_level_nested_spawn_sum"
-    make_closure .<lambda($init_test_81, 1)>, 0
+    make_closure .<lambda($init_test_ns_spawn_semantics_spawn_semantics, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "function_can_return_future_typed_value"
-    make_closure .<lambda($init_test_81, 2)>, 0
+    make_closure .<lambda($init_test_ns_spawn_semantics_spawn_semantics, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
@@ -43,7 +43,6 @@ function spawn_semantics.leaf() -> int {
 function spawn_semantics.mid() -> int {
     make_closure .<lambda(mid, 0)>, 0
     load_const null
-    load_const null
     spawn
     store_var _3
     load_var _3
@@ -55,7 +54,6 @@ function spawn_semantics.mid() -> int {
 
 function spawn_semantics.multiple_awaits_on_same_future_return_cached_value_fn() -> int {
     make_closure .<lambda(multiple_awaits_on_same_future_return_cached_value_fn, 0)>, 0
-    load_const null
     load_const null
     spawn
     store_var _3
@@ -80,7 +78,6 @@ function spawn_semantics.multiple_awaits_on_same_future_return_cached_value_fn()
 function spawn_semantics.spawn_child() -> future<int, null> {
     make_closure .<lambda(spawn_child, 0)>, 0
     load_const null
-    load_const null
     spawn
     store_var _2
     load_var _2
@@ -89,7 +86,6 @@ function spawn_semantics.spawn_child() -> future<int, null> {
 
 function spawn_semantics.three_level_nested_spawn_sum_fn() -> int {
     make_closure .<lambda(three_level_nested_spawn_sum_fn, 0)>, 0
-    load_const null
     load_const null
     spawn
     store_var _3
@@ -100,7 +96,6 @@ function spawn_semantics.three_level_nested_spawn_sum_fn() -> int {
 
 function spawn_semantics.top() -> int {
     make_closure .<lambda(top, 0)>, 0
-    load_const null
     load_const null
     spawn
     store_var _3

@@ -12,13 +12,13 @@ impl BamlClassTypeValue for PackageBamlImpl {
     /// This identity guarantee makes the result usable as a stable key in
     /// `map<string, V>` until generic-K interfaces enable a real
     /// `map<type, V>`.
-    fn to_string(vm: &BexVm, self_value: &Value) -> String {
+    fn to_string(vm: &BexVm, self_value: &Value) -> bex_str::BexStr {
         let Some(ptr) = self_value.as_object_ptr() else {
-            return "<type: ?>".to_string();
+            return bex_str::BexStr::from("<type: ?>");
         };
         match vm.get_object(ptr) {
-            Object::Type(ty) => ty.to_string(),
-            _ => "<type: ?>".to_string(),
+            Object::Type(ty) => bex_str::BexStr::from(ty.to_string()),
+            _ => bex_str::BexStr::from("<type: ?>"),
         }
     }
 }

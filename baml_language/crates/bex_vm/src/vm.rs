@@ -16,6 +16,8 @@
 
 use std::{collections::HashMap, sync::Arc};
 
+use smallvec::SmallVec;
+
 /// Branch hint: tells the compiler this condition is almost never true.
 /// Used on the cold side of `if unlikely(cond) { ... }` in the dispatch
 /// loop's hot path — measurably faster than letting the compiler guess
@@ -1017,7 +1019,7 @@ impl BexVm {
     }
 
     /// Get string from a Value.
-    pub fn as_string(&self, value: &Value) -> Result<&String, VmInternalError> {
+    pub fn as_string(&self, value: &Value) -> Result<&bex_vm_types::BexStr, VmInternalError> {
         let ptr = self.as_object_ptr(*value, ObjectType::String)?;
         self.get_object(ptr).as_string()
     }
@@ -1078,7 +1080,10 @@ impl BexVm {
     /// Strings are immutable at the current BAML language surface. Do not use
     /// this for spawned user-code mutation unless strings gain the same
     /// object-level synchronization as containers.
-    pub fn as_string_mut(&mut self, value: &Value) -> Result<&mut String, VmInternalError> {
+    pub fn as_string_mut(
+        &mut self,
+        value: &Value,
+    ) -> Result<&mut bex_vm_types::BexStr, VmInternalError> {
         let ptr = self.as_object_ptr(*value, ObjectType::String)?;
         self.get_object_mut(ptr).as_string_mut()
     }
@@ -1357,12 +1362,12 @@ impl BexVm {
         Value::object(self.tlab.alloc(Object::Array(values.into())))
     }
 
-    pub fn alloc_map(&mut self, values: IndexMap<String, Value>) -> Value {
+    pub fn alloc_map(&mut self, values: IndexMap<bex_vm_types::BexStr, Value>) -> Value {
         Value::object(self.tlab.alloc(Object::Map(values.into())))
     }
 
-    pub fn alloc_string(&mut self, s: String) -> Value {
-        Value::object(self.tlab.alloc(Object::String(s)))
+    pub fn alloc_string(&mut self, s: impl Into<bex_vm_types::BexStr>) -> Value {
+        Value::object(self.tlab.alloc(Object::String(s.into())))
     }
 
     /// Allocate a heap-boxed float and return it as a `Value`.
@@ -2068,6 +2073,20 @@ impl BexVm {
                     vec![Value::int(index), Value::int(length as i64)],
                 )
             }
+            VmPanic::InvalidFieldAccess {
+                field_index,
+                field_count,
+            } =>
+            {
+                #[allow(clippy::cast_possible_wrap)]
+                (
+                    PanicClass::InvalidFieldAccess,
+                    vec![
+                        Value::int(field_index as i64),
+                        Value::int(field_count as i64),
+                    ],
+                )
+            }
             VmPanic::MapKeyNotFound => {
                 let key = self.alloc_string("(unknown)".to_string());
                 (PanicClass::MapKeyNotFound, vec![key])
@@ -2108,6 +2127,13 @@ impl BexVm {
             }
         };
         self.alloc_panic_value(class, fields)
+    }
+
+    fn invalid_field_access_error(&mut self, field_index: usize, field_count: usize) -> VmError {
+        VmError::Thrown(self.panic_to_exception_value(VmPanic::InvalidFieldAccess {
+            field_index,
+            field_count,
+        }))
     }
 
     /// Allocate a `baml.panics.*` class instance using pre-resolved pointers.
@@ -2518,7 +2544,8 @@ impl BexVm {
 
                 // Native functions should manage their own gc roots (or never yield).
                 // They have no data on the stack.
-                let args: Vec<Value> = self.stack.drain(locals_offset..).collect();
+                // SmallVec avoids heap allocation for calls with ≤4 args (the common case).
+                let args: SmallVec<[Value; 4]> = self.stack.drain(locals_offset..).collect();
 
                 // Run Rust native function, converting NativeCallResult → VmError.
                 match func(self, &args) {
@@ -2781,7 +2808,7 @@ impl BexVm {
         let dest_ptr = self.as_object_ptr(dest_value, ObjectType::Instance)?;
         let source_ptr = self.as_object_ptr(source_value, ObjectType::Instance)?;
 
-        let copied_fields: Vec<(usize, Value, Value)> = {
+        let copied_fields = {
             let Object::Instance(source) = self.get_object(source_ptr) else {
                 return Err(VmInternalError::TypeError {
                     expected: ObjectType::Instance.into(),
@@ -2797,17 +2824,24 @@ impl BexVm {
                 .into());
             };
 
-            field_copy_set
-                .fields
-                .iter()
-                .map(|copy| {
-                    (
-                        copy.dest,
-                        dest.load_field(copy.dest),
-                        source.load_field(copy.source),
-                    )
-                })
-                .collect()
+            let mut copied_fields = Vec::with_capacity(field_copy_set.fields.len());
+            let mut invalid_field_access = None;
+            for copy in &field_copy_set.fields {
+                let Some(old_value) = dest.try_load_field(copy.dest) else {
+                    invalid_field_access = Some((copy.dest, dest.field_len()));
+                    break;
+                };
+                let Some(new_value) = source.try_load_field(copy.source) else {
+                    invalid_field_access = Some((copy.source, source.field_len()));
+                    break;
+                };
+                copied_fields.push((copy.dest, old_value, new_value));
+            }
+            if let Some((index, field_count)) = invalid_field_access {
+                return Err(self.invalid_field_access_error(index, field_count));
+            }
+
+            copied_fields
         };
 
         let watched_node = NodeId::HeapObject(dest_ptr);
@@ -2826,6 +2860,15 @@ impl BexVm {
                 old_value,
                 new_value,
             );
+            let store_error = {
+                let Object::Instance(dest) = self.get_object(dest_ptr) else {
+                    unreachable!("destination instance already type-checked above");
+                };
+                (dest_field >= dest.field_len()).then_some(dest.field_len())
+            };
+            if let Some(length) = store_error {
+                return Err(self.invalid_field_access_error(dest_field, length));
+            }
             self.heap.write_barrier(dest_ptr, new_value);
             let Object::Instance(dest) = self.get_object(dest_ptr) else {
                 unreachable!("destination instance already type-checked above");
@@ -3262,9 +3305,8 @@ impl BexVm {
         } else if left.is_object() && right.is_object() && op == BinOp::Add {
             let ls = self.as_string(&left)?;
             let rs = self.as_string(&right)?;
-            let mut concat = ls.clone();
-            concat.push_str(rs);
-            self.alloc_string(concat)
+            let result = bex_str::BexStr::concat(ls.clone(), rs.clone());
+            self.alloc_string(result)
         } else {
             return Err(VmInternalError::CannotApplyBinOp {
                 left: self.type_of(&left),
@@ -3653,14 +3695,24 @@ impl BexVm {
                     let idx = { read_u32_unchecked(code, pc) as usize };
                     let top = self.stack.ensure_pop();
                     let obj_ptr = self.as_object_ptr(top, ObjectType::Instance)?;
-                    let Object::Instance(instance) = self.get_object(obj_ptr) else {
-                        return Err(VmInternalError::TypeError {
-                            expected: ObjectType::Instance.into(),
-                            got: ObjectType::of(self.get_object(obj_ptr)).into(),
-                        }
-                        .into());
+                    let load_result = {
+                        let Object::Instance(instance) = self.get_object(obj_ptr) else {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Instance.into(),
+                                got: ObjectType::of(self.get_object(obj_ptr)).into(),
+                            }
+                            .into());
+                        };
+                        instance
+                            .try_load_field(idx)
+                            .ok_or_else(|| instance.field_len())
                     };
-                    let value = instance.load_field(idx);
+                    let value = match load_result {
+                        Ok(value) => value,
+                        Err(length) => {
+                            return Err(self.invalid_field_access_error(idx, length));
+                        }
+                    };
                     self.stack.push(value);
                 }
 
@@ -3678,7 +3730,15 @@ impl BexVm {
                             }
                             .into());
                         };
-                        instance.load_field(idx)
+                        instance
+                            .try_load_field(idx)
+                            .ok_or_else(|| instance.field_len())
+                    };
+                    let old_value = match old_value {
+                        Ok(old_value) => old_value,
+                        Err(length) => {
+                            return Err(self.invalid_field_access_error(idx, length));
+                        }
                     };
 
                     let watched_node = NodeId::HeapObject(obj_ptr);
@@ -3688,6 +3748,15 @@ impl BexVm {
                         old_value,
                         new_value,
                     );
+                    let store_error = {
+                        let Object::Instance(instance) = self.get_object(obj_ptr) else {
+                            unreachable!("already type-checked above");
+                        };
+                        (idx >= instance.field_len()).then_some(instance.field_len())
+                    };
+                    if let Some(length) = store_error {
+                        return Err(self.invalid_field_access_error(idx, length));
+                    }
                     self.heap.write_barrier(obj_ptr, new_value);
                     let Object::Instance(instance) = self.get_object(obj_ptr) else {
                         unreachable!("already type-checked above");
@@ -3707,13 +3776,22 @@ impl BexVm {
                     let new_value = self.stack.ensure_pop();
                     let instance_value = self.stack.ensure_pop();
                     let obj_ptr = self.as_object_ptr(instance_value, ObjectType::Instance)?;
+                    let store_error = {
+                        let Object::Instance(instance) = self.get_object(obj_ptr) else {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Instance.into(),
+                                got: ObjectType::of(self.get_object(obj_ptr)).into(),
+                            }
+                            .into());
+                        };
+                        (idx >= instance.field_len()).then_some(instance.field_len())
+                    };
+                    if let Some(length) = store_error {
+                        return Err(self.invalid_field_access_error(idx, length));
+                    }
                     self.heap.write_barrier(obj_ptr, new_value);
                     let Object::Instance(instance) = self.get_object(obj_ptr) else {
-                        return Err(VmInternalError::TypeError {
-                            expected: ObjectType::Instance.into(),
-                            got: ObjectType::of(self.get_object(obj_ptr)).into(),
-                        }
-                        .into());
+                        unreachable!("already type-checked above");
                     };
                     instance.store_field(idx, new_value);
                     self.stack.push(instance_value);
@@ -3968,7 +4046,7 @@ impl BexVm {
                         return Err(VmInternalError::InvalidFilter.into());
                     };
                     let channel_value = self.stack.ensure_pop();
-                    let channel = self.as_string(&channel_value)?.to_owned();
+                    let channel = self.as_string(&channel_value)?.to_string();
                     let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
                         unreachable!()
                     };
@@ -4795,6 +4873,32 @@ impl BexVm {
                 }
 
                 // ── Array / Map element ops ───────────────────────────────────
+                OpCode::ContainerLen => {
+                    let container = self.stack.ensure_pop();
+                    let Some(ptr) = container.as_object_ptr() else {
+                        return Err(VmInternalError::TypeError {
+                            expected: ObjectType::Array.into(),
+                            got: self.type_of(&container),
+                        }
+                        .into());
+                    };
+                    #[allow(clippy::cast_possible_wrap)]
+                    let len = match self.get_object(ptr) {
+                        Object::Array(arr) => arr.len() as i64,
+                        Object::Uint8Array(bytes) => bytes.len() as i64,
+                        Object::Map(map) => map.len() as i64,
+                        Object::String(s) => s.len() as i64,
+                        other => {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Array.into(),
+                                got: ObjectType::of(other).into(),
+                            }
+                            .into());
+                        }
+                    };
+                    self.stack.push(Value::int(len));
+                }
+
                 OpCode::LoadArrayElement => {
                     let index_value = self.stack.ensure_pop();
                     let array_value = self.stack.ensure_pop();
@@ -5010,7 +5114,7 @@ impl BexVm {
                     let watched_node = NodeId::HeapObject(map_index);
                     self.update_watched_node(
                         watched_node,
-                        watch::Path::MapKey(key),
+                        watch::Path::MapKey(key.to_string()),
                         old_value,
                         new_value,
                     );
@@ -5332,7 +5436,7 @@ impl BexVm {
                 OpCode::SendEvent => {
                     let data = self.stack.ensure_pop();
                     let name_value = self.stack.ensure_pop();
-                    let event_name = self.as_string(&name_value)?.clone();
+                    let event_name = self.as_string(&name_value)?.to_string();
                     let source_location = if let Frame::Bytecode(bf) = &self.frames[*frame_idx] {
                         let pc = bf.faulting_pc;
                         let func_obj = self.get_object(bf.function).as_callable().ok();

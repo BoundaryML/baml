@@ -6,7 +6,7 @@ function deep_copy  <builtin>/baml/core.baml:3
 
 /// Returns a deep copy of `value` — all nested structures are recursively cloned.
 //baml:mut_vm
-function deep_copy<T>(value: T) -> T {
+function deep_copy<T>(value: T) -> T throws never {
   $rust_function
 }
 

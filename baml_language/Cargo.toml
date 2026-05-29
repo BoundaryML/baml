@@ -45,6 +45,8 @@ version = "0.0.0-beta"
 
 [workspace.dependencies]
 #  Internal dependencies (baml_*)
+bex_str = { path = "crates/bex_str" }
+ahash = "0.8"
 baml_base = { path = "crates/baml_base" }
 baml_type = { path = "crates/baml_type" }
 baml_builtins = { path = "crates/baml_builtins" }
@@ -181,6 +183,7 @@ quote = { version = "1" }
 ratatui = "0.29"
 regex = { version = "1.10.2" }
 base64 = "0.22"
+bytecount = "0.6"
 reqwest = { version = "0.13.1", default-features = false, features = [
   "stream",
 ] }
@@ -198,6 +201,7 @@ serde-wasm-bindgen = "0.6"
 serde_json = { version = "1.0.113", features = [ "arbitrary_precision", "preserve_order" ] }
 serde_yaml = "0.9"
 similar = { version = "2.4.0", features = [ "inline" ] }
+smallvec = { version = "1.15", features = [ "const_generics" ] }
 smol_str = { version = "0.3", features = [ "serde", "borsh" ] }
 strsim = { version = "0.11.1" }
 syn = { version = "2", features = [ "full" ] }
@@ -205,7 +209,7 @@ tar = "0.4"
 zip = { version = "2", default-features = false, features = [ "deflate" ] }
 taplo = { version = "0.13" }
 tempfile = { version = "3" }
-time = { version = "0.3", features = [ "formatting", "macros" ] }
+time = { version = "0.3", features = [ "formatting", "macros", "parsing" ] }
 text-size = { version = "1.1", features = [ "serde" ] }
 thiserror = { version = "2.0.0" }
 toml = { version = "0.8" }
@@ -238,12 +242,12 @@ pyo3-stub-gen = { version = "0.22", default-features = false }
 napi = { version = "3.8.4", default-features = false }
 napi-derive = "3.5.3"
 napi-build = "2.3.1"
-wee_alloc = "0.4"
 wiremock = "0.6"
 vfs = "0.12"
 wasm-logger = "0.2.0"
 web-time = "1.1.0"
 getrandom = { version = "0.2" }
+getrandom_03 = { package = "getrandom", version = "0.3", features = [ "wasm_js" ] }
 num-bigint = { version = "0.4", features = [ "rand", "serde" ] }
 rsa = { version = "0.9", default-features = false, features = [ "std", "pem" ] }
 sha2 = { version = "0.10", features = [ "oid" ] }

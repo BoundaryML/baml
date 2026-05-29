@@ -1,64 +1,64 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function typed_inputs.$init_test_87(registry: testing.TestCollector) -> null {
+function typed_inputs.$init_test_ns_typed_inputs_typed_inputs(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "int_input"
-    make_closure .<lambda($init_test_87, 0)>, 0
+    make_closure .<lambda($init_test_ns_typed_inputs_typed_inputs, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "string_input"
-    make_closure .<lambda($init_test_87, 1)>, 0
+    make_closure .<lambda($init_test_ns_typed_inputs_typed_inputs, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "multiple_inputs"
-    make_closure .<lambda($init_test_87, 2)>, 0
+    make_closure .<lambda($init_test_ns_typed_inputs_typed_inputs, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "bool_input"
-    make_closure .<lambda($init_test_87, 3)>, 0
+    make_closure .<lambda($init_test_ns_typed_inputs_typed_inputs, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "float_input"
-    make_closure .<lambda($init_test_87, 4)>, 0
+    make_closure .<lambda($init_test_ns_typed_inputs_typed_inputs, 4)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "array_input"
-    make_closure .<lambda($init_test_87, 5)>, 0
+    make_closure .<lambda($init_test_ns_typed_inputs_typed_inputs, 5)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "class_input"
-    make_closure .<lambda($init_test_87, 6)>, 0
+    make_closure .<lambda($init_test_ns_typed_inputs_typed_inputs, 6)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "map_input"
-    make_closure .<lambda($init_test_87, 7)>, 0
+    make_closure .<lambda($init_test_ns_typed_inputs_typed_inputs, 7)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "null_input"
-    make_closure .<lambda($init_test_87, 8)>, 0
+    make_closure .<lambda($init_test_ns_typed_inputs_typed_inputs, 8)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "mixed_types_inputs"
-    make_closure .<lambda($init_test_87, 9)>, 0
+    make_closure .<lambda($init_test_ns_typed_inputs_typed_inputs, 9)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
@@ -153,7 +153,7 @@ function typed_inputs.sum(arr: int[]) -> int {
   L0:
     load_var __for_idx
     load_var arr
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2

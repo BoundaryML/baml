@@ -22,7 +22,7 @@ class TaskGroup {
   /// Create a group capping concurrency at `limit`. `name` is an optional
   /// debug label (no semantic meaning).
   //baml:mut_vm
-  function new(limit: int, name: string? = null) -> TaskGroup {
+  function new(limit: int, name: string? = null) -> TaskGroup throws never {
     $rust_function
   }
 
@@ -30,38 +30,38 @@ class TaskGroup {
   /// members, `active` selects running ones (both default `true`). Returns the
   /// number signalled. The group stays usable afterward.
   //baml:vm
-  function cancel(self, pending: bool? = true, active: bool? = true) -> int {
+  function cancel(self, pending: bool? = true, active: bool? = true) -> int throws never {
     $rust_function
   }
 
   /// Change the concurrency cap. Increasing admits queued members up to the new
   /// cap immediately; decreasing never preempts running members; `0` pauses.
   //baml:vm
-  function set_limit(self, limit: int) -> void {
+  function set_limit(self, limit: int) -> void throws never {
     $rust_function
   }
 
   /// The current concurrency cap.
   //baml:vm
-  function limit(self) -> int {
+  function limit(self) -> int throws never {
     $rust_function
   }
 
   /// The optional debug name.
   //baml:vm
-  function name(self) -> string? {
+  function name(self) -> string? throws never {
     $rust_function
   }
 
   /// Instantaneous count of running members.
   //baml:vm
-  function active_count(self) -> int {
+  function active_count(self) -> int throws never {
     $rust_function
   }
 
   /// Instantaneous count of queued members.
   //baml:vm
-  function queued_count(self) -> int {
+  function queued_count(self) -> int throws never {
     $rust_function
   }
 }
@@ -75,7 +75,7 @@ class CancelToken {
 
   /// Create a fresh, un-cancelled token.
   //baml:mut_vm
-  function new() -> CancelToken {
+  function new() -> CancelToken throws never {
     $rust_function
   }
 
@@ -83,20 +83,20 @@ class CancelToken {
   /// returned token does not propagate back to the inputs (one-directional),
   /// so token composition cannot form cycles.
   //baml:mut_vm
-  function any(tokens: CancelToken[]) -> CancelToken {
+  function any(tokens: CancelToken[]) -> CancelToken throws never {
     $rust_function
   }
 
   /// Request cancellation. Returns `1` if this call transitioned the token
   /// from un-cancelled to cancelled, `0` if it was already cancelled.
   //baml:vm
-  function cancel(self) -> int {
+  function cancel(self) -> int throws never {
     $rust_function
   }
 
   /// `true` if this token has been cancelled.
   //baml:vm
-  function is_cancelled(self) -> bool {
+  function is_cancelled(self) -> bool throws never {
     $rust_function
   }
 }
@@ -107,6 +107,6 @@ class CancelToken {
 /// errors to the root task instead of the spawner. (`group` is accepted for
 /// forward compatibility and wired in a follow-up.)
 //baml:mut_vm
-function options(group: TaskGroup? = null, cancel: CancelToken? = null, detach: bool? = null) -> SpawnConfig {
+function options(group: TaskGroup? = null, cancel: CancelToken? = null, detach: bool? = null) -> SpawnConfig throws never {
   $rust_function
 }

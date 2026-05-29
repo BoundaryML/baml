@@ -1,40 +1,40 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function optional_function_parameters.$init_test_72(registry: testing.TestCollector) -> null {
+function optional_function_parameters.$init_test_ns_optional_function_parameters_optional_function_parameters(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "source_defaults_named_overrides_and_required_by_name"
-    make_closure .<lambda($init_test_72, 0)>, 0
+    make_closure .<lambda($init_test_ns_optional_function_parameters_optional_function_parameters, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "mutable_default_array_is_fresh_per_call"
-    make_closure .<lambda($init_test_72, 1)>, 0
+    make_closure .<lambda($init_test_ns_optional_function_parameters_optional_function_parameters, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "optional_dropping_adapter_uses_defaults_for_hidden_params"
-    make_closure .<lambda($init_test_72, 2)>, 0
+    make_closure .<lambda($init_test_ns_optional_function_parameters_optional_function_parameters, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "default_named_call_args_do_not_reuse_body_call_metadata"
-    make_closure .<lambda($init_test_72, 3)>, 0
+    make_closure .<lambda($init_test_ns_optional_function_parameters_optional_function_parameters, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "host_call_omitted_default_returns_default"
-    make_closure .<lambda($init_test_72, 4)>, 0
+    make_closure .<lambda($init_test_ns_optional_function_parameters_optional_function_parameters, 4)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "host_call_explicit_null_returns_1"
-    make_closure .<lambda($init_test_72, 5)>, 0
+    make_closure .<lambda($init_test_ns_optional_function_parameters_optional_function_parameters, 5)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
@@ -188,7 +188,7 @@ function optional_function_parameters.push_default(value: int, items: int[]) -> 
     call baml.Array.push
     pop 1
     load_var items
-    call baml.Array.length
+    container_len
     return
 }
 

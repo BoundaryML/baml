@@ -1,64 +1,64 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function class_type_args_at_runtime.$init_test_43(registry: testing.TestCollector) -> null {
+function class_type_args_at_runtime.$init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "method_sees_class_type_arg_int"
-    make_closure .<lambda($init_test_43, 0)>, 0
+    make_closure .<lambda($init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "method_sees_class_type_arg_string"
-    make_closure .<lambda($init_test_43, 1)>, 0
+    make_closure .<lambda($init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "method_sees_composite_class_type_arg"
-    make_closure .<lambda($init_test_43, 2)>, 0
+    make_closure .<lambda($init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "union_dispatch_generic_class_int"
-    make_closure .<lambda($init_test_43, 3)>, 0
+    make_closure .<lambda($init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "union_dispatch_generic_class_string"
-    make_closure .<lambda($init_test_43, 4)>, 0
+    make_closure .<lambda($init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime, 4)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "is_type_parametric_class_same_args"
-    make_closure .<lambda($init_test_43, 5)>, 0
+    make_closure .<lambda($init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime, 5)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "is_type_parametric_class_different_args"
-    make_closure .<lambda($init_test_43, 6)>, 0
+    make_closure .<lambda($init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime, 6)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "is_type_bare_class_still_matches"
-    make_closure .<lambda($init_test_43, 7)>, 0
+    make_closure .<lambda($init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime, 7)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "closure_inside_method_captures_class_type_arg"
-    make_closure .<lambda($init_test_43, 8)>, 0
+    make_closure .<lambda($init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime, 8)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "closure_inside_method_survives_gc"
-    make_closure .<lambda($init_test_43, 9)>, 0
+    make_closure .<lambda($init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime, 9)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1

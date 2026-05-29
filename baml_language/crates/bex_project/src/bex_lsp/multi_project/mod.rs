@@ -767,7 +767,7 @@ impl BexMulitProject {
                 "testing.TestRegistry.run_test",
                 vec![
                     registry_value,
-                    bex_engine::BexExternalValue::String(test_name.to_string()),
+                    bex_engine::BexExternalValue::String(test_name.into()),
                 ],
                 ctx,
                 true, // deep copy TestReport for wire
@@ -825,7 +825,7 @@ impl BexMulitProject {
                     "testing.TestRegistry.expand_set",
                     vec![
                         registry_value.clone(),
-                        bex_engine::BexExternalValue::String(name.clone()),
+                        bex_engine::BexExternalValue::String(name.as_str().into()),
                     ],
                     ctx,
                     true,
@@ -930,7 +930,7 @@ fn bex_value_to_json(v: &bex_engine::BexExternalValue) -> serde_json::Value {
         bex_engine::BexExternalValue::Bigint(b) => serde_json::json!(b.to_string()),
         bex_engine::BexExternalValue::Float(f) => serde_json::json!(f),
         bex_engine::BexExternalValue::Bool(b) => serde_json::json!(b),
-        bex_engine::BexExternalValue::String(s) => serde_json::json!(s),
+        bex_engine::BexExternalValue::String(s) => serde_json::json!(s.as_str()),
         bex_engine::BexExternalValue::Array { items, .. } => {
             serde_json::Value::Array(items.iter().map(bex_value_to_json).collect())
         }

@@ -1,52 +1,52 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function json_parse_stringify.$init_test_62(registry: testing.TestCollector) -> null {
+function json_parse_stringify.$init_test_ns_json_parse_stringify_json_parse_stringify(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "parse_array_of_ints"
-    make_closure .<lambda($init_test_62, 0)>, 0
+    make_closure .<lambda($init_test_ns_json_parse_stringify_json_parse_stringify, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "parse_then_match_array"
-    make_closure .<lambda($init_test_62, 1)>, 0
+    make_closure .<lambda($init_test_ns_json_parse_stringify_json_parse_stringify, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "roundtrip_stringify_parse"
-    make_closure .<lambda($init_test_62, 2)>, 0
+    make_closure .<lambda($init_test_ns_json_parse_stringify_json_parse_stringify, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "parse_int_disambiguation"
-    make_closure .<lambda($init_test_62, 3)>, 0
+    make_closure .<lambda($init_test_ns_json_parse_stringify_json_parse_stringify, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "parse_float_disambiguation"
-    make_closure .<lambda($init_test_62, 4)>, 0
+    make_closure .<lambda($init_test_ns_json_parse_stringify_json_parse_stringify, 4)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "parse_throws_on_garbage"
-    make_closure .<lambda($init_test_62, 5)>, 0
+    make_closure .<lambda($init_test_ns_json_parse_stringify_json_parse_stringify, 5)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "stringify_pretty_multiline"
-    make_closure .<lambda($init_test_62, 6)>, 0
+    make_closure .<lambda($init_test_ns_json_parse_stringify_json_parse_stringify, 6)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "roundtrip_nested_object"
-    make_closure .<lambda($init_test_62, 7)>, 0
+    make_closure .<lambda($init_test_ns_json_parse_stringify_json_parse_stringify, 7)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
@@ -70,7 +70,7 @@ function json_parse_stringify.parse_array_len() -> int {
 
   L1:
     load_var j
-    call baml.Array.length
+    container_len
 
   L2:
     return
@@ -128,7 +128,7 @@ function json_parse_stringify.parse_then_match_array_len() -> int {
 
   L1:
     load_var j
-    call baml.Array.length
+    container_len
 
   L2:
     return

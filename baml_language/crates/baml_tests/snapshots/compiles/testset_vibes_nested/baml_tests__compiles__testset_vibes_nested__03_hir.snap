@@ -7,7 +7,7 @@ class user.Sentiment {
   confidence: float
   reasoning: string
 }
-function user.$init_test_36(registry: testing.TestCollector) -> ?  [expr] {
+function user.$init_test_main(registry: testing.TestCollector) -> ?  [expr] {
   { registry.register_test_set("test", (testset: testing.TestCollector) -> void { { let topics = ["happy", "sad"]; for sentiments in topics { testset.register_test_set(sentiments, (testset: testing.TestCollector) -> { { let req = baml.http.fetch("http://localhost:..." Add sentiments); let data = req.text(); let tests = GenerateTests$parse(data); for ex in tests { testset.register_test(ex, () -> { { let result = ClassifySentiment("hi"); assert.equal(result.feeling, "positive") } }, null) } } null }, null) }; testset.register_test_set("vibes", (testset: testing.TestCollector) -> { { let topics = ["happy", "sad"]; for sentiments in topics { testset.register_test_set(sentiments, (testset: testing.TestCollector) -> { { let tests = GenerateTests(5, sentiments); for ex in tests { testset.register_test(ex, () -> { { let result = ClassifySentiment("hi"); assert.equal(result.feeling, "positive") } }, null) } } null }, null) } } null }, null) } null }, null) } null
 }
 function user.ClassifySentiment(text: string) -> user.Sentiment  [llm] {

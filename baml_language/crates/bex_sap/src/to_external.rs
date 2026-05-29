@@ -161,7 +161,7 @@ fn baml_value_inner_to_external(
     ty: &TyWithMeta<TyResolvedRef<'_, TypeName>, &TypeAnnotations<'_, TypeName>>,
 ) -> BexExternalValue {
     match value {
-        BamlValue::String(s) => BexExternalValue::String(s.value.to_string()),
+        BamlValue::String(s) => BexExternalValue::String(bex_str::BexStr::from(s.value.as_ref())),
         BamlValue::Int(i) => BexExternalValue::Int(i.value),
         BamlValue::Bigint(b) => BexExternalValue::Bigint(b.value.clone()),
         BamlValue::Float(f) => BexExternalValue::Float(f.value),
@@ -227,7 +227,7 @@ fn stream_state_to_external(state: &BamlStreamState<'_, '_, '_, TypeName>) -> Be
     fields.insert("value".to_string(), baml_value_to_external(inner));
     fields.insert(
         "state".to_string(),
-        BexExternalValue::String(state_name.to_string()),
+        BexExternalValue::String(bex_str::BexStr::from(state_name)),
     );
     BexExternalValue::Instance {
         class_name: "StreamState".to_string(),

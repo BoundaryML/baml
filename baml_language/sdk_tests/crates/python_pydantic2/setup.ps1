@@ -8,15 +8,14 @@
 #
 # See setup.sh for the full rationale. In short: `uv sync` per fixture
 # creates each venv + editable-links baml_core, then a single
-# `maturin develop` against a pinned build venv rebuilds the shared
-# extension module incrementally (~7s steady state). The build venv is
-# populated from `sdks/python/pyproject.toml`'s dev tools so the maturin
+# `maturin develop` against `sdks/python/.venv` rebuilds the shared
+# extension module incrementally (~7s steady state). That venv is
+# populated from `sdks/python/pyproject.toml`'s dev group so the maturin
 # version constraint lives in TOML, not in an error-prone shell argument.
-# The old
-# `uv sync --reinstall-package baml_core` was strictly slower (~70s
-# every run): uv's isolated build used an ephemeral interpreter whose
-# path moved each run, busting pyo3's fingerprint and forcing a full
-# bridge_python rebuild. The steps below are equivalent to setup.sh.
+# The old `uv sync --reinstall-package baml_core` was strictly slower
+# (~70s every run): uv's isolated build used an ephemeral interpreter
+# whose path moved each run, busting pyo3's fingerprint and forcing a
+# full bridge_python rebuild. The steps below are equivalent to setup.sh.
 
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
@@ -55,35 +54,27 @@ Get-ChildItem -Directory | ForEach-Object {
 }
 
 # 2. Rebuild the shared baml_core extension incrementally via maturin.
-#    The build venv is pinned at a fixed path so its interpreter never
-#    moves (see setup.sh for why that matters for the cargo cache).
-#    abi3 wheels are interpreter-version-agnostic, so any >=3.10 works.
-#
-#    `sdks/python/pyproject.toml` owns the maturin version constraint.
-#    `uv sync --group dev --no-install-project` installs the dev tools
-#    into the pinned build venv without installing/building baml_core
-#    during environment preparation.
-$BuildVenv = Join-Path $WorkspaceRoot 'target\maturin-build-venv'
-$MaturinExe = Join-Path $BuildVenv 'Scripts\maturin.exe'
-Write-Host "==> syncing maturin build venv at $BuildVenv"
+#    The build venv is `sdks/python/.venv` — uv's default project venv,
+#    at a stable path (see setup.sh for why that matters for the cargo
+#    cache). abi3 wheels are interpreter-version-agnostic, so any
+#    >=3.10 works. `sdks/python/pyproject.toml` owns the maturin
+#    version constraint; the sync below installs dev tools without
+#    installing/building baml_core (`maturin develop` does that).
+$SdkPyVenv = Join-Path $SdkPy '.venv'
+$MaturinExe = Join-Path $SdkPyVenv 'Scripts\maturin.exe'
+Write-Host "==> uv sync (dev) in $SdkPy"
 Push-Location $SdkPy
 try {
-    $OldProjectEnvironment = $env:UV_PROJECT_ENVIRONMENT
-    $env:UV_PROJECT_ENVIRONMENT = $BuildVenv
+    $env:UV_PROJECT_ENVIRONMENT = $SdkPyVenv
     & $UvBin sync --group dev --no-install-project
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 } finally {
-    if ($null -eq $OldProjectEnvironment) {
-        Remove-Item Env:\UV_PROJECT_ENVIRONMENT -ErrorAction SilentlyContinue
-    } else {
-        $env:UV_PROJECT_ENVIRONMENT = $OldProjectEnvironment
-    }
     Pop-Location
 }
 Write-Host '==> maturin develop (shared baml_core extension)'
 Push-Location $SdkPy
 try {
-    $env:VIRTUAL_ENV = $BuildVenv
+    $env:VIRTUAL_ENV = $SdkPyVenv
     & $MaturinExe develop
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 } finally {

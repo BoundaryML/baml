@@ -35,7 +35,7 @@ pub fn external_to_outbound(
         BexExternalValue::Bigint(bi) => Some(BamlValueVariant::BigintValue(format!("{bi:x}"))),
         BexExternalValue::Float(f) => Some(BamlValueVariant::FloatValue(*f)),
         BexExternalValue::Bool(b) => Some(BamlValueVariant::BoolValue(*b)),
-        BexExternalValue::String(s) => Some(BamlValueVariant::StringValue(s.clone())),
+        BexExternalValue::String(s) => Some(BamlValueVariant::StringValue(s.to_string())),
         BexExternalValue::Array {
             items,
             element_type,

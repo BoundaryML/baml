@@ -1,46 +1,46 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function json_alias.$init_test_60(registry: testing.TestCollector) -> null {
+function json_alias.$init_test_ns_json_alias_json_alias(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "field_of_type_json_lowers_cleanly"
-    make_closure .<lambda($init_test_60, 0)>, 0
+    make_closure .<lambda($init_test_ns_json_alias_json_alias, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "let_json_null"
-    make_closure .<lambda($init_test_60, 1)>, 0
+    make_closure .<lambda($init_test_ns_json_alias_json_alias, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "let_json_int"
-    make_closure .<lambda($init_test_60, 2)>, 0
+    make_closure .<lambda($init_test_ns_json_alias_json_alias, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "let_json_string"
-    make_closure .<lambda($init_test_60, 3)>, 0
+    make_closure .<lambda($init_test_ns_json_alias_json_alias, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "let_json_array"
-    make_closure .<lambda($init_test_60, 4)>, 0
+    make_closure .<lambda($init_test_ns_json_alias_json_alias, 4)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "let_json_map"
-    make_closure .<lambda($init_test_60, 5)>, 0
+    make_closure .<lambda($init_test_ns_json_alias_json_alias, 5)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "match_json_arms_exhaustive"
-    make_closure .<lambda($init_test_60, 6)>, 0
+    make_closure .<lambda($init_test_ns_json_alias_json_alias, 6)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
@@ -72,7 +72,7 @@ function json_alias.json_array_len() -> int {
 
   L1:
     load_var arr
-    call baml.Array.length
+    container_len
 
   L2:
     return
@@ -93,7 +93,7 @@ function json_alias.json_map_has_key() -> bool {
 
   L1:
     load_var m
-    call baml.Map.length
+    container_len
     load_const 1
     cmp_int_op ==
 

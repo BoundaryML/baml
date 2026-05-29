@@ -27,6 +27,7 @@ indexmap = { workspace = true }
 js-sys = { workspace = true }
 log = { workspace = true }
 lsp-server = { workspace = true }
+num-bigint = { workspace = true }
 prost = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }

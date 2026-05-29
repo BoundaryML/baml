@@ -279,7 +279,7 @@ fn get_string_field(
 ) -> Result<String, String> {
     match fields.get(key) {
         None | Some(BexExternalValue::Null) => Ok(default.to_string()),
-        Some(value) => value.as_string().ok_or_else(|| {
+        Some(value) => value.as_string().map(|s| s.to_string()).ok_or_else(|| {
             format!(
                 "ScanOptions.{key} must be a string, got {}",
                 value.type_name()

@@ -205,7 +205,7 @@ mod tests {
         let output = ops.call_host_value(
             &heap,
             CallId::next(),
-            BexExternalValue::String("not a host value".to_string()),
+            BexExternalValue::String("not a host value".to_string().into()),
             vec![],
             int_ty(),
             &ctx,
@@ -325,8 +325,11 @@ mod tests {
     // -------------------------------------------------------------------------
     #[test]
     fn validate_return_value_rejects_mismatched_type() {
-        let err = validate_return_value(&BexExternalValue::String("oops".to_string()), &int_ty())
-            .expect_err("a String should not match the `int` return type");
+        let err = validate_return_value(
+            &BexExternalValue::String("oops".to_string().into()),
+            &int_ty(),
+        )
+        .expect_err("a String should not match the `int` return type");
         match err {
             OpErrorKind::HostCallable { category, .. } => {
                 assert_eq!(
@@ -344,7 +347,7 @@ mod tests {
     #[test]
     fn validate_return_value_unknown_accepts_anything() {
         validate_return_value(
-            &BexExternalValue::String("anything".to_string()),
+            &BexExternalValue::String("anything".to_string().into()),
             &Ty::unknown(),
         )
         .expect("`unknown` return type should accept any value");
