@@ -98,6 +98,13 @@ pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<Name, Ty>) -> Ty {
                 .collect();
             Ty::Class(name.clone(), substituted_args, attr.clone())
         }
+        // `Future<T, E>` is its own variant (not a `Ty::Class`); substitute
+        // both type parameters so combinators over `Future<T, E>[]` resolve.
+        Ty::Future(value, error, attr) => Ty::Future(
+            Box::new(substitute_ty(value, bindings)),
+            Box::new(substitute_ty(error, bindings)),
+            attr.clone(),
+        ),
         // All other types are leaves (primitives, enums, etc.) — pass through.
         _ => ty.clone(),
     }
@@ -339,6 +346,48 @@ pub fn contains_typevar(ty: &Ty) -> bool {
                 || contains_typevar(throws)
         }
         Ty::Class(_, type_args, _) => type_args.iter().any(contains_typevar),
+        Ty::Future(value, error, _) => contains_typevar(value) || contains_typevar(error),
+        _ => false,
+    }
+}
+
+/// Like [`contains_typevar`], but ignores type variables whose name appears in
+/// `rigid`. Used at a generic call site to tell the callee's still-unbound
+/// inference variables apart from the *enclosing* function's generic params:
+/// the latter are rigid (fixed, concrete-enough) types within the current body,
+/// so a callback parameter like `Future<T, E>` — where `T`/`E` are the caller's
+/// own generics — can drive bidirectional checking of an unannotated lambda
+/// parameter instead of falling back to synthesis (which would reject the bare
+/// param). A typevar that is NOT rigid is one the callee must still infer, so a
+/// param mentioning it genuinely cannot give the lambda a concrete shape.
+pub fn contains_non_rigid_typevar(ty: &Ty, rigid: &[Name]) -> bool {
+    match ty {
+        Ty::TypeVar(name, _) => !rigid.iter().any(|r| r == name),
+        Ty::List(inner, _) | Ty::Optional(inner, _) | Ty::EvolvingList(inner, _) => {
+            contains_non_rigid_typevar(inner, rigid)
+        }
+        Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) => {
+            contains_non_rigid_typevar(k, rigid) || contains_non_rigid_typevar(v, rigid)
+        }
+        Ty::Union(tys, _) => tys.iter().any(|t| contains_non_rigid_typevar(t, rigid)),
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            params
+                .iter()
+                .any(|param| contains_non_rigid_typevar(&param.ty, rigid))
+                || contains_non_rigid_typevar(ret, rigid)
+                || contains_non_rigid_typevar(throws, rigid)
+        }
+        Ty::Class(_, type_args, _) => type_args
+            .iter()
+            .any(|t| contains_non_rigid_typevar(t, rigid)),
+        Ty::Future(value, error, _) => {
+            contains_non_rigid_typevar(value, rigid) || contains_non_rigid_typevar(error, rigid)
+        }
         _ => false,
     }
 }
@@ -400,6 +449,22 @@ fn infer_bindings_inner(
         (Ty::Class(fn_name, f_args, _), Ty::Class(an_name, a_args, _)) if fn_name == an_name => {
             for (ft, at) in f_args.iter().zip(a_args.iter()) {
                 infer_bindings_inner(ft, at, bindings, allow_typevar_actuals);
+            }
+        }
+        // `Future<T, E>` is its own variant — descend into both params so the
+        // future combinators can infer `<T, E>` from a `Future<T, E>[]` arg.
+        (Ty::Future(f_value, f_error, _), Ty::Future(a_value, a_error, _)) => {
+            infer_bindings_inner(f_value, a_value, bindings, allow_typevar_actuals);
+            infer_bindings_inner(f_error, a_error, bindings, allow_typevar_actuals);
+        }
+        // A heterogeneous future array — e.g. `[spawn { 1 }, spawn { 2 }]` —
+        // types as `(Future<A, EA> | Future<B, EB>)[]` because `Future` is
+        // invariant. Match the `Future<T, E>` formal against each union member
+        // so `T`/`E` bind to the union of the member value/error types (the
+        // TypeVar arm merges the per-member bindings via `union_ty`).
+        (Ty::Future(_, _, _), Ty::Union(members, _)) => {
+            for member in members {
+                infer_bindings_inner(formal, member, bindings, allow_typevar_actuals);
             }
         }
         // Builtin container bridging: Array<T> ↔ List(T), Map<K,V> ↔ Map(K,V)
@@ -525,6 +590,11 @@ pub fn erase_unresolved_typevars(
                 .iter()
                 .map(|t| erase_unresolved_typevars(t, diagnostics))
                 .collect(),
+            attr.clone(),
+        ),
+        Ty::Future(value, error, attr) => Ty::Future(
+            Box::new(erase_unresolved_typevars(value, diagnostics)),
+            Box::new(erase_unresolved_typevars(error, diagnostics)),
             attr.clone(),
         ),
         other => other.clone(),

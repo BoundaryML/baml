@@ -2361,10 +2361,21 @@ impl<'db> TypeInferenceBuilder<'db> {
                             params: fn_params, ..
                         }) = self.expected_lambda_function_ty(&substituted)
                         {
-                            let all_params_concrete = fn_params
-                                .iter()
-                                .all(|param| !crate::generics::contains_typevar(&param.ty));
-                            if all_params_concrete {
+                            // Drive bidirectional checking as long as every
+                            // callback parameter is concrete *modulo the
+                            // enclosing function's own generics*. Those outer
+                            // generics are rigid here, so a param like
+                            // `Future<T, E>` (T/E being the caller's generics)
+                            // still gives an unannotated lambda param a concrete
+                            // shape; only a callee inference var the call hasn't
+                            // bound yet forces synthesis.
+                            let all_params_inferable = fn_params.iter().all(|param| {
+                                !crate::generics::contains_non_rigid_typevar(
+                                    &param.ty,
+                                    &self.generic_params,
+                                )
+                            });
+                            if all_params_inferable {
                                 self.check_expr(*arg, body, &substituted)
                             } else {
                                 self.infer_expr(*arg, body)

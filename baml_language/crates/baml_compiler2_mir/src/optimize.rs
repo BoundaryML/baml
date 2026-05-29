@@ -974,10 +974,15 @@ fn apply_subst_to_terminator(term: &mut Terminator, subst: &HashMap<Local, Opera
         Terminator::ShortCircuit { operand, .. } => {
             apply_subst_to_operand(operand, subst);
         }
-        Terminator::Goto { .. }
-        | Terminator::Return
-        | Terminator::Unreachable
-        | Terminator::Await { .. } => {}
+        // `future` is the awaited operand (a `Place::Local`); it must be
+        // substituted like any other read so a propagated copy-of-param
+        // (`_tmp = copy param; await _tmp`) doesn't leave the await pointing at
+        // a local whose defining copy was just dead-eliminated. `destination`
+        // is a write target and is intentionally left untouched.
+        Terminator::Await { future, .. } => {
+            apply_subst_to_place_locals(future, subst);
+        }
+        Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable => {}
     }
 }
 
