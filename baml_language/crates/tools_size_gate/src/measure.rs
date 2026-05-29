@@ -189,9 +189,9 @@ fn locate_artifact(workspace_root: &Path, name: &str, config: &ArtifactConfig) -
             let lib_name = resolve_lib_name(workspace_root, package)?;
             if config.is_wasm() {
                 let dir = workspace_root.join("target/wasm32-unknown-unknown/release");
-                // WASM cdylib uses the package name with underscores (Cargo convention)
-                let wasm_name = package.replace('-', "_");
-                (dir, format!("{wasm_name}.wasm"))
+                // WASM cdylib output is `<lib_name>.wasm` (the resolved lib
+                // target name, which may differ from the package name).
+                (dir, format!("{lib_name}.wasm"))
             } else if let Some(target) = &config.target {
                 let dir = workspace_root.join(format!("target/{target}/release"));
                 (dir, native_lib_filename(&lib_name))

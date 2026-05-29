@@ -221,7 +221,39 @@ impl Config {
             .with_context(|| format!("failed to read config: {}", config_path.display()))?;
         let config: Config =
             toml::from_str(&content).with_context(|| "failed to parse size-gate.toml")?;
+        config.validate()?;
         Ok(config)
+    }
+
+    /// Reject configurations the build path would silently ignore.
+    fn validate(&self) -> Result<()> {
+        for (name, artifact) in &self.artifacts {
+            if artifact.kind == ArtifactKind::Pack {
+                // `pack` builds the CLI + host from its [pack] table on the
+                // host target; the generic cargo build flags don't apply and
+                // would be silently ignored, so reject them up front rather
+                // than measure an artifact that diverges from the config.
+                let ignored = [
+                    ("package", artifact.package.is_some()),
+                    ("target", artifact.target.is_some()),
+                    ("no_default_features", artifact.no_default_features),
+                    ("features", !artifact.features.is_empty()),
+                ];
+                if let Some((field, _)) = ignored.iter().find(|(_, set)| *set) {
+                    anyhow::bail!(
+                        "artifact `{name}` (kind = \"pack\") sets `{field}`, which is ignored \
+                         for pack artifacts — configure the build via [artifacts.{name}.pack] \
+                         instead"
+                    );
+                }
+                // Surface a missing [pack] table at load time, not mid-build.
+                artifact
+                    .pack
+                    .as_ref()
+                    .with_context(|| format!("artifact `{name}` (kind = \"pack\") is missing a [artifacts.{name}.pack] table"))?;
+            }
+        }
+        Ok(())
     }
 
     /// Return the resolved platform for a given artifact config.
