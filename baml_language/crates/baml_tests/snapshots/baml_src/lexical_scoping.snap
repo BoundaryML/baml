@@ -259,7 +259,7 @@ function lexical_scoping.for_loop_restores_outer() -> int {
   L0:
     load_var __for_idx
     load_var _2
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2
@@ -456,7 +456,7 @@ function lexical_scoping.rule2_for_outer_mutation_escapes() -> int {
   L0:
     load_var __for_idx
     load_var _2
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2

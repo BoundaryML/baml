@@ -314,7 +314,7 @@ function json_to_from_string.from_string_json_passthrough_object_len() -> int {
 
   L1:
     load_var j
-    call baml.Map.length
+    container_len
 
   L2:
     return

@@ -276,7 +276,7 @@ function user.iterator_style_for_loop() -> int {
   L0:
     load_var __for_idx
     load_var _2
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2
@@ -379,7 +379,7 @@ function user.nested_for_loop() -> int {
   L0:
     load_var __for_idx
     load_var _2
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2
@@ -404,7 +404,7 @@ function user.nested_for_loop() -> int {
   L3:
     load_var __for_idx_1
     load_var _8
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L4
     jump L5

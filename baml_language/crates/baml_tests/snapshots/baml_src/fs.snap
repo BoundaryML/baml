@@ -286,7 +286,7 @@ function fs.fs_file_read_bytes_n_fn() -> bool {
     sys_op baml.fs.remove
     pop 1
     load_var data
-    call baml.Uint8Array.length
+    container_len
     load_const 3
     call baml.deep_equals
     return
@@ -476,7 +476,7 @@ function fs.fs_open_and_read_bytes_fn() -> bool {
     sys_op baml.fs.remove
     pop 1
     load_var data
-    call baml.Uint8Array.length
+    container_len
     load_const 16
     call baml.deep_equals
     return
@@ -707,7 +707,7 @@ function fs.fs_read_dir_empty_dir_fn() -> bool {
     pop 1
     load_const "/tmp/baml_fs_read_dir_empty_abc"
     sys_op baml.fs.read_dir
-    call baml.Array.length
+    container_len
     load_const 0
     call baml.deep_equals
     return
@@ -752,7 +752,7 @@ function fs.fs_read_dir_returns_entries_fn() -> bool {
     sys_op baml.fs.remove
     pop 1
     load_var entries
-    call baml.Array.length
+    container_len
     load_const 3
     call baml.deep_equals
     store_var count_ok
@@ -924,7 +924,7 @@ function fs.fs_write_bytes_fn() -> bool {
     jump_if_false L0
     pop 1
     load_var readback
-    call baml.Uint8Array.length
+    container_len
     load_const 11
     call baml.deep_equals
 

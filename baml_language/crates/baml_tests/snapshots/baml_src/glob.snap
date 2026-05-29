@@ -455,9 +455,6 @@ function glob.scan_follows_symlinked_directory_checks() -> bool[] {
     sys_op baml.glob.Glob.scan
     store_var result
     load_var result
-    call baml.Array.length
-    store_var _29
-    load_var result
     load_const "link_dir/hidden_via_link.txt"
     call baml.Array.includes
     store_var _30
@@ -471,7 +468,8 @@ function glob.scan_follows_symlinked_directory_checks() -> bool[] {
     load_const null
     sys_op baml.sys.shell
     pop 1
-    load_var _29
+    load_var result
+    container_len
     load_const 1
     cmp_int_op ==
     load_var _30
@@ -513,9 +511,6 @@ function glob.scan_matches_absolute_pattern_checks() -> bool[] {
     sys_op baml.glob.Glob.scan
     store_var result
     load_var result
-    call baml.Array.length
-    store_var _19
-    load_var result
     load_var root
     load_const "/file.txt"
     bin_op +
@@ -527,7 +522,8 @@ function glob.scan_matches_absolute_pattern_checks() -> bool[] {
     load_const null
     sys_op baml.sys.shell
     pop 1
-    load_var _19
+    load_var result
+    container_len
     load_const 1
     cmp_int_op ==
     load_var _20
@@ -653,9 +649,6 @@ function glob.scan_opts_include_dot_absolute_and_dirs_checks() -> bool[] {
     sys_op baml.glob.Glob.scan
     store_var result
     load_var result
-    call baml.Array.length
-    store_var _23
-    load_var result
     load_var root
     load_const "/.hidden.txt"
     bin_op +
@@ -679,7 +672,8 @@ function glob.scan_opts_include_dot_absolute_and_dirs_checks() -> bool[] {
     load_const null
     sys_op baml.sys.shell
     pop 1
-    load_var _23
+    load_var result
+    container_len
     load_const 3
     cmp_int_op ==
     load_var _24

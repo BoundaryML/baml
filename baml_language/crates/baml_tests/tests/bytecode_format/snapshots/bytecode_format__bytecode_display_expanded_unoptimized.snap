@@ -201,7 +201,7 @@ function testing.TestCollector.find_testset(self: null, name: string) -> testing
        4    store_var 5            (__for_idx)
        5    load_var 5             (__for_idx)
        6    load_var 4             (_3)
-       7    call 21 ntypeargs=0    (baml.Array.length)
+       7    container_len          
        8    cmp_int_op <           
        9    pop_jump_if_false +2   (to 11)
        10   jump +5                (to 15)
@@ -305,7 +305,7 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
        26   store_var 10            (__for_idx)
        27   load_var 10             (__for_idx)
        28   load_var 9              (_13)
-       29   call 21 ntypeargs=0     (baml.Array.length)
+       29   container_len           
        30   cmp_int_op <            
        31   pop_jump_if_false +2    (to 33)
        32   jump +34                (to 66)
@@ -407,7 +407,7 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
        26   store_var 10            (__for_idx)
        27   load_var 10             (__for_idx)
        28   load_var 9              (_13)
-       29   call 21 ntypeargs=0     (baml.Array.length)
+       29   container_len           
        30   cmp_int_op <            
        31   pop_jump_if_false +2    (to 33)
        32   jump +34                (to 66)
@@ -541,7 +541,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
         5    store_var 4            (__for_idx)
         6    load_var 4             (__for_idx)
         7    load_var 3             (_3)
-        8    call 21 ntypeargs=0    (baml.Array.length)
+        8    container_len          
         9    cmp_int_op <           
         10   pop_jump_if_false +2   (to 12)
         11   jump +42               (to 53)
@@ -555,7 +555,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
         17   store_var 11           (__for_idx_1)
         18   load_var 11            (__for_idx_1)
         19   load_var 10            (_28)
-        20   call 21 ntypeargs=0    (baml.Array.length)
+        20   container_len          
         21   cmp_int_op <           
         22   pop_jump_if_false +2   (to 24)
         23   jump +5                (to 28)
@@ -700,7 +700,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
         5    store_var 4            (__for_idx)
         6    load_var 4             (__for_idx)
         7    load_var 3             (_3)
-        8    call 21 ntypeargs=0    (baml.Array.length)
+        8    container_len          
         9    cmp_int_op <           
         10   pop_jump_if_false +2   (to 12)
         11   jump +42               (to 53)
@@ -714,7 +714,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
         17   store_var 7            (__for_idx_1)
         18   load_var 7             (__for_idx_1)
         19   load_var 6             (_13)
-        20   call 21 ntypeargs=0    (baml.Array.length)
+        20   container_len          
         21   cmp_int_op <           
         22   pop_jump_if_false +2   (to 24)
         23   jump +5                (to 28)
@@ -792,7 +792,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
         7    store_var 5            (__for_idx)
         8    load_var 5             (__for_idx)
         9    load_var 4             (_3)
-        10   call 21 ntypeargs=0    (baml.Array.length)
+        10   container_len          
         11   cmp_int_op <           
         12   pop_jump_if_false +2   (to 14)
         13   jump +60               (to 73)
@@ -805,7 +805,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
         19   store_var 8            (__for_idx_1)
         20   load_var 8             (__for_idx_1)
         21   load_var 7             (_12)
-        22   call 21 ntypeargs=0    (baml.Array.length)
+        22   container_len          
         23   cmp_int_op <           
         24   pop_jump_if_false +2   (to 26)
         25   jump +5                (to 30)

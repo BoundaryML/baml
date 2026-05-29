@@ -188,7 +188,7 @@ function optional_function_parameters.push_default(value: int, items: int[]) -> 
     call baml.Array.push
     pop 1
     load_var items
-    call baml.Array.length
+    container_len
     return
 }
 
