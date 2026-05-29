@@ -537,7 +537,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
-          save-if: ${{ github.ref == 'refs/heads/canary' }}
+          # TEMPORARY — revert to `${{ github.ref == 'refs/heads/canary' }}`
+          # before merge. Saving on this branch lets benchmarks-run restore the
+          # cargo home in the SAME workflow run, so we can prove the metadata
+          # fix on this PR before canary has seeded the lane.
+          save-if: true
           cache-all-crates: true
           cache-workspace-crates: true
           shared-key: "linux-arm-bench"
