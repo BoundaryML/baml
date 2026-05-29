@@ -141,14 +141,17 @@ impl ArtifactConfig {
     pub(crate) fn effective_policy(&self, platform: &str) -> Policy {
         let mut effective = self.policy.clone();
         if let Some(over) = self.platform.get(platform) {
+            if over.max_file_bytes.is_some() {
+                effective.max_file_bytes = over.max_file_bytes;
+            }
             if over.max_gzip_bytes.is_some() {
                 effective.max_gzip_bytes = over.max_gzip_bytes;
             }
             if over.max_stripped_bytes.is_some() {
                 effective.max_stripped_bytes = over.max_stripped_bytes;
             }
-            if over.max_gzip_delta_bytes.is_some() {
-                effective.max_gzip_delta_bytes = over.max_gzip_delta_bytes;
+            if over.max_delta_bytes.is_some() {
+                effective.max_delta_bytes = over.max_delta_bytes;
             }
             if over.max_delta_pct.is_some() {
                 effective.max_delta_pct = over.max_delta_pct;
@@ -161,16 +164,22 @@ impl ArtifactConfig {
 #[derive(Debug, Default, Clone, Deserialize)]
 #[allow(clippy::struct_field_names)]
 pub(crate) struct Policy {
-    /// Maximum allowed gzip bytes (absolute ceiling).
+    /// Maximum allowed on-disk file bytes (absolute ceiling). This is the
+    /// primary gate — the actual size a user installs/ships.
+    pub max_file_bytes: Option<u64>,
+
+    /// Maximum allowed gzip bytes (absolute ceiling). Optional secondary
+    /// gate; gzip is recorded and displayed for visibility either way.
     pub max_gzip_bytes: Option<u64>,
 
-    /// Maximum allowed stripped file bytes.
+    /// Maximum allowed stripped file bytes (absolute ceiling).
     pub max_stripped_bytes: Option<u64>,
 
-    /// Maximum allowed gzip delta in bytes vs baseline.
-    pub max_gzip_delta_bytes: Option<i64>,
+    /// Maximum allowed file-size delta in bytes vs baseline.
+    pub max_delta_bytes: Option<i64>,
 
-    /// Maximum allowed growth percentage vs baseline (e.g., 5.0 = 5%).
+    /// Maximum allowed file-size growth percentage vs baseline
+    /// (e.g., 3.0 = 3%).
     pub max_delta_pct: Option<f64>,
 }
 

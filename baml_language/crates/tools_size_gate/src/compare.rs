@@ -18,7 +18,21 @@ pub(crate) fn check_policy(
 ) -> Vec<Violation> {
     let mut violations = Vec::new();
 
-    // Absolute gzip limit
+    // Absolute file-size limit — the primary gate (actual shipped size).
+    if let Some(max) = policy.max_file_bytes {
+        if current.file_bytes > max {
+            let over = current.file_bytes - max;
+            violations.push(Violation {
+                metric: "file_bytes".into(),
+                policy_name: "max_file_bytes".into(),
+                limit: format_bytes(max),
+                actual: format_bytes(current.file_bytes),
+                exceeded_by: format!("+{}", format_bytes(over)),
+            });
+        }
+    }
+
+    // Absolute gzip limit (optional secondary gate)
     if let Some(max) = policy.max_gzip_bytes {
         if current.gzip_bytes > max {
             let over = current.gzip_bytes - max;
@@ -48,16 +62,17 @@ pub(crate) fn check_policy(
         }
     }
 
-    // Delta checks require baseline
+    // Delta checks require baseline. Deltas are measured on file size —
+    // the actual shipped size — not gzip.
     if let Some(base) = baseline {
-        // Absolute gzip delta
-        if let Some(max_delta) = policy.max_gzip_delta_bytes {
-            let delta = current.gzip_bytes as i64 - base.gzip_bytes as i64;
+        // Absolute file-size delta
+        if let Some(max_delta) = policy.max_delta_bytes {
+            let delta = current.file_bytes as i64 - base.file_bytes as i64;
             if delta > max_delta {
                 let over = delta - max_delta;
                 violations.push(Violation {
-                    metric: "gzip_delta".into(),
-                    policy_name: "max_gzip_delta_bytes".into(),
+                    metric: "file_delta".into(),
+                    policy_name: "max_delta_bytes".into(),
                     limit: format_delta_bytes(max_delta),
                     actual: format_delta_bytes(delta),
                     exceeded_by: format!("+{}", format_bytes(over.unsigned_abs())),
@@ -67,14 +82,14 @@ pub(crate) fn check_policy(
 
         // Percentage delta
         if let Some(max_pct) = policy.max_delta_pct {
-            if base.gzip_bytes > 0 {
-                let delta_pct = ((current.gzip_bytes as f64 - base.gzip_bytes as f64)
-                    / base.gzip_bytes as f64)
+            if base.file_bytes > 0 {
+                let delta_pct = ((current.file_bytes as f64 - base.file_bytes as f64)
+                    / base.file_bytes as f64)
                     * 100.0;
                 if delta_pct > max_pct {
                     let over = delta_pct - max_pct;
                     violations.push(Violation {
-                        metric: "gzip_delta_pct".into(),
+                        metric: "file_delta_pct".into(),
                         policy_name: "max_delta_pct".into(),
                         limit: format!("{max_pct:.1}%"),
                         actual: format!("{delta_pct:+.1}%"),

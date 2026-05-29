@@ -207,6 +207,7 @@ pub(crate) fn render_json(rows: &[ReportRow]) {
                     .unwrap_or_else(|| "-".into()),
                 gzip_bytes: row.current.gzip_bytes,
                 gzip_display: format_bytes(row.current.gzip_bytes),
+                baseline_file_bytes: row.baseline.as_ref().map(|b| b.file_bytes),
                 baseline_gzip_bytes: row.baseline.as_ref().map(|b| b.gzip_bytes),
                 delta,
                 delta_pct,
@@ -256,6 +257,7 @@ pub(crate) struct JsonArtifact {
     pub stripped_display: String,
     pub gzip_bytes: u64,
     pub gzip_display: String,
+    pub baseline_file_bytes: Option<u64>,
     pub baseline_gzip_bytes: Option<u64>,
     pub delta: String,
     pub delta_pct: String,
@@ -305,11 +307,12 @@ fn row_status_md(row: &ReportRow) -> &'static str {
     }
 }
 
+/// Delta strings are computed on file size — the gated metric — not gzip.
 fn delta_strings(row: &ReportRow) -> (String, String) {
     if let Some(base) = &row.baseline {
-        let delta = row.current.gzip_bytes as i64 - base.gzip_bytes as i64;
-        let pct = if base.gzip_bytes > 0 {
-            ((row.current.gzip_bytes as f64 - base.gzip_bytes as f64) / base.gzip_bytes as f64)
+        let delta = row.current.file_bytes as i64 - base.file_bytes as i64;
+        let pct = if base.file_bytes > 0 {
+            ((row.current.file_bytes as f64 - base.file_bytes as f64) / base.file_bytes as f64)
                 * 100.0
         } else {
             0.0
@@ -605,9 +608,10 @@ pub(crate) fn render_aggregate_markdown(reports: &[JsonReport], run_url: Option<
         );
     }
 
-    // Unified table
-    println!("| | Artifact | Platform | Gzip | Baseline | Delta | Status |");
-    println!("|---|----------|----------|------|----------|-------|--------|");
+    // Unified table. Size (on-disk file bytes) is the gated metric, so it
+    // carries the baseline + delta; gzip is shown for visibility only.
+    println!("| | Artifact | Platform | Size | Baseline | Delta | Gzip | Status |");
+    println!("|---|----------|----------|------|----------|-------|------|--------|");
 
     for a in &all_artifacts {
         let icon = match a.status.as_str() {
@@ -615,15 +619,15 @@ pub(crate) fn render_aggregate_markdown(reports: &[JsonReport], run_url: Option<
             "FAIL" => ":x:",
             _ => ":warning:",
         };
-        let baseline_display = match a.baseline_gzip_bytes {
+        let baseline_display = match a.baseline_file_bytes {
             Some(b) => format_bytes(b),
             None => "n/a".into(),
         };
         let platform_label = short_platform(&a.platform);
 
         println!(
-            "| {icon} | `{}` | {platform_label} | {} | {baseline_display} | {} ({}) | {} |",
-            a.artifact, a.gzip_display, a.delta, a.delta_pct, a.status
+            "| {icon} | `{}` | {platform_label} | {} | {baseline_display} | {} ({}) | {} | {} |",
+            a.artifact, a.file_display, a.delta, a.delta_pct, a.gzip_display, a.status
         );
     }
     println!();

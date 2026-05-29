@@ -7,19 +7,22 @@ baseline_dir = ".ci/size-gate"
 #                       (measured on every native platform)
 #   3. bridge_wasm    — the WASM build
 #
-# Two gates, both meant to stay tight as we drive size down:
+# The gate is on ACTUAL on-disk size (`max_file_bytes` / `max_delta_pct`).
+# Gzip is still measured and shown in the report for visibility, but it is
+# not what we benchmark against. Two gates, both kept tight as we drive
+# size down:
 #   * max_delta_pct — per-platform regression guard vs the committed
-#     baseline in `baseline_dir`. 3% absorbs normal build-to-build LTO
-#     jitter while still catching accidental growth.
-#   * max_gzip_bytes — an absolute hard ceiling. It is set PER PLATFORM
-#     (binaries differ in size across OSes) so each platform is capped
-#     ~100–200 KB above its own recorded baseline, not loosely to the
+#     baseline in `baseline_dir`, on file size. 3% absorbs normal
+#     build-to-build LTO jitter while still catching accidental growth.
+#   * max_file_bytes — an absolute hard ceiling on file size. Set PER
+#     PLATFORM (binaries differ across OSes) so each platform is capped
+#     ~150–200 KB above its own recorded baseline, not loosely to the
 #     largest platform. Bump a ceiling only as a deliberate, reviewed
 #     commit when a real size increase lands.
 #
-# When recording a new platform (`mise run size-gate-record`), add its
-# `[artifacts.<name>.platform.<triple>]` ceiling here, tight to the value
-# the record just wrote.
+# When recording a new platform (`mise run size-gate-record`), commit the
+# baseline it writes and add the matching `max_file_bytes` ceiling here,
+# tight (~150–200 KB) above that file size.
 
 [artifacts.baml-cli]
 kind = "bin"
@@ -27,29 +30,30 @@ package = "baml_cli"
 bin = "baml-cli"
 policy.max_delta_pct = 3.0
 
-# macOS arm64: baseline 7.23 MB gzip.
-[artifacts.baml-cli.platform.aarch64-apple-darwin]
-max_gzip_bytes = 7_400_000
-# Linux x86_64: baseline 8.07 MB gzip.
+# macOS arm64: re-baselined from CI (see .ci/size-gate stub). Ceiling
+# added once CI records the authoritative file size:
+# [artifacts.baml-cli.platform.aarch64-apple-darwin]
+# max_file_bytes = <recorded file_bytes + ~200 KB>
+# Linux x86_64: baseline 19.40 MB file.
 [artifacts.baml-cli.platform.x86_64-unknown-linux-gnu]
-max_gzip_bytes = 8_250_000
-# Windows x86_64: baseline 7.13 MB gzip.
+max_file_bytes = 19_600_000
+# Windows x86_64: baseline 15.76 MB file.
 [artifacts.baml-cli.platform.x86_64-pc-windows-msvc]
-max_gzip_bytes = 7_300_000
+max_file_bytes = 15_950_000
 
 [artifacts.packed-program]
 kind = "pack"
 policy.max_delta_pct = 3.0
 
-# macOS arm64: baseline 5.35 MB gzip.
-[artifacts.packed-program.platform.aarch64-apple-darwin]
-max_gzip_bytes = 5_500_000
-# Linux x86_64: baseline 6.16 MB gzip.
+# macOS arm64: re-baselined from CI. Ceiling added once CI records it:
+# [artifacts.packed-program.platform.aarch64-apple-darwin]
+# max_file_bytes = <recorded file_bytes + ~200 KB>
+# Linux x86_64: baseline 14.69 MB file.
 [artifacts.packed-program.platform.x86_64-unknown-linux-gnu]
-max_gzip_bytes = 6_310_000
-# Windows x86_64: baseline 5.43 MB gzip.
+max_file_bytes = 14_900_000
+# Windows x86_64: baseline 11.85 MB file.
 [artifacts.packed-program.platform.x86_64-pc-windows-msvc]
-max_gzip_bytes = 5_580_000
+max_file_bytes = 12_050_000
 
 [artifacts.packed-program.pack]
 cli_package = "baml_cli"
@@ -66,6 +70,6 @@ no_default_features = true
 wasm = true
 policy.max_delta_pct = 3.0
 
-# WASM is a single platform; baseline 3.76 MB gzip.
+# WASM is a single platform; baseline 12.82 MB file.
 [artifacts.bridge_wasm.platform.wasm32-unknown-unknown]
-max_gzip_bytes = 3_800_000
+max_file_bytes = 13_020_000

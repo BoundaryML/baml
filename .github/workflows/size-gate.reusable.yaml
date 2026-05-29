@@ -331,8 +331,13 @@ jobs:
           file-path: unified-report.md
           comment-tag: size-gate
 
-      - name: "Write job summary"
-        run: cat unified-report.md >> "$GITHUB_STEP_SUMMARY"
+      - name: "Print report + write job summary"
+        run: |
+          # Print to the workflow console log (so the status is visible in
+          # the job output, not just the summary tab and PR comment)...
+          cat unified-report.md
+          # ...and to the run's summary tab.
+          cat unified-report.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: "Fail if any platform is missing or any check failed"
         env:
