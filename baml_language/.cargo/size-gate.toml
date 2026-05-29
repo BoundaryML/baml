@@ -30,11 +30,12 @@ policy.max_delta_pct = 3.0
 # macOS arm64: baseline 7.23 MB gzip.
 [artifacts.baml-cli.platform.aarch64-apple-darwin]
 max_gzip_bytes = 7_400_000
-# Linux/Windows ceilings are added when their baselines are recorded:
-# [artifacts.baml-cli.platform.x86_64-unknown-linux-gnu]
-# max_gzip_bytes = <recorded gzip + ~150 KB>
-# [artifacts.baml-cli.platform.x86_64-pc-windows-msvc]
-# max_gzip_bytes = <recorded gzip + ~150 KB>
+# Linux x86_64: baseline 8.07 MB gzip.
+[artifacts.baml-cli.platform.x86_64-unknown-linux-gnu]
+max_gzip_bytes = 8_250_000
+# Windows x86_64: baseline 7.13 MB gzip.
+[artifacts.baml-cli.platform.x86_64-pc-windows-msvc]
+max_gzip_bytes = 7_300_000
 
 [artifacts.packed-program]
 kind = "pack"
@@ -43,10 +44,12 @@ policy.max_delta_pct = 3.0
 # macOS arm64: baseline 5.35 MB gzip.
 [artifacts.packed-program.platform.aarch64-apple-darwin]
 max_gzip_bytes = 5_500_000
-# [artifacts.packed-program.platform.x86_64-unknown-linux-gnu]
-# max_gzip_bytes = <recorded gzip + ~150 KB>
-# [artifacts.packed-program.platform.x86_64-pc-windows-msvc]
-# max_gzip_bytes = <recorded gzip + ~150 KB>
+# Linux x86_64: baseline 6.16 MB gzip.
+[artifacts.packed-program.platform.x86_64-unknown-linux-gnu]
+max_gzip_bytes = 6_310_000
+# Windows x86_64: baseline 5.43 MB gzip.
+[artifacts.packed-program.platform.x86_64-pc-windows-msvc]
+max_gzip_bytes = 5_580_000
 
 [artifacts.packed-program.pack]
 cli_package = "baml_cli"
