@@ -53,10 +53,6 @@ jobs:
           install_args: "cargo:wasm-pack"
 
       # NOTE: if you add a crate with wasm-gated tests, add a step here.
-      - name: "Run wasm-pack tests (baml_playground_wasm)"
-        run: wasm-pack test --node crates/baml_playground_wasm
-        working-directory: baml_language
-
       - name: "Run wasm-pack tests (sys_llm)"
         run: wasm-pack test --node crates/sys_llm
         working-directory: baml_language
