@@ -48,7 +48,7 @@ jobs:
         working-directory: baml_language
         run: |
           cargo run --timings -p cargo-size-gate -- size-gate check \
-            --only bridge_cffi-stripped,bridge_cffi \
+            --only baml-cli,packed-program \
             --format json > size-gate-linux.json 2> size-gate-stderr.txt || exit_code=$?
           cat size-gate-stderr.txt >&2
           echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
@@ -96,7 +96,7 @@ jobs:
         working-directory: baml_language
         run: |
           cargo run --timings -p cargo-size-gate -- size-gate check \
-            --only bridge_cffi-stripped,bridge_cffi \
+            --only baml-cli,packed-program \
             --format json > size-gate-macos.json 2> size-gate-stderr.txt || exit_code=$?
           cat size-gate-stderr.txt >&2
           echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
@@ -151,7 +151,7 @@ jobs:
         working-directory: baml_language
         run: |
           cargo run --timings -p cargo-size-gate -- size-gate check \
-            --only bridge_cffi-stripped,bridge_cffi \
+            --only baml-cli,packed-program \
             --format json > size-gate-windows.json 2> size-gate-stderr.txt || exit_code=$?
           cat size-gate-stderr.txt >&2
           echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"

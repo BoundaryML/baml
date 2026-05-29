@@ -148,10 +148,9 @@ fn relevant_artifacts(config: &Config, filter: Option<&[String]>) -> BTreeMap<St
         }
 
         let platform = Config::platform_for_artifact(artifact);
-        let is_wasm = artifact.wasm || artifact.target.as_deref() == Some("wasm32-unknown-unknown");
 
         // Only include artifacts buildable on this host
-        if !is_wasm && platform != host {
+        if !artifact.is_wasm() && platform != host {
             continue;
         }
 
@@ -179,14 +178,12 @@ fn build_and_measure(
             eprintln!("measuring {name} (platform: {platform})");
 
             let artifact_path = if args.no_build {
-                locate_artifact_public(workspace_root, artifact_config)?
+                locate_artifact_public(workspace_root, name, artifact_config)?
             } else {
-                build_artifact(workspace_root, artifact_config)?
+                build_artifact(workspace_root, name, artifact_config)?
             };
 
-            let is_wasm = artifact_config.wasm
-                || artifact_config.target.as_deref() == Some("wasm32-unknown-unknown");
-            let measurement = measure_artifact(&artifact_path, is_wasm)
+            let measurement = measure_artifact(&artifact_path, artifact_config.should_strip())
                 .with_context(|| format!("failed to measure {name}"))?;
 
             eprintln!(
@@ -335,7 +332,8 @@ fn build_report_rows(
             let baseline_measurement = platform_baseline.and_then(|b| b.artifacts.get(name));
 
             let violations = if let Some(artifact_config) = config.artifacts.get(name) {
-                check_policy(measurement, baseline_measurement, &artifact_config.policy)
+                let policy = artifact_config.effective_policy(platform);
+                check_policy(measurement, baseline_measurement, &policy)
             } else {
                 Vec::new()
             };

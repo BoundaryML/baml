@@ -1,13 +1,7 @@
+# Needs re-record: the size gate now tracks `baml-cli` and
+# `packed-program` (was `bridge_cffi`). Run on a Windows x86_64 host:
+#   mise run size-gate-record
+# then commit the regenerated artifact entries below.
 version = 1
-recorded_at = "2026-05-07T03:43:50Z"
-git_sha = "f032bfe36"
-
-[artifacts.bridge_cffi]
-file_bytes = 12041216
-stripped_bytes = 12041216
-gzip_bytes = 5092414
-
-[artifacts.bridge_cffi-stripped]
-file_bytes = 10944512
-stripped_bytes = 10944512
-gzip_bytes = 4661166
+recorded_at = "1970-01-01T00:00:00Z"
+git_sha = ""

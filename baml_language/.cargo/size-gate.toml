@@ -1,21 +1,68 @@
 baseline_dir = ".ci/size-gate"
 
-[artifacts.bridge_cffi-stripped]
-package = "bridge_cffi"
-# ignore default features (includes bundle-http → reqwest + hyper + rustls)
-no_default_features = true
-policy.max_gzip_bytes = 6_391_456
-policy.max_delta_pct = 10.0
+# The size gate tracks the three artifacts users actually ship:
+#   1. baml-cli       — the CLI binary (measured on every native platform)
+#   2. packed-program — a trivial program built with `baml pack`, i.e. the
+#                       pack-host binary + bytecode envelope a user ships
+#                       (measured on every native platform)
+#   3. bridge_wasm    — the WASM build
+#
+# Two gates, both meant to stay tight as we drive size down:
+#   * max_delta_pct — per-platform regression guard vs the committed
+#     baseline in `baseline_dir`. 3% absorbs normal build-to-build LTO
+#     jitter while still catching accidental growth.
+#   * max_gzip_bytes — an absolute hard ceiling. It is set PER PLATFORM
+#     (binaries differ in size across OSes) so each platform is capped
+#     ~100–200 KB above its own recorded baseline, not loosely to the
+#     largest platform. Bump a ceiling only as a deliberate, reviewed
+#     commit when a real size increase lands.
+#
+# When recording a new platform (`mise run size-gate-record`), add its
+# `[artifacts.<name>.platform.<triple>]` ceiling here, tight to the value
+# the record just wrote.
 
-[artifacts.bridge_cffi]
-package = "bridge_cffi"
-policy.max_gzip_bytes = 6_700_000
-policy.max_delta_pct = 10.0
+[artifacts.baml-cli]
+kind = "bin"
+package = "baml_cli"
+bin = "baml-cli"
+policy.max_delta_pct = 3.0
+
+# macOS arm64: baseline 7.23 MB gzip.
+[artifacts.baml-cli.platform.aarch64-apple-darwin]
+max_gzip_bytes = 7_400_000
+# Linux/Windows ceilings are added when their baselines are recorded:
+# [artifacts.baml-cli.platform.x86_64-unknown-linux-gnu]
+# max_gzip_bytes = <recorded gzip + ~150 KB>
+# [artifacts.baml-cli.platform.x86_64-pc-windows-msvc]
+# max_gzip_bytes = <recorded gzip + ~150 KB>
+
+[artifacts.packed-program]
+kind = "pack"
+policy.max_delta_pct = 3.0
+
+# macOS arm64: baseline 5.35 MB gzip.
+[artifacts.packed-program.platform.aarch64-apple-darwin]
+max_gzip_bytes = 5_500_000
+# [artifacts.packed-program.platform.x86_64-unknown-linux-gnu]
+# max_gzip_bytes = <recorded gzip + ~150 KB>
+# [artifacts.packed-program.platform.x86_64-pc-windows-msvc]
+# max_gzip_bytes = <recorded gzip + ~150 KB>
+
+[artifacts.packed-program.pack]
+cli_package = "baml_cli"
+cli_bin = "baml-cli"
+host_package = "baml_pack_host"
+host_bin = "baml-pack-host"
+fixture = "crates/tools_size_gate/fixtures/minimal.baml"
+function = "Identity"
 
 [artifacts.bridge_wasm]
 package = "bridge_wasm"
 target = "wasm32-unknown-unknown"
 no_default_features = true
 wasm = true
-policy.max_gzip_bytes = 3_800_000
-policy.max_delta_pct = 10.0
+policy.max_delta_pct = 3.0
+
+# WASM is a single platform; baseline 3.76 MB gzip.
+[artifacts.bridge_wasm.platform.wasm32-unknown-unknown]
+max_gzip_bytes = 3_800_000

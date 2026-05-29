@@ -22,10 +22,38 @@ fn default_baseline_dir() -> PathBuf {
     PathBuf::from(".ci/size-gate")
 }
 
+/// What kind of artifact we build and measure.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum ArtifactKind {
+    /// A `cdylib` (native `.so`/`.dylib`/`.dll`, or a `.wasm` when
+    /// `wasm = true`). The historical default.
+    #[default]
+    Cdylib,
+
+    /// An executable produced by `cargo build --bin`.
+    Bin,
+
+    /// A standalone executable produced by running `baml pack` on a
+    /// fixture — i.e. the size a user actually ships with `baml pack`.
+    Pack,
+}
+
 #[derive(Debug, Deserialize)]
 pub(crate) struct ArtifactConfig {
-    /// Cargo package name (e.g., `bridge_cffi`).
-    pub package: String,
+    /// Artifact kind. Defaults to `cdylib` for backwards compatibility.
+    #[serde(default)]
+    pub kind: ArtifactKind,
+
+    /// Cargo package name (e.g., `bridge_wasm`). Required for `cdylib`
+    /// and `bin`; ignored for `pack` (which uses `[artifacts.x.pack]`).
+    pub package: Option<String>,
+
+    /// Binary name for `kind = "bin"`. Defaults to the `package` name.
+    pub bin: Option<String>,
+
+    /// Pack configuration. Required for `kind = "pack"`.
+    pub pack: Option<PackConfig>,
 
     /// Target triple. None means native host target.
     pub target: Option<String>,
@@ -42,12 +70,95 @@ pub(crate) struct ArtifactConfig {
     #[serde(default)]
     pub wasm: bool,
 
-    /// Policy thresholds.
+    /// Base policy thresholds, applied to every platform.
     #[serde(default)]
     pub policy: Policy,
+
+    /// Per-platform policy overrides, keyed by target triple. Any field
+    /// set here wins over `policy` for that platform. Absolute ceilings
+    /// (`max_gzip_bytes`) live here so each platform can be capped tight
+    /// to its own baseline rather than to the largest platform.
+    #[serde(default)]
+    pub platform: BTreeMap<String, Policy>,
 }
 
-#[derive(Debug, Default, Deserialize)]
+/// Configuration for a `kind = "pack"` artifact: build the CLI and the
+/// pack host, then run `baml pack <function>` on `fixture`.
+#[derive(Debug, Deserialize)]
+pub(crate) struct PackConfig {
+    /// Cargo package providing the `baml` CLI used to run `baml pack`.
+    pub cli_package: String,
+    /// Binary name of the CLI within `cli_package`.
+    pub cli_bin: String,
+    /// Cargo package providing the pack host binary. The built host must
+    /// sit next to the CLI binary so `baml pack` finds it without a
+    /// network download.
+    pub host_package: String,
+    /// Binary name of the pack host within `host_package`.
+    pub host_bin: String,
+    /// `.baml` source to pack, relative to the workspace root.
+    pub fixture: PathBuf,
+    /// Function name to pack as the binary's only entry point.
+    pub function: String,
+}
+
+impl ArtifactConfig {
+    /// True if this artifact is a WASM build (explicit `wasm = true` or a
+    /// `wasm32-*` target). WASM artifacts are never stripped.
+    pub(crate) fn is_wasm(&self) -> bool {
+        self.wasm || self.target.as_deref() == Some("wasm32-unknown-unknown")
+    }
+
+    /// Whether the measured artifact should be stripped before sizing.
+    /// Native cdylibs and binaries are stripped; WASM and `pack` outputs
+    /// are measured as-is (stripping a packed binary would also drop its
+    /// appended bytecode section).
+    pub(crate) fn should_strip(&self) -> bool {
+        match self.kind {
+            ArtifactKind::Bin => true,
+            ArtifactKind::Cdylib => !self.is_wasm(),
+            ArtifactKind::Pack => false,
+        }
+    }
+
+    /// The cargo package name, erroring if absent (required for non-pack
+    /// kinds).
+    pub(crate) fn require_package(&self) -> Result<&str> {
+        self.package
+            .as_deref()
+            .context("artifact is missing required `package` field")
+    }
+
+    /// The pack configuration, erroring if absent (required for `pack`).
+    pub(crate) fn require_pack(&self) -> Result<&PackConfig> {
+        self.pack
+            .as_ref()
+            .context("artifact with kind = \"pack\" is missing a [artifacts.*.pack] table")
+    }
+
+    /// The effective policy for `platform`: the base `policy` with any
+    /// per-platform overrides layered on top (set fields win).
+    pub(crate) fn effective_policy(&self, platform: &str) -> Policy {
+        let mut effective = self.policy.clone();
+        if let Some(over) = self.platform.get(platform) {
+            if over.max_gzip_bytes.is_some() {
+                effective.max_gzip_bytes = over.max_gzip_bytes;
+            }
+            if over.max_stripped_bytes.is_some() {
+                effective.max_stripped_bytes = over.max_stripped_bytes;
+            }
+            if over.max_gzip_delta_bytes.is_some() {
+                effective.max_gzip_delta_bytes = over.max_gzip_delta_bytes;
+            }
+            if over.max_delta_pct.is_some() {
+                effective.max_delta_pct = over.max_delta_pct;
+            }
+        }
+        effective
+    }
+}
+
+#[derive(Debug, Default, Clone, Deserialize)]
 #[allow(clippy::struct_field_names)]
 pub(crate) struct Policy {
     /// Maximum allowed gzip bytes (absolute ceiling).
