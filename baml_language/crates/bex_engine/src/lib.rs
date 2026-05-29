@@ -1257,10 +1257,7 @@ impl BexEngine {
         }
 
         let (function_index, kind) = self.lookup_function(function_name)?;
-        if matches!(
-            kind,
-            bex_vm_types::FunctionKind::SysOp(_) | bex_vm_types::FunctionKind::NativeUnresolved
-        ) {
+        if matches!(kind, bex_vm_types::FunctionKind::NativeUnresolved) {
             return Err(EngineError::NotInvokableAsEntry {
                 name: function_name.to_string(),
                 kind: format!("{kind:?}"),
