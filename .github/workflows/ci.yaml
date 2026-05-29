@@ -203,7 +203,6 @@ jobs:
             ':typescript2/pkg-playground/**' \
             ':typescript2/pkg-proto/**' \
             ':baml_language/crates/bridge_ctypes/types/**' \
-            ':baml_language/crates/baml_playground_wasm/**' \
             ':.github/workflows/webview-tests.reusable.yaml' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"

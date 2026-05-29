@@ -10,6 +10,11 @@ from speedtest.fmt import (
 from speedtest.storage import resolve_ref, results_dir
 
 
+def _cli_vcs(run_data):
+    cli = run_data.get("cli", {}) or {}
+    return cli.get("vcs") or cli.get("git") or {}
+
+
 def cmd_compare(args):
     rdir = results_dir(args)
     a = resolve_ref(rdir, args.a)
@@ -23,9 +28,10 @@ def cmd_compare(args):
         sys.exit(1)
 
     return _render_md(args, a, b)
-    b_git = b.get("cli", {}).get("git", {})
-    a_commit = a_git.get("commit", "?")[:7]
-    b_commit = b_git.get("commit", "?")[:7]
+    a_vcs = _cli_vcs(a)
+    b_vcs = _cli_vcs(b)
+    a_commit = a_vcs.get("commit", "?")[:7]
+    b_commit = b_vcs.get("commit", "?")[:7]
     a_label = args.a
     b_label = args.b
 
@@ -38,10 +44,10 @@ def cmd_compare(args):
 
     print()
     print(f"  {BOLD}{a_disp}{RESET} ({a_commit}) → {BOLD}{b_disp}{RESET} ({b_commit})")
-    if a_git.get("message"):
-        print(f"  before: {DIM}{a_git['message'][:60]}{RESET}")
-    if b_git.get("message"):
-        print(f"  after:  {DIM}{b_git['message'][:60]}{RESET}")
+    if a_vcs.get("message"):
+        print(f"  before: {DIM}{a_vcs['message'][:60]}{RESET}")
+    if b_vcs.get("message"):
+        print(f"  after:  {DIM}{b_vcs['message'][:60]}{RESET}")
     print()
 
     NAME_W = 30
@@ -145,10 +151,10 @@ def cmd_compare(args):
 
 def _render_md(args, a, b):
     """Render comparison as a markdown table."""
-    a_git = a.get("cli", {}).get("git", {})
-    b_git = b.get("cli", {}).get("git", {})
-    a_commit = a_git.get("commit", "?")[:7]
-    b_commit = b_git.get("commit", "?")[:7]
+    a_vcs = _cli_vcs(a)
+    b_vcs = _cli_vcs(b)
+    a_commit = a_vcs.get("commit", "?")[:7]
+    b_commit = b_vcs.get("commit", "?")[:7]
 
     b_by_name = {w["name"]: w for w in b.get("workloads", [])}
 
@@ -170,10 +176,10 @@ def _render_md(args, a, b):
                 cat_workloads[cat].append(w)
 
     print(f"## speedtest: `{args.a}` ({a_commit}) → `{args.b}` ({b_commit})")
-    if a_git.get("message"):
-        print(f"> before: {a_git['message'][:80]}")
-    if b_git.get("message"):
-        print(f"> after: {b_git['message'][:80]}")
+    if a_vcs.get("message"):
+        print(f"> before: {a_vcs['message'][:80]}")
+    if b_vcs.get("message"):
+        print(f"> after: {b_vcs['message'][:80]}")
     print()
 
     faster = slower = unch = 0

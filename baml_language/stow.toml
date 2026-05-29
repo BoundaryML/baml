@@ -154,4 +154,4 @@ name = "surface"
 # `baml_pack_host` is the runtime binary embedded in packed
 # executables. Listed here so they're exempt from the baml-namespace
 # rules forbidding bex_* deps.
-name_exceptions = {"baml_cli" = "baml_cli", "baml_playground_wasm" = "baml_playground_wasm", "baml_exec" = "baml_exec", "baml_pack_host" = "baml_pack_host" }
+name_exceptions = {"baml_cli" = "baml_cli", "baml_exec" = "baml_exec", "baml_pack_host" = "baml_pack_host" }
