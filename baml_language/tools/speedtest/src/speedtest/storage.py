@@ -82,7 +82,7 @@ def _cli_info(cli_path):
 
 def _branch_slug(cli_info):
     """Get the branch name for baseline storage. Returns 'NO_BRANCH' if not in a repo."""
-    git = cli_info.get("git", {})
+    git = cli_info.get("git") or {}
     if not git or not git.get("in_repo"):
         return "NO_BRANCH"
     branch = git.get("branch", "unknown")
@@ -97,9 +97,9 @@ def generate_run_id():
     return now.strftime("%Y%m%d-%H%M%S") + f"-{commit}"
 
 
-def build_run_data(args, results, runners_used):
+def build_run_data(args, results, runners_used, *, baml_cli=None):
     """Build the complete meta.json — metadata + workload timings."""
-    baml_cli = args.baml or ""
+    baml_cli = baml_cli or args.baml or ""
 
     workloads = []
     for row in results:

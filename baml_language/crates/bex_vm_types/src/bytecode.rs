@@ -403,6 +403,12 @@ pub enum Instruction {
     /// the result is the element at that index.
     LoadArrayElement,
 
+    /// Pops a container (Array, `Uint8Array`, Map, or String) from the stack
+    /// and pushes its length as an int.
+    ///
+    /// Format: `CONTAINER_LEN` — stack: [container] → [int]
+    ContainerLen,
+
     /// Loads a value from a map at a given key.
     ///
     /// Format: `LOAD_MAP_ELEMENT` where the stack contains [map, key] and
@@ -756,6 +762,7 @@ pub enum OpCode {
     Unreachable,
     MakeCell,
     SendEvent,
+    ContainerLen,
 
     // ── Expanded arithmetic (no operands, 1 byte) ──────────────
     Add,
@@ -896,6 +903,7 @@ impl OpCode {
             | Self::Unreachable
             | Self::MakeCell
             | Self::SendEvent
+            | Self::ContainerLen
             | Self::Spawn
             | Self::Add
             | Self::Sub
@@ -1027,6 +1035,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::Unreachable as u8 => Ok(Self::Unreachable),
             x if x == Self::MakeCell as u8 => Ok(Self::MakeCell),
             x if x == Self::SendEvent as u8 => Ok(Self::SendEvent),
+            x if x == Self::ContainerLen as u8 => Ok(Self::ContainerLen),
             x if x == Self::Add as u8 => Ok(Self::Add),
             x if x == Self::Sub as u8 => Ok(Self::Sub),
             x if x == Self::Mul as u8 => Ok(Self::Mul),
@@ -1148,6 +1157,7 @@ impl std::fmt::Display for OpCode {
             Self::Unreachable => "UNREACHABLE",
             Self::MakeCell => "MAKE_CELL",
             Self::SendEvent => "SEND_EVENT",
+            Self::ContainerLen => "CONTAINER_LEN",
             Self::Add => "ADD",
             Self::Sub => "SUB",
             Self::Mul => "MUL",
@@ -1546,6 +1556,7 @@ impl std::fmt::Display for Instruction {
             Instruction::StoreCapture(idx) => write!(f, "STORE_CAPTURE {idx}"),
             Instruction::CaptureRef(idx) => write!(f, "CAPTURE_REF {idx}"),
             Instruction::SendEvent => f.write_str("SEND_EVENT"),
+            Instruction::ContainerLen => f.write_str("CONTAINER_LEN"),
         }
     }
 }
@@ -1908,6 +1919,7 @@ impl Bytecode {
                 | Instruction::Unreachable
                 | Instruction::MakeCell
                 | Instruction::SendEvent
+                | Instruction::ContainerLen
                 | Instruction::Spawn => {}
 
                 // ── Expanded sub-enum ops: no operands ──────────────
@@ -2200,6 +2212,7 @@ impl Bytecode {
             Instruction::Unreachable => OpCode::Unreachable,
             Instruction::MakeCell => OpCode::MakeCell,
             Instruction::SendEvent => OpCode::SendEvent,
+            Instruction::ContainerLen => OpCode::ContainerLen,
 
             // Expanded sub-enum variants
             Instruction::BinOp(op) => match op {
