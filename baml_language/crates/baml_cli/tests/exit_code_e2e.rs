@@ -207,7 +207,7 @@ fn test_compilation_error_returns_nonzero_exit_code() {
     );
 }
 
-/// `baml test` with no tests should return exit code 5 (NoTestsRun), not 0.
+/// `baml test` with no tests should return exit code 5 (`NoTestsRun`), not 0.
 #[test]
 fn test_no_tests_returns_specific_exit_code() {
     let built = common::ensure_built();
