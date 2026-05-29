@@ -97,9 +97,19 @@ pub enum Hir2Diagnostic {
         target_name: String,
         span: TextRange,
     },
-    /// `interface I requires X` where `X` is not an interface (a class, enum, or
-    /// unknown type). Reported at the `requires` clause, not at an implementor.
+    /// `interface I requires X` where `X` exists but is not an interface (a
+    /// class or enum). Reported at the `requires` clause, not at an implementor.
     InterfaceRequiresNonInterface {
+        interface_name: Name,
+        target_name: String,
+        span: TextRange,
+    },
+    /// `interface I requires X` where `X` does not name any type at all.
+    /// Distinct from [`Self::InterfaceRequiresNonInterface`] (which is for a
+    /// real-but-wrong-kind target) so the message matches the `implements`
+    /// path's "no interface with that name is in scope" (E0112) instead of
+    /// wrongly claiming `X` "is not an interface".
+    UnknownRequiredInterface {
         interface_name: Name,
         target_name: String,
         span: TextRange,
@@ -471,6 +481,25 @@ impl Hir2Diagnostic {
                     range: *span,
                 },
                 "not an interface",
+            )
+            .with_phase(DiagnosticPhase::Hir),
+            Hir2Diagnostic::UnknownRequiredInterface {
+                interface_name,
+                target_name,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::UnknownInterface,
+                format!(
+                    "interface `{interface_name}` cannot require `{target_name}`: \
+                     no interface with that name is in scope"
+                ),
+            )
+            .with_primary(
+                Span {
+                    file_id,
+                    range: *span,
+                },
+                "interface not found",
             )
             .with_phase(DiagnosticPhase::Hir),
             Hir2Diagnostic::MissingInterfaceMethod {

@@ -224,11 +224,13 @@ pub enum TirTypeError {
     /// BEP-044 §"Method Disambiguation": an unqualified call resolves to
     /// a method declared by two or more interfaces — the receiver carries
     /// no information to pick one. `sources` lists every contributing
-    /// interface name.
+    /// interface as a namespace-qualified display string (e.g. `zoo.Animal`)
+    /// so colliding same-simple-name interfaces from different namespaces are
+    /// distinguishable and the suggested `as<…>` fix actually compiles.
     AmbiguousInterfaceMethod {
         class_name: Name,
         method_name: Name,
-        sources: Vec<Name>,
+        sources: Vec<String>,
     },
 
     /// BEP-044 interface fields live in per-interface namespaces. A bare

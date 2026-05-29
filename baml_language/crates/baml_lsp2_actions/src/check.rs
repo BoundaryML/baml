@@ -432,16 +432,27 @@ fn check_interfaces<'db>(
                             .unwrap_or_default(),
                         other => format!("{other}"),
                     };
-                    diagnostics.push(
+                    let interface_name =
+                        Name::new(interface_qtn_for_file(db, file, &iface.name).to_string());
+                    // Distinguish "name exists but isn't an interface" (E0133)
+                    // from "name doesn't exist at all" (E0112), mirroring the
+                    // `implements` path. Without this, a `requires` on an
+                    // unknown name wrongly claims the name "is not an interface".
+                    let diag = if is_non_interface_type(&parent_te.expr, pkg_items, namespace_path)
+                    {
                         Hir2Diagnostic::InterfaceRequiresNonInterface {
-                            interface_name: Name::new(
-                                interface_qtn_for_file(db, file, &iface.name).to_string(),
-                            ),
+                            interface_name,
                             target_name,
                             span: parent_te.span,
                         }
-                        .to_diagnostic(file_id),
-                    );
+                    } else {
+                        Hir2Diagnostic::UnknownRequiredInterface {
+                            interface_name,
+                            target_name,
+                            span: parent_te.span,
+                        }
+                    };
+                    diagnostics.push(diag.to_diagnostic(file_id));
                 }
             }
         }
@@ -2124,6 +2135,33 @@ fn validate_class_implements<'db>(
             }
             continue;
         };
+        // E0002: the interface name resolved, but its generic type arguments
+        // must themselves be resolvable types. `implements Container<Bogus>`
+        // is rejected here just like a field type `x: Bogus` is. Without this,
+        // an unresolvable type argument in an `implements` clause is silently
+        // dropped — the only code that lowers the target (dispatch-source
+        // collection) discards these diagnostics.
+        {
+            let mut arg_errors = Vec::new();
+            baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+                db,
+                &block.target.expr,
+                pkg_items,
+                namespace_path,
+                &class.generic_params,
+                &mut arg_errors,
+            );
+            for error in arg_errors {
+                diagnostics.push(
+                    Diagnostic::error(tir_type_error_to_diagnostic_id(&error), error.to_string())
+                        .with_primary_span(Span {
+                            file_id,
+                            range: block.target.span,
+                        })
+                        .with_phase(DiagnosticPhase::Type),
+                );
+            }
+        }
         let iface_display_name = resolved_iface.display_name();
         let iface_qtn = resolved_iface.qtn.clone();
         let iface_file = resolved_iface.loc.file(db);

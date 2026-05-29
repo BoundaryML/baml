@@ -7601,3 +7601,188 @@ function main() -> string {
         BexExternalValue::String("Woof!".into())
     );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Group R: namespace-resolution regression fixes (wf2 re-verification).
+//
+// Three genuine defects survived re-verification under the namespace
+// resolution rule (`root.` is the absolute cross-namespace form). Each is
+// pinned here.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── #7: `requires <unknown>` must be E0112 (unknown name), not E0133 ─────────
+
+#[test]
+fn requires_unknown_name_is_unknown_interface_not_non_interface() {
+    // `requires DoesNotExist` names nothing at all. The diagnostic must say
+    // "no interface with that name is in scope" (E0112, like `implements`),
+    // not "is not an interface" (E0133) — the latter wrongly implies the
+    // symbol exists with the wrong kind.
+    let errors = collect_compile_errors(
+        r#"
+        interface Person requires DoesNotExist {
+            name: string
+        }
+        "#,
+    );
+    assert!(
+        errors.iter().any(|e| e.starts_with("[E0112]")),
+        "expected an E0112 unknown-interface error, got:\n  {}",
+        errors.join("\n  ")
+    );
+    assert!(
+        !errors.iter().any(|e| e.starts_with("[E0133]")),
+        "must NOT emit E0133 (`is not an interface`) for a name that does not \
+         exist at all; got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
+#[test]
+fn requires_real_non_interface_is_still_non_interface_error() {
+    // Regression guard for the fix above: `requires` a *real* class (a
+    // wrong-kind target, not an unknown name) must still be E0133.
+    assert_compile_error_code(
+        r#"
+        class RealClass { x: int }
+        interface Person requires RealClass {
+            name: string
+        }
+        "#,
+        "E0133",
+    );
+}
+
+// ── #4: an unresolvable type argument in an `implements` clause is E0002 ──────
+
+#[test]
+fn unresolvable_type_arg_in_implements_clause_is_error() {
+    // `implements Container<DoesNotExist>` has a bad generic type argument.
+    // It must be rejected with E0002 (unresolved type) exactly like the same
+    // name in field position — not silently swallowed (which let the program
+    // compile and run with the implements relation never registering).
+    assert_compile_error_code(
+        r#"
+        interface Container<T> {
+            function size(self) -> int
+        }
+        class Box {
+            items: int[]
+            implements Container<DoesNotExist> {
+                function size(self) -> int { return 0 }
+            }
+        }
+        "#,
+        "E0002",
+    );
+}
+
+#[test]
+fn resolvable_type_arg_in_implements_clause_is_ok() {
+    // Control for the test above: a valid concrete type argument compiles.
+    assert_no_interface_errors(
+        r#"
+        interface Container<T> {
+            function size(self) -> int
+        }
+        class Box {
+            items: int[]
+            implements Container<int> {
+                function size(self) -> int { return 0 }
+            }
+        }
+        "#,
+    );
+}
+
+// ── #6: ambiguous same-name interface methods across namespaces qualify ──────
+
+#[test]
+fn ambiguous_method_across_namespaces_uses_qualified_interface_names() {
+    // `Parrot` implements `zoo.Animal` and `farm.Animal`, two distinct
+    // interfaces that share the simple name `Animal`. The E0121 ambiguity
+    // diagnostic must qualify them (`zoo.Animal` / `farm.Animal`) so they are
+    // distinguishable — and the suggested `as<…>` fixes must name the
+    // namespace-qualified form (which actually compiles), not the bare,
+    // identical, uncompilable `as<Animal>`.
+    let files = &[
+        (
+            "main.baml",
+            r#"
+            class Parrot {
+                implements zoo.Animal {
+                    function speak(self) -> string { return "squawk" }
+                }
+                implements farm.Animal {
+                    function speak(self) -> string { return "cluck" }
+                }
+            }
+            function main() -> string {
+                let p = Parrot {}
+                return p.speak()
+            }
+            "#,
+        ),
+        (
+            "ns_zoo/zoo.baml",
+            r#"interface Animal { function speak(self) -> string }"#,
+        ),
+        (
+            "ns_farm/farm.baml",
+            r#"interface Animal { function speak(self) -> string }"#,
+        ),
+    ];
+    let errors = collect_compile_errors_multi(files);
+    let e0121: Vec<_> = errors.iter().filter(|e| e.starts_with("[E0121]")).collect();
+    assert!(
+        !e0121.is_empty(),
+        "expected an E0121 ambiguous-method error, got:\n  {}",
+        errors.join("\n  ")
+    );
+    let msg = e0121[0];
+    for needle in [
+        "zoo.Animal",
+        "farm.Animal",
+        "as<zoo.Animal>",
+        "as<farm.Animal>",
+    ] {
+        assert!(
+            msg.contains(needle),
+            "E0121 message must contain {needle:?} (qualified, compilable), got:\n  {msg}"
+        );
+    }
+}
+
+#[test]
+fn ambiguous_method_namespace_qualified_fix_compiles() {
+    // The fix the E0121 message suggests — `p.as<zoo.Animal>.speak()` — must
+    // actually resolve and compile cleanly.
+    let files = &[
+        (
+            "main.baml",
+            r#"
+            class Parrot {
+                implements zoo.Animal {
+                    function speak(self) -> string { return "squawk" }
+                }
+                implements farm.Animal {
+                    function speak(self) -> string { return "cluck" }
+                }
+            }
+            function main() -> string {
+                let p = Parrot {}
+                return p.as<zoo.Animal>.speak()
+            }
+            "#,
+        ),
+        (
+            "ns_zoo/zoo.baml",
+            r#"interface Animal { function speak(self) -> string }"#,
+        ),
+        (
+            "ns_farm/farm.baml",
+            r#"interface Animal { function speak(self) -> string }"#,
+        ),
+    ];
+    assert_no_compile_errors_multi(files);
+}

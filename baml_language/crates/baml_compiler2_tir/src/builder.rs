@@ -6872,7 +6872,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // surface the "needs projection" error when there's no such
                 // method to fall through to.
                 if let [interface_name] = field_sources.as_slice()
-                    && self.lookup_class_method(class_name, type_args, member).is_none()
+                    && self
+                        .lookup_class_method(class_name, type_args, member)
+                        .is_none()
                 {
                     self.context.report_at_member(
                         TirTypeError::InterfaceFieldRequiresProjection {
@@ -6920,10 +6922,28 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // call site is ambiguous. Emit E0121 listing every contributing
                 // interface. The class declaration itself is allowed; only the
                 // call errors.
-                let method_sources: Vec<Name> = self
+                // Render each contributing interface with its namespace
+                // (e.g. `zoo.Animal`) so two same-simple-name interfaces from
+                // different namespaces are distinguishable and the suggested
+                // `as<…>` projection actually resolves. Root-namespace
+                // interfaces stay bare (`Named`).
+                let method_sources: Vec<String> = self
                     .implemented_interface_method_sources(class_name, member)
                     .into_iter()
-                    .map(|(name, _, _)| name)
+                    .map(|(name, qtn, args)| {
+                        let base = format_interface_display(&name, &args);
+                        if qtn.namespace().is_empty() {
+                            base
+                        } else {
+                            let ns = qtn
+                                .namespace()
+                                .iter()
+                                .map(std::string::ToString::to_string)
+                                .collect::<Vec<_>>()
+                                .join(".");
+                            format!("{ns}.{base}")
+                        }
+                    })
                     .collect();
                 if method_sources.len() >= 2 {
                     let sources = method_sources;
@@ -7008,8 +7028,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // `InterfaceDefaultMethod` resolution and dispatches to the
                 // default body. Ambiguity (≥2 sources) was already rejected
                 // above, so at most one source remains here.
-                if let [(_, iface_qtn, iface_args)] =
-                    self.implemented_interface_method_sources(class_name, member).as_slice()
+                if let [(_, iface_qtn, iface_args)] = self
+                    .implemented_interface_method_sources(class_name, member)
+                    .as_slice()
                 {
                     let iface_qtn = iface_qtn.clone();
                     let iface_args = iface_args.clone();
@@ -8712,7 +8733,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // `resolve_member` for proper resolution / disambiguation.
                 if &iface_data.name == member
                     || iface_data.fields.iter().any(|f| &f.name == member)
-                    || iface_data.required_methods.iter().any(|s| s.name == *member)
+                    || iface_data
+                        .required_methods
+                        .iter()
+                        .any(|s| s.name == *member)
                     || iface_data
                         .default_methods
                         .iter()
@@ -9000,26 +9024,25 @@ impl<'db> TypeInferenceBuilder<'db> {
                 continue;
             };
 
-            let declares = crate::interfaces::interface_closure_locs(
-                db,
-                root_iface_loc,
-                pkg_items,
-                &ns,
-            )
-            .into_iter()
-            .any(|iface_loc| {
-                let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
-                iface_tree
-                    .interfaces
-                    .get(&iface_loc.id(db))
-                    .is_some_and(|iface_data| {
-                        iface_data.required_methods.iter().any(|s| s.name == *member)
-                            || iface_data
-                                .default_methods
-                                .iter()
-                                .any(|&fn_id| iface_tree[fn_id].name == *member)
-                    })
-            });
+            let declares =
+                crate::interfaces::interface_closure_locs(db, root_iface_loc, pkg_items, &ns)
+                    .into_iter()
+                    .any(|iface_loc| {
+                        let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+                        iface_tree
+                            .interfaces
+                            .get(&iface_loc.id(db))
+                            .is_some_and(|iface_data| {
+                                iface_data
+                                    .required_methods
+                                    .iter()
+                                    .any(|s| s.name == *member)
+                                    || iface_data
+                                        .default_methods
+                                        .iter()
+                                        .any(|&fn_id| iface_tree[fn_id].name == *member)
+                            })
+                    });
             if !declares {
                 continue;
             }
