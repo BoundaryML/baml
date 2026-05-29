@@ -27,7 +27,7 @@ pub fn inbound_to_external(
     match value.value {
         None => Ok(BexExternalValue::Null),
         Some(variant) => match variant {
-            InboundValueVariant::StringValue(s) => Ok(BexExternalValue::String(s)),
+            InboundValueVariant::StringValue(s) => Ok(BexExternalValue::String(s.into())),
             InboundValueVariant::IntValue(i) => Ok(BexExternalValue::Int(i)),
             InboundValueVariant::BigintValue(s) => {
                 // Pre-allocation cap: stop a multi-megabyte hex blob from

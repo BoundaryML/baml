@@ -10,8 +10,96 @@
 //!   - Panics vs user throws
 //!   - Nested, rethrow, sequential
 
-use baml_tests::baml_test;
-use bex_engine::BexExternalValue;
+use std::sync::Arc;
+
+use baml_tests::{
+    baml_test,
+    engine::{OptLevel, compile_source_with_opt},
+};
+use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
+use bex_vm_types::{Instruction, Object, ObjectIndex};
+use sys_native::SysOpsExt;
+
+// ============================================================================
+// §VM — bytecode-level panic regression tests
+// ============================================================================
+
+#[tokio::test]
+async fn catch_stale_field_slot_invalid_field_access() {
+    let mut program = compile_source_with_opt(
+        r#"
+        class Short {
+            x int
+        }
+
+        function oob() -> int {
+            let keep = Short { x: 0 };
+            keep.x;
+            0
+        }
+
+        function main() -> int {
+            oob() catch (e) {
+                let err: baml.panics.InvalidFieldAccess => err.field_index
+            }
+        }
+        "#,
+        OptLevel::One,
+    );
+
+    let class_idx = program
+        .objects
+        .iter()
+        .position(|object| {
+            matches!(
+                object,
+                Object::Class(class) if class.name.display_name.as_str() == "user.Short"
+            )
+        })
+        .expect("Short class should exist");
+
+    let oob_idx = program
+        .function_index("user.oob")
+        .expect("user.oob should exist");
+    let Object::Function(func) = program
+        .objects
+        .get_mut(oob_idx)
+        .expect("user.oob object should exist")
+    else {
+        panic!("user.oob should be a function");
+    };
+
+    func.bytecode.instructions = vec![
+        Instruction::AllocInstance {
+            class_obj: ObjectIndex::from_raw(class_idx),
+            ntypeargs: 0,
+        },
+        Instruction::LoadField(1),
+        Instruction::Return,
+    ];
+    func.bytecode.compact = None;
+
+    let engine = Arc::new(
+        BexEngine::new(
+            program,
+            Arc::new(sys_ops::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("engine"),
+    );
+
+    let result = engine
+        .call_function_bound_args(
+            "user.main",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    assert_eq!(result, Ok(BexExternalValue::Int(1)));
+}
 
 // ============================================================================
 // §N — Stack trace tests

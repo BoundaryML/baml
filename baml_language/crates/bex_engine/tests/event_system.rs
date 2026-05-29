@@ -438,7 +438,7 @@ async fn test_send_event_bytecode_yields_custom_event() {
     program
         .objects
         .0
-        .push(Object::String("phase3_event".to_string()));
+        .push(Object::String("phase3_event".into()));
 
     // 4. Patch the function bytecode: inject SendEvent before Return.
     let func = match &mut program.objects.0[func_obj_idx] {

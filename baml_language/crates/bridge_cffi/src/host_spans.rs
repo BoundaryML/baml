@@ -114,7 +114,7 @@ impl HostSpanManager {
 
     /// Exit the current span with an error.
     pub fn exit_error(&mut self, error_message: String) {
-        self.exit_inner(bex_project::BexExternalValue::String(error_message));
+        self.exit_inner(bex_project::BexExternalValue::String(error_message.into()));
     }
 
     /// Merge tags into the current span and emit a `SetTags` event.
@@ -230,7 +230,7 @@ fn json_value_to_bex(value: &serde_json::Value) -> bex_project::BexExternalValue
                 BexExternalValue::Null
             }
         }
-        serde_json::Value::String(s) => BexExternalValue::String(s.clone()),
+        serde_json::Value::String(s) => BexExternalValue::String(s.as_str().into()),
         serde_json::Value::Array(items) => BexExternalValue::Array {
             element_type: bex_project::Ty::Null {
                 attr: bex_project::TyAttr::default(),

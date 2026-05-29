@@ -68,13 +68,22 @@ type Behaviour = Arc<dyn Fn(Vec<BamlOutboundValue>) -> FakeReturn + Send + Sync>
 static BEHAVIOUR_TABLE: OnceLock<Mutex<HashMap<u64, Behaviour>>> = OnceLock::new();
 static NEXT_KEY: AtomicU64 = AtomicU64::new(1);
 static DISPATCH_REGISTERED: OnceLock<()> = OnceLock::new();
-/// Channel sender used by [`FakeReturn::NeverComplete`] to publish the
-/// dispatched `call_id` back to the test that armed the hung-host behaviour.
-static PENDING_CALL_ID: OnceLock<Mutex<Option<std::sync::mpsc::Sender<u32>>>> = OnceLock::new();
-static PENDING_CALL_TEST_LOCK: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
+/// Per-`host_value_key` channel senders used by [`FakeReturn::NeverComplete`]
+/// to publish the dispatched `call_id` back to the test that armed the
+/// hung-host behaviour. Keyed by `host_value_key` (rather than a single shared
+/// slot) because the whole test binary runs in one process under libtest: a
+/// single slot would let concurrently-running `NeverComplete` tests clobber
+/// each other's sender — dropping it so `recv` sees `Disconnected` — or
+/// cross-route a `call_id` into the wrong test's channel.
+static PENDING_CALL_ID: OnceLock<Mutex<HashMap<u64, std::sync::mpsc::Sender<u32>>>> =
+    OnceLock::new();
 
 fn table() -> &'static Mutex<HashMap<u64, Behaviour>> {
     BEHAVIOUR_TABLE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn pending_call_ids() -> &'static Mutex<HashMap<u64, std::sync::mpsc::Sender<u32>>> {
+    PENDING_CALL_ID.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
 fn next_host_key() -> u64 {
@@ -146,12 +155,13 @@ extern "C" fn global_dispatch(host_value_key: u64, call_id: u32, args: *const u8
             complete_with_test_error(call_id, &class_name, &message);
         }
         FakeReturn::NeverComplete => {
-            // Model a hung host: publish the call_id and return without
-            // completing. The engine's sysop future stays pending until the
-            // BAML call is cancelled, at which point the future (and its
-            // InflightGuard) is dropped, evicting the table entry.
+            // Model a hung host: publish the call_id (routed to the test that
+            // armed *this* key) and return without completing. The engine's
+            // sysop future stays pending until the BAML call is cancelled, at
+            // which point the future (and its InflightGuard) is dropped,
+            // evicting the table entry.
             if let Some(slot) = PENDING_CALL_ID.get() {
-                if let Some(tx) = slot.lock().unwrap().as_ref() {
+                if let Some(tx) = slot.lock().unwrap().get(&host_value_key) {
                     let _ = tx.send(call_id);
                 }
             }
@@ -434,7 +444,7 @@ async fn host_callable_wrong_return_type_surfaces_as_host_callable_throw() {
 
     // Behaviour: return a string where an int is expected.
     let arc = register_host_callable(|_items| {
-        FakeReturn::Ok(BexExternalValue::String("not-an-int".to_string()))
+        FakeReturn::Ok(BexExternalValue::String("not-an-int".to_string().into()))
     });
 
     let snapshot = compile_for_engine(source);
@@ -546,7 +556,7 @@ async fn host_callable_wrong_class_field_type_surfaces_as_host_callable_throw() 
         let mut fields = IndexMap::new();
         fields.insert(
             "x".to_string(),
-            BexExternalValue::String("oops".to_string()),
+            BexExternalValue::String("oops".to_string().into()),
         );
         fields.insert("y".to_string(), BexExternalValue::Int(2));
         FakeReturn::Ok(BexExternalValue::Instance {
@@ -589,11 +599,6 @@ async fn host_callable_wrong_class_field_type_surfaces_as_host_callable_throw() 
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn host_callable_cancel_evicts_in_flight_entry() {
-    let _pending_call_guard = PENDING_CALL_TEST_LOCK
-        .get_or_init(|| tokio::sync::Mutex::new(()))
-        .lock()
-        .await;
-
     let source = r#"
         function add_one(f: (int) -> int, x: int) -> int {
             return f(x);
@@ -603,11 +608,10 @@ async fn host_callable_cancel_evicts_in_flight_entry() {
     // Wire a channel so the hung-host behaviour can publish the dispatched
     // call_id back to us.
     let (tx, rx) = std::sync::mpsc::channel::<u32>();
-    let slot = PENDING_CALL_ID.get_or_init(|| Mutex::new(None));
-    *slot.lock().unwrap() = Some(tx);
 
     // Behaviour: never complete — model a hung host.
     let arc = register_host_callable(|_items| FakeReturn::NeverComplete);
+    pending_call_ids().lock().unwrap().insert(arc.key, tx);
 
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
@@ -666,7 +670,7 @@ async fn host_callable_cancel_evicts_in_flight_entry() {
     );
 
     // Tidy up the global channel slot so it does not dangle into other tests.
-    *slot.lock().unwrap() = None;
+    pending_call_ids().lock().unwrap().remove(&arc.key);
     drop(arc);
 }
 
@@ -804,11 +808,6 @@ async fn host_callable_returning_a_callable_is_rejected() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn host_call_ret_ty_survives_gc_during_await() {
-    let _pending_call_guard = PENDING_CALL_TEST_LOCK
-        .get_or_init(|| tokio::sync::Mutex::new(()))
-        .lock()
-        .await;
-
     let source = r#"
         function add_one(f: (int) -> int, x: int) -> int {
             return f(x);
@@ -817,11 +816,10 @@ async fn host_call_ret_ty_survives_gc_during_await() {
 
     // Publish the dispatched call_id so the test controls GC-vs-completion order.
     let (tx, rx) = std::sync::mpsc::channel::<u32>();
-    let slot = PENDING_CALL_ID.get_or_init(|| Mutex::new(None));
-    *slot.lock().unwrap() = Some(tx);
 
     // Park the host call (don't complete) so we can run a GC during the await.
     let arc = register_host_callable(|_items| FakeReturn::NeverComplete);
+    pending_call_ids().lock().unwrap().insert(arc.key, tx);
 
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
@@ -870,13 +868,13 @@ async fn host_call_ret_ty_survives_gc_during_await() {
     // validation a silent no-op and the string is wrongly accepted.
     sys_native::host_dispatch::complete_with_value(
         call_id,
-        BexExternalValue::String("not-an-int".to_string()),
+        BexExternalValue::String("not-an-int".to_string().into()),
     );
 
     let result = call.await.expect("join call task");
     assert_host_callable_throw(&result);
 
-    *slot.lock().unwrap() = None;
+    pending_call_ids().lock().unwrap().remove(&arc.key);
     drop(arc);
 }
 

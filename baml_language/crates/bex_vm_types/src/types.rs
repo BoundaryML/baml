@@ -554,8 +554,27 @@ impl Instance {
     }
 
     #[inline]
+    pub fn field_len(&self) -> usize {
+        self.fields.len()
+    }
+
+    #[inline]
+    pub fn try_load_field(&self, idx: usize) -> Option<Value> {
+        self.fields.get(idx).map(AtomicValueSlot::load)
+    }
+
+    #[inline]
     pub fn load_field(&self, idx: usize) -> Value {
         self.fields[idx].load()
+    }
+
+    #[inline]
+    pub fn try_store_field(&self, idx: usize, value: Value) -> Result<(), usize> {
+        let Some(field) = self.fields.get(idx) else {
+            return Err(self.fields.len());
+        };
+        field.store(value);
+        Ok(())
     }
 
     #[inline]
@@ -1513,25 +1532,25 @@ pub type Uint8ArrayContainer = LockedContainer<Vec<u8>>;
 pub type Uint8ArrayReadGuard<'a> = LockedReadGuard<'a, Vec<u8>>;
 pub type Uint8ArrayWriteGuard<'a> = LockedWriteGuard<'a, Vec<u8>>;
 
-/// Heap-mutable map container. Pairs a boxed `IndexMap<String, Value>` with
+/// Heap-mutable map container. Pairs a boxed `IndexMap<BexStr, Value>` with
 /// the generic [`LockedContainer`] lock/guard machinery.
 ///
 /// `IndexMap` is 72 bytes before the lock, so storing it inline would push
 /// `Object` past its size cap. Storing only the backing map behind `Box<_>`
 /// keeps the container itself small while avoiding an extra indirection around
 /// the lock.
-pub type MapContainer = LockedContainer<Box<IndexMap<String, Value>>>;
-pub type MapReadGuard<'a> = LockedReadGuard<'a, Box<IndexMap<String, Value>>>;
-pub type MapWriteGuard<'a> = LockedWriteGuard<'a, Box<IndexMap<String, Value>>>;
+pub type MapContainer = LockedContainer<Box<IndexMap<bex_str::BexStr, Value>>>;
+pub type MapReadGuard<'a> = LockedReadGuard<'a, Box<IndexMap<bex_str::BexStr, Value>>>;
+pub type MapWriteGuard<'a> = LockedWriteGuard<'a, Box<IndexMap<bex_str::BexStr, Value>>>;
 
 impl MapReadGuard<'_> {
     /// Snapshot the underlying `IndexMap`.
-    pub fn to_index_map(&self) -> IndexMap<String, Value> {
+    pub fn to_index_map(&self) -> IndexMap<bex_str::BexStr, Value> {
         self.as_ref().clone()
     }
 }
 
-impl LockedContainer<Box<IndexMap<String, Value>>> {
+impl LockedContainer<Box<IndexMap<bex_str::BexStr, Value>>> {
     /// Locked convenience: number of entries.
     pub fn len(&self) -> usize {
         self.lock().len()
@@ -1548,13 +1567,15 @@ impl LockedContainer<Box<IndexMap<String, Value>>> {
     }
 
     /// Locked convenience: snapshot the underlying `IndexMap`.
-    pub fn to_index_map(&self) -> IndexMap<String, Value> {
+    pub fn to_index_map(&self) -> IndexMap<bex_str::BexStr, Value> {
         self.lock().to_index_map()
     }
 }
 
-impl From<IndexMap<String, Value>> for LockedContainer<Box<IndexMap<String, Value>>> {
-    fn from(data: IndexMap<String, Value>) -> Self {
+impl From<IndexMap<bex_str::BexStr, Value>>
+    for LockedContainer<Box<IndexMap<bex_str::BexStr, Value>>>
+{
+    fn from(data: IndexMap<bex_str::BexStr, Value>) -> Self {
         Self::new(Box::new(data))
     }
 }
@@ -1603,16 +1624,11 @@ pub enum Object {
     /// A mutable cell holding a single captured value.
     Cell(Cell),
 
-    /// Heap allocated string.
+    /// Heap allocated string backed by [`bex_str::BexStr`].
     ///
-    /// TODO: Add a `Vm::strings` interner to avoid allocating duplicates.
-    /// In Rust it's not easy to implement because `Vm::objects`
-    /// owns the strings allocated on heap, but the interner would be something
-    /// like `HashSet`<&str> and it would store pointers to the strings. That
-    /// reference will cause some lifetime issues because the VM would have
-    /// pointers to itself, so we'd have to figure how to implement it
-    /// otherwise.
-    String(String),
+    /// `BexStr` avoids allocating for small strings (up to ~22 bytes inline)
+    /// and reference-counts larger ones, making clone cheap.
+    String(bex_str::BexStr),
 
     /// Heap-allocated arbitrary-precision integer.
     ///
@@ -1660,9 +1676,17 @@ pub enum Object {
     Sentinel(SentinelKind),
 }
 
+// BexStr is larger than String on wasm32 (20 vs 12 bytes) due to u64 fields,
+// so allow 88 bytes on 32-bit targets.
+#[cfg(target_pointer_width = "64")]
 const _: () = assert!(
     std::mem::size_of::<Object>() <= 80,
-    "Object enum size regression — expected <= 80 bytes"
+    "Object enum size regression — expected <= 80 bytes (64-bit)"
+);
+#[cfg(target_pointer_width = "32")]
+const _: () = assert!(
+    std::mem::size_of::<Object>() <= 88,
+    "Object enum size regression — expected <= 88 bytes (32-bit)"
 );
 
 // Custom borsh for Object: RustData and Collector contain non-serializable
@@ -1709,11 +1733,16 @@ impl BorshSerialize for Object {
             Self::Closure(v) => ObjectWire::Closure(v.clone()),
             Self::BoundMethod(v) => ObjectWire::BoundMethod(v.clone()),
             Self::Cell(v) => ObjectWire::Cell(v.clone()),
-            Self::String(v) => ObjectWire::String(v.clone()),
+            Self::String(v) => ObjectWire::String(v.to_string()),
             Self::Bigint(v) => ObjectWire::Bigint((**v).clone()),
             Self::Uint8Array(v) => ObjectWire::Uint8Array(v.lock().clone()),
             Self::Array(v) => ObjectWire::Array(v.lock().clone()),
-            Self::Map(v) => ObjectWire::Map(v.to_index_map()),
+            Self::Map(v) => ObjectWire::Map(
+                v.to_index_map()
+                    .into_iter()
+                    .map(|(k, v)| (k.to_string(), v))
+                    .collect(),
+            ),
             Self::Float(v) => ObjectWire::Float(*v),
             Self::Future(v) => ObjectWire::Future(v.clone()),
             Self::UnscheduledFuture(v) => ObjectWire::UnscheduledFuture(v.clone()),
@@ -1760,11 +1789,16 @@ impl BorshDeserialize for Object {
             ObjectWire::Closure(v) => Self::Closure(v),
             ObjectWire::BoundMethod(v) => Self::BoundMethod(v),
             ObjectWire::Cell(v) => Self::Cell(v),
-            ObjectWire::String(v) => Self::String(v),
+            ObjectWire::String(v) => Self::String(bex_str::BexStr::from(v)),
             ObjectWire::Bigint(v) => Self::Bigint(std::sync::Arc::new(v)),
             ObjectWire::Uint8Array(v) => Self::Uint8Array(Uint8ArrayContainer::new(v)),
             ObjectWire::Array(v) => Self::Array(ArrayContainer::new(v)),
-            ObjectWire::Map(v) => Self::Map(v.into()),
+            ObjectWire::Map(v) => Self::Map(
+                v.into_iter()
+                    .map(|(k, v)| (bex_str::BexStr::from(k), v))
+                    .collect::<IndexMap<bex_str::BexStr, Value>>()
+                    .into(),
+            ),
             ObjectWire::Float(v) => Self::Float(v),
             ObjectWire::Future(v) => Self::Future(v),
             ObjectWire::UnscheduledFuture(v) => Self::UnscheduledFuture(v),
@@ -2629,7 +2663,7 @@ impl From<&Future> for FutureType {
 
 #[cfg(test)]
 mod tests {
-    use super::{ConstValue, Type, Value, format_float};
+    use super::{ConstValue, HeapPtr, Instance, Type, Value, format_float};
 
     #[test]
     fn test_format_float() {
@@ -2661,5 +2695,31 @@ mod tests {
             Type::OmittedArg
         );
         assert_eq!(value.to_string(), "<omitted>");
+    }
+
+    #[test]
+    fn instance_field_helpers_load_and_store_checked_slots() {
+        let instance = Instance::new(
+            HeapPtr::null(),
+            vec![],
+            vec![Value::int(10), Value::int(20)],
+        );
+
+        assert_eq!(instance.field_len(), 2);
+        assert_eq!(instance.try_load_field(0), Some(Value::int(10)));
+        assert_eq!(instance.try_load_field(2), None);
+        assert_eq!(instance.load_field(1), Value::int(20));
+
+        assert_eq!(instance.try_store_field(1, Value::int(99)), Ok(()));
+        assert_eq!(instance.try_load_field(1), Some(Value::int(99)));
+        assert_eq!(instance.try_store_field(2, Value::int(123)), Err(2));
+    }
+
+    #[test]
+    #[should_panic(expected = "index out of bounds")]
+    fn instance_load_field_panics_for_invalid_slot() {
+        let instance = Instance::new(HeapPtr::null(), vec![], vec![Value::int(10)]);
+
+        let _ = instance.load_field(1);
     }
 }

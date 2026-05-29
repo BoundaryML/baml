@@ -8,7 +8,7 @@ mod pull_semantics;
 mod stack_carry;
 mod verifier;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub use analysis::OptLevel;
 use baml_base::{Name, Span};
@@ -21,12 +21,13 @@ use baml_compiler2_hir::{
     package::PackageId,
 };
 use baml_compiler2_mir::{
-    BuiltinKind, MirFunctionKind, ResolvedAliases, def_to_item_ref, lower_function, lower_let_body,
+    BuiltinKind, Local, MirFunctionBody, MirFunctionKind, Operand, Place, ResolvedAliases, Rvalue,
+    StatementKind, Terminator, def_to_item_ref, lower_function, lower_let_body,
 };
 // Use the PPIR item tree (which includes synthetic *$stream items) rather than
 // the bare HIR item tree, to stay consistent with TIR's LocalItemId indices.
 use baml_compiler2_ppir::file_item_tree;
-use baml_type::TyAttr;
+use baml_type::{Ty, TyAttr};
 use bex_vm_types::{
     Bytecode, Class, ClassField, ConstValue, Enum, EnumVariant, Function, FunctionKind,
     FunctionMeta, FunctionOrigin, Instruction, Object, ObjectIndex, ObjectPool, Program,
@@ -85,6 +86,10 @@ pub(crate) struct MirCodegenContext<'ctx, 'obj> {
     pub lambda_object_indices: &'ctx [usize],
     /// Lambda debug names, parallel to `lambda_object_indices`.
     pub lambda_names: &'ctx [String],
+    /// Compile-time types for captures in the function currently being emitted.
+    pub capture_types: &'ctx [Ty],
+    /// Capture slots whose cells may be touched by spawned code.
+    pub spawn_capture_indices: &'ctx HashSet<usize>,
 }
 
 /// Database trait for compiler2 emit queries.
@@ -502,8 +507,13 @@ pub fn generate_project_bytecode_with_opt(
                 MirFunctionKind::Bytecode(body) => {
                     // Compile lambda children first, collecting their ObjectPool indices.
                     let source_file = file.path(db).display().to_string();
+                    let empty_capture_types = Vec::new();
+                    let empty_spawn_capture_indices = HashSet::new();
                     let lambda_info = compile_lambdas_flat(
                         &mir.lambdas,
+                        Some(body),
+                        &empty_capture_types,
+                        &empty_spawn_capture_indices,
                         &line_starts,
                         &source_file,
                         &globals,
@@ -527,6 +537,8 @@ pub fn generate_project_bytecode_with_opt(
                         objects: &mut program.objects,
                         lambda_object_indices: &lambda_obj_indices,
                         lambda_names: &lambda_names_vec,
+                        capture_types: &empty_capture_types,
+                        spawn_capture_indices: &empty_spawn_capture_indices,
                     };
                     let mut f =
                         compile_mir_function(body, mir.arity, mir.span, &line_starts, ctx, opt);
@@ -1521,6 +1533,223 @@ fn topological_sort_lets<'db>(
     Ok(sorted.into_iter().map(|i| bindings[i].clone()).collect())
 }
 
+#[derive(Clone, Default)]
+struct LambdaCaptureInfo {
+    capture_types: Vec<Ty>,
+    spawn_capture_indices: HashSet<usize>,
+}
+
+fn unknown_capture_ty() -> Ty {
+    Ty::BuiltinUnknown {
+        attr: TyAttr::default(),
+    }
+}
+
+fn local_def_rvalue(body: &MirFunctionBody, local: Local) -> Option<&Rvalue> {
+    body.blocks
+        .iter()
+        .flat_map(|block| &block.statements)
+        .find_map(|statement| match &statement.kind {
+            StatementKind::Assign {
+                destination: Place::Local(dest),
+                value,
+            } if *dest == local => Some(value),
+            _ => None,
+        })
+}
+
+fn resolve_capture_operand_type(
+    body: &MirFunctionBody,
+    parent_capture_types: &[Ty],
+    operand: &Operand,
+) -> Option<Ty> {
+    match operand {
+        Operand::Constant(c) => match c {
+            baml_compiler2_mir::Constant::Int(_) => Some(Ty::int()),
+            baml_compiler2_mir::Constant::Bigint(_) => Some(Ty::bigint()),
+            baml_compiler2_mir::Constant::Float(_) => Some(Ty::float()),
+            baml_compiler2_mir::Constant::String(_) => Some(Ty::string()),
+            baml_compiler2_mir::Constant::Bool(_) => Some(Ty::bool()),
+            baml_compiler2_mir::Constant::Null => Some(Ty::null()),
+            _ => None,
+        },
+        Operand::Copy(place) | Operand::Move(place) => {
+            resolve_capture_place_type(body, parent_capture_types, place)
+        }
+    }
+}
+
+fn resolve_capture_place_type(
+    body: &MirFunctionBody,
+    parent_capture_types: &[Ty],
+    place: &Place,
+) -> Option<Ty> {
+    match place {
+        Place::Local(local) => body.locals.get(local.0).map(|decl| decl.ty.clone()),
+        Place::Capture(idx) => parent_capture_types.get(*idx).cloned(),
+        Place::Field { .. } | Place::Index { .. } => None,
+    }
+}
+
+fn operand_reads_spawn_capture(
+    body: &MirFunctionBody,
+    parent_spawn_capture_indices: &HashSet<usize>,
+    operand: &Operand,
+    seen: &mut HashSet<Local>,
+) -> bool {
+    match operand {
+        Operand::Copy(place) | Operand::Move(place) => {
+            place_reads_spawn_capture(body, parent_spawn_capture_indices, place, seen)
+        }
+        Operand::Constant(_) => false,
+    }
+}
+
+fn place_reads_spawn_capture(
+    body: &MirFunctionBody,
+    parent_spawn_capture_indices: &HashSet<usize>,
+    place: &Place,
+    seen: &mut HashSet<Local>,
+) -> bool {
+    match place {
+        Place::Local(local) => {
+            if !seen.insert(*local) {
+                return false;
+            }
+            match local_def_rvalue(body, *local) {
+                Some(Rvalue::Use(operand)) => {
+                    operand_reads_spawn_capture(body, parent_spawn_capture_indices, operand, seen)
+                }
+                _ => false,
+            }
+        }
+        Place::Capture(idx) => parent_spawn_capture_indices.contains(idx),
+        Place::Field { base, .. } => {
+            place_reads_spawn_capture(body, parent_spawn_capture_indices, base, seen)
+        }
+        Place::Index { base, index, .. } => {
+            place_reads_spawn_capture(body, parent_spawn_capture_indices, base, seen)
+                || place_reads_spawn_capture(
+                    body,
+                    parent_spawn_capture_indices,
+                    &Place::Local(*index),
+                    seen,
+                )
+        }
+    }
+}
+
+fn make_closure_for_operand<'a>(
+    body: &'a MirFunctionBody,
+    operand: &'a Operand,
+    seen: &mut HashSet<Local>,
+) -> Option<(usize, &'a [Operand])> {
+    match operand {
+        Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
+            if !seen.insert(*local) {
+                return None;
+            }
+            match local_def_rvalue(body, *local)? {
+                Rvalue::MakeClosure {
+                    lambda_idx,
+                    captures,
+                    ..
+                } => Some((*lambda_idx, captures)),
+                Rvalue::Use(operand) => make_closure_for_operand(body, operand, seen),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+fn mark_spawned_closure_operand(
+    body: &MirFunctionBody,
+    infos: &mut [LambdaCaptureInfo],
+    operand: &Operand,
+    seen_locals: &mut HashSet<Local>,
+    seen_lambdas: &mut HashSet<usize>,
+) {
+    let Some((lambda_idx, captures)) = make_closure_for_operand(body, operand, seen_locals) else {
+        return;
+    };
+    let Some(info) = infos.get_mut(lambda_idx) else {
+        return;
+    };
+
+    if !seen_lambdas.insert(lambda_idx) {
+        return;
+    }
+
+    info.spawn_capture_indices.extend(0..captures.len());
+
+    for capture in captures {
+        mark_spawned_closure_operand(body, infos, capture, seen_locals, seen_lambdas);
+    }
+}
+
+fn collect_lambda_capture_infos(
+    body: &MirFunctionBody,
+    lambda_count: usize,
+    parent_capture_types: &[Ty],
+    parent_spawn_capture_indices: &HashSet<usize>,
+) -> Vec<LambdaCaptureInfo> {
+    let mut infos = vec![LambdaCaptureInfo::default(); lambda_count];
+
+    for block in &body.blocks {
+        for statement in &block.statements {
+            let StatementKind::Assign { value, .. } = &statement.kind else {
+                continue;
+            };
+            let Rvalue::MakeClosure {
+                lambda_idx,
+                captures,
+                ..
+            } = value
+            else {
+                continue;
+            };
+            let Some(info) = infos.get_mut(*lambda_idx) else {
+                continue;
+            };
+
+            info.capture_types = captures
+                .iter()
+                .map(|capture| {
+                    resolve_capture_operand_type(body, parent_capture_types, capture)
+                        .unwrap_or_else(unknown_capture_ty)
+                })
+                .collect();
+
+            for (capture_idx, capture) in captures.iter().enumerate() {
+                if operand_reads_spawn_capture(
+                    body,
+                    parent_spawn_capture_indices,
+                    capture,
+                    &mut HashSet::new(),
+                ) {
+                    info.spawn_capture_indices.insert(capture_idx);
+                }
+            }
+        }
+    }
+
+    for block in &body.blocks {
+        let Some(Terminator::Spawn { closure, .. }) = &block.terminator else {
+            continue;
+        };
+        mark_spawned_closure_operand(
+            body,
+            &mut infos,
+            closure,
+            &mut HashSet::new(),
+            &mut HashSet::new(),
+        );
+    }
+
+    infos
+}
+
 /// Compile a flat list of lambda `MirFunction`s into bytecode `Function` objects
 /// and register them in `objects`.  Returns a parallel `Vec<(obj_idx, name)>`
 /// that can be used to build `lambda_object_indices` and `lambda_names` for the
@@ -1532,6 +1761,9 @@ fn topological_sort_lets<'db>(
 #[allow(clippy::too_many_arguments)]
 fn compile_lambdas_flat(
     lambdas: &[baml_compiler2_mir::MirFunction],
+    parent_body: Option<&MirFunctionBody>,
+    parent_capture_types: &[Ty],
+    parent_spawn_capture_indices: &HashSet<usize>,
     line_starts: &[u32],
     source_file: &str,
     globals: &HashMap<String, usize>,
@@ -1542,14 +1774,29 @@ fn compile_lambdas_flat(
     objects: &mut ObjectPool,
     opt: OptLevel,
 ) -> Vec<(usize, String)> {
+    let capture_infos = parent_body.map_or_else(
+        || vec![LambdaCaptureInfo::default(); lambdas.len()],
+        |body| {
+            collect_lambda_capture_infos(
+                body,
+                lambdas.len(),
+                parent_capture_types,
+                parent_spawn_capture_indices,
+            )
+        },
+    );
     let mut result = Vec::with_capacity(lambdas.len());
-    for lambda in lambdas {
+    for (lambda_idx, lambda) in lambdas.iter().enumerate() {
+        let capture_info = capture_infos.get(lambda_idx).cloned().unwrap_or_default();
         let lambda_name = lambda.item_ref.to_string();
         let obj_idx = match &lambda.kind {
             MirFunctionKind::Bytecode(body) => {
                 // Recursively compile any nested lambdas within this lambda.
                 let nested_info = compile_lambdas_flat(
                     &lambda.lambdas,
+                    Some(body),
+                    &capture_info.capture_types,
+                    &capture_info.spawn_capture_indices,
                     line_starts,
                     source_file,
                     globals,
@@ -1573,6 +1820,8 @@ fn compile_lambdas_flat(
                     objects,
                     lambda_object_indices: &nested_obj_indices,
                     lambda_names: &nested_names,
+                    capture_types: &capture_info.capture_types,
+                    spawn_capture_indices: &capture_info.spawn_capture_indices,
                 };
                 let mut f =
                     compile_mir_function(body, lambda.arity, lambda.span, line_starts, ctx, opt);
@@ -1632,8 +1881,13 @@ fn compile_init_function<'db>(
                 let line_starts = build_line_starts(file.text(db));
                 // Compile lambda children first and collect their object indices.
                 let source_file = file.path(db).display().to_string();
+                let empty_capture_types = Vec::new();
+                let empty_spawn_capture_indices = HashSet::new();
                 let lambda_info = compile_lambdas_flat(
                     &lambdas,
+                    Some(&mir_body),
+                    &empty_capture_types,
+                    &empty_spawn_capture_indices,
                     &line_starts,
                     &source_file,
                     globals,
@@ -1657,6 +1911,8 @@ fn compile_init_function<'db>(
                     objects: &mut program.objects,
                     lambda_object_indices: &lambda_let_obj_indices,
                     lambda_names: &lambda_let_names,
+                    capture_types: &empty_capture_types,
+                    spawn_capture_indices: &empty_spawn_capture_indices,
                 };
                 let mut helper = compile_mir_function(&mir_body, 0, None, &line_starts, ctx, opt);
                 helper.name = format!("$init_let_{i}");

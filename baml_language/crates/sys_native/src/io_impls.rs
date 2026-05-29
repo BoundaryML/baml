@@ -658,12 +658,13 @@ impl io::IoClassGlobGlob for NativeSysOps {
             let handle = downcast_glob_handle(&glob)?;
 
             let (cwd, dot, absolute, follow_symlinks, throw_on_broken, only_files) = match &root {
-                BexExternalValue::String(s) => (s.clone(), false, false, false, false, true),
+                BexExternalValue::String(s) => (s.to_string(), false, false, false, false, true),
                 BexExternalValue::Instance { fields, .. } => {
                     let get_string = |key: &str, default: &str| {
                         fields
                             .get(key)
                             .and_then(BexExternalValue::as_string)
+                            .map(|s| s.to_string())
                             .unwrap_or_else(|| default.to_string())
                     };
                     let get_bool = |key: &str, default: bool| {

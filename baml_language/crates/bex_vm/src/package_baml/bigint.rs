@@ -4,6 +4,7 @@ use std::sync::Arc;
 /// so TIR's constant-folder can refuse to fold bigint expressions that the
 /// VM would refuse to allocate.
 pub(crate) use baml_type::MAX_BIGINT_BITS;
+use bex_str::BexStr;
 use bex_vm_types::Value;
 use num_bigint::{BigInt, BigUint, Sign};
 
@@ -159,9 +160,10 @@ impl BamlClassBigint for PackageBamlImpl {
         Ok(Arc::new(BigInt::from(lo)))
     }
 
-    fn parse(text: &str) -> Result<Arc<BigInt>, VmRustFnError> {
+    fn parse(text: &BexStr) -> Result<Arc<BigInt>, VmRustFnError> {
         // Accept an optional leading sign followed by ASCII digits, matching the
         // documented behaviour: no whitespace, no underscores, no other formats.
+        let text: &str = text;
         let (sign_str, digits) = if let Some(rest) = text.strip_prefix('-') {
             ("-", rest)
         } else if let Some(rest) = text.strip_prefix('+') {

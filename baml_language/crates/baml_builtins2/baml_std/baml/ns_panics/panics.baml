@@ -9,6 +9,12 @@ class IndexOutOfBounds {
   length int
 }
 
+/// Raised when VM field access targets a stale or invalid field slot.
+class InvalidFieldAccess {
+  field_index int
+  field_count int
+}
+
 /// Raised when a map is accessed with a key that does not exist.
 class MapKeyNotFound {
   key string
@@ -78,4 +84,4 @@ class SdkPanic {
   message string
 }
 
-type Panic = DivisionByZero | IndexOutOfBounds | MapKeyNotFound | StackOverflow | AssertionFailed | Unreachable | Cancelled | UserPanic | Exit | AllocFailure | HostUnavailable | NegativeBitShift | SdkPanic
+type Panic = DivisionByZero | IndexOutOfBounds | InvalidFieldAccess | MapKeyNotFound | StackOverflow | AssertionFailed | Unreachable | Cancelled | UserPanic | Exit | AllocFailure | HostUnavailable | NegativeBitShift | SdkPanic

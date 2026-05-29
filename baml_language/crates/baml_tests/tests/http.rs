@@ -64,7 +64,9 @@ async fn http_fetch_and_text() {
     "#);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("Hello from HTTP!".to_string()))
+        Ok(BexExternalValue::String(
+            "Hello from HTTP!".to_string().into()
+        ))
     );
 }
 
@@ -215,7 +217,10 @@ async fn http_response_url() {
         return
     }
     "#);
-    assert_eq!(output.result, Ok(BexExternalValue::String(expected_url)));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(expected_url.into()))
+    );
 }
 
 #[tokio::test]
