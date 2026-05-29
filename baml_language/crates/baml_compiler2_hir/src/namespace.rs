@@ -230,7 +230,7 @@ pub fn namespace_items<'db>(
     }
 
     // Sort conflicts by name for deterministic output.
-    conflicts.sort_by(|a, b| a.name.cmp(&b.name));
+    conflicts.sort_unstable_by(|a, b| a.name.cmp(&b.name));
 
     let extra = if conflicts.is_empty() {
         None

@@ -141,7 +141,7 @@ pub fn list_functions_with_metadata(db: &ProjectDatabase) -> Vec<FunctionSymbol>
             }
         }
     }
-    result.sort_by(|a, b| a.name.cmp(&b.name));
+    result.sort_unstable_by(|a, b| a.name.cmp(&b.name));
     result
 }
 
