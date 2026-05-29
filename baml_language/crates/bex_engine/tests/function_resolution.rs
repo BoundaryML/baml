@@ -119,31 +119,25 @@ fn find_user_function_does_not_expose_stdlib() {
     assert_eq!(main_info.qualified_name, "user.main");
 }
 
-/// `BexEngine::call_function*` rejects sysops as entry points. Native
-/// `$rust_function` entries are wrapped by the VM in a synthetic bytecode
-/// caller, but sysops still need to be reached from an existing bytecode
-/// frame that can resume after the engine executes the operation.
+/// `baml.fs.exists(path: string) -> bool` is a `$rust_io_function` →
+/// `FunctionKind::SysOp`. Calling it as an entry point should yield to the
+/// engine, resume the synthesized entry frame, and return the sysop result.
 #[tokio::test]
-async fn call_function_rejects_sysop_entry() {
+async fn sysop_fs_exists_callable_as_entry_point() {
     let eng = engine(&[("main.baml", "function main() -> int { 1 }")]);
 
-    // `baml.fs.exists` is a `$rust_io_function` sysop (see
-    // baml_builtins2/baml_std/baml/ns_fs/fs.baml). Invoking it as an
-    // entry must be rejected up-front.
     let result = eng
         .call_function(
             "baml.fs.exists",
-            vec![],
+            vec![BexExternalValue::String(".".into())],
             FunctionCallContextBuilder::new(CallId::next()).build(),
             true,
         )
         .await;
 
     match result {
-        Err(EngineError::NotInvokableAsEntry { name, .. }) => {
-            assert_eq!(name, "baml.fs.exists");
-        }
-        other => panic!("expected NotInvokableAsEntry, got {other:?}"),
+        Ok(BexExternalValue::Bool(exists)) => assert!(exists, "'.' should exist"),
+        other => panic!("expected Ok(Bool(true)) from baml.fs.exists as entry, got {other:?}"),
     }
 
     // Sanity: bytecode entries still work.
@@ -177,5 +171,28 @@ async fn native_trunc_callable_as_entry_point() {
     match result {
         Ok(BexExternalValue::Int(n)) => assert_eq!(n, 3, "trunc(3.7) should be 3"),
         other => panic!("expected Ok(Int(3)) from baml.math.trunc as entry, got {other:?}"),
+    }
+}
+
+/// Generic `$rust_function` entries must still expose host-provided type args
+/// to the native through `current_call_type_args()`.
+#[tokio::test]
+async fn generic_native_json_to_string_callable_as_entry_point() {
+    let eng = engine(&[("main.baml", "function main() -> int { 1 }")]);
+
+    let result = eng
+        .call_function(
+            "baml.json.to_string",
+            vec![BexExternalValue::Int(7)],
+            FunctionCallContextBuilder::new(CallId::next())
+                .with_type_args(vec![baml_type::Ty::int()])
+                .build(),
+            true,
+        )
+        .await;
+
+    match result {
+        Ok(BexExternalValue::String(s)) => assert_eq!(s.as_str(), "7"),
+        other => panic!("expected Ok(String(\"7\")) from baml.json.to_string<int>, got {other:?}"),
     }
 }

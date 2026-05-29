@@ -184,25 +184,9 @@ def test_call_repeatedly_with_zero_n_returns_empty_list():
     assert invocations == []
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "A host-callable error currently surfaces as an unhandled throw "
-        "rather than a VM-side catchable throw: on the current sys-op "
-        "single-yield path the engine returns the throw without re-entering "
-        "the VM, so the in-VM exception table is bypassed. In-BAML "
-        "`try/catch` over a host call therefore cannot run, even though "
-        "`throws root.errors.HostCallable` type-checks and the handler "
-        "compiles. It will become catchable once sys-op call sites are "
-        "awaited explicitly: the await becomes the catch point and the "
-        "error rides the catchable path."
-    ),
-)
 def test_call_with_throwing_catches_host_callable_error():
     """A host exception should surface as a catchable
     `baml.errors.HostCallable` throw; BAML's `catch (e)` should match.
-    Currently fails because the sys-op path emits an unhandled throw
-    directly to the engine, not a VM-side throw walk.
     """
 
     def cb(_x: int) -> str:
