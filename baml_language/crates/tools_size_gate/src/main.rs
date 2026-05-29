@@ -331,9 +331,14 @@ fn build_report_rows(
         for (name, measurement) in measurements {
             let baseline_measurement = platform_baseline.and_then(|b| b.artifacts.get(name));
 
+            let gate = config
+                .artifacts
+                .get(name)
+                .map(|c| c.gate)
+                .unwrap_or_default();
             let violations = if let Some(artifact_config) = config.artifacts.get(name) {
                 let policy = artifact_config.effective_policy(platform);
-                check_policy(measurement, baseline_measurement, &policy)
+                check_policy(measurement, baseline_measurement, &policy, gate)
             } else {
                 Vec::new()
             };
@@ -345,6 +350,7 @@ fn build_report_rows(
                 baseline: baseline_measurement.cloned(),
                 violations,
                 platform_file_exists,
+                gate,
             });
         }
     }

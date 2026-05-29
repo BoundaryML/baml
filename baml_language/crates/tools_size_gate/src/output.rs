@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     compare::{Violation, format_bytes},
+    config::GateMetric,
     measure::ArtifactMeasurement,
 };
 
@@ -16,69 +17,117 @@ pub(crate) struct ReportRow {
     pub violations: Vec<Violation>,
     /// True if the platform baseline file exists on disk (even if this artifact isn't in it).
     pub platform_file_exists: bool,
+    /// The metric this artifact is gated on (file vs gzip).
+    pub gate: GateMetric,
 }
 
 impl ReportRow {
     fn has_failure(&self) -> bool {
         !self.violations.is_empty() || self.baseline.is_none()
     }
+
+    /// Current value of the gated metric.
+    fn gated_bytes(&self) -> u64 {
+        match self.gate {
+            GateMetric::File => self.current.file_bytes,
+            GateMetric::Gzip => self.current.gzip_bytes,
+        }
+    }
+
+    /// Baseline value of the gated metric, if a baseline exists.
+    fn gated_baseline_bytes(&self) -> Option<u64> {
+        self.baseline.as_ref().map(|b| match self.gate {
+            GateMetric::File => b.file_bytes,
+            GateMetric::Gzip => b.gzip_bytes,
+        })
+    }
 }
 
-/// Render a report as a terminal table.
+/// One-line legend explaining the 🔒 / "gated on" marker, shown beneath
+/// every table so the file-vs-gzip distinction is never ambiguous.
+const GATE_LEGEND: &str = "🔒 = the size this artifact is GATED on (ceiling + delta). Binaries gate on \
+     **file** size (installed binary); WASM gates on **gzip** (download size). \
+     The other size is shown for information only.";
+
+/// Plain-text legend for the terminal table.
+const GATE_LEGEND_PLAIN: &str = "[*] = GATED metric (ceiling + delta). Binaries gate on file size; WASM gates \
+     on gzip. Delta column is measured on the gated metric.";
+
+/// Render a report as a terminal table. The gated metric's value is
+/// marked with `[*]`; the Delta column is measured on that metric.
 pub(crate) fn render_table(rows: &[ReportRow]) {
     // Header
     println!(
-        "{:<20} {:>10} {:>10} {:>10} {:>12} {:>10} {:>10}",
-        "Artifact", "File", "Stripped", "Gzip", "Delta", "Delta%", "Status"
+        "{:<20} {:>13} {:>10} {:>13} {:>6} {:>12} {:>10} {:>8}",
+        "Artifact", "File", "Stripped", "Gzip", "Gated", "Delta", "Delta%", "Status"
     );
-    println!("{}", "-".repeat(86));
+    println!("{}", "-".repeat(96));
 
     for row in rows {
-        let file_str = format_bytes(row.current.file_bytes);
+        // Mark the gated metric's cell with a trailing [*].
+        let mark = |is_gated: bool, s: String| if is_gated { format!("{s} [*]") } else { s };
+        let file_str = mark(
+            row.gate == GateMetric::File,
+            format_bytes(row.current.file_bytes),
+        );
         let stripped_str = row
             .current
             .stripped_bytes
             .map(format_bytes)
             .unwrap_or_else(|| "-".into());
-        let gzip_str = format_bytes(row.current.gzip_bytes);
+        let gzip_str = mark(
+            row.gate == GateMetric::Gzip,
+            format_bytes(row.current.gzip_bytes),
+        );
 
         let (delta_str, delta_pct_str) = delta_strings(row);
 
         let status = row_status(row);
 
         println!(
-            "{:<20} {:>10} {:>10} {:>10} {:>12} {:>10} {:>10}",
-            row.artifact, file_str, stripped_str, gzip_str, delta_str, delta_pct_str, status
+            "{:<20} {:>13} {:>10} {:>13} {:>6} {:>12} {:>10} {:>8}",
+            row.artifact,
+            file_str,
+            stripped_str,
+            gzip_str,
+            row.gate.label(),
+            delta_str,
+            delta_pct_str,
+            status
         );
     }
 
+    println!("\n{GATE_LEGEND_PLAIN}");
     print_fix_hint(rows);
 }
 
-/// Render a report as GitHub-flavored markdown.
+/// Render a report as GitHub-flavored markdown. The 🔒 marks the gated
+/// metric's value; Baseline/Delta are measured on that metric.
 pub(crate) fn render_markdown(rows: &[ReportRow]) {
     println!("## Size Gate Results\n");
-    println!("| Artifact | File | Stripped | Gzip | Delta | Delta% | Status |");
-    println!("|----------|------|---------|------|-------|--------|--------|");
+    println!("| Artifact | File | Gzip | Gated on | Delta | Delta% | Status |");
+    println!("|----------|------|------|----------|-------|--------|--------|");
 
     for row in rows {
-        let file_str = format_bytes(row.current.file_bytes);
-        let stripped_str = row
-            .current
-            .stripped_bytes
-            .map(format_bytes)
-            .unwrap_or_else(|| "-".into());
-        let gzip_str = format_bytes(row.current.gzip_bytes);
+        let file_str = gated_cell(row, GateMetric::File, format_bytes(row.current.file_bytes));
+        let gzip_str = gated_cell(row, GateMetric::Gzip, format_bytes(row.current.gzip_bytes));
 
         let (delta_str, delta_pct_str) = delta_strings(row);
 
         let status = row_status_md(row);
 
         println!(
-            "| {:<20} | {} | {} | {} | {} | {} | {} |",
-            row.artifact, file_str, stripped_str, gzip_str, delta_str, delta_pct_str, status
+            "| {:<20} | {} | {} | **{}** | {} | {} | {} |",
+            row.artifact,
+            file_str,
+            gzip_str,
+            row.gate.label(),
+            delta_str,
+            delta_pct_str,
+            status
         );
     }
+    println!("\n> {GATE_LEGEND}");
 
     let has_any_failure = rows.iter().any(ReportRow::has_failure);
     if has_any_failure {
@@ -127,21 +176,22 @@ pub(crate) fn render_markdown(rows: &[ReportRow]) {
 /// 3. If there are fix hints, a `<!-- FIX_HINTS -->` marker followed by fix hint details
 pub(crate) fn render_markdown_fragment(rows: &[ReportRow]) {
     for row in rows {
-        let file_str = format_bytes(row.current.file_bytes);
-        let stripped_str = row
-            .current
-            .stripped_bytes
-            .map(format_bytes)
-            .unwrap_or_else(|| "-".into());
-        let gzip_str = format_bytes(row.current.gzip_bytes);
+        let file_str = gated_cell(row, GateMetric::File, format_bytes(row.current.file_bytes));
+        let gzip_str = gated_cell(row, GateMetric::Gzip, format_bytes(row.current.gzip_bytes));
 
         let (delta_str, delta_pct_str) = delta_strings(row);
 
         let status = row_status_md(row);
 
         println!(
-            "| {} | {} | {} | {} | {} | {} | {} |",
-            row.artifact, file_str, stripped_str, gzip_str, delta_str, delta_pct_str, status
+            "| {} | {} | {} | **{}** | {} | {} | {} |",
+            row.artifact,
+            file_str,
+            gzip_str,
+            row.gate.label(),
+            delta_str,
+            delta_pct_str,
+            status
         );
     }
 
@@ -197,6 +247,7 @@ pub(crate) fn render_json(rows: &[ReportRow]) {
                 artifact: row.artifact.clone(),
                 platform: row.platform.clone(),
                 status: status.to_owned(),
+                gate: row.gate.label().to_owned(),
                 file_bytes: row.current.file_bytes,
                 file_display: format_bytes(row.current.file_bytes),
                 stripped_bytes: row.current.stripped_bytes,
@@ -251,6 +302,10 @@ pub(crate) struct JsonArtifact {
     pub artifact: String,
     pub platform: String,
     pub status: String,
+    /// The metric this artifact is gated on: `file` or `gzip`. Defaulted
+    /// for forward-compat when aggregating an older report.
+    #[serde(default)]
+    pub gate: String,
     pub file_bytes: u64,
     pub file_display: String,
     pub stripped_bytes: Option<u64>,
@@ -307,19 +362,30 @@ fn row_status_md(row: &ReportRow) -> &'static str {
     }
 }
 
-/// Delta strings are computed on file size — the gated metric — not gzip.
-fn delta_strings(row: &ReportRow) -> (String, String) {
-    if let Some(base) = &row.baseline {
-        let delta = row.current.file_bytes as i64 - base.file_bytes as i64;
-        let pct = if base.file_bytes > 0 {
-            ((row.current.file_bytes as f64 - base.file_bytes as f64) / base.file_bytes as f64)
-                * 100.0
-        } else {
-            0.0
-        };
-        (format_delta_bytes(delta), format!("{pct:+.1}%"))
+/// Format a metric cell, prefixing 🔒 when `metric` is the artifact's
+/// gated metric so the reader can't miss which size is being enforced.
+fn gated_cell(row: &ReportRow, metric: GateMetric, value: String) -> String {
+    if row.gate == metric {
+        format!("🔒 {value}")
     } else {
-        ("n/a".into(), "n/a".into())
+        value
+    }
+}
+
+/// Delta strings are computed on the gated metric (file size for
+/// binaries, gzip for WASM) — never a mix.
+fn delta_strings(row: &ReportRow) -> (String, String) {
+    match (row.gated_baseline_bytes(), row.gated_bytes()) {
+        (Some(base), cur) => {
+            let delta = cur as i64 - base as i64;
+            let pct = if base > 0 {
+                ((cur as f64 - base as f64) / base as f64) * 100.0
+            } else {
+                0.0
+            };
+            (format_delta_bytes(delta), format!("{pct:+.1}%"))
+        }
+        (None, _) => ("n/a".into(), "n/a".into()),
     }
 }
 
@@ -608,10 +674,12 @@ pub(crate) fn render_aggregate_markdown(reports: &[JsonReport], run_url: Option<
         );
     }
 
-    // Unified table. Size (on-disk file bytes) is the gated metric, so it
-    // carries the baseline + delta; gzip is shown for visibility only.
-    println!("| | Artifact | Platform | Size | Baseline | Delta | Gzip | Status |");
-    println!("|---|----------|----------|------|----------|-------|------|--------|");
+    // Unified table. Each artifact is gated on ONE metric — file size for
+    // binaries, gzip for WASM. 🔒 marks that metric's value, and the
+    // Baseline/Delta columns are measured on it. The other size is shown
+    // for information only.
+    println!("| | Artifact | Platform | File | Gzip | Gated on | Baseline | Delta | Status |");
+    println!("|---|----------|----------|------|------|----------|----------|-------|--------|");
 
     for a in &all_artifacts {
         let icon = match a.status.as_str() {
@@ -619,17 +687,33 @@ pub(crate) fn render_aggregate_markdown(reports: &[JsonReport], run_url: Option<
             "FAIL" => ":x:",
             _ => ":warning:",
         };
-        let baseline_display = match a.baseline_file_bytes {
-            Some(b) => format_bytes(b),
-            None => "n/a".into(),
+        let gates_gzip = a.gate == "gzip";
+        // 🔒 marks the gated metric's value.
+        let file_cell = if gates_gzip {
+            a.file_display.clone()
+        } else {
+            format!("🔒 {}", a.file_display)
         };
+        let gzip_cell = if gates_gzip {
+            format!("🔒 {}", a.gzip_display)
+        } else {
+            a.gzip_display.clone()
+        };
+        let baseline_gated = if gates_gzip {
+            a.baseline_gzip_bytes
+        } else {
+            a.baseline_file_bytes
+        };
+        let baseline_display = baseline_gated.map_or("n/a".into(), format_bytes);
         let platform_label = short_platform(&a.platform);
 
         println!(
-            "| {icon} | `{}` | {platform_label} | {} | {baseline_display} | {} ({}) | {} | {} |",
-            a.artifact, a.file_display, a.delta, a.delta_pct, a.gzip_display, a.status
+            "| {icon} | `{}` | {platform_label} | {file_cell} | {gzip_cell} | **{}** | {baseline_display} | {} ({}) | {} |",
+            a.artifact, a.gate, a.delta, a.delta_pct, a.status
         );
     }
+    println!();
+    println!("> {GATE_LEGEND}");
     println!();
 
     // Details section (only if failures)

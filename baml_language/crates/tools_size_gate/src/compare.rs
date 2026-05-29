@@ -1,4 +1,7 @@
-use crate::{config::Policy, measure::ArtifactMeasurement};
+use crate::{
+    config::{GateMetric, Policy},
+    measure::ArtifactMeasurement,
+};
 
 /// A single policy violation.
 pub(crate) struct Violation {
@@ -10,13 +13,23 @@ pub(crate) struct Violation {
     pub exceeded_by: String,
 }
 
-/// Compare current measurements against baseline + policy. Returns violations.
+/// Compare current measurements against baseline + policy. Returns
+/// violations. Deltas are measured on `gate` — the metric this artifact
+/// is gated on (file size for binaries, gzip for WASM).
 pub(crate) fn check_policy(
     current: &ArtifactMeasurement,
     baseline: Option<&ArtifactMeasurement>,
     policy: &Policy,
+    gate: GateMetric,
 ) -> Vec<Violation> {
     let mut violations = Vec::new();
+
+    // The current/baseline value for the gated metric.
+    let gated_current = |m: &ArtifactMeasurement| match gate {
+        GateMetric::File => m.file_bytes,
+        GateMetric::Gzip => m.gzip_bytes,
+    };
+    let gate_label = gate.label();
 
     // Absolute file-size limit — the primary gate (actual shipped size).
     if let Some(max) = policy.max_file_bytes {
@@ -62,16 +75,19 @@ pub(crate) fn check_policy(
         }
     }
 
-    // Delta checks require baseline. Deltas are measured on file size —
-    // the actual shipped size — not gzip.
+    // Delta checks require baseline. Deltas are measured on the gated
+    // metric (file size for binaries, gzip for WASM).
     if let Some(base) = baseline {
-        // Absolute file-size delta
+        let cur = gated_current(current) as i64;
+        let prev = gated_current(base) as i64;
+
+        // Absolute delta
         if let Some(max_delta) = policy.max_delta_bytes {
-            let delta = current.file_bytes as i64 - base.file_bytes as i64;
+            let delta = cur - prev;
             if delta > max_delta {
                 let over = delta - max_delta;
                 violations.push(Violation {
-                    metric: "file_delta".into(),
+                    metric: format!("{gate_label}_delta"),
                     policy_name: "max_delta_bytes".into(),
                     limit: format_delta_bytes(max_delta),
                     actual: format_delta_bytes(delta),
@@ -82,14 +98,12 @@ pub(crate) fn check_policy(
 
         // Percentage delta
         if let Some(max_pct) = policy.max_delta_pct {
-            if base.file_bytes > 0 {
-                let delta_pct = ((current.file_bytes as f64 - base.file_bytes as f64)
-                    / base.file_bytes as f64)
-                    * 100.0;
+            if prev > 0 {
+                let delta_pct = ((cur - prev) as f64 / prev as f64) * 100.0;
                 if delta_pct > max_pct {
                     let over = delta_pct - max_pct;
                     violations.push(Violation {
-                        metric: "file_delta_pct".into(),
+                        metric: format!("{gate_label}_delta_pct"),
                         policy_name: "max_delta_pct".into(),
                         limit: format!("{max_pct:.1}%"),
                         actual: format!("{delta_pct:+.1}%"),

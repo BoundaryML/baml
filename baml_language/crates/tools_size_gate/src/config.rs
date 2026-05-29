@@ -39,11 +39,42 @@ pub(crate) enum ArtifactKind {
     Pack,
 }
 
+/// Which measured size an artifact is *gated* on: the absolute ceiling
+/// and the baseline delta both use this metric, and the report flags it.
+///
+/// Binaries gate on `File` (the installed/shipped on-disk size); WASM
+/// gates on `Gzip` (what's actually shipped over the wire). The other
+/// size is still measured and shown, just for information.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum GateMetric {
+    /// On-disk file size. Default.
+    #[default]
+    File,
+    /// Gzip-compressed size (download size).
+    Gzip,
+}
+
+impl GateMetric {
+    /// Lowercase label used in reports and messages (`file` / `gzip`).
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            GateMetric::File => "file",
+            GateMetric::Gzip => "gzip",
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub(crate) struct ArtifactConfig {
     /// Artifact kind. Defaults to `cdylib` for backwards compatibility.
     #[serde(default)]
     pub kind: ArtifactKind,
+
+    /// Which measured size this artifact is gated on. Defaults to `file`
+    /// (the shipped on-disk size); WASM sets `gzip` (the download size).
+    #[serde(default)]
+    pub gate: GateMetric,
 
     /// Cargo package name (e.g., `bridge_wasm`). Required for `cdylib`
     /// and `bin`; ignored for `pack` (which uses `[artifacts.x.pack]`).

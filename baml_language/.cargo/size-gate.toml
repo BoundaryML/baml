@@ -7,14 +7,19 @@ baseline_dir = ".ci/size-gate"
 #                       (measured on every native platform)
 #   3. bridge_wasm    — the WASM build
 #
-# The gate is on ACTUAL on-disk size (`max_file_bytes` / `max_delta_pct`).
-# Gzip is still measured and shown in the report for visibility, but it is
-# not what we benchmark against. Two gates, both kept tight as we drive
-# size down:
+# Each artifact is gated on ONE metric (`gate`):
+#   * binaries (baml-cli, packed-program) gate on FILE size — the actual
+#     on-disk size a user installs/ships.
+#   * bridge_wasm gates on GZIP — what ships over the wire.
+# The non-gated size is still measured and shown in the report (clearly
+# marked), but it is not what we benchmark against.
+#
+# Two gates, both kept tight as we drive size down, applied to the gated
+# metric:
 #   * max_delta_pct — per-platform regression guard vs the committed
-#     baseline in `baseline_dir`, on file size. 3% absorbs normal
-#     build-to-build LTO jitter while still catching accidental growth.
-#   * max_file_bytes — an absolute hard ceiling on file size. Set PER
+#     baseline in `baseline_dir`. 3% absorbs normal build-to-build LTO
+#     jitter while still catching accidental growth.
+#   * max_file_bytes / max_gzip_bytes — an absolute hard ceiling. Set PER
 #     PLATFORM (binaries differ across OSes) so each platform is capped
 #     ~150–200 KB above its own recorded baseline, not loosely to the
 #     largest platform. Bump a ceiling only as a deliberate, reviewed
@@ -63,13 +68,18 @@ host_bin = "baml-pack-host"
 fixture = "crates/tools_size_gate/fixtures/minimal.baml"
 function = "Identity"
 
+# WASM is gated on GZIP (the download size), not file size — that's what
+# actually ships over the wire. gate = "gzip" makes both the ceiling and
+# the delta use gzip, and the report flags it.
 [artifacts.bridge_wasm]
+kind = "cdylib"
+gate = "gzip"
 package = "bridge_wasm"
 target = "wasm32-unknown-unknown"
 no_default_features = true
 wasm = true
 policy.max_delta_pct = 3.0
 
-# WASM is a single platform; baseline 12.82 MB file.
+# Single platform; baseline 3.76 MB gzip.
 [artifacts.bridge_wasm.platform.wasm32-unknown-unknown]
-max_file_bytes = 13_020_000
+max_gzip_bytes = 3_800_000
