@@ -7,7 +7,10 @@ use bex_vm_types::{
 use indexmap::IndexMap;
 
 use super::{BamlPackageBaml, PackageBamlImpl};
-use crate::BexVm;
+use crate::{
+    BexVm,
+    errors::{VmBamlError, VmRustFnError},
+};
 
 impl BamlPackageBaml for PackageBamlImpl {
     fn deep_copy(vm: &mut BexVm, value: &Value) -> Value {
@@ -18,6 +21,56 @@ impl BamlPackageBaml for PackageBamlImpl {
     fn deep_equals(vm: &BexVm, a: &Value, b: &Value) -> bool {
         let mut visited = HashMap::new();
         deep_equals_recursive(vm, *a, *b, &mut visited)
+    }
+
+    fn baml_max(vm: &mut BexVm, a: &Value, b: &Value) -> Result<Value, VmRustFnError> {
+        numeric_min_max(vm, *a, *b, NumericMinMax::Max)
+    }
+
+    fn baml_min(vm: &mut BexVm, a: &Value, b: &Value) -> Result<Value, VmRustFnError> {
+        numeric_min_max(vm, *a, *b, NumericMinMax::Min)
+    }
+}
+
+enum NumericMinMax {
+    Min,
+    Max,
+}
+
+fn numeric_min_max(
+    vm: &mut BexVm,
+    a: Value,
+    b: Value,
+    op: NumericMinMax,
+) -> Result<Value, VmRustFnError> {
+    if let (Some(a_int), Some(b_int)) = (a.as_int(), b.as_int()) {
+        let result = match op {
+            NumericMinMax::Min => a_int.min(b_int),
+            NumericMinMax::Max => a_int.max(b_int),
+        };
+        return Ok(Value::int(result));
+    }
+
+    if let (Some(a_float), Some(b_float)) = (value_as_float(vm, a), value_as_float(vm, b)) {
+        let result = match op {
+            NumericMinMax::Min => a_float.min(b_float),
+            NumericMinMax::Max => a_float.max(b_float),
+        };
+        return Ok(vm.alloc_float(result));
+    }
+
+    Err(VmBamlError::InvalidArgument {
+        message: "baml.max/min require both arguments to be int or both arguments to be float"
+            .to_string(),
+    }
+    .into())
+}
+
+fn value_as_float(vm: &BexVm, value: Value) -> Option<f64> {
+    let ptr = value.as_object_ptr()?;
+    match vm.get_object(ptr) {
+        Object::Float(float) => Some(*float),
+        _ => None,
     }
 }
 

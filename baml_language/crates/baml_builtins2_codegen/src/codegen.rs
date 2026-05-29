@@ -40,6 +40,8 @@ fn is_fallible(b: &NativeBuiltin) -> bool {
                 | "baml.media.Video.to_json"
                 | "baml.media.Image.to_json"
                 | "baml.Float.random"
+                | "baml.max"
+                | "baml.min"
                 // `bigint.pow` raises `AllocFailure` (a panic, not in `throws`) when
                 // the estimated result size exceeds `MAX_BIGINT_BITS`.
                 | "baml.Bigint.pow"
@@ -155,7 +157,7 @@ fn build_namespace_tree(builtins: &[NativeBuiltin]) -> NamespaceNode<'_> {
         let rest = b.path.strip_prefix("baml.").unwrap_or(&b.path);
         let segments: Vec<&str> = rest.split('.').collect();
         let baml_method_name = segments.last().unwrap().to_string();
-        let rust_method_name = camel_to_snake(&baml_method_name);
+        let rust_method_name = rust_method_name_for_builtin(&segments, &baml_method_name);
 
         let entry = BuiltinEntry {
             builtin: b,
@@ -186,6 +188,14 @@ fn build_namespace_tree(builtins: &[NativeBuiltin]) -> NamespaceNode<'_> {
     }
 
     root
+}
+
+fn rust_method_name_for_builtin(segments: &[&str], baml_method_name: &str) -> String {
+    if segments.len() == 1 && matches!(baml_method_name, "max" | "min") {
+        format!("baml_{}", camel_to_snake(baml_method_name))
+    } else {
+        camel_to_snake(baml_method_name)
+    }
 }
 
 // ============================================================================
@@ -2013,6 +2023,12 @@ mod tests {
             output.contains("fn deep_equals(vm: &BexVm, a: &Value, b: &Value) -> bool;"),
             "BamlPackageBaml should have deep_equals with &BexVm:\n{output}"
         );
+        assert!(
+            output.contains(
+                "fn baml_max(vm: &mut BexVm, a: &Value, b: &Value) -> Result<Value, VmRustFnError>;"
+            ),
+            "BamlPackageBaml should expose baml.max with a conflict-free Rust method name:\n{output}"
+        );
     }
 
     #[test]
@@ -2039,7 +2055,7 @@ mod tests {
             let rest = b.path.strip_prefix("baml.").unwrap_or(&b.path);
             let segments: Vec<&str> = rest.split('.').collect();
             let baml_name = segments.last().unwrap();
-            let name = camel_to_snake(baml_name);
+            let name = rust_method_name_for_builtin(&segments, baml_name);
             let has_mut_receiver = b
                 .receiver
                 .as_ref()

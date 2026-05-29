@@ -2417,6 +2417,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         self.record_function_coercion_if_needed(*arg, &arg_ty, &expected_arg_ty);
                     }
                 }
+                self.validate_numeric_min_max_call(expr_id, body, &param_arg_pairs);
 
                 let substituted_ret = crate::generics::substitute_ty(ret, &bindings);
                 let mut erase_diags = Vec::new();
@@ -2603,6 +2604,90 @@ impl<'db> TypeInferenceBuilder<'db> {
                 expr_id,
                 Vec::new(),
             );
+        }
+    }
+
+    fn validate_numeric_min_max_call(
+        &mut self,
+        expr_id: ExprId,
+        body: &ExprBody,
+        param_arg_pairs: &[(&FunctionParamTy, ExprId)],
+    ) {
+        let callee = match &body.exprs[expr_id] {
+            Expr::Call { callee, .. } | Expr::OptionalCall { callee, .. } => *callee,
+            _ => return,
+        };
+        let Some(function) = self.call_target_name(callee, body) else {
+            return;
+        };
+        if !matches!(function.as_str(), "baml.max" | "baml.min") || param_arg_pairs.len() != 2 {
+            return;
+        }
+
+        let left = self
+            .expressions
+            .get(&param_arg_pairs[0].1)
+            .cloned()
+            .unwrap_or(Ty::Unknown {
+                attr: TyAttr::default(),
+            });
+        let right = self
+            .expressions
+            .get(&param_arg_pairs[1].1)
+            .cloned()
+            .unwrap_or(Ty::Unknown {
+                attr: TyAttr::default(),
+            });
+
+        if matches!(
+            (&left, &right),
+            (Ty::Unknown { .. } | Ty::Error { .. }, _) | (_, Ty::Unknown { .. } | Ty::Error { .. })
+        ) {
+            return;
+        }
+
+        let left_kind = self.numeric_min_max_kind(&left);
+        let right_kind = self.numeric_min_max_kind(&right);
+        if left_kind.is_some() && left_kind == right_kind {
+            return;
+        }
+
+        self.context.report_simple(
+            TirTypeError::NumericMinMaxTypeMismatch {
+                function,
+                left,
+                right,
+            },
+            expr_id,
+        );
+    }
+
+    fn numeric_min_max_kind(&self, ty: &Ty) -> Option<PrimitiveType> {
+        let expanded = self.expand_alias_chains(ty.clone());
+        Self::numeric_min_max_kind_expanded(&expanded)
+    }
+
+    fn numeric_min_max_kind_expanded(ty: &Ty) -> Option<PrimitiveType> {
+        match ty {
+            Ty::Primitive(kind @ (PrimitiveType::Int | PrimitiveType::Float), _) => {
+                Some(kind.clone())
+            }
+            Ty::Literal(lit, _, _) => match PrimitiveType::from_literal(lit) {
+                kind @ (PrimitiveType::Int | PrimitiveType::Float) => Some(kind),
+                _ => None,
+            },
+            Ty::Union(members, _) => {
+                let mut kind = None;
+                for member in members {
+                    let member_kind = Self::numeric_min_max_kind_expanded(member)?;
+                    if kind.as_ref().is_some_and(|kind| kind != &member_kind) {
+                        return None;
+                    }
+                    kind = Some(member_kind);
+                }
+                kind
+            }
+            _ => None,
         }
     }
 

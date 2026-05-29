@@ -958,6 +958,15 @@ mod tests {
             .expect("missing deep_equals");
         assert_eq!(deep_equals.vm_usage, VmUsage::Ref);
 
+        let baml_max = vm_builtins
+            .iter()
+            .find(|b| b.path == "baml.max")
+            .expect("missing max");
+        assert!(baml_max.receiver.is_none());
+        assert_eq!(baml_max.params.len(), 2);
+        assert_eq!(baml_max.generics, vec!["T"]);
+        assert_eq!(baml_max.vm_usage, VmUsage::MutRef);
+
         assert_eq!(array_length.vm_usage, VmUsage::None);
         assert_eq!(array_push.vm_usage, VmUsage::None);
         assert_eq!(math_trunc.vm_usage, VmUsage::None);

@@ -867,7 +867,9 @@ fn tir_type_error_to_diagnostic_id(
 ) -> DiagnosticId {
     use baml_compiler2_tir::infer_context::TirTypeError;
     match error {
-        TirTypeError::TypeMismatch { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::TypeMismatch { .. } | TirTypeError::NumericMinMaxTypeMismatch { .. } => {
+            DiagnosticId::TypeMismatch
+        }
         TirTypeError::UnresolvedMember { .. } => DiagnosticId::NoSuchField,
         TirTypeError::UnresolvedName { .. } => DiagnosticId::UnknownVariable,
         TirTypeError::DeadCode { .. } => DiagnosticId::TypeMismatch,

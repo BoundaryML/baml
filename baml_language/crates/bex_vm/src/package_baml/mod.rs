@@ -10,7 +10,7 @@
 //! - `math` — `BamlNamespaceMath` (trunc)
 //! - `media` — `BamlClassMedia{Pdf,Audio,Video,Image}` + `BamlNamespaceMedia`
 //! - `unstable` — `BamlNamespaceUnstable` (string)
-//! - `root` — `BamlPackageBaml` (`deep_copy`, `deep_equals`)
+//! - `root` — `BamlPackageBaml` (`deep_copy`, `deep_equals`, `min`, `max`)
 //!
 //! # Adding a new builtin
 //!

@@ -33,6 +33,8 @@ use crate::{
 pub enum TirTypeError {
     /// Type mismatch: expected vs actual.
     TypeMismatch { expected: Ty, got: Ty },
+    /// `baml.min`/`baml.max` are same-type numeric builtins.
+    NumericMinMaxTypeMismatch { function: Name, left: Ty, right: Ty },
     /// Member not found on a known type.
     ///
     /// Reported when the base type IS resolved (known class/enum) but the
@@ -233,6 +235,16 @@ impl fmt::Display for TirTypeError {
                     humanize_ty(got)
                 )
             }
+            TirTypeError::NumericMinMaxTypeMismatch {
+                function,
+                left,
+                right,
+            } => write!(
+                f,
+                "`{function}` expects both arguments to be the same numeric type (`int` or `float`), got {} and {}",
+                humanize_ty(left),
+                humanize_ty(right)
+            ),
             TirTypeError::UnresolvedMember { base_type, member } => {
                 write!(
                     f,
