@@ -406,7 +406,7 @@ pub enum Instruction {
     /// Pops a container (Array, `Uint8Array`, Map, or String) from the stack
     /// and pushes its length as an int.
     ///
-    /// Format: `CONTAINER_LEN` — stack: [container] → [int]
+    /// Format: `CONTAINER_LEN` — stack: \[container\] → \[int\]
     ContainerLen,
 
     /// Loads a value from a map at a given key.
