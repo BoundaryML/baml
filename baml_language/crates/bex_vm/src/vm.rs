@@ -67,11 +67,12 @@ use ::core::any::TypeId;
 use ::core::sync::atomic::AtomicBool;
 use bex_heap::{BexHeap, Tlab};
 use bex_vm_types::{
-    BinOp, CmpOp, FunctionKind, FutureRead, HeapPtr, Object, ObjectIndex, ObjectPool, ObjectType,
-    PanicClass, PermitProof, StackIndex, UnaryOp, Value, Variant, VmGlobals,
-    bytecode::{self, BlockNotification},
+    BinOp, CmpOp, FunctionKind, FutureRead, GlobalIndex, HeapPtr, Object, ObjectIndex, ObjectPool,
+    ObjectType, PanicClass, PermitProof, StackIndex, UnaryOp, Value, Variant, VmGlobals,
+    bytecode::{self, BlockNotification, Instruction},
     types::{
-        BoundMethod, Closure, ConstValue, Function, FunctionType, Instance, Type, UnscheduledFuture,
+        BoundMethod, Closure, ConstValue, Function, FunctionOrigin, FunctionType, Instance, Type,
+        UnscheduledFuture,
     },
 };
 use indexmap::IndexMap;
@@ -1275,16 +1276,10 @@ impl BexVm {
     /// `type_args` slot. Use when the host invokes a generic function
     /// (e.g. a user function with `<T>`) and needs to thread `T` through.
     ///
-    /// Entry points must be [`bex_vm_types::FunctionKind::Bytecode`] —
-    /// either a bare `Object::Function` or an `Object::Closure` wrapping
-    /// one (BEP-034 spawn). The engine boundary
-    /// (`bex_engine::BexEngine::call_function_bound_args` — backticks
-    /// rather than an intra-doc link because `bex_vm` doesn't depend on
-    /// `bex_engine`; the relationship goes the other way) rejects
-    /// `SysOp` / `Native` / `NativeUnresolved` callees with
-    /// `EngineError::NotInvokableAsEntry` before reaching this method,
-    /// because there's no enclosing bytecode frame for a native to
-    /// `YieldToCall` back into at the top level.
+    /// Bytecode entry points are pushed directly. Native entry points are
+    /// wrapped in a synthetic bytecode caller that executes
+    /// `CALL <native>; RETURN`, giving the normal call path a real caller
+    /// frame for synchronous results and `YieldToCall` continuations.
     pub fn set_entry_point_with_type_args(
         &mut self,
         function: HeapPtr,
@@ -1299,33 +1294,121 @@ impl BexVm {
             "expect function or closure as entry point, got {:?}",
             self.get_object(function)
         );
-        debug_assert!(
-            match self.get_object(function) {
-                Object::Function(f) => matches!(f.kind, bex_vm_types::FunctionKind::Bytecode),
-                Object::Closure(_) => true,
-                _ => false,
-            },
-            "entry points must be Function::Bytecode or Closure; engine \
-             boundary should have rejected this — see \
-             EngineError::NotInvokableAsEntry"
-        );
 
-        self.pending_call_type_args.clone_from(&type_args);
+        let callable_kind = match self.get_object(function) {
+            Object::Function(f) => f.kind,
+            Object::Closure(closure) => {
+                let func_obj = unsafe { closure.function.get() };
+                match func_obj {
+                    Object::Function(f) => f.kind,
+                    other => panic!("expect closure function, got {other:?}"),
+                }
+            }
+            other => panic!("expect function or closure as entry point, got {other:?}"),
+        };
 
+        match callable_kind {
+            FunctionKind::Bytecode => {
+                self.pending_call_type_args.clone_from(&type_args);
+                self.stack.extend(args.iter().copied());
+                self.frames.push(Frame::Bytecode(BytecodeFrame {
+                    function,
+                    instruction_ptr: 0,
+                    locals_offset: StackIndex::from_raw(0),
+                    type_args,
+                    faulting_pc: 0,
+                }));
+
+                // Entry functions need the same frame-local pre-allocation as normal
+                // bytecode calls now that INIT_LOCALS is gone from bytecode.
+                self.allocate_real_locals_for_frame(function)
+                    .expect("entry point must be a valid function frame");
+            }
+            FunctionKind::Native(_) => {
+                self.push_native_entry_frame(function, args, type_args);
+            }
+            FunctionKind::SysOp(_) | FunctionKind::NativeUnresolved => {
+                panic!("entry point kind is not directly invokable: {callable_kind:?}");
+            }
+        }
+    }
+
+    fn global_index_for_function_ptr(&self, function: HeapPtr) -> Option<GlobalIndex> {
+        self.globals
+            .as_slice(self.proof())
+            .iter()
+            .position(|value| value.as_object_ptr() == Some(function))
+            .map(GlobalIndex::from_raw)
+    }
+
+    fn push_native_entry_frame(
+        &mut self,
+        function: HeapPtr,
+        args: &[Value],
+        type_args: Vec<baml_type::Ty>,
+    ) {
+        let callee_global = self
+            .global_index_for_function_ptr(function)
+            .expect("native entry point must be present in globals");
+        let ntypeargs = u16::try_from(type_args.len()).expect("native entry type args fit in u16");
+
+        let (callee_name, return_type, throws_type) = match self.get_object(function) {
+            Object::Function(f) => (f.name.clone(), f.return_type.clone(), f.throws_type.clone()),
+            other => panic!("expect native function as entry point, got {other:?}"),
+        };
+
+        self.pending_call_type_args.clear();
+        for ty in type_args {
+            let ty_ptr = self.tlab.alloc(Object::Type(Box::new(ty)));
+            self.stack.push(Value::object(ty_ptr));
+        }
         self.stack.extend(args.iter().copied());
 
+        let mut bytecode = bytecode::Bytecode {
+            instructions: vec![
+                Instruction::Call {
+                    callee: callee_global,
+                    ntypeargs,
+                },
+                Instruction::Return,
+            ],
+            ..bytecode::Bytecode::default()
+        };
+        bytecode.compact = Some(bytecode.lower_to_compact());
+
+        let entry_function = Function {
+            name: format!("$entry::{callee_name}"),
+            source_file: String::new(),
+            arity: 0,
+            real_local_count: 0,
+            bytecode,
+            kind: FunctionKind::Bytecode,
+            local_names: Vec::new(),
+            debug_locals: Vec::new(),
+            span: baml_type::Span::fake(),
+            block_notifications: Vec::new(),
+            viz_nodes: Vec::new(),
+            return_type,
+            stream_return_type: baml_type::Ty::Null {
+                attr: baml_type::TyAttr::default(),
+            },
+            param_names: Vec::new(),
+            param_types: Vec::new(),
+            param_has_default: Vec::new(),
+            throws_type,
+            origin: FunctionOrigin::Internal,
+            body_meta: None,
+            trace: false,
+        };
+        let entry_ptr = self.tlab.alloc(Object::Function(Box::new(entry_function)));
+
         self.frames.push(Frame::Bytecode(BytecodeFrame {
-            function,
+            function: entry_ptr,
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(0),
-            type_args,
+            type_args: Vec::new(),
             faulting_pc: 0,
         }));
-
-        // Entry functions need the same frame-local pre-allocation as normal
-        // bytecode calls now that INIT_LOCALS is gone from bytecode.
-        self.allocate_real_locals_for_frame(function)
-            .expect("entry point must be a valid function frame");
     }
 
     /// Restores the VM state and prepares it for the next execution.
