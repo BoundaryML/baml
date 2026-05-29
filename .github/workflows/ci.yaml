@@ -471,6 +471,149 @@ jobs:
           fi
           echo "All generated proto files are in sync."
 
+  # Benchmarks are split into two jobs so the slow compile happens on a fast,
+  # cheap machine while the actual measurement happens on a stable CodSpeed
+  # macro runner.
+  #
+  #   benchmarks-build  -> compiles the bench binaries (the part that used to
+  #                        time out on the small CodSpeed runner)
+  #   benchmarks-run    -> ONLY executes those prebuilt binaries on codspeed-macro
+  #
+  # CRITICAL — no double-build / flag mismatch:
+  #   `cargo codspeed build` compiles each bench target with CodSpeed's own
+  #   compilation flags and copies the resulting executables into
+  #   target/codspeed/walltime/<pkg>/<bench>. `cargo codspeed run` then ONLY
+  #   executes those copies — it never invokes the compiler. So the run job
+  #   cannot accidentally rebuild with default flags; if the artifact is missing
+  #   it errors ("No benchmarks found") instead of measuring the wrong binary.
+  #
+  # CRITICAL — ABI match:
+  #   codspeed-macro is an ARM64 machine, so the binaries MUST be built on ARM64
+  #   too. We build on the OLDEST Ubuntu we have an ARM runner for (22.04,
+  #   glibc 2.35) so the binaries stay forward-compatible with whatever (newer
+  #   or equal) glibc the macro runner ships.
+  benchmarks-build:
+    name: "benchmarks build (baml)"
+    runs-on: blacksmith-8vcpu-ubuntu-2204-arm
+    needs: determine_changes
+    # Runs automatically on ANY change under baml_language/ (determine_changes'
+    # `code` flag = `git diff ... ':baml_language/**'`), so every PR that could
+    # affect perf is measured. Also runs on push to main/canary, and on manual
+    # opt-in (RUN_CODSPEED=1 in the PR body) for PRs that don't touch
+    # baml_language/. Skipped in merge_group (already ran on the PR).
+    if: |
+      github.event_name != 'merge_group' &&
+      (
+        needs.determine_changes.outputs.code == 'true' ||
+        github.ref == 'refs/heads/main' ||
+        github.ref == 'refs/heads/canary' ||
+        contains(github.event.pull_request.body, 'RUN_CODSPEED=1')
+      )
+    timeout-minutes: 30
+    steps:
+      - name: "Checkout Branch"
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      # Cache strategy mirrors cargo-tests.reusable.yaml: only canary writes,
+      # PRs restore read-only. Deliberately a bench-specific lane
+      # (`linux-arm-bench`), NOT a shared/canonical aarch64 lane:
+      #
+      #   - It can't reuse the x86 `linux-cargo` lane anyway — Swatinem/rust-cache
+      #     bakes the rustc host triple into every key, so aarch64 never matches
+      #     an x86_64 entry, and the artifacts are arch-incompatible.
+      #   - It also shouldn't be reused by other ARM jobs: its only saver is this
+      #     benchmark build, which compiles just `baml_tests` benches. That's a
+      #     thin seed — a general ARM CI job reading it would still rebuild most
+      #     of the workspace. Future ARM jobs should stand up their own lane
+      #     (ideally with a broad-tree saver, like x86's `cargo-test-linux`)
+      #     rather than piggyback on this one.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
+          cache-all-crates: true
+          cache-workspace-crates: true
+          shared-key: "linux-arm-bench"
+
+      # Pin to the same major+minor as codspeed-divan-compat in Cargo.lock
+      # (4.7.0). cargo codspeed run aborts on a major-version mismatch.
+      - name: "Install cargo-codspeed"
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-codspeed@4.7.0
+
+      - name: "Build benchmarks (walltime)"
+        run: cargo codspeed build -p baml_tests -m walltime
+        working-directory: baml_language
+
+      - name: "Upload prebuilt benchmark binaries"
+        uses: actions/upload-artifact@v7
+        with:
+          name: codspeed-walltime-benches
+          path: baml_language/target/codspeed/walltime
+          if-no-files-found: error
+          retention-days: 1
+
+  benchmarks-run:
+    name: "benchmarks instrumented (baml)"
+    runs-on: codspeed-macro
+    needs:
+      - determine_changes
+      - benchmarks-build
+    if: |
+      github.event_name != 'merge_group' &&
+      (
+        needs.determine_changes.outputs.code == 'true' ||
+        github.ref == 'refs/heads/main' ||
+        github.ref == 'refs/heads/canary' ||
+        contains(github.event.pull_request.body, 'RUN_CODSPEED=1')
+      )
+    timeout-minutes: 30
+    steps:
+      - name: "Checkout Branch"
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # `cargo codspeed run` needs `cargo metadata` to locate the benches and
+      # their working directories. It does NOT compile anything here.
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - name: "Install cargo-codspeed"
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-codspeed@4.7.0
+
+      - name: "Download prebuilt benchmark binaries"
+        uses: actions/download-artifact@v7
+        with:
+          name: codspeed-walltime-benches
+          path: baml_language/target/codspeed/walltime
+
+      # actions/upload-artifact drops the Unix executable bit; restore it so the
+      # binaries can be exec'd by `cargo codspeed run`.
+      - name: "Restore executable bit on bench binaries"
+        run: chmod -R +x baml_language/target/codspeed/walltime
+
+      - name: "Run benchmarks (walltime)"
+        uses: CodSpeedHQ/action@v4
+        # Benchmarks are advisory — never block a merge on a measurement blip.
+        continue-on-error: true
+        with:
+          mode: walltime
+          # Executes ONLY the prebuilt binaries downloaded above; no compiler runs.
+          run: cd baml_language && cargo codspeed run -m walltime
+          token: ${{ secrets.CODSPEED_TOKEN }}
+
   # CI Failure Alert - Required status check using "skipped = success" pattern
   # See: https://devopsdirective.com/posts/2025/08/github-actions-required-checks-for-conditional-jobs/
   #

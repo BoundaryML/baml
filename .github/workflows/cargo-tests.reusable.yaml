@@ -44,6 +44,15 @@
 # | `linux-msrv`    | `cargo-build-msrv`    | —                                               |
 # | `macos-cargo`   | `cargo-test-macos`    | `sdk-tests/macos`, `size-gate::macos`           |
 # | `windows-cargo` | `cargo-test-windows`  | `sdk-tests/windows`, `size-gate::windows`       |
+# | `linux-arm-bench` | `ci.yaml::benchmarks-build` | — (bench-only; see note)                  |
+#
+# Note: `linux-arm-bench` is bench-specific on purpose — its saver builds only
+# `baml_tests` benches, so it's a thin seed not worth sharing with a general
+# ARM job (which would still rebuild most of the workspace). It is also NOT
+# touched by the daily purge in `canary-cache-refresh.yml` (that purge
+# repopulates via this reusable workflow, which has no ARM job); it
+# self-refreshes whenever `benchmarks-build` runs on canary, and only ages out
+# after the 7-day TTL during fully ARM-idle periods.
 #
 # `cargo-test-linux` is the saver for `linux-cargo` because it builds
 # the broadest target/ tree (`cargo test --no-run --all-features`
