@@ -1679,6 +1679,59 @@ fn baml.fs.File.write_bytes = builtin(io)
 
 fn baml.fs.write_bytes = builtin(io)
 
+fn baml.future.all_complete(futures: future<void, void>[]) -> future<void[], void> {
+    // Locals:
+    let _0: future<void[], void> // _0 // return
+    let _1: future<void, void>[] // futures // param [captured]
+    let _2: null
+    let _3: null
+
+    bb0: {
+        _2 = make_closure lambda[0]<2 type_args>(copy _1);
+        _3 = spawn copy _2 name=const null -> bb1;
+    }
+
+    bb1: {
+        _0 = copy _3;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(all_complete, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (future<void, void>) -> void throws never
+
+    bb0: {
+        _1 = make_closure lambda[0]<2 type_args>();
+        _0 = call const fn baml.Array.map(copy capture[0], copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(<lambda(all_complete, 0)>, 1)>(f: null) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: null // f // param
+
+    bb0: {
+        _0 = await _1 -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn baml.future.Future.cancel = builtin(vm)
 
 fn baml.future.Future.from_json(j: baml.json.json) -> future<void, void> {
@@ -7162,6 +7215,156 @@ fn baml.panics.AssertionFailed.to_json(self: baml.panics.AssertionFailed) -> bam
     bb1: {
         _0 = { const "message": copy _2 };
         goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.spawn.TaskGroup.active_count = builtin(vm)
+
+fn baml.spawn.CancelToken.any = builtin(vm)
+
+fn baml.spawn.TaskGroup.cancel = builtin(vm)
+
+fn baml.spawn.CancelToken.cancel = builtin(vm)
+
+fn baml.spawn.SpawnConfig.from_json(j: baml.json.json) -> baml.spawn.SpawnConfig {
+    // Locals:
+    let _0: baml.spawn.SpawnConfig // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.spawn.SpawnConfig);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.spawn.TaskGroup.from_json(j: baml.json.json) -> baml.spawn.TaskGroup {
+    // Locals:
+    let _0: baml.spawn.TaskGroup // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.spawn.TaskGroup);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.spawn.CancelToken.from_json(j: baml.json.json) -> baml.spawn.CancelToken {
+    // Locals:
+    let _0: baml.spawn.CancelToken // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.spawn.CancelToken);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.spawn.CancelToken.is_cancelled = builtin(vm)
+
+fn baml.spawn.TaskGroup.limit = builtin(vm)
+
+fn baml.spawn.TaskGroup.name = builtin(vm)
+
+fn baml.spawn.CancelToken.new = builtin(vm)
+
+fn baml.spawn.TaskGroup.new = builtin(vm)
+
+fn baml.spawn.options = builtin(vm)
+
+fn baml.spawn.TaskGroup.queued_count = builtin(vm)
+
+fn baml.spawn.TaskGroup.set_limit = builtin(vm)
+
+fn baml.spawn.SpawnConfig.to_json(self: baml.spawn.SpawnConfig) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.spawn.SpawnConfig // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.spawn.SpawnConfig);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.spawn.TaskGroup.to_json(self: baml.spawn.TaskGroup) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.spawn.TaskGroup // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.spawn.TaskGroup);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.spawn.CancelToken.to_json(self: baml.spawn.CancelToken) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.spawn.CancelToken // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.spawn.CancelToken);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
     }
 
     bb2: {

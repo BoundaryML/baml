@@ -1263,6 +1263,22 @@ function baml.future.Future.to_json(self: null) -> baml.json.json {
     return
 }
 
+function baml.future.all_complete(futures: future<void, void>[]) -> future<void[], void> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type #0
+    load_type #1
+    load_var futures
+    make_closure .<lambda(all_complete, 0)>, captures=1, ntypeargs=2
+    load_const null
+    load_const null
+    spawn
+    store_var _3
+    load_var _3
+    return
+}
+
 function baml.glob.Glob.from_json(j: baml.json.json) -> baml.glob.Glob {
     load_var j
     call baml.json.stringify

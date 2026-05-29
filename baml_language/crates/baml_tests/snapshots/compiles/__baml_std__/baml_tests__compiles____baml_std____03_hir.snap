@@ -385,6 +385,9 @@ function baml.fs.write_bytes(path: string, content: uint8array) -> int  [builtin
 class baml.future.Future {
 }
 enum baml.future.FutureState {Pending, Ready, Error, Cancelled}
+function baml.future.all_complete(futures: baml.future.Future[]) -> baml.future.Future  [expr] {
+  {  } spawn { () -> { {  } futures.map((f) -> { {  } await f }) } }
+}
 function baml.future.cancel(self: ?) -> bool  [builtin]
 function baml.future.from_json(j: baml.json.json) -> baml.future.Future  [expr] {
   baml.future.Future {  }
@@ -397,6 +400,9 @@ function baml.future.state(self: ?) -> baml.future.FutureState  [builtin]
 function baml.future.to_json(self: ?) -> baml.json.json  [expr] {
   map {  }
 }
+
+--- captures ---
+lambda () in all_complete: captures [futures]
 
 --- <builtin>/baml/ns_glob/glob.baml ---
 class baml.glob.Glob {

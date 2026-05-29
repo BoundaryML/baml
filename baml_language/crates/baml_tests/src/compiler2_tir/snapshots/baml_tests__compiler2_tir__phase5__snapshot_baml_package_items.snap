@@ -53,6 +53,7 @@ namespace baml.fs:
 namespace baml.future:
   class Future<T, E> { methods: [cancel, is_settled, is_cancelled, is_result, is_error, state, to_json, from_json] }
   enum FutureState
+  function all_complete<T, E>
 namespace baml.glob:
   class Glob { methods: [scan, matches, to_json, from_json] }
   class ScanOptions { methods: [to_json, from_json] }

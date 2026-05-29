@@ -357,6 +357,15 @@ function baml.future.Future.to_json(self: baml.future.Future) -> baml.json.json 
 function baml.future.Future.from_json(j: baml.json.json) -> Future<unknown, unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Future {  } : baml.future.Future<T, E>
 }
+function baml.future.all_complete<T, E>(futures: Future<T, E>[]) -> Future<T[], E> throws never {
+  { : Future<U[], null>
+    spawn { () -> { ... } } : Future<U[], null>
+  }
+}
+lambda baml.future.all_complete {
+}
+lambda baml.future.all_complete {
+}
 class baml.future.Future$stream {
 }
 

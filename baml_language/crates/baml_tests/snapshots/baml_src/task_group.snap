@@ -1,28 +1,28 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function task_group.$init_test_84(registry: testing.TestCollector) -> null {
+function task_group.$init_test_ns_task_group_task_group(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "caps_active_and_queues_rest"
-    make_closure .<lambda($init_test_84, 0)>, 0
+    make_closure .<lambda($init_test_ns_task_group_task_group, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "queues_excess_and_all_complete"
-    make_closure .<lambda($init_test_84, 1)>, 0
+    make_closure .<lambda($init_test_ns_task_group_task_group, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "group_cancel_cancels_member"
-    make_closure .<lambda($init_test_84, 2)>, 0
+    make_closure .<lambda($init_test_ns_task_group_task_group, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "set_limit_updates_limit"
-    make_closure .<lambda($init_test_84, 3)>, 0
+    make_closure .<lambda($init_test_ns_task_group_task_group, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
