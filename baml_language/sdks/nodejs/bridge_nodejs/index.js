@@ -8,7 +8,7 @@
 "use strict";
 // index.ts — mirrors bridge_python/python_src/baml_py/__init__.py
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.Collector = exports.FunctionLog = exports.FunctionResult = exports.wrapNativeError = exports.BamlPanic = exports.BamlCancelledError = exports.BamlClientError = exports.BamlInvalidArgumentError = exports.BamlError = exports.BAML_PLACEHOLDER = exports.getTypeMap = exports.setTypeMap = exports.BamlTypeMap = exports.CtxManager = exports.decodeCallResult = exports.encodeCallArgs = exports.BamlStream = exports.BamlPdf = exports.BamlVideo = exports.BamlAudio = exports.BamlImage = exports._seedGenericMediaHandle = exports._seedFunctionRefHandle = exports.putHandleIntoTable = exports.takeHandleFromTable = exports.Usage = exports.Timing = exports.flushEvents = exports.getVersion = exports.getRuntime = exports.HostSpanManager = exports.BamlHandle = exports.AbortController = exports.BamlRuntime = void 0;
+exports.Collector = exports.FunctionLog = exports.FunctionResult = exports.wrapNativeError = exports.BamlPanic = exports.BamlCancelledError = exports.BamlClientError = exports.BamlInvalidArgumentError = exports.BamlError = exports.BAML_PLACEHOLDER = exports.UNSET = exports.defineInstanceFunction = exports.defineFunction = exports.getTypeMap = exports.setTypeMap = exports.BamlTypeMap = exports.CtxManager = exports.decodeCallResult = exports.encodeCallArgs = exports.BamlStream = exports.BamlPdf = exports.BamlVideo = exports.BamlAudio = exports.BamlImage = exports._seedGenericMediaHandle = exports._seedFunctionRefHandle = exports.putHandleIntoTable = exports.takeHandleFromTable = exports.Usage = exports.Timing = exports.flushEvents = exports.getVersion = exports.getRuntime = exports.HostSpanManager = exports.BamlHandle = exports.AbortController = exports.BamlRuntime = void 0;
 exports.initializeRuntime = initializeRuntime;
 exports.callFunctionSync = callFunctionSync;
 exports.callFunction = callFunction;
@@ -52,6 +52,11 @@ var typemap_1 = require("./typemap");
 Object.defineProperty(exports, "BamlTypeMap", { enumerable: true, get: function () { return typemap_1.BamlTypeMap; } });
 Object.defineProperty(exports, "setTypeMap", { enumerable: true, get: function () { return typemap_1.setTypeMap; } });
 Object.defineProperty(exports, "getTypeMap", { enumerable: true, get: function () { return typemap_1.getTypeMap; } });
+// Callable factories the generated SDK emits for every BAML function/method.
+var define_function_1 = require("./define_function");
+Object.defineProperty(exports, "defineFunction", { enumerable: true, get: function () { return define_function_1.defineFunction; } });
+Object.defineProperty(exports, "defineInstanceFunction", { enumerable: true, get: function () { return define_function_1.defineInstanceFunction; } });
+Object.defineProperty(exports, "UNSET", { enumerable: true, get: function () { return define_function_1.UNSET; } });
 /**
  * Phase-2 placeholder sentinel. Generated leaf bodies emit
  * `export const Foo: any = BAML_PLACEHOLDER;` until Phase 4 fills in the real

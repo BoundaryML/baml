@@ -16,10 +16,6 @@
 //! type aliases natively, so — unlike the Python port — there is no
 //! self-ref quoting or `defer_name_refs`.
 //!
-//! Phase 4 wires this into the emitters; until then the public surface is
-//! exercised only by the unit tests, hence the module-level allow.
-#![allow(dead_code)]
-
 use std::collections::BTreeSet;
 
 use baml_base::{Literal, MediaKind};
@@ -61,7 +57,19 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
         Ty::Uint8Array => TranslatedType::bare("Uint8Array"),
         Ty::BuiltinUnknown => TranslatedType::bare("unknown"),
         Ty::Unit => TranslatedType::bare("null"),
-        Ty::BamlOptions => TranslatedType::bare("baml.Options"),
+        Ty::BamlOptions => {
+            // `baml.Options` lives in the `baml` namespace; record the import.
+            let mut imports = BTreeSet::new();
+            imports.insert(LeafPath {
+                segments: vec!["baml".to_string()],
+            });
+            TranslatedType {
+                expr: "baml.Options".to_string(),
+                imports,
+            }
+        }
+        // `_BamlHandle` is the runtime opaque-handle type; Phase 4 emits the
+        // `import type { BamlHandle as _BamlHandle }` when this token appears.
         Ty::RustType => TranslatedType::bare("_BamlHandle"),
 
         Ty::Literal(Literal::Int(value)) => TranslatedType::bare(format!("{value}")),
@@ -105,10 +113,18 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
             let value = translate_ty(value, ctx);
             let mut imports = key.imports;
             imports.extend(value.imports);
-            TranslatedType {
-                expr: format!("Record<{}, {}>", key.expr, value.expr),
-                imports,
-            }
+            // Use an inline index/mapped type rather than `Record<K, V>`: a
+            // `Record` (itself a mapped-type alias) does NOT defer recursion,
+            // so a recursive alias like `type Json = … | Map<string, Json>`
+            // is rejected by tsc (TS2456). An inline `{ [key: string]: V }`
+            // does defer. Map keys are always `string` or an enum (validated
+            // upstream); enum keys become a partial mapped type.
+            let expr = if key.expr == "string" {
+                format!("{{ [key: string]: {} }}", value.expr)
+            } else {
+                format!("{{ [key in {}]?: {} }}", key.expr, value.expr)
+            };
+            TranslatedType { expr, imports }
         }
         Ty::Union(items) => {
             let mut imports = BTreeSet::new();
@@ -189,17 +205,36 @@ fn media_ref(bare: &str, ctx: &TranslateCtx) -> TranslatedType {
     render_name_ref(&name, ctx)
 }
 
-/// Render a class/enum/alias name reference. Same leaf or root-routed →
-/// bare name, no import. Cross-leaf → root-relative dotted path
-/// (`lorem.Resume`, `vendor.aws.s3.Bucket`, `stream_types.lorem.Resume`)
-/// plus the routed `LeafPath` in `imports`.
+/// The namespace alias Phase 4 binds to the package root, used to reach
+/// root-namespace symbols from a non-root leaf (`_bamlRoot.Foo`). Phase 4
+/// emits `import type * as _bamlRoot from "<rel-to-root>"` whenever the
+/// root `LeafPath` (empty segments) appears in `imports`.
+pub(crate) const ROOT_ALIAS: &str = "_bamlRoot";
+
+/// Render a class/enum/alias name reference.
+///
+/// - Same leaf → bare name, no import.
+/// - Root-namespace symbol referenced from a non-root leaf → `_bamlRoot.Name`
+///   plus the root `LeafPath` (empty segments) in `imports`.
+/// - Otherwise → root-relative dotted path (`lorem.Resume`,
+///   `vendor.aws.s3.Bucket`, `stream_types.lorem.Resume`) plus the routed
+///   `LeafPath` in `imports`.
 fn render_name_ref(name: &Name, ctx: &TranslateCtx) -> TranslatedType {
     let routed = route_class_ref(name);
-    if routed == ctx.current_leaf || routed.segments.is_empty() {
-        TranslatedType::bare(name.bare_name().to_string())
+    if routed == ctx.current_leaf {
+        return TranslatedType::bare(name.bare_name().to_string());
+    }
+    let mut imports = BTreeSet::new();
+    if routed.segments.is_empty() {
+        // Root-namespace symbol from a non-root leaf (the same-leaf case is
+        // caught above, so `ctx.current_leaf` is non-root here).
+        imports.insert(routed);
+        TranslatedType {
+            expr: format!("{ROOT_ALIAS}.{}", name.bare_name()),
+            imports,
+        }
     } else {
         let dotted = routed.segments.join(".");
-        let mut imports = BTreeSet::new();
         imports.insert(routed);
         TranslatedType {
             expr: format!("{dotted}.{}", name.bare_name()),
@@ -381,7 +416,7 @@ mod tests {
                 ty: Ty::BamlOptions,
                 ctx: ctx(&[]),
                 expected_expr: "baml.Options",
-                expected_imports: &[],
+                expected_imports: &[&["baml"]],
             },
             Case {
                 label: "rust_type",
@@ -512,7 +547,7 @@ mod tests {
                     value: boxed(Ty::Int),
                 },
                 ctx: ctx(&[]),
-                expected_expr: "Record<string, number>",
+                expected_expr: "{ [key: string]: number }",
                 expected_imports: &[],
             },
             Case {
@@ -541,6 +576,13 @@ mod tests {
                 label: "class_root_from_leaf",
                 ty: cls("user", &[], "Foo"),
                 ctx: ctx(&["lorem"]),
+                expected_expr: "_bamlRoot.Foo",
+                expected_imports: &[&[]],
+            },
+            Case {
+                label: "class_root_from_root",
+                ty: cls("user", &[], "Foo"),
+                ctx: ctx(&[]),
                 expected_expr: "Foo",
                 expected_imports: &[],
             },
@@ -638,7 +680,7 @@ mod tests {
                     value: boxed(Ty::TypeVar(BaseName::new("V"))),
                 },
                 ctx: ctx(&[]),
-                expected_expr: "Record<string, V>",
+                expected_expr: "{ [key: string]: V }",
                 expected_imports: &[],
             },
             // ── Callable ──

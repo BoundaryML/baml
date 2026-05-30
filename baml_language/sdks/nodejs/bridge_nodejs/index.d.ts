@@ -14,6 +14,7 @@ export { BamlStream } from './stream';
 export { encodeCallArgs, decodeCallResult } from './proto';
 export { CtxManager } from './ctx_manager';
 export { BamlTypeMap, setTypeMap, getTypeMap } from './typemap';
+export { defineFunction, defineInstanceFunction, UNSET } from './define_function';
 /**
  * Phase-2 placeholder sentinel. Generated leaf bodies emit
  * `export const Foo: any = BAML_PLACEHOLDER;` until Phase 4 fills in the real

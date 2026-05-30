@@ -32,6 +32,8 @@ export { encodeCallArgs, decodeCallResult } from './proto';
 export { CtxManager } from './ctx_manager';
 // Codegen support: typemap + placeholder sentinel + free runtime initializer.
 export { BamlTypeMap, setTypeMap, getTypeMap } from './typemap';
+// Callable factories the generated SDK emits for every BAML function/method.
+export { defineFunction, defineInstanceFunction, UNSET } from './define_function';
 
 /**
  * Phase-2 placeholder sentinel. Generated leaf bodies emit

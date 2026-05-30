@@ -3,11 +3,13 @@
 //! companion) per namespace directory, plus `_inlinedbaml.ts` and
 //! `_typemap.ts` at the SDK root.
 //!
-//! Phase 2 emits **scaffolding only** — every BAML top renders as a
-//! `// kind Name` comment plus an `export const Name: any = BAML_PLACEHOLDER;`
-//! stub (the five runtime-owned stdlib types re-export from
-//! `@boundaryml/baml-core` instead). Phase 3 wires `translate_ty`; Phase 4
-//! replaces stubs with real `export class` / `defineFunction(...)` bodies.
+//! Every BAML top renders to real TS: `export class` with a typed
+//! constructor, `export enum`, `export type` aliases, and
+//! `defineFunction(...)` / `defineInstanceFunction(...)` bindings (sync +
+//! async + companions). Types come from `translate_ty`; cross-leaf
+//! references resolve through namespace imports. The five runtime-owned
+//! stdlib types (media + `Stream`) re-export from `@boundaryml/baml-core`
+//! rather than getting a generated body.
 //!
 //! This is a near-1:1 port of `codegen_python`; the only structural
 //! difference is the in-directory filename (`__init__.py(i)` → `index.ts(.d.ts)`)
@@ -29,7 +31,7 @@ pub use baml_codegen_types::{NamingConvention, OutputType};
 
 use crate::{
     emit::{build_emitted, typemap_file::render_typemap_module},
-    leaf::{LeafBody, group_and_sort, render_leaf_body, render_leaf_body_dts},
+    leaf::{LeafBody, group_and_sort, render_index_dts, render_index_ts},
     routing::{LeafPath, route},
 };
 
@@ -124,24 +126,8 @@ pub fn to_source_code(
         let body = bodies.get(&leaf_path).unwrap_or(&empty_body);
         let is_root = dir.is_empty();
 
-        // `.ts` — container barrel (child re-exports) or root runtime init,
-        // then the leaf's own symbol placeholders.
-        let mut content = if is_root {
-            render_root_index(&kids)
-        } else {
-            render_package_index(&kids)
-        };
-        // The root preamble already imports BAML_PLACEHOLDER, so the root
-        // leaf body must not re-import it.
-        content.push_str(&render_leaf_body(body, !is_root));
-        out.insert(init_ts_path(dir), content);
-
-        // `.d.ts` — child re-exports only (no runtime init; `.d.ts` may
-        // not contain executable statements), then type-position
-        // placeholders.
-        let mut dts = render_index_dts(&kids);
-        dts.push_str(&render_leaf_body_dts(body));
-        out.insert(init_dts_path(dir), dts);
+        out.insert(init_ts_path(dir), render_index_ts(body, &kids, is_root));
+        out.insert(init_dts_path(dir), render_index_dts(body, &kids, is_root));
     }
 
     // Root-only data modules.
@@ -185,49 +171,6 @@ fn init_dts_path(dir: &[String]) -> PathBuf {
     }
     path.push("index.d.ts");
     path
-}
-
-/// Render a non-root container `index.ts`: child namespace re-exports
-/// ONLY. Never `export * from "./child"` (which would flatten the
-/// child's symbols into this parent).
-fn render_package_index(children: &BTreeSet<String>) -> String {
-    let mut out = String::new();
-    for c in children {
-        let _ = writeln!(out, "export * as {c} from \"./{c}\";");
-    }
-    out
-}
-
-/// Render the SDK root `index.ts`: wires up the runtime + typemap, then
-/// re-exports top-level child namespaces. The root does NOT build an
-/// aggregated `b` client object — the package module is the client.
-fn render_root_index(top_children: &BTreeSet<String>) -> String {
-    let mut out = String::new();
-    out.push_str(
-        "import { initializeRuntime, setTypeMap, BAML_PLACEHOLDER } from \"@boundaryml/baml-core\";\n",
-    );
-    out.push_str("import * as _inlinedbaml from \"./_inlinedbaml\";\n");
-    out.push_str("import { _TYPE_MAP } from \"./_typemap\";\n\n");
-    out.push_str("initializeRuntime(\"baml_src\", _inlinedbaml.FILES);\n");
-    out.push_str("setTypeMap(_TYPE_MAP);\n");
-    if !top_children.is_empty() {
-        out.push('\n');
-        for c in top_children {
-            let _ = writeln!(out, "export * as {c} from \"./{c}\";");
-        }
-    }
-    out
-}
-
-/// Render an `index.d.ts` (root or container alike): child namespace
-/// re-exports only. No runtime init — `.d.ts` may not carry executable
-/// statements.
-fn render_index_dts(children: &BTreeSet<String>) -> String {
-    let mut out = String::new();
-    for c in children {
-        let _ = writeln!(out, "export * as {c} from \"./{c}\";");
-    }
-    out
 }
 
 fn render_inlinedbaml(files: &[UserBamlFile]) -> String {
@@ -359,13 +302,11 @@ mod tests {
         }
         let root = &out[&PathBuf::from("index.ts")];
         assert!(root.contains(HEADER_LEN_MARKER));
-        assert!(root.contains(
-            "import { initializeRuntime, setTypeMap, BAML_PLACEHOLDER } from \"@boundaryml/baml-core\";"
-        ));
         assert!(root.contains("initializeRuntime(\"baml_src\", _inlinedbaml.FILES);"));
         assert!(root.contains("setTypeMap(_TYPE_MAP);"));
         assert!(root.contains("export * as baml from \"./baml\";"));
         assert!(!root.contains("export const b"));
+        assert!(!root.contains("BAML_PLACEHOLDER"));
     }
 
     #[test]
@@ -375,7 +316,9 @@ mod tests {
         pool.insert(n.clone(), class_sym(&n, 0));
         let out = emit_sdk(&pool);
         let leaf = &out[&PathBuf::from("lorem/index.ts")];
-        assert!(leaf.contains("// class Resume\nexport const Resume: any = BAML_PLACEHOLDER;\n"));
+        assert!(leaf.contains("export class Resume {"));
+        let dts = &out[&PathBuf::from("lorem/index.d.ts")];
+        assert!(dts.contains("export declare class Resume {"));
     }
 
     #[test]
@@ -385,9 +328,8 @@ mod tests {
         pool.insert(n.clone(), enum_sym(&n, 0));
         let out = emit_sdk(&pool);
         let leaf = &out[&PathBuf::from("ipsum/index.ts")];
-        assert!(
-            leaf.contains("// enum Sentiment\nexport const Sentiment: any = BAML_PLACEHOLDER;\n")
-        );
+        assert!(leaf.contains("export enum Sentiment {"));
+        assert!(leaf.contains("POSITIVE = \"POSITIVE\","));
     }
 
     #[test]
@@ -397,8 +339,12 @@ mod tests {
         pool.insert(n, func_sym(0));
         let out = emit_sdk(&pool);
         let leaf = &out[&PathBuf::from("lorem/index.ts")];
-        assert!(leaf.contains("export const extract_resume: any = BAML_PLACEHOLDER;"));
-        assert!(leaf.contains("export const extract_resume_async: any = BAML_PLACEHOLDER;"));
+        assert!(leaf.contains(
+            "export const extract_resume = defineFunction(\"user.lorem.extract_resume\", \"sync\", [\"x\"])"
+        ));
+        assert!(leaf.contains(
+            "export const extract_resume_async = defineFunction(\"user.lorem.extract_resume\", \"async\", [\"x\"])"
+        ));
     }
 
     #[test]
@@ -435,10 +381,7 @@ mod tests {
         assert!(
             out[&PathBuf::from("vendor/aws/index.ts")].contains("export * as s3 from \"./s3\";")
         );
-        assert!(
-            out[&PathBuf::from("vendor/aws/s3/index.ts")]
-                .contains("export const Bucket: any = BAML_PLACEHOLDER;")
-        );
+        assert!(out[&PathBuf::from("vendor/aws/s3/index.ts")].contains("export class Bucket {"));
     }
 
     #[test]
@@ -448,7 +391,7 @@ mod tests {
         pool.insert(n.clone(), class_sym(&n, 0));
         let out = emit_sdk(&pool);
         let root = &out[&PathBuf::from("index.ts")];
-        assert!(root.contains("export const Foo: any = BAML_PLACEHOLDER;"));
+        assert!(root.contains("export class Foo {"));
         assert!(!root.contains("export const b"));
     }
 
@@ -459,7 +402,7 @@ mod tests {
         pool.insert(n.clone(), class_sym(&n, 0));
         let out = emit_sdk(&pool);
         let leaf = &out[&PathBuf::from("stream_types/lorem/index.ts")];
-        assert!(leaf.contains("export const Resume: any = BAML_PLACEHOLDER;"));
+        assert!(leaf.contains("export class Resume {"));
         let typemap = &out[&PathBuf::from("_typemap.ts")];
         assert!(typemap.contains(
             "\"user.lorem.Resume$stream\": [\"baml_sdk/stream_types/lorem\", \"Resume\"],"
