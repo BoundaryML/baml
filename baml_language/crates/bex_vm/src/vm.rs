@@ -4449,7 +4449,6 @@ impl BexVm {
                         );
                         let visible_arity = full_arity.saturating_sub(1);
                         let receiver = bm.receiver;
-                        let fn_ptr = bm.function;
                         let _popped = self.stack.ensure_pop();
                         let args_offset = self
                             .stack
@@ -4458,8 +4457,15 @@ impl BexVm {
                             .ok_or(VmInternalError::NotEnoughItemsOnStack(visible_arity))?;
                         self.stack.insert(args_offset, receiver);
                         let locals_offset = StackIndex::from_raw(args_offset);
+                        // Pass the BoundMethod pointer (not its inner function) so
+                        // `execute_call_from_locals_offset` seeds the receiver's
+                        // `class_type_args` into the new frame — generic instance
+                        // methods invoked through a bound-method value would
+                        // otherwise start with an empty class-type-arg prefix. The
+                        // receiver is already on the stack, and the helper resolves
+                        // the inner function itself without re-inserting it.
                         if let Some(state) = self.execute_call_from_locals_offset(
-                            fn_ptr,
+                            callee_ptr,
                             locals_offset,
                             full_arity,
                             frame_idx,

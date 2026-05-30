@@ -1657,11 +1657,11 @@ fn return_type_needs_alloc(ty: &BamlType) -> bool {
         BamlType::String
         | BamlType::Uint8Array
         | BamlType::Bigint
+        | BamlType::Float
         | BamlType::List(_)
         | BamlType::Map(_, _) => true,
         BamlType::Optional(inner) => return_type_needs_alloc(inner),
         BamlType::Int
-        | BamlType::Float
         | BamlType::Bool
         | BamlType::Null
         | BamlType::Generic(_)
