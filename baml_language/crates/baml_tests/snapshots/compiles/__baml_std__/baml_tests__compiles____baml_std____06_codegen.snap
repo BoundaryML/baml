@@ -2273,7 +2273,7 @@ function baml.llm.Client.build_attempt_with_state(self: null, planner_state: bam
   L1:
     load_var self
     load_field .sub_clients
-    call baml.Array.length
+    container_len
     load_const 0
     cmp_int_op ==
     pop_jump_if_false L2
@@ -2286,14 +2286,12 @@ function baml.llm.Client.build_attempt_with_state(self: null, planner_state: bam
     load_var self
     load_field .counter
     store_var _28
-    load_var self
-    load_field .sub_clients
-    call baml.Array.length
-    store_var _29
     load_var planner_state
     load_var _27
     load_var _28
-    load_var _29
+    load_var self
+    load_field .sub_clients
+    container_len
     call baml.llm.PlannerState.rr_pick_index
     store_var idx
     load_var self
@@ -2320,7 +2318,7 @@ function baml.llm.Client.build_attempt_with_state(self: null, planner_state: bam
   L5:
     load_var __for_idx
     load_var _9
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L6
     jump L7
@@ -2342,7 +2340,7 @@ function baml.llm.Client.build_attempt_with_state(self: null, planner_state: bam
   L8:
     load_var __for_idx_1
     load_var _15
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L9
     jump L10
@@ -2475,7 +2473,7 @@ function baml.llm.Client.build_plan_with_state(self: null, planner_state: baml.l
   L9:
     load_var __for_idx
     load_var _26
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L10
     jump L11
@@ -2525,17 +2523,13 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: baml.llm.Exec
   L1:
     load_var self
     load_field .sub_clients
-    call baml.Array.length
+    container_len
     load_const 0
     cmp_int_op ==
     pop_jump_if_false L2
     jump L3
 
   L2:
-    load_var self
-    load_field .sub_clients
-    call baml.Array.length
-    pop 1
     load_var self
     copy 0
     load_field .counter
@@ -2562,7 +2556,7 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: baml.llm.Exec
   L5:
     load_var __for_idx
     load_var _35
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L6
     jump L7
@@ -2698,17 +2692,13 @@ function baml.llm.Client.execute_once_stream(self: null, context: baml.llm.Execu
   L1:
     load_var self
     load_field .sub_clients
-    call baml.Array.length
+    container_len
     load_const 0
     cmp_int_op ==
     pop_jump_if_false L2
     jump L3
 
   L2:
-    load_var self
-    load_field .sub_clients
-    call baml.Array.length
-    pop 1
     load_var self
     copy 0
     load_field .counter
@@ -2735,7 +2725,7 @@ function baml.llm.Client.execute_once_stream(self: null, context: baml.llm.Execu
   L5:
     load_var __for_idx
     load_var _22
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L6
     jump L7
@@ -3328,7 +3318,7 @@ function baml.llm.PlannerState.rr_local_offset(self: null, client_name: string) 
   L0:
     load_var __for_idx
     load_var _4
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2

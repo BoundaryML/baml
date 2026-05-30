@@ -70,7 +70,7 @@ function json_parse_stringify.parse_array_len() -> int {
 
   L1:
     load_var j
-    call baml.Array.length
+    container_len
 
   L2:
     return
@@ -128,7 +128,7 @@ function json_parse_stringify.parse_then_match_array_len() -> int {
 
   L1:
     load_var j
-    call baml.Array.length
+    container_len
 
   L2:
     return

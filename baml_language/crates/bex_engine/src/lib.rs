@@ -85,10 +85,10 @@ use async_trait::async_trait;
 use bex_events::{EventKind, FunctionEnd, FunctionEvent, FunctionStart, SpanContext};
 pub use bex_events::{HostSpanContext, RuntimeEvent, SpanId};
 pub use bex_external_types::{BexExternalValue, Ty, TypeName, UnionMetadata};
-use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
 pub use bex_heap::{ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapPermit};
+use bex_heap::{BexHeap, TlabHolder};
 use bex_vm::{BexVm, SpanNotification, VmExecState};
 use bex_vm_types::{
     FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp, Value,
@@ -1257,11 +1257,7 @@ impl BexEngine {
         }
 
         let (function_index, kind) = self.lookup_function(function_name)?;
-        // Only bytecode functions can be invoked as engine entry points.
-        // Sysops + `$rust_function` natives reach their handlers through
-        // an enclosing bytecode frame's `Call` / `YieldToCall` — there's
-        // no frame for them to return into at the top level.
-        if !matches!(kind, bex_vm_types::FunctionKind::Bytecode) {
+        if matches!(kind, bex_vm_types::FunctionKind::NativeUnresolved) {
             return Err(EngineError::NotInvokableAsEntry {
                 name: function_name.to_string(),
                 kind: format!("{kind:?}"),
@@ -1396,7 +1392,7 @@ impl BexEngine {
                 let collector_ref = bex_vm_types::CollectorRef(
                     Arc::clone(c) as Arc<dyn std::any::Any + Send + Sync>
                 );
-                thread.vm.alloc_collector(collector_ref)
+                Value::object(thread.vm.alloc_collector(collector_ref))
             })
             .collect();
 

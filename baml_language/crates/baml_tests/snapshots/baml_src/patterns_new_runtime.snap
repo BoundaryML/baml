@@ -750,7 +750,7 @@ function patterns_new_runtime.exact_length(xs: int[]) -> int {
     is_type int[]
     pop_jump_if_false L0
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 0
     cmp_int_op ==
     pop_jump_if_false L0
@@ -761,7 +761,7 @@ function patterns_new_runtime.exact_length(xs: int[]) -> int {
     is_type int[]
     pop_jump_if_false L1
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op ==
     pop_jump_if_false L1
@@ -772,7 +772,7 @@ function patterns_new_runtime.exact_length(xs: int[]) -> int {
     is_type int[]
     pop_jump_if_false L2
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 2
     cmp_int_op ==
     pop_jump_if_false L2
@@ -806,7 +806,7 @@ function patterns_new_runtime.from_array_boxes(boxes: patterns_new_runtime.BoxT<
   L0:
     load_var __for_idx
     load_var boxes
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2
@@ -1058,7 +1058,7 @@ function patterns_new_runtime.pick_grid(g: patterns_new_runtime.Grid1) -> int {
     is_type patterns_new_runtime.Cell1[]
     pop_jump_if_false L0
     load_var _3
-    call baml.Array.length
+    container_len
     load_const 2
     cmp_int_op >=
     pop_jump_if_false L0
@@ -1074,7 +1074,7 @@ function patterns_new_runtime.pick_grid(g: patterns_new_runtime.Grid1) -> int {
     is_type int[]
     pop_jump_if_false L0
     load_var _11
-    call baml.Array.length
+    container_len
     load_const 2
     cmp_int_op >=
     pop_jump_if_false L0
@@ -1095,13 +1095,13 @@ function patterns_new_runtime.pick_grid(g: patterns_new_runtime.Grid1) -> int {
     is_type patterns_new_runtime.Cell1[]
     pop_jump_if_false L1
     load_var _29
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L1
     load_var _29
     load_var _29
-    call baml.Array.length
+    container_len
     load_const 1
     sub_int
     load_array_element
@@ -1114,13 +1114,13 @@ function patterns_new_runtime.pick_grid(g: patterns_new_runtime.Grid1) -> int {
     is_type int[]
     pop_jump_if_false L1
     load_var _37
-    call baml.Array.length
+    container_len
     load_const 2
     cmp_int_op >=
     pop_jump_if_false L1
     load_var _37
     load_var _37
-    call baml.Array.length
+    container_len
     load_const 2
     sub_int
     load_array_element
@@ -1137,14 +1137,14 @@ function patterns_new_runtime.pick_grid(g: patterns_new_runtime.Grid1) -> int {
     load_field .cells
     store_var_load_var _47
     load_var _47
-    call baml.Array.length
+    container_len
     load_const 1
     sub_int
     load_array_element
     load_field .row
     store_var_load_var _51
     load_var _51
-    call baml.Array.length
+    container_len
     load_const 2
     sub_int
     load_array_element
@@ -1178,7 +1178,7 @@ function patterns_new_runtime.pick_pair(p: patterns_new_runtime.Pair1 | patterns
     is_type int[]
     pop_jump_if_false L0
     load_var _5
-    call baml.Array.length
+    container_len
     load_const 2
     cmp_int_op >=
     pop_jump_if_false L0
@@ -1199,7 +1199,7 @@ function patterns_new_runtime.pick_pair(p: patterns_new_runtime.Pair1 | patterns
     is_type int[]
     pop_jump_if_false L1
     load_var _20
-    call baml.Array.length
+    container_len
     load_const 3
     cmp_int_op >=
     pop_jump_if_false L1
@@ -1220,13 +1220,13 @@ function patterns_new_runtime.pick_pair(p: patterns_new_runtime.Pair1 | patterns
     is_type int[]
     pop_jump_if_false L2
     load_var _36
-    call baml.Array.length
+    container_len
     load_const 3
     cmp_int_op >=
     pop_jump_if_false L2
     load_var _36
     load_var _36
-    call baml.Array.length
+    container_len
     load_const 3
     sub_int
     load_array_element
@@ -1239,7 +1239,7 @@ function patterns_new_runtime.pick_pair(p: patterns_new_runtime.Pair1 | patterns
     is_type int[][]
     pop_jump_if_false L3
     load_var p
-    call baml.Array.length
+    container_len
     load_const 2
     cmp_int_op >=
     pop_jump_if_false L3
@@ -1250,13 +1250,13 @@ function patterns_new_runtime.pick_pair(p: patterns_new_runtime.Pair1 | patterns
     is_type int[]
     pop_jump_if_false L3
     load_var _62
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L3
     load_var _62
     load_var _62
-    call baml.Array.length
+    container_len
     load_const 1
     sub_int
     load_array_element
@@ -1274,7 +1274,7 @@ function patterns_new_runtime.pick_pair(p: patterns_new_runtime.Pair1 | patterns
     load_array_element
     store_var_load_var _72
     load_var _72
-    call baml.Array.length
+    container_len
     load_const 1
     sub_int
     load_array_element
@@ -1285,7 +1285,7 @@ function patterns_new_runtime.pick_pair(p: patterns_new_runtime.Pair1 | patterns
     load_field .0
     store_var_load_var _48
     load_var _48
-    call baml.Array.length
+    container_len
     load_const 3
     sub_int
     load_array_element
@@ -1319,7 +1319,7 @@ function patterns_new_runtime.pick_sheet(s: patterns_new_runtime.Sheet1) -> int 
     is_type patterns_new_runtime.Row1[]
     pop_jump_if_false L0
     load_var _3
-    call baml.Array.length
+    container_len
     load_const 2
     cmp_int_op >=
     pop_jump_if_false L0
@@ -1335,7 +1335,7 @@ function patterns_new_runtime.pick_sheet(s: patterns_new_runtime.Sheet1) -> int 
     is_type patterns_new_runtime.Slot1[]
     pop_jump_if_false L0
     load_var _11
-    call baml.Array.length
+    container_len
     load_const 2
     cmp_int_op >=
     pop_jump_if_false L0
@@ -1351,7 +1351,7 @@ function patterns_new_runtime.pick_sheet(s: patterns_new_runtime.Sheet1) -> int 
     is_type patterns_new_runtime.Atom1[]
     pop_jump_if_false L0
     load_var _19
-    call baml.Array.length
+    container_len
     load_const 2
     cmp_int_op >=
     pop_jump_if_false L0
@@ -1377,13 +1377,13 @@ function patterns_new_runtime.pick_sheet(s: patterns_new_runtime.Sheet1) -> int 
     is_type patterns_new_runtime.Row1[]
     pop_jump_if_false L1
     load_var _44
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L1
     load_var _44
     load_var _44
-    call baml.Array.length
+    container_len
     load_const 1
     sub_int
     load_array_element
@@ -1396,13 +1396,13 @@ function patterns_new_runtime.pick_sheet(s: patterns_new_runtime.Sheet1) -> int 
     is_type patterns_new_runtime.Slot1[]
     pop_jump_if_false L1
     load_var _52
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L1
     load_var _52
     load_var _52
-    call baml.Array.length
+    container_len
     load_const 1
     sub_int
     load_array_element
@@ -1415,13 +1415,13 @@ function patterns_new_runtime.pick_sheet(s: patterns_new_runtime.Sheet1) -> int 
     is_type patterns_new_runtime.Atom1[]
     pop_jump_if_false L1
     load_var _60
-    call baml.Array.length
+    container_len
     load_const 2
     cmp_int_op >=
     pop_jump_if_false L1
     load_var _60
     load_var _60
-    call baml.Array.length
+    container_len
     load_const 2
     sub_int
     load_array_element
@@ -1443,21 +1443,21 @@ function patterns_new_runtime.pick_sheet(s: patterns_new_runtime.Sheet1) -> int 
     load_field .rows
     store_var_load_var _72
     load_var _72
-    call baml.Array.length
+    container_len
     load_const 1
     sub_int
     load_array_element
     load_field .slots
     store_var_load_var _76
     load_var _76
-    call baml.Array.length
+    container_len
     load_const 1
     sub_int
     load_array_element
     load_field .atoms
     store_var_load_var _80
     load_var _80
-    call baml.Array.length
+    container_len
     load_const 2
     sub_int
     load_array_element
@@ -1486,7 +1486,7 @@ function patterns_new_runtime.prefix_length(xs: int[]) -> int {
     is_type int[]
     pop_jump_if_false L0
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L0
@@ -1672,7 +1672,7 @@ function patterns_new_runtime.score_bool_slice(xs: bool[]) -> int {
     is_type bool[]
     pop_jump_if_false L0
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L0
@@ -1689,13 +1689,13 @@ function patterns_new_runtime.score_bool_slice(xs: bool[]) -> int {
     is_type bool[]
     pop_jump_if_false L1
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L1
     load_var xs
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 1
     sub_int
     load_array_element
@@ -1709,7 +1709,7 @@ function patterns_new_runtime.score_bool_slice(xs: bool[]) -> int {
     is_type bool[]
     pop_jump_if_false L2
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 0
     cmp_int_op ==
     pop_jump_if_false L2
@@ -1775,7 +1775,7 @@ function patterns_new_runtime.score_empty_prefix_rest(xs: int[]) -> int {
     is_type int[]
     pop_jump_if_false L0
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 0
     cmp_int_op ==
     pop_jump_if_false L0
@@ -1802,7 +1802,7 @@ function patterns_new_runtime.score_exact_length_45() -> int {
     is_type int[]
     pop_jump_if_false L0
     load_var _1
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op ==
     pop_jump_if_false L0
@@ -1818,7 +1818,7 @@ function patterns_new_runtime.score_exact_length_45() -> int {
     is_type int[]
     pop_jump_if_false L1
     load_var _1
-    call baml.Array.length
+    container_len
     load_const 2
     cmp_int_op ==
     pop_jump_if_false L1
@@ -2005,7 +2005,7 @@ function patterns_new_runtime.score_int_string_array(v: int[] | string[]) -> int
     is_type int[]
     pop_jump_if_false L0
     load_var v
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op ==
     pop_jump_if_false L0
@@ -2038,7 +2038,7 @@ function patterns_new_runtime.score_ints(xs: int[]) -> int {
     is_type int[]
     pop_jump_if_false L0
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 2
     cmp_int_op >=
     pop_jump_if_false L0
@@ -2061,7 +2061,7 @@ function patterns_new_runtime.score_ints(xs: int[]) -> int {
     is_type int[]
     pop_jump_if_false L1
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L1
@@ -2108,7 +2108,7 @@ function patterns_new_runtime.score_opat(input: patterns_new_runtime.OPat_A | pa
     is_type int[]
     pop_jump_if_false L1
     load_var _8
-    call baml.Array.length
+    container_len
     load_const 2
     cmp_int_op ==
     pop_jump_if_false L1
@@ -2143,7 +2143,7 @@ function patterns_new_runtime.score_or_array_refine(v: int[] | string[]) -> int 
     is_type int[]
     pop_jump_if_false L0
     load_var v
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op ==
     pop_jump_if_false L0
@@ -2159,7 +2159,7 @@ function patterns_new_runtime.score_or_array_refine(v: int[] | string[]) -> int 
     is_type int[]
     pop_jump_if_false L1
     load_var v
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L1
@@ -2202,7 +2202,7 @@ function patterns_new_runtime.score_or_nested_2d(rows: int[][]) -> int {
     is_type int[][]
     pop_jump_if_false L0
     load_var rows
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op ==
     pop_jump_if_false L0
@@ -2213,7 +2213,7 @@ function patterns_new_runtime.score_or_nested_2d(rows: int[][]) -> int {
     is_type int[]
     pop_jump_if_false L0
     load_var _6
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L0
@@ -2229,7 +2229,7 @@ function patterns_new_runtime.score_or_nested_2d(rows: int[][]) -> int {
     is_type int[][]
     pop_jump_if_false L1
     load_var rows
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L1
@@ -2240,7 +2240,7 @@ function patterns_new_runtime.score_or_nested_2d(rows: int[][]) -> int {
     is_type int[]
     pop_jump_if_false L1
     load_var _22
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L1
@@ -2279,7 +2279,7 @@ function patterns_new_runtime.score_or_share(xs: int[]) -> int {
     is_type int[]
     pop_jump_if_false L0
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op ==
     pop_jump_if_false L0
@@ -2295,7 +2295,7 @@ function patterns_new_runtime.score_or_share(xs: int[]) -> int {
     is_type int[]
     pop_jump_if_false L1
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L1
@@ -2333,13 +2333,13 @@ function patterns_new_runtime.score_outer_chain(xs: int[][]) -> int {
     is_type int[][]
     pop_jump_if_false L0
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 2
     cmp_int_op >=
     pop_jump_if_false L0
     load_var xs
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 2
     sub_int
     load_array_element
@@ -2347,7 +2347,7 @@ function patterns_new_runtime.score_outer_chain(xs: int[][]) -> int {
     pop_jump_if_false L0
     load_var xs
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 1
     sub_int
     load_array_element
@@ -2361,14 +2361,14 @@ function patterns_new_runtime.score_outer_chain(xs: int[][]) -> int {
 
   L1:
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 2
     sub_int
     load_const 100
     mul_int
     load_var xs
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 2
     sub_int
     load_array_element
@@ -2379,7 +2379,7 @@ function patterns_new_runtime.score_outer_chain(xs: int[][]) -> int {
     add_int
     load_var xs
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 1
     sub_int
     load_array_element
@@ -2493,7 +2493,7 @@ function patterns_new_runtime.score_prefix_two_suffix(xs: int[]) -> int {
     is_type int[]
     pop_jump_if_false L0
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 3
     cmp_int_op >=
     pop_jump_if_false L0
@@ -2504,7 +2504,7 @@ function patterns_new_runtime.score_prefix_two_suffix(xs: int[]) -> int {
     pop_jump_if_false L0
     load_var xs
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 2
     sub_int
     load_array_element
@@ -2512,7 +2512,7 @@ function patterns_new_runtime.score_prefix_two_suffix(xs: int[]) -> int {
     pop_jump_if_false L0
     load_var xs
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 1
     sub_int
     load_array_element
@@ -2532,7 +2532,7 @@ function patterns_new_runtime.score_prefix_two_suffix(xs: int[]) -> int {
     mul_int
     load_var xs
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 2
     sub_int
     load_array_element
@@ -2541,7 +2541,7 @@ function patterns_new_runtime.score_prefix_two_suffix(xs: int[]) -> int {
     add_int
     load_var xs
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 1
     sub_int
     load_array_element
@@ -2578,7 +2578,7 @@ function patterns_new_runtime.score_rest_copy(xs: int[]) -> int {
     is_type int[]
     pop_jump_if_false L0
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L0
@@ -2595,14 +2595,12 @@ function patterns_new_runtime.score_rest_copy(xs: int[]) -> int {
 
   L1:
     load_var xs
-    call baml.Array.length
-    store_var _14
-    load_var xs
     load_const 0
     load_array_element
     load_const 10
     mul_int
-    load_var _14
+    load_var xs
+    container_len
     load_const 1
     sub_int
     add_int
@@ -2616,7 +2614,7 @@ function patterns_new_runtime.score_strings_len(xs: string[]) -> int {
     is_type string[]
     pop_jump_if_false L0
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L0
@@ -2633,7 +2631,7 @@ function patterns_new_runtime.score_strings_len(xs: string[]) -> int {
 
   L1:
     load_var xs
-    call baml.Array.length
+    container_len
 
   L2:
     return
@@ -2644,13 +2642,13 @@ function patterns_new_runtime.score_suffix_rest(xs: int[]) -> int {
     is_type int[]
     pop_jump_if_false L0
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L0
     load_var xs
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 1
     sub_int
     load_array_element
@@ -2664,14 +2662,14 @@ function patterns_new_runtime.score_suffix_rest(xs: int[]) -> int {
 
   L1:
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 1
     sub_int
     load_const 10
     mul_int
     load_var xs
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 1
     sub_int
     load_array_element
@@ -2686,7 +2684,7 @@ function patterns_new_runtime.score_team2(teams: patterns_new_runtime.Team2[]) -
     is_type patterns_new_runtime.Team2[]
     pop_jump_if_false L0
     load_var teams
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op ==
     pop_jump_if_false L0
@@ -2702,7 +2700,7 @@ function patterns_new_runtime.score_team2(teams: patterns_new_runtime.Team2[]) -
     is_type int[]
     pop_jump_if_false L0
     load_var _8
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L0
@@ -2718,7 +2716,7 @@ function patterns_new_runtime.score_team2(teams: patterns_new_runtime.Team2[]) -
     is_type patterns_new_runtime.Team2[]
     pop_jump_if_false L1
     load_var teams
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L1
@@ -2734,7 +2732,7 @@ function patterns_new_runtime.score_team2(teams: patterns_new_runtime.Team2[]) -
     is_type int[]
     pop_jump_if_false L1
     load_var _27
-    call baml.Array.length
+    container_len
     load_const 2
     cmp_int_op >=
     pop_jump_if_false L1
@@ -2780,7 +2778,7 @@ function patterns_new_runtime.score_team3(team: patterns_new_runtime.Team3) -> i
     is_type int[]
     pop_jump_if_false L0
     load_var _3
-    call baml.Array.length
+    container_len
     load_const 0
     cmp_int_op ==
     pop_jump_if_false L0
@@ -2810,7 +2808,7 @@ function patterns_new_runtime.score_team4(team: patterns_new_runtime.Team4) -> i
     is_type int[]
     pop_jump_if_false L0
     load_var _3
-    call baml.Array.length
+    container_len
     load_const 2
     cmp_int_op >=
     pop_jump_if_false L0
@@ -2840,7 +2838,7 @@ function patterns_new_runtime.score_two_prefix(xs: int[]) -> int {
     is_type int[]
     pop_jump_if_false L0
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 3
     cmp_int_op >=
     pop_jump_if_false L0
@@ -2856,7 +2854,7 @@ function patterns_new_runtime.score_two_prefix(xs: int[]) -> int {
     pop_jump_if_false L0
     load_var xs
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 1
     sub_int
     load_array_element
@@ -2882,7 +2880,7 @@ function patterns_new_runtime.score_two_prefix(xs: int[]) -> int {
     add_int
     load_var xs
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 1
     sub_int
     load_array_element
@@ -2897,7 +2895,7 @@ function patterns_new_runtime.score_user_score(users: patterns_new_runtime.UserS
     is_type patterns_new_runtime.UserScore[]
     pop_jump_if_false L0
     load_var users
-    call baml.Array.length
+    container_len
     load_const 0
     cmp_int_op ==
     pop_jump_if_false L0
@@ -2905,15 +2903,13 @@ function patterns_new_runtime.score_user_score(users: patterns_new_runtime.UserS
 
   L0:
     load_var users
-    call baml.Array.length
-    store_var _12
-    load_var users
     load_const 0
     load_array_element
     load_field .score
     load_const 10
     mul_int
-    load_var _12
+    load_var users
+    container_len
     load_const 1
     sub_int
     add_int
@@ -2931,7 +2927,7 @@ function patterns_new_runtime.score_wildcard_second(xs: int[]) -> int {
     is_type int[]
     pop_jump_if_false L0
     load_var xs
-    call baml.Array.length
+    container_len
     load_const 2
     cmp_int_op >=
     pop_jump_if_false L0
@@ -2960,7 +2956,7 @@ function patterns_new_runtime.score_wildcard_user(users: patterns_new_runtime.Us
     is_type patterns_new_runtime.UserScore[]
     pop_jump_if_false L0
     load_var users
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L0
@@ -2995,7 +2991,7 @@ function patterns_new_runtime.score_wrap2(v: int[][] | patterns_new_runtime.Wrap
     is_type int[][]
     pop_jump_if_false L0
     load_var v
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L0
@@ -3006,7 +3002,7 @@ function patterns_new_runtime.score_wrap2(v: int[][] | patterns_new_runtime.Wrap
     is_type int[]
     pop_jump_if_false L0
     load_var _6
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L0
@@ -3027,13 +3023,13 @@ function patterns_new_runtime.score_wrap2(v: int[][] | patterns_new_runtime.Wrap
     is_type int[][]
     pop_jump_if_false L1
     load_var _19
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L1
     load_var _19
     load_var _19
-    call baml.Array.length
+    container_len
     load_const 1
     sub_int
     load_array_element
@@ -3041,7 +3037,7 @@ function patterns_new_runtime.score_wrap2(v: int[][] | patterns_new_runtime.Wrap
     is_type int[]
     pop_jump_if_false L1
     load_var _25
-    call baml.Array.length
+    container_len
     load_const 2
     cmp_int_op >=
     pop_jump_if_false L1
@@ -3061,7 +3057,7 @@ function patterns_new_runtime.score_wrap2(v: int[][] | patterns_new_runtime.Wrap
     load_field .0
     store_var_load_var _33
     load_var _33
-    call baml.Array.length
+    container_len
     load_const 1
     sub_int
     load_array_element
@@ -3192,7 +3188,7 @@ function patterns_new_runtime.test_for_class_binds_inner_zip() -> int {
   L0:
     load_var __for_idx
     load_var _12
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2
@@ -3244,7 +3240,7 @@ function patterns_new_runtime.test_for_deep_class_capture_fresh() -> int {
   L0:
     load_var __for_idx
     load_var _12
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2
@@ -3322,7 +3318,7 @@ function patterns_new_runtime.test_for_deep_class_sums() -> int {
   L0:
     load_var __for_idx
     load_var _12
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2
@@ -3368,7 +3364,7 @@ function patterns_new_runtime.test_for_inside_class_destruct() -> int {
   L0:
     load_var __for_idx
     load_var _9
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2
@@ -3382,8 +3378,10 @@ function patterns_new_runtime.test_for_inside_class_destruct() -> int {
     load_var __for_idx
     load_array_element
     load_field .scores
-    call baml.Array.length
+    container_len
+    store_var _16
     load_var total
+    load_var _16
     add_int
     store_var total
     load_var __for_idx
@@ -3410,7 +3408,7 @@ function patterns_new_runtime.test_for_let_chain_alias_capture() -> int {
   L0:
     load_var __for_idx
     load_var _2
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2
@@ -3479,7 +3477,7 @@ function patterns_new_runtime.test_for_let_chain_of_bindings() -> int {
   L0:
     load_var __for_idx
     load_var _2
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2
@@ -3524,7 +3522,7 @@ function patterns_new_runtime.test_for_let_chain_trailing_type() -> int {
   L0:
     load_var __for_idx
     load_var _2
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2
@@ -3538,11 +3536,8 @@ function patterns_new_runtime.test_for_let_chain_trailing_type() -> int {
     load_var __for_idx
     load_array_element
     store_var_load_var row
-    call baml.Array.length
+    container_len
     store_var _13
-    load_var row
-    call baml.Array.length
-    store_var _18
     load_var total
     load_var _13
     load_const 100
@@ -3553,7 +3548,8 @@ function patterns_new_runtime.test_for_let_chain_trailing_type() -> int {
     load_const 10
     mul_int
     add_int
-    load_var _18
+    load_var row
+    container_len
     add_int
     add_int
     store_var total
@@ -3579,7 +3575,7 @@ function patterns_new_runtime.test_for_let_or_same_binding() -> int {
   L0:
     load_var __for_idx
     load_var _2
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2
@@ -3632,7 +3628,7 @@ function patterns_new_runtime.test_for_let_or_six_bindings() -> int {
   L0:
     load_var __for_idx
     load_var _2
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2
@@ -3732,7 +3728,7 @@ function patterns_new_runtime.test_for_nested_rest_irrefutable() -> int {
   L0:
     load_var __for_idx
     load_var _2
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2
@@ -3776,7 +3772,7 @@ function patterns_new_runtime.test_for_rest_capture_fresh_cell() -> int {
   L0:
     load_var __for_idx
     load_var _6
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2
@@ -3846,7 +3842,7 @@ function patterns_new_runtime.test_for_rest_sums_rows() -> int {
   L0:
     load_var __for_idx
     load_var _6
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2
@@ -3859,8 +3855,10 @@ function patterns_new_runtime.test_for_rest_sums_rows() -> int {
     load_var _6
     load_var __for_idx
     load_array_element
-    call baml.Array.length
+    container_len
+    store_var _12
     load_var total
+    load_var _12
     add_int
     store_var total
     load_var __for_idx
@@ -3887,7 +3885,7 @@ function patterns_new_runtime.test_for_rest_wildcard_irrefutable() -> int {
   L0:
     load_var __for_idx
     load_var _6
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2
@@ -4068,7 +4066,7 @@ function patterns_new_runtime.test_match_alphabet() -> int {
     is_type int[]
     pop_jump_if_false L0
     load_var _1
-    call baml.Array.length
+    container_len
     load_const 26
     cmp_int_op ==
     pop_jump_if_false L0
@@ -4325,7 +4323,7 @@ function patterns_new_runtime.test_match_array_shadows_outer() -> int {
     is_type int[]
     pop_jump_if_false L0
     load_var _3
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L0
@@ -4407,7 +4405,7 @@ function patterns_new_runtime.test_match_chain_trailing_binding() -> int {
     is_type int[][]
     pop_jump_if_false L0
     load_var _1
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op ==
     pop_jump_if_false L0
@@ -4418,7 +4416,7 @@ function patterns_new_runtime.test_match_chain_trailing_binding() -> int {
     is_type int[]
     pop_jump_if_false L0
     load_var _8
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op ==
     pop_jump_if_false L0
@@ -4548,7 +4546,7 @@ function patterns_new_runtime.test_match_nested_array_projects_inner() -> int {
     is_type int[][]
     pop_jump_if_false L0
     load_var _1
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op ==
     pop_jump_if_false L0
@@ -4559,7 +4557,7 @@ function patterns_new_runtime.test_match_nested_array_projects_inner() -> int {
     is_type int[]
     pop_jump_if_false L0
     load_var _7
-    call baml.Array.length
+    container_len
     load_const 1
     cmp_int_op ==
     pop_jump_if_false L0
@@ -4674,7 +4672,7 @@ function patterns_new_runtime.test_match_wildcard_chained_array() -> int {
     load_const 5
     load_const 6
     alloc_array 3
-    call baml.Array.length
+    container_len
     return
 }
 

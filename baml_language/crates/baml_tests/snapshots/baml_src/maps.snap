@@ -199,7 +199,7 @@ function maps.map_clear_already_empty_main() -> int {
     call baml.Map.clear
     pop 1
     load_var m
-    call baml.Map.length
+    container_len
     return
 }
 
@@ -235,7 +235,7 @@ function maps.map_clear_removes_all_main() -> int {
     call baml.Map.clear
     pop 1
     load_var m
-    call baml.Map.length
+    container_len
     return
 }
 
@@ -362,7 +362,7 @@ function maps.map_delete_shrinks_length_main() -> int {
     call baml.Map.delete
     pop 1
     load_var m
-    call baml.Map.length
+    container_len
     return
 }
 
@@ -410,7 +410,7 @@ function maps.map_get_or_insert_grows_length_main() -> int {
     call baml.Map.get_or_insert
     pop 1
     load_var m
-    call baml.Map.length
+    container_len
     return
 }
 
@@ -498,7 +498,7 @@ function maps.map_len_helper() -> int {
     load_const "hi"
     load_const "it_works"
     alloc_map 2
-    call baml.Map.length
+    container_len
     return
 }
 
@@ -528,7 +528,7 @@ function maps.map_set_grows_length_main() -> int {
     call baml.Map.set
     pop 1
     load_var m
-    call baml.Map.length
+    container_len
     return
 }
 
@@ -550,7 +550,7 @@ function maps.map_set_replace_preserves_length_main() -> int {
     call baml.Map.set
     pop 1
     load_var m
-    call baml.Map.length
+    container_len
     return
 }
 

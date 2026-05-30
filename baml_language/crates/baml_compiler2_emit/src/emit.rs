@@ -2980,18 +2980,9 @@ impl PullSink for StackifyCodegen<'_, '_> {
     }
 
     fn len_of_place(&mut self, place: &Place) -> Result<(), Self::Error> {
-        // MIR `Rvalue::Len` is array length.
-        let global_idx = self
-            .globals
-            .get("baml.Array.length")
-            .copied()
-            .unwrap_or_else(|| panic!("undefined function: baml.Array.length"));
+        // MIR `Rvalue::Len` → dedicated ContainerLen opcode (no function call overhead).
         pull_semantics::walk_place_pull(self, place)?;
-        let inst = self.emit(Instruction::Call {
-            callee: GlobalIndex::from_raw(global_idx),
-            ntypeargs: 0,
-        });
-        self.set_operand(inst, OperandMeta::Callable("baml.Array.length".to_string()));
+        self.emit(Instruction::ContainerLen);
         Ok(())
     }
 

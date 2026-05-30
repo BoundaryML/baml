@@ -3187,7 +3187,8 @@ fn baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state
 
     bb2: {
         _25 = copy _1.2;
-        _24 = call const fn baml.Array.length(copy _25) -> [bb3];
+        _24 = len(_25);
+        goto -> bb3;
     }
 
     bb3: {
@@ -3199,7 +3200,8 @@ fn baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state
         _27 = copy _1.0;
         _28 = copy _1.4;
         _30 = copy _1.2;
-        _29 = call const fn baml.Array.length(copy _30) -> [bb5];
+        _29 = len(_30);
+        goto -> bb5;
     }
 
     bb5: {
@@ -3527,7 +3529,8 @@ fn baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm
 
     bb2: {
         _47 = copy _1.2;
-        _46 = call const fn baml.Array.length(copy _47) -> [bb3];
+        _46 = len(_47);
+        goto -> bb3;
     }
 
     bb3: {
@@ -3538,7 +3541,8 @@ fn baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm
     bb4: {
         _49 = copy _1.4;
         _51 = copy _1.2;
-        _50 = call const fn baml.Array.length(copy _51) -> [bb5];
+        _50 = len(_51);
+        goto -> bb5;
     }
 
     bb5: {
@@ -3767,7 +3771,8 @@ fn baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: baml.llm.
 
     bb2: {
         _35 = copy _1.2;
-        _34 = call const fn baml.Array.length(copy _35) -> [bb3];
+        _34 = len(_35);
+        goto -> bb3;
     }
 
     bb3: {
@@ -3778,7 +3783,8 @@ fn baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: baml.llm.
     bb4: {
         _37 = copy _1.4;
         _39 = copy _1.2;
-        _38 = call const fn baml.Array.length(copy _39) -> [bb5];
+        _38 = len(_39);
+        goto -> bb5;
     }
 
     bb5: {

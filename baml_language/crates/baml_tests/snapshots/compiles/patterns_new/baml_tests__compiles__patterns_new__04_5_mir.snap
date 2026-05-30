@@ -673,7 +673,8 @@ fn user.nested_paren_union_array_one(items: (int | string)[]) -> int {
     let _1: (int | string)[] // items // param
 
     bb0: {
-        _0 = call const fn baml.Array.length(copy _1) -> [bb1];
+        _0 = len(_1);
+        goto -> bb1;
     }
 
     bb1: {
@@ -702,7 +703,8 @@ fn user.nested_paren_union_array_three(v: (int | string)[][]) -> int {
     let _1: (int | string)[][] // v // param
 
     bb0: {
-        _0 = call const fn baml.Array.length(copy _1) -> [bb1];
+        _0 = len(_1);
+        goto -> bb1;
     }
 
     bb1: {
@@ -716,7 +718,8 @@ fn user.nested_paren_union_array_two(items: (int | string)[]) -> int {
     let _1: (int | string)[] // items // param
 
     bb0: {
-        _0 = call const fn baml.Array.length(copy _1) -> [bb1];
+        _0 = len(_1);
+        goto -> bb1;
     }
 
     bb1: {

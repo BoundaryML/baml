@@ -249,6 +249,7 @@ pub(crate) fn display_instruction(
         | Instruction::CaptureRef(_)
         | Instruction::Return
         | Instruction::SendEvent
+        | Instruction::ContainerLen
         | Instruction::Spawn
         | Instruction::LoadType(_) => String::new(),
     };
@@ -427,6 +428,7 @@ fn instruction_style(instruction: &Instruction) -> Style {
         }
         Instruction::StoreDeref(_) | Instruction::StoreCapture(_) => Style::new().green(),
         Instruction::SendEvent => Style::new().green().bright(),
+        Instruction::ContainerLen => Style::new().cyan(),
     }
 }
 
@@ -956,6 +958,7 @@ fn display_instruction_textual(
         Instruction::StoreCapture(idx) => format!("store_capture {idx}"),
         Instruction::CaptureRef(idx) => format!("capture_ref {idx}"),
         Instruction::SendEvent => "send_event".to_string(),
+        Instruction::ContainerLen => "container_len".to_string(),
     }
 }
 
@@ -1225,6 +1228,7 @@ pub fn display_compact_bytecode(
             | OpCode::Unreachable
             | OpCode::MakeCell
             | OpCode::SendEvent
+            | OpCode::ContainerLen
             | OpCode::Spawn
             | OpCode::Add
             | OpCode::Sub
