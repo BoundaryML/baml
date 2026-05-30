@@ -1,13 +1,12 @@
 version = 1
-recorded_at = "2026-05-07T02:32:44Z"
-git_sha = "f5a2a0d29"
+recorded_at = "2026-05-29T23:30:00Z"
+git_sha = "56b8a69e9"
 
-[artifacts.bridge_cffi]
-file_bytes = 12992448
-stripped_bytes = 12992488
-gzip_bytes = 5601839
+[artifacts.baml-cli]
+file_bytes = 14604480
+stripped_bytes = 14604512
+gzip_bytes = 6983329
 
-[artifacts.bridge_cffi-stripped]
-file_bytes = 10765904
-stripped_bytes = 10765944
-gzip_bytes = 4670994
+[artifacts.packed-program]
+file_bytes = 11170322
+gzip_bytes = 5353377

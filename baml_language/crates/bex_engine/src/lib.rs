@@ -1267,11 +1267,7 @@ impl BexEngine {
         }
 
         let (function_index, kind) = self.lookup_function(function_name)?;
-        // Only bytecode functions can be invoked as engine entry points.
-        // Sysops + `$rust_function` natives reach their handlers through
-        // an enclosing bytecode frame's `Call` / `YieldToCall` — there's
-        // no frame for them to return into at the top level.
-        if !matches!(kind, bex_vm_types::FunctionKind::Bytecode) {
+        if matches!(kind, bex_vm_types::FunctionKind::NativeUnresolved) {
             return Err(EngineError::NotInvokableAsEntry {
                 name: function_name.to_string(),
                 kind: format!("{kind:?}"),

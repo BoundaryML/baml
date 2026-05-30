@@ -121,7 +121,16 @@ def test_str_is_non_empty():
 # ---------------------------------------------------------------------------
 
 # `File "<src>", line N, in <fn>` — the wire trace-line shape.
-_TRACE_LINE = r'File "(?P<file>[^"]+)", line (?P<line>\d+), in (?P<func>[^"]+)'
+_TRACE_LINE = r'File "(?P<file>[^"]*)", line (?P<line>\d+), in (?P<func>[^"]+)'
+
+
+def _python_traceback_line(line: str) -> str:
+    """Python tracebacks are 1-indexed, even for synthetic builtin frames."""
+    m = re.fullmatch(_TRACE_LINE, line)
+    if m is None:
+        return line
+    lineno = max(int(m["line"]), 1)
+    return f'File "{m["file"]}", line {lineno}, in {m["func"]}'
 
 
 def test_baml_error_carries_baml_trace():
@@ -152,9 +161,12 @@ def test_baml_trace_spliced_into_python_traceback():
     else:
         pytest.fail("ParseJson did not raise BamlError")
 
-    # Every wire trace line must appear verbatim in the rendered traceback...
+    # Every wire trace line must appear in the rendered traceback. Builtin
+    # frames may carry line 0 on the wire, but Python traceback objects render
+    # locations as 1-indexed lines.
     for line in wire_trace:
-        assert line in rendered, f"{line!r} not spliced into:\n{rendered}"
+        expected = _python_traceback_line(line)
+        assert expected in rendered, f"{expected!r} not spliced into:\n{rendered}"
     # ...and the splice must name the throwing BAML function + its source.
     assert re.search(
         r'File "[^"]*types\.baml", line \d+, in user\.throws_test\.ParseJson',
