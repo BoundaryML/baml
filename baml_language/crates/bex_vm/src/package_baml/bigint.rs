@@ -4,6 +4,7 @@ use std::sync::Arc;
 /// so TIR's constant-folder can refuse to fold bigint expressions that the
 /// VM would refuse to allocate.
 pub(crate) use baml_type::MAX_BIGINT_BITS;
+use bex_heap::TlabHolder;
 use bex_str::BexStr;
 use bex_vm_types::Value;
 use num_bigint::{BigInt, BigUint, Sign};
@@ -19,7 +20,7 @@ impl BamlClassBigint for PackageBamlImpl {
         // JSON has no native arbitrary-precision integer; emit a decimal
         // string so the value round-trips losslessly through any consumer.
         // Matches `value_to_serde` for `Object::Bigint` in `package_baml::json`.
-        vm.alloc_string(bigint.to_string())
+        Value::object(vm.alloc_string(bigint.to_string()))
     }
 
     fn abs(bigint: Arc<BigInt>) -> Arc<BigInt> {
