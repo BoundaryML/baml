@@ -3585,7 +3585,61 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     /// Checking mode: verify an expression against an expected type.
+    fn check_object_literal_declared_class_mismatch(
+        &mut self,
+        expr_id: ExprId,
+        body: &ExprBody,
+        expected: &Ty,
+        type_name: Option<&baml_base::core_types::TypePath>,
+    ) -> Option<Ty> {
+        // BEP-044 wf3 #G15: when the literal explicitly names a concrete
+        // class that differs from the expected class, it must be a subtype.
+        // Keep this out of `check_expr` proper so its temporary lowering
+        // state doesn't bloat every recursive checking frame in debug builds.
+        let (Ty::Class(expected_qtn, _, _), Some(path)) = (expected, type_name) else {
+            return None;
+        };
+
+        let mut diags = Vec::new();
+        let lit_ty = crate::lower_type_expr::lower_type_expr_in_ns(
+            self.context.db(),
+            &TypeExpr::Path {
+                segments: path.segments().to_vec(),
+                generic_args: Vec::new(),
+                attrs: Vec::new(),
+            },
+            self.package_items,
+            &self.ns_context,
+            &self.generic_params,
+            &mut diags,
+        );
+        if let Ty::Class(lit_qtn, _, _) = &lit_ty
+            && lit_qtn != expected_qtn
+        {
+            let inferred = self.infer_expr(expr_id, body);
+            if !matches!(inferred, Ty::Unknown { .. } | Ty::Error { .. })
+                && !self.is_subtype(&inferred, expected)
+            {
+                self.context.report(
+                    TirTypeError::TypeMismatch {
+                        expected: expected.clone(),
+                        got: inferred.clone(),
+                    },
+                    expr_id,
+                    Vec::new(),
+                );
+            }
+            Some(inferred)
+        } else {
+            None
+        }
+    }
+
     pub fn check_expr(&mut self, expr_id: ExprId, body: &ExprBody, expected: &Ty) -> Ty {
+        // This function is deeply recursive during builtin throws inference.
+        // Keep bulky match-arm temporaries in helpers so debug builds don't
+        // reserve them in every `check_expr` frame (Windows build.rs stacks are
+        // tight enough for a few extra KiB per frame to matter).
         // Fix the element type of an empty evolving container the first time
         // it is used in a typed context (see `retype_evolving_empty`).
         self.retype_evolving_empty(expr_id, body, expected);
@@ -3745,46 +3799,13 @@ impl<'db> TypeInferenceBuilder<'db> {
             Expr::Object {
                 fields, type_name, ..
             } => {
-                // BEP-044 wf3 #G15: when the literal explicitly names a concrete
-                // class that differs from the expected class, it must be a
-                // subtype. `return Cup {}` where `Box` (or `Self` = the enclosing
-                // class) is expected is a genuine type error — not a silent
-                // coercion that records the wrong concrete shape. Resolve the
-                // literal's own class first; only the different-class case is
-                // diverted (same-class keeps the bidirectional field/generic
-                // inference path below).
-                if let (Ty::Class(expected_qtn, _, _), Some(path)) = (expected, type_name.as_ref()) {
-                    let mut diags = Vec::new();
-                    let lit_ty = crate::lower_type_expr::lower_type_expr_in_ns(
-                        self.context.db(),
-                        &TypeExpr::Path {
-                            segments: path.segments().to_vec(),
-                            generic_args: Vec::new(),
-                            attrs: Vec::new(),
-                        },
-                        self.package_items,
-                        &self.ns_context,
-                        &self.generic_params,
-                        &mut diags,
-                    );
-                    if let Ty::Class(lit_qtn, _, _) = &lit_ty
-                        && lit_qtn != expected_qtn
-                    {
-                        let inferred = self.infer_expr(expr_id, body);
-                        if !matches!(inferred, Ty::Unknown { .. } | Ty::Error { .. })
-                            && !self.is_subtype(&inferred, expected)
-                        {
-                            self.context.report(
-                                TirTypeError::TypeMismatch {
-                                    expected: expected.clone(),
-                                    got: inferred.clone(),
-                                },
-                                expr_id,
-                                Vec::new(),
-                            );
-                        }
-                        return inferred;
-                    }
+                if let Some(inferred) = self.check_object_literal_declared_class_mismatch(
+                    expr_id,
+                    body,
+                    expected,
+                    type_name.as_ref(),
+                ) {
+                    return inferred;
                 }
                 if let Ty::Class(class_name, type_args, _) = expected {
                     let field_types: FxHashMap<Name, Ty> = self
