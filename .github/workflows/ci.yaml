@@ -533,25 +533,6 @@ jobs:
           cache-workspace-crates: true
           shared-key: "linux-arm-bench"
 
-      # Separately, cache the cargo HOME (registry index + git dep checkouts) so
-      # benchmarks-run can restore it on the codspeed-macro runner and skip the
-      # ~24-min cold `cargo metadata` that otherwise re-clones every git
-      # dependency (minijinja, the aws-sdk-rust fork, …).
-      #
-      # We deliberately do NOT reuse Swatinem's lane here: rust-cache folds a
-      # per-runner "environment hash" into its key, and rustup behaves
-      # differently on codspeed-macro (`rustup toolchain list` errors), so the
-      # build and run keys never match. An explicit Cargo.lock-hashed key is
-      # byte-identical on both jobs — one entry per lockfile, saved by whichever
-      # job runs first (here the build job, which runs first via `needs`).
-      - name: "Cache cargo home for benchmarks-run"
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: cargo-home-arm-bench-${{ hashFiles('baml_language/Cargo.lock') }}
-
       # Pin to the same major+minor as codspeed-divan-compat in Cargo.lock
       # (4.7.0). cargo codspeed run aborts on a major-version mismatch.
       - name: "Install cargo-codspeed"
@@ -570,6 +551,24 @@ jobs:
         with:
           name: codspeed-walltime-benches
           path: baml_language/target/codspeed/walltime
+          if-no-files-found: error
+          retention-days: 1
+
+      # Hand the resolved cargo home to benchmarks-run via an ARTIFACT, not a
+      # cache. actions/cache addresses entries by (key, version) where version
+      # depends on the runner's compression tooling, so a cache saved on this
+      # blacksmith runner is invisible to the codspeed-macro run job even with an
+      # identical key (verified: same key 4f01266e…, "Cache not found"). Artifacts
+      # are content-addressed by name and transfer cleanly across runners.
+      # benchmarks-run untars this into ~/.cargo so its offline `cargo metadata`
+      # has every dep locally — no ~24-min cold git re-clone.
+      - name: "Pack cargo home for benchmarks-run"
+        run: tar -C "$HOME" -cf cargo-home.tar .cargo/registry .cargo/git
+      - name: "Upload cargo home"
+        uses: actions/upload-artifact@v7
+        with:
+          name: codspeed-cargo-home
+          path: cargo-home.tar
           if-no-files-found: error
           retention-days: 1
 
@@ -600,19 +599,17 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      # Restore the cargo home that benchmarks-build saved under the same
-      # explicit Cargo.lock-hashed key (identical on both runners — see the
-      # build job for why we don't use rust-cache's machine-sensitive key).
-      # Without it, `cargo codspeed run`'s implicit `cargo metadata` re-clones
-      # every git dependency on the bare codspeed-macro runner — ~24 min of
-      # silence before a single bench runs.
-      - name: "Restore cargo home"
-        uses: actions/cache/restore@v4
+      # Restore the resolved cargo home that benchmarks-build packed, so this
+      # job's offline `cargo metadata` has every dep locally instead of cold
+      # re-cloning git deps on the bare codspeed-macro runner (~24 min). Comes
+      # via artifact, not cache — see the build job for why cache misses here.
+      - name: "Download cargo home"
+        uses: actions/download-artifact@v7
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: cargo-home-arm-bench-${{ hashFiles('baml_language/Cargo.lock') }}
+          name: codspeed-cargo-home
+          path: /tmp/cargo-home
+      - name: "Unpack cargo home into ~/.cargo"
+        run: tar -C "$HOME" -xf /tmp/cargo-home/cargo-home.tar
 
       - name: "Install cargo-codspeed"
         uses: taiki-e/install-action@v2
