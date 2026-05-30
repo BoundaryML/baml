@@ -57,42 +57,40 @@ describe("llm_functions — class shapes", () => {
 
 describe("llm_functions — factory + companion bindings", () => {
   it("lorem.ExtractResume sync + async factories are callable", () => {
-    expect(typeof (lorem as any).ExtractResume).toBe("function");
-    expect(typeof (lorem as any).ExtractResume_async).toBe("function");
+    expect(typeof lorem.ExtractResume).toBe("function");
+    expect(typeof lorem.ExtractResume_async).toBe("function");
   });
 
   it("lorem.ExtractResume companion bindings exist", () => {
-    for (const name of [
-      "ExtractResume__build_request",
-      "ExtractResume__render_prompt",
-      "ExtractResume__parse",
-      "ExtractResume__parse_stream",
-    ]) {
-      expect(typeof (lorem as any)[name]).toBe("function");
-      expect(typeof (lorem as any)[`${name}_async`]).toBe("function");
-    }
+    expect(typeof lorem.ExtractResume__build_request).toBe("function");
+    expect(typeof lorem.ExtractResume__build_request_async).toBe("function");
+    expect(typeof lorem.ExtractResume__render_prompt).toBe("function");
+    expect(typeof lorem.ExtractResume__render_prompt_async).toBe("function");
+    expect(typeof lorem.ExtractResume__parse).toBe("function");
+    expect(typeof lorem.ExtractResume__parse_async).toBe("function");
+    expect(typeof lorem.ExtractResume__parse_stream).toBe("function");
+    expect(typeof lorem.ExtractResume__parse_stream_async).toBe("function");
   });
 
   it("lorem.StreamingExtract sync + async factories are callable", () => {
-    expect(typeof (lorem as any).StreamingExtract).toBe("function");
-    expect(typeof (lorem as any).StreamingExtract_async).toBe("function");
+    expect(typeof lorem.StreamingExtract).toBe("function");
+    expect(typeof lorem.StreamingExtract_async).toBe("function");
   });
 
   it("lorem.StreamingExtract companion bindings exist", () => {
-    for (const name of [
-      "StreamingExtract__build_request",
-      "StreamingExtract__render_prompt",
-      "StreamingExtract__parse",
-      "StreamingExtract__parse_stream",
-    ]) {
-      expect(typeof (lorem as any)[name]).toBe("function");
-      expect(typeof (lorem as any)[`${name}_async`]).toBe("function");
-    }
+    expect(typeof lorem.StreamingExtract__build_request).toBe("function");
+    expect(typeof lorem.StreamingExtract__build_request_async).toBe("function");
+    expect(typeof lorem.StreamingExtract__render_prompt).toBe("function");
+    expect(typeof lorem.StreamingExtract__render_prompt_async).toBe("function");
+    expect(typeof lorem.StreamingExtract__parse).toBe("function");
+    expect(typeof lorem.StreamingExtract__parse_async).toBe("function");
+    expect(typeof lorem.StreamingExtract__parse_stream).toBe("function");
+    expect(typeof lorem.StreamingExtract__parse_stream_async).toBe("function");
   });
 
   it("ipsum.ClassifySentiment sync + async factories are callable", () => {
-    expect(typeof (ipsum as any).ClassifySentiment).toBe("function");
-    expect(typeof (ipsum as any).ClassifySentiment_async).toBe("function");
+    expect(typeof ipsum.ClassifySentiment).toBe("function");
+    expect(typeof ipsum.ClassifySentiment_async).toBe("function");
   });
 });
 

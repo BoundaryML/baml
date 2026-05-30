@@ -734,6 +734,7 @@ dependencies = [
  "borsh",
  "clap",
  "clap-cargo",
+ "codegen_nodejs",
  "codegen_python",
  "console",
  "ctrlc",

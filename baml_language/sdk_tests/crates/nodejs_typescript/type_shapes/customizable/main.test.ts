@@ -27,6 +27,7 @@ import * as unions from "./baml_sdk/unions";
 import * as recursion from "./baml_sdk/recursion";
 import * as generics from "./baml_sdk/generics";
 import * as forwardRefs from "./baml_sdk/forward_refs";
+import * as complexModels from "./baml_sdk/complex_models";
 import * as lorem from "./baml_sdk/lorem";
 import * as a from "./baml_sdk/a";
 
@@ -51,6 +52,7 @@ describe("type_shapes — namespace imports", () => {
       recursion,
       generics,
       forwardRefs,
+      complexModels,
       lorem,
       a,
     ]) {
@@ -76,24 +78,24 @@ describe("type_shapes — representative symbols", () => {
 // Phase 5: typed value round-trips through the engine (non-LLM pure functions).
 describe("type_shapes — typed round-trips", () => {
   it("round_trip_foo returns a typed Foo instance", () => {
-    const r = (b as any).round_trip_foo({ v: 5 });
+    const r = b.round_trip_foo({ v: 5 });
     expect(r).toBeInstanceOf(Foo);
     expect(r.v).toBe(5);
   });
 
   it("round_trip_foo_async returns a typed Foo instance", async () => {
-    const r = await (b as any).round_trip_foo_async({ v: 7 });
+    const r = await b.round_trip_foo_async({ v: 7 });
     expect(r).toBeInstanceOf(Foo);
     expect(r.v).toBe(7);
   });
 
   it("pick_sentiment returns a typed Sentiment enum member", () => {
-    const r = (enums as any).pick_sentiment(true);
+    const r = enums.pick_sentiment(true);
     expect(r).toBe(Sentiment.Positive);
   });
 
   it("round_trip_sentiment preserves the enum member", () => {
-    const r = (enums as any).round_trip_sentiment(Sentiment.Negative);
+    const r = enums.round_trip_sentiment(Sentiment.Negative);
     expect(r).toBe(Sentiment.Negative);
   });
 });

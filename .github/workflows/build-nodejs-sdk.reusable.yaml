@@ -1,0 +1,115 @@
+name: BAML SDK Release - Build Node.js
+
+# Per-platform NAPI prebuild matrix for the Node.js SDK runtime package
+# `@boundaryml/baml-core`. Mirrors `build-python-sdk.reusable.yaml` (same
+# 8-target set), with `napi-rs` standing in for `maturin`. Each job builds
+# one `*.node` native addon and uploads it as `nodejs-sdk-<target>`; the
+# publish job in `release-sdk.yaml` downloads them all, runs
+# `napi prepublish` to assemble the per-platform npm sub-packages, and
+# publishes the umbrella package + sub-packages.
+
+on:
+  workflow_call: {}
+  push:
+    branches:
+      # Mirror the Python reusable workflow's rehearsal-branch trigger so the
+      # Node build matrix can be exercised on a branch before release.
+      - sam/publish-nodejs
+
+concurrency:
+  # suffix is important to prevent a concurrency deadlock with the calling workflow
+  group: ${{ github.workflow }}-${{ github.ref }}-build-nodejs-sdk
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  BRIDGE_DIR: baml_language/sdks/nodejs/bridge_nodejs
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        _:
+          - target: x86_64-unknown-linux-gnu
+            runs_on: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            runs_on: ubuntu-latest
+          - target: x86_64-unknown-linux-musl
+            runs_on: ubuntu-latest
+          - target: aarch64-unknown-linux-musl
+            runs_on: ubuntu-latest
+          - target: x86_64-apple-darwin
+            runs_on: macos-latest
+          - target: aarch64-apple-darwin
+            runs_on: macos-latest
+          - target: x86_64-pc-windows-msvc
+            runs_on: windows-latest
+          - target: aarch64-pc-windows-msvc
+            runs_on: windows-11-arm
+            architecture: arm64
+
+    name: ${{ matrix._.target }}
+    runs-on: ${{ matrix._.runs_on }}
+    steps:
+      - name: Setup build environment (ARM64 Windows)
+        if: matrix._.target == 'aarch64-pc-windows-msvc'
+        shell: powershell
+        run: |
+          # rustup is not preinstalled on aarch64 Windows runners
+          if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
+              Invoke-WebRequest -Uri "https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe" -OutFile "rustup-init.exe"
+              .\rustup-init.exe --default-toolchain stable -y
+              Remove-Item "rustup-init.exe"
+              Add-Content -Path "$env:GITHUB_PATH" -Value "$env:USERPROFILE\.cargo\bin" -Encoding utf8
+          }
+
+      - uses: actions/checkout@v6
+
+      - name: Install Rust target
+        run: rustup target add ${{ matrix._.target }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          architecture: ${{ matrix._.architecture }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      # musl targets cross-compile from a glibc host via zig; napi-rs
+      # supports `--cross-compile` with the zig linker for musl.
+      - name: Install zig (musl cross-compile)
+        if: contains(matrix._.target, 'musl')
+        uses: mlugg/setup-zig@v1
+
+      - name: Install dependencies
+        working-directory: ${{ env.BRIDGE_DIR }}
+        run: pnpm install --ignore-scripts
+
+      - name: Build protobuf runtime
+        working-directory: ${{ env.BRIDGE_DIR }}
+        run: pnpm build:proto
+
+      - name: Build native addon (${{ matrix._.target }})
+        working-directory: ${{ env.BRIDGE_DIR }}
+        run: |
+          set -euo pipefail
+          if [[ "${{ matrix._.target }}" == *musl* ]]; then
+            pnpm exec napi build --platform --release --target ${{ matrix._.target }} --cross-compile --js native.js --dts native.d.ts
+          else
+            pnpm exec napi build --platform --release --target ${{ matrix._.target }} --js native.js --dts native.d.ts
+          fi
+
+      - name: Upload native addon
+        uses: actions/upload-artifact@v7
+        with:
+          name: nodejs-sdk-${{ matrix._.target }}
+          path: ${{ env.BRIDGE_DIR }}/*.node
+          if-no-files-found: error

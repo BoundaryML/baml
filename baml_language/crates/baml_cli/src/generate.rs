@@ -153,6 +153,11 @@ impl GenerateArgs {
                         generator.naming_convention,
                     )
                 }
+                OutputType::NodejsTypescript => codegen_nodejs::to_source_code(
+                    &pool,
+                    &user_baml_files,
+                    generator.naming_convention,
+                ),
             };
 
             std::fs::create_dir_all(&output_dir).with_context(|| {
@@ -228,7 +233,7 @@ fn discover_generators(
                 *id,
                 generator_item,
                 "output_type",
-                r#"one of: "python/pydantic", "python/pydantic/v1""#,
+                r#"one of: "python/pydantic", "python/pydantic/v1", "nodejs/typescript""#,
                 &source_map,
                 file_id,
                 &mut diags,

@@ -29,12 +29,6 @@ const HostCallableError = baml_cffi_1.baml_core.cffi.v1.HostCallableError;
 const HostCallableErrorCategory = baml_cffi_1.baml_core.cffi.v1.HostCallableErrorCategory;
 const BamlHandleType = baml_cffi_1.baml_core.cffi.v1.BamlHandleType;
 // ─── Inbound (TS → Rust) ───
-function isPlainObject(value) {
-    if (value == null || typeof value !== 'object')
-        return false;
-    const proto = Object.getPrototypeOf(value);
-    return proto === Object.prototype || proto === null;
-}
 /**
  * Error thrown when a host callable (a JS `function`) is passed to the
  * *synchronous* call path. See {@link encodeCallArgs} for why this can't work.
@@ -86,7 +80,9 @@ function setInboundValue(iv, value, ctx) {
                 '(callFunction) instead of callFunctionSync. The sync path blocks the Node main ' +
                 'thread, so the host callback can never run and the call would hang.');
         }
-        iv.handle = { key: value.key, handleType: value.handleType };
+        // The Rust inbound decoder drains handle-table entries. Send a fresh
+        // cloned key so the JS-owned handle remains valid for later calls.
+        iv.handle = { key: (0, native_1.putHandleIntoTable)(value), handleType: value.handleType };
     }
     else if (value instanceof stream_1.BamlStream) {
         // Stream wrapper → its inner TaggedHeapHandle. Mirrors the BamlHandle
@@ -131,9 +127,52 @@ function setInboundValue(iv, value, ctx) {
         }
         iv.listValue = { values: listVal };
     }
-    else if (isPlainObject(value)) {
+    else if (value !== null && typeof value === 'object') {
+        // Any remaining object — a plain object OR a codegen-emitted class
+        // instance (e.g. `new Resume({...})`) — encodes as `map_value` with
+        // no FQN tag. The Rust side's `coerce_arg_to_declared_type` reshapes
+        // it against the function's declared parameter type (the 10a
+        // typemap-free encode simplification). `Object.entries` yields the
+        // class's own enumerable fields, set by the constructor's
+        // `Object.assign(this, init)`. The specific built-in wrappers
+        // (BamlHandle/BamlStream/media) are handled by the instanceof
+        // branches above, so they never reach here.
+        //
+        // Class instances additionally carry their instance-method bindings
+        // (`m = defineInstanceFunction(...).bind(this)`) as own enumerable
+        // fields. Those are behavior, not state — skip function-valued fields
+        // on a class instance so re-encoding a handle-backed value (e.g. a
+        // `baml.fs.File` with `read`/`text` bindings) sends only its data
+        // (the `_handle`). Plain objects keep every field, so a host callable
+        // nested in a plain object still encodes as a callable.
+        const proto = Object.getPrototypeOf(value);
+        const isClassInstance = proto !== Object.prototype && proto !== null;
+        // Handle-backed stdlib types (e.g. `baml.fs.File`, `baml.http.Response`)
+        // decode to a class instance that carries the engine's handle in a
+        // field (`_handle` / `_body`). The engine resolves these from a
+        // FQN-tagged `class_value` (not a bare `map` — which has no FQN — nor a
+        // bare `handle`), so re-sending the same handle inside the named class
+        // value lets it resolve the same object and preserve cursor/connection
+        // state across FFI calls. The FQN comes from the typemap reverse map.
+        if (isClassInstance && Object.values(value).some(v => v instanceof native_1.BamlHandle)) {
+            const fqn = (0, typemap_1.getTypeMap)().jsTypeToBamlType(value.constructor);
+            if (fqn) {
+                const classFields = [];
+                for (const [k, v] of Object.entries(value)) {
+                    if (typeof v === 'function')
+                        continue;
+                    const childVal = {};
+                    setInboundValue(childVal, v, ctx);
+                    classFields.push({ stringKey: k, value: childVal });
+                }
+                iv.classValue = { name: fqn, fields: classFields };
+                return;
+            }
+        }
         const entries = [];
         for (const [k, v] of Object.entries(value)) {
+            if (isClassInstance && typeof v === 'function')
+                continue;
             const entry = { stringKey: k };
             const childVal = {};
             setInboundValue(childVal, v, ctx);
@@ -292,8 +331,9 @@ function decodeValueHolder(holder, typeMap) {
         if (ht === BamlHandleType.ADT_MEDIA_PDF)
             return native_1.BamlPdf._fromHandle(handle);
         // ADT_MEDIA_GENERIC has no typed wrapper — stays a bare BamlHandle.
-        // TODO Phase 5: ADT_TAGGED_HEAP_HANDLE dispatch via the typemap →
-        // BamlStream / user classes. For now it falls through to BamlHandle.
+        // TODO: ADT_TAGGED_HEAP_HANDLE / RustData re-encode (handle-backed
+        // stdlib types like baml.fs.File) needs cross-call handle-lifecycle
+        // work; for now non-media handles decode to a bare BamlHandle.
         return handle;
     }
     // FIXME: Unknown/unsupported outbound variants silently collapse to null, making them

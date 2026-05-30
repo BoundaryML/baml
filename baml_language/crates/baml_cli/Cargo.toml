@@ -30,6 +30,7 @@ bex_engine = { workspace = true }
 bex_events = { workspace = true }
 bex_events_native = { workspace = true }
 bex_vm_types = { workspace = true }
+codegen_nodejs = { workspace = true }
 codegen_python = { workspace = true }
 sys_native = { workspace = true }
 anyhow = { workspace = true }

@@ -26,6 +26,7 @@ def test_all_namespaces_reachable():
     import baml_sdk.recursion  # noqa: F401
     import baml_sdk.generics  # noqa: F401
     import baml_sdk.forward_refs  # noqa: F401
+    import baml_sdk.complex_models  # noqa: F401
     import baml_sdk.lorem  # noqa: F401
     import baml_sdk.a  # noqa: F401
 
