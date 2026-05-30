@@ -16,6 +16,7 @@
 mod emit;
 mod leaf;
 mod routing;
+mod translate_ty;
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
