@@ -18,6 +18,8 @@ exports.decodeOutboundValue = decodeOutboundValue;
 exports.decodeCallResult = decodeCallResult;
 const baml_cffi_1 = require("./proto/baml_cffi");
 const native_1 = require("./native");
+const stream_1 = require("./stream");
+const errors_1 = require("./errors");
 const CallFunctionArgs = baml_cffi_1.baml_core.cffi.v1.CallFunctionArgs;
 const BamlOutboundValue = baml_cffi_1.baml_core.cffi.v1.BamlOutboundValue;
 const BamlOutboundResult = baml_cffi_1.baml_core.cffi.v1.BamlOutboundResult;
@@ -84,6 +86,21 @@ function setInboundValue(iv, value, ctx) {
                 'thread, so the host callback can never run and the call would hang.');
         }
         iv.handle = { key: value.key, handleType: value.handleType };
+    }
+    else if (value instanceof stream_1.BamlStream) {
+        // Stream wrapper → its inner TaggedHeapHandle. Mirrors the BamlHandle
+        // branch above; the engine re-binds it to the heap value on decode.
+        const h = value._toHandle();
+        iv.handle = { key: h.key, handleType: h.handleType };
+    }
+    else if (value instanceof native_1.BamlImage
+        || value instanceof native_1.BamlAudio
+        || value instanceof native_1.BamlVideo
+        || value instanceof native_1.BamlPdf) {
+        // Stdlib media wrappers → their backing ADT_MEDIA_* handle. `_toHandle`
+        // clones the table row so the wrapper stays usable after encode.
+        const h = value._toHandle();
+        iv.handle = { key: h.key, handleType: h.handleType };
     }
     else if (typeof value === 'function') {
         // Host callables cannot work on the synchronous call path —
@@ -262,8 +279,26 @@ function decodeValueHolder(holder) {
     }
     // handle_value: pass the protobufjs Long directly as the key — BamlHandle's
     // constructor accepts { low, high } which is layout-compatible with Long.
+    // Dispatch on handle_type so media handles decode to their typed wrapper.
     if (holder.handleValue) {
-        return new native_1.BamlHandle(holder.handleValue.key, holder.handleValue.handleType ?? 0);
+        const ht = holder.handleValue.handleType ?? 0;
+        if (ht === BamlHandleType.HANDLE_UNSPECIFIED) {
+            // Never a valid decoded handle (mirrors Python's _decode_handle).
+            throw new errors_1.BamlError('decoded handle has HANDLE_UNSPECIFIED handle_type');
+        }
+        const handle = new native_1.BamlHandle(holder.handleValue.key, ht);
+        if (ht === BamlHandleType.ADT_MEDIA_IMAGE)
+            return native_1.BamlImage._fromHandle(handle);
+        if (ht === BamlHandleType.ADT_MEDIA_AUDIO)
+            return native_1.BamlAudio._fromHandle(handle);
+        if (ht === BamlHandleType.ADT_MEDIA_VIDEO)
+            return native_1.BamlVideo._fromHandle(handle);
+        if (ht === BamlHandleType.ADT_MEDIA_PDF)
+            return native_1.BamlPdf._fromHandle(handle);
+        // ADT_MEDIA_GENERIC has no typed wrapper — stays a bare BamlHandle.
+        // TODO Phase 5: ADT_TAGGED_HEAP_HANDLE dispatch via the typemap →
+        // BamlStream / user classes. For now it falls through to BamlHandle.
+        return handle;
     }
     // FIXME: Unknown/unsupported outbound variants silently collapse to null, making them
     // indistinguishable from a legitimate BAML null result. Legacy engine/ threw via Rust
@@ -298,14 +333,14 @@ function describeThrown(holder) {
     }
     return { className, message };
 }
-function makeThrownError(kind, className, message, trace) {
+function formatThrownMessage(kind, className, message, trace) {
     const label = className || `baml.${kind}`;
     let text = `baml ${kind}: ${label}`;
     if (message)
         text += `: ${message}`;
     if (trace.length)
         text += '\n' + trace.map(l => '    ' + l).join('\n');
-    return new Error(text);
+    return text;
 }
 /**
  * Decode a `BamlOutboundResult` envelope (the engine's call-result wire shape
@@ -321,16 +356,19 @@ function decodeCallResult(data) {
     switch (result.result) {
         case 'error': {
             const { className, message } = describeThrown(result.error?.value);
-            throw makeThrownError('error', className, message, result.error?.trace ?? []);
+            throw new errors_1.BamlError(formatThrownMessage('error', className, message, result.error?.trace ?? []));
         }
         case 'panic': {
             const panic = result.panic;
             if (panic?.isExitPanic) {
+                // Clean process-exit panic: exit after flushing telemetry (the
+                // registered `process.once('exit', flushEvents)` hook fires
+                // synchronously inside process.exit), rather than throwing.
                 const code = Number(panic.exitCode ?? 0);
                 process.exit(code);
             }
             const { className, message } = describeThrown(panic?.value);
-            throw makeThrownError('panic', className, message, panic?.trace ?? []);
+            throw new errors_1.BamlPanic(formatThrownMessage('panic', className, message, panic?.trace ?? []));
         }
         case 'ok':
         default:

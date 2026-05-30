@@ -65,7 +65,7 @@ pub const IGNORE_REASON: &str = "codegen_nodejs is a stub; re-enable once the em
 
 /// Per-fixture package.json. `__PACKAGE_NAME__` is substituted per
 /// fixture. The dev toolchain (jest + ts-jest + typescript + types)
-/// plus the BAML runtime dep on `@boundaryml/baml-node` (which
+/// plus the BAML runtime dep on `@boundaryml/baml-core` (which
 /// `file:`-points at the bridge_nodejs source tree five levels up:
 /// `crates/nodejs_typescript/<F>/generated/` →
 /// `crates/nodejs_typescript/<F>/` → `crates/nodejs_typescript/` →

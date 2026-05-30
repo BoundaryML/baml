@@ -10,12 +10,24 @@ import {
     Timing,
     Usage,
     LLMCall,
-    flushEvents,
 } from './native';
 import { encodeCallArgs, decodeCallResult } from './proto';
+import { installFlushOnExit } from './exit_hook';
 
-export { BamlRuntime, AbortController, BamlHandle, HostSpanManager, getVersion, flushEvents } from './native';
+export { BamlRuntime, AbortController, BamlHandle, HostSpanManager, getRuntime, getVersion, flushEvents } from './native';
 export { Timing, Usage, LLMCall } from './native';
+// Handle-table helpers (decode validate-on-take / encode clone-on-put + test seeds).
+export {
+    takeHandleFromTable,
+    putHandleIntoTable,
+    _seedFunctionRefHandle,
+    _seedGenericMediaHandle,
+} from './native';
+// Runtime-owned stdlib value classes. Exported under their `Baml*` names only;
+// codegen aliases them as Image/Audio/Video/Pdf on re-export.
+export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native';
+// Stream wrapper. Exported as `BamlStream`; codegen aliases it as `Stream`.
+export { BamlStream } from './stream';
 export { encodeCallArgs, decodeCallResult } from './proto';
 export { CtxManager } from './ctx_manager';
 import { wrapNativeError } from './errors';
@@ -24,6 +36,7 @@ export {
     BamlInvalidArgumentError,
     BamlClientError,
     BamlCancelledError,
+    BamlPanic,
     wrapNativeError,
 } from './errors';
 
@@ -124,7 +137,5 @@ export async function callFunction(
     }
 }
 
-// Register flush on process exit (once to prevent duplicate handlers on module reload)
-process.once('exit', () => {
-    try { flushEvents(); } catch (_) { /* ignore */ }
-});
+// Register flush on process exit (single registration; see exit_hook.ts).
+installFlushOnExit();

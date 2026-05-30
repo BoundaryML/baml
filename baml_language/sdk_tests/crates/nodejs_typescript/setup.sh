@@ -45,7 +45,7 @@ echo "==> pnpm build:debug in sdks/nodejs/bridge_nodejs"
 #    doesn't walk up to the repo-root workspace and skip the install.
 #    The per-fixture `package.json` `file:`-points at bridge_nodejs, so
 #    the install resolves the dev toolchain (jest, ts-jest, typescript)
-#    plus the `@boundaryml/baml-node` runtime dep against the addon we
+#    plus the `@boundaryml/baml-core` runtime dep against the addon we
 #    just built.
 for fixture_dir in */generated; do
     [[ -d "$fixture_dir" ]] || continue

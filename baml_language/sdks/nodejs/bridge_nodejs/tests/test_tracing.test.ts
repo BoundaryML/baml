@@ -43,7 +43,7 @@ describe('HostSpanManager', () => {
 });
 
 describe('CtxManager', () => {
-    const rt = BamlRuntime.fromFiles('.', { 'main.baml': BAML_SRC });
+    const rt = BamlRuntime.initializeRuntime('.', { 'main.baml': BAML_SRC });
 
     test('provides isolated contexts', async () => {
         const ctxMgr = new CtxManager(rt);

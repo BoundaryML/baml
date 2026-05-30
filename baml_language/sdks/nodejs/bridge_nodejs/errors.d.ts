@@ -17,5 +17,14 @@ export declare class BamlClientError extends BamlError {
 export declare class BamlCancelledError extends BamlError {
     constructor(message: string);
 }
+/**
+ * Raised for SDK-setup failures and BAML-runtime panics — the Node analog of
+ * `bridge_python`'s `BamlPanic`. The in-call panic path (`decodeCallResult`'s
+ * `panic` arm) and the `getRuntime` not-initialized path both surface this,
+ * except clean process-exit panics, which exit after flushing telemetry.
+ */
+export declare class BamlPanic extends BamlError {
+    constructor(message: string);
+}
 export declare function wrapNativeError(err: unknown): BamlError;
 //# sourceMappingURL=errors.d.ts.map

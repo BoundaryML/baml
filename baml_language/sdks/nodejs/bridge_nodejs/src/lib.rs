@@ -7,7 +7,8 @@ mod abort_controller;
 mod errors;
 pub mod handle;
 pub mod host_value;
-mod runtime;
+pub mod media;
+pub mod runtime;
 mod types;
 
 use napi_derive::napi;

@@ -126,7 +126,7 @@ function EchoBigint(x: bigint) -> bigint {
 // ============================================================================
 
 function makeRuntime(bamlSource: string): BamlRuntime {
-    return BamlRuntime.fromFiles('.', { 'main.baml': bamlSource });
+    return BamlRuntime.initializeRuntime('.', { 'main.baml': bamlSource });
 }
 
 // ============================================================================

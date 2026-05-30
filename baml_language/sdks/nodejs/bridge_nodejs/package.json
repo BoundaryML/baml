@@ -1,5 +1,5 @@
 {
-  "name": "@boundaryml/baml-node",
+  "name": "@boundaryml/baml-core",
   "version": "0.0.0-beta",
   "main": "index.js",
   "types": "index.d.ts",

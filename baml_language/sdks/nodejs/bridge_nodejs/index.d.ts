@@ -6,11 +6,14 @@
  * Build:  cd baml_language/crates/bridge_nodejs && pnpm build:debug
  */
 import { BamlRuntime, AbortController, HostSpanManager, Collector as NativeCollector, FunctionLog as NativeFunctionLog, Timing, Usage, LLMCall } from './native';
-export { BamlRuntime, AbortController, BamlHandle, HostSpanManager, getVersion, flushEvents } from './native';
+export { BamlRuntime, AbortController, BamlHandle, HostSpanManager, getRuntime, getVersion, flushEvents } from './native';
 export { Timing, Usage, LLMCall } from './native';
+export { takeHandleFromTable, putHandleIntoTable, _seedFunctionRefHandle, _seedGenericMediaHandle, } from './native';
+export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native';
+export { BamlStream } from './stream';
 export { encodeCallArgs, decodeCallResult } from './proto';
 export { CtxManager } from './ctx_manager';
-export { BamlError, BamlInvalidArgumentError, BamlClientError, BamlCancelledError, wrapNativeError, } from './errors';
+export { BamlError, BamlInvalidArgumentError, BamlClientError, BamlCancelledError, BamlPanic, wrapNativeError, } from './errors';
 export declare class FunctionResult {
     private _value;
     constructor(value: unknown);
