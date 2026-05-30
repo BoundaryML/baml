@@ -260,7 +260,7 @@ async fn resolve_file(
     io: &dyn RuntimeIo,
 ) -> Result<(), BuildRequestError> {
     let file = io
-        .fs_open(path.to_string(), BexExternalValue::String("r".to_string()))
+        .fs_open(path.to_string(), BexExternalValue::String("r".into()))
         .await
         .map_err(|e| {
             BuildRequestError::FileNotResolved(format!("failed to open file {path}: {e}"))

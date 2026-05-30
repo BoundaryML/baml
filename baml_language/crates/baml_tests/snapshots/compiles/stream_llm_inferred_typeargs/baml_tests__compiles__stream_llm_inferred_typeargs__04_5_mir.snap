@@ -6,9 +6,9 @@ fn user.TestClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: baml.llm.PrimitiveClientOptions
-    let _2: map<void, void>
-    let _3: map<void, void>
-    let _4: map<void, void>
+    let _2: map<string, string>
+    let _3: map<string, string>
+    let _4: map<string, unknown>
 
     bb0: {
         _2 = {  };

@@ -17,6 +17,7 @@ pub mod lazy_biased_mutex;
 mod roots;
 pub mod types;
 
+pub use bex_str::BexStr;
 pub use bytecode::{
     BinOp, Bytecode, CmpOp, Instruction, JumpTableData, UnaryOp, VizExecDelta, VizExecEvent,
     VizNodeMeta, VizNodeType,
@@ -27,12 +28,12 @@ pub use indexable::{
 };
 pub use roots::{PermitProof, RootHaver, WriteBarrier};
 pub use types::{
-    ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, Class, ClassField,
-    ClientBuildMeta, ClientBuildType, CollectorRef, ConstValue, Enum, EnumVariant, Function,
-    FunctionKind, FunctionMeta, FunctionOrigin, Future, FutureRead, HostClosure, Instance,
-    LockedContainer, LockedReadGuard, LockedWriteGuard, MapContainer, MapReadGuard, MapWriteGuard,
-    MediaValue, Object, ObjectType, PanicClass, Program, PromptAst, RetryPolicyMeta, SysOp,
-    SysOpErrorCategory, SysOpPanicCategory, TestArgValue, TestCase, Uint8ArrayContainer,
+    ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BoundMethod, Class,
+    ClassField, ClientBuildMeta, ClientBuildType, CollectorRef, ConstValue, Enum, EnumVariant,
+    Function, FunctionKind, FunctionMeta, FunctionOrigin, Future, FutureRead, HostClosure,
+    Instance, LockedContainer, LockedReadGuard, LockedWriteGuard, MapContainer, MapReadGuard,
+    MapWriteGuard, MediaValue, Object, ObjectType, PanicClass, Program, PromptAst, RetryPolicyMeta,
+    SysOp, SysOpErrorCategory, SysOpPanicCategory, TestArgValue, TestCase, Uint8ArrayContainer,
     Uint8ArrayReadGuard, Uint8ArrayWriteGuard, UnscheduledFuture, Value, ValueKind, Variant,
     format_float, sys_op_for_path, type_tags,
 };

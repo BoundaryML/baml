@@ -1,172 +1,172 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function type_error_repro.$init_test_82(registry: testing.TestCollector) -> null {
+function type_error_repro.$init_test_ns_type_error_repro_type_error_repro(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "bytecode_1d_array_write_local"
-    make_closure .<lambda($init_test_82, 0)>, 0
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "bytecode_1d_array_write_through_field"
-    make_closure .<lambda($init_test_82, 1)>, 0
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "bytecode_1d_array_read_through_field"
-    make_closure .<lambda($init_test_82, 2)>, 0
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "bytecode_2d_array_write_local"
-    make_closure .<lambda($init_test_82, 3)>, 0
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "bytecode_2d_array_write_through_field"
-    make_closure .<lambda($init_test_82, 4)>, 0
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 4)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "bytecode_map_write_through_field"
-    make_closure .<lambda($init_test_82, 5)>, 0
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 5)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "bytecode_map_write_local"
-    make_closure .<lambda($init_test_82, 6)>, 0
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 6)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "bytecode_non_self_param_array_write"
-    make_closure .<lambda($init_test_82, 7)>, 0
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 7)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "array_index_with_int_works"
-    make_closure .<lambda($init_test_82, 8)>, 0
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 8)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "int_through_function_call_as_index_works"
-    make_closure .<lambda($init_test_82, 9)>, 0
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 9)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "nested_array_index_with_int_works"
-    make_closure .<lambda($init_test_82, 10)>, 0
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 10)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "array_element_assignment_2d_type_error"
-    make_closure .<lambda($init_test_82, 11)>, 0
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 11)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "array_element_assignment_1d"
-    make_closure .<lambda($init_test_82, 12)>, 0
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 12)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "class_method_array_read_works"
-    make_closure .<lambda($init_test_82, 13)>, 0
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 13)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "class_method_array_write_type_error"
-    make_closure .<lambda($init_test_82, 14)>, 0
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 14)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "nested_array_read_with_variables"
-    make_closure .<lambda($init_test_82, 15)>, 0
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 15)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "nested_array_write_with_variables"
-    make_closure .<lambda($init_test_82, 16)>, 0
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 16)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "array_write_with_variable_index"
-    make_closure .<lambda($init_test_82, 17)>, 0
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 17)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "class_method_1d_array_write_through_self"
-    make_closure .<lambda($init_test_82, 18)>, 0
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 18)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "class_method_2d_array_write_through_self_literals"
-    make_closure .<lambda($init_test_82, 19)>, 0
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 19)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "class_method_2d_array_write_minimal"
-    make_closure .<lambda($init_test_82, 20)>, 0
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 20)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "class_method_map_write_through_self"
-    make_closure .<lambda($init_test_82, 21)>, 0
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 21)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "map_write_local_variable"
-    make_closure .<lambda($init_test_82, 22)>, 0
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 22)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "class_method_nested_field_array_write"
-    make_closure .<lambda($init_test_82, 23)>, 0
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 23)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "class_method_map_then_array_write_through_self"
-    make_closure .<lambda($init_test_82, 24)>, 0
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 24)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "class_method_3d_array_write_through_self"
-    make_closure .<lambda($init_test_82, 25)>, 0
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 25)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "class_method_array_push_through_self"
-    make_closure .<lambda($init_test_82, 26)>, 0
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 26)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "non_self_param_array_write"
-    make_closure .<lambda($init_test_82, 27)>, 0
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 27)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
@@ -192,7 +192,7 @@ function type_error_repro.BoardMinimal.new() -> type_error_repro.BoardMinimal {
     return
 }
 
-function type_error_repro.BoardMinimal.play(self: null, player: string, row: int, col: int) -> null {
+function type_error_repro.BoardMinimal.play(self: type_error_repro.BoardMinimal, player: string, row: int, col: int) -> null {
     load_var self
     load_field .cells
     load_var row
@@ -204,7 +204,7 @@ function type_error_repro.BoardMinimal.play(self: null, player: string, row: int
     return
 }
 
-function type_error_repro.BoardRead.get(self: null, row: int, col: int) -> string {
+function type_error_repro.BoardRead.get(self: type_error_repro.BoardRead, row: int, col: int) -> string {
     load_var self
     load_field .cells
     load_var row
@@ -232,7 +232,7 @@ function type_error_repro.BoardRead.new() -> type_error_repro.BoardRead {
     return
 }
 
-function type_error_repro.BoardWrite.get(self: null, row: int, col: int) -> string {
+function type_error_repro.BoardWrite.get(self: type_error_repro.BoardWrite, row: int, col: int) -> string {
     load_var self
     load_field .cells
     load_var row
@@ -260,7 +260,7 @@ function type_error_repro.BoardWrite.new() -> type_error_repro.BoardWrite {
     return
 }
 
-function type_error_repro.BoardWrite.play(self: null, player: string, row: int, col: int) -> null {
+function type_error_repro.BoardWrite.play(self: type_error_repro.BoardWrite, player: string, row: int, col: int) -> null {
     load_var self
     load_field .cells
     load_var row
@@ -272,7 +272,7 @@ function type_error_repro.BoardWrite.play(self: null, player: string, row: int, 
     return
 }
 
-function type_error_repro.BytecodeContainer.set(self: null, idx: int, val: string) -> null {
+function type_error_repro.BytecodeContainer.set(self: type_error_repro.BytecodeContainer, idx: int, val: string) -> null {
     load_var self
     load_field .items
     load_var idx
@@ -282,7 +282,7 @@ function type_error_repro.BytecodeContainer.set(self: null, idx: int, val: strin
     return
 }
 
-function type_error_repro.BytecodeContainerRead.get(self: null, idx: int) -> string {
+function type_error_repro.BytecodeContainerRead.get(self: type_error_repro.BytecodeContainerRead, idx: int) -> string {
     load_var self
     load_field .items
     load_var idx
@@ -290,7 +290,7 @@ function type_error_repro.BytecodeContainerRead.get(self: null, idx: int) -> str
     return
 }
 
-function type_error_repro.BytecodeGrid.set(self: null, row: int, col: int, val: string) -> null {
+function type_error_repro.BytecodeGrid.set(self: type_error_repro.BytecodeGrid, row: int, col: int, val: string) -> null {
     load_var self
     load_field .cells
     load_var row
@@ -302,7 +302,7 @@ function type_error_repro.BytecodeGrid.set(self: null, row: int, col: int, val: 
     return
 }
 
-function type_error_repro.BytecodeScores.set(self: null, key: string, val: int) -> null {
+function type_error_repro.BytecodeScores.set(self: type_error_repro.BytecodeScores, key: string, val: int) -> null {
     load_var self
     load_field .data
     load_var key
@@ -312,7 +312,7 @@ function type_error_repro.BytecodeScores.set(self: null, key: string, val: int) 
     return
 }
 
-function type_error_repro.ContainerSelf.get(self: null, idx: int) -> string {
+function type_error_repro.ContainerSelf.get(self: type_error_repro.ContainerSelf, idx: int) -> string {
     load_var self
     load_field .items
     load_var idx
@@ -329,7 +329,7 @@ function type_error_repro.ContainerSelf.new() -> type_error_repro.ContainerSelf 
     return
 }
 
-function type_error_repro.ContainerSelf.set(self: null, idx: int, val: string) -> null {
+function type_error_repro.ContainerSelf.set(self: type_error_repro.ContainerSelf, idx: int, val: string) -> null {
     load_var self
     load_field .items
     load_var idx
@@ -339,7 +339,7 @@ function type_error_repro.ContainerSelf.set(self: null, idx: int, val: string) -
     return
 }
 
-function type_error_repro.Cube.get(self: null, x: int, y: int, z: int) -> int {
+function type_error_repro.Cube.get(self: type_error_repro.Cube, x: int, y: int, z: int) -> int {
     load_var self
     load_field .data
     load_var x
@@ -371,7 +371,7 @@ function type_error_repro.Cube.new() -> type_error_repro.Cube {
     return
 }
 
-function type_error_repro.Cube.set(self: null, x: int, y: int, z: int, val: int) -> null {
+function type_error_repro.Cube.set(self: type_error_repro.Cube, x: int, y: int, z: int, val: int) -> null {
     load_var self
     load_field .data
     load_var x
@@ -385,7 +385,7 @@ function type_error_repro.Cube.set(self: null, x: int, y: int, z: int, val: int)
     return
 }
 
-function type_error_repro.GridSelf.get(self: null, row: int, col: int) -> string {
+function type_error_repro.GridSelf.get(self: type_error_repro.GridSelf, row: int, col: int) -> string {
     load_var self
     load_field .cells
     load_var row
@@ -413,7 +413,7 @@ function type_error_repro.GridSelf.new() -> type_error_repro.GridSelf {
     return
 }
 
-function type_error_repro.GridSelf.set(self: null, row: int, col: int, val: string) -> null {
+function type_error_repro.GridSelf.set(self: type_error_repro.GridSelf, row: int, col: int, val: string) -> null {
     load_var self
     load_field .cells
     load_var row
@@ -425,7 +425,7 @@ function type_error_repro.GridSelf.set(self: null, row: int, col: int, val: stri
     return
 }
 
-function type_error_repro.OuterItems.get(self: null, idx: int) -> string {
+function type_error_repro.OuterItems.get(self: type_error_repro.OuterItems, idx: int) -> string {
     load_var self
     load_field .inner
     load_field .items
@@ -444,7 +444,7 @@ function type_error_repro.OuterItems.new() -> type_error_repro.OuterItems {
     return
 }
 
-function type_error_repro.OuterItems.set(self: null, idx: int, val: string) -> null {
+function type_error_repro.OuterItems.set(self: type_error_repro.OuterItems, idx: int, val: string) -> null {
     load_var self
     load_field .inner
     load_field .items
@@ -455,7 +455,7 @@ function type_error_repro.OuterItems.set(self: null, idx: int, val: string) -> n
     return
 }
 
-function type_error_repro.Registry.get(self: null, key: string, idx: int) -> int {
+function type_error_repro.Registry.get(self: type_error_repro.Registry, key: string, idx: int) -> int {
     load_var self
     load_field .data
     load_var key
@@ -476,7 +476,7 @@ function type_error_repro.Registry.new() -> type_error_repro.Registry {
     return
 }
 
-function type_error_repro.Registry.set(self: null, key: string, idx: int, val: int) -> null {
+function type_error_repro.Registry.set(self: type_error_repro.Registry, key: string, idx: int, val: int) -> null {
     load_var self
     load_field .data
     load_var key
@@ -488,7 +488,7 @@ function type_error_repro.Registry.set(self: null, key: string, idx: int, val: i
     return
 }
 
-function type_error_repro.ScoresSelf.get(self: null, key: string) -> int {
+function type_error_repro.ScoresSelf.get(self: type_error_repro.ScoresSelf, key: string) -> int {
     load_var self
     load_field .data
     load_var key
@@ -502,7 +502,7 @@ function type_error_repro.ScoresSelf.new() -> type_error_repro.ScoresSelf {
     return
 }
 
-function type_error_repro.ScoresSelf.set(self: null, key: string, val: int) -> null {
+function type_error_repro.ScoresSelf.set(self: type_error_repro.ScoresSelf, key: string, val: int) -> null {
     load_var self
     load_field .data
     load_var key
@@ -518,7 +518,7 @@ function type_error_repro.Stack.new() -> type_error_repro.Stack {
     return
 }
 
-function type_error_repro.Stack.peek(self: null) -> int {
+function type_error_repro.Stack.peek(self: type_error_repro.Stack) -> int {
     load_var self
     load_field .items
     load_const 0
@@ -526,7 +526,7 @@ function type_error_repro.Stack.peek(self: null) -> int {
     return
 }
 
-function type_error_repro.Stack.push(self: null, val: int) -> null {
+function type_error_repro.Stack.push(self: type_error_repro.Stack, val: int) -> null {
     load_var self
     load_field .items
     load_var val

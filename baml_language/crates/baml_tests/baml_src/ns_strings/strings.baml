@@ -19,32 +19,8 @@ function strings_concat() -> string {
 // non-string-literal expression; otherwise the parser treats the opening `{` as
 // a map literal when the first token is a string literal.
 
-function strings_substring_mid_codepoint() -> string {
-    "héllo".substring(0, 2)
-}
-
-function strings_char_at_mid_codepoint() -> string {
-    "héllo".char_at(2)
-}
-
-function strings_char_at_past_end() -> string {
-    "hi".char_at(99)
-}
-
 function strings_char_at_negative() -> string {
     "hi".char_at(-1)
-}
-
-function strings_code_point_at_mid() -> int {
-    "héllo".code_point_at(2)
-}
-
-function strings_code_point_at_end() -> int {
-    "hi".code_point_at(2)
-}
-
-function strings_code_point_at_negative() -> int {
-    "hi".code_point_at(-1)
 }
 
 function strings_from_utf8_invalid() -> string {
@@ -166,31 +142,37 @@ test "string_substring_bounds" {
     assert.is_true(baml.deep_equals("hello".substring(2, 10), "llo"))
 }
 
-// ─── byte-indexed semantics (BEP-043) ─────────────────────────────────────────
+// ─── codepoint-indexed semantics ─────────────────────────────────────────────
 
-// `é` is U+00E9, encoded as two bytes in UTF-8 (0xC3 0xA9).
-test "string_length_is_bytes_for_non_ascii" {
-    assert.is_true(baml.deep_equals("héllo".length(), 6))
+// length() returns codepoints, not bytes.
+test "string_length_codepoints_non_ascii" {
+    assert.is_true(baml.deep_equals("héllo".length(), 5))
 }
 
-// 🐈 (U+1F408) takes 4 bytes in UTF-8.
-test "string_length_is_bytes_for_emoji" {
-    assert.is_true(baml.deep_equals("🐈".length(), 4))
+test "string_length_codepoints_emoji" {
+    assert.is_true(baml.deep_equals("🐈".length(), 1))
 }
 
-// Bytes 0..3 of "héllo" are the H plus the two bytes of `é`.
-test "string_substring_byte_indexed_keeps_multibyte_char" {
-    assert.is_true(baml.deep_equals("héllo".substring(0, 3), "hé"))
+// byte_length() returns UTF-8 bytes.
+test "string_byte_length_non_ascii" {
+    assert.is_true(baml.deep_equals("héllo".byte_length(), 6))
 }
 
-// Byte 2 of "héllo" lands inside the `é` (which occupies bytes 1..3).
-test "string_substring_mid_codepoint_throws" {
-    {
-        let _ = strings_substring_mid_codepoint();
-        baml.sys.panic("expected substring to throw")
-    } catch (e) {
-        baml.errors.InvalidArgument => null
-    }
+test "string_byte_length_emoji" {
+    assert.is_true(baml.deep_equals("🐈".byte_length(), 4))
+}
+
+// substring uses codepoint indices.
+test "string_substring_codepoint_indexed" {
+    assert.is_true(baml.deep_equals("héllo".substring(0, 2), "hé"))
+}
+
+test "string_substring_emoji_first_char" {
+    assert.is_true(baml.deep_equals("😀hello".substring(0, 1), "😀"))
+}
+
+test "string_substring_after_emoji" {
+    assert.is_true(baml.deep_equals("😀hello".substring(1, 4), "hel"))
 }
 
 test "string_substring_negative_clamps_to_zero" {
@@ -201,39 +183,34 @@ test "string_substring_empty_when_start_past_end" {
     assert.is_true(baml.deep_equals("hello".substring(4, 2), ""))
 }
 
-// `é` starts at byte 1 of "héllo".
-test "string_char_at_byte_indexed_returns_multibyte_char" {
+test "string_substring_out_of_bounds_clamps" {
+    assert.is_true(baml.deep_equals("hello".substring(0, 100), "hello"))
+}
+
+// char_at uses codepoint index.
+test "string_char_at_multibyte" {
     assert.is_true(baml.deep_equals("héllo".char_at(1), "é"))
 }
 
-// `l` after `é` lives at byte 3.
-test "string_char_at_byte_indexed_after_multibyte" {
-    assert.is_true(baml.deep_equals("héllo".char_at(3), "l"))
+test "string_char_at_after_multibyte" {
+    assert.is_true(baml.deep_equals("héllo".char_at(2), "l"))
 }
 
-// Byte 2 of "héllo" lands inside the `é`.
-test "string_char_at_mid_codepoint_throws" {
-    {
-        let _ = strings_char_at_mid_codepoint();
-        baml.sys.panic("expected char_at to throw")
-    } catch (e) {
-        baml.errors.InvalidArgument => null
-    }
+test "string_char_at_emoji" {
+    assert.is_true(baml.deep_equals("😀hello".char_at(0), "😀"))
 }
 
-// char_at at exactly length() returns "".
+test "string_char_at_after_emoji" {
+    assert.is_true(baml.deep_equals("😀hello".char_at(1), "h"))
+}
+
+// char_at past the end returns empty string.
 test "string_char_at_end_returns_empty" {
     assert.is_true(baml.deep_equals("hi".char_at(2), ""))
 }
 
-// Past the end (99) throws InvalidArgument.
-test "string_char_at_past_end_throws" {
-    {
-        let _ = strings_char_at_past_end();
-        baml.sys.panic("expected char_at to throw")
-    } catch (e) {
-        baml.errors.InvalidArgument => null
-    }
+test "string_char_at_past_end_returns_empty" {
+    assert.is_true(baml.deep_equals("hi".char_at(99), ""))
 }
 
 test "string_char_at_negative_throws" {
@@ -245,9 +222,27 @@ test "string_char_at_negative_throws" {
     }
 }
 
-// The first `l` in "héllo" lives at byte 3 (after the 2-byte `é`).
-test "string_index_of_returns_byte_offset" {
-    assert.is_true(baml.deep_equals("héllo".index_of("l"), 3))
+// index_of returns codepoint index.
+test "string_index_of_returns_codepoint_index" {
+    assert.is_true(baml.deep_equals("héllo".index_of("l"), 2))
+}
+
+test "string_index_of_after_emoji" {
+    assert.is_true(baml.deep_equals("😀hello".index_of("h"), 1))
+}
+
+// ─── repeat ──────────────────────────────────────────────────────────────────
+
+test "string_repeat" {
+    assert.is_true(baml.deep_equals("ab".repeat(3), "ababab"))
+}
+
+test "string_repeat_zero" {
+    assert.is_true(baml.deep_equals("ab".repeat(0), ""))
+}
+
+test "string_repeat_negative" {
+    assert.is_true(baml.deep_equals("ab".repeat(-1), ""))
 }
 
 // ─── char_count ───────────────────────────────────────────────────────────────
@@ -314,52 +309,6 @@ test "string_lines_empty_string" {
 // A single "\n" produces one empty string (the line before the newline).
 test "string_lines_just_newline" {
     assert.is_true(baml.deep_equals("\n".lines(), [""]))
-}
-
-// ─── code_point_at ────────────────────────────────────────────────────────────
-
-// `h` = U+0068 = 104.
-test "string_code_point_at_ascii" {
-    assert.is_true(baml.deep_equals("hi".code_point_at(0), 104))
-}
-
-// `é` = U+00E9 = 0xE9 = 233.
-test "string_code_point_at_multibyte" {
-    assert.is_true(baml.deep_equals("héllo".code_point_at(1), 233))
-}
-
-// 🐑 (sheep) = U+1F411 = 128017.
-test "string_code_point_at_emoji" {
-    assert.is_true(baml.deep_equals("🐑".code_point_at(0), 128017))
-}
-
-// Mid-codepoint byte offset throws.
-test "string_code_point_at_mid_codepoint_throws" {
-    {
-        let _ = strings_code_point_at_mid();
-        baml.sys.panic("expected code_point_at to throw")
-    } catch (e) {
-        baml.errors.InvalidArgument => null
-    }
-}
-
-// code_point_at at exactly length() throws (no code point there).
-test "string_code_point_at_at_end_throws" {
-    {
-        let _ = strings_code_point_at_end();
-        baml.sys.panic("expected code_point_at to throw")
-    } catch (e) {
-        baml.errors.InvalidArgument => null
-    }
-}
-
-test "string_code_point_at_negative_throws" {
-    {
-        let _ = strings_code_point_at_negative();
-        baml.sys.panic("expected code_point_at to throw")
-    } catch (e) {
-        baml.errors.InvalidArgument => null
-    }
 }
 
 // ─── to_utf8 / from_utf8 ──────────────────────────────────────────────────────

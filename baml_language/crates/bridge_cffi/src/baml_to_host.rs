@@ -56,7 +56,11 @@ fn one_field_instance(class_name: &str, field: &str, value: BexExternalValue) ->
 /// Build a `class_name { message: <message> }` instance — the shape of every
 /// synthesized `baml.errors.*` / `baml.panics.SdkPanic` infra class.
 fn message_instance(class_name: &str, message: String) -> BexExternalValue {
-    one_field_instance(class_name, "message", BexExternalValue::String(message))
+    one_field_instance(
+        class_name,
+        "message",
+        BexExternalValue::String(message.into()),
+    )
 }
 
 /// True iff the (possibly union-wrapped) thrown value is a `baml.panics.*`

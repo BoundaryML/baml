@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 42814
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] error: unreachable arm
@@ -32,61 +33,61 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0063
 ────╯
 
-  [type] error: non-exhaustive match on `int`; missing: _
+  [type] error: non-exhaustive match on type int; missing: _
     ╭─[ match_exhaustiveness.baml:59:51 ]
     │
  59 │ ╭─▶ function GuardedOnlyNonExhaustive(x: int) -> int {
     ┆ ┆   
  63 │ ├─▶     }
     │ │           
-    │ ╰─────────── non-exhaustive match on `int`; missing: _
+    │ ╰─────────── non-exhaustive match on type int; missing: _
     │     
     │     Note: Error code: E0062
 ────╯
 
-  [type] error: non-exhaustive match on `bool`; missing: false
+  [type] error: non-exhaustive match on type bool; missing: false
      ╭─[ match_exhaustiveness.baml:243:60 ]
      │
  243 │ ╭─▶ function NonExhaustiveBoolMissingFalse(b: bool) -> string {
      ┆ ┆   
  246 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `bool`; missing: false
+     │ ╰─────────── non-exhaustive match on type bool; missing: false
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] error: non-exhaustive match on `bool`; missing: true
+  [type] error: non-exhaustive match on type bool; missing: true
      ╭─[ match_exhaustiveness.baml:250:59 ]
      │
  250 │ ╭─▶ function NonExhaustiveBoolMissingTrue(b: bool) -> string {
      ┆ ┆   
  253 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `bool`; missing: true
+     │ ╰─────────── non-exhaustive match on type bool; missing: true
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] error: non-exhaustive match on `user.AlwaysTrue`; missing: true
+  [type] error: non-exhaustive match on type AlwaysTrue; missing: true
      ╭─[ match_exhaustiveness.baml:295:70 ]
      │
  295 │ ╭─▶ function NonExhaustiveTrueTypeWrongLiteral(t: AlwaysTrue) -> string {
      ┆ ┆   
  298 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `user.AlwaysTrue`; missing: true
+     │ ╰─────────── non-exhaustive match on type AlwaysTrue; missing: true
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] error: type mismatch: expected user.AlwaysTrue, got false
+  [type] error: type mismatch: expected AlwaysTrue, got false
      ╭─[ match_exhaustiveness.baml:296:16 ]
      │
  296 │ ╭─▶     match (t) {
  297 │ ├─▶         false => "wrong!"
      │ │                               
-     │ ╰─────────────────────────────── type mismatch: expected user.AlwaysTrue, got false
+     │ ╰─────────────────────────────── type mismatch: expected AlwaysTrue, got false
      │     
      │     Note: Error code: E0001
 ─────╯
@@ -101,62 +102,62 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0063
 ─────╯
 
-  [type] error: non-exhaustive match on `user.CustomBool`; missing: false
+  [type] error: non-exhaustive match on type CustomBool; missing: false
      ╭─[ match_exhaustiveness.baml:302:67 ]
      │
  302 │ ╭─▶ function NonExhaustiveCustomBoolMissing(b: CustomBool) -> string {
      ┆ ┆   
  305 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `user.CustomBool`; missing: false
+     │ ╰─────────── non-exhaustive match on type CustomBool; missing: false
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] error: non-exhaustive match on `user.Role`; missing: "system"
+  [type] error: non-exhaustive match on type Role; missing: "system"
      ╭─[ match_exhaustiveness.baml:355:60 ]
      │
  355 │ ╭─▶ function NonExhaustiveStringLiteral(role: Role) -> string {
      ┆ ┆   
  359 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `user.Role`; missing: "system"
+     │ ╰─────────── non-exhaustive match on type Role; missing: "system"
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] error: non-exhaustive match on `user.SuccessCode`; missing: 204
+  [type] error: non-exhaustive match on type SuccessCode; missing: 204
      ╭─[ match_exhaustiveness.baml:396:64 ]
      │
  396 │ ╭─▶ function NonExhaustiveIntLiteral(code: SuccessCode) -> string {
      ┆ ┆   
  400 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `user.SuccessCode`; missing: 204
+     │ ╰─────────── non-exhaustive match on type SuccessCode; missing: 204
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] error: non-exhaustive match on `user.Status`; missing: user.Status.Pending
+  [type] error: non-exhaustive match on type Status; missing: user.Status.Pending
      ╭─[ match_exhaustiveness.baml:456:60 ]
      │
  456 │ ╭─▶ function NonExhaustiveEnumMissingOne(s: Status) -> string {
      ┆ ┆   
  460 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `user.Status`; missing: user.Status.Pending
+     │ ╰─────────── non-exhaustive match on type Status; missing: user.Status.Pending
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] error: non-exhaustive match on `user.Status`; missing: user.Status.Inactive, user.Status.Pending
+  [type] error: non-exhaustive match on type Status; missing: user.Status.Inactive, user.Status.Pending
      ╭─[ match_exhaustiveness.baml:464:65 ]
      │
  464 │ ╭─▶ function NonExhaustiveEnumMissingMultiple(s: Status) -> string {
      ┆ ┆   
  467 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `user.Status`; missing: user.Status.Inactive, user.Status.Pending
+     │ ╰─────────── non-exhaustive match on type Status; missing: user.Status.Inactive, user.Status.Pending
      │     
      │     Note: Error code: E0062
 ─────╯
@@ -201,62 +202,62 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0063
 ─────╯
 
-  [type] error: non-exhaustive match on `user.MaybeOk`; missing: null
+  [type] error: non-exhaustive match on type MaybeOk; missing: null
      ╭─[ match_exhaustiveness.baml:529:69 ]
      │
  529 │ ╭─▶ function NonExhaustiveOptionalMissingNull(code: MaybeOk) -> string {
      ┆ ┆   
  532 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `user.MaybeOk`; missing: null
+     │ ╰─────────── non-exhaustive match on type MaybeOk; missing: null
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] error: non-exhaustive match on `user.MaybeOk`; missing: 200
+  [type] error: non-exhaustive match on type MaybeOk; missing: 200
      ╭─[ match_exhaustiveness.baml:536:70 ]
      │
  536 │ ╭─▶ function NonExhaustiveOptionalMissingValue(code: MaybeOk) -> string {
      ┆ ┆   
  539 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `user.MaybeOk`; missing: 200
+     │ ╰─────────── non-exhaustive match on type MaybeOk; missing: 200
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] error: non-exhaustive match on `user.MixedLiterals`; missing: true
+  [type] error: non-exhaustive match on type MixedLiterals; missing: true
      ╭─[ match_exhaustiveness.baml:559:66 ]
      │
  559 │ ╭─▶ function NonExhaustiveMixedLiterals(x: MixedLiterals) -> string {
      ┆ ┆   
  563 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `user.MixedLiterals`; missing: true
+     │ ╰─────────── non-exhaustive match on type MixedLiterals; missing: true
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] error: non-exhaustive match on `user.OkOrCreated`; missing: 201
+  [type] error: non-exhaustive match on type OkOrCreated; missing: 201
      ╭─[ match_exhaustiveness.baml:583:69 ]
      │
  583 │ ╭─▶ function NonExhaustiveAliasOfLiterals(code: OkOrCreated) -> string {
      ┆ ┆   
  586 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `user.OkOrCreated`; missing: 201
+     │ ╰─────────── non-exhaustive match on type OkOrCreated; missing: 201
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] error: non-exhaustive match on `user.DoubleMaybe`; missing: user.Success { data: _ }, user.Failure { reason: _ }
+  [type] error: non-exhaustive match on type DoubleMaybe; missing: user.Success { data: _ }, user.Failure { reason: _ }
      ╭─[ match_exhaustiveness.baml:598:60 ]
      │
  598 │ ╭─▶ function ExhaustiveDoubleMaybe(dm: DoubleMaybe) -> string {
      ┆ ┆   
  603 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `user.DoubleMaybe`; missing: user.Success { data: _ }, user.Failure { reason: _ }
+     │ ╰─────────── non-exhaustive match on type DoubleMaybe; missing: user.Success { data: _ }, user.Failure { reason: _ }
      │     
      │     Note: Error code: E0062
 ─────╯
@@ -281,14 +282,14 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0063
 ─────╯
 
-  [type] error: non-exhaustive match on `user.DoubleMaybe`; missing: user.Success { data: _ }, user.Failure { reason: _ }, null, null
+  [type] error: non-exhaustive match on type DoubleMaybe; missing: user.Success { data: _ }, user.Failure { reason: _ }, null, null
      ╭─[ match_exhaustiveness.baml:607:74 ]
      │
  607 │ ╭─▶ function NonExhaustiveDoubleMaybeMissingNull(dm: DoubleMaybe) -> string {
      ┆ ┆   
  611 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `user.DoubleMaybe`; missing: user.Success { data: _ }, user.Failure { reason: _ }, null, null
+     │ ╰─────────── non-exhaustive match on type DoubleMaybe; missing: user.Success { data: _ }, user.Failure { reason: _ }, null, null
      │     
      │     Note: Error code: E0062
 ─────╯
@@ -313,26 +314,26 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0063
 ─────╯
 
-  [type] error: non-exhaustive match on `user.Result`; missing: user.Failure { reason: _ }
+  [type] error: non-exhaustive match on type Result; missing: user.Failure { reason: _ }
      ╭─[ match_exhaustiveness.baml:620:65 ]
      │
  620 │ ╭─▶ function NonExhaustiveTypeAliasMissingOne(r: Result) -> string {
      ┆ ┆   
  623 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `user.Result`; missing: user.Failure { reason: _ }
+     │ ╰─────────── non-exhaustive match on type Result; missing: user.Failure { reason: _ }
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] error: non-exhaustive match on `user.FullResult`; missing: user.Pending { eta: _ }
+  [type] error: non-exhaustive match on type FullResult; missing: user.Pending { eta: _ }
      ╭─[ match_exhaustiveness.baml:627:70 ]
      │
  627 │ ╭─▶ function NonExhaustiveFullResultMissingOne(r: FullResult) -> string {
      ┆ ┆   
  631 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `user.FullResult`; missing: user.Pending { eta: _ }
+     │ ╰─────────── non-exhaustive match on type FullResult; missing: user.Pending { eta: _ }
      │     
      │     Note: Error code: E0062
 ─────╯
@@ -347,50 +348,50 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0063
 ─────╯
 
-  [type] error: non-exhaustive match on `user.Status?`; missing: null
+  [type] error: non-exhaustive match on type Status?; missing: null
      ╭─[ match_exhaustiveness.baml:671:70 ]
      │
  671 │ ╭─▶ function NonExhaustiveNullableEnumMissingNull(s: Status?) -> string {
      ┆ ┆   
  676 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `user.Status?`; missing: null
+     │ ╰─────────── non-exhaustive match on type Status?; missing: null
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] error: non-exhaustive match on `user.Status?`; missing: user.Status.Pending
+  [type] error: non-exhaustive match on type Status?; missing: user.Status.Pending
      ╭─[ match_exhaustiveness.baml:680:73 ]
      │
  680 │ ╭─▶ function NonExhaustiveNullableEnumMissingVariant(s: Status?) -> string {
      ┆ ┆   
  685 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `user.Status?`; missing: user.Status.Pending
+     │ ╰─────────── non-exhaustive match on type Status?; missing: user.Status.Pending
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] error: non-exhaustive match on `user.SuccessOr200`; missing: 200
+  [type] error: non-exhaustive match on type SuccessOr200; missing: 200
      ╭─[ match_exhaustiveness.baml:704:82 ]
      │
  704 │ ╭─▶ function NonExhaustiveClassPlusLiteralMissingLiteral(x: SuccessOr200) -> string {
      ┆ ┆   
  707 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `user.SuccessOr200`; missing: 200
+     │ ╰─────────── non-exhaustive match on type SuccessOr200; missing: 200
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] error: non-exhaustive match on `user.SuccessOr200`; missing: user.Success { data: _ }
+  [type] error: non-exhaustive match on type SuccessOr200; missing: user.Success { data: _ }
      ╭─[ match_exhaustiveness.baml:711:80 ]
      │
  711 │ ╭─▶ function NonExhaustiveClassPlusLiteralMissingClass(x: SuccessOr200) -> string {
      ┆ ┆   
  714 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `user.SuccessOr200`; missing: user.Success { data: _ }
+     │ ╰─────────── non-exhaustive match on type SuccessOr200; missing: user.Success { data: _ }
      │     
      │     Note: Error code: E0062
 ─────╯
@@ -405,14 +406,14 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0063
 ─────╯
 
-  [type] error: non-exhaustive match on `bool`; missing: true, false
+  [type] error: non-exhaustive match on type bool; missing: true, false
      ╭─[ match_exhaustiveness.baml:744:58 ]
      │
  744 │ ╭─▶ function WrongLiteralTypeBoolWithInt(b: bool) -> string {
      ┆ ┆   
  747 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `bool`; missing: true, false
+     │ ╰─────────── non-exhaustive match on type bool; missing: true, false
      │     
      │     Note: Error code: E0062
 ─────╯
@@ -438,14 +439,14 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0063
 ─────╯
 
-  [type] error: non-exhaustive match on `int`; missing: _
+  [type] error: non-exhaustive match on type int; missing: _
      ╭─[ match_exhaustiveness.baml:751:59 ]
      │
  751 │ ╭─▶ function WrongLiteralTypeIntWithString(x: int) -> string {
      ┆ ┆   
  754 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `int`; missing: _
+     │ ╰─────────── non-exhaustive match on type int; missing: _
      │     
      │     Note: Error code: E0062
 ─────╯
@@ -461,14 +462,14 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0001
 ─────╯
 
-  [type] error: non-exhaustive match on `user.FullResult`; missing: user.Pending { eta: _ }
+  [type] error: non-exhaustive match on type FullResult; missing: user.Pending { eta: _ }
      ╭─[ match_exhaustiveness.baml:763:64 ]
      │
  763 │ ╭─▶ function PartialUnionPatternCoverage(r: FullResult) -> string {
      ┆ ┆   
  766 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `user.FullResult`; missing: user.Pending { eta: _ }
+     │ ╰─────────── non-exhaustive match on type FullResult; missing: user.Pending { eta: _ }
      │     
      │     Note: Error code: E0062
 ─────╯
@@ -533,14 +534,14 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0063
 ─────╯
 
-  [type] error: non-exhaustive match on `user.Status`; missing: user.Status.Inactive, user.Status.Pending
+  [type] error: non-exhaustive match on type Status; missing: user.Status.Inactive, user.Status.Pending
      ╭─[ match_exhaustiveness.baml:875:60 ]
      │
  875 │ ╭─▶ function HighLineNumberNonExhaustive(s: Status) -> string {
      ┆ ┆   
  878 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `user.Status`; missing: user.Status.Inactive, user.Status.Pending
+     │ ╰─────────── non-exhaustive match on type Status; missing: user.Status.Inactive, user.Status.Pending
      │     
      │     Note: Error code: E0062
 ─────╯

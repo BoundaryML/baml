@@ -297,7 +297,11 @@ async fn sse_empty_stream_returns_null() {
     let BexExternalValue::String(s) = result else {
         panic!("expected string, got {result:?}");
     };
-    assert_eq!(s, "got-null", "first next() on empty stream should be null");
+    assert_eq!(
+        s.as_str(),
+        "got-null",
+        "first next() on empty stream should be null"
+    );
 }
 
 #[tokio::test]
@@ -338,7 +342,7 @@ async fn sse_next_after_close_returns_null() {
     let BexExternalValue::String(s) = result else {
         panic!("expected string, got {result:?}");
     };
-    assert_eq!(s, "null-after-close");
+    assert_eq!(s.as_str(), "null-after-close");
 }
 
 #[tokio::test]

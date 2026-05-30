@@ -27,12 +27,11 @@ via platform-filtered (`cfg(unix)` / `cfg(windows)`) setup-script
 bindings in
 [`baml_language/.config/nextest.toml`](../.config/nextest.toml).
 
-> ⚠️ **Run the suite with `cargo nextest run`, not `cargo test`.**
-> The setup scripts run only under nextest, and each records a
-> per-run breadcrumb in nextest's `$NEXTEST_ENV` that the
-> `setup_guard::ran` test checks for. Plain `cargo test` never sets
-> `$NEXTEST_ENV`, so the guard always fails — even if you run
-> `setup.sh`/`setup.ps1` by hand. See
+> ⚠️ Prefer `cargo nextest run` for this suite. The setup scripts run
+> only under nextest, and each records a per-run breadcrumb in nextest's
+> `$NEXTEST_ENV` that the `setup_guard::ran` test checks for. Plain
+> `cargo test` cannot receive that breadcrumb, so the guard is a no-op
+> there and the fixture tests report setup problems directly. See
 > [setup.sh guard](#setupsh-guard-setup_guardran) for the breadcrumb
 > format.
 
@@ -300,10 +299,9 @@ every per-fixture test until `codegen_nodejs` is real — see
 ### setup.sh guard (`setup_guard::ran`)
 
 Because the toolchain install now lives in `setup.sh` (run by
-`cargo nextest run`, not by `build.rs`), running the suite with
-plain `cargo test` would skip it and the fixtures would fail with a
-confusing stale-`.so` / missing-`node_modules` error. To catch that
-up front, each generator scaffold emits a
+`cargo nextest run`, not by `build.rs`), nextest runs need a per-run
+check that the matching setup script actually fired. Each generator
+scaffold emits a
 `mod setup_guard { #[test] fn ran }` test (via
 `::sdk_test_harness_runner::setup_guard!("SDK_TEST_<GEN>_SETUP")`)
 that asserts the setup script ran *this* run.
@@ -330,11 +328,11 @@ It's deliberately an env var via `$NEXTEST_ENV`, not a file marker:
 a file would persist across runs and false-pass after the `.so` /
 `node_modules` went stale, and checking `NEXTEST=1` alone would only
 prove "under nextest", not "this script ran". Under plain
-`cargo test` there's no `$NEXTEST_ENV`, the var stays unset, and the
-guard fails — running `setup.sh` by hand does not help, because only
-nextest populates `$NEXTEST_ENV`. That is why the suite must be run
-with `cargo nextest run`. nodejs_typescript's guard is `#[ignore]`d
-alongside its other tests while `codegen_nodejs` is a stub.
+`cargo test` there's no `$NEXTEST_ENV`, so the guard does not enforce
+the breadcrumb; the generated fixture tests are still free to fail if
+the local setup is missing or stale. nodejs_typescript's guard is
+`#[ignore]`d alongside its other tests while `codegen_nodejs` is a
+stub.
 
 Hard panics are retained for repo/author bugs: missing `fixtures/`
 directory, fixtures with zero `.baml` files, `.baml` files with

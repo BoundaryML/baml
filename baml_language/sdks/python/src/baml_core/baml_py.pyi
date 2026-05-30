@@ -482,4 +482,3 @@ def take_pyhandle_from_table(key: builtins.int, handle_type: builtins.int) -> Ba
     key exists so a malformed wire payload errors here rather than on
     later use.
     """
-

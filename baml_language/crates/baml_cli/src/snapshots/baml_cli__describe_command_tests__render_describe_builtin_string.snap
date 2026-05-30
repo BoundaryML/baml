@@ -11,14 +11,14 @@ class String  <builtin>/baml/string.baml:5
 class String {
   /// Serializes this string to a JSON value.
   //baml:mut_vm
-  function to_json(self) -> baml.json.json {
+  function to_json(self) -> baml.json.json throws never {
     $rust_function
   }
 
-  /// Returns the length of the string in **UTF-8 bytes**.
+  /// Returns the number of **Unicode code points** (characters) in the string.
   ///
-  /// This is `O(1)`. For ASCII text the byte length equals the character
-  [... skipped 464 lines ...]
+  /// This is `O(1)` — the count is cached at construction time. For ASCII
+  [... skipped 448 lines ...]
   ///
   /// # Examples
   /// ```
@@ -33,6 +33,6 @@ class String {
   }
 }
 
-[INFO] Showing 28 of 491 lines. Use --budget 492 for full output.
+[INFO] Showing 28 of 475 lines. Use --budget 476 for full output.
 
 references (0):

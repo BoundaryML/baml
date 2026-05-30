@@ -123,11 +123,11 @@ async fn test_concurrent_allocations_no_overlap() {
                 attr: TyAttr::default(),
             },
             items: vec![
-                BexExternalValue::String("a".to_string()),
-                BexExternalValue::String("b".to_string()),
-                BexExternalValue::String("c".to_string()),
-                BexExternalValue::String("d".to_string()),
-                BexExternalValue::String("e".to_string()),
+                BexExternalValue::String("a".to_string().into()),
+                BexExternalValue::String("b".to_string().into()),
+                BexExternalValue::String("c".to_string().into()),
+                BexExternalValue::String("d".to_string().into()),
+                BexExternalValue::String("e".to_string().into()),
             ],
         };
         assert_eq!(value, expected);
@@ -249,7 +249,7 @@ async fn test_concurrent_string_allocations() {
 
         // Extract expected suffix from function name
         let suffix = func_name.strip_prefix("create_string_").unwrap();
-        let expected = BexExternalValue::String(format!("string_{suffix}"));
+        let expected = BexExternalValue::String(format!("string_{suffix}").into());
         assert_eq!(value, expected, "String mismatch for {func_name}");
     }
 }
@@ -364,7 +364,10 @@ async fn test_call_function_with_external_args() {
         .await
         .expect("call_function failed");
 
-    assert_eq!(result, BexExternalValue::String("Hello World".to_string()));
+    assert_eq!(
+        result,
+        BexExternalValue::String("Hello World".to_string().into())
+    );
 
     // Test passing an array via BexExternalValue
     let arr = BexExternalValue::Array {

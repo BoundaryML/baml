@@ -57,12 +57,12 @@ function MapAssignments() -> int {
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// error: type mismatch: expected map<string, user.Person>, got map<string, user.Animal>
+// error: type mismatch: expected map<string, Person>, got map<string, Animal>
 //     ╭─[ invalid_assignment_maps.baml:32:5 ]
 //     │
 //  32 │     e = {"a": Animal { species: "Cat", legs: 4 }};
 //     │        ─────────────────────┬────────────────────  
-//     │                             ╰────────────────────── type mismatch: expected map<string, user.Person>, got map<string, user.Animal>
+//     │                             ╰────────────────────── type mismatch: expected map<string, Person>, got map<string, Animal>
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

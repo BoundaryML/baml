@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 3999
 ---
 === HIR2 ===
 
@@ -1088,6 +1089,109 @@ function baml.sys.to_json(self: ?) -> baml.json.json  [expr] {
   map { "cwd": self.cwd?.to_json(), "env": self.env?.to_json(), "timeout_ms": self.timeout_ms?.to_json(), "stdin": self.stdin?.to_json() }
 }
 
+--- <builtin>/baml/ns_time/duration.baml ---
+class baml.time.Duration {
+  _nanoseconds: bigint
+}
+function baml.time.abs(self: ?) -> baml.time.Duration  [expr] {
+  {  } baml.time.Duration { _nanoseconds: self._nanoseconds.abs() }
+}
+function baml.time.from_hours(h: bigint) -> baml.time.Duration  [expr] {
+  {  } baml.time.Duration { _nanoseconds: h Mul 3600000000000 }
+}
+function baml.time.from_json(j: baml.json.json) -> baml.time.Duration  [expr] {
+  baml.time.Duration { _nanoseconds: baml.json.from_json(baml.json.field(j, "_nanoseconds")) }
+}
+function baml.time.from_microseconds(us: bigint) -> baml.time.Duration  [expr] {
+  {  } baml.time.Duration { _nanoseconds: us Mul 1000 }
+}
+function baml.time.from_milliseconds(ms: bigint) -> baml.time.Duration  [expr] {
+  {  } baml.time.Duration { _nanoseconds: ms Mul 1000000 }
+}
+function baml.time.from_minutes(m: bigint) -> baml.time.Duration  [expr] {
+  {  } baml.time.Duration { _nanoseconds: m Mul 60000000000 }
+}
+function baml.time.from_nanoseconds(ns: bigint) -> baml.time.Duration  [expr] {
+  {  } baml.time.Duration { _nanoseconds: ns }
+}
+function baml.time.from_seconds(s: bigint) -> baml.time.Duration  [expr] {
+  {  } baml.time.Duration { _nanoseconds: s Mul 1000000000 }
+}
+function baml.time.to_hours(self: ?) -> bigint  [expr] {
+  {  } self._nanoseconds Div 3600000000000
+}
+function baml.time.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "_nanoseconds": self._nanoseconds.to_json() }
+}
+function baml.time.to_microseconds(self: ?) -> bigint  [expr] {
+  {  } self._nanoseconds Div 1000
+}
+function baml.time.to_milliseconds(self: ?) -> bigint  [expr] {
+  {  } self._nanoseconds Div 1000000
+}
+function baml.time.to_minutes(self: ?) -> bigint  [expr] {
+  {  } self._nanoseconds Div 60000000000
+}
+function baml.time.to_nanoseconds(self: ?) -> bigint  [expr] {
+  {  } self._nanoseconds
+}
+function baml.time.to_seconds(self: ?) -> bigint  [expr] {
+  {  } self._nanoseconds Div 1000000000
+}
+
+--- <builtin>/baml/ns_time/instant.baml ---
+class baml.time.Instant {
+  _nanoseconds: bigint
+}
+function baml.time.abs_diff(self: ?, other: baml.time.Instant) -> baml.time.Duration  [expr] {
+  {  } Duration { _nanoseconds: self._nanoseconds Sub other._nanoseconds.abs() }
+}
+function baml.time.elapsed(self: ?) -> baml.time.Duration  [expr] {
+  {  } Duration { _nanoseconds: Instant.now()._nanoseconds Sub self._nanoseconds }
+}
+function baml.time.epoch() -> baml.time.Instant  [expr] {
+  {  } baml.time.Instant { _nanoseconds: 0n }
+}
+function baml.time.from_json(j: baml.json.json) -> baml.time.Instant  [expr] {
+  {  } match (j) { string => Instant.parse(j) catch (_) { root.errors.ParseError { message: message } => throw root.json.JsonDecodeError { message: message, path: "" } }, _ => throw root.json.JsonDecodeError { message: "Expected timestam..." } }
+}
+function baml.time.from_timestamp_microseconds(us: bigint) -> baml.time.Instant  [expr] {
+  {  } baml.time.Instant { _nanoseconds: us Mul 1000 }
+}
+function baml.time.from_timestamp_milliseconds(ms: bigint) -> baml.time.Instant  [expr] {
+  {  } baml.time.Instant { _nanoseconds: ms Mul 1000000 }
+}
+function baml.time.from_timestamp_nanoseconds(ns: bigint) -> baml.time.Instant  [expr] {
+  {  } baml.time.Instant { _nanoseconds: ns }
+}
+function baml.time.from_timestamp_seconds(s: bigint) -> baml.time.Instant  [expr] {
+  {  } baml.time.Instant { _nanoseconds: s Mul 1000000000 }
+}
+function baml.time.max(self: ?, other: baml.time.Instant) -> baml.time.Instant  [expr] {
+  {  } if (other._nanoseconds Gt self._nanoseconds) {  } other else {  } self
+}
+function baml.time.min(self: ?, other: baml.time.Instant) -> baml.time.Instant  [expr] {
+  {  } if (other._nanoseconds Lt self._nanoseconds) {  } other else {  } self
+}
+function baml.time.now() -> baml.time.Instant  [builtin]
+function baml.time.parse(s: string) -> baml.time.Instant  [builtin]
+function baml.time.to_json(self: ?) -> string  [expr] {
+  {  } self.to_string() catch (_) { root.errors.InvalidArgument { message: message } => throw root.json.JsonSerializationError { message: message, path: "" } }
+}
+function baml.time.to_string(self: ?) -> string  [builtin]
+function baml.time.to_timestamp_microseconds(self: ?) -> bigint  [expr] {
+  {  } self._nanoseconds Div 1000
+}
+function baml.time.to_timestamp_milliseconds(self: ?) -> bigint  [expr] {
+  {  } self._nanoseconds Div 1000000
+}
+function baml.time.to_timestamp_nanoseconds(self: ?) -> bigint  [expr] {
+  {  } self._nanoseconds
+}
+function baml.time.to_timestamp_seconds(self: ?) -> bigint  [expr] {
+  {  } self._nanoseconds Div 1000000000
+}
+
 --- <builtin>/baml/ns_unstable/unstable.baml ---
 function baml.unstable.string(value: baml.unstable.T) -> string  [builtin]
 
@@ -1102,9 +1206,9 @@ function baml.to_json(self: ?) -> baml.json.json  [builtin]
 --- <builtin>/baml/string.baml ---
 class baml.String {
 }
+function baml.byte_length(self: ?) -> int  [builtin]
 function baml.char_at(self: ?, index: int) -> string  [builtin]
 function baml.char_count(self: ?) -> int  [builtin]
-function baml.code_point_at(self: ?, index: int) -> int  [builtin]
 function baml.ends_with(self: ?, suffix: string) -> bool  [builtin]
 function baml.from_code_points(unicode: int[]) -> string  [builtin]
 function baml.from_json(j: baml.json.json) -> baml.String  [expr] {
@@ -1134,6 +1238,7 @@ function baml.is_whitespace(self: ?) -> bool  [builtin]
 function baml.length(self: ?) -> int  [builtin]
 function baml.lines(self: ?) -> string[]  [builtin]
 function baml.matches(self: ?, substring: string) -> bool  [builtin]
+function baml.repeat(self: ?, count: int) -> string  [builtin]
 function baml.replace(self: ?, search: string, replacement: string) -> string  [builtin]
 function baml.replace_all(self: ?, search: string, replacement: string) -> string  [builtin]
 function baml.split(self: ?, delimiter: string) -> string[]  [builtin]
@@ -1153,6 +1258,9 @@ class baml.TypeValue {
 function baml.from_json(j: baml.json.json) -> baml.TypeValue  [expr] {
   baml.TypeValue {  }
 }
+function baml.implemented_by(self: ?, other: type) -> bool  [builtin]
+function baml.implementors(self: ?) -> type[]  [builtin]
+function baml.implements(self: ?, other: type) -> bool  [builtin]
 function baml.to_json(self: ?) -> baml.json.json  [expr] {
   map {  }
 }

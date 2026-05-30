@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 4198
 ---
 === TIR2 ===
 
@@ -355,7 +356,7 @@ function baml.future.Future.to_json(self: baml.future.Future) -> baml.json.json 
   map {  } : map<never, never>
 }
 function baml.future.Future.from_json(j: baml.json.json) -> Future<unknown, unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Future {  } : baml.future.Future<T, E>
+  Future {  } : Future<T, E>
 }
 class baml.future.Future$stream {
 }
@@ -1564,6 +1565,192 @@ class baml.sys.ShellOutput$stream {
   stdout: uint8array
   stderr: uint8array
   exit_code: null | int
+}
+
+--- <builtin>/baml/ns_time/duration.baml ---
+class baml.time.Duration {
+  _nanoseconds: bigint
+}
+function baml.time.Duration.abs(self: baml.time.Duration) -> baml.time.Duration throws never {
+  { : baml.time.Duration
+    Duration { _nanoseconds: self._nanoseconds.abs() } : baml.time.Duration
+  }
+}
+function baml.time.Duration.from_nanoseconds(ns: bigint) -> baml.time.Duration throws never {
+  { : baml.time.Duration
+    Duration { _nanoseconds: ns } : baml.time.Duration
+  }
+}
+function baml.time.Duration.from_microseconds(us: bigint) -> baml.time.Duration throws never {
+  { : baml.time.Duration
+    Duration { _nanoseconds: us * 1000 } : baml.time.Duration
+  }
+}
+function baml.time.Duration.from_milliseconds(ms: bigint) -> baml.time.Duration throws never {
+  { : baml.time.Duration
+    Duration { _nanoseconds: ms * 1000000 } : baml.time.Duration
+  }
+}
+function baml.time.Duration.from_seconds(s: bigint) -> baml.time.Duration throws never {
+  { : baml.time.Duration
+    Duration { _nanoseconds: s * 1000000000 } : baml.time.Duration
+  }
+}
+function baml.time.Duration.from_minutes(m: bigint) -> baml.time.Duration throws never {
+  { : baml.time.Duration
+    Duration { _nanoseconds: m * 60000000000 } : baml.time.Duration
+  }
+}
+function baml.time.Duration.from_hours(h: bigint) -> baml.time.Duration throws never {
+  { : baml.time.Duration
+    Duration { _nanoseconds: h * 3600000000000 } : baml.time.Duration
+  }
+}
+function baml.time.Duration.to_nanoseconds(self: baml.time.Duration) -> bigint throws never {
+  { : bigint
+    self._nanoseconds : bigint
+  }
+}
+function baml.time.Duration.to_microseconds(self: baml.time.Duration) -> bigint throws never {
+  { : bigint
+    self._nanoseconds / 1000 : bigint
+  }
+}
+function baml.time.Duration.to_milliseconds(self: baml.time.Duration) -> bigint throws never {
+  { : bigint
+    self._nanoseconds / 1000000 : bigint
+  }
+}
+function baml.time.Duration.to_seconds(self: baml.time.Duration) -> bigint throws never {
+  { : bigint
+    self._nanoseconds / 1000000000 : bigint
+  }
+}
+function baml.time.Duration.to_minutes(self: baml.time.Duration) -> bigint throws never {
+  { : bigint
+    self._nanoseconds / 60000000000 : bigint
+  }
+}
+function baml.time.Duration.to_hours(self: baml.time.Duration) -> bigint throws never {
+  { : bigint
+    self._nanoseconds / 3600000000000 : bigint
+  }
+}
+function baml.time.Duration.to_json(self: baml.time.Duration) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "_nanoseconds": self._nanoseconds.to_json() } : map<string, baml.json.json>
+}
+function baml.time.Duration.from_json(j: baml.json.json) -> baml.time.Duration throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Duration { _nanoseconds: baml.json.from_json<bigint>(baml.json.field(j, "_nanoseconds")) } : baml.time.Duration
+}
+class baml.time.Duration$stream {
+  _nanoseconds: null | bigint
+}
+
+--- <builtin>/baml/ns_time/instant.baml ---
+class baml.time.Instant {
+  _nanoseconds: bigint
+}
+function baml.time.Instant.elapsed(self: baml.time.Instant) -> baml.time.Duration throws never {
+  { : baml.time.Duration
+    Duration { _nanoseconds: Instant.now()._nanoseconds - self._nanoseconds } : baml.time.Duration
+  }
+}
+function baml.time.Instant.from_json(j: baml.json.json) -> baml.time.Instant throws baml.json.JsonDecodeError {
+  { : baml.time.Instant
+    match (j : baml.json.json) : baml.time.Instant
+      string =>
+        catch (Instant.parse(j) : baml.time.Instant) : baml.time.Instant
+          catch (_)
+            root.errors.ParseError { message: message } =>
+              throw root.json.JsonDecodeError { message: message, path: "" } : never
+      _ =>
+        throw root.json.JsonDecodeError { message: "Expected timestam..." } : never
+  }
+}
+function baml.time.Instant.to_json(self: baml.time.Instant) -> string throws baml.json.JsonSerializationError {
+  { : string
+    catch (self.to_string() : string) : unknown
+      catch (_)
+        root.errors.InvalidArgument { message: message } =>
+          throw root.json.JsonSerializationError { message: message, path: "" } : never
+  }
+}
+function baml.time.Instant.max(self: baml.time.Instant, other: baml.time.Instant) -> baml.time.Instant throws never {
+  { : baml.time.Instant
+    if (other._nanoseconds > self._nanoseconds : bool) : baml.time.Instant
+      { : baml.time.Instant
+        other : baml.time.Instant
+      }
+    else
+      { : baml.time.Instant
+        self : baml.time.Instant
+      }
+  }
+}
+function baml.time.Instant.min(self: baml.time.Instant, other: baml.time.Instant) -> baml.time.Instant throws never {
+  { : baml.time.Instant
+    if (other._nanoseconds < self._nanoseconds : bool) : baml.time.Instant
+      { : baml.time.Instant
+        other : baml.time.Instant
+      }
+    else
+      { : baml.time.Instant
+        self : baml.time.Instant
+      }
+  }
+}
+function baml.time.Instant.abs_diff(self: baml.time.Instant, other: baml.time.Instant) -> baml.time.Duration throws never {
+  { : baml.time.Duration
+    Duration { _nanoseconds: self._nanoseconds - other._nanoseconds.abs() } : baml.time.Duration
+  }
+}
+function baml.time.Instant.from_timestamp_nanoseconds(ns: bigint) -> baml.time.Instant throws never {
+  { : baml.time.Instant
+    Instant { _nanoseconds: ns } : baml.time.Instant
+  }
+}
+function baml.time.Instant.from_timestamp_microseconds(us: bigint) -> baml.time.Instant throws never {
+  { : baml.time.Instant
+    Instant { _nanoseconds: us * 1000 } : baml.time.Instant
+  }
+}
+function baml.time.Instant.from_timestamp_milliseconds(ms: bigint) -> baml.time.Instant throws never {
+  { : baml.time.Instant
+    Instant { _nanoseconds: ms * 1000000 } : baml.time.Instant
+  }
+}
+function baml.time.Instant.from_timestamp_seconds(s: bigint) -> baml.time.Instant throws never {
+  { : baml.time.Instant
+    Instant { _nanoseconds: s * 1000000000 } : baml.time.Instant
+  }
+}
+function baml.time.Instant.to_timestamp_nanoseconds(self: baml.time.Instant) -> bigint throws never {
+  { : bigint
+    self._nanoseconds : bigint
+  }
+}
+function baml.time.Instant.to_timestamp_microseconds(self: baml.time.Instant) -> bigint throws never {
+  { : bigint
+    self._nanoseconds / 1000 : bigint
+  }
+}
+function baml.time.Instant.to_timestamp_milliseconds(self: baml.time.Instant) -> bigint throws never {
+  { : bigint
+    self._nanoseconds / 1000000 : bigint
+  }
+}
+function baml.time.Instant.to_timestamp_seconds(self: baml.time.Instant) -> bigint throws never {
+  { : bigint
+    self._nanoseconds / 1000000000 : bigint
+  }
+}
+function baml.time.Instant.epoch() -> baml.time.Instant throws never {
+  { : baml.time.Instant
+    Instant { _nanoseconds: 0n } : baml.time.Instant
+  }
+}
+class baml.time.Instant$stream {
+  _nanoseconds: null | bigint
 }
 
 --- <builtin>/baml/ns_unstable/unstable.baml ---

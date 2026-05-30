@@ -152,7 +152,7 @@ pub(crate) fn bex_value_to_json(value: &BexExternalValue) -> Option<serde_json::
         BexExternalValue::Bigint(b) => Some(serde_json::json!(b.to_string())),
         BexExternalValue::Float(f) => Some(serde_json::json!(f)),
         BexExternalValue::Bool(b) => Some(serde_json::json!(b)),
-        BexExternalValue::String(s) => Some(serde_json::json!(s)),
+        BexExternalValue::String(s) => Some(serde_json::json!(s.as_str())),
         BexExternalValue::Array { items, .. } => {
             let arr: Vec<serde_json::Value> = items.iter().filter_map(bex_value_to_json).collect();
             Some(serde_json::Value::Array(arr))

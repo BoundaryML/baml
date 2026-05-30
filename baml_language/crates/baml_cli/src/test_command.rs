@@ -418,7 +418,10 @@ fn discover_testset_tests(
                 .build();
             rt.block_on(engine.call_function(
                 "testing.TestRegistry.expand_set",
-                vec![registry.clone(), BexExternalValue::String(name.clone())],
+                vec![
+                    registry.clone(),
+                    BexExternalValue::String(name.as_str().into()),
+                ],
                 ctx,
                 true,
             ))
@@ -539,7 +542,7 @@ fn run_testset_test(
         "testing.TestRegistry.run_test",
         vec![
             registry.clone(),
-            BexExternalValue::String(full_path.to_string()),
+            BexExternalValue::String(full_path.to_string().into()),
         ],
         call_ctx,
         true,

@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 7540
 ---
 function user.Box.from_json(j: baml.json.json) -> Box<void> {
     load_var j
@@ -14,7 +15,7 @@ function user.Box.from_json(j: baml.json.json) -> Box<void> {
     return
 }
 
-function user.Box.to_json(self: null) -> baml.json.json {
+function user.Box.to_json(self: Box) -> baml.json.json {
     load_var self
     load_field .value
     call baml.json.to_json
@@ -23,13 +24,13 @@ function user.Box.to_json(self: null) -> baml.json.json {
     return
 }
 
-function user.Box.unwrap(self: null) -> void {
+function user.Box.unwrap(self: Box) -> void {
     load_var self
     load_field .value
     return
 }
 
-function user.Calculator.compute(self: null, a: int, b: int) -> int {
+function user.Calculator.compute(self: Calculator, a: int, b: int) -> int {
     load_var self
     load_field .op
     load_const "add"
@@ -64,7 +65,7 @@ function user.Calculator.from_json(j: baml.json.json) -> Calculator {
     return
 }
 
-function user.Calculator.to_json(self: null) -> baml.json.json {
+function user.Calculator.to_json(self: Calculator) -> baml.json.json {
     load_var self
     load_field .op
     call baml.String.to_json
@@ -85,7 +86,7 @@ function user.Config.from_json(j: baml.json.json) -> Config {
     return
 }
 
-function user.Config.to_json(self: null) -> baml.json.json {
+function user.Config.to_json(self: Config) -> baml.json.json {
     load_var self
     load_field .encoder
     call user.Encoder.to_json
@@ -106,7 +107,7 @@ function user.Counter.from_json(j: baml.json.json) -> Counter {
     return
 }
 
-function user.Counter.increment(self: null) -> int {
+function user.Counter.increment(self: Counter) -> int {
     load_var self
     copy 0
     load_field .value
@@ -118,7 +119,7 @@ function user.Counter.increment(self: null) -> int {
     return
 }
 
-function user.Counter.to_json(self: null) -> baml.json.json {
+function user.Counter.to_json(self: Counter) -> baml.json.json {
     load_var self
     load_field .value
     call baml.Int.to_json
@@ -146,7 +147,7 @@ function user.Employee.from_json(j: baml.json.json) -> Employee {
     return
 }
 
-function user.Employee.full_name(self: null) -> string {
+function user.Employee.full_name(self: Employee) -> string {
     load_var self
     load_field .first
     load_const " "
@@ -157,7 +158,7 @@ function user.Employee.full_name(self: null) -> string {
     return
 }
 
-function user.Employee.greet(self: null, greeting: string) -> string {
+function user.Employee.greet(self: Employee, greeting: string) -> string {
     load_var greeting
     load_const ", "
     bin_op +
@@ -167,7 +168,7 @@ function user.Employee.greet(self: null, greeting: string) -> string {
     return
 }
 
-function user.Employee.to_json(self: null) -> baml.json.json {
+function user.Employee.to_json(self: Employee) -> baml.json.json {
     load_var self
     load_field .first
     call baml.String.to_json
@@ -180,7 +181,7 @@ function user.Employee.to_json(self: null) -> baml.json.json {
     return
 }
 
-function user.Encoder.encode(self: null, data: string) -> string {
+function user.Encoder.encode(self: Encoder, data: string) -> string {
     load_const "["
     load_var self
     load_field .charset
@@ -204,7 +205,7 @@ function user.Encoder.from_json(j: baml.json.json) -> Encoder {
     return
 }
 
-function user.Encoder.to_json(self: null) -> baml.json.json {
+function user.Encoder.to_json(self: Encoder) -> baml.json.json {
     load_var self
     load_field .charset
     call baml.String.to_json
@@ -213,7 +214,7 @@ function user.Encoder.to_json(self: null) -> baml.json.json {
     return
 }
 
-function user.Formatter.format(self: null, text: string) -> string {
+function user.Formatter.format(self: Formatter, text: string) -> string {
     load_var self
     load_field .prefix
     load_var text
@@ -233,7 +234,7 @@ function user.Formatter.from_json(j: baml.json.json) -> Formatter {
     return
 }
 
-function user.Formatter.to_json(self: null) -> baml.json.json {
+function user.Formatter.to_json(self: Formatter) -> baml.json.json {
     load_var self
     load_field .prefix
     call baml.String.to_json
@@ -261,7 +262,7 @@ function user.RangeCheck.from_json(j: baml.json.json) -> RangeCheck {
     return
 }
 
-function user.RangeCheck.is_valid(self: null, n: int) -> bool {
+function user.RangeCheck.is_valid(self: RangeCheck, n: int) -> bool {
     load_var n
     load_var self
     load_field .min
@@ -277,7 +278,7 @@ function user.RangeCheck.is_valid(self: null, n: int) -> bool {
     return
 }
 
-function user.RangeCheck.to_json(self: null) -> baml.json.json {
+function user.RangeCheck.to_json(self: RangeCheck) -> baml.json.json {
     load_var self
     load_field .min
     call baml.Int.to_json
@@ -359,7 +360,8 @@ function user.test_field_chain_bind(cfg: Config) -> string {
 
 function user.test_generic_bind() -> int {
     load_const 42
-    init_instance user.Box .value
+    load_type int
+    init_instance<1> user.Box .value
     make_bound_method user.Box.unwrap
     call_indirect
     return

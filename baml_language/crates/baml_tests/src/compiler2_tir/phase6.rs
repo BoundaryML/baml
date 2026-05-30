@@ -92,7 +92,7 @@ function f(xs: int[]) -> int {
 
     let tir = render_tir(&db, file);
     assert!(
-        tir.contains("type mismatch: expected user.Array<int>, got int[]"),
+        tir.contains("type mismatch: expected Array<int>, got int[]"),
         "expected nominal user.Array<T> to stay distinct from builtin int[], got:\n{tir}"
     );
 }

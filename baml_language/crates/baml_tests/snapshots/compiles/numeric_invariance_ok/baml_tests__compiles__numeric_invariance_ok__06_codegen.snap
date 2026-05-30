@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 20392
 ---
 function user.BigintCounter.from_json(j: baml.json.json) -> BigintCounter {
     load_var j
@@ -13,7 +14,7 @@ function user.BigintCounter.from_json(j: baml.json.json) -> BigintCounter {
     return
 }
 
-function user.BigintCounter.to_json(self: null) -> baml.json.json {
+function user.BigintCounter.to_json(self: BigintCounter) -> baml.json.json {
     load_var self
     load_field .count
     call baml.Bigint.to_json

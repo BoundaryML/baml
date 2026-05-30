@@ -245,7 +245,7 @@ fn test_stats_minor_partial_survival() {
 
 #[test]
 fn test_stats_compile_time_not_counted() {
-    let compile_time = vec![Object::String("builtin".to_string())];
+    let compile_time = vec![Object::String("builtin".into())];
     let heap = BexHeap::new(compile_time);
     let ct_ptr = heap.compile_time_ptr(0);
 

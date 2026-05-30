@@ -412,6 +412,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     let companion = ast::FunctionDef {
                         name: SmolStr::new(format!("{}$stream", func.name)),
                         generic_params: func.generic_params.clone(),
+                        generic_param_bounds: func.generic_param_bounds.clone(),
                         params: func.params.clone(),
                         defaults: func.defaults.clone(),
                         return_type: Some(stream_return_type.clone()),
@@ -455,6 +456,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     let companion = ast::FunctionDef {
                         name: SmolStr::new(format!("{}$parse_stream", func.name)),
                         generic_params: func.generic_params.clone(),
+                        generic_param_bounds: func.generic_param_bounds.clone(),
                         params: vec![sse_param],
                         defaults: ast::FunctionDefaults::empty(),
                         return_type: Some(stream_return_type),
@@ -484,8 +486,9 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
 pub fn file_semantic_index(db: &dyn Db, file: SourceFile) -> FileSemanticIndex<'_> {
     let tree = baml_compiler_parser::syntax_tree(db, file);
     let file_range = tree.text_range();
+    let path = file.path(db);
     let (mut items, lowering_diags, env_var_refs) =
-        ast::lower_file_with_file_id(&tree, file.file_id(db));
+        ast::lower_file_with_path(&tree, Some(path.as_path()));
 
     // Merge synthetic *$stream items
     let expansion = ppir_expansion_items(db, file);
@@ -593,11 +596,20 @@ fn enclosing_class_generic_params(
     item_tree: &ItemTree,
     function_id: baml_compiler2_hir::ids::LocalItemId<baml_compiler2_hir::ids::FunctionMarker>,
 ) -> Vec<Name> {
-    item_tree
+    if let Some(class_data) = item_tree
         .classes
         .values()
         .find(|class_data| class_data.methods.contains(&function_id))
-        .map(|class_data| class_data.generic_params.clone())
+    {
+        return class_data.generic_params.clone();
+    }
+    // BEP-044: a generic interface's default method sees the interface's type
+    // params (`interface Container<T> { function f(self) -> T { ... } }`).
+    item_tree
+        .interfaces
+        .values()
+        .find(|iface_data| iface_data.default_methods.contains(&function_id))
+        .map(|iface_data| iface_data.generic_params.clone())
         .unwrap_or_default()
 }
 

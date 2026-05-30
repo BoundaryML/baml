@@ -20,79 +20,53 @@ fn user.MatchJson(j: baml.json.json) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: baml.json.json // j // param
-    let _2: bool
-    let _3: bool
-    let _4: bool
-    let _5: bool
-    let _6: bool
-    let _7: bool
+    let _2: int
 
     bb0: {
-        _2 = copy _1 == const null;
-        branch copy _2 -> [bb12, bb1];
+        _2 = type_tag(_1);
+        switch copy _2 [null: bb8, bool: bb7, int: bb6, float: bb5, string: bb4, list: bb3, map: bb2, otherwise: bb1] (exhaustive);
     }
 
     bb1: {
-        _3 = is_type(copy _1, bool);
-        branch copy _3 -> [bb11, bb2];
+        unreachable;
     }
 
     bb2: {
-        _4 = is_type(copy _1, int);
-        branch copy _4 -> [bb10, bb3];
+        _0 = const "map";
+        goto -> bb9;
     }
 
     bb3: {
-        _5 = is_type(copy _1, float);
-        branch copy _5 -> [bb9, bb4];
+        _0 = const "array";
+        goto -> bb9;
     }
 
     bb4: {
-        _6 = is_type(copy _1, string);
-        branch copy _6 -> [bb8, bb5];
+        _0 = const "string";
+        goto -> bb9;
     }
 
     bb5: {
-        _7 = is_type(copy _1, baml.json.json[]);
-        branch copy _7 -> [bb7, bb6];
+        _0 = const "float";
+        goto -> bb9;
     }
 
     bb6: {
-        _0 = const "map";
-        goto -> bb13;
+        _0 = const "int";
+        goto -> bb9;
     }
 
     bb7: {
-        _0 = const "array";
-        goto -> bb13;
+        _0 = const "bool";
+        goto -> bb9;
     }
 
     bb8: {
-        _0 = const "string";
-        goto -> bb13;
+        _0 = const "null";
+        goto -> bb9;
     }
 
     bb9: {
-        _0 = const "float";
-        goto -> bb13;
-    }
-
-    bb10: {
-        _0 = const "int";
-        goto -> bb13;
-    }
-
-    bb11: {
-        _0 = const "bool";
-        goto -> bb13;
-    }
-
-    bb12: {
-        _0 = const "null";
-        goto -> bb13;
-    }
-
-    bb13: {
         return;
     }
 }

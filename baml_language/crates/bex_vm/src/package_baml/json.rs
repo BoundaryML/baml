@@ -65,6 +65,7 @@ fn class_lookup_key(qtn: &TypeName) -> String {
 }
 use std::collections::HashMap;
 
+use bex_heap::TlabHolder;
 use bex_vm_types::{
     HeapPtr,
     types::{Instance, Object, Value},
@@ -105,21 +106,23 @@ const JSON_SERIALIZATION_ERROR_FQN: &str = "baml.json.JsonSerializationError";
 // ─── Trait implementation ─────────────────────────────────────────────────────
 
 impl BamlNamespaceJson for PackageBamlImpl {
-    fn parse(vm: &mut BexVm, s: &str) -> Result<Value, VmRustFnError> {
-        json_parse(vm, s)
+    fn parse(vm: &mut BexVm, s: &bex_str::BexStr) -> Result<Value, VmRustFnError> {
+        json_parse(vm, s.as_str())
     }
 
-    fn stringify(vm: &mut BexVm, j: &Value) -> String {
+    fn stringify(vm: &mut BexVm, j: &Value) -> bex_str::BexStr {
         let json_val = value_to_serde(vm, *j);
-        serde_json::to_string(&json_val).unwrap_or_else(|_| "null".to_string())
+        let s = serde_json::to_string(&json_val).unwrap_or_else(|_| "null".to_string());
+        bex_str::BexStr::from(s)
     }
 
-    fn stringify_pretty(vm: &mut BexVm, j: &Value) -> String {
+    fn stringify_pretty(vm: &mut BexVm, j: &Value) -> bex_str::BexStr {
         let json_val = value_to_serde(vm, *j);
-        serde_json::to_string_pretty(&json_val).unwrap_or_else(|_| "null".to_string())
+        let s = serde_json::to_string_pretty(&json_val).unwrap_or_else(|_| "null".to_string());
+        bex_str::BexStr::from(s)
     }
 
-    fn to_string(vm: &mut BexVm, v: &Value) -> Result<String, VmRustFnError> {
+    fn to_string(vm: &mut BexVm, v: &Value) -> Result<bex_str::BexStr, VmRustFnError> {
         let ty = vm
             .current_call_type_args()
             .first()
@@ -129,10 +132,10 @@ impl BamlNamespaceJson for PackageBamlImpl {
                     name: "baml.json.to_string: missing type argument".to_string(),
                 })
             })?;
-        json_to_string_typed(vm, *v, &ty)
+        json_to_string_typed(vm, *v, &ty).map(bex_str::BexStr::from)
     }
 
-    fn from_string(vm: &mut BexVm, s: &str) -> Result<Value, VmRustFnError> {
+    fn from_string(vm: &mut BexVm, s: &bex_str::BexStr) -> Result<Value, VmRustFnError> {
         let ty = vm
             .current_call_type_args()
             .first()
@@ -142,7 +145,7 @@ impl BamlNamespaceJson for PackageBamlImpl {
                     name: "baml.json.from_string: missing type argument".to_string(),
                 })
             })?;
-        json_from_string_typed(vm, s, &ty)
+        json_from_string_typed(vm, s.as_str(), &ty)
     }
 
     fn to_json(vm: &mut BexVm, v: &Value) -> NativeCallResult {
@@ -172,10 +175,10 @@ impl BamlNamespaceJson for PackageBamlImpl {
         json_from_json_dispatch(vm, *j, &ty)
     }
 
-    fn field(vm: &mut BexVm, j: &Value, key: &str) -> Value {
+    fn field(vm: &mut BexVm, j: &Value, key: &bex_str::BexStr) -> Value {
         match j.as_object_ptr() {
             Some(ptr) => match vm.get_object(ptr) {
-                Object::Map(m) => m.get(key).unwrap_or(Value::NULL),
+                Object::Map(m) => m.get(key.as_str()).unwrap_or(Value::NULL),
                 _ => Value::NULL,
             },
             None => Value::NULL,
@@ -220,8 +223,10 @@ fn throw_json_parse_error(vm: &mut BexVm, message: String) -> Result<Value, VmIn
         .ok_or_else(|| VmInternalError::MissingNativeFunction {
             name: JSON_PARSE_ERROR_FQN.to_string(),
         })?;
-    let message_val = vm.alloc_string(message);
-    Ok(vm.alloc_instance(class_ptr, vec![message_val]))
+    let message_val = Value::object(vm.alloc_string(message));
+    Ok(Value::object(
+        vm.alloc_instance(class_ptr, vec![message_val]),
+    ))
 }
 
 fn throw_json_decode_error(
@@ -236,9 +241,11 @@ fn throw_json_decode_error(
         .ok_or_else(|| VmInternalError::MissingNativeFunction {
             name: JSON_DECODE_ERROR_FQN.to_string(),
         })?;
-    let message_val = vm.alloc_string(message);
-    let path_val = vm.alloc_string(path.to_string());
-    Ok(vm.alloc_instance(class_ptr, vec![message_val, path_val]))
+    let message_val = Value::object(vm.alloc_string(message));
+    let path_val = Value::object(vm.alloc_string(path.to_string()));
+    Ok(Value::object(
+        vm.alloc_instance(class_ptr, vec![message_val, path_val]),
+    ))
 }
 
 fn throw_json_serialization_error(
@@ -254,10 +261,13 @@ fn throw_json_serialization_error(
         .ok_or_else(|| VmInternalError::MissingNativeFunction {
             name: JSON_SERIALIZATION_ERROR_FQN.to_string(),
         })?;
-    let message_val = vm.alloc_string(message);
-    let path_val = vm.alloc_string(path.to_string());
-    let reason_val = vm.alloc_string(reason.to_string());
-    Ok(vm.alloc_instance(class_ptr, vec![message_val, path_val, reason_val]))
+    let message_val = Value::object(vm.alloc_string(message));
+    let path_val = Value::object(vm.alloc_string(path.to_string()));
+    let reason_val = Value::object(vm.alloc_string(reason.to_string()));
+    Ok(Value::object(vm.alloc_instance(
+        class_ptr,
+        vec![message_val, path_val, reason_val],
+    )))
 }
 
 fn raise_decode(vm: &mut BexVm, message: impl Into<String>, path: &str) -> VmRustFnError {
@@ -307,25 +317,30 @@ pub fn serde_to_value(vm: &mut BexVm, v: &serde_json::Value) -> Value {
             {
                 v
             } else if let Some(f) = n.as_f64() {
-                vm.alloc_float(f)
+                Value::object(vm.alloc_float(f))
             } else {
                 // Only reachable with serde_json's `arbitrary_precision`
                 // feature (not enabled here). NaN is a sentinel for "we
                 // were handed a number we can't represent at all"; if you
                 // hit this in practice, refuse arbitrary-precision input
                 // upstream rather than relying on this fallback.
-                vm.alloc_float(f64::NAN)
+                Value::object(vm.alloc_float(f64::NAN))
             }
         }
-        serde_json::Value::String(s) => vm.alloc_string(s.clone()),
+        serde_json::Value::String(s) => Value::object(vm.alloc_string(s.clone())),
         serde_json::Value::Array(arr) => {
             let items: Vec<Value> = arr.iter().map(|elem| serde_to_value(vm, elem)).collect();
             Value::object(vm.tlab.alloc(Object::Array(items.into())))
         }
         serde_json::Value::Object(map) => {
-            let entries: IndexMap<String, Value> = map
+            let entries: IndexMap<bex_vm_types::BexStr, Value> = map
                 .iter()
-                .map(|(k, v)| (k.clone(), serde_to_value(vm, v)))
+                .map(|(k, v)| {
+                    (
+                        bex_vm_types::BexStr::from(k.as_str()),
+                        serde_to_value(vm, v),
+                    )
+                })
                 .collect();
             Value::object(vm.tlab.alloc(Object::Map(entries.into())))
         }
@@ -347,7 +362,7 @@ pub fn value_to_serde(vm: &BexVm, v: Value) -> serde_json::Value {
             Object::Float(f) => serde_json::Number::from_f64(*f)
                 .map(serde_json::Value::Number)
                 .unwrap_or(serde_json::Value::Null),
-            Object::String(s) => serde_json::Value::String(s.clone()),
+            Object::String(s) => serde_json::Value::String(s.to_string()),
             Object::Array(arr) => {
                 let arr = arr.to_vec();
                 serde_json::Value::Array(arr.iter().map(|el| value_to_serde(vm, *el)).collect())
@@ -356,7 +371,7 @@ pub fn value_to_serde(vm: &BexVm, v: Value) -> serde_json::Value {
                 let map = map.to_index_map();
                 let entries: serde_json::Map<String, serde_json::Value> = map
                     .iter()
-                    .map(|(k, v)| (k.clone(), value_to_serde(vm, *v)))
+                    .map(|(k, v)| (k.to_string(), value_to_serde(vm, *v)))
                     .collect();
                 serde_json::Value::Object(entries)
             }
@@ -463,7 +478,7 @@ fn ty_value_to_serde(
                 let val_json = with_path_segment(path, format_args!("[{k:?}]"), |p| {
                     ty_value_to_serde(vm, v, vty, p)
                 })?;
-                out.insert(k, val_json);
+                out.insert(k.to_string(), val_json);
             }
             Ok(serde_json::Value::Object(out))
         }
@@ -766,7 +781,7 @@ fn ty_serde_to_value(
         Ty::Float { .. } => match json {
             serde_json::Value::Number(n) => {
                 if let Some(f) = n.as_f64() {
-                    Ok(vm.alloc_float(f))
+                    Ok(Value::object(vm.alloc_float(f)))
                 } else {
                     Err(raise_decode(vm, "expected number", path))
                 }
@@ -775,7 +790,7 @@ fn ty_serde_to_value(
         },
 
         Ty::String { .. } => match json {
-            serde_json::Value::String(s) => Ok(vm.alloc_string(s.clone())),
+            serde_json::Value::String(s) => Ok(Value::object(vm.alloc_string(s.clone()))),
             _ => Err(raise_decode(vm, "expected string", path)),
         },
 
@@ -800,12 +815,13 @@ fn ty_serde_to_value(
 
         Ty::Map { value: vty, .. } => match json {
             serde_json::Value::Object(map) => {
-                let mut entries: IndexMap<String, Value> = IndexMap::with_capacity(map.len());
+                let mut entries: IndexMap<bex_vm_types::BexStr, Value> =
+                    IndexMap::with_capacity(map.len());
                 for (k, val) in map {
                     let v = with_path_segment(path, format_args!("[{k:?}]"), |p| {
                         ty_serde_to_value(vm, val, vty, p)
                     })?;
-                    entries.insert(k.clone(), v);
+                    entries.insert(bex_vm_types::BexStr::from(k.as_str()), v);
                 }
                 Ok(Value::object(vm.tlab.alloc(Object::Map(entries.into()))))
             }
@@ -868,7 +884,7 @@ fn ty_serde_to_value(
                 Ok(Value::bool(*jb))
             }
             (baml_type::Literal::String(s), serde_json::Value::String(js)) if s == js => {
-                Ok(vm.alloc_string(js.clone()))
+                Ok(Value::object(vm.alloc_string(js.clone())))
             }
             (baml_type::Literal::Int(expected), serde_json::Value::Number(n)) => {
                 if let Some(actual) = n.as_i64() {
@@ -881,7 +897,7 @@ fn ty_serde_to_value(
             (baml_type::Literal::Float(s), serde_json::Value::Number(n)) => {
                 if let (Ok(expected), Some(actual)) = (s.parse::<f64>(), n.as_f64()) {
                     if (expected - actual).abs() < f64::EPSILON {
-                        return Ok(vm.alloc_float(actual));
+                        return Ok(Value::object(vm.alloc_float(actual)));
                     }
                 }
                 Err(raise_decode(vm, "literal float mismatch", path))
@@ -999,7 +1015,7 @@ fn deserialize_enum_variant(
         }
     };
     match idx {
-        Some(i) => Ok(vm.alloc_variant(enm_ptr, i)),
+        Some(i) => Ok(Value::object(vm.alloc_variant(enm_ptr, i))),
         None => Err(raise_decode(
             vm,
             format!("unknown variant `{variant_name}` for enum `{qtn}`"),
@@ -1078,8 +1094,8 @@ fn deserialize_media(
         .get(&key)
         .copied()
         .ok_or_else(|| raise_decode(vm, format!("media class `{qtn}` not found"), path))?;
-    let data_val = vm.alloc_rust_data(media_arc);
-    Ok(vm.alloc_instance(class_ptr, vec![data_val]))
+    let data_val = Value::object(vm.alloc_rust_data(media_arc));
+    Ok(Value::object(vm.alloc_instance(class_ptr, vec![data_val])))
 }
 
 // ─── from_json dispatcher ────────────────────────────────────────────────────
@@ -1281,7 +1297,7 @@ impl Continuation for ListFromJsonCont {
 // ── Map dispatch ──────────────────────────────────────────────────────────────
 
 fn map_from_json_start(vm: &mut BexVm, j: Value, val_ty: &Ty) -> NativeCallResult {
-    let entries: Vec<(String, Value)> = match j.as_object_ptr() {
+    let entries: Vec<(bex_vm_types::BexStr, Value)> = match j.as_object_ptr() {
         Some(p) => match vm.get_object(p) {
             Object::Map(m) => m.lock().iter().map(|(k, v)| (k.clone(), *v)).collect(),
             _ => {
@@ -1297,9 +1313,9 @@ fn map_from_json_start(vm: &mut BexVm, j: Value, val_ty: &Ty) -> NativeCallResul
 
 fn map_drive(
     vm: &mut BexVm,
-    entries: Vec<(String, Value)>,
+    entries: Vec<(bex_vm_types::BexStr, Value)>,
     val_ty: Ty,
-    mut results: IndexMap<String, Value>,
+    mut results: IndexMap<bex_vm_types::BexStr, Value>,
     mut idx: usize,
 ) -> NativeCallResult {
     while idx < entries.len() {
@@ -1328,9 +1344,9 @@ fn map_drive(
 
 fn wrap_map_yield(
     yld: NativeCallResult,
-    entries: Vec<(String, Value)>,
+    entries: Vec<(bex_vm_types::BexStr, Value)>,
     val_ty: Ty,
-    results: IndexMap<String, Value>,
+    results: IndexMap<bex_vm_types::BexStr, Value>,
     idx: usize,
 ) -> NativeCallResult {
     let (callee, args, type_args) = match yld {
@@ -1356,9 +1372,9 @@ fn wrap_map_yield(
 }
 
 struct MapFromJsonCont {
-    entries: Vec<(String, Value)>,
+    entries: Vec<(bex_vm_types::BexStr, Value)>,
     val_ty: Ty,
-    results: IndexMap<String, Value>,
+    results: IndexMap<bex_vm_types::BexStr, Value>,
     idx: usize,
 }
 

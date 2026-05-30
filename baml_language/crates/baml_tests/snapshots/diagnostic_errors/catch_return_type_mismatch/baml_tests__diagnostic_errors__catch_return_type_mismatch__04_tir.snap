@@ -7,7 +7,7 @@ function user.callee() -> bool throws user.Errors {
   { : never
     return true : true
   }
-  ?? 218..225: extraneous throws declaration: user.Errors
+  ?? 218..225: extraneous throws declaration: Errors
 }
 function user.caller() -> bool throws never {
   { : bool
@@ -18,5 +18,5 @@ function user.caller() -> bool throws never {
             return e : user.Errors
           }
   }
-  !! 458..459: type mismatch: expected bool, got user.Errors
+  !! 458..459: type mismatch: expected bool, got Errors
 }

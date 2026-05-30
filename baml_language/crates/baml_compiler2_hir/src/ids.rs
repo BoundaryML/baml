@@ -18,6 +18,8 @@ pub struct ClassMarker;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct EnumMarker;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct InterfaceMarker;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TypeAliasMarker;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ClientMarker;
@@ -96,6 +98,7 @@ pub enum ItemKind {
     Function,
     Class,
     Enum,
+    Interface,
     TypeAlias,
     Client,
     Generator,

@@ -1,28 +1,28 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function future_methods.$init_test_53(registry: testing.TestCollector) -> null {
+function future_methods.$init_test_ns_future_methods_future_methods(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "methods_after_successful_settle"
-    make_closure .<lambda($init_test_53, 0)>, 0
+    make_closure .<lambda($init_test_ns_future_methods_future_methods, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "methods_on_pending_future"
-    make_closure .<lambda($init_test_53, 1)>, 0
+    make_closure .<lambda($init_test_ns_future_methods_future_methods, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "methods_after_cancel"
-    make_closure .<lambda($init_test_53, 2)>, 0
+    make_closure .<lambda($init_test_ns_future_methods_future_methods, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "methods_on_errored_future"
-    make_closure .<lambda($init_test_53, 3)>, 0
+    make_closure .<lambda($init_test_ns_future_methods_future_methods, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
