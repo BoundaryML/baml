@@ -521,30 +521,36 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      # Cache strategy mirrors cargo-tests.reusable.yaml: only canary writes,
-      # PRs restore read-only. Deliberately a bench-specific lane
-      # (`linux-arm-bench`), NOT a shared/canonical aarch64 lane:
-      #
-      #   - It can't reuse the x86 `linux-cargo` lane anyway — Swatinem/rust-cache
-      #     bakes the rustc host triple into every key, so aarch64 never matches
-      #     an x86_64 entry, and the artifacts are arch-incompatible.
-      #   - It also shouldn't be reused by other ARM jobs: its only saver is this
-      #     benchmark build, which compiles just `baml_tests` benches. That's a
-      #     thin seed — a general ARM CI job reading it would still rebuild most
-      #     of the workspace. Future ARM jobs should stand up their own lane
-      #     (ideally with a broad-tree saver, like x86's `cargo-test-linux`)
-      #     rather than piggyback on this one.
+      # Swatinem caches the compiled target/ for this build job's own speed
+      # (canary is the sole saver; PRs restore read-only). It is bench-specific
+      # on purpose — its only saver compiles just baml_tests benches, a thin
+      # seed not worth sharing with a general ARM job.
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
-          # TEMPORARY — revert to `${{ github.ref == 'refs/heads/canary' }}`
-          # before merge. Saving on this branch lets benchmarks-run restore the
-          # cargo home in the SAME workflow run, so we can prove the metadata
-          # fix on this PR before canary has seeded the lane.
-          save-if: true
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
           cache-all-crates: true
           cache-workspace-crates: true
           shared-key: "linux-arm-bench"
+
+      # Separately, cache the cargo HOME (registry index + git dep checkouts) so
+      # benchmarks-run can restore it on the codspeed-macro runner and skip the
+      # ~24-min cold `cargo metadata` that otherwise re-clones every git
+      # dependency (minijinja, the aws-sdk-rust fork, …).
+      #
+      # We deliberately do NOT reuse Swatinem's lane here: rust-cache folds a
+      # per-runner "environment hash" into its key, and rustup behaves
+      # differently on codspeed-macro (`rustup toolchain list` errors), so the
+      # build and run keys never match. An explicit Cargo.lock-hashed key is
+      # byte-identical on both jobs — one entry per lockfile, saved by whichever
+      # job runs first (here the build job, which runs first via `needs`).
+      - name: "Cache cargo home for benchmarks-run"
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-home-arm-bench-${{ hashFiles('baml_language/Cargo.lock') }}
 
       # Pin to the same major+minor as codspeed-divan-compat in Cargo.lock
       # (4.7.0). cargo codspeed run aborts on a major-version mismatch.
@@ -594,20 +600,19 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      # Restore the cargo home (crates.io index + git dependency checkouts) that
-      # benchmarks-build populates on the same `linux-arm-bench` lane. WITHOUT
-      # this, `cargo codspeed run`'s implicit `cargo metadata` re-clones every
-      # git dependency (minijinja, the aws-sdk-rust fork, …) from scratch on the
-      # bare codspeed-macro runner — ~24 min of silence before a single bench
-      # runs. Reader only: benchmarks-build is the canary saver for this lane,
-      # and same aarch64-unknown-linux-gnu triple ⇒ the key matches.
-      - uses: Swatinem/rust-cache@v2
+      # Restore the cargo home that benchmarks-build saved under the same
+      # explicit Cargo.lock-hashed key (identical on both runners — see the
+      # build job for why we don't use rust-cache's machine-sensitive key).
+      # Without it, `cargo codspeed run`'s implicit `cargo metadata` re-clones
+      # every git dependency on the bare codspeed-macro runner — ~24 min of
+      # silence before a single bench runs.
+      - name: "Restore cargo home"
+        uses: actions/cache/restore@v4
         with:
-          workspaces: "baml_language -> target"
-          save-if: false
-          cache-all-crates: true
-          cache-workspace-crates: true
-          shared-key: "linux-arm-bench"
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-home-arm-bench-${{ hashFiles('baml_language/Cargo.lock') }}
 
       - name: "Install cargo-codspeed"
         uses: taiki-e/install-action@v2
@@ -629,6 +634,13 @@ jobs:
         uses: CodSpeedHQ/action@v4
         # Benchmarks are advisory — never block a merge on a measurement blip.
         continue-on-error: true
+        env:
+          # The cargo home is restored above, so `cargo metadata` has every dep
+          # locally. Force offline so it physically cannot stall on the network
+          # (no index update, no git fetch) — turns the old ~24-min metadata
+          # phase into seconds. Fails fast and loud if the cache ever misses,
+          # instead of silently re-cloning for half an hour.
+          CARGO_NET_OFFLINE: "true"
         with:
           mode: walltime
           # Executes ONLY the prebuilt binaries downloaded above; no compiler runs.
