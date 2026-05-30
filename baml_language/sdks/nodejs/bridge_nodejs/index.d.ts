@@ -13,6 +13,21 @@ export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native';
 export { BamlStream } from './stream';
 export { encodeCallArgs, decodeCallResult } from './proto';
 export { CtxManager } from './ctx_manager';
+export { BamlTypeMap, setTypeMap, getTypeMap } from './typemap';
+/**
+ * Phase-2 placeholder sentinel. Generated leaf bodies emit
+ * `export const Foo: any = BAML_PLACEHOLDER;` until Phase 4 fills in the real
+ * class/factory shape. A frozen non-`undefined` object so jest's
+ * `expect(Foo).toBeDefined()` passes on the scaffolding.
+ */
+export declare const BAML_PLACEHOLDER: any;
+/**
+ * Free-function runtime initializer used by generated `baml_sdk/index.ts`:
+ * `initializeRuntime("baml_src", _inlinedbaml.FILES)`. Thin wrapper over the
+ * `BamlRuntime.initializeRuntime` factory (which sets the process-global
+ * singleton reachable via `getRuntime()`).
+ */
+export declare function initializeRuntime(srcDir: string, files: Record<string, string>): void;
 export { BamlError, BamlInvalidArgumentError, BamlClientError, BamlCancelledError, BamlPanic, wrapNativeError, } from './errors';
 export declare class FunctionResult {
     private _value;

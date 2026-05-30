@@ -8,7 +8,8 @@
 "use strict";
 // index.ts — mirrors bridge_python/python_src/baml_py/__init__.py
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.Collector = exports.FunctionLog = exports.FunctionResult = exports.wrapNativeError = exports.BamlPanic = exports.BamlCancelledError = exports.BamlClientError = exports.BamlInvalidArgumentError = exports.BamlError = exports.CtxManager = exports.decodeCallResult = exports.encodeCallArgs = exports.BamlStream = exports.BamlPdf = exports.BamlVideo = exports.BamlAudio = exports.BamlImage = exports._seedGenericMediaHandle = exports._seedFunctionRefHandle = exports.putHandleIntoTable = exports.takeHandleFromTable = exports.Usage = exports.Timing = exports.flushEvents = exports.getVersion = exports.getRuntime = exports.HostSpanManager = exports.BamlHandle = exports.AbortController = exports.BamlRuntime = void 0;
+exports.Collector = exports.FunctionLog = exports.FunctionResult = exports.wrapNativeError = exports.BamlPanic = exports.BamlCancelledError = exports.BamlClientError = exports.BamlInvalidArgumentError = exports.BamlError = exports.BAML_PLACEHOLDER = exports.getTypeMap = exports.setTypeMap = exports.BamlTypeMap = exports.CtxManager = exports.decodeCallResult = exports.encodeCallArgs = exports.BamlStream = exports.BamlPdf = exports.BamlVideo = exports.BamlAudio = exports.BamlImage = exports._seedGenericMediaHandle = exports._seedFunctionRefHandle = exports.putHandleIntoTable = exports.takeHandleFromTable = exports.Usage = exports.Timing = exports.flushEvents = exports.getVersion = exports.getRuntime = exports.HostSpanManager = exports.BamlHandle = exports.AbortController = exports.BamlRuntime = void 0;
+exports.initializeRuntime = initializeRuntime;
 exports.callFunctionSync = callFunctionSync;
 exports.callFunction = callFunction;
 const native_1 = require("./native");
@@ -46,6 +47,27 @@ Object.defineProperty(exports, "encodeCallArgs", { enumerable: true, get: functi
 Object.defineProperty(exports, "decodeCallResult", { enumerable: true, get: function () { return proto_2.decodeCallResult; } });
 var ctx_manager_1 = require("./ctx_manager");
 Object.defineProperty(exports, "CtxManager", { enumerable: true, get: function () { return ctx_manager_1.CtxManager; } });
+// Codegen support: typemap + placeholder sentinel + free runtime initializer.
+var typemap_1 = require("./typemap");
+Object.defineProperty(exports, "BamlTypeMap", { enumerable: true, get: function () { return typemap_1.BamlTypeMap; } });
+Object.defineProperty(exports, "setTypeMap", { enumerable: true, get: function () { return typemap_1.setTypeMap; } });
+Object.defineProperty(exports, "getTypeMap", { enumerable: true, get: function () { return typemap_1.getTypeMap; } });
+/**
+ * Phase-2 placeholder sentinel. Generated leaf bodies emit
+ * `export const Foo: any = BAML_PLACEHOLDER;` until Phase 4 fills in the real
+ * class/factory shape. A frozen non-`undefined` object so jest's
+ * `expect(Foo).toBeDefined()` passes on the scaffolding.
+ */
+exports.BAML_PLACEHOLDER = Object.freeze({ __bamlPlaceholder: true });
+/**
+ * Free-function runtime initializer used by generated `baml_sdk/index.ts`:
+ * `initializeRuntime("baml_src", _inlinedbaml.FILES)`. Thin wrapper over the
+ * `BamlRuntime.initializeRuntime` factory (which sets the process-global
+ * singleton reachable via `getRuntime()`).
+ */
+function initializeRuntime(srcDir, files) {
+    native_1.BamlRuntime.initializeRuntime(srcDir, files);
+}
 const errors_1 = require("./errors");
 var errors_2 = require("./errors");
 Object.defineProperty(exports, "BamlError", { enumerable: true, get: function () { return errors_2.BamlError; } });

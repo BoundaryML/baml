@@ -50,7 +50,12 @@ echo "==> pnpm build:debug in sdks/nodejs/bridge_nodejs"
 for fixture_dir in */generated; do
     [[ -d "$fixture_dir" ]] || continue
     echo "==> pnpm install in $fixture_dir"
-    (cd "$fixture_dir" && pnpm install --ignore-workspace)
+    # `--ignore-scripts`: the only dependency with a build script is
+    # protobufjs, which needs no build for our pure-JS usage (we ship a
+    # pre-generated `baml_cffi.js` that `require`s `protobufjs/minimal` at
+    # runtime). Without this flag pnpm 9+ exits non-zero with
+    # ERR_PNPM_IGNORED_BUILDS, which `set -e` would treat as a fatal abort.
+    (cd "$fixture_dir" && pnpm install --ignore-workspace --ignore-scripts)
 done
 
 # Per-run breadcrumb for the `setup_guard::ran` test. See the

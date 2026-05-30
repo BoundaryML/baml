@@ -40,7 +40,10 @@ Get-ChildItem -Directory | ForEach-Object {
         Write-Host "==> pnpm install in $($_.Name)/generated"
         Push-Location $generated
         try {
-            pnpm install --ignore-workspace
+            # --ignore-scripts: protobufjs is the only dep with a build
+            # script and needs none for our pure-JS usage; without it pnpm 9+
+            # exits non-zero (ERR_PNPM_IGNORED_BUILDS). See setup.sh.
+            pnpm install --ignore-workspace --ignore-scripts
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         } finally {
             Pop-Location
