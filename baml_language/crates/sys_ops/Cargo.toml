@@ -13,8 +13,7 @@ aws-crypto = [ "sys_llm/aws-crypto" ]
 ring-crypto = [ "sys_llm/ring-crypto" ]
 
 [build-dependencies]
-baml_builtins2 = { workspace = true }
-baml_builtins2_codegen = { workspace = true }
+baml_rustgen_check = { workspace = true }
 
 [dependencies]
 baml_builtins2 = { workspace = true }

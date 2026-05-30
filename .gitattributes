@@ -8,3 +8,15 @@
 # Force LF line endings for .baml files so include_str! embeds consistent
 # content on all platforms (avoids CRLF line-number shifts on Windows CI).
 *.baml text eol=lf
+
+# Checked-in baml_std codegen output (see crates/tools_rustgen). `tools_rustgen`
+# always emits LF; forcing LF on checkout keeps the byte-for-byte freshness check
+# (tools_rustgen's up_to_date test) from failing on Windows CRLF checkouts.
+baml_language/crates/sys_types/src/io_generated.rs text eol=lf
+baml_language/crates/sys_types/src/runtime_io.rs text eol=lf
+baml_language/crates/sys_ops/src/io_generated.rs text eol=lf
+baml_language/crates/sys_ops/src/io_adapter.rs text eol=lf
+baml_language/crates/bex_vm/src/package_baml/nativefunctions_generated.rs text eol=lf
+baml_language/crates/bex_vm_types/src/sys_op_generated.rs text eol=lf
+baml_language/crates/bex_vm_types/src/errors_generated.rs text eol=lf
+baml_language/crates/bex_vm_types/src/panics_generated.rs text eol=lf

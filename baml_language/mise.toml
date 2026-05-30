@@ -61,3 +61,21 @@ description = "Run all snapshot tests with INSTA_UPDATE=always"
 env = { INSTA_UPDATE = "always" }
 run = "cargo test --workspace"
 sources = ["**/*.rs", "**/Cargo.toml"]
+
+[tasks.codegen]
+description = "Regenerate the checked-in builtin/IO source files"
+run = "cargo run -p tools_rustgen"
+sources = ["crates/baml_builtins2/baml_std/**", "crates/baml_builtins2_codegen/src/**"]
+outputs = [
+  "crates/sys_types/src/io_generated.rs",
+  "crates/sys_types/src/runtime_io.rs",
+  "crates/sys_ops/src/io_generated.rs",
+  "crates/sys_ops/src/io_adapter.rs",
+  "crates/bex_vm/src/package_baml/nativefunctions_generated.rs",
+  "crates/bex_vm_types/src/sys_op_generated.rs",
+  "crates/bex_vm_types/src/errors_generated.rs",
+  "crates/bex_vm_types/src/panics_generated.rs",
+]
+
+[tools]
+sccache = "0.15.0"

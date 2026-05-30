@@ -122,7 +122,7 @@ pub trait Continuation: Send {
 )]
 mod generated {
     use super::*;
-    include!(concat!(env!("OUT_DIR"), "/nativefunctions_generated.rs"));
+    include!("nativefunctions_generated.rs");
 }
 pub use generated::*;
 

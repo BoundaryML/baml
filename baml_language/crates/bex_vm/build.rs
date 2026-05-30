@@ -1,7 +1,11 @@
+//! Verifies the checked-in generated files are still in sync with the
+//! `baml_std` source of truth. Depends only on `baml_rustgen_check` (zero deps) — it
+//! does NOT run the codegen, so it never pulls `baml_compiler2_ast` into the
+//! build graph. Regenerate with `cargo run -p tools_rustgen` (or `mise run codegen`).
+
 fn main() {
-    let (vm_builtins, _io_builtins, class_defs) =
-        baml_builtins2_codegen::extract_native_builtins().unwrap_or_else(|e| panic!("{e}"));
-    let code = baml_builtins2_codegen::generate_native_trait(&vm_builtins, &class_defs);
-    let out_dir = std::env::var("OUT_DIR").unwrap();
-    std::fs::write(format!("{out_dir}/nativefunctions_generated.rs"), code).unwrap();
+    baml_rustgen_check::rerun_if_baml_std_changed();
+    baml_rustgen_check::assert_generated_matches_baml_std(
+        "bex_vm/src/package_baml/nativefunctions_generated.rs",
+    );
 }

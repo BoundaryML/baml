@@ -1,0 +1,23 @@
+[package]
+name = "tools_rustgen"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+publish = false
+description = "Generates the checked-in builtin/IO source files (formerly produced by build.rs)"
+
+[[bin]]
+name = "tools_rustgen"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+baml_builtins2_codegen = { workspace = true }
+baml_rustgen_check = { workspace = true }
+anyhow = { workspace = true }
+
+[package.metadata.ci]
+wasm_support = false

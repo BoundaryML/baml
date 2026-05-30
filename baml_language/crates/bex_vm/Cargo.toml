@@ -17,6 +17,9 @@ doctest = false
 [lints]
 workspace = true
 
+[build-dependencies]
+baml_rustgen_check = { workspace = true }
+
 [dependencies]
 baml_builtins2 = { workspace = true }
 baml_type = { workspace = true }
@@ -36,9 +39,6 @@ smallvec = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true }
 web-time = { workspace = true }
-
-[build-dependencies]
-baml_builtins2_codegen = { workspace = true }
 
 [dev-dependencies]
 baml_project = { workspace = true, features = [ "testing" ] }

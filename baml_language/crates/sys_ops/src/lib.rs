@@ -34,7 +34,7 @@ pub mod io {
         SysOpFn, SysOpOutput, SysOpResult,
     };
 
-    include!(concat!(env!("OUT_DIR"), "/io_generated.rs"));
+    include!("io_generated.rs");
 }
 
 // ============================================================================
@@ -81,7 +81,7 @@ mod io_adapter {
 
     use super::io::SysOps;
 
-    include!(concat!(env!("OUT_DIR"), "/io_adapter.rs"));
+    include!("io_adapter.rs");
 }
 pub use io_adapter::build_runtime_io;
 

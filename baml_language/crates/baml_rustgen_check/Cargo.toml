@@ -1,0 +1,18 @@
+[package]
+name = "baml_rustgen_check"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+publish = false
+description = "Zero-dependency hash of the baml_std codegen inputs, shared by tools_rustgen and the generated crates' build.rs staleness check"
+
+[lints]
+workspace = true
+
+# Intentionally NO dependencies: this crate is a build-dependency of the
+# generated-code crates, so it must compile for the host without dragging in
+# baml_compiler2_ast (the whole point of moving codegen out of build.rs).
+
+[package.metadata.ci]
+wasm_support = false

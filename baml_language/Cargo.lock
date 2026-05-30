@@ -1437,6 +1437,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_rustgen_check"
+version = "0.1.0"
+
+[[package]]
 name = "baml_tests"
 version = "0.0.0-beta"
 dependencies = [
@@ -1723,8 +1727,8 @@ version = "0.0.0-beta"
 dependencies = [
  "anyhow",
  "baml_builtins2",
- "baml_builtins2_codegen",
  "baml_project",
+ "baml_rustgen_check",
  "baml_type",
  "base64",
  "bex_events",
@@ -1753,7 +1757,7 @@ dependencies = [
  "anyhow",
  "baml_base",
  "baml_builtins2",
- "baml_builtins2_codegen",
+ "baml_rustgen_check",
  "baml_type",
  "bex_resource_types",
  "bex_str",
@@ -7724,7 +7728,7 @@ name = "sys_ops"
 version = "0.0.0-beta"
 dependencies = [
  "baml_builtins2",
- "baml_builtins2_codegen",
+ "baml_rustgen_check",
  "baml_type",
  "bex_external_types",
  "bex_heap",
@@ -7743,7 +7747,7 @@ name = "sys_types"
 version = "0.0.0-beta"
 dependencies = [
  "async-trait",
- "baml_builtins2_codegen",
+ "baml_rustgen_check",
  "baml_type",
  "bex_external_types",
  "bex_heap",
@@ -8190,6 +8194,15 @@ dependencies = [
  "salsa",
  "similar",
  "text-size",
+]
+
+[[package]]
+name = "tools_rustgen"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "baml_builtins2_codegen",
+ "baml_rustgen_check",
 ]
 
 [[package]]

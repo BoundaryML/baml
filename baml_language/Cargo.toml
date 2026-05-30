@@ -53,6 +53,7 @@ baml_builtins = { path = "crates/baml_builtins" }
 baml_builtins_codegen = { path = "crates/baml_builtins_codegen" }
 baml_builtins2 = { path = "crates/baml_builtins2" }
 baml_builtins2_codegen = { path = "crates/baml_builtins2_codegen" }
+baml_rustgen_check = { path = "crates/baml_rustgen_check" }
 baml_builtins_macros = { path = "crates/baml_builtins_macros" }
 codegen_go = { path = "sdks/go/codegen_go" }
 codegen_nodejs = { path = "sdks/nodejs/codegen_nodejs" }
@@ -311,6 +312,15 @@ if_not_else = "allow"
 
 # Diagnostics are not actionable: Enable once https://github.com/rust-lang/rust-clippy/issues/13774 is resolved.
 large_stack_arrays = "allow"
+
+# Dev builds default to full DWARF (debug = 2), which inflates every object
+# file and slows codegen + link. Line tables keep file:line in panics and
+# backtraces (what we actually use day-to-day) while dropping the heavy
+# variable/type DWARF. `unpacked` skips the dSYM bundling step on macOS.
+# Bump to debug = 1 locally if you need lldb local-variable stepping.
+[profile.dev]
+debug = "line-tables-only"
+split-debuginfo = "unpacked"
 
 [profile.release]
 lto = "fat"

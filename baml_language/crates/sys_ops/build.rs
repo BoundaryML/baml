@@ -1,17 +1,10 @@
+//! Verifies the checked-in generated files are still in sync with the
+//! `baml_std` source of truth. Depends only on `baml_rustgen_check` (zero deps) — it
+//! does NOT run the codegen, so it never pulls `baml_compiler2_ast` into the
+//! build graph. Regenerate with `cargo run -p tools_rustgen` (or `mise run codegen`).
+
 fn main() {
-    let (_vm_builtins, io_builtins, class_defs) =
-        baml_builtins2_codegen::extract_native_builtins().unwrap_or_else(|e| panic!("{e}"));
-    let code = baml_builtins2_codegen::generate_io_traits(
-        &io_builtins,
-        &class_defs,
-        "sys_types::generated",
-    );
-    let adapter_code = baml_builtins2_codegen::generate_io_adapter(
-        &io_builtins,
-        &class_defs,
-        "sys_types::generated",
-    );
-    let out_dir = std::env::var("OUT_DIR").unwrap();
-    std::fs::write(format!("{out_dir}/io_generated.rs"), code).unwrap();
-    std::fs::write(format!("{out_dir}/io_adapter.rs"), adapter_code).unwrap();
+    baml_rustgen_check::rerun_if_baml_std_changed();
+    baml_rustgen_check::assert_generated_matches_baml_std("sys_ops/src/io_generated.rs");
+    baml_rustgen_check::assert_generated_matches_baml_std("sys_ops/src/io_adapter.rs");
 }

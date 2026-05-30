@@ -107,7 +107,7 @@ pub mod generated {
         BexHeap, CallId, OpError, OpErrorKind, SysOpContext, SysOpFn, SysOpOutput, SysOpResult,
     };
 
-    include!(concat!(env!("OUT_DIR"), "/io_generated.rs"));
+    include!("io_generated.rs");
 }
 
 /// Typed async IO trait generated from `.baml` `$rust_io_function` definitions.
@@ -121,7 +121,7 @@ pub mod runtime_io {
 
     pub use super::generated::owned;
 
-    include!(concat!(env!("OUT_DIR"), "/runtime_io.rs"));
+    include!("runtime_io.rs");
 }
 
 // ============================================================================
