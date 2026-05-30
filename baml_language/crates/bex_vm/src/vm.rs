@@ -1396,7 +1396,7 @@ impl BexVm {
         // implementation with the spawn path.
         let type_args = match self.get_object(function) {
             Object::Function(_) => vec![],
-            Object::Closure(closure) => closure.captured_type_args.clone(),
+            Object::Closure(closure) => closure.captured_type_args.to_vec(),
             other => panic!("expect function or closure as entry point, got {other:?}"),
         };
         self.set_entry_point_with_type_args(function, args, type_args);
@@ -2624,9 +2624,9 @@ impl BexVm {
         // Extract captured_type_args from a Closure callee before we discard
         // the concrete Closure type in favour of the inner Function.
         // These are injected into the new BytecodeFrame after it is created.
-        let closure_type_args: Vec<baml_type::Ty> = match self.get_object(callee_ptr) {
+        let closure_type_args: Box<[baml_type::Ty]> = match self.get_object(callee_ptr) {
             Object::Closure(c) => c.captured_type_args.clone(),
-            _ => vec![],
+            _ => Box::new([]),
         };
 
         // For BoundMethod callees, extract the receiver's class_type_args so
@@ -2634,15 +2634,15 @@ impl BexVm {
         // appended.  This implements the De Bruijn ordering:
         //   frame.type_args = receiver.class_type_args ++ explicit_call_site_args
         // matching enclosing_generic_params() which puts class params first.
-        let bound_method_class_type_args: Vec<baml_type::Ty> = match self.get_object(callee_ptr) {
+        let bound_method_class_type_args: Box<[baml_type::Ty]> = match self.get_object(callee_ptr) {
             Object::BoundMethod(bm) => match bm.receiver.as_object_ptr() {
                 Some(recv_ptr) => match self.get_object(recv_ptr) {
-                    Object::Instance(inst) => inst.class_type_args.clone(),
-                    _ => vec![],
+                    Object::Instance(inst) => inst.class_type_args.clone().into_boxed_slice(),
+                    _ => Box::new([]),
                 },
-                None => vec![],
+                None => Box::new([]),
             },
-            _ => vec![],
+            _ => Box::new([]),
         };
 
         // Resolve the callee: either a plain Function, a Closure, or a BoundMethod wrapping one.
@@ -2838,7 +2838,7 @@ impl BexVm {
                     function: callee_ptr,
                     instruction_ptr: 0,
                     locals_offset,
-                    type_args: initial_type_args,
+                    type_args: initial_type_args.into_vec(),
                     faulting_pc: 0,
                 }));
                 self.allocate_real_locals_for_frame(callee_ptr)?;
@@ -4836,8 +4836,8 @@ impl BexVm {
                     let function_ptr = self.idx_to_ptr(ObjectIndex::from_raw(obj_idx_raw));
                     let closure = Object::Closure(Closure {
                         function: function_ptr,
-                        captures,
-                        captured_type_args,
+                        captures: captures.into_boxed_slice(),
+                        captured_type_args: captured_type_args.into_boxed_slice(),
                     });
                     let ptr = self.tlab.alloc(closure);
                     self.stack.push(Value::object(ptr));
