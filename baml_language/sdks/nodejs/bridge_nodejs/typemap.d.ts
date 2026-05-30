@@ -5,7 +5,8 @@
  * Proto:  baml_language/crates/bridge_ctypes/types/baml_core/cffi/v1/*.proto
  * Build:  cd baml_language/crates/bridge_nodejs && pnpm build:debug
  */
-export type LazyEntry = [string, string];
+/** A deferred resolver for a generated class / enum / type alias. */
+export type LazyEntry = () => unknown;
 export declare class BamlTypeMap {
     private classLazy;
     private enumLazy;
@@ -23,7 +24,12 @@ export declare class BamlTypeMap {
     getClass(fqn: string): unknown;
     getEnum(fqn: string): unknown;
     getTypeAlias(fqn: string): unknown;
-    jsTypeToBamlType(cls: unknown): string;
+    /**
+     * Reverse lookup for the encode path: given a value's constructor, return
+     * its BAML FQN, or "" if it is not a codegen-emitted class. Builds the
+     * reverse map lazily by resolving every class/enum thunk once.
+     */
+    jsTypeToBamlType(ctor: unknown): string;
     warm(): void;
 }
 export declare function setTypeMap(m: BamlTypeMap): void;

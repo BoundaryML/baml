@@ -20,6 +20,7 @@ const baml_cffi_1 = require("./proto/baml_cffi");
 const native_1 = require("./native");
 const stream_1 = require("./stream");
 const errors_1 = require("./errors");
+const typemap_1 = require("./typemap");
 const CallFunctionArgs = baml_cffi_1.baml_core.cffi.v1.CallFunctionArgs;
 const BamlOutboundValue = baml_cffi_1.baml_core.cffi.v1.BamlOutboundValue;
 const BamlOutboundResult = baml_cffi_1.baml_core.cffi.v1.BamlOutboundResult;
@@ -216,7 +217,7 @@ function parseHexBigint(s) {
         ? -BigInt(`0x${magnitude}`)
         : BigInt(`0x${magnitude}`);
 }
-function decodeValueHolder(holder) {
+function decodeValueHolder(holder, typeMap) {
     if (holder.nullValue != null)
         return null;
     if (holder.stringValue != null)
@@ -233,16 +234,11 @@ function decodeValueHolder(holder) {
     if (holder.uint8arrayValue != null)
         return holder.uint8arrayValue;
     if (holder.classValue) {
-        const obj = Object.create(null);
-        for (const entry of holder.classValue.fields || []) {
-            if (entry.key != null && entry.value) {
-                obj[entry.key] = decodeValueHolder(entry.value);
-            }
-        }
-        return obj;
+        return decodeClass(holder.classValue, typeMap);
     }
-    if (holder.enumValue)
-        return holder.enumValue.value;
+    if (holder.enumValue) {
+        return decodeEnum(holder.enumValue, typeMap);
+    }
     if (holder.literalValue) {
         if (holder.literalValue.stringLiteral != null)
             return holder.literalValue.stringLiteral.value;
@@ -263,19 +259,19 @@ function decodeValueHolder(holder) {
         }
     }
     if (holder.listValue) {
-        return (holder.listValue.items || []).map(item => decodeValueHolder(item));
+        return (holder.listValue.items || []).map(item => decodeValueHolder(item, typeMap));
     }
     if (holder.mapValue) {
         const obj = Object.create(null);
         for (const entry of holder.mapValue.entries || []) {
             if (entry.key != null && entry.value) {
-                obj[entry.key] = decodeValueHolder(entry.value);
+                obj[entry.key] = decodeValueHolder(entry.value, typeMap);
             }
         }
         return obj;
     }
     if (holder.unionVariantValue && holder.unionVariantValue.value) {
-        return decodeValueHolder(holder.unionVariantValue.value);
+        return decodeValueHolder(holder.unionVariantValue.value, typeMap);
     }
     // handle_value: pass the protobufjs Long directly as the key — BamlHandle's
     // constructor accepts { low, high } which is layout-compatible with Long.
@@ -307,13 +303,76 @@ function decodeValueHolder(holder) {
     return null;
 }
 /**
+ * Decode a `class_value` to a typed instance via the typemap. When the FQN is
+ * in the typemap (the generated-SDK path), construct `new Cls(fieldDict)`
+ * (codegen emits `constructor(init) { Object.assign(this, init); }`). The five
+ * stdlib media wrappers unwrap their `_data` envelope to the wrapper itself.
+ * When the FQN is absent (the bare bridge has no typemap, or an unmapped
+ * class), fall back to a plain object — preserving the pre-typemap behavior.
+ */
+function decodeClass(classValue, typeMap) {
+    const fieldDict = {};
+    for (const entry of classValue.fields || []) {
+        if (entry.key != null && entry.value) {
+            fieldDict[entry.key] = decodeValueHolder(entry.value, typeMap);
+        }
+    }
+    const fqn = classValue.name?.name ?? '';
+    if (fqn) {
+        let Cls;
+        try {
+            Cls = typeMap.getClass(fqn);
+        }
+        catch {
+            Cls = undefined; // unmapped FQN — fall back below
+        }
+        if (Cls !== undefined) {
+            // Stdlib media wrappers: the decoded `_data` is already the typed
+            // wrapper (its inner handle_value decoded via the media branch);
+            // unwrap the envelope per the spec's Instance row.
+            if ((Cls === native_1.BamlImage || Cls === native_1.BamlAudio || Cls === native_1.BamlVideo || Cls === native_1.BamlPdf)
+                && '_data' in fieldDict) {
+                return fieldDict._data;
+            }
+            const Ctor = Cls;
+            return new Ctor(fieldDict);
+        }
+    }
+    // Fallback: plain object (null-prototype, matching the prior behavior).
+    const obj = Object.create(null);
+    for (const [k, v] of Object.entries(fieldDict))
+        obj[k] = v;
+    return obj;
+}
+/**
+ * Decode an `enum_value` to a typed enum member via the typemap. Falls back to
+ * the raw variant string when the FQN is unmapped (bare bridge / unmapped enum).
+ */
+function decodeEnum(enumValue, typeMap) {
+    const fqn = enumValue.name?.name ?? '';
+    const variant = enumValue.value;
+    if (fqn && variant != null) {
+        let En;
+        try {
+            En = typeMap.getEnum(fqn);
+        }
+        catch {
+            En = undefined;
+        }
+        if (En !== undefined && variant in En) {
+            return En[variant];
+        }
+    }
+    return variant;
+}
+/**
  * Decode a bare `BamlOutboundValue` to a JS value. Used for the host-callable
  * args path, where the engine sends a list-shaped `BamlOutboundValue` rather
  * than the call-result `BamlOutboundResult` envelope.
  */
 function decodeOutboundValue(data) {
     const msg = BamlOutboundValue.decode(data instanceof Buffer ? data : Buffer.from(data));
-    return decodeValueHolder(msg);
+    return decodeValueHolder(msg, (0, typemap_1.getTypeMap)());
 }
 /**
  * Read the thrown value's class FQN (e.g. `baml.errors.GenericSdkError`) and
@@ -373,7 +432,7 @@ function decodeCallResult(data) {
         case 'ok':
         default:
             // `ok` (or an absent oneof — an all-default envelope is a null `ok`).
-            return result.ok ? decodeValueHolder(result.ok) : null;
+            return result.ok ? decodeValueHolder(result.ok, (0, typemap_1.getTypeMap)()) : null;
     }
 }
 // ─── Host-callable dispatch (BAML → JS) ───

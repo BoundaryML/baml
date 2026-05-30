@@ -405,7 +405,7 @@ mod tests {
         assert!(leaf.contains("export class Resume {"));
         let typemap = &out[&PathBuf::from("_typemap.ts")];
         assert!(typemap.contains(
-            "\"user.lorem.Resume$stream\": [\"baml_sdk/stream_types/lorem\", \"Resume\"],"
+            "\"user.lorem.Resume$stream\": () => require(\"./stream_types/lorem\")[\"Resume\"],"
         ));
     }
 

@@ -15,11 +15,11 @@ describe('BamlTypeMap', () => {
         expect(() => m.getClass('foo.Bar')).toThrow(BamlError);
     });
 
-    test('lazy entry resolves via require and memoizes', () => {
-        // Point at a node builtin so require resolves regardless of cwd:
-        // require("path").sep is always defined.
+    test('lazy thunk resolves and memoizes', () => {
+        // A thunk closing over a require; point at a node builtin so it
+        // resolves regardless of cwd: require("path").sep is always defined.
         const m = BamlTypeMap.fromLazyEntries({
-            classes: { 'user.PathSep': ['path', 'sep'] },
+            classes: { 'user.PathSep': () => require('path').sep },
             enums: {},
             typeAliases: {},
         });
@@ -29,9 +29,9 @@ describe('BamlTypeMap', () => {
         expect(m.getClass('user.PathSep')).toBe(sep);
     });
 
-    test('unresolvable attr throws BamlError', () => {
+    test('thunk returning undefined throws BamlError', () => {
         const m = BamlTypeMap.fromLazyEntries({
-            classes: { 'user.Missing': ['path', 'definitelyNotAnExport'] },
+            classes: { 'user.Missing': () => require('path').definitelyNotAnExport },
             enums: {},
             typeAliases: {},
         });

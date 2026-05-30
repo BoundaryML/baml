@@ -2,23 +2,18 @@
 // sdks/python/src/baml_core/typemap.py.
 //
 // Codegen emits `_typemap.ts` with `BamlTypeMap.fromLazyEntries({ classes,
-// enums, typeAliases })` where each entry is `[modulePath, attrName]`. The
-// root `index.ts` calls `setTypeMap(_TYPE_MAP)` at import time. Resolution is
-// lazy: `getClass(fqn)` does `require(modulePath)[attrName]` on first lookup
-// and memoizes. (The decode-side walk that consumes this lands in Phase 5.)
+// enums, typeAliases })` where each entry is a RESOLVER THUNK
+// `() => require("./lorem").Resume`. The thunk closes over a `require`
+// relative to the generated `_typemap.ts`, so resolution happens in the SDK's
+// module scope (the runtime package can't resolve a `baml_sdk/...` path). The
+// root `index.ts` calls `setTypeMap(_TYPE_MAP)` at import time; resolution is
+// lazy and memoized on first lookup, which also avoids the circular
+// `index ↔ _typemap` import deadlocking.
 
 import { BamlError } from './errors';
 
-export type LazyEntry = [string, string]; // [modulePath, attrName]
-
-// Hard-coded stdlib reverse-overrides. Mirrors _STDLIB_REVERSE_OVERRIDES in
-// baml_core/typemap.py. Keys are `${modulePath}::${exportName}` of the native
-// class identities the codegen-emitted re-exports point at. Phase 4/5 seed the
-// real native identities (BamlImage/…/BamlStream); Phase 2 leaves it empty and
-// documents the intent.
-const _STDLIB_REVERSE_OVERRIDES: Map<string, string> = new Map([
-    // ["@boundaryml/baml-core::BamlImage", "baml.media.Image"], — wired in Phase 4/5
-]);
+/** A deferred resolver for a generated class / enum / type alias. */
+export type LazyEntry = () => unknown;
 
 export class BamlTypeMap {
     private classLazy = new Map<string, LazyEntry>();
@@ -27,7 +22,11 @@ export class BamlTypeMap {
     private classCache = new Map<string, unknown>();
     private enumCache = new Map<string, unknown>();
     private aliasCache = new Map<string, unknown>();
-    private reverse: Map<string, string> = new Map(_STDLIB_REVERSE_OVERRIDES);
+    // Reverse map (constructor identity → FQN) for the encode path. Lazily
+    // built from the class/enum thunks on first `jsTypeToBamlType` call. The
+    // five stdlib media/stream wrappers encode via `instanceof` in proto.ts,
+    // so they don't need to be seeded here.
+    private reverse: Map<unknown, string> | null = null;
 
     static fromLazyEntries(args: {
         classes: Record<string, LazyEntry>;
@@ -38,14 +37,6 @@ export class BamlTypeMap {
         for (const [fqn, le] of Object.entries(args.classes)) m.classLazy.set(fqn, le);
         for (const [fqn, le] of Object.entries(args.enums)) m.enumLazy.set(fqn, le);
         for (const [fqn, le] of Object.entries(args.typeAliases)) m.aliasLazy.set(fqn, le);
-        for (const [fqn, [mp, attr]] of Object.entries(args.classes)) {
-            const k = `${mp}::${attr}`;
-            if (!m.reverse.has(k)) m.reverse.set(k, fqn);
-        }
-        for (const [fqn, [mp, attr]] of Object.entries(args.enums)) {
-            const k = `${mp}::${attr}`;
-            if (!m.reverse.has(k)) m.reverse.set(k, fqn);
-        }
         return m;
     }
 
@@ -56,14 +47,16 @@ export class BamlTypeMap {
         kind: string,
     ): unknown {
         if (cache.has(fqn)) return cache.get(fqn);
-        const entry = lazy.get(fqn);
-        if (entry === undefined) throw new BamlError(`Unknown ${kind} FQN ${fqn}`);
-        const [modulePath, attr] = entry;
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const mod = require(modulePath);
-        const resolved = mod[attr];
+        const thunk = lazy.get(fqn);
+        if (thunk === undefined) throw new BamlError(`Unknown ${kind} FQN ${fqn}`);
+        let resolved: unknown;
+        try {
+            resolved = thunk();
+        } catch (e) {
+            throw new BamlError(`Failed to resolve ${kind} ${fqn}: ${String(e)}`);
+        }
         if (resolved === undefined) {
-            throw new BamlError(`Could not resolve ${fqn} → ${modulePath}.${attr}`);
+            throw new BamlError(`Could not resolve ${kind} ${fqn} (resolver returned undefined)`);
         }
         cache.set(fqn, resolved);
         return resolved;
@@ -81,17 +74,26 @@ export class BamlTypeMap {
         return this._resolve(fqn, this.aliasLazy, this.aliasCache, 'type alias');
     }
 
-    // Walk the prototype chain. Returns "" if no match. Phase 5 refines this
-    // for class identity. (Provisional — see 10a-todo-items.md Phase D.)
-    jsTypeToBamlType(cls: unknown): string {
-        let cur: unknown = cls;
-        while (cur != null) {
-            const name = (cur as { name?: string }).name;
-            const mod = (cur as { __bamlModulePath?: string }).__bamlModulePath;
-            if (mod && name) {
-                const fqn = this.reverse.get(`${mod}::${name}`);
-                if (fqn !== undefined) return fqn;
+    /**
+     * Reverse lookup for the encode path: given a value's constructor, return
+     * its BAML FQN, or "" if it is not a codegen-emitted class. Builds the
+     * reverse map lazily by resolving every class/enum thunk once.
+     */
+    jsTypeToBamlType(ctor: unknown): string {
+        if (this.reverse === null) {
+            this.reverse = new Map();
+            for (const [fqn, thunk] of this.classLazy) {
+                try {
+                    this.reverse.set(thunk(), fqn);
+                } catch {
+                    /* unresolvable entry — skip */
+                }
             }
+        }
+        let cur: unknown = ctor;
+        while (cur != null) {
+            const fqn = this.reverse.get(cur);
+            if (fqn !== undefined) return fqn;
             cur = Object.getPrototypeOf(cur);
         }
         return '';
