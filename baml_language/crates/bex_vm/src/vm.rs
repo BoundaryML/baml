@@ -1586,24 +1586,6 @@ impl BexVm {
         }
     }
 
-    /// Allocates an array on the heap and returns it to the caller.
-    pub fn alloc_array(&mut self, values: Vec<Value>) -> Value {
-        Value::object(self.tlab.alloc(Object::Array(values.into())))
-    }
-
-    pub fn alloc_map(&mut self, values: IndexMap<bex_vm_types::BexStr, Value>) -> Value {
-        Value::object(self.tlab.alloc(Object::Map(values.into())))
-    }
-
-    pub fn alloc_string(&mut self, s: impl Into<bex_vm_types::BexStr>) -> Value {
-        Value::object(self.tlab.alloc(Object::String(s.into())))
-    }
-
-    /// Allocate a heap-boxed float and return it as a `Value`.
-    pub fn alloc_float(&mut self, f: f64) -> Value {
-        Value::object(self.tlab.alloc(Object::Float(f)))
-    }
-
     /// Allocate a bigint on the heap. Takes an `Arc<BigInt>` to allow sharing.
     ///
     /// Refuses values exceeding `MAX_BIGINT_BITS` so a single arithmetic op
@@ -1929,29 +1911,6 @@ impl BexVm {
         Ok(Value::object(self.tlab.alloc(Object::Bigint(arc))))
     }
 
-    pub fn alloc_uint8array(&mut self, data: Vec<u8>) -> Value {
-        Value::object(self.tlab.alloc_uint8array(data))
-    }
-
-    /// TODO: Seems to low level for an embedder, provide an API that takes
-    /// class name and mapping of field name => value instead.
-    pub fn alloc_instance(&mut self, class: HeapPtr, fields: Vec<Value>) -> Value {
-        Value::object(
-            self.tlab
-                .alloc(Object::Instance(Instance::new(class, vec![], fields))),
-        )
-    }
-
-    // TODO: Same problem as above. Ideally takes (&str, &str) instead.
-    pub fn alloc_variant(&mut self, enm: HeapPtr, index: usize) -> Value {
-        Value::object(self.tlab.alloc(Object::Variant(Variant { enm, index })))
-    }
-
-    /// Allocate a collector object on the heap.
-    pub fn alloc_collector(&mut self, collector: bex_vm_types::CollectorRef) -> Value {
-        Value::object(self.tlab.alloc_collector(collector))
-    }
-
     /// Get collector ref from a Value.
     pub fn as_collector(
         &self,
@@ -1966,13 +1925,6 @@ impl BexVm {
                 got: ObjectType::of(obj).into(),
             }),
         }
-    }
-
-    /// Allocate opaque Rust data on the heap, returning a `Value::object(HeapPtr)`.
-    ///
-    /// Used by generated `copy::` structs for `$rust_type` fields.
-    pub fn alloc_rust_data(&mut self, data: Arc<dyn std::any::Any + Send + Sync>) -> Value {
-        Value::object(self.tlab.alloc_rust_data(data))
     }
 
     /// Downcast a `Value` carrying a heap pointer to `Object::RustData` to `&T`.
@@ -2052,23 +2004,6 @@ impl BexVm {
             }
         }
         None
-    }
-
-    /// Allocate a `BoundMethod` on the heap, binding `function` (a `HeapPtr`
-    /// pointing to an `Object::Function`) to `receiver`.
-    ///
-    /// When the bound method is called via `YieldToCall`, the VM automatically
-    /// inserts `receiver` as the first argument (`self`).
-    pub fn alloc_bound_method(&mut self, function: HeapPtr, receiver: Value) -> Value {
-        Value::object(
-            self.tlab
-                .alloc(Object::BoundMethod(BoundMethod { function, receiver })),
-        )
-    }
-
-    /// Allocate a type descriptor object on the heap.
-    pub fn alloc_type(&mut self, ty: baml_type::Ty) -> Value {
-        Value::object(self.tlab.alloc_type(ty))
     }
 
     /// Stops the execution of the current bytecode in favor of the given
@@ -2220,43 +2155,54 @@ impl BexVm {
         let (class, fields) = match error {
             VmBamlError::InvalidArgument { message } => (
                 ErrorClass::InvalidArgument,
-                vec![self.alloc_string(message)],
+                vec![Value::object(self.alloc_string(message))],
             ),
-            VmBamlError::ParseError { message } => {
-                (ErrorClass::ParseError, vec![self.alloc_string(message)])
-            }
-            VmBamlError::Io { message } => (ErrorClass::Io, vec![self.alloc_string(message)]),
+            VmBamlError::ParseError { message } => (
+                ErrorClass::ParseError,
+                vec![Value::object(self.alloc_string(message))],
+            ),
+            VmBamlError::Io { message } => (
+                ErrorClass::Io,
+                vec![Value::object(self.alloc_string(message))],
+            ),
             VmBamlError::Timeout {
                 message,
                 duration_ms,
             } => (
                 ErrorClass::Timeout,
                 vec![
-                    self.alloc_string(message),
+                    Value::object(self.alloc_string(message)),
                     duration_ms.map_or(Value::NULL, Value::int),
                 ],
             ),
-            VmBamlError::Unsupported { message } => {
-                (ErrorClass::Unsupported, vec![self.alloc_string(message)])
-            }
-            VmBamlError::AccessError { message } => {
-                (ErrorClass::AccessError, vec![self.alloc_string(message)])
-            }
-            VmBamlError::RenderPrompt { message } => {
-                (ErrorClass::RenderPrompt, vec![self.alloc_string(message)])
-            }
-            VmBamlError::NotImplemented { message } => {
-                (ErrorClass::NotImplemented, vec![self.alloc_string(message)])
-            }
-            VmBamlError::LlmClient { message } => {
-                (ErrorClass::LlmClient, vec![self.alloc_string(message)])
-            }
-            VmBamlError::DevOther { message } => {
-                (ErrorClass::DevOther, vec![self.alloc_string(message)])
-            }
-            VmBamlError::HostPanic { message } => {
-                (ErrorClass::HostPanic, vec![self.alloc_string(message)])
-            }
+            VmBamlError::Unsupported { message } => (
+                ErrorClass::Unsupported,
+                vec![Value::object(self.alloc_string(message))],
+            ),
+            VmBamlError::AccessError { message } => (
+                ErrorClass::AccessError,
+                vec![Value::object(self.alloc_string(message))],
+            ),
+            VmBamlError::RenderPrompt { message } => (
+                ErrorClass::RenderPrompt,
+                vec![Value::object(self.alloc_string(message))],
+            ),
+            VmBamlError::NotImplemented { message } => (
+                ErrorClass::NotImplemented,
+                vec![Value::object(self.alloc_string(message))],
+            ),
+            VmBamlError::LlmClient { message } => (
+                ErrorClass::LlmClient,
+                vec![Value::object(self.alloc_string(message))],
+            ),
+            VmBamlError::DevOther { message } => (
+                ErrorClass::DevOther,
+                vec![Value::object(self.alloc_string(message))],
+            ),
+            VmBamlError::HostPanic { message } => (
+                ErrorClass::HostPanic,
+                vec![Value::object(self.alloc_string(message))],
+            ),
         };
         self.alloc_error_value(class, fields)
     }
@@ -2279,10 +2225,10 @@ impl BexVm {
         let frames: Vec<Value> = trace
             .iter()
             .map(|loc| {
-                let file = self.alloc_string(loc.file_path.clone());
+                let file = Value::object(self.alloc_string(loc.file_path.clone()));
                 #[allow(clippy::cast_possible_wrap)]
                 let line = Value::int(loc.error_line as i64);
-                let function_name = self.alloc_string(loc.function_name.clone());
+                let function_name = Value::object(self.alloc_string(loc.function_name.clone()));
                 self.alloc_error_value(ErrorClass::StackFrame, vec![file, line, function_name])
             })
             .collect();
@@ -2317,41 +2263,41 @@ impl BexVm {
                 )
             }
             VmPanic::MapKeyNotFound => {
-                let key = self.alloc_string("(unknown)".to_string());
+                let key = Value::object(self.alloc_string("(unknown)".to_string()));
                 (PanicClass::MapKeyNotFound, vec![key])
             }
             VmPanic::StackOverflow => {
-                let msg = self.alloc_string("stack overflow".to_string());
+                let msg = Value::object(self.alloc_string("stack overflow".to_string()));
                 (PanicClass::StackOverflow, vec![msg])
             }
             VmPanic::AssertionFailed => {
-                let msg = self.alloc_string("assertion failed".to_string());
+                let msg = Value::object(self.alloc_string("assertion failed".to_string()));
                 (PanicClass::AssertionFailed, vec![msg])
             }
             VmPanic::Unreachable => {
-                let msg = self.alloc_string("unreachable code executed".to_string());
+                let msg = Value::object(self.alloc_string("unreachable code executed".to_string()));
                 (PanicClass::Unreachable, vec![msg])
             }
             VmPanic::Cancelled => {
-                let msg = self.alloc_string("operation cancelled".to_string());
+                let msg = Value::object(self.alloc_string("operation cancelled".to_string()));
                 (PanicClass::Cancelled, vec![msg])
             }
             VmPanic::UserPanic { message } => {
-                let msg = self.alloc_string(message);
+                let msg = Value::object(self.alloc_string(message));
                 (PanicClass::UserPanic, vec![msg])
             }
             VmPanic::Exit { code } => (PanicClass::Exit, vec![Value::int(code)]),
             VmPanic::AllocFailure { message } => {
-                let msg = self.alloc_string(message);
+                let msg = Value::object(self.alloc_string(message));
                 (PanicClass::AllocFailure, vec![msg])
             }
             VmPanic::HostUnavailable { resource, message } => {
-                let resource = self.alloc_string(resource);
-                let message = self.alloc_string(message);
+                let resource = Value::object(self.alloc_string(resource));
+                let message = Value::object(self.alloc_string(message));
                 (PanicClass::HostUnavailable, vec![resource, message])
             }
             VmPanic::NegativeBitShift { message } => {
-                let msg = self.alloc_string(message);
+                let msg = Value::object(self.alloc_string(message));
                 (PanicClass::NegativeBitShift, vec![msg])
             }
         };
@@ -3502,12 +3448,12 @@ impl BexVm {
                     let left_v = if left.is_object() {
                         left
                     } else {
-                        self.alloc_float(l)
+                        Value::object(self.alloc_float(l))
                     };
                     let right_v = if right.is_object() {
                         right
                     } else {
-                        self.alloc_float(r)
+                        Value::object(self.alloc_float(r))
                     };
                     return Err(VmError::Thrown(self.panic_to_exception_value(
                         VmPanic::DivisionByZero {
@@ -3530,12 +3476,12 @@ impl BexVm {
                     .into());
                 }
             };
-            self.alloc_float(f)
+            Value::object(self.alloc_float(f))
         } else if left.is_object() && right.is_object() && op == BinOp::Add {
             let ls = self.as_string(&left)?;
             let rs = self.as_string(&right)?;
             let result = bex_str::BexStr::concat(ls.clone(), rs.clone());
-            self.alloc_string(result)
+            Value::object(self.alloc_string(result))
         } else {
             return Err(VmInternalError::CannotApplyBinOp {
                 left: self.type_of(&left),
@@ -4925,7 +4871,7 @@ impl BexVm {
                         }
                     };
 
-                    let value = self.alloc_type(ty);
+                    let value = Value::object(self.alloc_type(ty));
                     self.stack.push(value);
                 }
 
@@ -5428,7 +5374,7 @@ impl BexVm {
                     let Some(l) = value_as_float(self.stack.ensure_pop()) else {
                         std::hint::unreachable_unchecked()
                     };
-                    let v = self.alloc_float(l + r);
+                    let v = Value::object(self.alloc_float(l + r));
                     self.stack.push(v);
                 }
                 OpCode::SubFloat => {
@@ -5438,7 +5384,7 @@ impl BexVm {
                     let Some(l) = value_as_float(self.stack.ensure_pop()) else {
                         std::hint::unreachable_unchecked()
                     };
-                    let v = self.alloc_float(l - r);
+                    let v = Value::object(self.alloc_float(l - r));
                     self.stack.push(v);
                 }
                 OpCode::MulFloat => {
@@ -5448,7 +5394,7 @@ impl BexVm {
                     let Some(l) = value_as_float(self.stack.ensure_pop()) else {
                         std::hint::unreachable_unchecked()
                     };
-                    let v = self.alloc_float(l * r);
+                    let v = Value::object(self.alloc_float(l * r));
                     self.stack.push(v);
                 }
                 OpCode::DivFloat => {
@@ -5471,7 +5417,7 @@ impl BexVm {
                             },
                         )));
                     }
-                    let v = self.alloc_float(l / r);
+                    let v = Value::object(self.alloc_float(l / r));
                     self.stack.push(v);
                 }
 
@@ -5612,7 +5558,7 @@ impl BexVm {
                     if let Some(n) = val.as_int() {
                         self.stack.push(Value::int(-n));
                     } else if let Some(n) = value_as_float(val) {
-                        let v = self.alloc_float(-n);
+                        let v = Value::object(self.alloc_float(-n));
                         self.stack.push(v);
                     } else if let Some(ptr) = val.as_object_ptr() {
                         // Bigint negation. Compute the negated value into an

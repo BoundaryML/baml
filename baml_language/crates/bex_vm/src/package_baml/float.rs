@@ -1,3 +1,4 @@
+use bex_heap::TlabHolder;
 use bex_vm_types::Value;
 
 use super::{BamlClassFloat, PackageBamlImpl};
@@ -35,7 +36,7 @@ fn float_to_int(value: f64, op: &str) -> Result<i64, VmRustFnError> {
 
 impl BamlClassFloat for PackageBamlImpl {
     fn to_json(vm: &mut BexVm, float: f64) -> Value {
-        vm.alloc_float(float)
+        Value::object(vm.alloc_float(float))
     }
     // ── Predicates ────────────────────────────────────────────────────────────
 
