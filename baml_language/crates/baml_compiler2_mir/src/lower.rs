@@ -2265,9 +2265,7 @@ impl<'db> LoweringContext<'db> {
         if !matches!(recv_ty, Tir2Ty::Class(..) | Tir2Ty::Primitive(..)) {
             return None;
         }
-        let pkg = baml_compiler2_hir::file_package::file_package(self.db, self.file)
-            .package
-            .clone();
+        let pkg = baml_compiler2_hir::file_package::file_package(self.db, self.file).package;
         let registry = baml_compiler2_tir::interfaces::package_implements_registry(
             self.db,
             baml_compiler2_hir::package::PackageId::new(self.db, pkg),

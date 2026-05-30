@@ -750,6 +750,8 @@ impl Ty {
                 throws,
                 ..
             } => {
+                use std::fmt::Write as _;
+
                 let mut out = String::new();
                 if !generic_params.is_empty() {
                     out.push('<');
@@ -757,9 +759,9 @@ impl Ty {
                         if i > 0 {
                             out.push_str(", ");
                         }
-                        out.push_str(&param.to_string());
+                        out.push_str(param.as_ref());
                         if let Some(bound) = generic_param_bounds.get(i).and_then(Option::as_ref) {
-                            out.push_str(&format!(" extends {}", bound.render_with(s)));
+                            let _ = write!(out, " extends {}", bound.render_with(s));
                         }
                     }
                     out.push('>');

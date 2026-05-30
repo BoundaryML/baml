@@ -3198,7 +3198,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             {
                 self.context.report_simple(
                     TirTypeError::TypeDoesNotImplementInterface {
-                        value_type: base_ty.clone(),
+                        value_type: base_ty,
                         interface_name: iface_qtn.name().clone(),
                     },
                     expr_id,
