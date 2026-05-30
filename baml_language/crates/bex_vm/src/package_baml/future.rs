@@ -13,6 +13,7 @@
 //! thread: the first writer to CAS `state` wins, others observe the new
 //! state and become no-ops.
 
+use bex_heap::TlabHolder;
 use bex_vm_types::types::{FutureRead, Object, Value};
 
 use super::{BamlClassFutureFuture, BamlNamespaceFuture, PackageBamlImpl};
@@ -103,7 +104,7 @@ impl BamlClassFutureFuture for PackageBamlImpl {
             _ => None,
         };
         match idx {
-            Some(i) => vm.alloc_variant(enm_ptr, i),
+            Some(i) => Value::object(vm.alloc_variant(enm_ptr, i)),
             None => Value::NULL,
         }
     }

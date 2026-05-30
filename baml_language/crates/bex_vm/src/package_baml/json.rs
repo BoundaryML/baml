@@ -65,6 +65,7 @@ fn class_lookup_key(qtn: &TypeName) -> String {
 }
 use std::collections::HashMap;
 
+use bex_heap::TlabHolder;
 use bex_vm_types::{
     HeapPtr,
     types::{Instance, Object, Value},
@@ -222,8 +223,10 @@ fn throw_json_parse_error(vm: &mut BexVm, message: String) -> Result<Value, VmIn
         .ok_or_else(|| VmInternalError::MissingNativeFunction {
             name: JSON_PARSE_ERROR_FQN.to_string(),
         })?;
-    let message_val = vm.alloc_string(message);
-    Ok(vm.alloc_instance(class_ptr, vec![message_val]))
+    let message_val = Value::object(vm.alloc_string(message));
+    Ok(Value::object(
+        vm.alloc_instance(class_ptr, vec![message_val]),
+    ))
 }
 
 fn throw_json_decode_error(
@@ -238,9 +241,11 @@ fn throw_json_decode_error(
         .ok_or_else(|| VmInternalError::MissingNativeFunction {
             name: JSON_DECODE_ERROR_FQN.to_string(),
         })?;
-    let message_val = vm.alloc_string(message);
-    let path_val = vm.alloc_string(path.to_string());
-    Ok(vm.alloc_instance(class_ptr, vec![message_val, path_val]))
+    let message_val = Value::object(vm.alloc_string(message));
+    let path_val = Value::object(vm.alloc_string(path.to_string()));
+    Ok(Value::object(
+        vm.alloc_instance(class_ptr, vec![message_val, path_val]),
+    ))
 }
 
 fn throw_json_serialization_error(
@@ -256,10 +261,13 @@ fn throw_json_serialization_error(
         .ok_or_else(|| VmInternalError::MissingNativeFunction {
             name: JSON_SERIALIZATION_ERROR_FQN.to_string(),
         })?;
-    let message_val = vm.alloc_string(message);
-    let path_val = vm.alloc_string(path.to_string());
-    let reason_val = vm.alloc_string(reason.to_string());
-    Ok(vm.alloc_instance(class_ptr, vec![message_val, path_val, reason_val]))
+    let message_val = Value::object(vm.alloc_string(message));
+    let path_val = Value::object(vm.alloc_string(path.to_string()));
+    let reason_val = Value::object(vm.alloc_string(reason.to_string()));
+    Ok(Value::object(vm.alloc_instance(
+        class_ptr,
+        vec![message_val, path_val, reason_val],
+    )))
 }
 
 fn raise_decode(vm: &mut BexVm, message: impl Into<String>, path: &str) -> VmRustFnError {
@@ -309,17 +317,17 @@ pub fn serde_to_value(vm: &mut BexVm, v: &serde_json::Value) -> Value {
             {
                 v
             } else if let Some(f) = n.as_f64() {
-                vm.alloc_float(f)
+                Value::object(vm.alloc_float(f))
             } else {
                 // Only reachable with serde_json's `arbitrary_precision`
                 // feature (not enabled here). NaN is a sentinel for "we
                 // were handed a number we can't represent at all"; if you
                 // hit this in practice, refuse arbitrary-precision input
                 // upstream rather than relying on this fallback.
-                vm.alloc_float(f64::NAN)
+                Value::object(vm.alloc_float(f64::NAN))
             }
         }
-        serde_json::Value::String(s) => vm.alloc_string(s.clone()),
+        serde_json::Value::String(s) => Value::object(vm.alloc_string(s.clone())),
         serde_json::Value::Array(arr) => {
             let items: Vec<Value> = arr.iter().map(|elem| serde_to_value(vm, elem)).collect();
             Value::object(vm.tlab.alloc(Object::Array(items.into())))
@@ -773,7 +781,7 @@ fn ty_serde_to_value(
         Ty::Float { .. } => match json {
             serde_json::Value::Number(n) => {
                 if let Some(f) = n.as_f64() {
-                    Ok(vm.alloc_float(f))
+                    Ok(Value::object(vm.alloc_float(f)))
                 } else {
                     Err(raise_decode(vm, "expected number", path))
                 }
@@ -782,7 +790,7 @@ fn ty_serde_to_value(
         },
 
         Ty::String { .. } => match json {
-            serde_json::Value::String(s) => Ok(vm.alloc_string(s.clone())),
+            serde_json::Value::String(s) => Ok(Value::object(vm.alloc_string(s.clone()))),
             _ => Err(raise_decode(vm, "expected string", path)),
         },
 
@@ -876,7 +884,7 @@ fn ty_serde_to_value(
                 Ok(Value::bool(*jb))
             }
             (baml_type::Literal::String(s), serde_json::Value::String(js)) if s == js => {
-                Ok(vm.alloc_string(js.clone()))
+                Ok(Value::object(vm.alloc_string(js.clone())))
             }
             (baml_type::Literal::Int(expected), serde_json::Value::Number(n)) => {
                 if let Some(actual) = n.as_i64() {
@@ -889,7 +897,7 @@ fn ty_serde_to_value(
             (baml_type::Literal::Float(s), serde_json::Value::Number(n)) => {
                 if let (Ok(expected), Some(actual)) = (s.parse::<f64>(), n.as_f64()) {
                     if (expected - actual).abs() < f64::EPSILON {
-                        return Ok(vm.alloc_float(actual));
+                        return Ok(Value::object(vm.alloc_float(actual)));
                     }
                 }
                 Err(raise_decode(vm, "literal float mismatch", path))
@@ -1007,7 +1015,7 @@ fn deserialize_enum_variant(
         }
     };
     match idx {
-        Some(i) => Ok(vm.alloc_variant(enm_ptr, i)),
+        Some(i) => Ok(Value::object(vm.alloc_variant(enm_ptr, i))),
         None => Err(raise_decode(
             vm,
             format!("unknown variant `{variant_name}` for enum `{qtn}`"),
@@ -1086,8 +1094,8 @@ fn deserialize_media(
         .get(&key)
         .copied()
         .ok_or_else(|| raise_decode(vm, format!("media class `{qtn}` not found"), path))?;
-    let data_val = vm.alloc_rust_data(media_arc);
-    Ok(vm.alloc_instance(class_ptr, vec![data_val]))
+    let data_val = Value::object(vm.alloc_rust_data(media_arc));
+    Ok(Value::object(vm.alloc_instance(class_ptr, vec![data_val])))
 }
 
 // ─── from_json dispatcher ────────────────────────────────────────────────────

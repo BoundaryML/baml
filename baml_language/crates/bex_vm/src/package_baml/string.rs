@@ -1,3 +1,4 @@
+use bex_heap::TlabHolder;
 use bex_str::BexStr;
 use bex_vm_types::types::Value;
 
@@ -12,7 +13,7 @@ impl BamlClassString for PackageBamlImpl {
         // `string` is already a valid `json` arm — BAML's `json` type alias
         // includes `string` as one of its union members.  Wrap the BexStr
         // back into a heap-allocated `Value::object(Object::String(...))`.
-        vm.alloc_string(string.clone())
+        Value::object(vm.alloc_string(string.clone()))
     }
 
     #[allow(clippy::cast_possible_wrap)]
