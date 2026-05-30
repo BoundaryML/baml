@@ -42,7 +42,10 @@ impl BamlClassTypeValue for PackageBamlImpl {
             .get(&iface_name)
             .is_some_and(|impls| {
                 impls.iter().any(|(impl_class, impl_args)| {
-                    *impl_class == class_name && (iface_args.is_empty() || *impl_args == iface_args)
+                    *impl_class == class_name
+                        && (iface_args.is_empty()
+                            || impl_args.is_empty()
+                            || *impl_args == iface_args)
                 })
             })
     }
@@ -72,8 +75,10 @@ impl BamlClassTypeValue for PackageBamlImpl {
         entries
             .into_iter()
             // Keep only implementors recorded at the requested instantiation
-            // (any, when the request carries no type args).
-            .filter(|(_, impl_args)| iface_args.is_empty() || *impl_args == iface_args)
+            // (any, when the request or implementor entry carries no type args).
+            .filter(|(_, impl_args)| {
+                iface_args.is_empty() || impl_args.is_empty() || *impl_args == iface_args
+            })
             .map(|(name, _)| {
                 let ty = baml_type::Ty::Class(name, Vec::new(), baml_type::TyAttr::default());
                 Value::object(vm.tlab.alloc(Object::Type(Box::new(ty))))

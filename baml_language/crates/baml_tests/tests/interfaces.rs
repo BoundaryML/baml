@@ -5568,6 +5568,30 @@ async fn form2_reflect_implementors_includes_satisfying_classes() {
 }
 
 #[tokio::test]
+async fn blanket_interface_rule_reflection_includes_concrete_container_implementors() {
+    let output = baml_test!(
+        r#"
+        interface Printable<T> {}
+        class Container<T> {
+            value: T
+        }
+        implements<T> Printable<T> for Container<T> {}
+        function main() -> bool {
+            let int_printable: Printable<int> = Container<int> { value: 1 }
+            let string_printable: Printable<string> = Container<string> { value: "two" }
+            return reflect.type_of<Container<int>>().implements(reflect.type_of<Printable<int>>())
+                && reflect.type_of<Container<string>>().implements(reflect.type_of<Printable<string>>())
+                && reflect.type_of<Printable<int>>().implemented_by(reflect.type_of<Container<int>>())
+                && reflect.type_of<Printable<string>>().implemented_by(reflect.type_of<Container<string>>())
+                && reflect.type_of<Printable<int>>().implementors().length() == 1
+                && reflect.type_of<Printable<string>>().implementors().length() == 1
+        }
+    "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
+}
+
+#[tokio::test]
 async fn unified_rule_implementor_satisfies_generic_interface_bound() {
     let output = baml_test!(
         r#"

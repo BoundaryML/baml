@@ -48,6 +48,41 @@ fn build_alias_caches(
     }
     caches
 }
+
+fn contains_tir_type_var(ty: &baml_compiler2_tir::ty::Ty) -> bool {
+    use baml_compiler2_tir::ty::{FunctionParamTy, Ty};
+
+    match ty {
+        Ty::TypeVar(..) => true,
+        Ty::Class(_, args, _) | Ty::Interface(_, args, _) | Ty::Union(args, _) => {
+            args.iter().any(contains_tir_type_var)
+        }
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) | Ty::Optional(inner, _) => {
+            contains_tir_type_var(inner)
+        }
+        Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) | Ty::Future(k, v, _) => {
+            contains_tir_type_var(k) || contains_tir_type_var(v)
+        }
+        Ty::Function {
+            generic_param_bounds,
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            generic_param_bounds
+                .iter()
+                .flatten()
+                .any(contains_tir_type_var)
+                || params
+                    .iter()
+                    .any(|FunctionParamTy { ty, .. }| contains_tir_type_var(ty))
+                || contains_tir_type_var(ret)
+                || contains_tir_type_var(throws)
+        }
+        _ => false,
+    }
+}
 pub(crate) use emit::compile_mir_function;
 
 fn is_builtin_function_name(name: &str) -> bool {
@@ -961,11 +996,16 @@ pub fn generate_project_bytecode_with_opt(
                     .collect();
                 match &rule.for_ty_pattern {
                     baml_compiler2_tir::ty::Ty::Class(class_qtn, _, _) => {
+                        let iface_args = if iface_type_args.iter().any(contains_tir_type_var) {
+                            Vec::new()
+                        } else {
+                            converted_iface_args.clone()
+                        };
                         add_impl(
                             iface_qtn,
                             baml_compiler2_mir::qtn_to_type_name(class_qtn),
                             class_qtn.to_string(),
-                            converted_iface_args,
+                            iface_args,
                         );
                     }
                     // BEP-044 wf3 #G19: an out-of-body `implements I for <primitive>`
