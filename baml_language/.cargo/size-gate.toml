@@ -21,13 +21,14 @@ baseline_dir = ".ci/size-gate"
 #     jitter while still catching accidental growth.
 #   * max_file_bytes / max_gzip_bytes — an absolute hard ceiling. Set PER
 #     PLATFORM (binaries differ across OSes) so each platform is capped
-#     ~150–200 KB above its own recorded baseline, not loosely to the
-#     largest platform. Bump a ceiling only as a deliberate, reviewed
-#     commit when a real size increase lands.
+#     ~3% above its own recorded baseline — enough to absorb build-to-build
+#     and local-vs-CI build variance (observed ~2.4%), while the 3%
+#     max_delta_pct is the precise slippage guard. Bump a ceiling only as a
+#     deliberate, reviewed commit when a real size increase lands.
 #
 # When recording a new platform (`mise run size-gate-record`), commit the
 # baseline it writes and add the matching `max_file_bytes` ceiling here,
-# tight (~150–200 KB) above that file size.
+# ~3% above that file size.
 
 [artifacts.baml-cli]
 kind = "bin"
@@ -35,30 +36,29 @@ package = "baml_cli"
 bin = "baml-cli"
 policy.max_delta_pct = 3.0
 
-# macOS arm64: re-baselined from CI (see .ci/size-gate stub). Ceiling
-# added once CI records the authoritative file size:
-# [artifacts.baml-cli.platform.aarch64-apple-darwin]
-# max_file_bytes = <recorded file_bytes + ~200 KB>
+# macOS arm64: baseline 14.60 MB file.
+[artifacts.baml-cli.platform.aarch64-apple-darwin]
+max_file_bytes = 15_050_000
 # Linux x86_64: baseline 19.40 MB file.
 [artifacts.baml-cli.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = 19_600_000
+max_file_bytes = 19_990_000
 # Windows x86_64: baseline 15.76 MB file.
 [artifacts.baml-cli.platform.x86_64-pc-windows-msvc]
-max_file_bytes = 15_950_000
+max_file_bytes = 16_240_000
 
 [artifacts.packed-program]
 kind = "pack"
 policy.max_delta_pct = 3.0
 
-# macOS arm64: re-baselined from CI. Ceiling added once CI records it:
-# [artifacts.packed-program.platform.aarch64-apple-darwin]
-# max_file_bytes = <recorded file_bytes + ~200 KB>
+# macOS arm64: baseline 11.17 MB file.
+[artifacts.packed-program.platform.aarch64-apple-darwin]
+max_file_bytes = 11_510_000
 # Linux x86_64: baseline 14.69 MB file.
 [artifacts.packed-program.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = 14_900_000
+max_file_bytes = 15_140_000
 # Windows x86_64: baseline 11.85 MB file.
 [artifacts.packed-program.platform.x86_64-pc-windows-msvc]
-max_file_bytes = 12_050_000
+max_file_bytes = 12_210_000
 
 [artifacts.packed-program.pack]
 cli_package = "baml_cli"

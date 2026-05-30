@@ -1,8 +1,12 @@
-# Needs re-record from CI: baselines are sourced from CI builds so they
-# match what the gate measures there (local fat-LTO builds differ by a
-# few %). The first CI run reports the authoritative file_bytes for this
-# platform in the size-gate PR comment; commit those here and add the
-# matching `max_file_bytes` ceiling in `.cargo/size-gate.toml`.
 version = 1
-recorded_at = "1970-01-01T00:00:00Z"
-git_sha = ""
+recorded_at = "2026-05-29T23:30:00Z"
+git_sha = "56b8a69e9"
+
+[artifacts.baml-cli]
+file_bytes = 14604480
+stripped_bytes = 14604512
+gzip_bytes = 6983329
+
+[artifacts.packed-program]
+file_bytes = 11170322
+gzip_bytes = 5353377
