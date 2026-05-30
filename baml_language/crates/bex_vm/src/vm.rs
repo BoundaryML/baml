@@ -69,11 +69,12 @@ use ::core::any::TypeId;
 use ::core::sync::atomic::AtomicBool;
 use bex_heap::{BexHeap, Tlab};
 use bex_vm_types::{
-    BinOp, CmpOp, FunctionKind, FutureRead, HeapPtr, Object, ObjectIndex, ObjectPool, ObjectType,
-    PanicClass, PermitProof, StackIndex, UnaryOp, Value, Variant, VmGlobals,
-    bytecode::{self, BlockNotification},
+    BinOp, CmpOp, FunctionKind, FutureRead, GlobalIndex, HeapPtr, Object, ObjectIndex, ObjectPool,
+    ObjectType, PanicClass, PermitProof, StackIndex, UnaryOp, Value, Variant, VmGlobals,
+    bytecode::{self, BlockNotification, Instruction},
     types::{
-        BoundMethod, Closure, ConstValue, Function, FunctionType, Instance, Type, UnscheduledFuture,
+        BoundMethod, Closure, ConstValue, Function, FunctionOrigin, FunctionType, Instance, Type,
+        UnscheduledFuture,
     },
 };
 use indexmap::IndexMap;
@@ -165,16 +166,18 @@ mod tests {
     use std::{collections::HashMap, sync::Arc};
 
     use baml_type::{Name, Ty, TyAttr, TyTemplate, TypeName};
-    use bex_heap::{BexHeap, Tlab};
+    use bex_heap::{BexHeap, CollectionLevel, Tlab};
     use bex_vm_types::{
-        EarlyYieldCheck, GlobalPool, Object, ObjectIndex, Value, ValueKind, VmGlobals,
-        bytecode::{FieldCopy, FieldCopySet},
-        types::{Class, ClassField, Instance, type_tags},
+        EarlyYieldCheck, FunctionKind, GlobalPool, HeapPtr, Object, ObjectIndex, RootHaver, Value,
+        ValueKind, VmGlobals,
+        bytecode::{Bytecode, FieldCopy, FieldCopySet},
+        types::{Class, ClassField, Function, FunctionOrigin, Instance, type_tags},
     };
 
-    use super::{BexVm, VmExecState, WatchNotification, value_type_tag};
+    use super::{BexVm, Frame, VmExecState, WatchNotification, value_type_tag};
     use crate::{
         indexable::EvalStack,
+        package_baml::{NativeCallResult, NativeFunction},
         watch::{NodeId, RootState, Watch, WatchFilter},
     };
 
@@ -239,6 +242,52 @@ mod tests {
             argv: Arc::from([]),
             pending_call_type_args: Vec::new(),
         }
+    }
+
+    fn native_done(_vm: &mut BexVm, _args: &[Value]) -> NativeCallResult {
+        NativeCallResult::Done(Value::int(42))
+    }
+
+    fn native_function_object() -> Object {
+        let native: NativeFunction = native_done;
+        Object::Function(Box::new(Function {
+            name: "test_native".to_string(),
+            source_file: String::new(),
+            arity: 0,
+            real_local_count: 0,
+            bytecode: Bytecode::default(),
+            kind: FunctionKind::Native(native as *const ()),
+            local_names: Vec::new(),
+            debug_locals: Vec::new(),
+            span: baml_type::Span::fake(),
+            block_notifications: Vec::new(),
+            viz_nodes: Vec::new(),
+            return_type: int_ty(),
+            stream_return_type: Ty::Null {
+                attr: TyAttr::default(),
+            },
+            param_names: Vec::new(),
+            param_types: Vec::new(),
+            param_has_default: Vec::new(),
+            throws_type: None,
+            origin: FunctionOrigin::Internal,
+            body_meta: None,
+            trace: false,
+        }))
+    }
+
+    fn vm_with_native_entry() -> (BexVm, HeapPtr) {
+        let mut vm = test_vm(vec![native_function_object()]);
+        let native_ptr = vm.idx_to_ptr(ObjectIndex::from_raw(0));
+        vm.globals = VmGlobals::Owned(GlobalPool::from_vec(vec![Value::object(native_ptr)]));
+        (vm, native_ptr)
+    }
+
+    fn trampoline_ptr(vm: &BexVm) -> HeapPtr {
+        let Some(Frame::Bytecode(frame)) = vm.frames.last() else {
+            panic!("expected trampoline bytecode frame");
+        };
+        frame.function
     }
 
     #[test]
@@ -306,6 +355,86 @@ mod tests {
         assert_eq!(
             dest.field_values().collect::<Vec<_>>(),
             vec![Value::int(10), Value::int(2)]
+        );
+    }
+
+    #[test]
+    fn trampoline_function_survives_gc_while_frame_is_active() {
+        let (mut vm, native_ptr) = vm_with_native_entry();
+
+        vm.set_entry_point(native_ptr, &[]);
+        let trampoline = trampoline_ptr(&vm);
+
+        let mut roots = Vec::new();
+        vm.collect_roots(&mut roots);
+        assert!(
+            roots.contains(&trampoline),
+            "active trampoline frame must root its synthetic function"
+        );
+
+        let (stats, _remapped_roots, forwarding) = unsafe {
+            vm.heap
+                .collect_garbage_generational(&roots, CollectionLevel::Major)
+        };
+
+        assert_eq!(stats.live_count, 1);
+        assert!(
+            forwarding.contains_key(&trampoline),
+            "active trampoline function must be forwarded by GC"
+        );
+
+        vm.forward_roots(&forwarding);
+
+        let moved_trampoline = trampoline_ptr(&vm);
+        assert!(
+            matches!(vm.get_object(moved_trampoline), Object::Function(f) if f.name == "$entry::test_native"),
+            "frame should point at the moved trampoline function after forwarding"
+        );
+
+        let result = vm.exec().expect("native trampoline should execute");
+        assert!(
+            matches!(result, VmExecState::Complete(value) if value == Value::int(42)),
+            "native trampoline should return the native result"
+        );
+    }
+
+    #[test]
+    fn trampoline_function_is_collected_after_return() {
+        let (mut vm, native_ptr) = vm_with_native_entry();
+
+        vm.set_entry_point(native_ptr, &[]);
+        let trampoline = trampoline_ptr(&vm);
+
+        let result = vm.exec().expect("native trampoline should execute");
+        assert!(
+            matches!(result, VmExecState::Complete(value) if value == Value::int(42)),
+            "native trampoline should return the native result"
+        );
+        assert!(
+            vm.frames.is_empty(),
+            "trampoline frame should be popped after return"
+        );
+
+        let mut roots = Vec::new();
+        vm.collect_roots(&mut roots);
+        assert!(
+            !roots.contains(&trampoline),
+            "returned trampoline function must not remain rooted"
+        );
+
+        let (stats, _remapped_roots, forwarding) = unsafe {
+            vm.heap
+                .collect_garbage_generational(&roots, CollectionLevel::Major)
+        };
+
+        assert_eq!(stats.live_count, 0);
+        assert!(
+            stats.collected_count >= 1,
+            "GC should collect the unrooted trampoline function"
+        );
+        assert!(
+            !forwarding.contains_key(&trampoline),
+            "unrooted trampoline function must not be forwarded after return"
         );
     }
 }
@@ -1277,16 +1406,10 @@ impl BexVm {
     /// `type_args` slot. Use when the host invokes a generic function
     /// (e.g. a user function with `<T>`) and needs to thread `T` through.
     ///
-    /// Entry points must be [`bex_vm_types::FunctionKind::Bytecode`] —
-    /// either a bare `Object::Function` or an `Object::Closure` wrapping
-    /// one (BEP-034 spawn). The engine boundary
-    /// (`bex_engine::BexEngine::call_function_bound_args` — backticks
-    /// rather than an intra-doc link because `bex_vm` doesn't depend on
-    /// `bex_engine`; the relationship goes the other way) rejects
-    /// `SysOp` / `Native` / `NativeUnresolved` callees with
-    /// `EngineError::NotInvokableAsEntry` before reaching this method,
-    /// because there's no enclosing bytecode frame for a native to
-    /// `YieldToCall` back into at the top level.
+    /// Bytecode entry points are pushed directly. Native and sysop entries are
+    /// wrapped in a synthetic bytecode caller that executes either
+    /// `CALL <native>; RETURN` or `SYS_OP <sysop>; RETURN`, giving the normal VM
+    /// machinery a bytecode frame to resume into.
     pub fn set_entry_point_with_type_args(
         &mut self,
         function: HeapPtr,
@@ -1301,33 +1424,139 @@ impl BexVm {
             "expect function or closure as entry point, got {:?}",
             self.get_object(function)
         );
-        debug_assert!(
-            match self.get_object(function) {
-                Object::Function(f) => matches!(f.kind, bex_vm_types::FunctionKind::Bytecode),
-                Object::Closure(_) => true,
-                _ => false,
+
+        let callable_kind = match self.get_object(function) {
+            Object::Function(f) => f.kind,
+            Object::Closure(closure) => {
+                let func_obj = unsafe { closure.function.get() };
+                match func_obj {
+                    Object::Function(f) => f.kind,
+                    other => unreachable!("expect closure function, got {other:?}"),
+                }
+            }
+            other => unreachable!("expect function or closure as entry point, got {other:?}"),
+        };
+
+        match callable_kind {
+            FunctionKind::Bytecode => {
+                self.pending_call_type_args.clone_from(&type_args);
+                self.stack.extend(args.iter().copied());
+                self.frames.push(Frame::Bytecode(BytecodeFrame {
+                    function,
+                    instruction_ptr: 0,
+                    locals_offset: StackIndex::from_raw(0),
+                    type_args,
+                    faulting_pc: 0,
+                }));
+
+                // Entry functions need the same frame-local pre-allocation as normal
+                // bytecode calls now that INIT_LOCALS is gone from bytecode.
+                self.allocate_real_locals_for_frame(function)
+                    .expect("entry point must be a valid function frame");
+            }
+            FunctionKind::Native(_) | FunctionKind::SysOp(_) => {
+                self.push_trampoline_frame(function, args, type_args, callable_kind);
+            }
+            FunctionKind::NativeUnresolved => {
+                unreachable!("entry point kind is not directly invokable: {callable_kind:?}");
+            }
+        }
+    }
+
+    fn global_index_for_function_ptr(&self, function: HeapPtr) -> Option<GlobalIndex> {
+        self.globals
+            .as_slice(self.proof())
+            .iter()
+            .position(|value| value.as_object_ptr() == Some(function))
+            .map(GlobalIndex::from_raw)
+    }
+
+    fn push_trampoline_frame(
+        &mut self,
+        function: HeapPtr,
+        args: &[Value],
+        type_args: Vec<baml_type::Ty>,
+        callable_kind: FunctionKind,
+    ) {
+        let callee_global = self
+            .global_index_for_function_ptr(function)
+            .expect("entry point must be present in globals");
+        let ntypeargs = u16::try_from(type_args.len()).expect("entry type args fit in u16");
+
+        let (callee_name, return_type, throws_type) = match self.get_object(function) {
+            Object::Function(f) => (f.name.clone(), f.return_type.clone(), f.throws_type.clone()),
+            other => unreachable!("expect function as entry point, got {other:?}"),
+        };
+
+        self.pending_call_type_args.clear();
+        match callable_kind {
+            FunctionKind::Native(_) => {
+                for ty in type_args {
+                    let ty_ptr = self.tlab.alloc(Object::Type(Box::new(ty)));
+                    self.stack.push(Value::object(ty_ptr));
+                }
+                self.stack.extend(args.iter().copied());
+            }
+            FunctionKind::SysOp(_) => {
+                self.stack.extend(args.iter().copied());
+            }
+            FunctionKind::Bytecode | FunctionKind::NativeUnresolved => {
+                unreachable!("trampoline frame requires Native or SysOp")
+            }
+        }
+
+        let instructions = match callable_kind {
+            FunctionKind::Native(_) => vec![
+                Instruction::Call {
+                    callee: callee_global,
+                    ntypeargs,
+                },
+                Instruction::Return,
+            ],
+            FunctionKind::SysOp(_) => vec![Instruction::SysOp(callee_global), Instruction::Return],
+            FunctionKind::Bytecode | FunctionKind::NativeUnresolved => {
+                unreachable!("trampoline frame requires Native or SysOp")
+            }
+        };
+        let mut bytecode = bytecode::Bytecode {
+            instructions,
+            ..bytecode::Bytecode::default()
+        };
+        bytecode.compact = Some(bytecode.lower_to_compact());
+
+        let entry_function = Function {
+            name: format!("$entry::{callee_name}"),
+            source_file: String::new(),
+            arity: 0,
+            real_local_count: 0,
+            bytecode,
+            kind: FunctionKind::Bytecode,
+            local_names: Vec::new(),
+            debug_locals: Vec::new(),
+            span: baml_type::Span::fake(),
+            block_notifications: Vec::new(),
+            viz_nodes: Vec::new(),
+            return_type,
+            stream_return_type: baml_type::Ty::Null {
+                attr: baml_type::TyAttr::default(),
             },
-            "entry points must be Function::Bytecode or Closure; engine \
-             boundary should have rejected this — see \
-             EngineError::NotInvokableAsEntry"
-        );
-
-        self.pending_call_type_args.clone_from(&type_args);
-
-        self.stack.extend(args.iter().copied());
+            param_names: Vec::new(),
+            param_types: Vec::new(),
+            param_has_default: Vec::new(),
+            throws_type,
+            origin: FunctionOrigin::Internal,
+            body_meta: None,
+            trace: false,
+        };
+        let entry_ptr = self.tlab.alloc(Object::Function(Box::new(entry_function)));
 
         self.frames.push(Frame::Bytecode(BytecodeFrame {
-            function,
+            function: entry_ptr,
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(0),
-            type_args,
+            type_args: Vec::new(),
             faulting_pc: 0,
         }));
-
-        // Entry functions need the same frame-local pre-allocation as normal
-        // bytecode calls now that INIT_LOCALS is gone from bytecode.
-        self.allocate_real_locals_for_frame(function)
-            .expect("entry point must be a valid function frame");
     }
 
     /// Restores the VM state and prepares it for the next execution.
