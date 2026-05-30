@@ -834,7 +834,17 @@ impl MethodSignature {
         }
         let gp = &self.generic_params;
         let cmp = |a: &baml_compiler2_ast::TypeExpr, b: &baml_compiler2_ast::TypeExpr| {
-            type_exprs_compatible(db, pkg_items, namespace_path, gp, a, namespace_path, gp, b, aliases)
+            type_exprs_compatible(
+                db,
+                pkg_items,
+                namespace_path,
+                gp,
+                a,
+                namespace_path,
+                gp,
+                b,
+                aliases,
+            )
         };
         for (i, ((an, at), (bn, bt))) in self.params.iter().zip(&other.params).enumerate() {
             if an != bn {

@@ -119,9 +119,7 @@ impl QualifiedTypeName {
     }
 
     pub fn is_builtin_root_type(&self, name: &str) -> bool {
-        self.package().as_str() == "baml"
-            && self.namespace.is_empty()
-            && self.name.as_str() == name
+        self.package().as_str() == "baml" && self.namespace.is_empty() && self.name.as_str() == name
     }
 
     /// Returns `true` if this type lives in the `baml.panics` namespace

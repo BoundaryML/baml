@@ -2296,11 +2296,7 @@ impl<'db> LoweringContext<'db> {
     /// Whether `iface_qtn` or any interface in its `requires` closure declares a
     /// method named `method`. Mirrors the TIR-side check; used by
     /// `registry_dispatch_target_for_concrete`.
-    fn mir_interface_declares_method(
-        &self,
-        iface_qtn: &QualifiedTypeName,
-        method: &Name,
-    ) -> bool {
+    fn mir_interface_declares_method(&self, iface_qtn: &QualifiedTypeName, method: &Name) -> bool {
         let pkg_id =
             baml_compiler2_hir::package::PackageId::new(self.db, iface_qtn.package().clone());
         let pkg_items = baml_compiler2_hir::package::package_items(self.db, pkg_id);
@@ -2309,7 +2305,8 @@ impl<'db> LoweringContext<'db> {
         else {
             return false;
         };
-        let root_pkg = baml_compiler2_hir::file_package::file_package(self.db, root_loc.file(self.db));
+        let root_pkg =
+            baml_compiler2_hir::file_package::file_package(self.db, root_loc.file(self.db));
         baml_compiler2_tir::interfaces::interface_closure_locs(
             self.db,
             root_loc,
@@ -2323,7 +2320,10 @@ impl<'db> LoweringContext<'db> {
                 .interfaces
                 .get(&iface_loc.id(self.db))
                 .is_some_and(|iface_data| {
-                    iface_data.required_methods.iter().any(|s| s.name == *method)
+                    iface_data
+                        .required_methods
+                        .iter()
+                        .any(|s| s.name == *method)
                         || iface_data
                             .default_methods
                             .iter()

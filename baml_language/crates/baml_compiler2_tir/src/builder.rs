@@ -2948,9 +2948,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             Expr::MemberAccess { base, member } => {
                 self.infer_member_access_expr(expr_id, body, *base, member)
             }
-            Expr::Upcast { base, target } => {
-                self.infer_upcast_expr(expr_id, body, *base, target)
-            }
+            Expr::Upcast { base, target } => self.infer_upcast_expr(expr_id, body, *base, target),
             Expr::OptionalMemberAccess { base, member } => {
                 self.infer_optional_member_access_expr(expr_id, body, *base, member)
             }
@@ -3046,13 +3044,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 type_args: obj_type_args,
                 fields,
                 ..
-            } => self.infer_object_expr(
-                expr_id,
-                body,
-                type_name.as_ref(),
-                obj_type_args,
-                fields,
-            ),
+            } => self.infer_object_expr(expr_id, body, type_name.as_ref(), obj_type_args, fields),
             Expr::Index { base, index } => self.infer_index_expr(expr_id, body, *base, *index),
             Expr::OptionalIndex { base, index } => {
                 self.infer_optional_index_expr(expr_id, body, *base, *index)
@@ -3470,7 +3462,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 }
             };
-            param_tys.push(FunctionParamTy::required(Some(param.name.clone()), param_ty));
+            param_tys.push(FunctionParamTy::required(
+                Some(param.name.clone()),
+                param_ty,
+            ));
         }
 
         // Lower optional return type annotation
@@ -3482,8 +3477,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.choose_lambda_throws_surface(func_def, &all_generic_params, None);
 
         // Infer the lambda body using save/restore approach
-        let (ret_ty, _lambda_expressions, lambda_fsi, lambda_effective_throws) =
-            self.infer_lambda_body(
+        let (ret_ty, _lambda_expressions, lambda_fsi, lambda_effective_throws) = self
+            .infer_lambda_body(
                 func_def,
                 &param_tys,
                 return_annotation.as_ref(),
@@ -3563,11 +3558,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                                 continue;
                             }
                             let field_ty = self.infer_expr(*field_expr, body).widen_fresh();
-                            crate::generics::infer_bindings(
-                                declared_ty,
-                                &field_ty,
-                                &mut bindings,
-                            );
+                            crate::generics::infer_bindings(declared_ty, &field_ty, &mut bindings);
                         }
                         let inferred_type_args: Vec<Ty> = class_data
                             .generic_params
@@ -3622,8 +3613,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                     self.check_expr(*field_expr, body, declared_ty);
                 } else if !field_name.as_str().contains('.')
-                    && let Some((qualified_name, declared_ty)) =
-                        self.qualified_interface_field_for_construction(
+                    && let Some((qualified_name, declared_ty)) = self
+                        .qualified_interface_field_for_construction(
                             class_name, type_args, field_name,
                         )
                 {
@@ -3739,8 +3730,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                     self.check_expr(*field_expr, body, declared_ty);
                 } else if !field_name.as_str().contains('.')
-                    && let Some((qualified_name, declared_ty)) =
-                        self.qualified_interface_field_for_construction(
+                    && let Some((qualified_name, declared_ty)) = self
+                        .qualified_interface_field_for_construction(
                             class_name, type_args, field_name,
                         )
                 {
@@ -3772,12 +3763,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                     let db = self.context.db();
                     let registry =
                         crate::interfaces::package_implements_registry(db, self.package_id);
-                    registry.first_failing_bound(
-                        &inferred,
-                        expected,
-                        &self.aliases,
-                        |a, b| self.is_subtype(a, b),
-                    )
+                    registry.first_failing_bound(&inferred, expected, &self.aliases, |a, b| {
+                        self.is_subtype(a, b)
+                    })
                 } else {
                     None
                 };
@@ -3989,11 +3977,8 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                     let param_ty = match &param.type_expr {
                         Some(te) => {
-                            let annotated = self.lower_lambda_type_expr(
-                                &te.expr,
-                                &all_generic_params,
-                                te.span,
-                            );
+                            let annotated =
+                                self.lower_lambda_type_expr(&te.expr, &all_generic_params, te.span);
                             // Check annotation is compatible with expected
                             if !self.is_subtype(&expected_param_ty, &annotated) {
                                 self.context.report(
@@ -4012,7 +3997,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                             expected_param_ty
                         }
                     };
-                    param_tys.push(FunctionParamTy::required(Some(param.name.clone()), param_ty));
+                    param_tys.push(FunctionParamTy::required(
+                        Some(param.name.clone()),
+                        param_ty,
+                    ));
                 }
 
                 // Determine return type: annotation > expected
@@ -4021,16 +4009,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .as_ref()
                     .map(|te| self.lower_lambda_type_expr(&te.expr, &all_generic_params, te.span));
                 let effective_ret = return_annotation.as_ref().unwrap_or(expected_ret.as_ref());
-                let (throws_ty, throws_span, warn_extraneous_throws) =
-                    self.choose_lambda_throws_surface(
+                let (throws_ty, throws_span, warn_extraneous_throws) = self
+                    .choose_lambda_throws_surface(
                         func_def,
                         &all_generic_params,
                         Some(expected_throws.as_ref()),
                     );
 
                 // Infer/check the lambda body using save/restore approach
-                let (ret_ty, _lambda_expressions, lambda_fsi, lambda_effective_throws) =
-                    self.infer_lambda_body(
+                let (ret_ty, _lambda_expressions, lambda_fsi, lambda_effective_throws) = self
+                    .infer_lambda_body(
                         func_def,
                         &param_tys,
                         Some(effective_ret),
@@ -4039,7 +4027,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                         warn_extraneous_throws,
                     );
                 let surface_ret_ty = return_annotation.unwrap_or_else(|| {
-                    if matches!(expected_ret.as_ref(), Ty::Unknown { .. } | Ty::TypeVar(_, _)) {
+                    if matches!(
+                        expected_ret.as_ref(),
+                        Ty::Unknown { .. } | Ty::TypeVar(_, _)
+                    ) {
                         ret_ty.clone()
                     } else {
                         expected_ret.as_ref().clone()
@@ -9380,7 +9371,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .interfaces
                     .get(&iface_loc.id(db))
                     .is_some_and(|iface_data| {
-                        iface_data.required_methods.iter().any(|s| s.name == *member)
+                        iface_data
+                            .required_methods
+                            .iter()
+                            .any(|s| s.name == *member)
                             || iface_data
                                 .default_methods
                                 .iter()
@@ -9505,8 +9499,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             // Confirm via the full rule check so generic bounds are honored
             // (e.g. `implements<T extends Named> Printable for Box<T>`).
-            let requested =
-                Ty::Interface(iface_qtn.clone(), iface_args.clone(), TyAttr::default());
+            let requested = Ty::Interface(iface_qtn.clone(), iface_args.clone(), TyAttr::default());
             if !registry.type_implements_interface_via_rule(
                 base_ty,
                 &requested,

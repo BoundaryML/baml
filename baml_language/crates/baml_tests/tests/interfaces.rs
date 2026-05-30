@@ -7858,7 +7858,10 @@ async fn wf3_blanket_on_blanket_chain_runtime() {
         }
         "#
     );
-    assert_eq!(output.result.unwrap(), BexExternalValue::String("loud".into()));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("loud".into())
+    );
 }
 
 /// wf3 #3 [crash/unsound]: a phantom impl type param
@@ -7955,7 +7958,10 @@ async fn wf3_generic_default_method_self_call_respects_interface_view_runtime() 
         }
         "#
     );
-    assert_eq!(output.result.unwrap(), BexExternalValue::String("seven".into()));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("seven".into())
+    );
 }
 
 /// wf3 #6 [high]: `reflect.type_of<Box<U>>()` inside a generic fn must substitute
@@ -8180,7 +8186,10 @@ async fn wf3_pure_diamond_single_method_dispatches_runtime() {
         }
         "#
     );
-    assert_eq!(output.result.unwrap(), BexExternalValue::String("base".into()));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("base".into())
+    );
 }
 
 /// wf3 #11b [medium]: same defect across namespaces — `W` provides `f` once (via
@@ -8193,7 +8202,10 @@ fn wf3_pure_diamond_single_method_across_namespaces_no_false_ambiguity() {
             "main.baml",
             r#"function main() -> string { let w = b.W {} return w.f() }"#,
         ),
-        ("ns_a/a.baml", r#"interface Base { function f(self) -> string }"#),
+        (
+            "ns_a/a.baml",
+            r#"interface Base { function f(self) -> string }"#,
+        ),
         (
             "ns_b/b.baml",
             r#"
@@ -8218,7 +8230,10 @@ fn wf3_three_level_requires_chain_single_method_no_false_ambiguity() {
             "main.baml",
             r#"function main() -> string { let w = c.W {} return w.f() }"#,
         ),
-        ("ns_a/a.baml", r#"interface A { function f(self) -> string }"#),
+        (
+            "ns_a/a.baml",
+            r#"interface A { function f(self) -> string }"#,
+        ),
         ("ns_b/b.baml", r#"interface B requires root.a.A {}"#),
         (
             "ns_c/c.baml",
@@ -8265,7 +8280,10 @@ async fn wf3_union_of_implementors_assignable_to_interface_runtime() {
         }
         "#
     );
-    assert_eq!(output.result.unwrap(), BexExternalValue::String("Meow.".into()));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("Meow.".into())
+    );
 }
 
 /// wf3 #13 [medium]: calling `.speak()` on `Animal | Swimmer` must be rejected
@@ -8465,7 +8483,10 @@ fn wf3_bare_cross_ns_requires_unknown_echoes_qualifier() {
             "ns_a/a.baml",
             r#"interface Base { function f(self) -> string }"#,
         ),
-        ("ns_b/b.baml", r#"interface Derived requires root.a.Ghost {}"#),
+        (
+            "ns_b/b.baml",
+            r#"interface Derived requires root.a.Ghost {}"#,
+        ),
     ];
     assert_compile_error_contains_multi(files, "root.a.Ghost");
 }
@@ -8604,7 +8625,10 @@ async fn wf3_self_interface_field_access_via_projection_runtime() {
         }
         "#
     );
-    assert_eq!(output.result.unwrap(), BexExternalValue::String("Hi Ada".into()));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("Hi Ada".into())
+    );
 }
 
 /// wf3 [low/design]: a `throws` narrower than the interface's declaration
@@ -8708,7 +8732,10 @@ async fn wf3_out_of_body_method_callable_directly_runtime() {
         }
         "#
     );
-    assert_eq!(output.result.unwrap(), BexExternalValue::String("int".into()));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("int".into())
+    );
 }
 
 /// wf3 [low]: a blanket method on a generic class must be callable directly on
@@ -8729,7 +8756,10 @@ async fn wf3_blanket_method_callable_directly_runtime() {
         }
         "#
     );
-    assert_eq!(output.result.unwrap(), BexExternalValue::String("box".into()));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("box".into())
+    );
 }
 
 // ── Correct-today behavior pinned against regression (works-confirmations) ───
@@ -8777,7 +8807,10 @@ async fn wf3_two_blanket_rules_list_wins_pins() {
         }
         "#
     );
-    assert_eq!(output.result.unwrap(), BexExternalValue::String("list".into()));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("list".into())
+    );
 }
 
 /// wf3 pin: a method present on every member of a concrete-class union is
@@ -8811,7 +8844,10 @@ async fn wf3_union_member_method_call_works_pins() {
         }
         "#
     );
-    assert_eq!(output.result.unwrap(), BexExternalValue::String("Meow.".into()));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("Meow.".into())
+    );
 }
 
 /// wf3 pin: a class's own concrete field shadows same-named interface-field
@@ -8893,5 +8929,8 @@ async fn wf3_blanket_implementor_identity_is_bare_class_pins() {
         }
         "#
     );
-    assert_eq!(output.result.unwrap(), BexExternalValue::String("Box".into()));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("Box".into())
+    );
 }

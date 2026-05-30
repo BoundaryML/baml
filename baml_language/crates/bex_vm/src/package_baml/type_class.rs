@@ -38,11 +38,13 @@ impl BamlClassTypeValue for PackageBamlImpl {
         // BEP-044: a generic interface request (`Box<string>`) must match only
         // implementors recorded at those exact type args. An interface request
         // with no args (`Box` / a non-generic interface) matches any.
-        vm.interface_implementors.get(&iface_name).is_some_and(|impls| {
-            impls.iter().any(|(impl_class, impl_args)| {
-                *impl_class == class_name && (iface_args.is_empty() || *impl_args == iface_args)
+        vm.interface_implementors
+            .get(&iface_name)
+            .is_some_and(|impls| {
+                impls.iter().any(|(impl_class, impl_args)| {
+                    *impl_class == class_name && (iface_args.is_empty() || *impl_args == iface_args)
+                })
             })
-        })
     }
 
     /// BEP-044: `iface_t.implemented_by(class_t)` — same answer as

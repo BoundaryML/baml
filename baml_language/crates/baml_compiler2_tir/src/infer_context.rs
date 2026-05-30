@@ -299,18 +299,12 @@ pub enum TirTypeError {
     },
     /// BEP-044: a value almost satisfies an interface via a blanket impl, but a
     /// generic bound (`T extends Bound`) is not met. Names the failed bound.
-    BlanketBoundNotSatisfied {
-        value_type: Ty,
-        bound: Ty,
-    },
+    BlanketBoundNotSatisfied { value_type: Ty, bound: Ty },
     /// BEP-044 wf3 #18: a class provides the SAME interface instantiation via
     /// more than one `implements` block (distinct generic blocks that collapse
     /// under the concrete type args, e.g. `Getter<L>`+`Getter<R>` at
     /// `Pair<int, int>`). Coercing to that interface is ambiguous.
-    AmbiguousInterfaceInstantiation {
-        class_name: Name,
-        interface: Ty,
-    },
+    AmbiguousInterfaceInstantiation { class_name: Name, interface: Ty },
 }
 
 impl fmt::Display for TirTypeError {
@@ -433,7 +427,11 @@ impl fmt::Display for TirTypeError {
                 )
             }
             TirTypeError::MissingReturn { expected } => {
-                write!(f, "missing return: expected `{}`", expected.render_user_facing())
+                write!(
+                    f,
+                    "missing return: expected `{}`",
+                    expected.render_user_facing()
+                )
             }
             TirTypeError::AliasCycle { name } => {
                 write!(f, "recursive type alias cycle: {name}")
