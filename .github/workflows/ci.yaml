@@ -524,7 +524,14 @@ jobs:
       # (canary is the sole saver; PRs restore read-only). It is bench-specific
       # on purpose — its only saver compiles just baml_tests benches, a thin
       # seed not worth sharing with a general ARM job.
-      - uses: Swatinem/rust-cache@v2
+      # Blacksmith's drop-in for Swatinem/rust-cache. On Blacksmith self-hosted
+      # runners the GitHub cache backend's *finalize* step races the runner's
+      # immediate post-job shutdown, so large saves (e.g. this 4GB bench cache)
+      # upload to 100% but never commit — every run is then a cold "No cache
+      # found". Blacksmith's own cache backend has no such teardown race.
+      # If this confirms the fix, the same swap applies to the other
+      # blacksmith-* jobs (all v0-rust-linux-* caches are currently missing too).
+      - uses: useblacksmith/rust-cache@v3
         with:
           workspaces: "baml_language -> target"
           save-if: ${{ github.ref == 'refs/heads/canary' }}
