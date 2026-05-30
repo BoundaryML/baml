@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 21362
 ---
 function user.ConditionalLogic(age: int) -> string {
     load_var age
@@ -42,7 +43,7 @@ function user.EdgeFoo.from_json(j: baml.json.json) -> EdgeFoo {
     return
 }
 
-function user.EdgeFoo.to_json(self: null) -> baml.json.json {
+function user.EdgeFoo.to_json(self: EdgeFoo) -> baml.json.json {
     load_var self
     load_field .x
     call baml.Int.to_json
@@ -70,7 +71,7 @@ function user.Point.from_json(j: baml.json.json) -> Point {
     return
 }
 
-function user.Point.to_json(self: null) -> baml.json.json {
+function user.Point.to_json(self: Point) -> baml.json.json {
     load_var self
     load_field .x
     call baml.Int.to_json

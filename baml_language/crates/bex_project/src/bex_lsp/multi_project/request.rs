@@ -827,6 +827,7 @@ fn definition_kind_to_lsp_symbol_kind(
         DefinitionKind::Function => lsp_types::SymbolKind::FUNCTION,
         DefinitionKind::Class => lsp_types::SymbolKind::CLASS,
         DefinitionKind::Enum => lsp_types::SymbolKind::ENUM,
+        DefinitionKind::Interface => lsp_types::SymbolKind::INTERFACE,
         DefinitionKind::TypeAlias => lsp_types::SymbolKind::CLASS,
         DefinitionKind::Client => lsp_types::SymbolKind::STRUCT,
         DefinitionKind::Test => lsp_types::SymbolKind::METHOD,

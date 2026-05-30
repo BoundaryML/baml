@@ -98,6 +98,29 @@ pub enum LoweringDiagnostic {
         reason: &'static str,
         span: TextRange,
     },
+
+    /// Top-level `implements I for T` where `T` does not match any class in the file.
+    UnresolvedImplementsForTarget {
+        interface_name: String,
+        target_name: String,
+        span: TextRange,
+    },
+
+    /// Top-level `implements I for T` tried to add fields to a non-class
+    /// target. Primitive and fixed-shape types may only provide methods.
+    InvalidImplementsForFieldsTarget {
+        target_name: String,
+        span: TextRange,
+    },
+
+    /// Field declarations inside `implements` blocks are the obsolete
+    /// qualified-field model. Interface fields are satisfied by class fields
+    /// or explicit `field as class_field` links.
+    InterfaceFieldDeclaredInImplementsBlock {
+        interface_name: String,
+        field_name: String,
+        span: TextRange,
+    },
 }
 
 impl LoweringDiagnostic {
@@ -224,6 +247,36 @@ impl LoweringDiagnostic {
                 format!("invalid pattern type ascription: {reason}"),
                 *span,
                 "type ascription not allowed here",
+            ),
+            LoweringDiagnostic::UnresolvedImplementsForTarget {
+                interface_name,
+                target_name,
+                span,
+            } => (
+                DiagnosticId::UnknownType,
+                format!("`implements {interface_name} for {target_name}`: type `{target_name}` not found"),
+                *span,
+                "unknown target type",
+            ),
+            LoweringDiagnostic::InvalidImplementsForFieldsTarget { target_name, span } => (
+                DiagnosticId::TypeMismatch,
+                format!(
+                    "`implements for {target_name}` cannot declare fields; only class targets can add interface fields"
+                ),
+                *span,
+                "fields are not allowed for this target",
+            ),
+            LoweringDiagnostic::InterfaceFieldDeclaredInImplementsBlock {
+                interface_name,
+                field_name,
+                span,
+            } => (
+                DiagnosticId::InterfaceFieldDeclaredInImplementsBlock,
+                format!(
+                    "field `{field_name}` cannot be declared inside `implements {interface_name}`"
+                ),
+                *span,
+                "add a class field, or link it with `field as class_field`",
             ),
         };
 

@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 19699
 ---
 === MIR2 ===
 fn user.RootAliasParam(cfg: Config) -> string {
@@ -36,17 +37,15 @@ fn user.RootEnumMatch(s: Status) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: Status // s // param
-    let _2: bool
-    let _3: bool
+    let _2: int
 
     bb0: {
-        _2 = copy _1 == const user.Status.Ok;
-        branch copy _2 -> [bb4, bb1];
+        _2 = discriminant(_1);
+        switch copy _2 [Status.Ok: bb4, Status.Failed: bb3, Status.Pending: bb2, otherwise: bb1] (exhaustive);
     }
 
     bb1: {
-        _3 = copy _1 == const user.Status.Failed;
-        branch copy _3 -> [bb3, bb2];
+        unreachable;
     }
 
     bb2: {
@@ -796,17 +795,15 @@ fn user.auth.AuthMatchesRootStatus(s: Status) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: Status // s // param
-    let _2: bool
-    let _3: bool
+    let _2: int
 
     bb0: {
-        _2 = copy _1 == const user.Status.Ok;
-        branch copy _2 -> [bb4, bb1];
+        _2 = discriminant(_1);
+        switch copy _2 [Status.Ok: bb4, Status.Failed: bb3, Status.Pending: bb2, otherwise: bb1] (exhaustive);
     }
 
     bb1: {
-        _3 = copy _1 == const user.Status.Failed;
-        branch copy _3 -> [bb3, bb2];
+        unreachable;
     }
 
     bb2: {
@@ -1342,17 +1339,15 @@ fn user.llm.LlmMatchesRootStatus(s: Status) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: Status // s // param
-    let _2: bool
-    let _3: bool
+    let _2: int
 
     bb0: {
-        _2 = copy _1 == const user.Status.Ok;
-        branch copy _2 -> [bb4, bb1];
+        _2 = discriminant(_1);
+        switch copy _2 [Status.Ok: bb4, Status.Failed: bb3, Status.Pending: bb2, otherwise: bb1] (exhaustive);
     }
 
     bb1: {
-        _3 = copy _1 == const user.Status.Failed;
-        branch copy _3 -> [bb3, bb2];
+        unreachable;
     }
 
     bb2: {
@@ -2285,17 +2280,15 @@ fn user.llm.openai.OpenAIMatchesRootStatus(s: Status) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: Status // s // param
-    let _2: bool
-    let _3: bool
+    let _2: int
 
     bb0: {
-        _2 = copy _1 == const user.Status.Ok;
-        branch copy _2 -> [bb4, bb1];
+        _2 = discriminant(_1);
+        switch copy _2 [Status.Ok: bb4, Status.Failed: bb3, Status.Pending: bb2, otherwise: bb1] (exhaustive);
     }
 
     bb1: {
-        _3 = copy _1 == const user.Status.Failed;
-        branch copy _3 -> [bb3, bb2];
+        unreachable;
     }
 
     bb2: {

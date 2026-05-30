@@ -21,4 +21,121 @@ impl BamlClassTypeValue for PackageBamlImpl {
             _ => bex_str::BexStr::from("<type: ?>"),
         }
     }
+
+    /// BEP-044: `class_t.implements(iface_t)`.
+    ///
+    /// Looks `class_t`'s `TypeName` up in the program's interface→implementors
+    /// table under the key `iface_t`. The table is populated at codegen time
+    /// with the transitive `extends`/`implements` closure, so transitive
+    /// satisfaction is a single hash lookup.
+    fn implements(vm: &BexVm, self_value: &Value, other: &Value) -> bool {
+        let Some(class_name) = ty_name(vm, *self_value) else {
+            return false;
+        };
+        let Some((iface_name, iface_args)) = ty_name_and_args(vm, *other) else {
+            return false;
+        };
+        // BEP-044: a generic interface request (`Box<string>`) must match only
+        // implementors recorded at those exact type args. An interface request
+        // with no args (`Box` / a non-generic interface) matches any.
+        vm.interface_implementors
+            .get(&iface_name)
+            .is_some_and(|impls| {
+                impls.iter().any(|(impl_class, impl_args)| {
+                    *impl_class == class_name
+                        && (iface_args.is_empty()
+                            || impl_args.is_empty()
+                            || *impl_args == iface_args)
+                })
+            })
+    }
+
+    /// BEP-044: `iface_t.implemented_by(class_t)` — same answer as
+    /// `class_t.implements(iface_t)` but with the receiver flipped.
+    fn implemented_by(vm: &BexVm, self_value: &Value, other: &Value) -> bool {
+        Self::implements(vm, other, self_value)
+    }
+
+    /// BEP-044: `iface_t.implementors()` returns the concrete classes that
+    /// nominally satisfy this interface, in stable declaration order.
+    /// Returns `[]` when `self_value` is not an interface (e.g. a class type,
+    /// a primitive type, or a `type` value for a generic instantiation that
+    /// the codegen pass didn't enumerate).
+    ///
+    /// Returns a raw `Vec<Value>`; the codegen glue wraps it into an
+    /// `Object::Array` allocation. The element `Object::Type` values are
+    /// allocated here because they each require a fresh TLAB slot.
+    fn implementors(vm: &mut BexVm, self_value: &Value) -> Vec<Value> {
+        let Some((iface_name, iface_args)) = ty_name_and_args(vm, *self_value) else {
+            return Vec::new();
+        };
+        let Some(entries) = vm.interface_implementors.get(&iface_name).cloned() else {
+            return Vec::new();
+        };
+        entries
+            .into_iter()
+            // Keep only implementors recorded at the requested instantiation
+            // (any, when the request or implementor entry carries no type args).
+            .filter(|(_, impl_args)| {
+                iface_args.is_empty() || impl_args.is_empty() || *impl_args == iface_args
+            })
+            .map(|(name, _)| {
+                let ty = baml_type::Ty::Class(name, Vec::new(), baml_type::TyAttr::default());
+                Value::object(vm.tlab.alloc(Object::Type(Box::new(ty))))
+            })
+            .collect()
+    }
+}
+
+/// Like [`ty_name`] but also returns the type's generic arguments (e.g.
+/// `[string]` for `Box<string>`). Used by reflection to discriminate generic
+/// interface instantiations.
+fn ty_name_and_args(vm: &BexVm, value: Value) -> Option<(baml_type::TypeName, Vec<baml_type::Ty>)> {
+    let ptr = value.as_object_ptr()?;
+    let Object::Type(ty) = vm.get_object(ptr) else {
+        return None;
+    };
+    match ty.as_ref() {
+        baml_type::Ty::Class(name, args, _) => Some((name.clone(), args.clone())),
+        baml_type::Ty::Enum(name, _) => Some((name.clone(), Vec::new())),
+        other => primitive_type_name(other).map(|name| (name, Vec::new())),
+    }
+}
+
+/// BEP-044 wf3 #G19: a synthetic `TypeName` for a primitive type so an
+/// out-of-body `implements I for int` is visible to reflection
+/// (`reflect.type_of<int>().implements(...)` / `I.implementors()`). Must match
+/// the naming used by `baml_compiler2_emit`'s Pass 7.6 when it bakes the
+/// implementor table.
+fn primitive_type_name(ty: &baml_type::Ty) -> Option<baml_type::TypeName> {
+    let name = match ty {
+        baml_type::Ty::Int { .. } => "int",
+        baml_type::Ty::Bigint { .. } => "bigint",
+        baml_type::Ty::Float { .. } => "float",
+        baml_type::Ty::String { .. } => "string",
+        baml_type::Ty::Bool { .. } => "bool",
+        baml_type::Ty::Null { .. } => "null",
+        _ => return None,
+    };
+    Some(baml_type::TypeName {
+        name: baml_type::Name::new(name),
+        module_path: Vec::new(),
+        display_name: baml_type::Name::new(name),
+    })
+}
+
+/// Project a `Value::Object(Object::Type)` to its underlying `TypeName`,
+/// when the wrapped `Ty` is name-bearing (class, enum, interface — all of
+/// which round-trip through `Ty::Class` at the runtime layer; see
+/// `baml_compiler2_mir/src/lower.rs`). Returns `None` for primitive types,
+/// containers, and anything else without a stable name.
+fn ty_name(vm: &BexVm, value: Value) -> Option<baml_type::TypeName> {
+    let ptr = value.as_object_ptr()?;
+    let Object::Type(ty) = vm.get_object(ptr) else {
+        return None;
+    };
+    match ty.as_ref() {
+        baml_type::Ty::Class(name, _, _) | baml_type::Ty::Enum(name, _) => Some(name.clone()),
+        other => primitive_type_name(other),
+    }
 }

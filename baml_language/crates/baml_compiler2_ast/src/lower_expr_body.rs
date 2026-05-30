@@ -32,11 +32,22 @@ pub struct EnvVarRef {
 /// Returns true if `kind` can serve as an identifier token in expression position.
 ///
 /// The parser allows `KW_CLIENT` (and `WORD`) inside `PATH_EXPR` / `FIELD_ACCESS_EXPR`
-/// nodes when `client` is used as a variable or field name. This must match
-/// exactly what `parse_path_or_ident` accepts; adding a new keyword there
-/// requires adding it here too.
+/// nodes when `client` is used as a variable or field name. The interface-related
+/// keywords (`implements`, `interface`, `extends`) likewise remain valid as
+/// member names — e.g. `dog_t.implements(animal_t)` on the reflection `type`
+/// value. This must match exactly what `parse_path_or_ident` / `at_member_name`
+/// accept in the parser.
 fn is_ident_token(kind: SyntaxKind) -> bool {
-    kind == SyntaxKind::WORD || kind == SyntaxKind::KW_CLIENT
+    matches!(
+        kind,
+        SyntaxKind::WORD
+            | SyntaxKind::KW_CLIENT
+            | SyntaxKind::KW_IMPLEMENTS
+            | SyntaxKind::KW_IMPLEMENT
+            | SyntaxKind::KW_INTERFACE
+            | SyntaxKind::KW_EXTENDS
+            | SyntaxKind::KW_REQUIRES
+    )
 }
 
 /// Locate the `GENERIC_ARGS` node that should be treated as the *call-site*
@@ -63,6 +74,9 @@ fn find_callee_generic_args(callee_node: &SyntaxNode) -> Option<SyntaxNode> {
             // Base is the first child node — it carries the receiver type's
             // `GENERIC_ARGS` for `<Type<...>>.method(args)` shape.
             let base = callee_node.children().next()?;
+            if base.kind() == SyntaxKind::UPCAST_EXPR {
+                return None;
+            }
             find_callee_generic_args(&base)
         }
         _ => None,
@@ -636,6 +650,7 @@ impl LoweringContext {
             }
             SyntaxKind::PATH_EXPR => self.lower_path_expr(node),
             SyntaxKind::FIELD_ACCESS_EXPR => self.lower_field_access_expr(node),
+            SyntaxKind::UPCAST_EXPR => self.lower_upcast_expr(node),
             SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR => self.lower_optional_field_access_expr(node),
             SyntaxKind::ENV_ACCESS_EXPR => self.lower_env_access_expr(node),
             SyntaxKind::INDEX_EXPR => self.lower_index_expr(node),
@@ -700,6 +715,7 @@ impl LoweringContext {
                     FunctionDef {
                         name: Name::new("<spawn>"),
                         generic_params: Vec::new(),
+                        generic_param_bounds: Vec::new(),
                         params: Vec::new(),
                         defaults: crate::ast::FunctionDefaults::empty(),
                         return_type: None,
@@ -1898,6 +1914,7 @@ impl LoweringContext {
                     | SyntaxKind::CALL_EXPR
                     | SyntaxKind::PATH_EXPR
                     | SyntaxKind::FIELD_ACCESS_EXPR
+                    | SyntaxKind::UPCAST_EXPR
                     | SyntaxKind::ENV_ACCESS_EXPR
                     | SyntaxKind::INDEX_EXPR
                     | SyntaxKind::IF_EXPR
@@ -2185,6 +2202,7 @@ impl LoweringContext {
         let mut base = None;
         let mut field = None;
         let mut field_range = None;
+        let mut seen_accessor = false;
 
         for elem in node.children_with_tokens() {
             match elem {
@@ -2194,9 +2212,18 @@ impl LoweringContext {
                     }
                 }
                 rowan::NodeOrToken::Token(token) => {
-                    if is_ident_token(token.kind()) && base.is_some() {
-                        field = Some(Name::new(token.text()));
-                        field_range = Some(token.text_range());
+                    if matches!(token.kind(), SyntaxKind::DOT | SyntaxKind::DOLLAR) {
+                        seen_accessor = true;
+                    } else if is_ident_token(token.kind()) {
+                        if !seen_accessor && base.is_none() {
+                            // Base is a bare identifier token, e.g.
+                            // `value.implements()` where `implements` lexes as
+                            // a keyword and the parser cannot build a PATH_EXPR.
+                            base = self.try_lower_bare_token(&token);
+                        } else if seen_accessor {
+                            field = Some(Name::new(token.text()));
+                            field_range = Some(token.text_range());
+                        }
                     }
                 }
             }
@@ -2209,6 +2236,41 @@ impl LoweringContext {
         if let Some(range) = field_range {
             self.source_map.member_access_member_spans.insert(id, range);
         }
+        if self.needs_chain_wrap.remove(&base) {
+            self.needs_chain_wrap.insert(id);
+        }
+        id
+    }
+
+    fn lower_upcast_expr(&mut self, node: &SyntaxNode) -> ExprId {
+        let mut base = None;
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Node(child)
+                    if child.kind() != SyntaxKind::GENERIC_ARGS && base.is_none() =>
+                {
+                    base = Some(self.lower_expr_in_chain(&child));
+                }
+                rowan::NodeOrToken::Token(token) if base.is_none() => {
+                    base = self.try_lower_bare_token(&token);
+                }
+                _ => {}
+            }
+        }
+        let base = base.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+
+        let target = node
+            .children()
+            .find(|child| child.kind() == SyntaxKind::GENERIC_ARGS)
+            .and_then(|args| {
+                args.children()
+                    .find(|child| child.kind() == SyntaxKind::TYPE_EXPR)
+            })
+            .and_then(baml_compiler_syntax::ast::TypeExpr::cast)
+            .map(|te| crate::lower_type_expr::lower_type_expr_node(&te))
+            .unwrap_or_else(|| TypeExpr::Unknown { attrs: Vec::new() });
+
+        let id = self.alloc_expr(Expr::Upcast { base, target }, node.text_range());
         if self.needs_chain_wrap.remove(&base) {
             self.needs_chain_wrap.insert(id);
         }
@@ -2462,11 +2524,40 @@ impl LoweringContext {
     }
 
     fn lower_object_literal(&mut self, node: &SyntaxNode) -> ExprId {
+        fn collect_constructor_path(
+            node: &SyntaxNode,
+            path_segments: &mut Vec<Name>,
+            type_args: &mut Vec<TypeExpr>,
+        ) {
+            for elem in node.children_with_tokens() {
+                match elem {
+                    rowan::NodeOrToken::Token(token) if is_ident_token(token.kind()) => {
+                        path_segments.push(Name::new(token.text()));
+                    }
+                    rowan::NodeOrToken::Node(args_node)
+                        if args_node.kind() == SyntaxKind::GENERIC_ARGS =>
+                    {
+                        *type_args = args_node
+                            .children()
+                            .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+                            .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
+                            .map(|te| crate::lower_type_expr::lower_type_expr_node(&te))
+                            .collect();
+                    }
+                    rowan::NodeOrToken::Node(child_node) => {
+                        collect_constructor_path(&child_node, path_segments, type_args);
+                    }
+                    rowan::NodeOrToken::Token(_) => {}
+                }
+            }
+        }
+
         let mut fields = Vec::new();
         let mut spreads = Vec::new();
         let mut position = 0;
         let mut type_name = None;
         let mut type_args: Vec<TypeExpr> = vec![];
+        let mut type_path_segments: Vec<Name> = vec![];
 
         // Look for the optional type name (first WORD or path before the brace):
         //   - A simple WORD token: `MyClass { ... }` → `TypePath::bare`.
@@ -2474,40 +2565,23 @@ impl LoweringContext {
         //     PATH_EXPR) → `TypePath` of all the WORD segments.
         //   - A generic path: `Foo<int> { ... }` (parsed as PATH_EXPR with
         //     GENERIC_ARGS child) → `TypePath::bare("Foo")` + `type_args = [int]`.
-        'outer: for elem in node.children_with_tokens() {
+        for elem in node.children_with_tokens() {
             match elem {
                 rowan::NodeOrToken::Token(token) => {
                     if token.kind() == SyntaxKind::L_BRACE {
                         break;
                     }
-                    if is_ident_token(token.kind()) && type_name.is_none() {
-                        type_name = Some(TypePath::bare(Name::new(token.text())));
+                    if is_ident_token(token.kind()) {
+                        type_path_segments.push(Name::new(token.text()));
                     }
                 }
                 rowan::NodeOrToken::Node(child_node) => {
-                    let segments: Vec<Name> = child_node
-                        .children_with_tokens()
-                        .filter_map(rowan::NodeOrToken::into_token)
-                        .filter(|t| is_ident_token(t.kind()))
-                        .map(|t| Name::new(t.text()))
-                        .collect();
-                    if !segments.is_empty() {
-                        type_name = Some(TypePath::new(segments));
-                    }
-                    // Also extract explicit generic type args from `Foo<int>` syntax:
-                    // PATH_EXPR contains a GENERIC_ARGS child with TYPE_EXPR children.
-                    type_args = child_node
-                        .children()
-                        .find(|n| n.kind() == SyntaxKind::GENERIC_ARGS)
-                        .into_iter()
-                        .flat_map(|args_node| args_node.children())
-                        .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
-                        .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
-                        .map(|te| crate::lower_type_expr::lower_type_expr_node(&te))
-                        .collect();
-                    break 'outer;
+                    collect_constructor_path(&child_node, &mut type_path_segments, &mut type_args);
                 }
             }
+        }
+        if !type_path_segments.is_empty() {
+            type_name = Some(TypePath::new(type_path_segments));
         }
 
         // Object fields are child nodes after L_BRACE
@@ -2515,8 +2589,8 @@ impl LoweringContext {
         for child in node.children() {
             match child.kind() {
                 SyntaxKind::OBJECT_FIELD => {
-                    // OBJECT_FIELD: WORD COLON expr
-                    let mut key = None;
+                    // OBJECT_FIELD: WORD (DOT WORD)* COLON expr
+                    let mut key_segments = Vec::new();
                     let mut val = None;
                     let mut seen_colon = false;
                     for elem in child.children_with_tokens() {
@@ -2527,9 +2601,7 @@ impl LoweringContext {
                             rowan::NodeOrToken::Token(t)
                                 if is_ident_token(t.kind()) && !seen_colon =>
                             {
-                                if key.is_none() {
-                                    key = Some(Name::new(t.text()));
-                                }
+                                key_segments.push(t.text().to_string());
                             }
                             rowan::NodeOrToken::Node(n) if seen_colon && val.is_none() => {
                                 val = Some(self.lower_expr(&n));
@@ -2541,6 +2613,11 @@ impl LoweringContext {
                             rowan::NodeOrToken::Node(_) => {}
                         }
                     }
+                    let key = if key_segments.is_empty() {
+                        None
+                    } else {
+                        Some(Name::new(key_segments.join(".")))
+                    };
                     if let (Some(k), Some(val_id)) = (key, val) {
                         fields.push((k, val_id));
                     }
@@ -2721,6 +2798,7 @@ impl LoweringContext {
         let func_def = FunctionDef {
             name: Name::new("<anonymous function>"),
             generic_params,
+            generic_param_bounds: Vec::new(),
             params,
             defaults,
             return_type,
@@ -3194,6 +3272,7 @@ impl LoweringContext {
         let lambda_def = FunctionDef {
             name: Name::new("<test body>"),
             generic_params: vec![],
+            generic_param_bounds: vec![],
             params: vec![],
             defaults: FunctionDefaults::empty(),
             return_type: None,
@@ -3290,6 +3369,7 @@ impl LoweringContext {
         let sub_collector_def = FunctionDef {
             name: Name::new("<testset collector>"),
             generic_params: vec![],
+            generic_param_bounds: vec![],
             params: vec![sub_param],
             defaults: FunctionDefaults::empty(),
             return_type: None,

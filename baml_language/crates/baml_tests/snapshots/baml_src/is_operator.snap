@@ -1451,8 +1451,9 @@ function is_operator.is_with_optional_chain_scrutinee_fn() -> bool {
 
   L0:
     load_const null
-    load_const "value"
-    load_map_element
+    store_var _5
+    load_var _5
+    load_field .0
     jump L2
 
   L1:

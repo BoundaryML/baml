@@ -79,12 +79,12 @@ function test_multiple_classes(x: Foo | Bar | Baz) -> string {
 //     │ 
 //     │ Note: Error code: E0098
 // ────╯
-// error: type `user.Bar` has no member `field`
+// error: type `Bar` has no member `field`
 //     ╭─[ expr_instanceof_narrowing.baml:13:18 ]
 //     │
 //  13 │         return x.field;
 //     │                  ──┬──  
-//     │                    ╰──── type `user.Bar` has no member `field`
+//     │                    ╰──── type `Bar` has no member `field`
 //     │ 
 //     │ Note: Error code: E0007
 // ────╯
@@ -106,21 +106,21 @@ function test_multiple_classes(x: Foo | Bar | Baz) -> string {
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// error: type `user.Bar` has no member `field`
+// error: type `Bar` has no member `field`
 //     ╭─[ expr_instanceof_narrowing.baml:36:18 ]
 //     │
 //  36 │         return x.field;
 //     │                  ──┬──  
-//     │                    ╰──── type `user.Bar` has no member `field`
+//     │                    ╰──── type `Bar` has no member `field`
 //     │ 
 //     │ Note: Error code: E0007
 // ────╯
-// error: type `user.Bar` has no member `field`
+// error: type `Bar` has no member `field`
 //     ╭─[ expr_instanceof_narrowing.baml:38:18 ]
 //     │
 //  38 │         return x.field;
 //     │                  ──┬──  
-//     │                    ╰──── type `user.Bar` has no member `field`
+//     │                    ╰──── type `Bar` has no member `field`
 //     │ 
 //     │ Note: Error code: E0007
 // ────╯

@@ -4,6 +4,7 @@ use baml_base::Name;
 use baml_compiler2_hir::{package::PackageId, scope::ScopeKind};
 use baml_compiler2_tir::{
     inference::infer_scope_types,
+    interfaces::package_implements_registry,
     package_interface::{ExportedType, package_interface, package_resolution_context},
     resolve::{ResolvedName, resolve_name_at_in_scope},
     ty::{FunctionParamMode, QualifiedTypeName, Ty},
@@ -162,7 +163,7 @@ fn unresolved_field() {
       { : never
         return x.missing : unknown
       }
-      !! 66..73: type `user.Foo` has no member `missing`
+      !! 66..73: type `Foo` has no member `missing`
     }
     class user.Foo$stream {
       name: null | string
@@ -199,7 +200,7 @@ function f(data: Data) -> string {
       { : never
         return data.inner.foo : unknown
       }
-      !! 78..83: type `user.Data` has no member `inner`
+      !! 78..83: type `Data` has no member `inner`
     }
     class user.Data$stream {
       name: null | string
@@ -236,7 +237,7 @@ function f(s: Sentiment) -> string {
       { : never
         return s.feelin : unknown
       }
-      !! 85..91: type `user.Sentiment` has no member `feelin`
+      !! 85..91: type `Sentiment` has no member `feelin`
     }
     class user.Sentiment$stream {
       feeling: null | string
@@ -486,6 +487,54 @@ fn package_interface_exports_optional_param_mode() {
         Some("limit")
     );
     assert_eq!(exported.params[1].mode, FunctionParamMode::Optional);
+}
+
+#[test]
+fn cross_file_out_of_body_implements_class_target_is_registered() {
+    let mut db = make_db();
+    db.add_file(
+        "types.baml",
+        r#"
+class Dog {
+    breed: string
+}
+"#,
+    );
+    let impl_file = db.add_file(
+        "impl.baml",
+        r#"
+interface ToJson {
+    function to_json(self) -> string
+}
+
+implements ToJson for Dog {
+    function to_json(self) -> string {
+        return "dog"
+    }
+}
+"#,
+    );
+
+    let item_tree = baml_compiler2_hir::file_item_tree(&db, impl_file);
+    assert_eq!(
+        item_tree.implements_for.len(),
+        1,
+        "cross-file class target must remain a first-class ImplementsFor record"
+    );
+
+    let diagnostics = baml_project::collect_compiler2_diagnostics(&db);
+    assert!(
+        diagnostics.is_empty(),
+        "cross-file class target should not produce diagnostics: {diagnostics:#?}"
+    );
+
+    let registry = package_implements_registry(&db, PackageId::new(&db, Name::new("user")));
+    let dog = QualifiedTypeName::new(Name::new("user"), vec![], Name::new("Dog"));
+    let to_json = QualifiedTypeName::new(Name::new("user"), vec![], Name::new("ToJson"));
+    assert!(
+        registry.implements(&dog, &to_json),
+        "out-of-body implementation in another file should register Dog <: ToJson"
+    );
 }
 
 #[test]

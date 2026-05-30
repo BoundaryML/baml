@@ -53,75 +53,75 @@ function fo() -> int {
 
 //----
 //- diagnostics
-// error: type `user.Color` has no member `get_re`
+// error: type `Color` has no member `get_re`
 //     ╭─[ class.baml:44:29 ]
 //     │
 //  44 │   let first_red = colors[0].get_re();
 //     │                             ───┬──  
-//     │                                ╰──── type `user.Color` has no member `get_re`
+//     │                                ╰──── type `Color` has no member `get_re`
 //     │ 
 //     │ Note: Error code: E0007
 // ────╯
-// error: type `user.Color` has no member `gree`
+// error: type `Color` has no member `gree`
 //     ╭─[ class.baml:45:32 ]
 //     │
 //  45 │   let second_green = colors[1].gree;
 //     │                                ──┬─  
-//     │                                  ╰─── type `user.Color` has no member `gree`
+//     │                                  ╰─── type `Color` has no member `gree`
 //     │ 
 //     │ Note: Error code: E0007
 // ────╯
-// error: type `user.Color` has no member `re`
+// error: type `Color` has no member `re`
 //     ╭─[ class.baml:47:23 ]
 //     │
 //  47 │   let sum = colors[0].re + colors[1].gree + colors[2].blu;
 //     │                       ─┬  
-//     │                        ╰── type `user.Color` has no member `re`
+//     │                        ╰── type `Color` has no member `re`
 //     │ 
 //     │ Note: Error code: E0007
 // ────╯
-// error: type `user.Color` has no member `gree`
+// error: type `Color` has no member `gree`
 //     ╭─[ class.baml:47:38 ]
 //     │
 //  47 │   let sum = colors[0].re + colors[1].gree + colors[2].blu;
 //     │                                      ──┬─  
-//     │                                        ╰─── type `user.Color` has no member `gree`
+//     │                                        ╰─── type `Color` has no member `gree`
 //     │ 
 //     │ Note: Error code: E0007
 // ────╯
-// error: type `user.Color` has no member `blu`
+// error: type `Color` has no member `blu`
 //     ╭─[ class.baml:47:55 ]
 //     │
 //  47 │   let sum = colors[0].re + colors[1].gree + colors[2].blu;
 //     │                                                       ─┬─  
-//     │                                                        ╰─── type `user.Color` has no member `blu`
+//     │                                                        ╰─── type `Color` has no member `blu`
 //     │ 
 //     │ Note: Error code: E0007
 // ────╯
-// error: type `user.Color` has no member `get_re`
+// error: type `Color` has no member `get_re`
 //     ╭─[ class.baml:49:27 ]
 //     │
 //  49 │   let nested = [colors[0].get_re(), colors[1].get_gree(), colors[2].get_blu()];
 //     │                           ───┬──  
-//     │                              ╰──── type `user.Color` has no member `get_re`
+//     │                              ╰──── type `Color` has no member `get_re`
 //     │ 
 //     │ Note: Error code: E0007
 // ────╯
-// error: type `user.Color` has no member `get_gree`
+// error: type `Color` has no member `get_gree`
 //     ╭─[ class.baml:49:47 ]
 //     │
 //  49 │   let nested = [colors[0].get_re(), colors[1].get_gree(), colors[2].get_blu()];
 //     │                                               ────┬───  
-//     │                                                   ╰───── type `user.Color` has no member `get_gree`
+//     │                                                   ╰───── type `Color` has no member `get_gree`
 //     │ 
 //     │ Note: Error code: E0007
 // ────╯
-// error: type `user.Color` has no member `get_blu`
+// error: type `Color` has no member `get_blu`
 //     ╭─[ class.baml:49:69 ]
 //     │
 //  49 │   let nested = [colors[0].get_re(), colors[1].get_gree(), colors[2].get_blu()];
 //     │                                                                     ───┬───  
-//     │                                                                        ╰───── type `user.Color` has no member `get_blu`
+//     │                                                                        ╰───── type `Color` has no member `get_blu`
 //     │ 
 //     │ Note: Error code: E0007
 // ────╯

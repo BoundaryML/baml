@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 4198
 ---
 === TIR2 ===
 
@@ -355,7 +356,7 @@ function baml.future.Future.to_json(self: baml.future.Future) -> baml.json.json 
   map {  } : map<never, never>
 }
 function baml.future.Future.from_json(j: baml.json.json) -> Future<unknown, unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Future {  } : baml.future.Future<T, E>
+  Future {  } : Future<T, E>
 }
 class baml.future.Future$stream {
 }

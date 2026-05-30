@@ -810,7 +810,7 @@ fn resolve_member_type(db: &dyn Db, file: SourceFile, sym: &SymbolInfo) -> Optio
                 .fields
                 .iter()
                 .find(|(field_name, _, _)| field_name.as_str() == sym.name)
-                .map(|(_, ty, _)| crate::utils::display_ty(ty))
+                .map(|(_, ty, _)| crate::utils::display_ty_for_file(db, file, ty))
         }
         (DefinitionKind::Variant, baml_compiler2_hir::contributions::Definition::Enum(_)) => {
             // Enum variants don't have a meaningful type beyond the enum itself.
@@ -933,6 +933,18 @@ fn find_dependencies(
         }
         baml_compiler2_hir::contributions::Definition::Enum(_) => {
             // Enums are self-contained, no type dependencies.
+        }
+        baml_compiler2_hir::contributions::Definition::Interface(iface_loc) => {
+            let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+            let iface = &item_tree[iface_loc.id(db)];
+            for field in &iface.fields {
+                if let Some(te) = &field.type_expr {
+                    collect_type_expr_deps(db, file, &te.expr, &mut deps, &mut seen);
+                }
+            }
+            for parent in &iface.requires {
+                collect_type_expr_deps(db, file, &parent.expr, &mut deps, &mut seen);
+            }
         }
         baml_compiler2_hir::contributions::Definition::TypeAlias(alias_loc) => {
             // Walk the alias's target type expression.

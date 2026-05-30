@@ -103,7 +103,7 @@ function user.OptionalNameMismatch() -> int throws never {
     let f: NamedLimit = Filtered : (query: string, filter?: string?) -> int throws never -> (query: string, limit?: string?) -> int throws never
     f("cats", limit = "recent") : int
   }
-  !! 511..519: type mismatch: expected user.NamedLimit, got (query: string, filter?: string?) -> int throws never
+  !! 511..519: type mismatch: expected NamedLimit, got (query: string, filter?: string?) -> int throws never
 }
 type user.NamedFilter$stream = unknown
 type user.NamedLimit$stream = unknown

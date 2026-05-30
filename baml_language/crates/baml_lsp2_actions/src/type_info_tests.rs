@@ -124,3 +124,31 @@ fn local_var_hover_for_for_loop_binding_uses_iterable_item_type() {
 
     assert_eq!(markdown, "```baml\nx: int\n```");
 }
+
+#[test]
+fn class_hover_lists_out_of_body_implements() {
+    let test = CursorTest::new(
+        r#"
+interface Animal {
+  function speak(self) -> string
+}
+
+class <[CURSOR]Dog {
+  name: string
+}
+
+implements Animal for Dog {
+  function speak(self) -> string { return self.name }
+}
+"#,
+    );
+
+    let markdown = type_at(&test.db, test.cursor.file, test.cursor.offset)
+        .expect("hover info")
+        .to_hover_markdown();
+
+    assert!(
+        markdown.contains("implements Animal {}"),
+        "expected class hover to surface out-of-body implements, got:\n{markdown}"
+    );
+}

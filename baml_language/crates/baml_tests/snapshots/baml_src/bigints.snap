@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
+assertion_line: 140
 ---
 function bigints.$init_test_ns_bigints_bigints(registry: testing.TestCollector) -> null {
     load_var registry
@@ -678,7 +679,7 @@ function bigints.$init_test_ns_bigints_bigints(registry: testing.TestCollector) 
     return
 }
 
-function bigints.BigintBox.set(self: null, x: void) -> void {
+function bigints.BigintBox.set(self: bigints.BigintBox, x: void) -> void {
     load_var self
     load_var x
     store_field .v

@@ -89,7 +89,7 @@ pub use bex_external_types::{BexExternalValue, Ty, TypeName, UnionMetadata};
 pub use bex_heap::GcStats;
 pub use bex_heap::{ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapPermit};
 use bex_heap::{BexHeap, TlabHolder};
-use bex_vm::{BexVm, SpanNotification, VmExecState};
+use bex_vm::{BexVm, SpanNotification, VmExecState, vm::InterfaceImplementors};
 use bex_vm_types::{
     FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp, Value,
     VmGlobals,
@@ -513,6 +513,11 @@ pub struct BexEngine {
     active_calls: Mutex<HashMap<CallId, CancellationToken>>,
 
     futures: FutureManager,
+
+    /// Per-program interface implementors registry (BEP-044), kept here so
+    /// every spawned VM (including post-`$init` workers) sees the same map
+    /// without cloning the underlying `IndexMap`.
+    interface_implementors: Arc<InterfaceImplementors>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -750,6 +755,9 @@ impl BexEngine {
         #[cfg(not(target_arch = "wasm32"))]
         let park_requested = Arc::new(AtomicBool::new(false));
 
+        let interface_implementors: Arc<InterfaceImplementors> =
+            Arc::new(bytecode.interface_implementors.clone());
+
         // Run $init for each package in dependency order.
         // $init evaluates top-level let-binding initializers and stores their
         // results into the global slots via StoreGlobal instructions.
@@ -767,6 +775,7 @@ impl BexEngine {
                     #[cfg(not(target_arch = "wasm32"))]
                     Arc::clone(&park_requested),
                     Arc::clone(&argv),
+                    Arc::clone(&interface_implementors),
                 );
                 vm.set_entry_point(*init_ptr, &[]);
                 // Drive the VM to completion. $init only contains synchronous
@@ -890,6 +899,7 @@ impl BexEngine {
             park_requested,
             active_calls: Mutex::new(HashMap::new()),
             futures: FutureManager::new(futures_permit),
+            interface_implementors,
         })
     }
 
@@ -1314,6 +1324,7 @@ impl BexEngine {
             #[cfg(not(target_arch = "wasm32"))]
             Arc::clone(&self.park_requested),
             Arc::clone(&self.argv),
+            Arc::clone(&self.interface_implementors),
         );
         // BEP-034: wrap the root VM in a `BexThread` from the outset so the
         // permit's `RootHaver` is the thread (delegating to the inner VM).
@@ -1975,6 +1986,7 @@ impl BexEngine {
             #[cfg(not(target_arch = "wasm32"))]
             Arc::clone(&self.park_requested),
             Arc::clone(&self.argv),
+            Arc::clone(&self.interface_implementors),
         );
         child_vm.set_entry_point(closure, &[]);
 

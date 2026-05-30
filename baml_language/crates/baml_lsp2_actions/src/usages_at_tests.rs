@@ -115,6 +115,36 @@ function ProcessPerson(p: Person) -> string {
     }
 
     #[test]
+    fn test_find_refs_interface_in_out_of_body_implements() {
+        let test = CursorTest::new(
+            r#"
+interface <[CURSOR]Animal {
+    function speak(self) -> string
+}
+
+class Dog {}
+
+implements Animal for Dog {
+    function speak(self) -> string { return "woof" }
+}
+"#,
+        );
+
+        let usages = test.find_all_usages();
+        let formatted = usages
+            .iter()
+            .map(|l| test.format_location_with_name(l))
+            .collect::<Vec<_>>();
+
+        assert!(
+            formatted
+                .iter()
+                .any(|usage| usage.ends_with("-> Animal") && usage.contains("test.baml:")),
+            "Should find the interface reference in the out-of-body implements target, found: {formatted:?}"
+        );
+    }
+
+    #[test]
     fn test_find_refs_enum() {
         let test = CursorTest::new(
             r#"
