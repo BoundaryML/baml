@@ -764,8 +764,8 @@ impl BexEngine {
                             };
                             break;
                         }
-                        Ok(VmExecState::Notify(_) | VmExecState::SpanNotify(_)) => {
-                            // Ignore watch/span notifications during init.
+                        Ok(VmExecState::Notify(_)) => {
+                            // Ignore watch notifications during init.
                             continue;
                         }
                         Ok(VmExecState::Event { .. }) => {
@@ -1946,9 +1946,6 @@ impl BexEngine {
         copy_objects: bool,
     ) -> Result<ThreadOutcome, EngineError> {
         loop {
-            // Tracing removed: span context is always unset.
-            thread.vm.current_span_context = None;
-
             let exec_result = match thread.vm.exec() {
                 Ok(state) => state,
                 Err(bex_vm::errors::VmError::ThrownUnhandled { value, trace }) => {
@@ -2431,10 +2428,6 @@ impl BexEngine {
                     // Ignore watch notifications for now
                 }
 
-                VmExecState::SpanNotify(_notification) => {
-                    // Tracing removed: span notifications are no-ops. The VM
-                    // still yields them; we simply resume execution.
-                }
                 VmExecState::EarlyYield => {
                     thread = self.gc_safepoint(thread).await;
                 }

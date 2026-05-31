@@ -980,7 +980,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             throws_type: None,
             origin: FunctionOrigin::Internal,
             body_meta: None,
-            trace: false,
         }
     }
 
