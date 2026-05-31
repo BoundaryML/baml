@@ -5,8 +5,6 @@
 //! at each call site (mirrors `bridge_python` after 31e-phase4), so this no
 //! longer caches its own clone.
 
-use std::sync::Arc;
-
 use bridge_ctypes::{HANDLE_TABLE, kwargs_to_bex_values};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
@@ -68,27 +66,16 @@ impl BamlRuntime {
         let prepared = (|| -> std::result::Result<_, bridge_cffi::BridgeError> {
             let runtime = bridge_cffi::get_runtime()?;
             let decoded = decode_args(args_proto.as_ref(), &function_name)?;
-            let host_ctx = ctx.and_then(|c| c.host_span_context());
-            let collector_arcs: Vec<Arc<bex_events::Collector>> = collectors
-                .as_ref()
-                .map(|colls| colls.iter().map(|c| c.inner_arc()).collect())
-                .unwrap_or_default();
-
-            let mut call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id)
-                .with_collectors(collector_arcs);
-
-            if let Some(host_ctx) = host_ctx {
-                call_ctx = call_ctx.with_host_ctx(host_ctx);
-            }
-
             let rt = bridge_cffi::get_tokio_runtime()?;
-            Ok((runtime, decoded, call_ctx.build(), rt))
+            Ok((runtime, decoded, rt))
         })();
+        let _ = (&ctx, &collectors);
 
-        let (runtime, decoded, call_ctx, rt) = match prepared {
+        let (runtime, decoded, rt) = match prepared {
             Ok(v) => v,
             Err(e) => return Ok(Buffer::from(bridge_cffi::error_to_outbound(e))),
         };
+        let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id).build();
 
         // The whole Result -> BamlOutboundResult translation (incl. the
         // catch_unwind -> SdkPanic boundary and error/panic routing) lives in
@@ -117,27 +104,17 @@ impl BamlRuntime {
         let prepared = (|| -> std::result::Result<_, bridge_cffi::BridgeError> {
             let runtime = bridge_cffi::get_runtime()?;
             let decoded = decode_args(args_proto.as_ref(), &function_name)?;
-            let host_ctx = ctx.and_then(|c| c.host_span_context());
-            let collector_arcs: Vec<Arc<bex_events::Collector>> = collectors
-                .as_ref()
-                .map(|colls| colls.iter().map(|c| c.inner_arc()).collect())
-                .unwrap_or_default();
-
-            let mut call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id)
-                .with_collectors(collector_arcs);
-
-            if let Some(host_ctx) = host_ctx {
-                call_ctx = call_ctx.with_host_ctx(host_ctx);
-            }
-
-            Ok((runtime, decoded, call_ctx.build()))
+            Ok((runtime, decoded))
         })();
+        let _ = (&ctx, &collectors);
 
         // Same shared call_and_encode as the sync + C-ABI paths — returns the
         // encoded BamlOutboundResult envelope bytes for the TS decoder.
         env.spawn_future(async move {
             let bytes = match prepared {
-                Ok((runtime, decoded, call_ctx)) => {
+                Ok((runtime, decoded)) => {
+                    let call_ctx =
+                        bridge_cffi::function_call_context_builder(decoded.call_id).build();
                     bridge_cffi::call_and_encode(runtime, function_name, decoded.kwargs, call_ctx)
                         .await
                 }

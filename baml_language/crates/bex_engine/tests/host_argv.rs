@@ -24,7 +24,6 @@ async fn set_argv_updates_what_baml_sys_argv_returns() {
     let mut engine = BexEngine::new(
         snapshot,
         sys_native::SysOps::native().into(),
-        None,
         vec!["/bin/baml".into(), "placeholder".into()],
     )
     .expect("BexEngine::new should succeed");
@@ -75,7 +74,6 @@ fn argv_getter_returns_current_value() {
     let mut engine = BexEngine::new(
         snapshot,
         sys_native::SysOps::native().into(),
-        None,
         vec!["a".into(), "b".into(), "c".into()],
     )
     .expect("BexEngine::new should succeed");

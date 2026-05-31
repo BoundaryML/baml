@@ -37,7 +37,6 @@ struct BexMulitProject {
     projects:
         std::sync::Arc<std::sync::Mutex<HashMap<crate::fs::FsPath, std::sync::Arc<LiveProject>>>>,
     sys_op_factory: SysOpFactory,
-    event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
     sender: std::sync::Arc<dyn LspClientSenderTrait + Send + Sync>,
     playground_sender: std::sync::Arc<dyn crate::bex_lsp::PlaygroundSender>,
 
@@ -95,13 +94,11 @@ impl BexMulitProject {
         sender: std::sync::Arc<dyn LspClientSenderTrait + Send + Sync>,
         playground_sender: std::sync::Arc<dyn crate::bex_lsp::PlaygroundSender>,
         fs: crate::fs::BamlVFS,
-        event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
         spawner: BackgroundSpawner,
     ) -> Self {
         Self {
             projects: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())),
             sys_op_factory,
-            event_sink,
             sender,
             playground_sender,
             position_encoding: PositionEncoding::UTF8,
@@ -133,7 +130,7 @@ impl BexMulitProject {
         }
 
         let sys_ops = (self.sys_op_factory)(&root_path);
-        let project = crate::project::BexProject::new(&root_path, sys_ops, self.event_sink.clone());
+        let project = crate::project::BexProject::new(&root_path, sys_ops);
         let project = std::sync::Arc::new(LiveProject {
             project,
             in_memory_changes: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())),
@@ -1036,15 +1033,7 @@ pub fn new_lsp(
     sender: std::sync::Arc<dyn LspClientSenderTrait + Send + Sync>,
     playground_sender: std::sync::Arc<dyn crate::bex_lsp::PlaygroundSender>,
     fs: crate::fs::BamlVFS,
-    event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
     spawner: BackgroundSpawner,
 ) -> impl crate::bex_lsp::BexLsp {
-    BexMulitProject::new(
-        sys_op_factory,
-        sender,
-        playground_sender,
-        fs,
-        event_sink,
-        spawner,
-    )
+    BexMulitProject::new(sys_op_factory, sender, playground_sender, fs, spawner)
 }

@@ -46,7 +46,6 @@ fn make_engine(source: &str) -> Arc<BexEngine> {
         BexEngine::new(
             compile_for_engine(source),
             Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),

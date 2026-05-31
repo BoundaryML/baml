@@ -30,8 +30,6 @@ rustls = [ "aws-crypto" ]
 [dependencies]
 baml_compiler2_visualization = { workspace = true }
 baml_version = { workspace = true }
-bex_events = { workspace = true }
-bex_events_native = { workspace = true }
 bex_heap = { workspace = true }
 bex_project = { workspace = true }
 bridge_ctypes = { workspace = true }
