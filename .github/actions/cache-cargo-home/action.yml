@@ -1,0 +1,49 @@
+name: "Cache cargo home (R2)"
+description: >
+  Granular, R2-backed cache for the slow-to-populate cargo download caches
+  (~/.cargo/git/db and ~/.cargo/registry/cache). It reads baml_language/Cargo.lock
+  and from that alone decides exactly which directories to cache: one
+  content-addressed object per crates.io `.crate` (keyed by the sha256 checksum
+  Cargo.lock already records) and one tar per git dependency repo under git/db.
+
+  Takes no inputs. R2 is configured entirely from the environment, using the
+  same variables sccache uses (see .envrc / cargo-tests.reusable.yaml):
+  SCCACHE_ENDPOINT, SCCACHE_BUCKET, SCCACHE_REGION, SCCACHE_S3_KEY_PREFIX, and
+  BAML_SCCACHE_R2_ACCESS_KEY_ID / BAML_SCCACHE_R2_SECRET_ACCESS_KEY. If any of
+  endpoint / bucket / key / secret is missing (e.g. a fork PR without secrets)
+  the action no-ops, mirroring sccache's secretless fallback.
+
+  Runs as a node20 action: main restores from R2, the post step uploads anything
+  the build fetched that wasn't already cached.
+
+outputs:
+  cache-hit:
+    description: "true if every crate and git repo was served from cache."
+  restored-crates:
+    description: "Number of crate files restored from R2."
+  present-crates:
+    description: "Number of crate files already present on disk."
+  missed-crates:
+    description: "Number of crate files not found in cache."
+  restored-index:
+    description: "Number of sparse-index entries restored from R2."
+  restored-git:
+    description: "Number of git db tarballs restored from R2."
+  missed-git:
+    description: "Number of git repos not found in cache."
+  uploaded-crates:
+    description: "Number of crate files uploaded to R2."
+  uploaded-index:
+    description: "Number of sparse-index entries uploaded to R2."
+  uploaded-git:
+    description: "Number of git db tarballs uploaded to R2."
+  restore-stats-path:
+    description: "Path to the restore stats JSON (timings + artifact lists)."
+  save-stats-path:
+    description: "Path to the save stats JSON (timings + artifact lists)."
+
+runs:
+  using: "node20"
+  main: "bundle/restore.js"
+  post: "bundle/save.js"
+  post-if: "always()"

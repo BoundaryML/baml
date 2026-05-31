@@ -1,0 +1,7 @@
+node_modules/
+*.tsbuildinfo
+.DS_Store
+.probe_dist_tracked.txt
+# bundle/ is intentionally committed — it is the published action entrypoint
+# (named bundle/ rather than dist/ because the monorepo root .gitignore excludes
+# dist/). Rebuild it with `pnpm run build` after changing anything under src/.

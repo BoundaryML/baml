@@ -1,32 +1,29 @@
-# sccache strategy
-# ================
+# sccache + R2 cargo-home cache strategy
+# ======================================
 #
-# This workflow uses sccache for Rust compilation artifacts and
-# Swatinem/rust-cache for Cargo registry/git state — i.e. everything cargo
+# This workflow uses sccache for Rust compilation artifacts and the
+# `cache-cargo-home` action for Cargo's download caches — everything cargo
 # downloads before it compiles: the crates.io index, the `.crate` tarballs, and
-# the git checkouts of our forks (minijinja, aws-sdk-rust, google-cloud-rust).
-# `cache-all-crates: true` keeps all of those (the git forks in particular,
-# which are large and otherwise re-cloned on every runner); `cache-targets:
-# false` leaves the compiled `target/` tree to sccache so the two caches don't
-# compete.
-#
-# Because `target/` is excluded, rust-cache's payload is small (registry + git,
-# no build output). As on canary, only canary writes the cache
-# (`save-if: ${{ github.ref == 'refs/heads/canary' }}`); PR branches read the
-# shared entry instead of each saving a fresh one, so cache usage doesn't blow
-# out. rust-cache keys are content-addressed on Cargo.lock, so jobs sharing a
-# `shared-key` reuse the same entry.
+# the git db of our forks (minijinja, aws-sdk-rust, google-cloud-rust). The
+# action reads baml_language/Cargo.lock and restores exactly those from R2 at
+# job start (main), then uploads anything newly fetched at job end (post), so
+# cargo resolves without re-fetching the index, forks, and crates on every run.
+# The compiled `target/` tree is left entirely to sccache, so the two caches
+# don't compete.
 #
 # mise installs sccache and direnv, then each cargo job loads .envrc via
-# `direnv export gha` so CI uses the exact same sccache config as local shells:
-# .envrc is the single source of truth. The R2 credentials are passed through
-# GitHub Actions secrets using the same BAML_SCCACHE_R2_* names that the
+# `direnv export gha` so CI uses the exact same sccache/R2 config as local
+# shells: .envrc is the single source of truth. The R2 credentials are passed
+# through GitHub Actions secrets using the same BAML_SCCACHE_R2_* names that the
 # RUSTC_WRAPPER maps to AWS_* before exec'ing sccache — the `tools/baml-sccache`
 # script on POSIX, and the native `tools_sccache` crate's binary on Windows
-# (built per-job; see the "Build native sccache wrapper" step).
+# (built per-job; see the "Build native sccache wrapper" step) — and that
+# cache-cargo-home signs its R2 requests with (SigV4).
 #
 # Secretless runs (e.g. fork PRs) still install sccache, but .envrc sees no R2
-# credentials and falls back to the runner-local cache.
+# credentials; sccache falls back to its runner-local cache and cache-cargo-home
+# no-ops.
+
 name: Cargo Tests (Reusable)
 
 on:
@@ -49,7 +46,8 @@ defaults:
 env:
   # Inputs read by .envrc; everything else (RUSTC_WRAPPER, SCCACHE_*) is set by
   # .envrc itself so it stays the single source of truth across CI and local.
-  # The R2 credentials .envrc maps to AWS_* for sccache (mapped to AWS_*).
+  # The R2 credentials .envrc maps to AWS_* for sccache, and that the
+  # cache-cargo-home action signs its R2 requests with (SigV4).
   BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
   BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
   CARGO_INCREMENTAL: 0
@@ -80,20 +78,18 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          save-if: ${{ github.ref == 'refs/heads/canary' }}
-          shared-key: "linux-cargo"
-
       - name: "Load .envrc with direnv"
         run: |
           set -euo pipefail
 
           direnv allow .envrc
           direnv export gha >> "$GITHUB_ENV"
+
+      # Restores ~/.cargo/{git/db,registry/cache} from R2 (main) and uploads any
+      # newly fetched crates/git repos at job end (post). Reads baml_language/
+      # Cargo.lock to decide what to cache; takes no inputs.
+      - name: "Cache cargo home (R2)"
+        uses: ./.github/actions/cache-cargo-home
 
       - name: "Install cargo nextest"
         uses: taiki-e/install-action@v2
@@ -172,20 +168,18 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          save-if: ${{ github.ref == 'refs/heads/canary' }}
-          shared-key: "macos-cargo"
-
       - name: "Load .envrc with direnv"
         run: |
           set -euo pipefail
 
           direnv allow .envrc
           direnv export gha >> "$GITHUB_ENV"
+
+      # Restores ~/.cargo/{git/db,registry/cache} from R2 (main) and uploads any
+      # newly fetched crates/git repos at job end (post). Reads baml_language/
+      # Cargo.lock to decide what to cache; takes no inputs.
+      - name: "Cache cargo home (R2)"
+        uses: ./.github/actions/cache-cargo-home
 
       - name: "Install cargo nextest"
         uses: taiki-e/install-action@v2
@@ -257,20 +251,18 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          save-if: ${{ github.ref == 'refs/heads/canary' }}
-          shared-key: "windows-cargo"
-
       - name: "Load .envrc with direnv"
         run: |
           set -euo pipefail
 
           direnv allow .envrc
           direnv export gha >> "$GITHUB_ENV"
+
+      # Restores ~/.cargo/{git/db,registry/cache} from R2 (main) and uploads any
+      # newly fetched crates/git repos at job end (post). Reads baml_language/
+      # Cargo.lock to decide what to cache; takes no inputs.
+      - name: "Cache cargo home (R2)"
+        uses: ./.github/actions/cache-cargo-home
 
       - name: "Build native sccache wrapper"
         run: |
@@ -376,20 +368,18 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          save-if: false
-          shared-key: ${{ matrix.rust-cache-key }}
-
       - name: "Load .envrc with direnv"
         run: |
           set -euo pipefail
 
           direnv allow .envrc
           direnv export gha >> "$GITHUB_ENV"
+
+      # Restores ~/.cargo/{git/db,registry/cache} from R2 (main) and uploads any
+      # newly fetched crates/git repos at job end (post). Reads baml_language/
+      # Cargo.lock to decide what to cache; takes no inputs.
+      - name: "Cache cargo home (R2)"
+        uses: ./.github/actions/cache-cargo-home
 
       # Windows-only: swap the .cmd RUSTC_WRAPPER for the native tools_sccache
       # .exe. See the matching step in `cargo-test-windows` for why.
@@ -475,20 +465,18 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          save-if: ${{ github.ref == 'refs/heads/canary' }}
-          shared-key: "linux-wasm"
-
       - name: "Load .envrc with direnv"
         run: |
           set -euo pipefail
 
           direnv allow .envrc
           direnv export gha >> "$GITHUB_ENV"
+
+      # Restores ~/.cargo/{git/db,registry/cache} from R2 (main) and uploads any
+      # newly fetched crates/git repos at job end (post). Reads baml_language/
+      # Cargo.lock to decide what to cache; takes no inputs.
+      - name: "Cache cargo home (R2)"
+        uses: ./.github/actions/cache-cargo-home
 
       - name: "Build for WASM"
         run: |
@@ -565,20 +553,18 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          save-if: ${{ github.ref == 'refs/heads/canary' }}
-          shared-key: "linux-msrv"
-
       - name: "Load .envrc with direnv"
         run: |
           set -euo pipefail
 
           direnv allow .envrc
           direnv export gha >> "$GITHUB_ENV"
+
+      # Restores ~/.cargo/{git/db,registry/cache} from R2 (main) and uploads any
+      # newly fetched crates/git repos at job end (post). Reads baml_language/
+      # Cargo.lock to decide what to cache; takes no inputs.
+      - name: "Cache cargo home (R2)"
+        uses: ./.github/actions/cache-cargo-home
 
       - name: "Build with MSRV"
         env:
@@ -635,20 +621,18 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          save-if: false
-          shared-key: "linux-cargo"
-
       - name: "Load .envrc with direnv"
         run: |
           set -euo pipefail
 
           direnv allow .envrc
           direnv export gha >> "$GITHUB_ENV"
+
+      # Restores ~/.cargo/{git/db,registry/cache} from R2 (main) and uploads any
+      # newly fetched crates/git repos at job end (post). Reads baml_language/
+      # Cargo.lock to decide what to cache; takes no inputs.
+      - name: "Cache cargo home (R2)"
+        uses: ./.github/actions/cache-cargo-home
 
       - name: "Generate documentation"
         run: cargo doc --all --no-deps --timings
@@ -705,20 +689,18 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          save-if: false
-          shared-key: "linux-cargo"
-
       - name: "Load .envrc with direnv"
         run: |
           set -euo pipefail
 
           direnv allow .envrc
           direnv export gha >> "$GITHUB_ENV"
+
+      # Restores ~/.cargo/{git/db,registry/cache} from R2 (main) and uploads any
+      # newly fetched crates/git repos at job end (post). Reads baml_language/
+      # Cargo.lock to decide what to cache; takes no inputs.
+      - name: "Cache cargo home (R2)"
+        uses: ./.github/actions/cache-cargo-home
 
       - name: "Install cargo insta and nextest"
         uses: taiki-e/install-action@v2
