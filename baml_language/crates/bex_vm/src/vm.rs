@@ -2069,7 +2069,28 @@ impl BexVm {
         StackIndex::from_raw(locals_offset.raw() + slot - 1)
     }
 
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     fn store_local_value(
+        &mut self,
+        local_var_index: StackIndex,
+        value: Value,
+    ) -> Result<Option<VmExecState>, VmError> {
+        // Fast path: no locals are watched, so a local store is just a stack
+        // write. The watch bookkeeping lives in a cold, never-inlined handler
+        // (`store_local_value_watched`) so this hot path stays inlined into
+        // `exec` and costs one predicted branch + one store. `Value` is `Copy`,
+        // so the overwrite needs no `mem::replace`/drop.
+        if unlikely(!self.watched_vars.is_empty()) {
+            return self.store_local_value_watched(local_var_index, value);
+        }
+        self.stack[local_var_index] = value;
+        Ok(None)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn store_local_value_watched(
         &mut self,
         local_var_index: StackIndex,
         value: Value,
@@ -2097,9 +2118,7 @@ impl BexVm {
         // 3. `process_notifications` walks all roots reaching this
         //    node (just itself, since it IS a root) and applies
         //    the watch filter to decide whether to notify.
-        if unlikely(!self.watched_vars.is_empty())
-            && self.watched_vars.contains_key(&local_var_index)
-        {
+        if self.watched_vars.contains_key(&local_var_index) {
             let watched_node = NodeId::LocalVar(local_var_index);
 
             self.update_watched_node(watched_node, watch::Path::Binding, old_value, value);
