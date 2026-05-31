@@ -8,6 +8,6 @@ fn main() -> anyhow::Result<()> {
     for path in &written {
         println!("wrote {}", path.display());
     }
-    eprintln!("tools_rustgen: {} file(s) up to date", written.len());
+    eprintln!("tools_rustgen: wrote {} generated file(s)", written.len());
     Ok(())
 }

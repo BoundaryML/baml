@@ -65,14 +65,32 @@ fn collect_inputs() -> Vec<(String, Vec<u8>)> {
 }
 
 fn walk(root: &Path, dir: &Path, out: &mut Vec<(String, Vec<u8>)>) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
+    // Fail CLOSED: an unreadable source-of-truth must abort the build/regen, not
+    // silently hash a partial tree (which could match stale generated output).
+    // This only runs at build/codegen time, so a panic is the right loud failure.
+    let entries = std::fs::read_dir(dir).unwrap_or_else(|e| {
+        panic!(
+            "baml_rustgen_check: cannot read baml_std dir {}: {e}",
+            dir.display()
+        )
+    });
+    for entry in entries {
+        let entry = entry.unwrap_or_else(|e| {
+            panic!(
+                "baml_rustgen_check: cannot read dir entry in {}: {e}",
+                dir.display()
+            )
+        });
         let path = entry.path();
         if path.is_dir() {
             walk(root, &path, out);
-        } else if let Ok(bytes) = std::fs::read(&path) {
+        } else {
+            let bytes = std::fs::read(&path).unwrap_or_else(|e| {
+                panic!(
+                    "baml_rustgen_check: cannot read baml_std file {}: {e}",
+                    path.display()
+                )
+            });
             let rel = path
                 .strip_prefix(root)
                 .unwrap_or(&path)
@@ -93,6 +111,13 @@ const MAX_SIG_LOOKBACK: usize = 60;
 
 /// Collapse runs of whitespace to single spaces, so reindentation/reflow doesn't
 /// change the hash but token changes do.
+///
+/// Known limitation: this also collapses whitespace *inside* string literals
+/// (e.g. a `"a  b"` default → `"a b"`), so that specific drift wouldn't change
+/// the hash. A quote-aware normalizer would close it, but it's not worth the
+/// complexity: such changes are exceedingly rare in builtin signatures, and the
+/// `tools_rustgen` `up_to_date` test (real regen + diff) catches ANY drift,
+/// including this, as the absolute backstop.
 fn normalize(line: &str) -> String {
     line.split_whitespace().collect::<Vec<_>>().join(" ")
 }
