@@ -6,4 +6,4 @@ on:
 
 jobs:
   build-cli:
-    uses: ./.github/workflows/build-cli-release-reusable.yaml 
+    uses: ./.github/workflows/build-cli-release.reusable.yaml
