@@ -534,7 +534,10 @@ jobs:
       - uses: useblacksmith/rust-cache@v3
         with:
           workspaces: "baml_language -> target"
-          save-if: ${{ github.ref == 'refs/heads/canary' }}
+          # TEMP(test): save on this PR too (normally canary-only) so we can
+          # confirm the Blacksmith cache persists without merging first.
+          # REVERT to `${{ github.ref == 'refs/heads/canary' }}` before merge.
+          save-if: true
           cache-all-crates: true
           cache-workspace-crates: true
           shared-key: "linux-arm-bench"
