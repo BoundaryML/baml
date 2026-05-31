@@ -234,4 +234,3 @@ class TestHostSpanManager:
     def test_context_depth_is_zero(self):
         hsm = HostSpanManager()
         assert hsm.context_depth() == 0
-

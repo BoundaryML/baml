@@ -123,7 +123,7 @@ use bex_heap::{BexHeap, Tlab};
 use bex_vm_types::{
     BinOp, CmpOp, FunctionKind, FutureRead, GlobalIndex, HeapPtr, Object, ObjectIndex, ObjectPool,
     ObjectType, PanicClass, PermitProof, StackIndex, UnaryOp, Value, Variant, VmGlobals,
-    bytecode::{self, BlockNotification, Instruction},
+    bytecode::{self, Instruction},
     types::{
         BoundMethod, Closure, ConstValue, Function, FunctionOrigin, FunctionType, Instance, Type,
         UnscheduledFuture,
@@ -313,8 +313,6 @@ mod tests {
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_type::Span::fake(),
-            block_notifications: Vec::new(),
-            viz_nodes: Vec::new(),
             return_type: int_ty(),
             stream_return_type: Ty::Null {
                 attr: TyAttr::default(),
@@ -810,11 +808,6 @@ pub enum VmExecState {
 #[derive(Debug, PartialEq)]
 pub enum WatchNotification {
     Variables(Vec<watch::NodeId>),
-    Block(BlockNotification),
-    Viz {
-        function_name: String,
-        event: bex_vm_types::bytecode::VizExecEvent,
-    },
 }
 
 /// Intermediate representation of a compiled BAML program.
@@ -1615,8 +1608,6 @@ impl BexVm {
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_type::Span::fake(),
-            block_notifications: Vec::new(),
-            viz_nodes: Vec::new(),
             return_type,
             stream_return_type: baml_type::Ty::Null {
                 attr: baml_type::TyAttr::default(),
@@ -4634,7 +4625,7 @@ impl BexVm {
                     return Ok(Some(VmExecState::Spawn(object_index)));
                 }
 
-                // ── Watch / Unwatch / Notify / NotifyBlock ────────────────────
+                // ── Watch / Unwatch / Notify ──────────────────────────────────
                 OpCode::Watch => {
                     let index = { read_u32_unchecked(code, pc) as usize };
                     let popped = self.stack.ensure_pop();
@@ -4723,49 +4714,6 @@ impl BexVm {
                     return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
                         notifications,
                     ))));
-                }
-
-                OpCode::NotifyBlock => {
-                    let block_index = { read_u32_unchecked(code, pc) as usize };
-                    let notification = &function.block_notifications[block_index];
-                    let full_notification = bytecode::BlockNotification {
-                        function_name: function.name.clone(),
-                        block_name: notification.block_name.clone(),
-                        level: notification.level,
-                        block_type: notification.block_type,
-                        is_enter: notification.is_enter,
-                    };
-                    return Ok(Some(VmExecState::Notify(WatchNotification::Block(
-                        full_notification,
-                    ))));
-                }
-
-                // ── VizEnter / VizExit ────────────────────────────────────────
-                OpCode::VizEnter | OpCode::VizExit => {
-                    let index = { read_u32_unchecked(code, pc) as usize };
-                    let delta = if op == OpCode::VizEnter {
-                        bytecode::VizExecDelta::Enter
-                    } else {
-                        bytecode::VizExecDelta::Exit
-                    };
-                    #[allow(clippy::cast_possible_wrap)]
-                    let node = function.viz_nodes.get(index).ok_or({
-                        VmError::Thrown(self.panic_to_exception_value(VmPanic::IndexOutOfBounds {
-                            index: index as i64,
-                            length: function.viz_nodes.len(),
-                        }))
-                    })?;
-                    let event = bytecode::VizExecEvent {
-                        delta,
-                        node_id: node.node_id,
-                        node_type: node.node_type,
-                        label: node.label.clone(),
-                        header_level: node.header_level,
-                    };
-                    return Ok(Some(VmExecState::Notify(WatchNotification::Viz {
-                        function_name: function.name.clone(),
-                        event,
-                    })));
                 }
 
                 // ── Call ──────────────────────────────────────────────────────

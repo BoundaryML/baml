@@ -1,5 +1,6 @@
 ---
 source: crates/baml_cli/src/describe_command_tests.rs
+assertion_line: 354
 expression: output
 ---
 class            Bigint                           <builtin>/baml/bigint.baml:26
@@ -37,7 +38,6 @@ class            errors.GenericSdkError           <builtin>/baml/ns_errors/error
 class            errors.CompilationError          <builtin>/baml/ns_errors/errors.baml:80
 class            errors.StackFrame                <builtin>/baml/ns_errors/stack_trace.baml:2
 class            errors.StackTrace                <builtin>/baml/ns_errors/stack_trace.baml:9
-function         events.send                      <builtin>/baml/ns_events/events.baml:3
 class            fs.File                          <builtin>/baml/ns_fs/fs.baml:6
 function         fs.open                          <builtin>/baml/ns_fs/fs.baml:57
 function         fs.exists                        <builtin>/baml/ns_fs/fs.baml:62

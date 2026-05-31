@@ -512,7 +512,6 @@ async fn cancel_function_call_by_id_before_registration_pre_cancels() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -707,7 +706,6 @@ async fn spawn_with_options_cancel_token_propagates() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -752,7 +750,6 @@ async fn spawn_with_options_cancel_token_is_catchable() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -788,7 +785,6 @@ async fn spawn_with_options_uncancelled_completes_normally() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -832,7 +828,6 @@ async fn spawn_with_options_cancel_token_any_composes() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -876,7 +871,6 @@ async fn spawn_with_options_detach_completes_normally() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -917,7 +911,6 @@ async fn spawn_with_options_detach_still_honors_cancel_token() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),

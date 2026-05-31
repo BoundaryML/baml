@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
+assertion_line: 140
 ---
 function watch.$init_test_ns_watch_watch(registry: testing.TestCollector) -> null {
     load_var registry
@@ -190,7 +191,6 @@ function watch.WPointWithSet.set(self: watch.WPointWithSet, x: int, y: int) -> w
 }
 
 function watch.block_notification_basic_fn() -> int {
-    notify_block entering_computation
     load_const 1
     load_const 2
     add_int
@@ -198,8 +198,6 @@ function watch.block_notification_basic_fn() -> int {
 }
 
 function watch.block_notification_multiple_fn() -> int {
-    notify_block first_block
-    notify_block second_block
     load_const 1
     load_const 2
     add_int
@@ -207,7 +205,6 @@ function watch.block_notification_multiple_fn() -> int {
 }
 
 function watch.header_before_if() -> int {
-    notify_block MyHeader
     load_const true
     pop_jump_if_false L0
     jump L1
@@ -226,7 +223,6 @@ function watch.header_before_if() -> int {
 function watch.header_before_while() -> int {
     load_const 0
     store_var x
-    notify_block LoopHeader
 
   L0:
     load_var x
@@ -264,8 +260,6 @@ function watch.if_no_header() -> int {
 }
 
 function watch.multiple_headers() -> int {
-    notify_block FirstHeader
-    notify_block SecondHeader
     load_const 1
     load_const 0
     cmp_int_op >
@@ -284,7 +278,6 @@ function watch.multiple_headers() -> int {
 }
 
 function watch.standalone_header() -> int {
-    notify_block JustAHeader
     load_const 5
     return
 }

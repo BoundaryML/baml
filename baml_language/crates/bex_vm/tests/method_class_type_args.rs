@@ -48,8 +48,6 @@ fn inject_function(
         local_names: vec![],
         debug_locals: vec![],
         span: baml_type::Span::fake(),
-        block_notifications: vec![],
-        viz_nodes: vec![],
         return_type: Ty::int(),
         stream_return_type: Ty::Null {
             attr: TyAttr::default(),

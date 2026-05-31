@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/compiler2_tir/phase5.rs
+assertion_line: 389
 expression: output
 ---
 namespace baml:
@@ -41,7 +42,6 @@ namespace baml.errors:
   class Timeout { methods: [to_json, from_json] }
   class Unsupported { methods: [to_json, from_json] }
 namespace baml.events:
-  function send
 namespace baml.fs:
   class DirEntry { methods: [to_json, from_json] }
   class File { methods: [text, bytes, read, read_bytes, close, seek_from, write, write_bytes, to_json, from_json] }

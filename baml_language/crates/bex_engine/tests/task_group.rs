@@ -22,13 +22,8 @@ use sys_native::SysOpsExt;
 fn build_engine(source: &str) -> Arc<BexEngine> {
     let snapshot = compile_for_engine(source);
     Arc::new(
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("Failed to create engine"),
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
     )
 }
 
@@ -196,13 +191,8 @@ async fn task_group_limit_three_runs_concurrently() {
     // scheduler jitter on top of one 200ms sleep.
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("engine"),
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("engine"),
     );
 
     let start = std::time::Instant::now();
@@ -244,13 +234,8 @@ async fn task_group_limit_one_serializes() {
 
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("engine"),
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("engine"),
     );
 
     let start = std::time::Instant::now();

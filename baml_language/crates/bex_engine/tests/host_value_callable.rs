@@ -92,13 +92,8 @@ async fn smoke_generic_pattern_in_match_substitutes_t() {
     "#;
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("Failed to create engine"),
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
     );
 
     let hit = engine
@@ -644,13 +639,8 @@ async fn host_callable_wrong_return_with_declared_throws_keeps_return_diagnostic
 
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("Failed to create engine"),
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
     );
 
     let result = engine
@@ -844,13 +834,8 @@ async fn host_callable_wrong_generic_class_field_type_panics_as_host_contract_vi
 
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("Failed to create engine"),
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
     );
 
     let result = engine
@@ -896,13 +881,8 @@ async fn host_callable_bridge_failure_surfaces_as_internal_error() {
 
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("Failed to create engine"),
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
     );
 
     let result = engine
@@ -977,13 +957,8 @@ async fn host_callable_off_contract_throw_panics_as_host_contract_violation() {
 
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("Failed to create engine"),
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
     );
 
     let result = engine
@@ -1040,13 +1015,8 @@ async fn host_callable_undeclared_callback_accepts_native_throw_as_opaque() {
 
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("Failed to create engine"),
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
     );
 
     let result = engine
@@ -1105,13 +1075,8 @@ async fn host_callable_throw_caught_in_baml() {
 
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("Failed to create engine"),
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
     );
 
     let result = engine
