@@ -18,10 +18,7 @@ mod roots;
 pub mod types;
 
 pub use bex_str::BexStr;
-pub use bytecode::{
-    BinOp, Bytecode, CmpOp, Instruction, JumpTableData, UnaryOp, VizExecDelta, VizExecEvent,
-    VizNodeMeta, VizNodeType,
-};
+pub use bytecode::{BinOp, Bytecode, CmpOp, Instruction, JumpTableData, UnaryOp};
 pub use heap_ptr::HeapPtr;
 pub use indexable::{
     GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, SharedGlobals, StackIndex, VmGlobals,

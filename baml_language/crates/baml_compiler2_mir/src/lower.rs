@@ -5254,7 +5254,6 @@ impl LoweringContext<'_> {
                         "log.debug" => Some(IntrinsicOp::Log(LogLevel::Debug)),
                         "log.warn" => Some(IntrinsicOp::Log(LogLevel::Warn)),
                         "log.error" => Some(IntrinsicOp::Log(LogLevel::Error)),
-                        "baml.events.send" => Some(IntrinsicOp::SendEvent),
                         _ => None,
                     };
                 }

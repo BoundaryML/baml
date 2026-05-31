@@ -600,8 +600,6 @@ pub fn generate_project_bytecode_with_opt(
                         local_names: Vec::new(),
                         debug_locals: Vec::new(),
                         span: Span::fake(),
-                        block_notifications: Vec::new(),
-                        viz_nodes: Vec::new(),
                         return_type: baml_type::Ty::Null {
                             attr: baml_type::TyAttr::default(),
                         },
@@ -626,8 +624,6 @@ pub fn generate_project_bytecode_with_opt(
                     local_names: Vec::new(),
                     debug_locals: Vec::new(),
                     span: Span::fake(),
-                    block_notifications: Vec::new(),
-                    viz_nodes: Vec::new(),
                     return_type: baml_type::Ty::Null {
                         attr: baml_type::TyAttr::default(),
                     },
@@ -860,8 +856,6 @@ pub fn generate_project_bytecode_with_opt(
                 local_names: vec![String::new(), "registry".to_string()],
                 debug_locals: Vec::new(),
                 span: Span::fake(),
-                block_notifications: Vec::new(),
-                viz_nodes: Vec::new(),
                 return_type: baml_type::Ty::Null {
                     attr: baml_type::TyAttr::default(),
                 },
@@ -1920,8 +1914,6 @@ fn compile_init_function<'db>(
                     local_names: Vec::new(),
                     debug_locals: Vec::new(),
                     span: baml_base::Span::fake(),
-                    block_notifications: Vec::new(),
-                    viz_nodes: Vec::new(),
                     return_type: baml_type::Ty::Null {
                         attr: baml_type::TyAttr::default(),
                     },
@@ -1993,8 +1985,6 @@ fn compile_init_function<'db>(
         local_names: Vec::new(),
         debug_locals: Vec::new(),
         span: baml_base::Span::fake(),
-        block_notifications: Vec::new(),
-        viz_nodes: Vec::new(),
         return_type: baml_type::Ty::Null {
             attr: baml_type::TyAttr::default(),
         },
