@@ -539,7 +539,6 @@ jobs:
           # REVERT to `${{ github.ref == 'refs/heads/canary' }}` before merge.
           save-if: true
           cache-all-crates: true
-          cache-workspace-crates: true
           shared-key: "linux-arm-bench"
 
       # Pin to the same major+minor as codspeed-divan-compat in Cargo.lock
