@@ -254,7 +254,7 @@ jobs:
         run: rustup toolchain install
         working-directory: baml_language
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: useblacksmith/rust-cache@v3
         with:
           workspaces: "baml_language -> target"
           # See the cache strategy explanation at the top of cargo-tests.reusable.yaml.
@@ -405,7 +405,7 @@ jobs:
         run: rustup toolchain install
         working-directory: baml_language
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: useblacksmith/rust-cache@v3
         with:
           workspaces: "baml_language -> target"
           # See the cache strategy explanation at the top of cargo-tests.reusable.yaml.

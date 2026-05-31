@@ -118,11 +118,10 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: useblacksmith/rust-cache@v3
         with:
           workspaces: "baml_language -> target"
           cache-all-crates: true
-          cache-workspace-crates: true
           # See the cache strategy explanation at the top of this file.
           save-if: ${{ github.ref == 'refs/heads/canary' }}
           shared-key: "linux-cargo"
@@ -237,11 +236,10 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: useblacksmith/rust-cache@v3
         with:
           workspaces: "baml_language -> target"
           cache-all-crates: true
-          cache-workspace-crates: true
           # See the cache strategy explanation at the top of this file.
           save-if: ${{ github.ref == 'refs/heads/canary' }}
           shared-key: "windows-cargo"
@@ -312,12 +310,24 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
+      # This job's matrix spans Blacksmith (linux, windows) and a GitHub-hosted
+      # macOS runner. Blacksmith's cache backend survives the runner's post-job
+      # teardown; the macOS leg stays on Swatinem. `uses:` can't be an
+      # expression, so gate two steps by matrix.os-label.
+      - uses: useblacksmith/rust-cache@v3
+        if: matrix.os-label != 'macos'
+        with:
+          workspaces: "baml_language -> target"
+          cache-all-crates: true
+          # See the cache strategy explanation at the top of this file.
+          save-if: false
+          shared-key: ${{ matrix.rust-cache-key }}
       - uses: Swatinem/rust-cache@v2
+        if: matrix.os-label == 'macos'
         with:
           workspaces: "baml_language -> target"
           cache-all-crates: true
           cache-workspace-crates: true
-          # See the cache strategy explanation at the top of this file.
           save-if: false
           shared-key: ${{ matrix.rust-cache-key }}
 
@@ -380,11 +390,10 @@ jobs:
           rustup target add wasm32-unknown-unknown
         working-directory: baml_language
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: useblacksmith/rust-cache@v3
         with:
           workspaces: "baml_language -> target"
           cache-all-crates: true
-          cache-workspace-crates: true
           # See the cache strategy explanation at the top of this file.
           save-if: ${{ github.ref == 'refs/heads/canary' }}
           shared-key: "linux-wasm"
@@ -441,11 +450,10 @@ jobs:
           rustup default "${MSRV}"
         working-directory: baml_language
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: useblacksmith/rust-cache@v3
         with:
           workspaces: "baml_language -> target"
           cache-all-crates: true
-          cache-workspace-crates: true
           # See the cache strategy explanation at the top of this file.
           save-if: ${{ github.ref == 'refs/heads/canary' }}
           shared-key: "linux-msrv"
@@ -481,11 +489,10 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: useblacksmith/rust-cache@v3
         with:
           workspaces: "baml_language -> target"
           cache-all-crates: true
-          cache-workspace-crates: true
           # See the cache strategy explanation at the top of this file.
           save-if: false
           shared-key: "linux-cargo"
@@ -522,11 +529,10 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: useblacksmith/rust-cache@v3
         with:
           workspaces: "baml_language -> target"
           cache-all-crates: true
-          cache-workspace-crates: true
           # See the cache strategy explanation at the top of this file.
           save-if: false
           shared-key: "linux-cargo"

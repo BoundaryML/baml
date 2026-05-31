@@ -37,7 +37,7 @@ jobs:
           rustup target add wasm32-unknown-unknown
         working-directory: baml_language
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: useblacksmith/rust-cache@v3
         with:
           workspaces: "baml_language -> target"
           # Share cache across similar Linux WASM jobs for better hit rates

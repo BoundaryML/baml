@@ -35,7 +35,7 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: useblacksmith/rust-cache@v3
         with:
           workspaces: "baml_language -> target"
           shared-key: "linux-cargo"
@@ -138,7 +138,7 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: useblacksmith/rust-cache@v3
         with:
           workspaces: "baml_language -> target"
           shared-key: "windows-cargo"
@@ -188,7 +188,7 @@ jobs:
           rustup target add wasm32-unknown-unknown
         working-directory: baml_language
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: useblacksmith/rust-cache@v3
         with:
           workspaces: "baml_language -> target"
           shared-key: "linux-wasm"
@@ -250,7 +250,7 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: useblacksmith/rust-cache@v3
         with:
           workspaces: "baml_language -> target"
           shared-key: "linux-cargo"
