@@ -317,6 +317,7 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
               onRunTest={onRunTest}
               testRunResults={testRunResults}
               failedExpands={failedExpands}
+              onRetryExpand={onRetryExpand}
             />
           ))}
         </div>
