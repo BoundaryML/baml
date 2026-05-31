@@ -157,9 +157,7 @@ async fn polymorphic_interface_dispatch() {
         call user.pick
         call user.area_of
         store_var _3
-        load_var _1
-        load_var _3
-        add_int
+        add_int_var_var 1 2
         return
     }
 

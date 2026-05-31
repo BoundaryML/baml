@@ -231,6 +231,10 @@ mod tests {
         BexVm {
             frames: Vec::new(),
             stack: EvalStack::new(),
+            op_count: 0,
+            cur_pc: 0,
+            dbg_skip_faultpc: std::env::var("BAML_NO_FAULTPC").as_deref() == Ok("1"),
+            dbg_skip_opcount: std::env::var("BAML_NO_OPCOUNT").as_deref() == Ok("1"),
             heap: Arc::clone(&heap),
             early_yield: early_yield_for_test(),
             tlab: Tlab::new(heap),
@@ -573,6 +577,22 @@ pub struct BexVm {
     ///
     /// This stack only stores values.
     pub stack: EvalStack,
+
+    /// Total bytecode ops dispatched (for the `BAML_KPERF` profiler only).
+    pub op_count: u64,
+
+    /// Start-PC of the instruction currently executing in the innermost
+    /// bytecode frame. Updated cheaply once per op (a flat field store) instead
+    /// of writing the frame's `faulting_pc` every op. Outer frames record their
+    /// call-site PC into `faulting_pc` at call time; the innermost frame's live
+    /// PC is read from here. Used for exception-handler lookup and stack traces.
+    pub cur_pc: usize,
+
+    /// Per-op-cost bisection gates (read from env once at construction; used
+    /// only to attribute instructions-per-op under `BAML_KPERF`). Each skips a
+    /// chunk of per-op work so its instruction cost shows up as the delta.
+    pub dbg_skip_faultpc: bool,
+    pub dbg_skip_opcount: bool,
 
     /// Reference to the shared heap (long-lived, shared across VMs).
     pub heap: Arc<BexHeap>,
@@ -994,6 +1014,10 @@ impl BexVm {
         Self {
             frames: Vec::new(),
             stack: EvalStack::new(),
+            op_count: 0,
+            cur_pc: 0,
+            dbg_skip_faultpc: std::env::var("BAML_NO_FAULTPC").as_deref() == Ok("1"),
+            dbg_skip_opcount: std::env::var("BAML_NO_OPCOUNT").as_deref() == Ok("1"),
             heap,
             early_yield,
             tlab,
@@ -2084,7 +2108,7 @@ impl BexVm {
         if unlikely(!self.watched_vars.is_empty()) {
             return self.store_local_value_watched(local_var_index, value);
         }
-        self.stack[local_var_index] = value;
+        self.stack.set_at(local_var_index, value);
         Ok(None)
     }
 
@@ -2310,16 +2334,28 @@ impl BexVm {
 
     /// Unwinds error values (both thrown and panics).
     fn capture_stack_trace(&self) -> Vec<StackFrame> {
+        // The innermost (topmost) bytecode frame's live PC lives in `cur_pc`;
+        // outer frames recorded their call-site PC in `faulting_pc` at call time.
+        let top_bc = self
+            .frames
+            .iter()
+            .rposition(|f| matches!(f, Frame::Bytecode(_)));
         self.frames
             .iter()
-            .filter_map(|frame| {
+            .enumerate()
+            .filter_map(|(idx, frame)| {
                 let func = self.get_object(frame.function()).as_callable().ok()?;
                 match frame {
                     Frame::Bytecode(frame) => {
-                        let error_line = if let Some(compact) = &func.bytecode.compact {
-                            compact.source_line_for_pc(frame.faulting_pc)
+                        let pc = if Some(idx) == top_bc {
+                            self.cur_pc
                         } else {
-                            func.bytecode.source_line_for_pc(frame.faulting_pc)
+                            frame.faulting_pc
+                        };
+                        let error_line = if let Some(compact) = &func.bytecode.compact {
+                            compact.source_line_for_pc(pc)
+                        } else {
+                            func.bytecode.source_line_for_pc(pc)
                         };
                         Some(StackFrame {
                             function_name: func.name.clone(),
@@ -2347,6 +2383,10 @@ impl BexVm {
     ) -> Result<(), VmError> {
         // Capture the stack trace before unwinding destroys frame information.
         let trace: Vec<StackFrame> = self.capture_stack_trace();
+
+        // The innermost (first) bytecode frame's faulting PC is the live
+        // `cur_pc`; outer frames use the call-site PC they recorded at call time.
+        let mut innermost_bc = true;
 
         // Walk the call stack from the current frame outward looking for an
         // exception table entry that covers the faulting PC.
@@ -2379,9 +2419,14 @@ impl BexVm {
                 unreachable!("non-Native frames already handled above");
             };
 
-            // faulting_pc is kept up-to-date by both exec_inner (legacy) and
-            // exec_compact before dispatching each instruction.
-            let faulting_pc = frame.faulting_pc;
+            // Innermost bytecode frame uses the live `cur_pc`; outer frames use
+            // the call-site PC recorded in `faulting_pc` when they descended.
+            let faulting_pc = if innermost_bc {
+                self.cur_pc
+            } else {
+                frame.faulting_pc
+            };
+            innermost_bc = false;
 
             // Load the function for this frame to access its exception table.
             // SAFETY: See `load_function` doc comment.
@@ -2579,6 +2624,15 @@ impl BexVm {
         frame_idx: &mut usize,
         function: &mut &'static Function,
     ) -> Result<Option<VmExecState>, VmError> {
+        // Record the caller's call-site PC before descending. Once a callee
+        // frame is pushed, this (now-outer) frame is no longer the innermost, so
+        // its live PC must be persisted into `faulting_pc` for correct unwinding
+        // and stack traces. `cur_pc` holds this call instruction's start.
+        let call_site = self.cur_pc;
+        if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
+            bf.faulting_pc = call_site;
+        }
+
         // A host closure isn't a Function/Closure/BoundMethod and dispatches via
         // a single-yield sys-op rather than a pushed frame. This path is reached
         // when a host callable is invoked *indirectly* — e.g. handed to a native
@@ -3188,13 +3242,26 @@ impl BexVm {
         // counter to reset at.
         self.early_yield.reset();
 
-        match self.exec_inner() {
+        // BAML_KPERF: read PMCs around this exec() on the current worker thread.
+        let kp = crate::kperf::enabled();
+        let (kp_start, ops_start) = if kp {
+            (crate::kperf::exec_start(), self.op_count)
+        } else {
+            ((0, 0), 0)
+        };
+
+        let result = match self.exec_inner() {
             Err(VmError::InternalError(err)) => {
                 let trace = self.capture_stack_trace();
                 Err(VmError::TracedInternalError { source: err, trace })
             }
             other => other,
+        };
+
+        if kp {
+            crate::kperf::exec_end(kp_start, self.op_count - ops_start);
         }
+        result
     }
 
     #[allow(clippy::inline_always)] // Measured: 20-40% speedup from inlining the dispatch loop
@@ -3696,12 +3763,18 @@ impl BexVm {
         #[allow(unsafe_code)]
         let op_byte = unsafe { *code.get_unchecked(*pc) };
         *pc += 1;
+        if !self.dbg_skip_opcount {
+            self.op_count += 1; // BAML_KPERF op counter
+        }
 
-        // Save faulting PC for error reporting (points to the opcode byte).
-        let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
-            verifier_unreachable!()
-        };
-        bf.faulting_pc = *pc - 1;
+        // Record the innermost frame's current instruction start cheaply (one
+        // flat field store), instead of writing the frame's `faulting_pc` every
+        // op (which needs a bounds-checked index + enum match + store). Outer
+        // frames record their call-site PC at call time; read sites resolve the
+        // innermost frame from `cur_pc`.
+        if !self.dbg_skip_faultpc {
+            self.cur_pc = *pc - 1;
+        }
 
         // SAFETY: OpCode is #[repr(u8)] and the compact bytecode is produced by our
         // own encoder which only emits valid opcode bytes.
@@ -3756,24 +3829,32 @@ impl BexVm {
                 // ── LoadConst ─────────────────────────────────────────────────
                 OpCode::LoadConst => {
                     let idx = { read_u32_unchecked(code, pc) as usize };
-                    let val = function.bytecode.resolved_constants[idx];
+                    // SAFETY: encoder only emits in-range constant indices.
+                    #[allow(unsafe_code)]
+                    let val = *unsafe { function.bytecode.resolved_constants.get_unchecked(idx) };
                     self.stack.push(val);
                 }
 
                 // ── LoadVar / StoreVar ────────────────────────────────────────
                 OpCode::LoadVar => {
                     let slot = { read_u32_unchecked(code, pc) as usize };
-                    let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                    // SAFETY: dispatch loop always runs with a Bytecode frame on top.
+                    #[allow(unsafe_code)]
+                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
+                    else {
                         unreachable!()
                     };
                     let stack_slot = Self::local_slot_stack_index(bf.locals_offset, slot);
-                    let value = self.stack[stack_slot];
+                    let value = self.stack.get_at(stack_slot);
                     self.stack.push(value);
                 }
 
                 OpCode::StoreVar => {
                     let slot = { read_u32_unchecked(code, pc) as usize };
-                    let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                    // SAFETY: dispatch loop always runs with a Bytecode frame on top.
+                    #[allow(unsafe_code)]
+                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
+                    else {
                         unreachable!()
                     };
                     let local_var_index = Self::local_slot_stack_index(bf.locals_offset, slot);
@@ -5220,6 +5301,114 @@ impl BexVm {
                     let l = self.stack.ensure_pop();
                     self.stack.push(Value::tagged_int_add(l, r));
                 }
+
+                // ── Fused superinstructions (binop with right operand folded) ─
+                // `AddIntVar(i)` == `LoadVar(i); AddInt`; the right operand is
+                // read straight out of the local slot instead of pushed/popped.
+                OpCode::AddIntVar => {
+                    let slot = { read_u32_unchecked(code, pc) as usize };
+                    #[allow(unsafe_code)]
+                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
+                    else {
+                        unreachable!()
+                    };
+                    let stack_slot = Self::local_slot_stack_index(bf.locals_offset, slot);
+                    let r = self.stack.get_at(stack_slot);
+                    let l = self.stack.ensure_pop();
+                    self.stack.push(Value::tagged_int_add(l, r));
+                }
+                OpCode::AddIntConst => {
+                    let idx = { read_u32_unchecked(code, pc) as usize };
+                    #[allow(unsafe_code)]
+                    let r = *unsafe { function.bytecode.resolved_constants.get_unchecked(idx) };
+                    let l = self.stack.ensure_pop();
+                    self.stack.push(Value::tagged_int_add(l, r));
+                }
+                OpCode::CmpIntLtVar => {
+                    let slot = { read_u32_unchecked(code, pc) as usize };
+                    #[allow(unsafe_code)]
+                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
+                    else {
+                        unreachable!()
+                    };
+                    let stack_slot = Self::local_slot_stack_index(bf.locals_offset, slot);
+                    let r = self.stack.get_at(stack_slot);
+                    let l = self.stack.ensure_pop();
+                    self.stack
+                        .push(Value::bool((l.bits() as i64) < (r.bits() as i64)));
+                }
+                OpCode::CmpIntLtConst => {
+                    let idx = { read_u32_unchecked(code, pc) as usize };
+                    #[allow(unsafe_code)]
+                    let r = *unsafe { function.bytecode.resolved_constants.get_unchecked(idx) };
+                    let l = self.stack.ensure_pop();
+                    self.stack
+                        .push(Value::bool((l.bits() as i64) < (r.bits() as i64)));
+                }
+
+                // ── Double-folded fused binops (both operands read directly) ──
+                // No stack pops: both operands come straight from local slots /
+                // the constant pool, and only the result is pushed.
+                OpCode::AddIntVarVar => {
+                    let a = { read_u32_unchecked(code, pc) as usize };
+                    let b = { read_u32_unchecked(code, pc) as usize };
+                    #[allow(unsafe_code)]
+                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
+                    else {
+                        unreachable!()
+                    };
+                    let sa = Self::local_slot_stack_index(bf.locals_offset, a);
+                    let sb = Self::local_slot_stack_index(bf.locals_offset, b);
+                    let va = self.stack.get_at(sa);
+                    let vb = self.stack.get_at(sb);
+                    self.stack.push(Value::tagged_int_add(va, vb));
+                }
+                OpCode::AddIntVarConst => {
+                    let a = { read_u32_unchecked(code, pc) as usize };
+                    let c = { read_u32_unchecked(code, pc) as usize };
+                    #[allow(unsafe_code)]
+                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
+                    else {
+                        unreachable!()
+                    };
+                    let va = self
+                        .stack
+                        .get_at(Self::local_slot_stack_index(bf.locals_offset, a));
+                    #[allow(unsafe_code)]
+                    let vc = *unsafe { function.bytecode.resolved_constants.get_unchecked(c) };
+                    self.stack.push(Value::tagged_int_add(va, vc));
+                }
+                OpCode::CmpIntLtVarVar => {
+                    let a = { read_u32_unchecked(code, pc) as usize };
+                    let b = { read_u32_unchecked(code, pc) as usize };
+                    #[allow(unsafe_code)]
+                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
+                    else {
+                        unreachable!()
+                    };
+                    let sa = Self::local_slot_stack_index(bf.locals_offset, a);
+                    let sb = Self::local_slot_stack_index(bf.locals_offset, b);
+                    let va = self.stack.get_at(sa);
+                    let vb = self.stack.get_at(sb);
+                    self.stack
+                        .push(Value::bool((va.bits() as i64) < (vb.bits() as i64)));
+                }
+                OpCode::CmpIntLtVarConst => {
+                    let a = { read_u32_unchecked(code, pc) as usize };
+                    let c = { read_u32_unchecked(code, pc) as usize };
+                    #[allow(unsafe_code)]
+                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
+                    else {
+                        unreachable!()
+                    };
+                    let va = self
+                        .stack
+                        .get_at(Self::local_slot_stack_index(bf.locals_offset, a));
+                    #[allow(unsafe_code)]
+                    let vc = *unsafe { function.bytecode.resolved_constants.get_unchecked(c) };
+                    self.stack
+                        .push(Value::bool((va.bits() as i64) < (vc.bits() as i64)));
+                }
                 OpCode::SubInt => {
                     let r = self.stack.ensure_pop();
                     let l = self.stack.ensure_pop();
@@ -5499,7 +5688,9 @@ impl BexVm {
                     let name_value = self.stack.ensure_pop();
                     let event_name = self.as_string(&name_value)?.to_string();
                     let source_location = if let Frame::Bytecode(bf) = &self.frames[*frame_idx] {
-                        let pc = bf.faulting_pc;
+                        // Innermost frame's live PC is `cur_pc` (frame.faulting_pc
+                        // is only refreshed at call/throw time now).
+                        let pc = self.cur_pc;
                         let func_obj = self.get_object(bf.function).as_callable().ok();
                         func_obj
                             .and_then(|func| {

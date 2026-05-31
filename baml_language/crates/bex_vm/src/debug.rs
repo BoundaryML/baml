@@ -125,7 +125,9 @@ pub(crate) fn display_instruction(
         .and_then(|m| m.operand.as_ref());
 
     let metadata = match instruction {
-        Instruction::LoadConst(index) => {
+        Instruction::LoadConst(index)
+        | Instruction::AddIntConst(index)
+        | Instruction::CmpIntLtConst(index) => {
             // Prefer resolved_constants (runtime), fall back to constants (compile-time)
             if let Some(value) = function.bytecode.resolved_constants.get(*index) {
                 format!("({})", display_value(*value))
@@ -144,6 +146,8 @@ pub(crate) fn display_instruction(
         Instruction::LoadVar(index)
         | Instruction::StoreVar(index)
         | Instruction::StoreVarLoadVar(index)
+        | Instruction::AddIntVar(index)
+        | Instruction::CmpIntLtVar(index)
         | Instruction::Watch(index)
         | Instruction::Unwatch(index)
         | Instruction::Notify(index) => match function.local_names.get(*index) {
@@ -210,6 +214,10 @@ pub(crate) fn display_instruction(
         | Instruction::CmpIntOp(_)
         | Instruction::CmpFloatOp(_)
         | Instruction::CmpBigintOp(_)
+        | Instruction::AddIntVarVar(..)
+        | Instruction::AddIntVarConst(..)
+        | Instruction::CmpIntLtVarVar(..)
+        | Instruction::CmpIntLtVarConst(..)
         | Instruction::UnaryOp(_)
         | Instruction::AllocArray(_)
         | Instruction::AllocMap(_)
@@ -377,6 +385,14 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::CmpIntOp(_)
         | Instruction::CmpFloatOp(_)
         | Instruction::CmpBigintOp(_)
+        | Instruction::AddIntVar(_)
+        | Instruction::AddIntConst(_)
+        | Instruction::CmpIntLtVar(_)
+        | Instruction::CmpIntLtConst(_)
+        | Instruction::AddIntVarVar(..)
+        | Instruction::AddIntVarConst(..)
+        | Instruction::CmpIntLtVarVar(..)
+        | Instruction::CmpIntLtVarConst(..)
         | Instruction::UnaryOp(_) => Style::new().blue().bright(),
         Instruction::Jump(_)
         | Instruction::PopJumpIfFalse(_)
@@ -793,6 +809,14 @@ fn display_instruction_textual(
         Instruction::BinOp(op) => format!("bin_op {op}"),
         Instruction::CmpOp(op) => format!("cmp_op {op}"),
         Instruction::AddInt => "add_int".to_string(),
+        Instruction::AddIntVar(idx) => format!("add_int_var {}", meta_str(idx)),
+        Instruction::AddIntConst(_) => format!("add_int_const {}", meta_str(&"")),
+        Instruction::CmpIntLtVar(idx) => format!("cmp_int_lt_var {}", meta_str(idx)),
+        Instruction::CmpIntLtConst(_) => format!("cmp_int_lt_const {}", meta_str(&"")),
+        Instruction::AddIntVarVar(a, b) => format!("add_int_var_var {a} {b}"),
+        Instruction::AddIntVarConst(a, c) => format!("add_int_var_const {a} {c}"),
+        Instruction::CmpIntLtVarVar(a, b) => format!("cmp_int_lt_var_var {a} {b}"),
+        Instruction::CmpIntLtVarConst(a, c) => format!("cmp_int_lt_var_const {a} {c}"),
         Instruction::SubInt => "sub_int".to_string(),
         Instruction::MulInt => "mul_int".to_string(),
         Instruction::DivInt => "div_int".to_string(),
@@ -1281,7 +1305,11 @@ pub fn display_compact_bytecode(
             | OpCode::StoreDeref
             | OpCode::LoadCapture
             | OpCode::StoreCapture
-            | OpCode::CaptureRef => {
+            | OpCode::CaptureRef
+            | OpCode::AddIntVar
+            | OpCode::AddIntConst
+            | OpCode::CmpIntLtVar
+            | OpCode::CmpIntLtConst => {
                 let val = read_u32(code, &mut pc);
                 writeln!(f, "{val}")?;
             }
@@ -1323,6 +1351,16 @@ pub fn display_compact_bytecode(
                     f,
                     "obj={obj_idx}  captures={capture_count}  ntypeargs={ntypeargs}"
                 )?;
+            }
+
+            // Two u32 operands (double-folded fused binops)
+            OpCode::AddIntVarVar
+            | OpCode::AddIntVarConst
+            | OpCode::CmpIntLtVarVar
+            | OpCode::CmpIntLtVarConst => {
+                let a = read_u32(code, &mut pc);
+                let b = read_u32(code, &mut pc);
+                writeln!(f, "{a} {b}")?;
             }
         }
     }

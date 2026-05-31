@@ -13,6 +13,7 @@
 pub mod debug;
 pub mod errors;
 pub mod indexable;
+pub mod kperf;
 pub mod package_baml;
 pub mod types;
 pub mod vm;

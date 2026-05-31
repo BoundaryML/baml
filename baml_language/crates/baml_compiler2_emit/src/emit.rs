@@ -1125,6 +1125,86 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         self.set_var_operand(inst, slot);
     }
 
+    /// Drop the most recently emitted instruction, keeping `meta` and the
+    /// line table in sync. Used by the binop peephole when it folds two loads
+    /// into one fused op (so the trailing operand slot is removed). Only ever
+    /// called on instructions in the current block, so jump targets and block
+    /// addresses — which point at block entries — are unaffected.
+    fn truncate_last_instruction(&mut self) {
+        let new_len = self.bytecode.instructions.len() - 1;
+        self.bytecode.instructions.truncate(new_len);
+        self.bytecode.meta.truncate(new_len);
+        while matches!(self.bytecode.line_table.last(), Some(e) if e.pc >= new_len) {
+            self.bytecode.line_table.pop();
+        }
+    }
+
+    /// Emit a type-specialized integer binop, folding the just-emitted operand
+    /// loads into a single fused superinstruction. Folds the *right* operand
+    /// load in place (like [`Self::emit_load_var`]), and — when the *left*
+    /// operand was also a plain load — folds that too, yielding a
+    /// double-folded op that reads both operands directly. Folding is confined
+    /// to the current basic block (`>= current_block_start`), so no jump target
+    /// or block address is ever fused across.
+    fn emit_fused_binop(&mut self, specialized: Instruction) {
+        let n = self.bytecode.instructions.len();
+        // Need the right-operand load to be in the current block.
+        if n == 0 || n - 1 < self.current_block_start {
+            self.emit(specialized);
+            return;
+        }
+        // First fold: collapse `<right load>; <binop>` into one op.
+        let single = match (self.bytecode.instructions[n - 1], specialized) {
+            (Instruction::LoadVar(v), Instruction::AddInt) => Instruction::AddIntVar(v),
+            (Instruction::LoadConst(c), Instruction::AddInt) => Instruction::AddIntConst(c),
+            (Instruction::LoadVar(v), Instruction::CmpIntOp(CmpOp::Lt)) => {
+                Instruction::CmpIntLtVar(v)
+            }
+            (Instruction::LoadConst(c), Instruction::CmpIntOp(CmpOp::Lt)) => {
+                Instruction::CmpIntLtConst(c)
+            }
+            _ => {
+                self.emit(specialized);
+                return;
+            }
+        };
+
+        // Second fold: if the *left* operand was also a plain load in this
+        // block, collapse `<left load>; <single-fold op>` into a double-fold op
+        // that reads both operands directly (no stack pushes for operands).
+        if n >= 2 && n - 2 >= self.current_block_start {
+            let double = match (self.bytecode.instructions[n - 2], single) {
+                (Instruction::LoadVar(a), Instruction::AddIntVar(b)) => {
+                    Some(Instruction::AddIntVarVar(a, b))
+                }
+                (Instruction::LoadVar(a), Instruction::AddIntConst(c)) => {
+                    Some(Instruction::AddIntVarConst(a, c))
+                }
+                // Add commutes, so `const + var` becomes `var + const`.
+                (Instruction::LoadConst(c), Instruction::AddIntVar(b)) => {
+                    Some(Instruction::AddIntVarConst(b, c))
+                }
+                (Instruction::LoadVar(a), Instruction::CmpIntLtVar(b)) => {
+                    Some(Instruction::CmpIntLtVarVar(a, b))
+                }
+                (Instruction::LoadVar(a), Instruction::CmpIntLtConst(c)) => {
+                    Some(Instruction::CmpIntLtVarConst(a, c))
+                }
+                _ => None,
+            };
+            if let Some(double) = double {
+                // Left load (n-2) becomes the double-fold op; the right load
+                // slot (n-1) is no longer needed.
+                self.bytecode.instructions[n - 2] = double;
+                self.truncate_last_instruction();
+                return;
+            }
+        }
+
+        // Only the single fold applies: rewrite the right load in place.
+        self.bytecode.instructions[n - 1] = single;
+    }
+
     /// Set the resolved operand metadata for an already-emitted instruction.
     fn set_operand(&mut self, index: usize, operand: OperandMeta) {
         self.bytecode.meta[index].operand = Some(operand);
@@ -1711,7 +1791,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             if let Some(specialized) = self.try_specialize_binary_op(*op, left, right) {
                 self.emit_operand_pull(left);
                 self.emit_operand_pull(right);
-                self.emit(specialized);
+                self.emit_fused_binop(specialized);
                 return;
             }
         }

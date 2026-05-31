@@ -29,11 +29,10 @@ fn constant_fold_int_addition() {
             2 + 3
         }
     "#;
-    insta::assert_snapshot!(unoptimized(source), @"
+    insta::assert_snapshot!(unoptimized(source), @r"
     function main() -> int {
         load_const 2
-        load_const 3
-        add_int
+        add_int_const 3
         return
     }
     ");
@@ -154,19 +153,15 @@ fn constant_fold_mixed_not_foldable() {
             x + 1
         }
     "#;
-    insta::assert_snapshot!(unoptimized(source), @"
+    insta::assert_snapshot!(unoptimized(source), @r"
     function main(x: int) -> int {
-        load_var x
-        load_const 1
-        add_int
+        add_int_var_const 1 0
         return
     }
     ");
-    insta::assert_snapshot!(optimized(source), @"
+    insta::assert_snapshot!(optimized(source), @r"
     function main(x: int) -> int {
-        load_var x
-        load_const 1
-        add_int
+        add_int_var_const 1 0
         return
     }
     ");
@@ -240,8 +235,7 @@ fn combined_constant_fold_and_struct() {
     insta::assert_snapshot!(unoptimized(source), @r#"
     function main() -> Result {
         load_const 2
-        load_const 3
-        add_int
+        add_int_const 3
         load_const "sum"
         init_instance user.Result .value, .label
         return
