@@ -5645,7 +5645,7 @@ impl BexVm {
                                 (
                                     entry.span.file_id.as_u32(),
                                     u32::try_from(entry.line).unwrap_or(u32::MAX),
-                                    entry.span.range.start().into(),
+                                    entry.column,
                                     u32::from(entry.span.range.start()),
                                     u32::from(entry.span.range.end()),
                                 )

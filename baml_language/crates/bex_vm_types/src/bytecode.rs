@@ -1616,6 +1616,8 @@ pub struct LineTableEntry {
     pub span: Span,
     /// 1-indexed source line for quick stack traces/disassembly.
     pub line: usize,
+    /// 0-indexed source column paired with `line`.
+    pub column: u32,
     /// True when this entry is a debugger sequence point.
     pub sequence_point: bool,
     /// Distinguishes multiple stops on the same line.
@@ -2119,6 +2121,7 @@ impl Bytecode {
                 pc: index_to_offset[entry.pc],
                 span: entry.span,
                 line: entry.line,
+                column: entry.column,
                 sequence_point: entry.sequence_point,
                 discriminator: entry.discriminator,
             })
@@ -2526,6 +2529,7 @@ mod compact_tests {
                     pc: 0,
                     span: Span::default(),
                     line: 1,
+                    column: 0,
                     sequence_point: true,
                     discriminator: 0,
                 },
@@ -2533,6 +2537,7 @@ mod compact_tests {
                     pc: 1,
                     span: Span::default(),
                     line: 2,
+                    column: 4,
                     sequence_point: true,
                     discriminator: 0,
                 },
@@ -2543,7 +2548,9 @@ mod compact_tests {
         };
         let compact = bc.lower_to_compact();
         assert_eq!(compact.line_table[0].pc, 0); // instruction 0 → byte 0
+        assert_eq!(compact.line_table[0].column, 0);
         assert_eq!(compact.line_table[1].pc, 2); // instruction 1 → byte 2 (after 2-byte LoadIntSmall)
+        assert_eq!(compact.line_table[1].column, 4);
     }
 
     #[test]

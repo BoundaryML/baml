@@ -1050,11 +1050,18 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         self.bytecode.instructions.len()
     }
 
-    /// Convert a byte offset to a 1-indexed line number.
-    fn offset_to_line(&self, offset: u32) -> usize {
+    /// Convert a byte offset to a 1-indexed line number and 0-indexed column.
+    fn offset_to_line_column(&self, offset: u32) -> (usize, u32) {
         match self.line_starts.binary_search(&offset) {
-            Ok(idx) => idx + 1,
-            Err(idx) => idx,
+            Ok(idx) => (idx + 1, 0),
+            Err(idx) => {
+                if idx == 0 {
+                    (0, offset)
+                } else {
+                    let line_start = self.line_starts[idx - 1];
+                    (idx, offset.saturating_sub(line_start))
+                }
+            }
         }
     }
 
@@ -1076,26 +1083,26 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// lines. Non-sequence expression entries fall back to end-line attribution
     /// when a span crosses lines, which avoids collapsing multiline operand
     /// spans to the previous line.
-    fn span_to_line(&self, span: Span, sequence_point: bool) -> usize {
+    fn span_to_line_column(&self, span: Span, sequence_point: bool) -> (usize, u32) {
         let start: u32 = span.range.start().into();
         let start = self.normalize_span_start_offset(start);
-        let start_line = self.offset_to_line(start);
+        let (start_line, start_column) = self.offset_to_line_column(start);
 
         if sequence_point {
-            return start_line;
+            return (start_line, start_column);
         }
 
         let start_u32: u32 = span.range.start().into();
         let end_u32: u32 = span.range.end().into();
         if end_u32 > start_u32 {
             let end_minus_one = end_u32 - 1;
-            let end_line = self.offset_to_line(end_minus_one);
+            let (end_line, end_column) = self.offset_to_line_column(end_minus_one);
             if end_line > start_line && end_line - start_line <= 1 {
-                return end_line;
+                return (end_line, end_column);
             }
         }
 
-        start_line
+        (start_line, start_column)
     }
 
     /// Set the current debug span used for subsequent emitted instructions.
@@ -1117,7 +1124,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         };
 
         if must_emit {
-            let line = self.span_to_line(span, self.pending_sequence_point);
+            let (line, column) = self.span_to_line_column(span, self.pending_sequence_point);
             let discriminator = if self.pending_sequence_point {
                 let counter = self.next_line_discriminator.entry(line).or_insert(0);
                 let out = *counter;
@@ -1130,6 +1137,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 pc,
                 span,
                 line,
+                column,
                 sequence_point: self.pending_sequence_point,
                 discriminator,
             });
