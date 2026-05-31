@@ -68,6 +68,7 @@ declare const self: DedicatedWorkerGlobalScope;
 // ---------------------------------------------------------------------------
 
 let disposed = false;
+const textEncoder = new TextEncoder();
 
 function dispose(): void {
   if (disposed) return;
@@ -452,7 +453,10 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
           // Heuristic: only show decoration if the formatted output is longer than the source span.
           // This filters out constant literals (where output ≈ source) and shows expanded variables.
           const sourceSpanLength = source.endOffset - source.startOffset;
-          const isLikelyVariable = message.length > sourceSpanLength + 5;
+          // Rust source spans are byte offsets, so compare the UTF-8 byte length
+          // instead of JavaScript UTF-16 code units.
+          const messageByteLen = textEncoder.encode(message).length;
+          const isLikelyVariable = messageByteLen > sourceSpanLength + 5;
 
           if (isLikelyVariable) {
             const existing = decorationsByLine.get(line);
