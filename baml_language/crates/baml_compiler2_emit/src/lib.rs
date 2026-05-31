@@ -625,7 +625,6 @@ pub fn generate_project_bytecode_with_opt(
                         throws_type: None,
                         origin: FunctionOrigin::Builtin,
                         body_meta: None,
-                        trace: false,
                     }
                 }
                 MirFunctionKind::Builtin(BuiltinKind::Vm) => Function {
@@ -655,7 +654,6 @@ pub fn generate_project_bytecode_with_opt(
                     throws_type: None,
                     origin: FunctionOrigin::Builtin,
                     body_meta: None,
-                    trace: false,
                 },
             };
 
@@ -700,7 +698,6 @@ pub fn generate_project_bytecode_with_opt(
                         prompt_template: prompt.text.clone(),
                         client: client.to_string(),
                     });
-                    compiled_fn.trace = true;
                 }
             }
 
@@ -896,7 +893,6 @@ pub fn generate_project_bytecode_with_opt(
                 throws_type: None,
                 origin: FunctionOrigin::Internal,
                 body_meta: None,
-                trace: false,
             };
 
             let chainer_name = if pkg_name.as_str() == "user" {
@@ -2086,7 +2082,6 @@ fn compile_init_function<'db>(
                     throws_type: None,
                     origin: FunctionOrigin::Internal,
                     body_meta: None,
-                    trace: false,
                 }
             }
         };
@@ -2163,7 +2158,6 @@ fn compile_init_function<'db>(
         throws_type: None,
         origin: FunctionOrigin::Internal,
         body_meta: None,
-        trace: false,
     })
 }
 

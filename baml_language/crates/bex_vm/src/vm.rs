@@ -291,8 +291,6 @@ mod tests {
             watch: Watch::new(),
             watched_vars: HashMap::new(),
             interrupt_frame: None,
-            traced_frames: Vec::new(),
-            current_span_context: None,
             argv: Arc::from([]),
             pending_call_type_args: Vec::new(),
             interface_implementors: Arc::new(indexmap::IndexMap::new()),
@@ -330,7 +328,6 @@ mod tests {
             throws_type: None,
             origin: FunctionOrigin::Internal,
             body_meta: None,
-            trace: false,
         }))
     }
 
@@ -684,15 +681,6 @@ pub struct BexVm {
 
     pub interrupt_frame: Option<usize>,
 
-    /// Frame depths for traced function calls. Always sorted ascending (LIFO).
-    /// Checked on `Return` to yield `FunctionExit` notifications.
-    traced_frames: Vec<usize>,
-
-    /// Current span context, set by the engine before each VM execution step.
-    /// Available to `//baml:mut_vm` native functions that need to emit events
-    /// with the correct span context.
-    pub current_span_context: Option<bex_events::SpanContext>,
-
     /// Process argv passed to the engine at startup. Exposed to BAML via
     /// `baml.sys.argv()`. Shared (cheap to clone) across VMs.
     pub argv: Arc<[String]>,
@@ -800,9 +788,6 @@ pub enum VmExecState {
     /// Notify about watched variables.
     Notify(WatchNotification),
 
-    /// Notify about span lifecycle (from traced `Call` / `Return`).
-    SpanNotify(SpanNotification),
-
     /// The VM is yielding a custom event to be emitted.
     ///
     /// The engine handles this by converting both values to `BexExternalValue`
@@ -829,29 +814,6 @@ pub enum WatchNotification {
     Viz {
         function_name: String,
         event: bex_vm_types::bytecode::VizExecEvent,
-    },
-}
-
-/// Span notifications yielded by the VM for callstack tracking.
-///
-/// The VM provides args and result values from the eval stack so the engine
-/// can emit `FunctionStart`/`FunctionEnd` events without additional lookups.
-/// The VM itself has no span state (no `SpanId`, no timing) — all observability
-/// logic lives in the engine.
-#[derive(Clone, Debug, PartialEq)]
-pub enum SpanNotification {
-    /// A traced function call was entered.
-    /// `args` are snapshotted from the eval stack before the frame is pushed.
-    FunctionEnter {
-        function_name: String,
-        frame_depth: usize,
-        args: Vec<Value>,
-    },
-    /// A traced function call is returning.
-    /// `result` is the return value popped from the eval stack.
-    FunctionExit {
-        function_name: String,
-        result: Value,
     },
 }
 
@@ -1131,8 +1093,6 @@ impl BexVm {
             watch: Watch::new(),
             watched_vars: HashMap::new(),
             interrupt_frame: None,
-            traced_frames: Vec::new(),
-            current_span_context: None,
             argv,
             pending_call_type_args: Vec::new(),
             interface_implementors,
@@ -1670,7 +1630,6 @@ impl BexVm {
             throws_type,
             origin: FunctionOrigin::Internal,
             body_meta: None,
-            trace: false,
         };
         let entry_ptr = self.tlab.alloc(Object::Function(Box::new(entry_function)));
 
@@ -2635,14 +2594,7 @@ impl BexVm {
                     return Err(VmError::Thrown(exception_value));
                 }
                 self.frames.pop();
-                // Clean up tracing / interrupt bookkeeping
-                while self
-                    .traced_frames
-                    .last()
-                    .is_some_and(|d| *d >= self.frames.len())
-                {
-                    self.traced_frames.pop();
-                }
+                // Clean up interrupt bookkeeping
                 if let Some(interrupt_depth) = self.interrupt_frame
                     && interrupt_depth >= self.frames.len()
                 {
@@ -2735,15 +2687,7 @@ impl BexVm {
                 Frame::Native(_) => {} // native frames own no stack region
             }
 
-            // Clean up tracing / interrupt bookkeeping for popped frames.
-            while self
-                .traced_frames
-                .last()
-                .is_some_and(|d| *d >= self.frames.len())
-            {
-                self.traced_frames.pop();
-            }
-
+            // Clean up interrupt bookkeeping for popped frames.
             if let Some(interrupt_depth) = self.interrupt_frame
                 && interrupt_depth >= self.frames.len()
             {
@@ -3042,8 +2986,6 @@ impl BexVm {
             ));
         }
 
-        let is_traced = callee.trace;
-
         match callee.kind {
             FunctionKind::Native(func_ptr) => {
                 // Cast the type-erased pointer back to NativeFunction.
@@ -3169,15 +3111,6 @@ impl BexVm {
             }
 
             FunctionKind::Bytecode => {
-                // For traced functions, snapshot args before pushing the frame.
-                let trace_data = if is_traced {
-                    let args: Vec<Value> = self.stack[locals_offset..].to_owned();
-                    let callee_name = callee.name.clone();
-                    Some((callee_name, args))
-                } else {
-                    None
-                };
-
                 // Push the new frame.
                 // Seed frame.type_args from:
                 //  1. BoundMethod callees: the receiver's class_type_args (De
@@ -3212,19 +3145,6 @@ impl BexVm {
 
                 // Update frame_idx to point to the new frame.
                 *frame_idx = self.frames.len() - 1;
-
-                // If traced, record the frame and yield a span notification.
-                if let Some((callee_name, args)) = trace_data {
-                    self.traced_frames.push(*frame_idx);
-
-                    return Ok(Some(VmExecState::SpanNotify(
-                        SpanNotification::FunctionEnter {
-                            function_name: callee_name,
-                            frame_depth: *frame_idx,
-                            args,
-                        },
-                    )));
-                }
 
                 // SAFETY: See `load_function` doc comment.
                 *function = unsafe { self.load_function(*frame_idx)? };
@@ -5028,17 +4948,6 @@ impl BexVm {
                 // ── Return ────────────────────────────────────────────────────
                 OpCode::Return => {
                     let result = self.stack.ensure_pop();
-                    let span_exit = if self.traced_frames.last() == Some(frame_idx) {
-                        let func_name = self
-                            .get_object(self.frames[*frame_idx].function())
-                            .as_callable()
-                            .map(|f| f.name.clone())
-                            .ok();
-                        self.traced_frames.pop();
-                        func_name
-                    } else {
-                        None
-                    };
                     let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
                         unreachable!()
                     };
@@ -5056,14 +4965,6 @@ impl BexVm {
                     }
                     if self.frames.is_empty() {
                         return Ok(Some(VmExecState::Complete(self.stack.ensure_pop())));
-                    }
-                    if let Some(name) = span_exit {
-                        return Ok(Some(VmExecState::SpanNotify(
-                            SpanNotification::FunctionExit {
-                                function_name: name,
-                                result,
-                            },
-                        )));
                     }
                     if self.early_yield.should_early_yield() {
                         return Ok(Some(VmExecState::EarlyYield));

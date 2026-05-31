@@ -468,10 +468,6 @@ pub struct Function {
 
     /// LLM-specific metadata (prompt template, client name). `None` for non-LLM functions.
     pub body_meta: Option<FunctionMeta>,
-
-    /// Whether this function should be traced (emit span notifications on call/return).
-    /// Set to `true` for LLM functions by the compiler.
-    pub trace: bool,
 }
 
 impl std::fmt::Display for Function {

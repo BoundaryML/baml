@@ -1337,7 +1337,6 @@ dependencies = [
  "baml_project",
  "baml_type",
  "base64",
- "bex_events",
  "bex_heap",
  "bex_str",
  "bex_vm_types",
