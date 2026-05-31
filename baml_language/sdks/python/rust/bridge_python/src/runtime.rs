@@ -1,7 +1,5 @@
 //! BamlRuntime PyO3 class - wraps `Arc<dyn Bex>`.
 
-use std::sync::Arc;
-
 use bridge_ctypes::{HANDLE_TABLE, kwargs_to_bex_values};
 use prost::Message;
 use pyo3::{
@@ -104,24 +102,16 @@ impl BamlRuntime {
             Ok((runtime, kwargs))
         })();
 
-        let host_ctx = ctx.and_then(|c| c.host_span_context());
+        // Tracing is a no-op: `ctx`/`collectors` are accepted for ABI
+        // stability but no longer wired into the call context.
+        let _ = (&ctx, &collectors);
         let cancel = abort_controller
             .map(AbortController::token)
             .unwrap_or_default();
 
-        let collector_arcs: Vec<Arc<bex_events::Collector>> = collectors
-            .as_ref()
-            .map(|colls| colls.iter().map(|c| c.inner_arc()).collect())
-            .unwrap_or_default();
-
         let call_id = bex_project::CallId::next();
-        let mut call_ctx = bex_project::FunctionCallContextBuilder::new(call_id)
-            .with_collectors(collector_arcs)
-            .with_cancel_token(cancel);
-
-        if let Some(host_ctx) = host_ctx {
-            call_ctx = call_ctx.with_host_ctx(host_ctx);
-        }
+        let call_ctx =
+            bex_project::FunctionCallContextBuilder::new(call_id).with_cancel_token(cancel);
 
         // The whole Result -> BamlOutboundResult translation (incl. the
         // catch_unwind -> SdkPanic boundary) lives in bridge_cffi; we just
@@ -173,24 +163,16 @@ impl BamlRuntime {
             Err(e) => return Ok(bridge_cffi::error_to_outbound(e)),
         };
 
-        let host_ctx = ctx.and_then(|c| c.host_span_context());
+        // Tracing is a no-op: `ctx`/`collectors` are accepted for ABI
+        // stability but no longer wired into the call context.
+        let _ = (&ctx, &collectors);
         let cancel = abort_controller
             .map(AbortController::token)
             .unwrap_or_default();
 
-        let collector_arcs: Vec<Arc<bex_events::Collector>> = collectors
-            .as_ref()
-            .map(|colls| colls.iter().map(|c| c.inner_arc()).collect())
-            .unwrap_or_default();
-
         let call_id = bex_project::CallId::next();
-        let mut call_ctx = bex_project::FunctionCallContextBuilder::new(call_id)
-            .with_collectors(collector_arcs)
-            .with_cancel_token(cancel);
-
-        if let Some(host_ctx) = host_ctx {
-            call_ctx = call_ctx.with_host_ctx(host_ctx);
-        }
+        let call_ctx =
+            bex_project::FunctionCallContextBuilder::new(call_id).with_cancel_token(cancel);
 
         // Same shared call_and_encode as the async + C-ABI paths — returns the
         // encoded BamlOutboundResult envelope bytes.

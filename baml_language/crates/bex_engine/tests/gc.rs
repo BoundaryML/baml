@@ -34,7 +34,6 @@ async fn test_handle_prevents_gc_collection() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .unwrap(),
@@ -98,7 +97,6 @@ async fn test_array_preserved_through_gc() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .unwrap(),
@@ -156,7 +154,6 @@ async fn test_gc_updates_forwarding_pointers() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .unwrap(),
@@ -215,7 +212,6 @@ async fn test_multiple_handles_survive_gc() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .unwrap(),
@@ -284,7 +280,6 @@ async fn test_gc_with_nested_class_instances() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .unwrap(),
@@ -341,7 +336,6 @@ async fn test_gc_with_enum_variant_round_trip() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .unwrap(),
@@ -393,7 +387,6 @@ async fn test_primitive_returns_are_external_values() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .unwrap(),

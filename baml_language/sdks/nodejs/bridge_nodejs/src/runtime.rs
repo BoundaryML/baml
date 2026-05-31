@@ -5,8 +5,6 @@
 //! at each call site (mirrors `bridge_python` after 31e-phase4), so this no
 //! longer caches its own clone.
 
-use std::sync::Arc;
-
 use bridge_ctypes::{HANDLE_TABLE, kwargs_to_bex_values};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
@@ -50,25 +48,17 @@ impl BamlRuntime {
     ) -> napi::Result<Buffer> {
         let runtime = bridge_cffi::get_runtime().map_err(bridge_error_to_napi)?;
         let kwargs = decode_args(args_proto.as_ref(), &function_name)?;
-        let host_ctx = ctx.and_then(|c| c.host_span_context());
+        // Tracing is a no-op: `ctx`/`collectors` are accepted for ABI
+        // stability but no longer wired into the call context.
+        let _ = (&ctx, &collectors);
         let cancel = abort_controller
             .map(AbortController::token)
             .unwrap_or_default();
-        let collector_arcs: Vec<Arc<bex_events::Collector>> = collectors
-            .as_ref()
-            .map(|colls| colls.iter().map(|c| c.inner_arc()).collect())
-            .unwrap_or_default();
 
         let call_id = bex_project::CallId::next();
-        let mut call_ctx = bex_project::FunctionCallContextBuilder::new(call_id)
-            .with_collectors(collector_arcs)
-            .with_cancel_token(cancel);
-
-        if let Some(host_ctx) = host_ctx {
-            call_ctx = call_ctx.with_host_ctx(host_ctx);
-        }
-
-        let call_ctx = call_ctx.build();
+        let call_ctx = bex_project::FunctionCallContextBuilder::new(call_id)
+            .with_cancel_token(cancel)
+            .build();
 
         let rt = bridge_cffi::get_tokio_runtime().map_err(bridge_error_to_napi)?;
 
@@ -99,25 +89,17 @@ impl BamlRuntime {
     ) -> napi::Result<PromiseRaw<'e, Buffer>> {
         let runtime = bridge_cffi::get_runtime().map_err(bridge_error_to_napi)?;
         let kwargs = decode_args(args_proto.as_ref(), &function_name)?;
-        let host_ctx = ctx.and_then(|c| c.host_span_context());
+        // Tracing is a no-op: `ctx`/`collectors` are accepted for ABI
+        // stability but no longer wired into the call context.
+        let _ = (&ctx, &collectors);
         let cancel = abort_controller
             .map(AbortController::token)
             .unwrap_or_default();
-        let collector_arcs: Vec<Arc<bex_events::Collector>> = collectors
-            .as_ref()
-            .map(|colls| colls.iter().map(|c| c.inner_arc()).collect())
-            .unwrap_or_default();
 
         let call_id = bex_project::CallId::next();
-        let mut call_ctx = bex_project::FunctionCallContextBuilder::new(call_id)
-            .with_collectors(collector_arcs)
-            .with_cancel_token(cancel);
-
-        if let Some(host_ctx) = host_ctx {
-            call_ctx = call_ctx.with_host_ctx(host_ctx);
-        }
-
-        let call_ctx = call_ctx.build();
+        let call_ctx = bex_project::FunctionCallContextBuilder::new(call_id)
+            .with_cancel_token(cancel)
+            .build();
 
         // Same shared call_and_encode as the sync + C-ABI paths — returns the
         // encoded BamlOutboundResult envelope bytes for the TS decoder.

@@ -23,7 +23,6 @@ impl TestState {
 pub(crate) struct BexProject {
     pub(crate) db: std::sync::Arc<std::sync::Mutex<baml_project::ProjectDatabase>>,
     sys_ops: std::sync::Arc<SysOps>,
-    event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
     current_bex: std::sync::RwLock<(bool, Option<std::sync::Arc<BexEngine>>)>,
     /// `(generation, cancel_token, registry)` — generation is bumped on every engine swap;
     /// stale async tasks compare their captured generation before storing results.
@@ -43,24 +42,15 @@ impl BexProject {
         })
     }
 
-    pub(crate) fn new(
-        root_path: &vfs::VfsPath,
-        sys_ops: std::sync::Arc<SysOps>,
-        event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
-    ) -> Self {
+    pub(crate) fn new(root_path: &vfs::VfsPath, sys_ops: std::sync::Arc<SysOps>) -> Self {
         let mut db = baml_project::ProjectDatabase::new();
         db.set_project_root(crate::fs::FsPath::from_vfs(root_path).as_path());
         Self {
             db: std::sync::Arc::new(std::sync::Mutex::new(db)),
             sys_ops,
-            event_sink,
             current_bex: std::sync::RwLock::new((false, None)),
             test_state: std::sync::Arc::new(std::sync::Mutex::new(TestState::new())),
         }
-    }
-
-    pub(crate) fn event_sink(&self) -> Option<std::sync::Arc<dyn bex_events::EventSink>> {
-        self.event_sink.clone()
     }
 
     #[allow(dead_code)]
@@ -202,12 +192,7 @@ impl BexProject {
                 });
             }
         };
-        let runtime = match BexEngine::new(
-            bytecode,
-            self.sys_ops.clone(),
-            self.event_sink.clone(),
-            Vec::new(),
-        ) {
+        let runtime = match BexEngine::new(bytecode, self.sys_ops.clone(), Vec::new()) {
             Ok(r) => r,
             Err(e) => {
                 log::warn!("update_bex: BexEngine::new failed: {e}");

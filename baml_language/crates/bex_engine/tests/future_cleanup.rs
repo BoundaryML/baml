@@ -12,13 +12,8 @@ use sys_native::SysOpsExt;
 fn make_engine(source: &str) -> Arc<BexEngine> {
     let snapshot = compile_for_engine(source);
     Arc::new(
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("Failed to create engine"),
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
     )
 }
 

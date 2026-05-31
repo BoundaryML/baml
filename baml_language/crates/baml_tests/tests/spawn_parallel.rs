@@ -34,13 +34,7 @@ async fn spawn_three_sleeps_runs_in_parallel() {
         OptLevel::One,
     );
     let engine = Arc::new(
-        BexEngine::new(
-            program,
-            Arc::new(sys_ops::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("engine"),
+        BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), Vec::new()).expect("engine"),
     );
 
     // Each sleep is 200ms. Sequential would be ~600ms; parallel ~200ms.

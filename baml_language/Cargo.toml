@@ -98,7 +98,6 @@ bridge_wasm = { path = "crates/bridge_wasm" }
 baml_exec = { path = "crates/baml_exec" }
 baml_pack_host = { path = "crates/baml_pack_host" }
 bex_events = { path = "crates/bex_events" }
-bex_events_native = { path = "crates/bex_events_native" }
 bex_resource_types = { path = "crates/bex_resource_types" }
 darwin-kperf = "0.1.0"
 darwin-kperf-events = "0.1.0"

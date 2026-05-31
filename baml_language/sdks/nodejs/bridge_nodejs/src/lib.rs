@@ -31,8 +31,6 @@ pub fn get_version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
 
-/// Flush all buffered trace events to the JSONL file (if BAML_TRACE_FILE is set).
+/// No-op: tracing has been removed. Kept as a live symbol for ABI stability.
 #[napi]
-pub fn flush_events() {
-    bridge_cffi::flush_event_sink();
-}
+pub fn flush_events() {}

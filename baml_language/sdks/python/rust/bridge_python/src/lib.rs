@@ -25,12 +25,11 @@ fn get_version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
 
-/// Flush all buffered trace events to the JSONL file (if BAML_TRACE_FILE is set).
+/// No-op: tracing has been removed. Kept as a live symbol for ABI stability
+/// (SDK `atexit` + `__all__` reference it).
 #[gen_stub_pyfunction]
 #[pyfunction]
-fn flush_events() {
-    bridge_cffi::flush_event_sink();
-}
+fn flush_events() {}
 
 #[pymodule]
 fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {

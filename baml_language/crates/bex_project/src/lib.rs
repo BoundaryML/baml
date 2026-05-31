@@ -15,7 +15,6 @@ pub use bex_engine::{
     CANCELLED_PANIC_CLASS, EngineError, FunctionCallContext, FunctionCallContextBuilder,
     is_cancelled_engine_error,
 };
-pub use bex_events::EventSink;
 pub use bex_external_types::{
     BexExternalAdt, BexExternalValue, Handle, HostReleaseFn, HostReturnTypeError, HostValueArc,
     HostValueKind, MediaKind, Ty, TyAttr, host_release_dispatch, try_convert_rust_data,
@@ -78,9 +77,8 @@ pub fn new(
     root_path: vfs::VfsPath,
     sys_ops: SysOps,
     files: std::collections::HashMap<crate::fs::FsPath, String>,
-    event_sink: Option<std::sync::Arc<dyn EventSink>>,
 ) -> Result<Arc<impl Bex>, RuntimeError> {
-    let project = project::BexProject::new(&root_path, Arc::new(sys_ops), event_sink);
+    let project = project::BexProject::new(&root_path, Arc::new(sys_ops));
     project.update_all_sources(&files);
     let engine = project.take()?;
     Ok(engine)

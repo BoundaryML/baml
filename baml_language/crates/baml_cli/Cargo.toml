@@ -27,8 +27,6 @@ baml_project = { workspace = true }
 baml_type = { workspace = true }
 baml_workspace = { workspace = true }
 bex_engine = { workspace = true }
-bex_events = { workspace = true }
-bex_events_native = { workspace = true }
 bex_vm_types = { workspace = true }
 codegen_python = { workspace = true }
 sys_native = { workspace = true }

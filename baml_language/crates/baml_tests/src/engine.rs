@@ -219,13 +219,8 @@ pub async fn run_test_with_options(
     let positional_args = resolve_args(&program, entry, args);
 
     // Create engine and execute.
-    let engine = BexEngine::new(
-        program,
-        Arc::new(sys_ops::SysOps::native()),
-        None,
-        Vec::new(),
-    )
-    .expect("Failed to create BexEngine");
+    let engine = BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), Vec::new())
+        .expect("Failed to create BexEngine");
     let engine = Arc::new(engine);
 
     let result = engine
@@ -302,13 +297,8 @@ mod tests {
             OptLevel::One,
         );
         let engine = Arc::new(
-            BexEngine::new(
-                program,
-                Arc::new(sys_ops::SysOps::native()),
-                None,
-                Vec::new(),
-            )
-            .expect("engine"),
+            BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), Vec::new())
+                .expect("engine"),
         );
 
         let err = engine
@@ -331,13 +321,8 @@ mod tests {
     async fn bound_args_reject_omitted_default_for_required_param() {
         let program = compile_source_with_opt("function main(x: int) -> int { x }", OptLevel::One);
         let engine = Arc::new(
-            BexEngine::new(
-                program,
-                Arc::new(sys_ops::SysOps::native()),
-                None,
-                Vec::new(),
-            )
-            .expect("engine"),
+            BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), Vec::new())
+                .expect("engine"),
         );
 
         let err = engine
