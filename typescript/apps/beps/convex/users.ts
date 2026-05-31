@@ -304,13 +304,32 @@ export const linkSlackUserId = internalMutation({
 // API TOKEN MANAGEMENT
 // ─────────────────────────────────────────────────────────────────────────────
 
+const API_TOKEN_ALPHABET =
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+const API_TOKEN_PREFIX = "bep_";
+const API_TOKEN_RANDOM_LENGTH = 32;
+const API_TOKEN_MAX_BYTE =
+  Math.floor(256 / API_TOKEN_ALPHABET.length) * API_TOKEN_ALPHABET.length;
+
 function generateApiToken(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  const prefix = "bep_";
-  let token = prefix;
-  for (let i = 0; i < 32; i++) {
-    token += chars.charAt(Math.floor(Math.random() * chars.length));
+  const randomBytes = new Uint8Array(API_TOKEN_RANDOM_LENGTH);
+  let token = API_TOKEN_PREFIX;
+
+  while (token.length < API_TOKEN_PREFIX.length + API_TOKEN_RANDOM_LENGTH) {
+    crypto.getRandomValues(randomBytes);
+
+    for (const byte of randomBytes) {
+      if (byte >= API_TOKEN_MAX_BYTE) {
+        continue;
+      }
+
+      token += API_TOKEN_ALPHABET[byte % API_TOKEN_ALPHABET.length];
+      if (token.length === API_TOKEN_PREFIX.length + API_TOKEN_RANDOM_LENGTH) {
+        break;
+      }
+    }
   }
+
   return token;
 }
 
