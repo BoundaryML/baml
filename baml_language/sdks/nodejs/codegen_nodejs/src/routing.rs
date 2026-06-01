@@ -16,13 +16,16 @@
 //!
 //! `"baml"` routes under `baml/`, anything else under `vendor/<pkg>/`.
 //!
-//! If the name carries the `$stream` suffix, the entire routed path is
-//! prepended with `stream_types/` before top-level packaging is applied.
+//! `$stream` companions do **not** get a separate leaf: because `$` is a
+//! valid TypeScript identifier character (spec2), a stream companion keeps
+//! its `$stream`-suffixed name and is emitted beside its base type in the
+//! same namespace leaf. Routing is therefore independent of the `$stream`
+//! suffix and of the symbol kind.
 
 #[cfg(test)]
 use std::path::PathBuf;
 
-use baml_codegen_types::{Name, Symbol};
+use baml_codegen_types::Name;
 
 /// Leaf directory path under `baml_sdk/`. Empty segments means the root
 /// leaf (i.e. `baml_sdk/index.ts`).
@@ -52,11 +55,11 @@ impl LeafPath {
 
 /// Route a pool entry to its leaf `index.ts` directory (under `baml_sdk/`).
 ///
-/// `$stream` *classes* route to `stream_types/…`; function symbols
-/// (including the function `$stream` and `$parse_stream` companions) route
-/// alongside their parent function regardless of the suffix.
-pub(crate) fn route(name: &Name, symbol: &Symbol) -> LeafPath {
-    route_inner(name, !matches!(symbol, Symbol::Function(_)))
+/// Routing depends only on the symbol's package + namespace path. The
+/// `$stream` suffix (on companion classes or function companions) does not
+/// influence placement — stream companions live beside their base type.
+pub(crate) fn route(name: &Name) -> LeafPath {
+    route_inner(name)
 }
 
 /// Sanitize a path segment so it's a usable module/file identifier.
@@ -71,20 +74,15 @@ fn sanitize_module_segment(seg: &str) -> String {
 }
 
 /// Route a `Name` referenced from a type position (`Ty::Class`,
-/// `Ty::Enum`, `Ty::TypeAlias`). Type references always point at
-/// class-like symbols, so the `$stream` suffix routes under
-/// `stream_types/`.
-#[allow(dead_code)]
+/// `Ty::Enum`, `Ty::TypeAlias`). Identical to [`route`]: a `$stream` class
+/// reference resolves to the base type's leaf (the suffix lives on the
+/// emitted identifier, not the path).
 pub(crate) fn route_class_ref(name: &Name) -> LeafPath {
-    route_inner(name, true)
+    route_inner(name)
 }
 
-fn route_inner(name: &Name, honor_stream_suffix: bool) -> LeafPath {
+fn route_inner(name: &Name) -> LeafPath {
     let mut segs: Vec<String> = Vec::new();
-
-    if honor_stream_suffix && name.is_stream() {
-        segs.push("stream_types".to_string());
-    }
 
     match name.pkg.as_str() {
         "user" => {}
@@ -105,7 +103,6 @@ fn route_inner(name: &Name, honor_stream_suffix: bool) -> LeafPath {
 #[cfg(test)]
 mod tests {
     use baml_base::Name as BaseName;
-    use baml_codegen_types::{Class, Enum, EnumVariant, Function, FunctionArgument, Origin, Ty};
 
     use super::*;
 
@@ -117,76 +114,23 @@ mod tests {
         )
     }
 
-    fn origin() -> Origin {
-        Origin {
-            source_file_path: "x.baml".to_string(),
-            span_start: 0,
-        }
-    }
-
-    fn class_sym(n: &Name) -> Symbol {
-        Symbol::Class(Class {
-            name: n.clone(),
-            generic_params: Vec::new(),
-            docstring: None,
-            properties: Vec::new(),
-            static_methods: Vec::new(),
-            instance_methods: Vec::new(),
-            origin: origin(),
-        })
-    }
-
-    fn enum_sym(n: &Name) -> Symbol {
-        Symbol::Enum(Enum {
-            name: n.clone(),
-            docstring: None,
-            variants: vec![EnumVariant {
-                name: BaseName::new("A"),
-                docstring: None,
-                value: "A".to_string(),
-            }],
-            origin: origin(),
-        })
-    }
-
-    fn func_sym() -> Symbol {
-        Symbol::Function(Function {
-            name: BaseName::new("foo"),
-            generic_params: Vec::new(),
-            docstring: None,
-            arguments: vec![FunctionArgument {
-                name: BaseName::new("x"),
-                docstring: None,
-                ty: Ty::Int,
-                default: None,
-            }],
-            return_type: Ty::Int,
-            throws: None,
-            watchers: Vec::new(),
-            origin: origin(),
-        })
-    }
-
     #[test]
     fn user_no_ns_routes_to_root_leaf() {
-        let n = name("user", &[], "Foo");
-        let lp = route(&n, &class_sym(&n));
+        let lp = route(&name("user", &[], "Foo"));
         assert!(lp.is_root());
         assert_eq!(lp.init_ts(), PathBuf::from("index.ts"));
     }
 
     #[test]
     fn user_with_ns_routes_under_ns() {
-        let n = name("user", &["lorem"], "Resume");
-        let lp = route(&n, &class_sym(&n));
+        let lp = route(&name("user", &["lorem"], "Resume"));
         assert_eq!(lp.segments, vec!["lorem".to_string()]);
         assert_eq!(lp.init_ts(), PathBuf::from("lorem/index.ts"));
     }
 
     #[test]
     fn vendor_routes_under_vendor_pkg() {
-        let n = name("aws", &["s3"], "Bucket");
-        let lp = route(&n, &class_sym(&n));
+        let lp = route(&name("aws", &["s3"], "Bucket"));
         assert_eq!(
             lp.segments,
             vec!["vendor".to_string(), "aws".to_string(), "s3".to_string()]
@@ -196,87 +140,68 @@ mod tests {
 
     #[test]
     fn baml_routes_under_baml() {
-        let n = name("baml", &["http"], "Response");
-        let lp = route(&n, &class_sym(&n));
+        let lp = route(&name("baml", &["http"], "Response"));
         assert_eq!(lp.segments, vec!["baml".to_string(), "http".to_string()]);
         assert_eq!(lp.init_ts(), PathBuf::from("baml/http/index.ts"));
     }
 
     #[test]
-    fn stream_class_prepends_stream_types() {
-        let n = name("user", &["lorem"], "Resume$stream");
-        let lp = route(&n, &class_sym(&n));
+    fn stream_class_routes_to_base_leaf() {
+        // spec2: a `$stream` companion class lives beside its base type;
+        // the suffix does not add a `stream_types/` path segment.
+        let lp = route(&name("user", &["lorem"], "Resume$stream"));
+        assert_eq!(lp.segments, vec!["lorem".to_string()]);
+    }
+
+    #[test]
+    fn stream_class_vendor_routes_to_base_leaf() {
+        let lp = route(&name("aws", &["s3"], "Bucket$stream"));
         assert_eq!(
             lp.segments,
-            vec!["stream_types".to_string(), "lorem".to_string()]
+            vec!["vendor".to_string(), "aws".to_string(), "s3".to_string()]
         );
     }
 
     #[test]
-    fn stream_class_vendor() {
-        let n = name("aws", &["s3"], "Bucket$stream");
-        let lp = route(&n, &class_sym(&n));
-        assert_eq!(
-            lp.segments,
-            vec![
-                "stream_types".to_string(),
-                "vendor".to_string(),
-                "aws".to_string(),
-                "s3".to_string()
-            ]
-        );
+    fn stream_class_baml_routes_to_base_leaf() {
+        let lp = route(&name("baml", &["http"], "Response$stream"));
+        assert_eq!(lp.segments, vec!["baml".to_string(), "http".to_string()]);
     }
 
     #[test]
-    fn stream_class_baml() {
-        let n = name("baml", &["http"], "Response$stream");
-        let lp = route(&n, &class_sym(&n));
-        assert_eq!(
-            lp.segments,
-            vec![
-                "stream_types".to_string(),
-                "baml".to_string(),
-                "http".to_string()
-            ]
-        );
-    }
-
-    #[test]
-    fn stream_class_user_no_ns_routes_to_stream_root_leaf() {
-        let n = name("user", &[], "Foo$stream");
-        let lp = route(&n, &class_sym(&n));
-        assert_eq!(lp.segments, vec!["stream_types".to_string()]);
-        assert_eq!(lp.init_ts(), PathBuf::from("stream_types/index.ts"));
+    fn stream_class_user_no_ns_routes_to_root_leaf() {
+        let lp = route(&name("user", &[], "Foo$stream"));
+        assert!(lp.is_root());
+        assert_eq!(lp.init_ts(), PathBuf::from("index.ts"));
     }
 
     #[test]
     fn user_deeper_ns() {
-        let n = name("user", &["a", "b"], "Thing");
-        let lp = route(&n, &class_sym(&n));
+        let lp = route(&name("user", &["a", "b"], "Thing"));
         assert_eq!(lp.segments, vec!["a".to_string(), "b".to_string()]);
     }
 
     #[test]
     fn function_stream_companion_routes_alongside_parent() {
-        // `extract$stream` is a function-level companion (not a class).
-        // It must NOT be routed under `stream_types/`.
-        let n = name("user", &["lorem"], "extract$stream");
-        let lp = route(&n, &func_sym());
+        // `extract$stream` is a function-level companion; it routes to its
+        // parent's leaf, same as every other symbol.
+        let lp = route(&name("user", &["lorem"], "extract$stream"));
         assert_eq!(lp.segments, vec!["lorem".to_string()]);
     }
 
     #[test]
     fn function_parse_companion_routes_alongside_parent() {
-        let n = name("user", &["lorem"], "extract$parse");
-        let lp = route(&n, &func_sym());
+        let lp = route(&name("user", &["lorem"], "extract$parse"));
         assert_eq!(lp.segments, vec!["lorem".to_string()]);
     }
 
     #[test]
-    fn enum_with_stream_suffix_does_not_route_to_stream_types() {
-        let n = name("user", &["lorem"], "Foo");
-        let lp = route(&n, &enum_sym(&n));
-        assert_eq!(lp.segments, vec!["lorem".to_string()]);
+    fn route_class_ref_matches_route_for_stream_suffix() {
+        // The type-position router agrees with `route`: a `$stream`
+        // reference resolves to the base type's leaf.
+        let n = name("user", &["lorem"], "Resume$stream");
+        assert_eq!(route_class_ref(&n), route(&n));
+        assert_eq!(route_class_ref(&n).segments, vec!["lorem".to_string()]);
     }
 
     #[test]
@@ -285,8 +210,7 @@ mod tests {
         // renamed to `assert_`), `import * as assert from "./assert"` is
         // legal TypeScript because `assert` is only a contextual keyword.
         // The segment passes through unchanged.
-        let n = name("assert", &[], "is_true");
-        let lp = route(&n, &func_sym());
+        let lp = route(&name("assert", &[], "is_true"));
         assert_eq!(
             lp.segments,
             vec!["vendor".to_string(), "assert".to_string()]
@@ -299,8 +223,7 @@ mod tests {
         // for a non-keyword segment (the Node analog of Python's
         // `assert_namespace_segment_is_sanitized`, which has no JS
         // equivalent today).
-        let n = name("user", &["helpers"], "Foo");
-        let lp = route(&n, &class_sym(&n));
+        let lp = route(&name("user", &["helpers"], "Foo"));
         assert_eq!(lp.segments, vec!["helpers".to_string()]);
     }
 }

@@ -18,10 +18,10 @@ build.rs for both targets and lives in a per-crate `setup.sh`
 [`crates/python_pydantic2/setup.sh`](./crates/python_pydantic2/setup.sh)
 (the `--reinstall-package` forces the maturin rebuild of
 baml_core's `.so` that a plain `uv sync` skips on incremental Rust
-edits), and nodejs_typescript's per-fixture `pnpm install` + the
+edits), and typescript_node's per-fixture `pnpm install` + the
 prereq `pnpm build:debug` of bridge_nodejs's native `.node` addon
 live in
-[`crates/nodejs_typescript/setup.sh`](./crates/nodejs_typescript/setup.sh).
+[`crates/typescript_node/setup.sh`](./crates/typescript_node/setup.sh).
 `cargo nextest run` fires the matching setup script automatically
 via platform-filtered (`cfg(unix)` / `cfg(windows)`) setup-script
 bindings in
@@ -66,7 +66,7 @@ Targets in tree:
 - **`sdk_test_python_pydantic2`** — Python + pydantic2. Three
   checks per fixture: `ruff`, `pyright`, `pytest` (plus the shared
   `build_diagnostics` test).
-- **`sdk_test_nodejs_typescript`** — TypeScript on Node.js. Two
+- **`sdk_test_typescript_node`** — TypeScript on Node.js. Two
   checks per fixture: `tsc` (`node node_modules/typescript/bin/tsc
   --noEmit`) and `jest` (`node node_modules/jest/bin/jest.js`).
   Every test in this crate — `tsc`, `jest`, and
@@ -75,18 +75,18 @@ Targets in tree:
   panics: every fixture records a `codegen` diagnostic and
   `baml_sdk/` stays empty, so the toolchain commands can't pass.
   Drop the `#[ignore]`s when the emitter lands (`IGNORE_REASON` in
-  `sdk_tests/harness_setup/src/nodejs_typescript.rs`). The native
+  `sdk_tests/harness_setup/src/typescript_node.rs`). The native
   `.node` addon build and per-fixture `pnpm install` live in
-  [`crates/nodejs_typescript/setup.sh`](./crates/nodejs_typescript/setup.sh)
+  [`crates/typescript_node/setup.sh`](./crates/typescript_node/setup.sh)
   (Unix) and the parallel
-  [`setup.ps1`](./crates/nodejs_typescript/setup.ps1) (Windows),
+  [`setup.ps1`](./crates/typescript_node/setup.ps1) (Windows),
   rather than build.rs. `cargo nextest run` invokes the right one
   automatically via two platform-filtered setup-script bindings in
   [`baml_language/.config/nextest.toml`](../.config/nextest.toml),
   so the common run flow is just:
 
   ```bash
-  cargo nextest run -p sdk_test_nodejs_typescript
+  cargo nextest run -p sdk_test_typescript_node
   ```
 
   Re-run after bridge_nodejs Rust changes or after adding a new
@@ -112,8 +112,8 @@ cargo nextest run -p sdk_test_python_pydantic2 build_diagnostics
 # List discovered tests (without running)
 cargo nextest list -p sdk_test_python_pydantic2
 
-# Run ignored nodejs_typescript tests too (local debugging of codegen_nodejs)
-cargo nextest run -p sdk_test_nodejs_typescript --run-ignored all
+# Run ignored typescript_node tests too (local debugging of codegen_nodejs)
+cargo nextest run -p sdk_test_typescript_node --run-ignored all
 ```
 
 ## Directory Structure
@@ -134,7 +134,7 @@ sdk_tests/
 │   └── src/
 │       ├── lib.rs                        # generator-agnostic helpers + BuildDiagnostics
 │       ├── python_pydantic2.rs           # python+pydantic2 codegen + scaffold emit (run_all)
-│       └── nodejs_typescript.rs          # nodejs+typescript codegen + scaffold emit
+│       └── typescript_node.rs          # nodejs+typescript codegen + scaffold emit
 ├── harness_runner/                       # test-side crate (std only)
 │   ├── Cargo.toml                        # name = "sdk_test_harness_runner"
 │   └── src/
@@ -166,14 +166,14 @@ sdk_tests/
     │   └── type_shapes/
     │       ├── customizable/
     │       └── generated/
-    └── nodejs_typescript/
-        ├── Cargo.toml                    # name = "sdk_test_nodejs_typescript"
+    └── typescript_node/
+        ├── Cargo.toml                    # name = "sdk_test_typescript_node"
         │                                 # [build-dependencies] sdk_test_harness_setup
         │                                 # [dev-dependencies]   sdk_test_harness_runner
-        ├── build.rs                      # one-liner → sdk_test_harness_setup::nodejs_typescript::run_all()
+        ├── build.rs                      # one-liner → sdk_test_harness_setup::typescript_node::run_all()
         ├── setup.sh                      # pnpm build:debug (bridge_nodejs) + per-fixture pnpm install (Unix)
         ├── setup.ps1                     # parallel script for Windows; nextest picks one by host cfg
-        ├── src/lib.rs                    # invokes sdk_test_harness_runner::nodejs_typescript::test_suite!()
+        ├── src/lib.rs                    # invokes sdk_test_harness_runner::typescript_node::test_suite!()
         ├── docstrings_etc/
         │   ├── customizable/             # tracked: *.test.ts — copied into generated/
         │   └── generated/                # gitignored: build output
@@ -199,7 +199,7 @@ sdk_tests/
   `crates/<G>/<F>/` is the output for one generator.
 - **Generator directory** (under `crates/`): lowercase snake
   matching the generator key (`python_pydantic2`,
-  `nodejs_typescript`).
+  `typescript_node`).
 - **Rust crate name**: `sdk_test_<generator>` — one per generator.
 - **Generated package name** (written into
   `crates/<G>/<F>/generated/{pyproject.toml,package.json}`):
@@ -221,11 +221,11 @@ sdk_tests/
    - Symlinks each file in
      `crates/<generator>/<fixture>/customizable/` into
      `crates/<generator>/<fixture>/generated/` (python) — or
-     copies (`nodejs_typescript`, because node + ts-jest follow
+     copies (`typescript_node`, because node + ts-jest follow
      symlinks during module resolution and break out of the
      generated dir's `node_modules`).
    - Writes `crates/<generator>/<fixture>/generated/pyproject.toml`
-     (or `package.json` + `tsconfig.json` for `nodejs_typescript`)
+     (or `package.json` + `tsconfig.json` for `typescript_node`)
      with the per-fixture package name.
    - For BOTH targets: the toolchain install is OUT of build.rs and
      lives in `crates/<generator>/setup.sh` (Unix) or `setup.ps1`
@@ -242,7 +242,7 @@ sdk_tests/
      plain `uv sync` is a no-op on incremental Rust edits — uv
      doesn't track the Rust sources behind the editable install,
      so the `.so` would stay stale.
-   - For nodejs_typescript: the setup script runs the per-fixture
+   - For typescript_node: the setup script runs the per-fixture
      `pnpm install` and the prereq `pnpm build:debug` of
      bridge_nodejs's native `.node` addon. Populates `node_modules/`
      from the shared `target/pnpm-store/`. Tests then only do
@@ -287,14 +287,14 @@ reads the file and fails with the records. `sdk_test_harness_setup`'s
 scaffold emitter stamps one invocation per generator scaffold —
 `::sdk_test_harness_runner::build_diagnostics!()` for python and
 `::sdk_test_harness_runner::build_diagnostics!(ignore = "…")` for
-nodejs_typescript (while `codegen_nodejs` is a stub).
+typescript_node (while `codegen_nodejs` is a stub).
 
 Outcome: `cargo doc` / `cargo check` succeed without `uv` / `pnpm`
 installed; `cargo nextest run` surfaces the same failures it would
 have hit before, just routed through a test rather than build.rs. The
-`nodejs_typescript` crate `#[ignore]`s `build_diagnostics` plus
+`typescript_node` crate `#[ignore]`s `build_diagnostics` plus
 every per-fixture test until `codegen_nodejs` is real — see
-`IGNORE_REASON` in `sdk_tests/harness_setup/src/nodejs_typescript.rs`.
+`IGNORE_REASON` in `sdk_tests/harness_setup/src/typescript_node.rs`.
 
 ### setup.sh guard (`setup_guard::ran`)
 
@@ -316,7 +316,7 @@ SDK_TEST_<GEN>_SETUP=1
 
 `<GEN>` is the upper-cased generator key:
 `SDK_TEST_PYTHON_PYDANTIC2_SETUP=1` for python_pydantic2 and
-`SDK_TEST_NODEJS_TYPESCRIPT_SETUP=1` for nodejs_typescript. The
+`SDK_TEST_TYPESCRIPT_NODE_SETUP=1` for typescript_node. The
 canonical name is the `SETUP_ENV_VAR` const in each
 `harness_setup/src/<generator>.rs` (the setup scripts and the
 emitted `setup_guard!(…)` invocation must agree on it). nextest
@@ -330,7 +330,7 @@ a file would persist across runs and false-pass after the `.so` /
 prove "under nextest", not "this script ran". Under plain
 `cargo test` there's no `$NEXTEST_ENV`, so the guard does not enforce
 the breadcrumb; the generated fixture tests are still free to fail if
-the local setup is missing or stale. nodejs_typescript's guard is
+the local setup is missing or stale. typescript_node's guard is
 `#[ignore]`d alongside its other tests while `codegen_nodejs` is a
 stub.
 
@@ -350,7 +350,7 @@ directory, fixtures with zero `.baml` files, `.baml` files with
    containing the host-language tests, e.g.
    `sdk_tests/crates/python_pydantic2/<name>/customizable/test_main.py`
    and/or
-   `sdk_tests/crates/nodejs_typescript/<name>/customizable/main.test.ts`.
+   `sdk_tests/crates/typescript_node/<name>/customizable/main.test.ts`.
 3. `cargo nextest run -p sdk_test_python_pydantic2 <name>::` to run
    (nextest fires `setup.sh` to sync the new fixture's venv).
 

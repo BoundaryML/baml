@@ -177,10 +177,12 @@ mod tests {
     }
 
     #[test]
-    fn stream_class_routes_to_stream_types_module_path() {
+    fn stream_class_resolves_in_base_leaf_with_suffix() {
+        // spec2: the `$stream` companion lives in its base type's leaf
+        // (`lorem`), and its emitted identifier keeps the `$stream` suffix.
         let mut bodies = BTreeMap::new();
         let leaf = LeafPath {
-            segments: vec!["stream_types".into(), "lorem".into()],
+            segments: vec!["lorem".into()],
         };
         bodies.insert(
             leaf.clone(),
@@ -188,13 +190,13 @@ mod tests {
                 leaf,
                 vec![class_sym(
                     name("user", &["lorem"], "Resume$stream"),
-                    "Resume",
+                    "Resume$stream",
                 )],
             ),
         );
         let out = render_typemap_module(&bodies, "baml_sdk");
         assert!(out.contains(
-            "\"user.lorem.Resume$stream\": () => require(\"./stream_types/lorem\")[\"Resume\"],"
+            "\"user.lorem.Resume$stream\": () => require(\"./lorem\")[\"Resume$stream\"],"
         ));
     }
 

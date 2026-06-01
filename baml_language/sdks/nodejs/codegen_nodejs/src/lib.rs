@@ -1,7 +1,6 @@
 //! Node.js + TypeScript SDK emitter. Produces a structurally correct
-//! `baml_sdk/` tree from a `SymbolPool`: one `index.ts` (and `.d.ts`
-//! companion) per namespace directory, plus `_inlinedbaml.ts` and
-//! `_typemap.ts` at the SDK root.
+//! `baml_sdk/` tree from a `SymbolPool`: one `index.ts` per namespace
+//! directory, plus `_inlinedbaml.ts` and `_typemap.ts` at the SDK root.
 //!
 //! Every BAML top renders to real TS: `export class` with a typed
 //! constructor, `export enum`, `export type` aliases, and
@@ -11,9 +10,11 @@
 //! stdlib types (media + `Stream`) re-export from `@boundaryml/baml-core`
 //! rather than getting a generated body.
 //!
-//! This is a near-1:1 port of `codegen_python`; the only structural
-//! difference is the in-directory filename (`__init__.py(i)` → `index.ts(.d.ts)`)
-//! and TS-flavored re-export syntax (`export * as child from "./child"`).
+//! This is a close port of `codegen_python`, with two structural
+//! differences: the in-directory filename (`__init__.py` → `index.ts`), and
+//! that Node emits no declaration file — the Python `__init__.pyi` stub has
+//! no `.d.ts` counterpart, because the generated `.ts` is already fully
+//! typed. Re-exports use TS syntax (`export * as child from "./child"`).
 
 mod emit;
 mod leaf;
@@ -31,15 +32,15 @@ pub use baml_codegen_types::{NamingConvention, OutputType};
 
 use crate::{
     emit::{build_emitted, typemap_file::render_typemap_module},
-    leaf::{LeafBody, group_and_sort, render_index_dts, render_index_ts},
+    leaf::{LeafBody, group_and_sort, render_index_ts},
     routing::{LeafPath, route},
 };
 
-/// Banner prepended to every generated `.ts` / `.d.ts` file. Mirrors the
-/// Python `PYTHON_BANNER` (and the legacy TS emitter's `CONTENT_PREFIX`).
-/// `@ts-nocheck` is intentionally NOT included — Phase 2 output is meant
-/// to typecheck cleanly under `tsc --noEmit` because every placeholder is
-/// `: any`, and a blanket `@ts-nocheck` would gut Phase 4's type-checking.
+/// Banner prepended to every generated `.ts` file. Mirrors the Python
+/// `PYTHON_BANNER` (and the legacy TS emitter's `CONTENT_PREFIX`).
+/// `@ts-nocheck` is intentionally NOT included — the generated `.ts`
+/// is meant to typecheck cleanly under `tsc --noEmit`, and a blanket
+/// `@ts-nocheck` would gut that type-checking.
 const NODE_BANNER: &str = "\
 /* eslint-disable */
 // prettier-ignore
@@ -77,8 +78,8 @@ pub fn to_source_code(
 
     // Every symbol routes to exactly one leaf. Dedup via `BTreeSet`.
     let mut leaves: BTreeSet<LeafPath> = BTreeSet::new();
-    for (key, symbol) in pool {
-        leaves.insert(route(key, symbol));
+    for (key, _symbol) in pool {
+        leaves.insert(route(key));
     }
 
     // `baml/` and the root leaf are always emitted.
@@ -113,7 +114,8 @@ pub fn to_source_code(
     let triples = build_emitted(pool);
     let bodies: BTreeMap<LeafPath, LeafBody> = group_and_sort(triples);
 
-    // Emit every directory's `index.ts` and a sibling `index.d.ts`.
+    // Emit every directory's `index.ts`. No sibling `index.d.ts`: the
+    // generated `.ts` is fully typed, so a declaration file is redundant.
     for dir in &all_dirs {
         let kids = children.get(dir).cloned().unwrap_or_default();
         let leaf_path = LeafPath {
@@ -127,7 +129,6 @@ pub fn to_source_code(
         let is_root = dir.is_empty();
 
         out.insert(init_ts_path(dir), render_index_ts(body, &kids, is_root));
-        out.insert(init_dts_path(dir), render_index_dts(body, &kids, is_root));
     }
 
     // Root-only data modules.
@@ -140,8 +141,7 @@ pub fn to_source_code(
         render_typemap_module(&bodies, "baml_sdk"),
     );
 
-    // Prepend the do-not-edit banner to every `.ts` / `.d.ts` file
-    // (`index.d.ts`'s extension is `ts`, so this covers both).
+    // Prepend the do-not-edit banner to every `.ts` file.
     for (path, content) in &mut out {
         let is_ts = path
             .extension()
@@ -161,15 +161,6 @@ fn init_ts_path(dir: &[String]) -> PathBuf {
         path.push(seg);
     }
     path.push("index.ts");
-    path
-}
-
-fn init_dts_path(dir: &[String]) -> PathBuf {
-    let mut path = PathBuf::new();
-    for seg in dir {
-        path.push(seg);
-    }
-    path.push("index.d.ts");
     path
 }
 
@@ -293,13 +284,14 @@ mod tests {
         let out = emit_sdk(&SymbolPool::new());
         for f in [
             "index.ts",
-            "index.d.ts",
             "_inlinedbaml.ts",
             "_typemap.ts",
             "baml/index.ts",
         ] {
             assert!(out.contains_key(&PathBuf::from(f)), "missing {f}");
         }
+        // No declaration files are emitted.
+        assert!(!out.keys().any(|p| p.to_string_lossy().ends_with(".d.ts")));
         let root = &out[&PathBuf::from("index.ts")];
         assert!(root.contains(HEADER_LEN_MARKER));
         assert!(root.contains("initializeRuntime(\"baml_src\", _inlinedbaml.FILES);"));
@@ -317,8 +309,7 @@ mod tests {
         let out = emit_sdk(&pool);
         let leaf = &out[&PathBuf::from("lorem/index.ts")];
         assert!(leaf.contains("export class Resume {"));
-        let dts = &out[&PathBuf::from("lorem/index.d.ts")];
-        assert!(dts.contains("export declare class Resume {"));
+        assert!(!out.contains_key(&PathBuf::from("lorem/index.d.ts")));
     }
 
     #[test]
@@ -396,16 +387,19 @@ mod tests {
     }
 
     #[test]
-    fn stream_class_routes_to_stream_types() {
+    fn stream_class_emits_in_base_leaf_with_suffix() {
+        // spec2: `Resume$stream` is emitted beside `Resume` in the `lorem`
+        // leaf, keeping its `$stream` suffix — there is no `stream_types/`.
         let mut pool = SymbolPool::new();
         let n = name("user", &["lorem"], "Resume$stream");
         pool.insert(n.clone(), class_sym(&n, 0));
         let out = emit_sdk(&pool);
-        let leaf = &out[&PathBuf::from("stream_types/lorem/index.ts")];
-        assert!(leaf.contains("export class Resume {"));
+        assert!(!out.contains_key(&PathBuf::from("stream_types/lorem/index.ts")));
+        let leaf = &out[&PathBuf::from("lorem/index.ts")];
+        assert!(leaf.contains("export class Resume$stream {"));
         let typemap = &out[&PathBuf::from("_typemap.ts")];
         assert!(typemap.contains(
-            "\"user.lorem.Resume$stream\": () => require(\"./stream_types/lorem\")[\"Resume\"],"
+            "\"user.lorem.Resume$stream\": () => require(\"./lorem\")[\"Resume$stream\"],"
         ));
     }
 

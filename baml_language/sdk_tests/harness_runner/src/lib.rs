@@ -213,10 +213,10 @@ pub fn __check_setup_ran(env_var: &str) {
 /// // Default — fail loudly if setup.sh didn't run.
 /// ::sdk_test_harness_runner::setup_guard!("SDK_TEST_PYTHON_PYDANTIC2_SETUP");
 ///
-/// // Ignored while the generator's other tests are (nodejs_typescript
+/// // Ignored while the generator's other tests are (typescript_node
 /// // is `#[ignore]`d wholesale until codegen_nodejs lands).
 /// ::sdk_test_harness_runner::setup_guard!(
-///     ignore = "codegen_nodejs is a stub", "SDK_TEST_NODEJS_TYPESCRIPT_SETUP");
+///     ignore = "codegen_nodejs is a stub", "SDK_TEST_TYPESCRIPT_NODE_SETUP");
 /// ```
 #[macro_export]
 macro_rules! setup_guard {
@@ -249,7 +249,7 @@ macro_rules! setup_guard {
 /// // Default — fail loudly on any recorded diagnostic.
 /// ::sdk_test_harness_runner::build_diagnostics!();
 ///
-/// // Skip — every fixture records a codegen failure (nodejs_typescript
+/// // Skip — every fixture records a codegen failure (typescript_node
 /// // while codegen_nodejs is a stub).
 /// ::sdk_test_harness_runner::build_diagnostics!(ignore = "codegen_nodejs is a stub");
 /// ```
@@ -296,18 +296,18 @@ pub mod python_pydantic2 {
 }
 
 /// Node.js + TypeScript generator's test-side glue. Invoked from
-/// `crates/nodejs_typescript/src/lib.rs` as
-/// `sdk_test_harness_runner::nodejs_typescript::test_suite!()`.
-pub mod nodejs_typescript {
-    /// `include!`s `OUT_DIR/nodejs_typescript_tests.rs` — the
+/// `crates/typescript_node/src/lib.rs` as
+/// `sdk_test_harness_runner::typescript_node::test_suite!()`.
+pub mod typescript_node {
+    /// `include!`s `OUT_DIR/typescript_node_tests.rs` — the
     /// per-fixture scaffold emitted by
-    /// `sdk_test_harness_setup::nodejs_typescript::run_all`.
+    /// `sdk_test_harness_setup::typescript_node::run_all`.
     #[macro_export]
-    macro_rules! nodejs_typescript_test_suite {
+    macro_rules! typescript_node_test_suite {
         () => {
-            include!(concat!(env!("OUT_DIR"), "/nodejs_typescript_tests.rs"));
+            include!(concat!(env!("OUT_DIR"), "/typescript_node_tests.rs"));
         };
     }
 
-    pub use crate::nodejs_typescript_test_suite as test_suite;
+    pub use crate::typescript_node_test_suite as test_suite;
 }

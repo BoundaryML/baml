@@ -213,16 +213,22 @@ pub(crate) const ROOT_ALIAS: &str = "_bamlRoot";
 
 /// Render a class/enum/alias name reference.
 ///
+/// The emitted identifier is the BAML name verbatim — including any
+/// `$stream` suffix (spec2: `$` is a valid TS identifier char, and stream
+/// companions live beside their base type rather than in a `stream_types/`
+/// namespace).
+///
 /// - Same leaf → bare name, no import.
 /// - Root-namespace symbol referenced from a non-root leaf → `_bamlRoot.Name`
 ///   plus the root `LeafPath` (empty segments) in `imports`.
 /// - Otherwise → root-relative dotted path (`lorem.Resume`,
-///   `vendor.aws.s3.Bucket`, `stream_types.lorem.Resume`) plus the routed
+///   `vendor.aws.s3.Bucket`, `lorem.Resume$stream`) plus the routed
 ///   `LeafPath` in `imports`.
 fn render_name_ref(name: &Name, ctx: &TranslateCtx) -> TranslatedType {
     let routed = route_class_ref(name);
+    let ident = name.name.as_str();
     if routed == ctx.current_leaf {
-        return TranslatedType::bare(name.bare_name().to_string());
+        return TranslatedType::bare(ident.to_string());
     }
     let mut imports = BTreeSet::new();
     if routed.segments.is_empty() {
@@ -230,14 +236,14 @@ fn render_name_ref(name: &Name, ctx: &TranslateCtx) -> TranslatedType {
         // caught above, so `ctx.current_leaf` is non-root here).
         imports.insert(routed);
         TranslatedType {
-            expr: format!("{ROOT_ALIAS}.{}", name.bare_name()),
+            expr: format!("{ROOT_ALIAS}.{ident}"),
             imports,
         }
     } else {
         let dotted = routed.segments.join(".");
         imports.insert(routed);
         TranslatedType {
-            expr: format!("{dotted}.{}", name.bare_name()),
+            expr: format!("{dotted}.{ident}"),
             imports,
         }
     }
@@ -614,12 +620,33 @@ mod tests {
                 expected_expr: "baml.http.Response",
                 expected_imports: &[&["baml", "http"]],
             },
+            // spec2: a `$stream` companion lives beside its base type, so
+            // from another leaf it reads `lorem.Resume$stream` (not
+            // `stream_types.lorem.Resume`), importing the `lorem` leaf.
             Case {
-                label: "stream_class_from_user",
+                label: "stream_class_cross_leaf",
+                ty: cls("user", &["lorem"], "Resume$stream"),
+                ctx: ctx(&["ipsum"]),
+                expected_expr: "lorem.Resume$stream",
+                expected_imports: &[&["lorem"]],
+            },
+            // From within its own leaf, a `$stream` companion is a bare
+            // same-leaf reference with no import.
+            Case {
+                label: "stream_class_same_leaf",
                 ty: cls("user", &["lorem"], "Resume$stream"),
                 ctx: ctx(&["lorem"]),
-                expected_expr: "stream_types.lorem.Resume",
-                expected_imports: &[&["stream_types", "lorem"]],
+                expected_expr: "Resume$stream",
+                expected_imports: &[],
+            },
+            // A root-namespace `$stream` companion referenced from a leaf
+            // resolves through the root alias, suffix preserved.
+            Case {
+                label: "stream_class_root_from_leaf",
+                ty: cls("user", &[], "Foo$stream"),
+                ctx: ctx(&["lorem"]),
+                expected_expr: "_bamlRoot.Foo$stream",
+                expected_imports: &[&[]],
             },
             Case {
                 label: "typevar",

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Per-fixture pnpm setup for the sdk_test_nodejs_typescript crate — Unix.
+# Per-fixture pnpm setup for the sdk_test_typescript_node crate — Unix.
 # Windows uses the parallel `setup.ps1`; keep the two in sync.
 #
 # Invoked automatically by `cargo nextest run` via the setup-script
 # binding in `baml_language/.config/nextest.toml` — whenever the run
-# selects any sdk_test_nodejs_typescript test. Run the suite with
+# selects any sdk_test_typescript_node test. Run the suite with
 # `cargo nextest run`, not `cargo test`: plain `cargo test` skips this
 # script and can't pass `setup_guard::ran` (see ../../README.md).
 #
@@ -16,7 +16,7 @@
 
 set -euo pipefail
 
-cd "$(dirname "$0")"  # baml_language/sdk_tests/crates/nodejs_typescript
+cd "$(dirname "$0")"  # baml_language/sdk_tests/crates/typescript_node
 
 WORKSPACE_ROOT="$(cd ../../.. && pwd)"
 BRIDGE_NODEJS="$WORKSPACE_ROOT/sdks/nodejs/bridge_nodejs"
@@ -61,7 +61,7 @@ done
 # Per-run breadcrumb for the `setup_guard::ran` test. See the
 # "setup.sh guard" section of ../../README.md for the format and
 # rationale. Keep the var name in sync with SETUP_ENV_VAR in
-# harness_setup/src/nodejs_typescript.rs.
+# harness_setup/src/typescript_node.rs.
 if [[ -n "${NEXTEST_ENV:-}" ]]; then
-    echo "SDK_TEST_NODEJS_TYPESCRIPT_SETUP=1" >> "$NEXTEST_ENV"
+    echo "SDK_TEST_TYPESCRIPT_NODE_SETUP=1" >> "$NEXTEST_ENV"
 fi

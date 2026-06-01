@@ -18,9 +18,9 @@ pub(crate) enum SyncAsync {
 
 #[allow(dead_code)]
 pub(crate) struct NodeFunction {
-    /// TS identifier. Sync form = BAML bare name verbatim; async form =
-    /// `<bare>_async`. Companion forms (`foo_stream`, `foo__build_request`)
-    /// are also `NodeFunction` stubs.
+    /// TS identifier. Sync form = BAML name verbatim; async form =
+    /// `<name>_async`. Companion forms keep their `$` suffix verbatim
+    /// (`foo$stream`, `foo$build_request`) and are also `NodeFunction` stubs.
     pub(crate) name: String,
     /// FQN passed as the first arg to `defineFunction`. Carries the
     /// `$<suffix>` tail for companions.
@@ -31,10 +31,10 @@ pub(crate) struct NodeFunction {
     pub(crate) param_names: Vec<String>,
     /// Default metadata matching `param_names`.
     pub(crate) arg_defaults: Vec<Option<FunctionArgumentDefault>>,
-    /// Parameter types matching `param_names`. Consumed by `.d.ts`
-    /// rendering in Phase 4.
+    /// Parameter types matching `param_names`. Consumed when rendering the
+    /// binding's `as (...) => ...` surface type in `index.ts`.
     pub(crate) arg_tys: Vec<Ty>,
-    /// Return type, consumed by `.d.ts` rendering in Phase 4.
+    /// Return type, consumed when rendering the binding's surface type.
     pub(crate) return_ty: Ty,
     /// `TypeVar` names declared on this function.
     pub(crate) generic_params: Vec<String>,

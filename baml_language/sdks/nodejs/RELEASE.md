@@ -16,7 +16,7 @@ native sub-packages are built and published by
   these from the build matrix's uploaded artifacts.
 
 Generated `baml_sdk/` projects (`baml-cli generate --from <project>` with a
-`generator { output_type "nodejs/typescript" }` block) import the runtime
+`generator { output_type "typescript/node" }` block) import the runtime
 from `@boundaryml/baml-core`.
 
 ## Version
@@ -55,4 +55,4 @@ dispatching a release run (mirrors the Python `pyproject.toml` flow).
   `@boundaryml` is onboarded to npm trusted publishing (OIDC), drop the
   token and mirror the PyPI OIDC binding instead.
 - `baml-cli generate` reaches the emitter through `codegen_nodejs` (wired in
-  `crates/baml_cli/src/generate.rs`); `output_type "nodejs/typescript"`.
+  `crates/baml_cli/src/generate.rs`); `output_type "typescript/node"`.

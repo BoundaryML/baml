@@ -153,7 +153,7 @@ impl GenerateArgs {
                         generator.naming_convention,
                     )
                 }
-                OutputType::NodejsTypescript => codegen_nodejs::to_source_code(
+                OutputType::TypescriptNode => codegen_nodejs::to_source_code(
                     &pool,
                     &user_baml_files,
                     generator.naming_convention,
@@ -233,7 +233,7 @@ fn discover_generators(
                 *id,
                 generator_item,
                 "output_type",
-                r#"one of: "python/pydantic", "python/pydantic/v1", "nodejs/typescript""#,
+                r#"one of: "python/pydantic", "python/pydantic/v1", "typescript/node""#,
                 &source_map,
                 file_id,
                 &mut diags,

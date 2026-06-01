@@ -9,7 +9,8 @@
 // - user.lorem.Resume + ExtractResume (with auto-generated companions)
 // - user.lorem.StreamingDoc + StreamingExtract
 // - user.ipsum.Sentiment (enum) + ClassifySentiment
-// - stream_types/lorem leaf presence
+// - lorem leaf hosts `$stream` companion classes beside their base type
+//   (spec2: `$` is a valid TS identifier char, so no `stream_types/` leaf)
 //
 // The python suite also pins shorthand-client api_key wiring (auth
 // header on `*$build_request`); that's deferred until the nodejs
@@ -22,7 +23,6 @@ import * as lorem from "./baml_sdk/lorem";
 import * as ipsum from "./baml_sdk/ipsum";
 import { Resume, StreamingDoc } from "./baml_sdk/lorem";
 import { Sentiment } from "./baml_sdk/ipsum";
-import * as streamLorem from "./baml_sdk/stream_types/lorem";
 
 describe("llm_functions — namespace imports", () => {
   it("baml_sdk root imports cleanly", () => {
@@ -62,14 +62,14 @@ describe("llm_functions — factory + companion bindings", () => {
   });
 
   it("lorem.ExtractResume companion bindings exist", () => {
-    expect(typeof lorem.ExtractResume__build_request).toBe("function");
-    expect(typeof lorem.ExtractResume__build_request_async).toBe("function");
-    expect(typeof lorem.ExtractResume__render_prompt).toBe("function");
-    expect(typeof lorem.ExtractResume__render_prompt_async).toBe("function");
-    expect(typeof lorem.ExtractResume__parse).toBe("function");
-    expect(typeof lorem.ExtractResume__parse_async).toBe("function");
-    expect(typeof lorem.ExtractResume__parse_stream).toBe("function");
-    expect(typeof lorem.ExtractResume__parse_stream_async).toBe("function");
+    expect(typeof lorem.ExtractResume$build_request).toBe("function");
+    expect(typeof lorem.ExtractResume$build_request_async).toBe("function");
+    expect(typeof lorem.ExtractResume$render_prompt).toBe("function");
+    expect(typeof lorem.ExtractResume$render_prompt_async).toBe("function");
+    expect(typeof lorem.ExtractResume$parse).toBe("function");
+    expect(typeof lorem.ExtractResume$parse_async).toBe("function");
+    expect(typeof lorem.ExtractResume$parse_stream).toBe("function");
+    expect(typeof lorem.ExtractResume$parse_stream_async).toBe("function");
   });
 
   it("lorem.StreamingExtract sync + async factories are callable", () => {
@@ -78,14 +78,14 @@ describe("llm_functions — factory + companion bindings", () => {
   });
 
   it("lorem.StreamingExtract companion bindings exist", () => {
-    expect(typeof lorem.StreamingExtract__build_request).toBe("function");
-    expect(typeof lorem.StreamingExtract__build_request_async).toBe("function");
-    expect(typeof lorem.StreamingExtract__render_prompt).toBe("function");
-    expect(typeof lorem.StreamingExtract__render_prompt_async).toBe("function");
-    expect(typeof lorem.StreamingExtract__parse).toBe("function");
-    expect(typeof lorem.StreamingExtract__parse_async).toBe("function");
-    expect(typeof lorem.StreamingExtract__parse_stream).toBe("function");
-    expect(typeof lorem.StreamingExtract__parse_stream_async).toBe("function");
+    expect(typeof lorem.StreamingExtract$build_request).toBe("function");
+    expect(typeof lorem.StreamingExtract$build_request_async).toBe("function");
+    expect(typeof lorem.StreamingExtract$render_prompt).toBe("function");
+    expect(typeof lorem.StreamingExtract$render_prompt_async).toBe("function");
+    expect(typeof lorem.StreamingExtract$parse).toBe("function");
+    expect(typeof lorem.StreamingExtract$parse_async).toBe("function");
+    expect(typeof lorem.StreamingExtract$parse_stream).toBe("function");
+    expect(typeof lorem.StreamingExtract$parse_stream_async).toBe("function");
   });
 
   it("ipsum.ClassifySentiment sync + async factories are callable", () => {
@@ -94,10 +94,10 @@ describe("llm_functions — factory + companion bindings", () => {
   });
 });
 
-describe("llm_functions — stream_types leaf", () => {
-  it("stream_types/lorem exposes at least one $stream companion class", () => {
-    const hasAny = ["Resume", "StreamingDoc"].some(
-      (name) => name in streamLorem,
+describe("llm_functions — stream companion classes in lorem leaf", () => {
+  it("lorem exposes the `$stream` companion classes beside their base type", () => {
+    const hasAny = ["Resume$stream", "StreamingDoc$stream"].some(
+      (name) => name in lorem,
     );
     expect(hasAny).toBe(true);
   });

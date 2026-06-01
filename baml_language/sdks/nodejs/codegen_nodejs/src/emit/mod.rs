@@ -63,8 +63,12 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
     let mut out: Vec<(LeafPath, EmittedSymbol, SortKey)> = Vec::new();
 
     for (key, symbol) in entries {
-        let leaf = route(key, symbol);
-        let bare = key.bare_name().to_string();
+        let leaf = route(key);
+        // spec2: preserve the BAML name verbatim — `$` is a valid TS
+        // identifier char, so a `$stream` companion class is emitted as
+        // e.g. `Resume$stream` (not stripped to `Resume`). Non-stream
+        // symbols are unaffected (their name carries no `$stream`).
+        let bare = key.name.as_str().to_string();
 
         match symbol {
             Symbol::Class(c) => {
@@ -278,20 +282,16 @@ fn expand_methods(
     out
 }
 
-/// Translate a callable's BAML name (which may carry a `$<suffix>` for
-/// companions) into the TS-side bare identifier used as the LHS of the
-/// sync binding (the async sibling appends `_async`).
+/// The TS-side bare identifier for a callable's BAML name, used as the LHS
+/// of the sync binding (the async sibling appends `_async`).
 ///
-/// - Plain name `foo` → `foo`.
-/// - `foo$stream` → `foo_stream` (only companion that uses single
-///   underscore).
-/// - `foo$<other>` → `foo__<other>`.
+/// spec2: the BAML name — including any `$<suffix>` companion marker — is
+/// preserved verbatim, because `$` is a valid TypeScript identifier
+/// character. So `foo` → `foo`, `foo$stream` → `foo$stream`,
+/// `foo$build_request` → `foo$build_request`. (Python must translate these
+/// to `_stream` / `__build_request`; TypeScript does not.)
 fn bare_callable_name(name: &str) -> String {
-    match name.split_once('$') {
-        None => name.to_string(),
-        Some((parent, "stream")) => format!("{parent}_stream"),
-        Some((parent, suffix)) => format!("{parent}__{suffix}"),
-    }
+    name.to_string()
 }
 
 /// Shared fan-out for free functions and methods. Calls `emit` twice:

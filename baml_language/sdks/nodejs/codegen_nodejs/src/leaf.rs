@@ -1,12 +1,17 @@
 //! Per-leaf body grouping and TypeScript rendering.
 //!
 //! `group_and_sort` buckets the emitted symbols by leaf and orders them
-//! within each leaf. `render_index_ts` / `render_index_dts` emit the full
-//! `index.ts` / `index.d.ts` for a directory: runtime/cross-leaf imports,
-//! child-namespace re-exports, and real TS bodies for every top — classes,
-//! enums, type aliases, and `defineFunction(...)` / `defineInstanceFunction(...)`
-//! bindings. The five runtime-owned stdlib types re-export from
-//! `@boundaryml/baml-core` instead of getting a generated body.
+//! within each leaf. `render_index_ts` emits the full `index.ts` for a
+//! directory: runtime/cross-leaf imports, child-namespace re-exports, and
+//! real TS bodies for every top — classes, enums, type aliases, and
+//! `defineFunction(...)` / `defineInstanceFunction(...)` bindings. The five
+//! runtime-owned stdlib types re-export from `@boundaryml/baml-core` instead
+//! of getting a generated body.
+//!
+//! Codegen emits only `index.ts` — no sibling `index.d.ts`. The generated
+//! `.ts` is fully typed (real `export class`, typed `as` casts on every
+//! `defineFunction` binding), so a separate declaration file is redundant;
+//! `tsc` and editors read types straight from the `.ts`.
 //!
 //! Output shapes follow `00a-example-ts-codegen-type-shapes.md`.
 
@@ -229,7 +234,7 @@ fn fn_type_sig(
     format!("{}({}) => {ret}", generic_decl(generics), params.join(", "))
 }
 
-// ── Public entry points ──
+// ── Public entry point ──
 
 /// Render the full `index.ts` for a directory.
 pub(crate) fn render_index_ts(body: &LeafBody, kids: &BTreeSet<String>, is_root: bool) -> String {
@@ -261,36 +266,7 @@ pub(crate) fn render_index_ts(body: &LeafBody, kids: &BTreeSet<String>, is_root:
     out
 }
 
-/// Render the full `index.d.ts` for a directory.
-pub(crate) fn render_index_dts(body: &LeafBody, kids: &BTreeSet<String>, is_root: bool) -> String {
-    let ctx = TranslateCtx {
-        current_leaf: body.leaf.clone(),
-    };
-    let mut state = RenderState::default();
-
-    let mut body_str = String::new();
-    let mut prev: Option<&SortKey> = None;
-    for (sym, key) in &body.symbols {
-        if prev.is_some() {
-            body_str.push('\n');
-        }
-        render_symbol_dts(&mut body_str, sym, &ctx, &mut state);
-        prev = Some(key);
-    }
-
-    state.uses_baml_handle = body_str.contains("_BamlHandle");
-    let mut out = String::new();
-    write_preamble_dts(&mut out, &state, body, kids, is_root);
-    if !body_str.is_empty() {
-        if !out.is_empty() {
-            out.push('\n');
-        }
-        out.push_str(&body_str);
-    }
-    out
-}
-
-// ── Preambles ──
+// ── Preamble ──
 
 /// Emit type-only `import type * as <seg0> from "<rel>"` lines for each
 /// distinct top-level namespace referenced cross-leaf. Reserved-word
@@ -400,26 +376,7 @@ fn write_preamble_ts(
     }
 }
 
-fn write_preamble_dts(
-    out: &mut String,
-    state: &RenderState,
-    body: &LeafBody,
-    kids: &BTreeSet<String>,
-    _is_root: bool,
-) {
-    // `.d.ts` never imports runtime helpers; only type-only cross-leaf
-    // imports and child re-exports. The root and non-root shapes coincide.
-    if state.uses_baml_handle {
-        let _ = writeln!(
-            out,
-            "import type {{ BamlHandle as _BamlHandle }} from \"{RUNTIME_PKG}\";"
-        );
-    }
-    out.push_str(&cross_leaf_imports(state, &body.leaf));
-    write_child_reexports(out, kids);
-}
-
-// ── Per-symbol rendering (.ts) ──
+// ── Per-symbol rendering ──
 
 fn render_symbol_ts(
     out: &mut String,
@@ -435,7 +392,7 @@ fn render_symbol_ts(
                 render_class_ts(out, c, ctx, state);
             }
         }
-        EmittedSymbol::Enum(e) => render_enum(out, e, /* declare */ false),
+        EmittedSymbol::Enum(e) => render_enum(out, e),
         EmittedSymbol::TypeAlias(a) => render_type_alias(out, a, ctx, state),
         EmittedSymbol::Function(f) => render_function_ts(out, f, ctx, state),
     }
@@ -455,14 +412,9 @@ fn render_media_reexport_ts(out: &mut String, local: &str, rust_name: &str) {
     let _ = writeln!(out, "export {{ {local} }};");
 }
 
-fn render_enum(out: &mut String, e: &NodeEnum, declare: bool) {
+fn render_enum(out: &mut String, e: &NodeEnum) {
     write_doc(out, e.docstring.as_deref());
-    let kw = if declare {
-        "export declare enum"
-    } else {
-        "export enum"
-    };
-    let _ = writeln!(out, "{kw} {} {{", e.name);
+    let _ = writeln!(out, "export enum {} {{", e.name);
     for v in &e.variants {
         let _ = writeln!(out, "  {} = {},", v.ident, crate::ts_string(&v.value));
     }
@@ -647,138 +599,6 @@ fn param_names_literal(names: &[String]) -> String {
     format!("[{}]", parts.join(", "))
 }
 
-// ── Per-symbol rendering (.d.ts) ──
-
-fn render_symbol_dts(
-    out: &mut String,
-    sym: &EmittedSymbol,
-    ctx: &TranslateCtx,
-    state: &mut RenderState,
-) {
-    match sym {
-        EmittedSymbol::Class(c) => {
-            if let Some(rust_name) = media_reexport_node_name(c) {
-                render_media_reexport_dts(out, &c.name, rust_name);
-            } else {
-                render_class_dts(out, c, ctx, state);
-            }
-        }
-        EmittedSymbol::Enum(e) => render_enum(out, e, /* declare */ true),
-        EmittedSymbol::TypeAlias(a) => render_type_alias(out, a, ctx, state),
-        EmittedSymbol::Function(f) => render_function_dts(out, f, ctx, state),
-    }
-}
-
-fn render_media_reexport_dts(out: &mut String, local: &str, rust_name: &str) {
-    let _ = writeln!(
-        out,
-        "export declare const {local}: typeof import(\"{RUNTIME_PKG}\").{rust_name};"
-    );
-    if rust_name == "BamlStream" {
-        let _ = writeln!(
-            out,
-            "export type {local}<TStream, TFinal> = import(\"{RUNTIME_PKG}\").{rust_name}<TStream, TFinal>;"
-        );
-    } else {
-        let _ = writeln!(
-            out,
-            "export type {local} = import(\"{RUNTIME_PKG}\").{rust_name};"
-        );
-    }
-}
-
-fn render_class_dts(out: &mut String, c: &NodeClass, ctx: &TranslateCtx, state: &mut RenderState) {
-    write_doc(out, c.docstring.as_deref());
-    let generics = generic_decl(&c.generic_params);
-    let props: Vec<(&str, TranslatedType)> = c
-        .properties
-        .iter()
-        .map(|p| {
-            let t = translate_ty(&p.ty, ctx);
-            state.merge(&t);
-            (p.name.as_str(), t)
-        })
-        .collect();
-
-    let _ = writeln!(out, "export declare class {}{generics} {{", c.name);
-    for (name, t) in &props {
-        let _ = writeln!(out, "  {name}: {};", t.expr);
-    }
-    if props.is_empty() {
-        out.push_str("  constructor(init: {});\n");
-    } else {
-        out.push_str("  constructor(init: {\n");
-        for (name, t) in &props {
-            let _ = writeln!(out, "    {name}: {};", t.expr);
-        }
-        out.push_str("  });\n");
-    }
-    for m in c.static_methods.iter().chain(c.instance_methods.iter()) {
-        write_doc(out, m.docstring.as_deref());
-        let (names, tys, ret) = binding_surface(m, ctx, state);
-        let is_async = m.mode == SyncAsync::Async;
-        let sig_generics = method_sig_generics(m, &c.generic_params);
-        let sig = fn_type_sig(&sig_generics, &names, &tys, &ret.expr, is_async);
-        let kw = if m.kind == MethodKind::Static {
-            "static "
-        } else {
-            ""
-        };
-        let _ = writeln!(out, "  {kw}{}: {sig};", m.name);
-    }
-    out.push_str("}\n");
-}
-
-fn render_function_dts(
-    out: &mut String,
-    f: &NodeFunction,
-    ctx: &TranslateCtx,
-    state: &mut RenderState,
-) {
-    write_doc(out, f.docstring.as_deref());
-    let tys: Vec<TranslatedType> = f
-        .arg_tys
-        .iter()
-        .map(|t| {
-            let tt = translate_ty(t, ctx);
-            state.merge(&tt);
-            tt
-        })
-        .collect();
-    let ret = translate_ty(&f.return_ty, ctx);
-    state.merge(&ret);
-    let params: Vec<String> = f
-        .param_names
-        .iter()
-        .zip(tys.iter())
-        .map(|(n, t)| format!("{}: {}", safe_param_name(n), t.expr))
-        .collect();
-    let ret_expr = if f.mode == SyncAsync::Async {
-        format!("Promise<{}>", ret.expr)
-    } else {
-        ret.expr.clone()
-    };
-    let generics = generic_decl(&f.generic_params);
-    // A reserved-word function name can't be a `function` declaration name;
-    // fall back to a `const` of the function type.
-    if is_js_reserved(&f.name) {
-        let local = format!("__baml_{}", f.name);
-        let _ = writeln!(
-            out,
-            "declare const {local}: {generics}({}) => {ret_expr};\nexport {{ {local} as {} }};",
-            params.join(", "),
-            f.name,
-        );
-    } else {
-        let _ = writeln!(
-            out,
-            "export declare function {}{generics}({}): {ret_expr};",
-            f.name,
-            params.join(", "),
-        );
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use baml_base::Name as BaseName;
@@ -878,11 +698,6 @@ mod tests {
         assert!(ts.contains("name!: string;"));
         assert!(ts.contains("age!: number;"));
         assert!(ts.contains("Object.assign(this, init);"));
-        let dts = render_index_dts(&b, &BTreeSet::new(), false);
-        assert!(dts.contains("export declare class Resume {"));
-        assert!(dts.contains("name: string;"));
-        assert!(dts.contains("constructor(init: {"));
-        assert!(!dts.contains("Object.assign"));
     }
 
     #[test]
@@ -898,8 +713,6 @@ mod tests {
         let ts = render_index_ts(&b, &BTreeSet::new(), false);
         assert!(ts.contains("export enum Sentiment {"));
         assert!(ts.contains("HAPPY = \"HAPPY\","));
-        let dts = render_index_dts(&b, &BTreeSet::new(), false);
-        assert!(dts.contains("export declare enum Sentiment {"));
     }
 
     #[test]
@@ -927,12 +740,6 @@ mod tests {
         assert!(ts.contains("import { defineFunction } from \"@boundaryml/baml-core\";"));
         assert!(ts.contains("export const extract = defineFunction(\"user.lorem.extract\", \"sync\", [\"text\"]) as (text: string) => number;"));
         assert!(ts.contains("export const extract_async = defineFunction(\"user.lorem.extract\", \"async\", [\"text\"]) as (text: string) => Promise<number>;"));
-        let dts = render_index_dts(&b, &BTreeSet::new(), false);
-        assert!(dts.contains("export declare function extract(text: string): number;"));
-        assert!(
-            dts.contains("export declare function extract_async(text: string): Promise<number>;")
-        );
-        assert!(!dts.contains("defineFunction"));
     }
 
     #[test]
@@ -965,10 +772,6 @@ mod tests {
         assert!(ts.contains("export { Image };"));
         // The class binding already provides the type; no separate `export type`.
         assert!(!ts.contains("export type Image"));
-        let dts = render_index_dts(&b, &BTreeSet::new(), false);
-        assert!(dts.contains(
-            "export declare const Image: typeof import(\"@boundaryml/baml-core\").BamlImage;"
-        ));
     }
 
     #[test]

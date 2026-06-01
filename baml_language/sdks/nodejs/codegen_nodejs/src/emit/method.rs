@@ -25,7 +25,7 @@ pub(crate) struct NodeMethodBinding {
     pub(crate) kind: MethodKind,
     /// Parameter types matching the IR's `arguments` (no `self`).
     pub(crate) arg_tys: Vec<Ty>,
-    /// Return type, consumed by `.d.ts` rendering in Phase 4.
+    /// Return type, consumed when rendering the binding's surface type.
     pub(crate) return_ty: Ty,
     /// `TypeVar` names declared on this method.
     pub(crate) generic_params: Vec<String>,
