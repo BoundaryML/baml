@@ -11060,14 +11060,31 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// preserves BAML's nominal semantics — a class without an explicit
     /// `implements I` block never satisfies `I`, even if it has matching
     /// fields and methods.
+    /// Whether the type variable `sub_name` is a subtype of `sup` by its own
+    /// identity (independent of its bound): `T <: T`, `T <: T?`, and
+    /// `T <: (T | …)`. Used to make type-variable reflexivity take precedence
+    /// over bound-expansion in [`Self::is_subtype`].
+    fn typevar_is_reflexive_subtype(sub_name: &Name, sup: &Ty) -> bool {
+        match sup {
+            Ty::TypeVar(sup_name, _) => sup_name == sub_name,
+            Ty::Optional(inner, _) => Self::typevar_is_reflexive_subtype(sub_name, inner),
+            Ty::Union(members, _) => members
+                .iter()
+                .any(|m| Self::typevar_is_reflexive_subtype(sub_name, m)),
+            _ => false,
+        }
+    }
+
     fn is_subtype(&self, sub: &Ty, sup: &Ty) -> bool {
-        // Reflexivity: a type variable is a subtype of *itself*, regardless of
-        // any bound. Checked before bound-substitution below — otherwise a
-        // bounded `T extends Animal` would rewrite `sub` to `Animal` and then
-        // reject `T <: T` (the self-contradictory "expected T, got T"), which
-        // breaks `fn id<T extends Animal>(a: T) -> T { return a }`.
-        if let (Ty::TypeVar(a, _), Ty::TypeVar(b, _)) = (sub, sup)
-            && a == b
+        // Type-variable reflexivity must be checked BEFORE expanding the
+        // variable's bound: a type variable is a subtype of *itself* (and of an
+        // optional/union containing itself), which holds for the variable's own
+        // identity regardless of its bound. Expanding the bound first would turn
+        // `T <: T` into `bound(T) <: T` (false) and wrongly reject legitimate
+        // same-variable uses like a `Self`-typed argument inside a default
+        // method, or `same<T extends Eq>(x: T, y: T) { x.eq(y) }`.
+        if let Ty::TypeVar(sub_name, _) = sub
+            && Self::typevar_is_reflexive_subtype(sub_name, sup)
         {
             return true;
         }
