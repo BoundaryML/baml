@@ -579,6 +579,12 @@ impl<'db> SemanticIndexBuilder<'db> {
                     }
                 }
             }
+            ast::Expr::GenericApply { base, .. } => {
+                // `foo<int>` references the base callable; walk it so the path
+                // root is recorded for name resolution. Type args are types,
+                // not value references, so they need no walking here.
+                self.walk_expr(*base, body, source_map, true);
+            }
             ast::Expr::Literal(_)
             | ast::Expr::ByteStringLiteral(_)
             | ast::Expr::Null

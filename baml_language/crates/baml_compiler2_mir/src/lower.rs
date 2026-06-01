@@ -3248,6 +3248,12 @@ impl LoweringContext<'_> {
                 self.lower_expr(base, dest);
             }
 
+            AstExpr::GenericApply { base, .. } => {
+                // `foo<int>` — generic instantiation as a value. Type arguments
+                // are erased at runtime; the value is the base callable.
+                self.lower_expr(base, dest);
+            }
+
             AstExpr::OptionalMemberAccess { base, member } => {
                 self.lower_optional_member_access(expr_id, base, &member, dest);
             }

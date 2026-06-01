@@ -2560,6 +2560,26 @@ fn generic_bound_violation_is_compile_error() {
 }
 
 #[test]
+fn generic_bound_violation_in_instantiation_expr_is_compile_error() {
+    // BEP-044 bound enforcement must also apply when a generic callable is
+    // referenced as a VALUE (`let f = first_name<int>`), not only at call
+    // sites. `int` does not satisfy `extends Named`, so this is a type error.
+    assert_compile_error_contains(
+        r#"
+        interface Named { name: string }
+        function first_name<T extends Named>(items: T[]) -> string {
+            return items[0].name
+        }
+        function main() -> string {
+            let f = first_name<int>;
+            return "ok"
+        }
+        "#,
+        "Named",
+    );
+}
+
+#[test]
 fn generic_bound_alias_syntax_is_compile_error() {
     assert_compile_error_contains(
         r#"

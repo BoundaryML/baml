@@ -1482,6 +1482,129 @@ impl<'db> TypeInferenceBuilder<'db> {
     ///
     /// Emits `WrongTypeArgArity` when the count of provided type args does not match the
     /// count of declared user generic params for the callee.
+    /// Infer `foo<int>` — a generic callable referenced with explicit type args
+    /// but NOT called (`Expr::GenericApply`). Produces the specialized function
+    /// type with the type params bound and **cleared** to `[]`, so the value is
+    /// a concrete function: a later call checks args against the substituted
+    /// param types (e.g. `let f = foo<int>; f("s")` is a type error).
+    fn infer_generic_apply(
+        &mut self,
+        base: ExprId,
+        type_args: &[TypeExpr],
+        body: &ExprBody,
+        expr_id: ExprId,
+    ) -> Ty {
+        let base_ty = self.infer_expr(base, body);
+        let Ty::Function {
+            generic_params,
+            generic_param_bounds,
+            params,
+            ret,
+            throws,
+            ..
+        } = base_ty
+        else {
+            // Type args applied to something that is not a generic callable.
+            self.context.report_simple(
+                TirTypeError::TypeIsNotGeneric {
+                    type_name: Self::generic_apply_base_name(base, body),
+                    kind: "value",
+                },
+                expr_id,
+            );
+            return Ty::Unknown {
+                attr: TyAttr::default(),
+            };
+        };
+
+        if type_args.len() != generic_params.len() {
+            self.context.report_simple(
+                TirTypeError::WrongTypeArgArity {
+                    callee_name: Self::generic_apply_base_name(base, body),
+                    expected: generic_params.len(),
+                    got: type_args.len(),
+                },
+                expr_id,
+            );
+            return Ty::Unknown {
+                attr: TyAttr::default(),
+            };
+        }
+
+        // Resolve each explicit type argument in the current namespace.
+        let db = self.context.db();
+        let ns = self.ns_context.clone();
+        let caller_generic_params = self.generic_params.clone();
+        let mut resolved: Vec<Ty> = Vec::with_capacity(type_args.len());
+        for type_arg_expr in type_args {
+            let mut diags = Vec::new();
+            let ty = crate::lower_type_expr::lower_type_expr_in_ns(
+                db,
+                type_arg_expr,
+                self.package_items,
+                &ns,
+                &caller_generic_params,
+                &mut diags,
+            );
+            for d in diags {
+                self.context.report_simple(d, expr_id);
+            }
+            resolved.push(ty);
+        }
+
+        let bindings = crate::generics::bind_type_vars(&generic_params, &resolved);
+
+        // BEP-044 generic-bound enforcement: each supplied type arg must satisfy
+        // its param's bound (mirrors the call-site check in
+        // `resolve_explicit_type_args`). The bounds are already lowered on
+        // `base_ty`; substitute the bindings so self-referential bounds
+        // (`<T: Container<T>>`) resolve before the subtype check.
+        for (idx, resolved_arg) in resolved.iter().enumerate() {
+            if let Some(Some(bound)) = generic_param_bounds.get(idx) {
+                let bound_ty = crate::generics::substitute_ty(bound, &bindings);
+                if !self.is_subtype(resolved_arg, &bound_ty) {
+                    self.context.report_simple(
+                        TirTypeError::TypeMismatch {
+                            expected: bound_ty,
+                            got: resolved_arg.clone(),
+                        },
+                        expr_id,
+                    );
+                }
+            }
+        }
+
+        // Build the specialized signature. Substitute the bound params into
+        // each param/ret/throws and clear `generic_params` so the result is a
+        // concrete (non-generic) function value.
+        Ty::Function {
+            generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
+            params: params
+                .iter()
+                .map(|param| FunctionParamTy {
+                    name: param.name.clone(),
+                    ty: crate::generics::substitute_ty(&param.ty, &bindings),
+                    mode: param.mode,
+                })
+                .collect(),
+            ret: Box::new(crate::generics::substitute_ty(&ret, &bindings)),
+            throws: Box::new(crate::generics::substitute_ty(&throws, &bindings)),
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// Best-effort display name for a `GenericApply` base, for diagnostics.
+    fn generic_apply_base_name(base: ExprId, body: &ExprBody) -> Name {
+        match &body.exprs[base] {
+            Expr::Path(segments) => segments
+                .last()
+                .cloned()
+                .unwrap_or_else(|| Name::new("<value>")),
+            _ => Name::new("<value>"),
+        }
+    }
+
     fn resolve_explicit_type_args(
         &mut self,
         callee_id: ExprId,
@@ -2282,6 +2405,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                     refs,
                 );
             }
+            Expr::GenericApply { base, .. } => {
+                Self::collect_default_expr_forward_references(
+                    *base,
+                    body,
+                    later_params,
+                    shadowed,
+                    refs,
+                );
+            }
             Expr::Literal(_) | Expr::ByteStringLiteral(_) | Expr::Null | Expr::Missing => {}
         }
     }
@@ -2850,6 +2982,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             Expr::Null => Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
             Expr::Path(segments) => self.infer_path(segments.as_slice(), body, expr_id),
+            Expr::GenericApply { base, type_args } => {
+                self.infer_generic_apply(*base, type_args, body, expr_id)
+            }
             Expr::If {
                 condition,
                 then_branch,
@@ -6224,6 +6359,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if let Some(Ty::Future(_value, error, _)) = self.expressions.get(future) {
                     out.extend(crate::throw_inference::flatten_ty_to_facts(error));
                 }
+            }
+            Expr::GenericApply { base, .. } => {
+                // Referencing a generic callable as a value cannot throw; walk
+                // the base for completeness (it is a path, a no-op).
+                self.collect_throw_facts_from_expr(*base, body, out);
             }
             Expr::Lambda(_)
             | Expr::Literal(_)
