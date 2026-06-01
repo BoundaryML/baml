@@ -14,6 +14,7 @@ os.environ.setdefault("CONVEX_URL", "http://localhost:3210")
 os.environ.setdefault("SERVICE_URL", "http://localhost:8080")
 os.environ.setdefault("SERVICE_TOKEN", "devservicetoken")
 os.environ.setdefault("CLAUDE_PROXY_TOKEN", "devproxytoken")
+os.environ.setdefault("SLACK_SIGNING_SECRET", "devsigningsecret")
 
 import pytest
 
