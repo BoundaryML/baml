@@ -1883,6 +1883,13 @@ pub struct HostClosure {
     /// `SysOp::BamlHostCallHostValue` as `type_arg_0` so the sysop impl
     /// can validate the host's returned value against the BAML signature.
     pub ret_ty: Box<baml_type::Ty>,
+    /// The declared error/throws contract of the host-callable (`E` in
+    /// `call_host_value<T, E>`), threaded through
+    /// `SysOp::BamlHostCallHostValue` as `type_arg_1`. A host throw is
+    /// checked against this contract; a generic/undeclared throws erases to
+    /// `Void`/`BuiltinUnknown` at runtime (i.e. `unknown`), which accepts any
+    /// thrown value. See `docs/design/host-callable-errors.md`.
+    pub throws_ty: Box<baml_type::Ty>,
     /// Number of value arguments the host callable expects.
     ///
     /// `CallIndirect` reads this to drain the right number of operand slots

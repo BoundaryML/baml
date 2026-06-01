@@ -2719,16 +2719,22 @@ impl BexVm {
     /// `baml.host.call_host_value` in `sys_ops/.../io_generated.rs`):
     ///   args\[0\] = `handle`     (`Object::HostClosure` → `BexExternalValue::HostValue`)
     ///   args\[1\] = `args_array` (`Object::Array<Value>`)
-    ///   args\[2\] = `ret_ty`     (`Object::Type<Ty>`)
+    ///   args\[2\] = `ret_ty`     (`Object::Type<Ty>`) — `type_arg_0` (`T`)
+    ///   args\[3\] = `throws_ty`  (`Object::Type<Ty>`) — `type_arg_1` (`E`)
     fn host_closure_call_sysop(
         &mut self,
         closure_ptr: HeapPtr,
         user_args: Vec<Value>,
     ) -> VmExecState {
-        // Read arity + return type out of the closure, then drop the borrow
-        // before allocating (a TLAB allocation may move/collect heap objects).
-        let (arity, ret_ty) = match self.get_object(closure_ptr) {
-            Object::HostClosure(hc) => (hc.arity, hc.ret_ty.as_ref().clone()),
+        // Read arity + return/throws types out of the closure, then drop the
+        // borrow before allocating (a TLAB allocation may move/collect heap
+        // objects).
+        let (arity, ret_ty, throws_ty) = match self.get_object(closure_ptr) {
+            Object::HostClosure(hc) => (
+                hc.arity,
+                hc.ret_ty.as_ref().clone(),
+                hc.throws_ty.as_ref().clone(),
+            ),
             // Every caller gates on `Object::HostClosure` before calling.
             _ => unreachable!("host_closure_call_sysop requires an Object::HostClosure"),
         };
@@ -2740,12 +2746,14 @@ impl BexVm {
         );
         let args_array_ptr = self.tlab.alloc(Object::Array(user_args.into()));
         let ret_ty_ptr = self.tlab.alloc(Object::Type(Box::new(ret_ty)));
+        let throws_ty_ptr = self.tlab.alloc(Object::Type(Box::new(throws_ty)));
         VmExecState::SysOp {
             operation: bex_vm_types::SysOp::BamlHostCallHostValue,
             args: vec![
                 Value::object(closure_ptr),
                 Value::object(args_array_ptr),
                 Value::object(ret_ty_ptr),
+                Value::object(throws_ty_ptr),
             ],
         }
     }

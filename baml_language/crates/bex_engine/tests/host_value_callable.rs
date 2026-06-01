@@ -341,10 +341,11 @@ async fn host_callable_invoked_from_native_map_continuation() {
 
 // ============================================================================
 // Operand-layout pin: the VM hand-builds the `SysOp::BamlHostCallHostValue`
-//        args as `[handle, args_array, ret_ty]` to match the codegen-generated
-//        glue (`sys_ops/.../io_generated.rs` extracts `__arg0` as the handle via
-//        `as_owned_but_very_slow`, `__arg1` as the args list, and `__arg2`/
-//        `type_arg_0` via `as_baml_type_owned`). Nothing else pins this contract,
+//        args as `[handle, args_array, ret_ty, throws_ty]` to match the
+//        codegen-generated glue (`sys_ops/.../io_generated.rs` extracts `__arg0`
+//        as the handle via `as_owned_but_very_slow`, `__arg1` as the args list,
+//        and `__arg2`/`type_arg_0` + `__arg3`/`type_arg_1` via
+//        `as_baml_type_owned`). Nothing else pins this contract,
 //        so a future codegen change to the type-arg operand position (or a swap
 //        of any two operands) would silently break host calls. This test makes
 //        the contract explicit and fails loudly if the operand order changes:

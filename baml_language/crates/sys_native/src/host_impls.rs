@@ -49,6 +49,9 @@ impl io::IoNamespaceHost for NativeSysOps {
         handle: BexExternalValue,
         args: Vec<BexExternalValue>,
         type_arg_0: Ty,
+        // `type_arg_1` is the declared throws contract `E`; the runtime
+        // contract check that consumes it lands in a later phase.
+        _type_arg_1: Ty,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         // Extract the HostValueArc from the incoming handle.
@@ -208,6 +211,7 @@ mod tests {
             BexExternalValue::String("not a host value".to_string().into()),
             vec![],
             int_ty(),
+            Ty::unknown(),
             &ctx,
         );
         let result = match output {

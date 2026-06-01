@@ -59,7 +59,7 @@ namespace baml.glob:
   function new
 namespace baml.host:
   class HostValue { methods: [to_json, from_json] }
-  function call_host_value<T>
+  function call_host_value<T, E>
 namespace baml.http:
   class Request { methods: [to_json, from_json] }
   class Response { methods: [text, bytes, ok, to_json, from_json] }

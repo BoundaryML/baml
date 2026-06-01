@@ -1219,6 +1219,7 @@ impl io::IoNamespaceHost for DefaultIoOps {
         _handle: BexExternalValue,
         _args: Vec<BexExternalValue>,
         _type_arg_0: baml_type::Ty,
+        _type_arg_1: baml_type::Ty,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         SysOpOutput::err(OpErrorKind::Unsupported)

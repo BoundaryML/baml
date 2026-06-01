@@ -509,8 +509,13 @@ impl BexEngine {
                              is `{ty}`; expected a function type",
                         ),
                     })?;
-                let (params, ret) = match function_ty {
-                    Ty::Function { params, ret, .. } => (params, ret.as_ref().clone()),
+                let (params, ret, throws) = match function_ty {
+                    Ty::Function {
+                        params,
+                        ret,
+                        throws,
+                        ..
+                    } => (params, ret.as_ref().clone(), throws.as_ref().clone()),
                     other => {
                         return Err(EngineError::TypeMismatch {
                             message: format!(
@@ -539,9 +544,18 @@ impl BexEngine {
                         ),
                     });
                 }
+                // `throws` is the callable's declared error contract `E`
+                // (`call_host_value<T, E>`). An omitted throws on the parameter
+                // is a synthesized generic effect param that erases to
+                // `Ty::Void` at runtime. Unlike the return type — rejected just
+                // above when generic/void, since the host's return must be
+                // validatable — an unknown error contract is fine: the contract
+                // check treats `Void` as "accept any thrown value" (the
+                // `unknown` fallback).
                 let host_closure = bex_vm_types::HostClosure {
                     handle: arc,
                     ret_ty: Box::new(ret),
+                    throws_ty: Box::new(throws),
                     arity: params.len(),
                 };
                 Value::object(

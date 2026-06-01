@@ -384,6 +384,7 @@ impl io::IoNamespaceHost for WasmHost {
         handle: BexExternalValue,
         args: Vec<BexExternalValue>,
         type_arg_0: baml_type::Ty,
+        _type_arg_1: baml_type::Ty,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         // Extract the HostValueArc from the incoming handle.
