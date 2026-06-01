@@ -1,7 +1,8 @@
 """One-off generator: build docs/reference.md from the in-code docstrings/JSDoc.
 
-Walks libs/bench_core/*.py (via AST) and convex/*.ts (via regex) and emits a single
-consolidated API reference — every function/method/class with its one-line summary.
+Walks the Python sources (libs/bench_core + services, via AST) and the TypeScript
+sources (convex + ui, via regex) and emits a single consolidated API reference -
+every function/method/class with its one-line summary.
 """
 from __future__ import annotations
 
@@ -65,27 +66,35 @@ def py_section(path: Path) -> list[str]:
     lines = [f"### `{rel}`", ""]
     for node in tree.body:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            lines.append(f"- **`{node.name}({sig(node.args)})`** — {first_line(ast.get_docstring(node))}")
+            lines.append(f"- **`{node.name}({sig(node.args)})`** - {first_line(ast.get_docstring(node))}")
         elif isinstance(node, ast.ClassDef):
-            lines.append(f"- **`class {node.name}`** — {first_line(ast.get_docstring(node))}")
+            lines.append(f"- **`class {node.name}`** - {first_line(ast.get_docstring(node))}")
             for m in node.body:
                 if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    lines.append(f"    - `{m.name}({sig(m.args)})` — {first_line(ast.get_docstring(m))}")
+                    lines.append(f"    - `{m.name}({sig(m.args)})` - {first_line(ast.get_docstring(m))}")
     lines.append("")
     return lines
 
 
-JSDOC = re.compile(r"/\*\*(.*?)\*/\s*export const (\w+)\s*=", re.S)
+# A JSDoc block immediately followed by an export (function/const/class/type/interface,
+# optionally default/async). Group 1 is the JSDoc body, group 2 the exported name. The
+# tempered ``(?:(?!\*/).)*?`` keeps the block to a single comment so a non-exported
+# helper's JSDoc can't be mis-paired with the next export.
+EXPORT = re.compile(
+    r"/\*\*((?:(?!\*/).)*?)\*/\s*export\s+(?:default\s+)?(?:async\s+)?"
+    r"(?:function|const|class|type|interface)\s+(\w+)",
+    re.S,
+)
 
 
 def ts_section(path: Path) -> list[str]:
     """Build the markdown reference lines for one TypeScript module.
 
-    Extracts each ``export const`` preceded by a JSDoc block, using the block's
-    first non-tag line as the summary.
+    Extracts each exported symbol (function/const/class/type/interface) preceded by
+    a JSDoc block, using the block's first non-tag line as the summary.
 
     Args:
-        path: The .ts file to document.
+        path: The .ts/.tsx file to document.
 
     Returns:
         Markdown lines: a section header plus one bullet per exported symbol.
@@ -93,19 +102,20 @@ def ts_section(path: Path) -> list[str]:
     text = path.read_text()
     rel = path.relative_to(ROOT)
     lines = [f"### `{rel}`", ""]
-    for block, name in JSDOC.findall(text):
+    for block, name in EXPORT.findall(text):
         body = [l.strip().lstrip("*").strip() for l in block.splitlines()]
         summary = next((l for l in body if l and not l.startswith("@")), "")
-        lines.append(f"- **`{name}`** — {summary}")
+        lines.append(f"- **`{name}`** - {summary}")
     lines.append("")
     return lines
 
 
 def main() -> None:
-    """Generate docs/reference.md from the bench_core Python and convex TypeScript sources.
+    """Generate docs/reference.md from the Python (bench_core + services) and
+    TypeScript (convex + ui) sources.
 
-    Walks ``libs/bench_core/*.py`` and ``convex/*.ts``, assembles the consolidated
-    reference, and writes it to ``reference.md`` next to this script.
+    Walks each source tree, assembles the consolidated reference grouped by area,
+    and writes it to ``reference.md`` next to this script.
     """
     out = [
         "# API reference",
@@ -122,10 +132,22 @@ def main() -> None:
         if p.name == "__init__.py":
             continue
         out += py_section(p)
+    out += ["## `services` (Python)", ""]
+    for p in sorted((ROOT / "services").rglob("*.py")):
+        if p.name == "__init__.py":
+            continue
+        out += py_section(p)
     out += ["## `convex` (TypeScript)", ""]
     for p in sorted((ROOT / "convex").glob("*.ts")):
         sec = ts_section(p)
         if len(sec) > 3:  # has at least one export
+            out += sec
+    out += ["## `ui` (TypeScript)", ""]
+    ui_files = sorted(list((ROOT / "ui" / "app").rglob("*.ts")) +
+                      list((ROOT / "ui" / "app").rglob("*.tsx")))
+    for p in ui_files:
+        sec = ts_section(p)
+        if len(sec) > 3:  # has at least one documented export
             out += sec
     OUT.write_text("\n".join(out) + "\n")
     print(f"wrote {OUT} ({len(out)} lines)")
