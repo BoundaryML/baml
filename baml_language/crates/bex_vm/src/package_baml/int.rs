@@ -1,3 +1,4 @@
+use bex_str::BexStr;
 use bex_vm_types::Value;
 
 use super::{BamlClassInt, PackageBamlImpl};
@@ -8,8 +9,8 @@ impl BamlClassInt for PackageBamlImpl {
         Value::int(int)
     }
 
-    fn to_string(int: i64) -> String {
-        int.to_string()
+    fn to_string(int: i64) -> BexStr {
+        BexStr::from(int.to_string())
     }
     // ── Comparisons / clamping ────────────────────────────────────────────────
 
@@ -92,17 +93,18 @@ impl BamlClassInt for PackageBamlImpl {
         }
     }
 
-    fn parse(text: &str) -> Result<i64, VmRustFnError> {
-        let v: i64 = text.parse::<i64>().map_err(|e| -> VmRustFnError {
+    fn parse(text: &bex_str::BexStr) -> Result<i64, VmRustFnError> {
+        let s = text.as_str();
+        let v: i64 = s.parse::<i64>().map_err(|e| -> VmRustFnError {
             VmBamlError::ParseError {
-                message: format!("int.parse: cannot parse {text:?} as int: {e}"),
+                message: format!("int.parse: cannot parse {s:?} as int: {e}"),
             }
             .into()
         })?;
         if !(Value::INT_MIN..=Value::INT_MAX).contains(&v) {
             return Err(VmBamlError::ParseError {
                 message: format!(
-                    "int.parse: {text:?} is outside the representable BAML int range [{}, {}]",
+                    "int.parse: {s:?} is outside the representable BAML int range [{}, {}]",
                     Value::INT_MIN,
                     Value::INT_MAX
                 ),

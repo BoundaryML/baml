@@ -108,6 +108,8 @@ pub enum TypeExpr {
     },
     /// Function type: (params) -> return
     Function {
+        generic_params: Vec<Name>,
+        generic_param_bounds: Vec<Option<TypeExpr>>,
         params: Vec<FunctionTypeParam>,
         ret: Box<TypeExpr>,
         throws: Option<Box<TypeExpr>>,
@@ -265,11 +267,26 @@ impl std::fmt::Display for TypeExpr {
             }
             TypeExpr::Literal { value, .. } => write!(f, "{value}"),
             TypeExpr::Function {
+                generic_params,
+                generic_param_bounds,
                 params,
                 ret,
                 throws,
                 ..
             } => {
+                if !generic_params.is_empty() {
+                    write!(f, "<")?;
+                    for (i, param) in generic_params.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{}", param.as_str())?;
+                        if let Some(bound) = generic_param_bounds.get(i).and_then(Option::as_ref) {
+                            write!(f, " extends {bound}")?;
+                        }
+                    }
+                    write!(f, ">")?;
+                }
                 write!(f, "(")?;
                 for (i, p) in params.iter().enumerate() {
                     if i > 0 {
@@ -382,6 +399,9 @@ impl ExprBody {
             }
             Expr::OptionalMemberAccess { base, member } => {
                 format!("{}?.{member}", self.display_expr_inner(*base, depth + 1))
+            }
+            Expr::Upcast { base, target } => {
+                format!("{}.as<{target}>", self.display_expr_inner(*base, depth + 1))
             }
             Expr::Index { base, index } => {
                 format!(
@@ -696,6 +716,11 @@ pub enum Expr {
     MemberAccess {
         base: ExprId,
         member: Name,
+    },
+    /// Explicit static projection/upcast: `expr.as<T>`.
+    Upcast {
+        base: ExprId,
+        target: TypeExpr,
     },
     /// Optional member access: `obj?.member` — short-circuits to null if base is null.
     OptionalMemberAccess {
@@ -1162,6 +1187,7 @@ pub enum Item {
     Function(FunctionDef),
     Class(ClassDef),
     Enum(EnumDef),
+    Interface(InterfaceDef),
     TypeAlias(TypeAliasDef),
     Client(ClientDef),
     Test(TestDef),
@@ -1169,6 +1195,7 @@ pub enum Item {
     TemplateString(TemplateStringDef),
     RetryPolicy(RetryPolicyDef),
     Let(LetDef),
+    ImplementsFor(ImplementsForDef),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1185,6 +1212,10 @@ pub struct FunctionDef {
     pub name: Name,
     /// Generic type parameters (e.g., `["T", "U"]`). Empty for non-generic functions.
     pub generic_params: Vec<Name>,
+    /// BEP-044 generic bounds: parallel to `generic_params`. Each entry
+    /// is the `TypeExpr` after `extends` (e.g. `T extends Named` stores
+    /// `Some(Path(["Named"]))`); `None` for unbounded parameters.
+    pub generic_param_bounds: Vec<Option<TypeExpr>>,
     pub params: Vec<Param>,
     pub defaults: FunctionDefaults,
     pub return_type: Option<SpannedTypeExpr>,
@@ -1294,11 +1325,113 @@ pub struct ClassDef {
     pub generic_params: Vec<Name>,
     pub fields: Vec<FieldDef>,
     pub methods: Vec<FunctionDef>,
+    /// `implements I { ... }` blocks declared inside the class body (BEP-044).
+    pub implements: Vec<ImplementsBlockDef>,
     pub attributes: Vec<RawAttribute>,
     /// Joined `///` doc-comment lines preceding this declaration.
     pub docstring: Option<std::string::String>,
     pub span: TextRange,
     pub name_span: TextRange,
+}
+
+/// Definition of an `interface` declaration (BEP-044).
+///
+/// Interfaces declare a contract over fields and methods. Classes opt in to
+/// the contract via [`ImplementsBlockDef`] inside the class body.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InterfaceDef {
+    pub name: Name,
+    /// Generic type parameters (e.g., `["T"]` for `Container<T>`). Empty for non-generic interfaces.
+    pub generic_params: Vec<Name>,
+    /// BEP-044 generic bounds parallel to `generic_params`. `Some(te)`
+    /// means the parameter at the matching index was declared with
+    /// `T extends <te>`; `None` means unbounded.
+    pub generic_param_bounds: Vec<Option<TypeExpr>>,
+    /// Required interfaces from `requires I1, I2, ...`. Each is parsed as a
+    /// `TypeExpr` so we can accept generic requirements like `Container<int>`.
+    pub requires: Vec<SpannedTypeExpr>,
+    /// Field signatures declared on the interface. Interface fields cannot
+    /// have default values — see BEP-044 §"Interface Fields".
+    pub fields: Vec<FieldDef>,
+    /// Required methods (no body). Implementing classes must provide a body.
+    pub required_methods: Vec<MethodSigDef>,
+    /// Default methods (with body). Implementing classes inherit unless they override.
+    pub default_methods: Vec<FunctionDef>,
+    pub attributes: Vec<RawAttribute>,
+    pub docstring: Option<std::string::String>,
+    pub span: TextRange,
+    pub name_span: TextRange,
+}
+
+/// Method signature declared in an interface body without a body — i.e., a
+/// required method. Mirrors [`FunctionDef`] minus the body.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MethodSigDef {
+    pub name: Name,
+    pub generic_params: Vec<Name>,
+    /// BEP-044 generic bounds parallel to `generic_params`.
+    pub generic_param_bounds: Vec<Option<TypeExpr>>,
+    pub params: Vec<Param>,
+    pub defaults: FunctionDefaults,
+    pub return_type: Option<SpannedTypeExpr>,
+    pub throws: Option<SpannedTypeExpr>,
+    pub attributes: Vec<RawAttribute>,
+    pub docstring: Option<std::string::String>,
+    pub span: TextRange,
+    pub name_span: TextRange,
+}
+
+/// One `implements I { ... }` block inside a class body (BEP-044).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImplementsBlockDef {
+    /// The target interface, captured as a `TypeExpr` so we can accept generic
+    /// parameterization like `implements Container<int>`. The path's first
+    /// segment is the interface name.
+    pub target: SpannedTypeExpr,
+    /// Explicit mappings from interface fields to class fields:
+    /// `interface_field as class_field`.
+    pub field_links: Vec<InterfaceFieldLinkDef>,
+    /// Method overrides / definitions inside this `implements` block.
+    pub methods: Vec<FunctionDef>,
+    /// True when this block came from top-level `implements I for T`.
+    pub is_out_of_body: bool,
+    pub span: TextRange,
+}
+
+impl ImplementsBlockDef {
+    /// Convenience: the interface's simple name (last path segment), used for
+    /// diagnostics. Returns `None` if the target is not a simple path.
+    pub fn interface_name(&self) -> Option<&Name> {
+        match &self.target.expr {
+            TypeExpr::Path { segments, .. } => segments.last(),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InterfaceFieldLinkDef {
+    pub interface_field: Name,
+    pub class_field: Name,
+    pub span: TextRange,
+    pub interface_field_span: TextRange,
+    pub class_field_span: TextRange,
+}
+
+/// Top-level `implements I for T { ... }` block (BEP-044).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImplementsForDef {
+    /// Generic type parameters on the implements block (e.g. `<T>` or `<T extends Named>`).
+    pub generic_params: Vec<(Name, Option<TypeExpr>)>,
+    /// The interface being implemented.
+    pub interface_target: SpannedTypeExpr,
+    /// The type the interface is being implemented for.
+    pub for_target: SpannedTypeExpr,
+    /// Explicit mappings from interface fields to class fields.
+    pub field_links: Vec<InterfaceFieldLinkDef>,
+    /// Method definitions inside the block.
+    pub methods: Vec<FunctionDef>,
+    pub span: TextRange,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -303,9 +303,7 @@ async fn project_id_from_credentials(
                         return Some(pid);
                     }
                     // File path? Read and extract.
-                    if let Ok(handle) = io
-                        .fs_open(val, BexExternalValue::String("r".to_string()))
-                        .await
+                    if let Ok(handle) = io.fs_open(val, BexExternalValue::String("r".into())).await
                     {
                         if let Ok(contents) = io.fs_file_text(&handle).await {
                             if let Some(pid) = extract_project_id_from_json(&contents) {
@@ -383,7 +381,7 @@ async fn project_id_from_adc_config(io: &dyn RuntimeIo) -> Option<String> {
     let adc_path = format!("{config_dir}/application_default_credentials.json");
 
     let handle = io
-        .fs_open(adc_path, BexExternalValue::String("r".to_string()))
+        .fs_open(adc_path, BexExternalValue::String("r".into()))
         .await
         .ok()?;
     let contents = io.fs_file_text(&handle).await.ok()?;
@@ -402,7 +400,7 @@ async fn read_credentials_file(
     io: &dyn RuntimeIo,
 ) -> Result<String, BuildRequestError> {
     let handle = io
-        .fs_open(path.to_string(), BexExternalValue::String("r".to_string()))
+        .fs_open(path.to_string(), BexExternalValue::String("r".into()))
         .await
         .map_err(|e| {
             BuildRequestError::AuthorizationFailed(format!(
@@ -473,7 +471,7 @@ mod native {
             std::thread::spawn(move || {
                 handle.block_on(async {
                     let file_handle = io
-                        .fs_open(path, BexExternalValue::String("r".to_string()))
+                        .fs_open(path, BexExternalValue::String("r".into()))
                         .await
                         .map_err(|_| {
                             std::io::Error::new(std::io::ErrorKind::NotFound, "file not found")
@@ -1423,7 +1421,7 @@ mod tests {
             Box::pin(async move {
                 if exists {
                     Ok(sys_types::runtime_io::FsFileHandle {
-                        raw: bex_external_types::BexExternalValue::String(path),
+                        raw: bex_external_types::BexExternalValue::String(path.into()),
                     })
                 } else {
                     Err(RuntimeIoError::Other("not found".into()))
@@ -1437,7 +1435,7 @@ mod tests {
         ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
             // Extract the path from the handle's raw value.
             let path = match &handle.raw {
-                bex_external_types::BexExternalValue::String(s) => s.clone(),
+                bex_external_types::BexExternalValue::String(s) => s.to_string(),
                 _ => return Box::pin(async { Err(RuntimeIoError::Other("bad handle".into())) }),
             };
             let contents = self.files.get(&path).cloned();

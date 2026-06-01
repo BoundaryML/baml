@@ -75,7 +75,7 @@ function user.ClassifySentiment2$build_request_stream(text: string) -> baml.http
 function user.ClassifySentiment2$parse(json: string) -> string throws never {
   baml.llm.parse<TFinal>("ClassifySentiment2", json) : string
 }
-function user.$init_test_35(registry: testing.TestCollector) -> ? throws never {
+function user.$init_test_main(registry: testing.TestCollector) -> ? throws never {
   { : null
     registry.register_test_set("test", (testset: testing.TestCollector) -> void { ... }, null) : void
       (testset: testing.TestCollector) -> void { ... } : (testset: testing.TestCollector) -> void throws unknown
@@ -91,17 +91,17 @@ function user.$init_test_35(registry: testing.TestCollector) -> ? throws never {
     null : null
   }
 }
-lambda user.$init_test_35 {
+lambda user.$init_test_main {
 }
-lambda user.$init_test_35 {
+lambda user.$init_test_main {
 }
-lambda user.$init_test_35 {
+lambda user.$init_test_main {
 }
-lambda user.$init_test_35 {
+lambda user.$init_test_main {
 }
-lambda user.$init_test_35 {
+lambda user.$init_test_main {
 }
-lambda user.$init_test_35 {
+lambda user.$init_test_main {
 }
 class user.Sentiment$stream {
   feeling: null | string

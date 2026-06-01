@@ -8,7 +8,7 @@ function user.namespaced_generic_class_type_pattern_requires_type_args(boxed: us
       root.llm.openai.Box =>
         1 : 1
   }
-  !! 127..155: type mismatch: expected user.llm.openai.Box<int>, got user.llm.openai.Box
+  !! 127..155: type mismatch: expected llm.openai.Box<int>, got llm.openai.Box
 }
 function user.namespace_relative_generic_class_type_pattern_requires_type_args(boxed: user.llm.openai.Box<int>) -> int throws never {
   { : 1
@@ -16,7 +16,7 @@ function user.namespace_relative_generic_class_type_pattern_requires_type_args(b
       llm.openai.Box =>
         1 : 1
   }
-  !! 300..323: type mismatch: expected user.llm.openai.Box<int>, got user.llm.openai.Box
+  !! 300..323: type mismatch: expected llm.openai.Box<int>, got llm.openai.Box
 }
 function user.namespaced_generic_class_type_pattern_rejects_extra_type_args(boxed: user.llm.openai.Box<int>) -> int throws never {
   { : 1 | 0
@@ -26,7 +26,7 @@ function user.namespaced_generic_class_type_pattern_rejects_extra_type_args(boxe
       _ =>
         0 : 0
   }
-  !! 470..511: type mismatch: expected user.llm.openai.Box<int>, got user.llm.openai.Box<int, string>
+  !! 470..511: type mismatch: expected llm.openai.Box<int>, got llm.openai.Box<int, string>
   !! 531..532: unreachable arm
 }
 function user.namespaced_non_generic_class_type_pattern_rejects_type_args(response: user.llm.openai.Response) -> int throws never {
@@ -35,7 +35,7 @@ function user.namespaced_non_generic_class_type_pattern_rejects_type_args(respon
       root.llm.openai.Response<int> =>
         1 : 1
   }
-  !! 678..716: type mismatch: expected user.llm.openai.Response, got user.llm.openai.Response<int>
+  !! 678..716: type mismatch: expected llm.openai.Response, got llm.openai.Response<int>
 }
 function user.namespaced_class_destructure_unknown_field(response: user.llm.openai.Response) -> int throws never {
   { : 1 | 0

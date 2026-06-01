@@ -7,9 +7,9 @@ fn user.OpenRouterMistralSmall3_1_24b$new() -> null {
     let _0: null // _0 // return
     let _1: baml.llm.PrimitiveClientOptions
     let _2: string
-    let _3: map<void, void>
-    let _4: map<void, void>
-    let _5: map<string, float>
+    let _3: map<string, string>
+    let _4: map<string, string>
+    let _5: map<string, unknown>
 
     bb0: {
         _2 = call const fn baml.env.get_or_panic(const "OPENROUTER_API_KEY") -> [bb1];

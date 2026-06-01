@@ -11,6 +11,11 @@ pub enum SyntaxKind {
     // Top-level declaration keywords
     KW_CLASS,
     KW_ENUM,
+    KW_INTERFACE,
+    KW_IMPLEMENTS,
+    KW_IMPLEMENT,
+    KW_EXTENDS,
+    KW_REQUIRES,
     KW_FUNCTION,
     KW_CLIENT,
     KW_GENERATOR,
@@ -146,6 +151,7 @@ pub enum SyntaxKind {
     FUNCTION_DEF,
     CLASS_DEF,
     ENUM_DEF,
+    INTERFACE_DEF,
     CLIENT_DEF,
     GENERATOR_DEF,
     TEST_DEF,
@@ -171,6 +177,16 @@ pub enum SyntaxKind {
     // Class components
     FIELD_LIST,
     FIELD,
+
+    // Interface components
+    METHOD_SIG,            // function name(params) -> ReturnType (no body)
+    EXTENDS_CLAUSE,        // reserved legacy node; interfaces use `requires`
+    REQUIRES_CLAUSE,       // requires I1, I2
+    IMPLEMENTS_BLOCK,      // implements I { ... } inside a class
+    IMPLEMENTS_TARGET,     // the interface name (path) in `implements I`
+    INTERFACE_FIELD_LINK,  // interface_field as class_field inside `implements`
+    IMPLEMENTS_FOR,        // implements I for T { ... } at top level
+    IMPLEMENTS_FOR_TARGET, // the `T` in `implements I for T`
 
     // Enum components
     ENUM_VARIANT_LIST,
@@ -230,6 +246,8 @@ pub enum SyntaxKind {
     ///   module item, or function reference
     /// - `FIELD_ACCESS_EXPR` is always a field/method access on a computed value
     FIELD_ACCESS_EXPR,
+    /// Explicit interface/static upcast projection: `<expr>.as<T>`.
+    UPCAST_EXPR,
     /// Optional field access: `obj?.field` — short-circuits to null if base is null.
     ///
     /// Structure: `<base_expr> QUESTION_DOT WORD`
@@ -347,6 +365,10 @@ pub enum SyntaxKind {
     GENERIC_PARAM_LIST,
     /// A single type parameter name inside a `GENERIC_PARAM_LIST`.
     GENERIC_PARAM,
+    /// BEP-044: optional bounds on a generic parameter, e.g. `T extends
+    /// Iface` or `T extends A & B`. Holds one or more `TYPE_EXPR`
+    /// children — multiple entries form an intersection bound.
+    GENERIC_PARAM_BOUNDS,
     OBJECT_LITERAL,
     OBJECT_FIELD,
     SPREAD_ELEMENT, // ...expr in object/array literals
@@ -474,6 +496,11 @@ impl SyntaxKind {
             self,
             Self::KW_CLASS
                 | Self::KW_ENUM
+                | Self::KW_INTERFACE
+                | Self::KW_IMPLEMENTS
+                | Self::KW_IMPLEMENT
+                | Self::KW_EXTENDS
+                | Self::KW_REQUIRES
                 | Self::KW_FUNCTION
                 | Self::KW_CLIENT
                 | Self::KW_GENERATOR

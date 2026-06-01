@@ -12,7 +12,7 @@ use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
 
 fn ok_string(s: &str) -> Result<BexExternalValue, bex_engine::EngineError> {
-    Ok(BexExternalValue::String(s.to_string()))
+    Ok(BexExternalValue::String(s.into()))
 }
 
 #[tokio::test]

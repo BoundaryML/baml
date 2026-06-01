@@ -59,6 +59,30 @@ fn call_main(engine: &Arc<BexEngine>) -> BexExternalValue {
     .expect("benchmark execution failed")
 }
 
+/// Benchmark a pure-runtime workload: compile `source` and build the tokio
+/// runtime ONCE (outside the measured region), then measure only the cost of
+/// calling `main()` on the resulting engine.
+///
+/// `BexEngine::call_function` takes `&Arc<Self>` and builds a fresh call context
+/// per call, so one compiled engine serves every sample — there is no need to
+/// recompile (the expensive part) on each iteration.
+fn bench_vm_main(bencher: Bencher, source: &str) {
+    let (_db, engine) = compile_source(source);
+    let engine = Arc::new(engine);
+    let rt = tokio::runtime::Runtime::new().expect("failed to build tokio runtime");
+    bencher.bench(|| {
+        black_box(
+            rt.block_on(engine.call_function(
+                "main",
+                vec![],
+                FunctionCallContextBuilder::new(CallId::next()).build(),
+                true,
+            ))
+            .expect("benchmark execution failed"),
+        )
+    });
+}
+
 /// Generate a chain of N functions: f0 -> f1 -> ... -> f{N-1}.
 /// Each adds 1 to its argument. main() calls f0(0) in a loop.
 fn generate_call_chain(depth: usize, iterations: usize) -> String {
@@ -184,30 +208,22 @@ function main() -> int { fib(10) }
 
 #[divan::bench]
 fn vm_fib_20(bencher: Bencher) {
-    bencher
-        .with_inputs(|| {
-            let (db, engine) = compile_source(
-                r#"
+    bench_vm_main(
+        bencher,
+        r#"
 function fib(n: int) -> int {
   if n <= 1 { n } else { fib(n - 1) + fib(n - 2) }
 }
 function main() -> int { fib(20) }
 "#,
-            );
-            (db, Arc::new(engine))
-        })
-        .bench_values(|(db, engine)| {
-            let _ = &db;
-            black_box(call_main(&engine));
-        });
+    );
 }
 
 #[divan::bench]
 fn vm_loop_500k(bencher: Bencher) {
-    bencher
-        .with_inputs(|| {
-            let (db, engine) = compile_source(
-                r#"
+    bench_vm_main(
+        bencher,
+        r#"
 function main() -> int {
   let sum = 0;
   for (let i = 0; i < 500000; i += 1) {
@@ -216,21 +232,14 @@ function main() -> int {
   return sum;
 }
 "#,
-            );
-            (db, Arc::new(engine))
-        })
-        .bench_values(|(db, engine)| {
-            let _ = &db;
-            black_box(call_main(&engine));
-        });
+    );
 }
 
 #[divan::bench]
 fn vm_string_concat_5k(bencher: Bencher) {
-    bencher
-        .with_inputs(|| {
-            let (db, engine) = compile_source(
-                r#"
+    bench_vm_main(
+        bencher,
+        r#"
 function main() -> int {
   let s = "";
   for (let i = 0; i < 5000; i += 1) {
@@ -239,21 +248,14 @@ function main() -> int {
   return s.length();
 }
 "#,
-            );
-            (db, Arc::new(engine))
-        })
-        .bench_values(|(db, engine)| {
-            let _ = &db;
-            black_box(call_main(&engine));
-        });
+    );
 }
 
 #[divan::bench]
 fn vm_array_push_50k(bencher: Bencher) {
-    bencher
-        .with_inputs(|| {
-            let (db, engine) = compile_source(
-                r#"
+    bench_vm_main(
+        bencher,
+        r#"
 function main() -> int {
   let arr: int[] = [];
   for (let i = 0; i < 50000; i += 1) {
@@ -262,21 +264,14 @@ function main() -> int {
   return arr.length();
 }
 "#,
-            );
-            (db, Arc::new(engine))
-        })
-        .bench_values(|(db, engine)| {
-            let _ = &db;
-            black_box(call_main(&engine));
-        });
+    );
 }
 
 #[divan::bench]
 fn vm_array_iter_10k(bencher: Bencher) {
-    bencher
-        .with_inputs(|| {
-            let (db, engine) = compile_source(
-                r#"
+    bench_vm_main(
+        bencher,
+        r#"
 function build_array() -> int[] {
   let arr: int[] = [];
   for (let i = 0; i < 10000; i += 1) {
@@ -294,21 +289,14 @@ function main() -> int {
   return s;
 }
 "#,
-            );
-            (db, Arc::new(engine))
-        })
-        .bench_values(|(db, engine)| {
-            let _ = &db;
-            black_box(call_main(&engine));
-        });
+    );
 }
 
 #[divan::bench]
 fn vm_class_create_50k(bencher: Bencher) {
-    bencher
-        .with_inputs(|| {
-            let (db, engine) = compile_source(
-                r#"
+    bench_vm_main(
+        bencher,
+        r#"
 class Point {
   x int
   y int
@@ -323,21 +311,14 @@ function main() -> int {
   return s;
 }
 "#,
-            );
-            (db, Arc::new(engine))
-        })
-        .bench_values(|(db, engine)| {
-            let _ = &db;
-            black_box(call_main(&engine));
-        });
+    );
 }
 
 #[divan::bench]
 fn vm_wide_nested_class_create_50k(bencher: Bencher) {
-    bencher
-        .with_inputs(|| {
-            let (db, engine) = compile_source(
-                r#"
+    bench_vm_main(
+        bencher,
+        r#"
 class Leaf {
   a int
   b int
@@ -405,21 +386,14 @@ function main() -> int {
   return s;
 }
 "#,
-            );
-            (db, Arc::new(engine))
-        })
-        .bench_values(|(db, engine)| {
-            let _ = &db;
-            black_box(call_main(&engine));
-        });
+    );
 }
 
 #[divan::bench]
 fn vm_field_access_50k(bencher: Bencher) {
-    bencher
-        .with_inputs(|| {
-            let (db, engine) = compile_source(
-                r#"
+    bench_vm_main(
+        bencher,
+        r#"
 class Point {
   x int
   y int
@@ -435,35 +409,20 @@ function main() -> int {
   return s;
 }
 "#,
-            );
-            (db, Arc::new(engine))
-        })
-        .bench_values(|(db, engine)| {
-            let _ = &db;
-            black_box(call_main(&engine));
-        });
+    );
 }
 
 #[divan::bench]
 fn vm_call_chain_100_x_5k(bencher: Bencher) {
-    bencher
-        .with_inputs(|| {
-            let source = generate_call_chain(100, 5000);
-            let (db, engine) = compile_source(&source);
-            (db, Arc::new(engine))
-        })
-        .bench_values(|(db, engine)| {
-            let _ = &db;
-            black_box(call_main(&engine));
-        });
+    let source = generate_call_chain(100, 5000);
+    bench_vm_main(bencher, &source);
 }
 
 #[divan::bench]
 fn vm_nested_loop(bencher: Bencher) {
-    bencher
-        .with_inputs(|| {
-            let (db, engine) = compile_source(
-                r#"
+    bench_vm_main(
+        bencher,
+        r#"
 function main() -> int {
   let sum = 0;
   for (let i = 0; i < 200; i += 1) {
@@ -474,21 +433,14 @@ function main() -> int {
   return sum;
 }
 "#,
-            );
-            (db, Arc::new(engine))
-        })
-        .bench_values(|(db, engine)| {
-            let _ = &db;
-            black_box(call_main(&engine));
-        });
+    );
 }
 
 #[divan::bench]
 fn vm_mixed_ops(bencher: Bencher) {
-    bencher
-        .with_inputs(|| {
-            let (db, engine) = compile_source(
-                r#"
+    bench_vm_main(
+        bencher,
+        r#"
 class Point {
   x int
   y int
@@ -509,21 +461,14 @@ function main() -> int {
   return sum + s.length() + arr.length();
 }
 "#,
-            );
-            (db, Arc::new(engine))
-        })
-        .bench_values(|(db, engine)| {
-            let _ = &db;
-            black_box(call_main(&engine));
-        });
+    );
 }
 
 #[divan::bench]
 fn vm_closure_call_50k(bencher: Bencher) {
-    bencher
-        .with_inputs(|| {
-            let (db, engine) = compile_source(
-                r#"
+    bench_vm_main(
+        bencher,
+        r#"
 function add_one(n: int) -> int { n + 1 }
 
 function main() -> int {
@@ -535,13 +480,7 @@ function main() -> int {
   return s;
 }
 "#,
-            );
-            (db, Arc::new(engine))
-        })
-        .bench_values(|(db, engine)| {
-            let _ = &db;
-            black_box(call_main(&engine));
-        });
+    );
 }
 
 // ============================================================================

@@ -565,6 +565,10 @@ fn expr_desc_spans<'db>(
             spans.extend(expr_desc_spans(*base, body, inference));
             spans.push(DetailSpan::Code(format!(".{member}")));
         }
+        Expr::Upcast { base, target } => {
+            spans.extend(expr_desc_spans(*base, body, inference));
+            spans.push(DetailSpan::Code(format!(".as<{target}>")));
+        }
         Expr::OptionalMemberAccess { base, member } => {
             spans.extend(expr_desc_spans(*base, body, inference));
             spans.push(DetailSpan::Code(format!("?.{member}")));
@@ -2095,6 +2099,9 @@ impl CompilerRunner {
                 }
                 Expr::MemberAccess { base, member } => {
                     format!("{}.{member}", expr_desc(*base, body))
+                }
+                Expr::Upcast { base, target } => {
+                    format!("{}.as<{target}>", expr_desc(*base, body))
                 }
                 Expr::OptionalMemberAccess { base, member } => {
                     format!("{}?.{member}", expr_desc(*base, body))
@@ -4280,6 +4287,10 @@ fn format_item_tree(item: &AstItem, output: &mut String, indent: usize) {
         Item::Function(func) => format_function(func, output, indent),
         Item::Class(class) => format_class(class, output, indent),
         Item::Enum(enum_def) => format_enum(enum_def, output, indent),
+        Item::Interface(interface) => format_interface(interface, output, indent),
+        Item::ImplementsFor(implements_for) => {
+            format_implements_for(implements_for, output, indent)
+        }
         Item::Client(client) => format_client(client, output, indent),
         Item::Test(test) => format_test(test, output, indent),
         Item::RetryPolicy(policy) => format_retry_policy(policy, output, indent),
@@ -4740,6 +4751,133 @@ fn format_class(class: &baml_compiler_syntax::ast::ClassDef, output: &mut String
         writeln!(output, "FIELDS").ok();
         for field in fields {
             format_field(&field, output, indent + 2);
+        }
+    }
+}
+
+fn format_interface(
+    interface: &baml_compiler_syntax::ast::InterfaceDef,
+    output: &mut String,
+    indent: usize,
+) {
+    write_indent(output, indent);
+    writeln!(output, "INTERFACE").ok();
+
+    if let Some(name) = interface.name() {
+        write_indent(output, indent + 1);
+        writeln!(output, "NAME {}", name.text()).ok();
+    }
+
+    let parents: Vec<_> = interface
+        .requires_clause()
+        .map(|requires| requires.parents().collect())
+        .unwrap_or_default();
+    if !parents.is_empty() {
+        write_indent(output, indent + 1);
+        writeln!(output, "REQUIRES").ok();
+        for parent in parents {
+            write_indent(output, indent + 2);
+            writeln!(output, "TYPE {}", parent.syntax().text()).ok();
+        }
+    }
+
+    let fields: Vec<_> = interface.fields().collect();
+    if !fields.is_empty() {
+        write_indent(output, indent + 1);
+        writeln!(output, "FIELDS").ok();
+        for field in fields {
+            format_field(&field, output, indent + 2);
+        }
+    }
+
+    let required_methods: Vec<_> = interface.required_methods().collect();
+    if !required_methods.is_empty() {
+        write_indent(output, indent + 1);
+        writeln!(output, "REQUIRED_METHODS").ok();
+        for method in required_methods {
+            format_method_sig(&method, output, indent + 2);
+        }
+    }
+
+    let default_methods: Vec<_> = interface.default_methods().collect();
+    if !default_methods.is_empty() {
+        write_indent(output, indent + 1);
+        writeln!(output, "DEFAULT_METHODS").ok();
+        for method in default_methods {
+            format_function(&method, output, indent + 2);
+        }
+    }
+}
+
+fn format_method_sig(
+    sig: &baml_compiler_syntax::ast::MethodSig,
+    output: &mut String,
+    indent: usize,
+) {
+    write_indent(output, indent);
+    writeln!(output, "METHOD_SIG").ok();
+
+    if let Some(name) = sig.name() {
+        write_indent(output, indent + 1);
+        writeln!(output, "NAME {}", name.text()).ok();
+    }
+
+    if let Some(param_list) = sig.param_list() {
+        let params: Vec<_> = param_list.params().collect();
+        if !params.is_empty() {
+            write_indent(output, indent + 1);
+            writeln!(output, "PARAMS").ok();
+            for param in params {
+                format_parameter(&param, output, indent + 2);
+            }
+        }
+    }
+
+    if let Some(return_type) = sig.return_type() {
+        write_indent(output, indent + 1);
+        writeln!(output, "RETURN_TYPE {}", return_type.syntax().text()).ok();
+    }
+}
+
+fn format_implements_for(
+    implements_for: &baml_compiler_syntax::ast::ImplementsFor,
+    output: &mut String,
+    indent: usize,
+) {
+    write_indent(output, indent);
+    writeln!(output, "IMPLEMENTS_FOR").ok();
+
+    if let Some(target) = implements_for
+        .target()
+        .and_then(|target| target.type_expr())
+    {
+        write_indent(output, indent + 1);
+        writeln!(output, "INTERFACE {}", target.syntax().text()).ok();
+    }
+
+    if let Some(for_target) = implements_for
+        .for_target()
+        .and_then(|target| target.type_expr())
+    {
+        write_indent(output, indent + 1);
+        writeln!(output, "FOR {}", for_target.syntax().text()).ok();
+    }
+
+    let fields: Vec<_> = implements_for.fields().collect();
+    if !fields.is_empty() {
+        write_indent(output, indent + 1);
+        writeln!(output, "FIELDS").ok();
+        for field in fields {
+            format_field(&field, output, indent + 2);
+        }
+    }
+
+    let methods: Vec<_> = implements_for.methods().collect();
+    if !methods.is_empty() {
+        write_indent(output, indent + 1);
+        writeln!(output, "METHODS").ok();
+        for method in methods {
+            format_function(&method, output, indent + 2);
         }
     }
 }

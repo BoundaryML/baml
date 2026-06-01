@@ -24,7 +24,7 @@ function user.case_b_class_without_to_string() -> string throws never {
     let f = FooNoToString { x: 1 } : user.FooNoToString
     "val: " + { 0 stmts + tail }.to_string() : string
   }
-  !! 1152..1156: type `user.FooNoToString` has no member `to_string`
+  !! 1152..1156: type `FooNoToString` has no member `to_string`
 }
 function user.get_count() -> int? throws never {
   { : 42

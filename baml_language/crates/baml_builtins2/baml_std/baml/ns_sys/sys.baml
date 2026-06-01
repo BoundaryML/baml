@@ -38,22 +38,24 @@ function sleep(ms: int) -> null throws root.errors.Io {
 }
 
 /// Panics with `message`, throwing a `baml.panics.UserPanic`. Never returns.
-function panic(message: string) -> never {
+//baml:fallible
+function panic(message: string) -> never throws never {
   $rust_function
 }
 
 /// Terminates the process with the given exit `code`. Throws `baml.panics.Exit` which, if unhandled, exits the process.
-function exit(code: int) -> never {
+//baml:fallible
+function exit(code: int) -> never throws never {
   $rust_function
 }
 
 /// Returns the current time as milliseconds since the Unix epoch (UTC).
-function now_ms() -> int {
+function now_ms() -> int throws never {
   $rust_function
 }
 
 //baml:mut_vm
 /// Returns the command-line arguments passed to the BAML program, as an array of strings.
-function argv() -> string[] {
+function argv() -> string[] throws never {
   $rust_function
 }

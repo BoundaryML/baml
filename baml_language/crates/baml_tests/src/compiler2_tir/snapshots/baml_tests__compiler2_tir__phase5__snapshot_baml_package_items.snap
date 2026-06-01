@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/compiler2_tir/phase5.rs
-assertion_line: 389
 expression: output
 ---
 namespace baml:
@@ -11,9 +10,9 @@ namespace baml:
   class Int { methods: [to_json, to_string, abs, min, max, clamp, isqrt, pow, ilog, leading_zeros, leading_ones, trailing_zeros, trailing_ones, count_zeros, count_ones, parse, random, max_value, min_value, from_json] }
   class Map<K, V> { methods: [length, has, keys, values, set, get, to_json, delete, get_or_insert, clear, from_json] }
   class Null { methods: [to_json, from_json] }
-  class String { methods: [to_json, to_string, length, char_count, to_lower_case, to_upper_case, trim, trim_start, trim_end, includes, starts_with, ends_with, split, lines, substring, replace, index_of, char_at, code_point_at, matches, replace_all, is_numeric, is_alphabetic, is_alphanumeric, is_uppercase, is_lowercase, is_whitespace, is_control, is_graphic, is_ascii, is_ascii_numeric, is_ascii_alphabetic, is_ascii_alphanumeric, is_ascii_uppercase, is_ascii_lowercase, is_ascii_whitespace, is_ascii_control, is_ascii_graphic, is_ascii_hex, to_utf8, from_utf8, from_code_points, from_json] }
+  class String { methods: [to_json, to_string, length, char_count, byte_length, to_lower_case, to_upper_case, trim, trim_start, trim_end, includes, starts_with, ends_with, split, lines, substring, replace, index_of, char_at, repeat, matches, replace_all, is_numeric, is_alphabetic, is_alphanumeric, is_uppercase, is_lowercase, is_whitespace, is_control, is_graphic, is_ascii, is_ascii_numeric, is_ascii_alphabetic, is_ascii_alphanumeric, is_ascii_uppercase, is_ascii_lowercase, is_ascii_whitespace, is_ascii_control, is_ascii_graphic, is_ascii_hex, to_utf8, from_utf8, from_code_points, from_json] }
   class TaggedString { methods: [to_json, from_json] }
-  class TypeValue { methods: [to_string, to_json, from_json] }
+  class TypeValue { methods: [to_string, implements, implemented_by, implementors, to_json, from_json] }
   class Uint8Array { methods: [to_json, length, at, push, pop, concat, includes, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, to_string, sort, from_json] }
   function deep_copy<T>
   function deep_equals<T>
@@ -140,6 +139,7 @@ namespace baml.panics:
   class Exit { methods: [to_json, from_json] }
   class HostUnavailable { methods: [to_json, from_json] }
   class IndexOutOfBounds { methods: [to_json, from_json] }
+  class InvalidFieldAccess { methods: [to_json, from_json] }
   class MapKeyNotFound { methods: [to_json, from_json] }
   class NegativeBitShift { methods: [to_json, from_json] }
   type Panic
@@ -160,5 +160,8 @@ namespace baml.sys:
   function panic
   function shell
   function sleep
+namespace baml.time:
+  class Duration { methods: [abs, from_nanoseconds, from_microseconds, from_milliseconds, from_seconds, from_minutes, from_hours, to_nanoseconds, to_microseconds, to_milliseconds, to_seconds, to_minutes, to_hours, to_json, from_json] }
+  class Instant { methods: [now, elapsed, parse, to_string, from_json, to_json, max, min, abs_diff, from_timestamp_nanoseconds, from_timestamp_microseconds, from_timestamp_milliseconds, from_timestamp_seconds, to_timestamp_nanoseconds, to_timestamp_microseconds, to_timestamp_milliseconds, to_timestamp_seconds, epoch] }
 namespace baml.unstable:
   function string<T>

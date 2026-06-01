@@ -203,7 +203,6 @@ jobs:
             ':typescript2/pkg-playground/**' \
             ':typescript2/pkg-proto/**' \
             ':baml_language/crates/bridge_ctypes/types/**' \
-            ':baml_language/crates/baml_playground_wasm/**' \
             ':.github/workflows/webview-tests.reusable.yaml' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -471,6 +470,194 @@ jobs:
           fi
           echo "All generated proto files are in sync."
 
+  # Benchmarks are split into two jobs so the slow compile happens on a fast,
+  # cheap machine while the actual measurement happens on a stable CodSpeed
+  # macro runner.
+  #
+  #   benchmarks-build  -> compiles the bench binaries (the part that used to
+  #                        time out on the small CodSpeed runner)
+  #   benchmarks-run    -> ONLY executes those prebuilt binaries on codspeed-macro
+  #
+  # CRITICAL — no double-build / flag mismatch:
+  #   `cargo codspeed build` compiles each bench target with CodSpeed's own
+  #   compilation flags and copies the resulting executables into
+  #   target/codspeed/walltime/<pkg>/<bench>. `cargo codspeed run` then ONLY
+  #   executes those copies — it never invokes the compiler. So the run job
+  #   cannot accidentally rebuild with default flags; if the artifact is missing
+  #   it errors ("No benchmarks found") instead of measuring the wrong binary.
+  #
+  # CRITICAL — ABI match:
+  #   codspeed-macro is an ARM64 machine, so the binaries MUST be built on ARM64
+  #   too. We build on the OLDEST Ubuntu we have an ARM runner for (22.04,
+  #   glibc 2.35) so the binaries stay forward-compatible with whatever (newer
+  #   or equal) glibc the macro runner ships.
+  benchmarks-build:
+    name: "benchmarks build (baml)"
+    runs-on: blacksmith-8vcpu-ubuntu-2204-arm
+    needs: determine_changes
+    # Runs automatically on ANY change under baml_language/ (determine_changes'
+    # `code` flag = `git diff ... ':baml_language/**'`), so every PR that could
+    # affect perf is measured. Also runs on push to main/canary, and on manual
+    # opt-in (RUN_CODSPEED=1 in the PR body) for PRs that don't touch
+    # baml_language/. Skipped in merge_group (already ran on the PR).
+    if: |
+      github.event_name != 'merge_group' &&
+      (
+        needs.determine_changes.outputs.code == 'true' ||
+        github.ref == 'refs/heads/main' ||
+        github.ref == 'refs/heads/canary' ||
+        contains(github.event.pull_request.body, 'RUN_CODSPEED=1')
+      )
+    timeout-minutes: 30
+    steps:
+      - name: "Checkout Branch"
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      # Swatinem caches the compiled target/ for this build job's own speed
+      # (canary is the sole saver; PRs restore read-only). It is bench-specific
+      # on purpose — its only saver compiles just baml_tests benches, a thin
+      # seed not worth sharing with a general ARM job.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
+          cache-all-crates: true
+          cache-workspace-crates: true
+          shared-key: "linux-arm-bench"
+
+      # Pin to the same major+minor as codspeed-divan-compat in Cargo.lock
+      # (4.7.0). cargo codspeed run aborts on a major-version mismatch.
+      - name: "Install cargo-codspeed"
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-codspeed@4.7.0
+
+      # Only runtime_benchmark — cache_profile is a macOS/kperf harness that's a
+      # no-op on Linux, so there's no reason to build or run it here.
+      - name: "Build benchmarks (walltime)"
+        run: cargo codspeed build -p baml_tests --bench runtime_benchmark -m walltime
+        working-directory: baml_language
+
+      - name: "Upload prebuilt benchmark binaries"
+        uses: actions/upload-artifact@v7
+        with:
+          name: codspeed-walltime-benches
+          path: baml_language/target/codspeed/walltime
+          if-no-files-found: error
+          retention-days: 1
+
+      # Hand the resolved cargo home to benchmarks-run via an ARTIFACT, not a
+      # cache. actions/cache addresses entries by (key, version) where version
+      # depends on the runner's compression tooling, so a cache saved on this
+      # blacksmith runner is invisible to the codspeed-macro run job even with an
+      # identical key (verified: same key 4f01266e…, "Cache not found"). Artifacts
+      # are content-addressed by name and transfer cleanly across runners.
+      # benchmarks-run untars this into ~/.cargo so its offline `cargo metadata`
+      # has every dep locally — no ~24-min cold git re-clone.
+      # Exclude registry/src (extracted dep sources — the bulk of ~/.cargo). The
+      # run job only does offline `cargo metadata`, which needs the registry
+      # index + git checkouts, not the unpacked sources, so this keeps the
+      # artifact (and the run job's download/untar) small.
+      - name: "Pack cargo home for benchmarks-run"
+        run: tar -C "$HOME" --exclude='.cargo/registry/src' -cf cargo-home.tar .cargo/registry .cargo/git
+      - name: "Upload cargo home"
+        uses: actions/upload-artifact@v7
+        with:
+          name: codspeed-cargo-home
+          path: cargo-home.tar
+          if-no-files-found: error
+          retention-days: 1
+
+  benchmarks-run:
+    name: "benchmarks instrumented (baml)"
+    runs-on: codspeed-macro
+    needs:
+      - determine_changes
+      - benchmarks-build
+    if: |
+      github.event_name != 'merge_group' &&
+      (
+        needs.determine_changes.outputs.code == 'true' ||
+        github.ref == 'refs/heads/main' ||
+        github.ref == 'refs/heads/canary' ||
+        contains(github.event.pull_request.body, 'RUN_CODSPEED=1')
+      )
+    timeout-minutes: 30
+    steps:
+      - name: "Checkout Branch"
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # `cargo codspeed run` needs `cargo metadata` to locate the benches and
+      # their working directories. It does NOT compile anything here.
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      # Restore the resolved cargo home that benchmarks-build packed, so this
+      # job's offline `cargo metadata` has every dep locally instead of cold
+      # re-cloning git deps on the bare codspeed-macro runner (~24 min). Comes
+      # via artifact, not cache — see the build job for why cache misses here.
+      - name: "Download cargo home"
+        uses: actions/download-artifact@v7
+        with:
+          name: codspeed-cargo-home
+          path: /tmp/cargo-home
+      - name: "Unpack cargo home into ~/.cargo"
+        run: tar -C "$HOME" -xf /tmp/cargo-home/cargo-home.tar
+
+      - name: "Install cargo-codspeed"
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-codspeed@4.7.0
+
+      - name: "Download prebuilt benchmark binaries"
+        uses: actions/download-artifact@v7
+        with:
+          name: codspeed-walltime-benches
+          path: baml_language/target/codspeed/walltime
+
+      # actions/upload-artifact drops the Unix executable bit; restore it so the
+      # binaries can be exec'd by `cargo codspeed run`.
+      - name: "Restore executable bit on bench binaries"
+        run: chmod -R +x baml_language/target/codspeed/walltime
+
+      - name: "Run benchmarks (walltime)"
+        uses: CodSpeedHQ/action@v4
+        # Benchmarks are advisory — never block a merge on a measurement blip.
+        continue-on-error: true
+        env:
+          # The cargo home is restored above, so `cargo metadata` has every dep
+          # locally. Force offline so it physically cannot stall on the network
+          # (no index update, no git fetch) — turns the old ~24-min metadata
+          # phase into seconds. Fails fast and loud if the cache ever misses,
+          # instead of silently re-cloning for half an hour.
+          CARGO_NET_OFFLINE: "true"
+        with:
+          mode: walltime
+          # Executes ONLY the prebuilt binaries downloaded above; no compiler runs.
+          #
+          # The `vm_|engine_init` filter selects only the benches that measure
+          # *runtime* (VM execution / engine init from prebuilt bytecode). The
+          # excluded `compile_to_engine`, `startup_empty_expression`, and `e2e_*`
+          # benches time compilation inside the measured region — out of scope for
+          # this runtime perf suite.
+          #
+          # These benches compile the project + build the tokio runtime once,
+          # outside the measured region (see bench_vm_main), so the full suite is
+          # ~2 min/pass on the macro runner at the default 100 samples — well
+          # within the timeout, no sample-count tuning needed.
+          run: cd baml_language && cargo codspeed run -m walltime 'vm_|engine_init'
+          token: ${{ secrets.CODSPEED_TOKEN }}
+
   # CI Failure Alert - Required status check using "skipped = success" pattern
   # See: https://devopsdirective.com/posts/2025/08/github-actions-required-checks-for-conditional-jobs/
   #
@@ -492,6 +679,7 @@ jobs:
       - webview-tests
       # - miri-tests  # TEMPORARILY DISABLED: miri tests timing out
       - proto-sync
+      - size-gate
     # Only run if something failed or was cancelled (otherwise skip → success)
     if: ${{ failure() || cancelled() }}
     steps:
@@ -512,6 +700,7 @@ jobs:
           echo "| webview-tests | ${{ needs.webview-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           # echo "| miri-tests | ${{ needs.miri-tests.result }} |" >> $GITHUB_STEP_SUMMARY  # TEMPORARILY DISABLED
           echo "| proto-sync | ${{ needs.proto-sync.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| size-gate | ${{ needs.size-gate.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "::error::One or more CI jobs failed!"
           exit 1

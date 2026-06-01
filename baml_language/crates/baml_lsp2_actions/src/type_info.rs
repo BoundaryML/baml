@@ -74,10 +74,11 @@ pub enum TypeInfo {
         throws: Option<String>,
         note: Option<String>,
     },
-    /// A class definition: name, fields (name + type string).
+    /// A class definition: name, fields (name + type string), implemented interfaces.
     Class {
         name: String,
         fields: Vec<(String, String)>,
+        implements: Vec<String>,
     },
     /// An enum definition: name, variants.
     Enum { name: String, variants: Vec<String> },
@@ -126,17 +127,27 @@ impl TypeInfo {
                 }
                 out
             }
-            TypeInfo::Class { name, fields } => {
-                let field_strs: Vec<String> = fields
+            TypeInfo::Class {
+                name,
+                fields,
+                implements,
+            } => {
+                let mut member_strs: Vec<String> = fields
                     .iter()
                     .map(|(n, t)| format!("    {n}: {t}"))
                     .collect();
-                if field_strs.is_empty() {
+                member_strs.extend(
+                    implements
+                        .iter()
+                        .map(|target| format!("    implements {target} {{}}")),
+                );
+
+                if member_strs.is_empty() {
                     format!("```baml\nclass {name} {{}}\n```")
                 } else {
                     format!(
                         "```baml\nclass {name} {{\n{}\n}}\n```",
-                        field_strs.join("\n")
+                        member_strs.join("\n")
                     )
                 }
             }
@@ -290,17 +301,17 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
                         .as_ref()
                         .map(|name| name.as_str().to_string())
                         .unwrap_or_else(|| "_".to_string()),
-                    ty: display_surface_ty(&param.ty),
+                    ty: display_surface_ty(db, file, &param.ty),
                     optional: param.is_optional(),
                 })
                 .collect();
-            let return_type = Some(display_surface_ty(&exported.return_type));
+            let return_type = Some(display_surface_ty(db, file, &exported.return_type));
             let throws = if exported.declared_throws.is_some()
                 || !matches!(
                     exported.callable_throws,
                     baml_compiler2_tir::ty::Ty::Never { .. }
                 ) {
-                Some(display_surface_ty(&exported.callable_throws))
+                Some(display_surface_ty(db, file, &exported.callable_throws))
             } else {
                 None
             };
@@ -324,13 +335,22 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
                 .fields
                 .iter()
                 .map(|(field_name, ty, _attrs)| {
-                    (field_name.as_str().to_string(), utils::display_ty(ty))
+                    (
+                        field_name.as_str().to_string(),
+                        utils::display_ty_for_file(db, class_loc.file(db), ty),
+                    )
                 })
+                .collect();
+            let implements = class_data
+                .implements
+                .iter()
+                .map(|block| format!("{}", block.target.expr))
                 .collect();
 
             TypeInfo::Class {
                 name: class_name,
                 fields,
+                implements,
             }
         }
 
@@ -348,6 +368,15 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
             }
         }
 
+        Definition::Interface(iface_loc) => {
+            let item_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+            let iface = &item_tree[iface_loc.id(db)];
+            TypeInfo::OtherItem {
+                name: iface.name.as_str().to_string(),
+                kind: "interface",
+            }
+        }
+
         Definition::TypeAlias(alias_loc) => {
             let item_tree = baml_compiler2_hir::file_item_tree(db, alias_loc.file(db));
             let alias_data = &item_tree[alias_loc.id(db)];
@@ -355,7 +384,7 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
 
             // Use the resolved (lowered) type for display.
             let resolved = baml_compiler2_tir::inference::resolve_type_alias(db, alias_loc);
-            let expansion = utils::display_ty(&resolved.ty);
+            let expansion = utils::display_ty_for_file(db, alias_loc.file(db), &resolved.ty);
 
             TypeInfo::TypeAlias {
                 name: alias_name,
@@ -423,15 +452,16 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
     }
 }
 
-fn display_surface_ty(ty: &baml_compiler2_tir::ty::Ty) -> String {
-    let rendered = utils::display_ty(ty);
-    rendered.replace("user.", "").replace("baml.", "")
+fn display_surface_ty(db: &dyn Db, file: SourceFile, ty: &baml_compiler2_tir::ty::Ty) -> String {
+    utils::display_ty_for_file(db, file, ty)
 }
 
-fn is_synthetic_effect_param_name(name: &Name) -> bool {
-    name.as_str()
-        .strip_prefix("__effect_param_")
-        .is_some_and(|suffix| !suffix.is_empty() && suffix.bytes().all(|b| b.is_ascii_digit()))
+fn display_local_binding_ty(
+    db: &dyn Db,
+    file: SourceFile,
+    ty: &baml_compiler2_tir::ty::Ty,
+) -> String {
+    utils::display_ty_for_file(db, file, ty)
 }
 
 fn function_param_matches_effect_slot(ty: &baml_compiler2_tir::ty::Ty, effect_name: &Name) -> bool {
@@ -477,7 +507,7 @@ fn callback_forwarding_note(
     let Ty::TypeVar(effect_name, _) = only_fact else {
         return None;
     };
-    if !is_synthetic_effect_param_name(effect_name) {
+    if !baml_compiler2_tir::ty::is_synthetic_effect_param(effect_name) {
         return None;
     }
 
@@ -564,7 +594,7 @@ fn local_type_info(
             let inference = baml_compiler2_tir::inference::infer_scope_types(db, func_scope_id);
             let ty_str = inference
                 .binding_type(pat_id)
-                .map(utils::display_ty)
+                .map(|ty| display_local_binding_ty(db, file, ty))
                 .unwrap_or_else(|| {
                     // Try the use-site's ancestor scope chain — restricts the
                     // lookup to inferences for bodies that share the
@@ -573,6 +603,7 @@ fn local_type_info(
                     // ExprBodies (e.g. two lambdas with the same arena
                     // index), surface the wrong type for hover/inlay hints.
                     find_binding_ty_in_scopes(db, index, scope_id, pat_id)
+                        .map(|ty| display_local_binding_ty(db, file, &ty))
                         .unwrap_or_else(|| "unknown".to_string())
                 });
 
@@ -630,12 +661,12 @@ fn find_binding_ty_in_scopes(
     index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
     from_scope: baml_compiler2_hir::scope::FileScopeId,
     pat_id: baml_compiler2_ast::PatId,
-) -> Option<String> {
+) -> Option<baml_compiler2_tir::ty::Ty> {
     for ancestor_id in index.ancestor_scopes(from_scope) {
         let scope_id = index.scope_ids[ancestor_id.index() as usize];
         let inference = baml_compiler2_tir::inference::infer_scope_types(db, scope_id);
         if let Some(ty) = inference.binding_type(pat_id) {
-            return Some(utils::display_ty(ty));
+            return Some(ty.clone());
         }
     }
     None

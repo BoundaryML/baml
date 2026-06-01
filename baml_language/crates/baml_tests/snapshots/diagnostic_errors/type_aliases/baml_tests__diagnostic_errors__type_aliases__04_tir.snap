@@ -13,7 +13,7 @@ function user.Bar() -> user.foo throws never {
   { : true
     true : true
   }
-  !! 120..124: type mismatch: expected user.foo, got true
+  !! 120..124: type mismatch: expected foo, got true
 }
 type user.Json = int | float | string | user.Json[] | map<string, user.Json>
 function user.Baz() -> user.Json throws never {
@@ -38,12 +38,12 @@ function user.EchoJSON(i: user.JSON) -> user.JSON throws never {
   { : user.NotJSON
     NotJSON { inner: "Whoops" } : user.NotJSON
   }
+  !! 165..191: type mismatch: expected JSON, got NotJSON
 }
 function user.MakeJSON(i: user.NotJSON) -> user.JSON throws never {
   { : unknown
     i.inner : unknown
   }
-  !! 92..97: unresolved type: name
 }
 type user.JSON$stream = int | float | string | bool | user.JSON$stream[] | map<string, baml.json.json$stream>
 class user.NotJSON$stream {

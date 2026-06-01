@@ -11,7 +11,8 @@ fn user.array_length() -> int {
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64];
         _2 = copy _1;
-        _0 = call const fn baml.Array.length(copy _2) -> [bb1];
+        _0 = len(_2);
+        goto -> bb1;
     }
 
     bb1: {

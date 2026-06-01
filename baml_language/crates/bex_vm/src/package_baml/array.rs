@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use bex_heap::TlabHolder;
 use bex_vm_types::{HeapPtr, Object, types::Value};
 
 use super::{BamlClassArray, Continuation, NativeCallResult, PackageBamlImpl, make_to_json_callee};
@@ -144,7 +145,7 @@ impl Continuation for MapContinuation {
         self.results.push(value);
         self.idx += 1;
         if self.idx >= self.array.len() {
-            return NativeCallResult::Done(vm.alloc_array(self.results));
+            return NativeCallResult::Done(Value::object(vm.alloc_array(self.results)));
         }
         let next_arg = self.array[self.idx];
         NativeCallResult::YieldToCall {
@@ -354,7 +355,7 @@ impl Continuation for FlatMapContinuation {
         self.results.extend(inner);
         self.idx += 1;
         if self.idx >= self.array.len() {
-            return NativeCallResult::Done(vm.alloc_array(self.results));
+            return NativeCallResult::Done(Value::object(vm.alloc_array(self.results)));
         }
         let next_arg = self.array[self.idx];
         NativeCallResult::YieldToCall {
@@ -387,7 +388,7 @@ impl Continuation for ToJsonContinuation {
         self.idx += 1;
 
         if self.idx >= self.array.len() {
-            return NativeCallResult::Done(vm.alloc_array(self.results));
+            return NativeCallResult::Done(Value::object(vm.alloc_array(self.results)));
         }
 
         let next_val = self.array[self.idx];
@@ -449,12 +450,18 @@ impl BamlClassArray for PackageBamlImpl {
         array[start..end].to_vec()
     }
 
-    fn join(vm: &BexVm, array: &[Value], separator: &str) -> String {
-        array
+    fn join(vm: &BexVm, array: &[Value], separator: &bex_str::BexStr) -> bex_str::BexStr {
+        let sep = separator.as_str();
+        let joined = array
             .iter()
-            .map(|v| vm.as_string(v).cloned().unwrap_or_default())
+            .map(|v| {
+                vm.as_string(v)
+                    .map(|s| s.as_str().to_owned())
+                    .unwrap_or_default()
+            })
             .collect::<Vec<_>>()
-            .join(separator)
+            .join(sep);
+        bex_str::BexStr::from(joined)
     }
 
     #[allow(clippy::unused_unit)]
@@ -545,7 +552,7 @@ impl BamlClassArray for PackageBamlImpl {
         };
         let array = array.to_vec();
         if array.is_empty() {
-            return NativeCallResult::Done(vm.alloc_array(vec![]));
+            return NativeCallResult::Done(Value::object(vm.alloc_array(vec![])));
         }
         let first_arg = array[0];
         let capacity = array.len();
@@ -564,7 +571,7 @@ impl BamlClassArray for PackageBamlImpl {
 
     fn to_json(vm: &mut BexVm, array: &[Value]) -> NativeCallResult {
         if array.is_empty() {
-            return NativeCallResult::Done(vm.alloc_array(vec![]));
+            return NativeCallResult::Done(Value::object(vm.alloc_array(vec![])));
         }
 
         let array = array.to_vec();
@@ -781,7 +788,7 @@ impl BamlClassArray for PackageBamlImpl {
         };
         let array = array.to_vec();
         if array.is_empty() {
-            return NativeCallResult::Done(vm.alloc_array(vec![]));
+            return NativeCallResult::Done(Value::object(vm.alloc_array(vec![])));
         }
         let first_arg = array[0];
         NativeCallResult::YieldToCall {

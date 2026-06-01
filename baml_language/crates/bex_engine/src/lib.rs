@@ -85,11 +85,11 @@ use async_trait::async_trait;
 use bex_events::{EventKind, FunctionEnd, FunctionEvent, FunctionStart, SpanContext};
 pub use bex_events::{HostSpanContext, RuntimeEvent, SpanId};
 pub use bex_external_types::{BexExternalValue, Ty, TypeName, UnionMetadata};
-use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
 pub use bex_heap::{ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapPermit};
-use bex_vm::{BexVm, SpanNotification, VmExecState};
+use bex_heap::{BexHeap, TlabHolder};
+use bex_vm::{BexVm, SpanNotification, VmExecState, vm::InterfaceImplementors};
 use bex_vm_types::{
     FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp, Value,
     VmGlobals,
@@ -383,7 +383,7 @@ pub fn cancelled_unhandled_throw() -> EngineError {
     let mut fields = indexmap::IndexMap::new();
     fields.insert(
         "message".to_string(),
-        BexExternalValue::String("operation cancelled".to_string()),
+        BexExternalValue::String("operation cancelled".into()),
     );
     EngineError::UnhandledThrow {
         value: Box::new(BexExternalValue::Instance {
@@ -513,6 +513,11 @@ pub struct BexEngine {
     active_calls: Mutex<HashMap<CallId, CancellationToken>>,
 
     futures: FutureManager,
+
+    /// Per-program interface implementors registry (BEP-044), kept here so
+    /// every spawned VM (including post-`$init` workers) sees the same map
+    /// without cloning the underlying `IndexMap`.
+    interface_implementors: Arc<InterfaceImplementors>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -589,20 +594,20 @@ pub(crate) fn op_error_to_catchable_throw(op_err: &OpError) -> Option<BexExterna
         let mut fields = indexmap::IndexMap::new();
         fields.insert(
             "message".to_string(),
-            BexExternalValue::String(message.clone()),
+            BexExternalValue::String(message.as_str().into()),
         );
         fields.insert(
             "class_name".to_string(),
-            BexExternalValue::String(class_name.clone()),
+            BexExternalValue::String(class_name.as_str().into()),
         );
         fields.insert(
             "language".to_string(),
-            BexExternalValue::String(language.clone().unwrap_or_default()),
+            BexExternalValue::String(language.as_deref().unwrap_or_default().into()),
         );
         fields.insert(
             "traceback".to_string(),
             traceback.as_ref().map_or(BexExternalValue::Null, |t| {
-                BexExternalValue::String(t.clone())
+                BexExternalValue::String(t.as_str().into())
             }),
         );
         fields.insert(
@@ -750,6 +755,9 @@ impl BexEngine {
         #[cfg(not(target_arch = "wasm32"))]
         let park_requested = Arc::new(AtomicBool::new(false));
 
+        let interface_implementors: Arc<InterfaceImplementors> =
+            Arc::new(bytecode.interface_implementors.clone());
+
         // Run $init for each package in dependency order.
         // $init evaluates top-level let-binding initializers and stores their
         // results into the global slots via StoreGlobal instructions.
@@ -767,6 +775,7 @@ impl BexEngine {
                     #[cfg(not(target_arch = "wasm32"))]
                     Arc::clone(&park_requested),
                     Arc::clone(&argv),
+                    Arc::clone(&interface_implementors),
                 );
                 vm.set_entry_point(*init_ptr, &[]);
                 // Drive the VM to completion. $init only contains synchronous
@@ -890,6 +899,7 @@ impl BexEngine {
             park_requested,
             active_calls: Mutex::new(HashMap::new()),
             futures: FutureManager::new(futures_permit),
+            interface_implementors,
         })
     }
 
@@ -1257,11 +1267,7 @@ impl BexEngine {
         }
 
         let (function_index, kind) = self.lookup_function(function_name)?;
-        // Only bytecode functions can be invoked as engine entry points.
-        // Sysops + `$rust_function` natives reach their handlers through
-        // an enclosing bytecode frame's `Call` / `YieldToCall` — there's
-        // no frame for them to return into at the top level.
-        if !matches!(kind, bex_vm_types::FunctionKind::Bytecode) {
+        if matches!(kind, bex_vm_types::FunctionKind::NativeUnresolved) {
             return Err(EngineError::NotInvokableAsEntry {
                 name: function_name.to_string(),
                 kind: format!("{kind:?}"),
@@ -1318,6 +1324,7 @@ impl BexEngine {
             #[cfg(not(target_arch = "wasm32"))]
             Arc::clone(&self.park_requested),
             Arc::clone(&self.argv),
+            Arc::clone(&self.interface_implementors),
         );
         // BEP-034: wrap the root VM in a `BexThread` from the outset so the
         // permit's `RootHaver` is the thread (delegating to the inner VM).
@@ -1396,7 +1403,7 @@ impl BexEngine {
                 let collector_ref = bex_vm_types::CollectorRef(
                     Arc::clone(c) as Arc<dyn std::any::Any + Send + Sync>
                 );
-                thread.vm.alloc_collector(collector_ref)
+                Value::object(thread.vm.alloc_collector(collector_ref))
             })
             .collect();
 
@@ -1752,7 +1759,7 @@ impl BexEngine {
         let collector = self
             .call_function(
                 "testing.TestCollector.new",
-                vec![BexExternalValue::String(String::new())],
+                vec![BexExternalValue::String("".into())],
                 ctx(),
                 false, // return Handle, not deep copy
             )
@@ -1979,6 +1986,7 @@ impl BexEngine {
             #[cfg(not(target_arch = "wasm32"))]
             Arc::clone(&self.park_requested),
             Arc::clone(&self.argv),
+            Arc::clone(&self.interface_implementors),
         );
         child_vm.set_entry_point(closure, &[]);
 
@@ -2492,7 +2500,7 @@ impl BexEngine {
                     };
                     let spawn_name: Option<String> =
                         name_ptr.and_then(|ptr| match unsafe { ptr.get() } {
-                            Object::String(s) => Some(s.clone()),
+                            Object::String(s) => Some(s.to_string()),
                             _ => None,
                         });
                     let parent_errors_arc = thread.vm_thread_pending_errors_arc();
@@ -2670,7 +2678,7 @@ impl BexEngine {
                                     .get("level")
                                     .and_then(|v| {
                                         if let BexExternalValue::String(s) = v {
-                                            Some(s.clone())
+                                            Some(s.to_string())
                                         } else {
                                             None
                                         }

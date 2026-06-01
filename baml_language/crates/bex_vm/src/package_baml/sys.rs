@@ -10,7 +10,7 @@ impl BamlNamespaceSys for PackageBamlImpl {
             .as_millis() as i64
     }
 
-    fn panic(message: &str) -> Result<(), VmRustFnError> {
+    fn panic(message: &bex_str::BexStr) -> Result<(), VmRustFnError> {
         Err(VmRustFnError::Panic(crate::VmPanic::UserPanic {
             message: message.to_string(),
         }))
@@ -24,7 +24,10 @@ impl BamlNamespaceSys for PackageBamlImpl {
         Err(VmRustFnError::Panic(crate::VmPanic::Exit { code }))
     }
 
-    fn argv(vm: &mut BexVm) -> Vec<String> {
-        vm.argv.iter().cloned().collect()
+    fn argv(vm: &mut BexVm) -> Vec<bex_str::BexStr> {
+        vm.argv
+            .iter()
+            .map(|s| bex_str::BexStr::from(s.as_str()))
+            .collect()
     }
 }

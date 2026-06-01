@@ -14,3 +14,9 @@ allowBuilds:
 
 catalog:
   jotai: ^2.10.0
+
+# Force all packages to use the same version of @types/react to avoid
+# JSX component type incompatibility errors (e.g., "cannot be used as JSX component")
+overrides:
+  '@types/react': 18.3.26
+  '@types/react-dom': 18.3.7

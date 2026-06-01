@@ -44,6 +44,15 @@
 # | `linux-msrv`    | `cargo-build-msrv`    | —                                               |
 # | `macos-cargo`   | `cargo-test-macos`    | `sdk-tests/macos`, `size-gate::macos`           |
 # | `windows-cargo` | `cargo-test-windows`  | `sdk-tests/windows`, `size-gate::windows`       |
+# | `linux-arm-bench` | `ci.yaml::benchmarks-build` | — (bench-only; see note)                  |
+#
+# Note: `linux-arm-bench` is bench-specific on purpose — its saver builds only
+# `baml_tests` benches, so it's a thin seed not worth sharing with a general
+# ARM job (which would still rebuild most of the workspace). It is also NOT
+# touched by the daily purge in `canary-cache-refresh.yml` (that purge
+# repopulates via this reusable workflow, which has no ARM job); it
+# self-refreshes whenever `benchmarks-build` runs on canary, and only ages out
+# after the 7-day TTL during fully ARM-idle periods.
 #
 # `cargo-test-linux` is the saver for `linux-cargo` because it builds
 # the broadest target/ tree (`cargo test --no-run --all-features`
@@ -157,6 +166,9 @@ jobs:
 
   cargo-test-macos:
     name: "cargo test (macos)"
+    # Skip in the merge queue: macos already ran on the PR. The merge_group
+    # event is inherited from ci.yaml through the workflow_call boundary.
+    if: ${{ github.event_name != 'merge_group' }}
     runs-on: macos-latest
     timeout-minutes: 35
     steps:
@@ -208,6 +220,9 @@ jobs:
 
   cargo-test-windows:
     name: "cargo test (windows)"
+    # Skip in the merge queue: windows already ran on the PR. The merge_group
+    # event is inherited from ci.yaml through the workflow_call boundary.
+    if: ${{ github.event_name != 'merge_group' }}
     runs-on: blacksmith-4vcpu-windows-2025
     # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
     # Right now it needs to download our repo every time which is very slow
@@ -274,20 +289,17 @@ jobs:
     name: "sdk tests (${{ matrix.os-label }})"
     strategy:
       fail-fast: false
+      # In the merge queue (`merge_group`) only the linux leg runs — the
+      # macos/windows legs already ran on the PR. The matrix is built from a
+      # `fromJSON` literal because matrix `include` entries can't carry their
+      # own `if:`. The merge_group event is inherited from ci.yaml through the
+      # workflow_call boundary. Keep these entries in sync with the standalone
+      # cargo-test-macos/windows jobs above.
       matrix:
-        include:
-          - os-label: linux
-            runs-on: blacksmith-16vcpu-ubuntu-2404
-            rust-cache-key: linux-cargo
-            timeout: 30
-          - os-label: macos
-            runs-on: macos-latest
-            rust-cache-key: macos-cargo
-            timeout: 40
-          - os-label: windows
-            runs-on: blacksmith-4vcpu-windows-2025
-            rust-cache-key: windows-cargo
-            timeout: 60
+        include: >-
+          ${{ fromJSON(github.event_name == 'merge_group'
+          && '[{"os-label":"linux","runs-on":"blacksmith-16vcpu-ubuntu-2404","rust-cache-key":"linux-cargo","timeout":30}]'
+          || '[{"os-label":"linux","runs-on":"blacksmith-16vcpu-ubuntu-2404","rust-cache-key":"linux-cargo","timeout":30},{"os-label":"macos","runs-on":"macos-latest","rust-cache-key":"macos-cargo","timeout":40},{"os-label":"windows","runs-on":"blacksmith-4vcpu-windows-2025","rust-cache-key":"windows-cargo","timeout":60}]') }}
     runs-on: ${{ matrix.runs-on }}
     timeout-minutes: ${{ matrix.timeout }}
     steps:
@@ -355,7 +367,7 @@ jobs:
   cargo-test-wasm:
     name: "cargo test (wasm)"
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
         with:
@@ -389,7 +401,10 @@ jobs:
 
       - name: "Rename cargo timings"
         if: always()
-        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-wasm.html
+        run: |
+          if [[ -f target/cargo-timings/cargo-timing.html ]]; then
+            mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-wasm.html
+          fi
         working-directory: baml_language
       - name: "Upload cargo timings"
         if: always()

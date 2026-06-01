@@ -22,7 +22,7 @@ use baml_compiler2_ast::{
 use baml_compiler2_hir::{
     body::{FunctionBody, LetBody},
     contributions::Definition,
-    loc::{ClassLoc, EnumLoc, FunctionLoc, LetLoc, TypeAliasLoc},
+    loc::{ClassLoc, EnumLoc, FunctionLoc, InterfaceLoc, LetLoc, TypeAliasLoc},
     package::{PackageId, PackageItems},
     scope::{FileScopeId, ScopeId, ScopeKind},
     semantic_index::{BindingId, BindingKind},
@@ -87,6 +87,12 @@ pub enum MemberResolution<'db> {
     /// e.g. `Person.get_name` where `Person` is a class type — type keeps `self`.
     UnboundMethod {
         class_loc: ClassLoc<'db>,
+        func_loc: FunctionLoc<'db>,
+    },
+    /// An interface default method referenced through the interface type
+    /// itself, e.g. `Named.describe(value)`.
+    InterfaceDefaultMethod {
+        iface_loc: InterfaceLoc<'db>,
         func_loc: FunctionLoc<'db>,
     },
 }
@@ -598,38 +604,101 @@ pub fn infer_scope_types<'db>(
                     let body = baml_compiler2_ppir::function_body(db, func_loc);
                     let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
 
+                    let enclosing_impl = item_tree
+                        .implements_for
+                        .iter()
+                        .find(|imp| imp.methods.contains(local_id));
+
                     // Compute the generic params for this function scope.
-                    // If this is a method inside a class, also include the class's generic params.
+                    // If this method belongs to an out-of-body `implements<T> ... for ...`
+                    // rule, the rule owns the generic params. Otherwise, methods
+                    // inside classes also include their class's generic params.
                     let mut generic_params = sig.user_generic_params.clone();
                     generic_params.extend(sig.synthetic_effect_params.iter().cloned());
-                    if let Some(parent_idx) = scope.parent {
+                    if let Some(imp) = enclosing_impl {
+                        let mut merged = imp.generic_params.clone();
+                        merged.extend(generic_params);
+                        generic_params = merged;
+                    } else if let Some(parent_idx) = scope.parent {
                         let parent = &index.scopes[parent_idx.index() as usize];
                         if matches!(parent.kind, ScopeKind::Class) {
                             if let Some(class_name) = &parent.name {
+                                let mut enclosing_generics: Option<Vec<Name>> = None;
                                 for class_data in item_tree.classes.values() {
                                     if class_data.name == *class_name {
-                                        // Check for method-level type params that shadow class-level ones.
-                                        for mp in &sig.user_generic_params {
-                                            if class_data.generic_params.iter().any(|cp| cp == mp) {
-                                                builder.report_at_span(
-                                                    crate::infer_context::TirTypeError::TypeParamShadowed {
-                                                        param_name: mp.clone(),
-                                                        class_name: class_name.clone(),
-                                                    },
-                                                    func_data.span,
-                                                );
-                                            }
-                                        }
-                                        let mut merged = class_data.generic_params.clone();
-                                        merged.extend(generic_params);
-                                        generic_params = merged;
+                                        enclosing_generics =
+                                            Some(class_data.generic_params.clone());
                                         break;
                                     }
+                                }
+                                // BEP-044: interfaces also push a `Class`-kind
+                                // scope, so a *default method* body's enclosing
+                                // generics may come from a generic interface
+                                // (`interface Container<T> { function f(self) -> T
+                                // { ... } }`). Without this its `T` would be
+                                // unresolved in the default body / signature.
+                                if enclosing_generics.is_none() {
+                                    for iface_data in item_tree.interfaces.values() {
+                                        if iface_data.name == *class_name {
+                                            enclosing_generics =
+                                                Some(iface_data.generic_params.clone());
+                                            break;
+                                        }
+                                    }
+                                }
+                                if let Some(parent_generics) = enclosing_generics {
+                                    // Check for method-level type params that shadow enclosing ones.
+                                    for mp in &sig.user_generic_params {
+                                        if parent_generics.iter().any(|cp| cp == mp) {
+                                            builder.report_at_span(
+                                                crate::infer_context::TirTypeError::TypeParamShadowed {
+                                                    param_name: mp.clone(),
+                                                    class_name: class_name.clone(),
+                                                },
+                                                func_data.span,
+                                            );
+                                        }
+                                    }
+                                    let mut merged = parent_generics;
+                                    merged.extend(generic_params);
+                                    generic_params = merged;
                                 }
                             }
                         }
                     }
                     builder.set_generic_params(generic_params.clone());
+                    // BEP-044 generic bounds: lower each `extends Iface`
+                    // expression to a TIR `Ty` and bind it under the
+                    // type-parameter name. Member access on `Ty::TypeVar`
+                    // walks this map to expose the bound's contract.
+                    let mut bounds: rustc_hash::FxHashMap<Name, Ty> =
+                        rustc_hash::FxHashMap::default();
+                    let mut bound_param_names = Vec::new();
+                    let mut bound_exprs = Vec::new();
+                    if let Some(imp) = enclosing_impl {
+                        bound_param_names.extend(imp.generic_params.iter().cloned());
+                        bound_exprs.extend(imp.generic_param_bounds.iter().cloned());
+                    }
+                    bound_param_names.extend(func_data.generic_params.iter().cloned());
+                    bound_exprs.extend(func_data.generic_param_bounds.iter().cloned());
+                    for (i, name) in bound_param_names.iter().enumerate() {
+                        if let Some(Some(bound_te)) = bound_exprs.get(i) {
+                            let mut bd = Vec::new();
+                            let bound_ty = crate::lower_type_expr::lower_type_expr_in_ns(
+                                db,
+                                bound_te,
+                                pkg_items,
+                                &pkg_info.namespace_path,
+                                &generic_params,
+                                &mut bd,
+                            );
+                            for d in bd {
+                                builder.report_at_span(d, func_data.span);
+                            }
+                            bounds.insert(name.clone(), bound_ty);
+                        }
+                    }
+                    builder.set_generic_param_bounds(bounds);
                     if let Some(sm) = baml_compiler2_ppir::function_body_source_map(db, func_loc) {
                         builder.set_body_source_map(sm);
                     }
@@ -637,23 +706,77 @@ pub fn infer_scope_types<'db>(
                         func_data.origin,
                         ast::FunctionOrigin::AutoDerive
                     ));
+                    // BEP-044: if this function lives inside an
+                    // `implements I { ... }` block, attach `I`'s QTN so
+                    // `default.<method>(...)` resolves against I's
+                    // contract.
+                    if let Some(target) = item_tree.method_to_iface_target.get(local_id)
+                        && let baml_compiler2_ast::TypeExpr::Path { segments, .. } = &target.expr
+                        && let Some((head, name)) = segments
+                            .split_last()
+                            .map(|(last, head)| (head, last.clone()))
+                    {
+                        let lookup_ns: &[Name] = if head.is_empty() {
+                            &pkg_info.namespace_path
+                        } else {
+                            head
+                        };
+                        if let Some(def) = pkg_items.lookup_type(lookup_ns, &name)
+                            && let baml_compiler2_hir::contributions::Definition::Interface(_) = def
+                        {
+                            let qtn = crate::lower_type_expr::qualify_def(db, def, &name);
+                            builder.set_implements_block_interface(Some(qtn));
+                        }
+                    }
 
                     if let FunctionBody::Expr(expr_body) = body.as_ref() {
+                        // Determine enclosing class name for `self` parameter
+                        // resolution and BEP-044 `Self`-type substitution.
+                        let enclosing_class_name: Option<Name> =
+                            scope.parent.and_then(|parent_idx| {
+                                let parent = &index.scopes[parent_idx.index() as usize];
+                                if matches!(parent.kind, ScopeKind::Class) {
+                                    parent.name.clone()
+                                } else {
+                                    None
+                                }
+                            });
+                        // BEP-044 `Self` substitution: inside an out-of-body
+                        // implementation, `Self` is the rule receiver pattern
+                        // (`Box<T>` or `T`). Otherwise it is the enclosing
+                        // class/interface type.
+                        let self_replacement = enclosing_impl
+                            .map(|imp| imp.for_target.expr.clone())
+                            .or_else(|| {
+                                enclosing_class_name.as_ref().map(|cn| {
+                                    crate::lower_type_expr::type_expr_for_name(cn.clone())
+                                })
+                            });
+                        let lower_with_self = |te: &baml_compiler2_ast::TypeExpr,
+                                               diags: &mut Vec<
+                            crate::infer_context::TirTypeError,
+                        >| {
+                            let resolved = if let Some(replacement) = &self_replacement {
+                                crate::lower_type_expr::substitute_self_in(te, replacement)
+                            } else {
+                                te.clone()
+                            };
+                            crate::lower_type_expr::lower_type_expr_in_ns(
+                                db,
+                                &resolved,
+                                pkg_items,
+                                &pkg_info.namespace_path,
+                                &generic_params,
+                                diags,
+                            )
+                        };
+
                         // Get declared return type
                         let mut diags = Vec::new();
                         let return_ty = sig
                             .return_type
                             .as_ref()
-                            .map(|te| {
-                                crate::lower_type_expr::lower_type_expr_in_ns(
-                                    db,
-                                    te,
-                                    pkg_items,
-                                    &pkg_info.namespace_path,
-                                    &generic_params,
-                                    &mut diags,
-                                )
-                            })
+                            .map(|te| lower_with_self(te, &mut diags))
                             .unwrap_or(Ty::Unknown {
                                 attr: TyAttr::default(),
                             });
@@ -674,17 +797,6 @@ pub fn infer_scope_types<'db>(
                         // Set declared return type for return statement checking
                         builder.set_return_type(return_ty.clone());
 
-                        // Determine enclosing class name for `self` parameter resolution
-                        let enclosing_class_name: Option<Name> =
-                            scope.parent.and_then(|parent_idx| {
-                                let parent = &index.scopes[parent_idx.index() as usize];
-                                if matches!(parent.kind, ScopeKind::Class) {
-                                    parent.name.clone()
-                                } else {
-                                    None
-                                }
-                            });
-
                         // Add parameter bindings as locals
                         let sig_sm = baml_compiler2_ppir::elaborated_function_signature_source_map(
                             db, func_loc,
@@ -693,27 +805,83 @@ pub fn infer_scope_types<'db>(
                             let param_ty = if param.name.as_str() == "self"
                                 && matches!(param.ty, baml_compiler2_ast::TypeExpr::Unknown { .. })
                             {
-                                // `self` parameter with no type annotation — infer from enclosing class
-                                enclosing_class_name
-                                    .as_ref()
-                                    .and_then(|cn| {
-                                        let ns_path = &pkg_info.namespace_path;
-                                        pkg_items.lookup_type(ns_path, cn).map(|def| {
-                                            Ty::Class(
-                                                crate::lower_type_expr::qualify_def(db, def, cn),
-                                                vec![],
-                                                TyAttr::default(),
-                                            )
+                                if let Some(imp) = enclosing_impl {
+                                    let mut self_diags = Vec::new();
+                                    let ty = crate::lower_type_expr::lower_type_expr_in_ns(
+                                        db,
+                                        &imp.for_target.expr,
+                                        pkg_items,
+                                        &pkg_info.namespace_path,
+                                        &generic_params,
+                                        &mut self_diags,
+                                    );
+                                    if !self_diags.is_empty() {
+                                        let span =
+                                            sig_sm.param_spans.get(i).copied().unwrap_or_default();
+                                        for diag in self_diags {
+                                            builder.report_at_span(diag, span);
+                                        }
+                                    }
+                                    ty
+                                } else {
+                                    // `self` parameter with no type annotation — infer from
+                                    // enclosing class. For BEP-044 interface default methods
+                                    // the enclosing scope is the interface, so we produce
+                                    // `Ty::Interface` so member resolution dispatches through
+                                    // the interface contract.
+                                    enclosing_class_name
+                                        .as_ref()
+                                        .and_then(|cn| {
+                                            let ns_path = &pkg_info.namespace_path;
+                                            pkg_items.lookup_type(ns_path, cn).map(|def| {
+                                                let qtn =
+                                                    crate::lower_type_expr::qualify_def(db, def, cn);
+                                                match def {
+                                                    baml_compiler2_hir::contributions::Definition::Interface(_) => {
+                                                        // BEP-044 wf3 #1/#5: a generic interface's
+                                                        // default method must type `self` as
+                                                        // `Interface<T..>` carrying its own params as
+                                                        // TypeVars — empty args dropped `T`, so a
+                                                        // `self.method()` call lost the reached view's
+                                                        // concrete arg (first impl block wins) and
+                                                        // cross-`requires` calls found no MIR candidate.
+                                                        let iface_args: Vec<Ty> = item_tree
+                                                            .interfaces
+                                                            .values()
+                                                            .find(|i| &i.name == cn)
+                                                            .map(|i| {
+                                                                i.generic_params
+                                                                    .iter()
+                                                                    .map(|p| Ty::TypeVar(
+                                                                        p.clone(),
+                                                                        TyAttr::default(),
+                                                                    ))
+                                                                    .collect()
+                                                            })
+                                                            .unwrap_or_default();
+                                                        Ty::Interface(qtn, iface_args, TyAttr::default())
+                                                    }
+                                                    _ => Ty::Class(qtn, vec![], TyAttr::default()),
+                                                }
+                                            })
                                         })
-                                    })
-                                    .unwrap_or(Ty::Unknown {
-                                        attr: TyAttr::default(),
-                                    })
+                                        .unwrap_or(Ty::Unknown {
+                                            attr: TyAttr::default(),
+                                        })
+                                }
                             } else {
                                 let mut param_diags = Vec::new();
+                                let resolved_te = if let Some(replacement) = &self_replacement {
+                                    crate::lower_type_expr::substitute_self_in(
+                                        &param.ty,
+                                        replacement,
+                                    )
+                                } else {
+                                    param.ty.clone()
+                                };
                                 let ty = crate::lower_type_expr::lower_type_expr_in_ns(
                                     db,
-                                    &param.ty,
+                                    &resolved_te,
                                     pkg_items,
                                     &pkg_info.namespace_path,
                                     &generic_params,

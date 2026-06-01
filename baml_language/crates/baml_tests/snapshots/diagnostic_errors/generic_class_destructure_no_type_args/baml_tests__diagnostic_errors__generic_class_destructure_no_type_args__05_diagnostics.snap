@@ -1,14 +1,15 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 40177
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: type mismatch: expected user.Box<int>, got user.Box
+  [type] error: type mismatch: expected Box<int>, got Box
     ╭─[ main.baml:10:45 ]
     │
  10 │ ╭─▶     let boxed: Box<int> = Box { value: 42 };
  11 │ ├─▶     let Box { value } = boxed;
     │ │                                    
-    │ ╰──────────────────────────────────── type mismatch: expected user.Box<int>, got user.Box
+    │ ╰──────────────────────────────────── type mismatch: expected Box<int>, got Box
     │     
     │     Note: Error code: E0001
 ────╯

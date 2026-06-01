@@ -61,7 +61,7 @@ async fn test_handle_prevents_gc_collection() {
     // Value should still be correct after GC (basic local-binding check)
     assert_eq!(
         result.clone(),
-        BexExternalValue::String("hello world".to_string())
+        BexExternalValue::String("hello world".to_string().into())
     );
 
     // Strengthen: pass the value back through the engine after GC.
@@ -78,7 +78,7 @@ async fn test_handle_prevents_gc_collection() {
         .unwrap();
     assert_eq!(
         echoed,
-        BexExternalValue::String("hello world".to_string()),
+        BexExternalValue::String("hello world".to_string().into()),
         "Engine must round-trip the string correctly after GC"
     );
 }
@@ -126,8 +126,8 @@ async fn test_array_preserved_through_gc() {
     match result {
         BexExternalValue::Array { items, .. } => {
             assert_eq!(items.len(), 5);
-            assert_eq!(items[0], BexExternalValue::String("a".to_string()));
-            assert_eq!(items[4], BexExternalValue::String("e".to_string()));
+            assert_eq!(items[0], BexExternalValue::String("a".to_string().into()));
+            assert_eq!(items[4], BexExternalValue::String("e".to_string().into()));
         }
         other => panic!("Expected array, got: {other:?}"),
     }
@@ -182,9 +182,18 @@ async fn test_gc_updates_forwarding_pointers() {
     match result {
         BexExternalValue::Array { items, .. } => {
             assert_eq!(items.len(), 3);
-            assert_eq!(items[0], BexExternalValue::String("first".to_string()));
-            assert_eq!(items[1], BexExternalValue::String("second".to_string()));
-            assert_eq!(items[2], BexExternalValue::String("third".to_string()));
+            assert_eq!(
+                items[0],
+                BexExternalValue::String("first".to_string().into())
+            );
+            assert_eq!(
+                items[1],
+                BexExternalValue::String("second".to_string().into())
+            );
+            assert_eq!(
+                items[2],
+                BexExternalValue::String("third".to_string().into())
+            );
         }
         other => panic!("Expected array, got: {other:?}"),
     }
@@ -245,9 +254,9 @@ async fn test_multiple_handles_survive_gc() {
     let _stats = engine.collect_garbage(CollectionLevel::Major).await;
 
     // All handles should still be valid
-    assert_eq!(h1, BexExternalValue::String("hello".to_string()));
-    assert_eq!(h2, BexExternalValue::String("world".to_string()));
-    assert_eq!(h3, BexExternalValue::String("test".to_string()));
+    assert_eq!(h1, BexExternalValue::String("hello".to_string().into()));
+    assert_eq!(h2, BexExternalValue::String("world".to_string().into()));
+    assert_eq!(h3, BexExternalValue::String("test".to_string().into()));
 }
 
 /// Test that nested class instances (Outer → Inner) survive GC and remain

@@ -22,12 +22,12 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] error: type `user.FooNoToString` has no member `to_string`
+  [type] error: type `FooNoToString` has no member `to_string`
     ╭─[ main.baml:30:11 ]
     │
  30 │     `val: ${f}`
     │           ──┬─  
-    │             ╰─── type `user.FooNoToString` has no member `to_string`
+    │             ╰─── type `FooNoToString` has no member `to_string`
     │ 
     │ Note: Error code: E0007
 ────╯

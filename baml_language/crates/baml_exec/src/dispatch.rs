@@ -226,7 +226,7 @@ async fn deserialize_via_baml_json(
     let result = engine
         .call_function(
             "baml.json.deserialize",
-            vec![BexExternalValue::String(json_text.to_string())],
+            vec![BexExternalValue::String(json_text.into())],
             FunctionCallContextBuilder::new(CallId::next())
                 .with_type_args(vec![ty.clone()])
                 .build(),

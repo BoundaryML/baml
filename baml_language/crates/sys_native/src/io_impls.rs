@@ -44,6 +44,31 @@ impl io::IoNamespaceEnv for NativeSysOps {
 }
 
 // ============================================================================
+// Time
+// ============================================================================
+
+impl io::IoClassTimeInstant for NativeSysOps {
+    fn now(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::time::Instant> {
+        // Wall-clock time as nanoseconds since the UNIX epoch. Per the
+        // `Instant.now()` contract, an unavailable/pre-epoch clock panics.
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_else(|_| unreachable!("system clock is set before the UNIX epoch"))
+            .as_nanos();
+        SysOpOutput::ok(owned::time::Instant {
+            _nanoseconds: Arc::new(num_bigint::BigInt::from(nanos)),
+        })
+    }
+}
+
+impl io::IoNamespaceTime for NativeSysOps {}
+
+// ============================================================================
 // IO (stdin input)
 // ============================================================================
 
@@ -658,12 +683,13 @@ impl io::IoClassGlobGlob for NativeSysOps {
             let handle = downcast_glob_handle(&glob)?;
 
             let (cwd, dot, absolute, follow_symlinks, throw_on_broken, only_files) = match &root {
-                BexExternalValue::String(s) => (s.clone(), false, false, false, false, true),
+                BexExternalValue::String(s) => (s.to_string(), false, false, false, false, true),
                 BexExternalValue::Instance { fields, .. } => {
                     let get_string = |key: &str, default: &str| {
                         fields
                             .get(key)
                             .and_then(BexExternalValue::as_string)
+                            .map(|s| s.to_string())
                             .unwrap_or_else(|| default.to_string())
                     };
                     let get_bool = |key: &str, default: bool| {

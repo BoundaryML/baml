@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 131
 ---
 === COMPILER2 DIAGNOSTICS ===
   [parse] error: Expected expression, found let
@@ -32,14 +33,14 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0003
 ───╯
 
-  [type] error: missing return: expected `int`
+  [type] error: missing return value of type int
     ╭─[ banned_expressions.baml:8:22 ]
     │
   8 │ ╭─▶ function Bar() -> int {
     ┆ ┆   
  10 │ ├─▶ }
     │ │       
-    │ ╰─────── missing return: expected `int`
+    │ ╰─────── missing return value of type int
     │     
     │     Note: Error code: E0029
 ────╯

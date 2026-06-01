@@ -560,7 +560,8 @@ fn call_params_for_call_node(
         baml_compiler2_tir::resolve::ResolvedName::Local {
             definition_site: Some(site),
             ..
-        } => local_variable_ty(db, file, offset, site).and_then(|ty| params_from_function_ty(&ty)),
+        } => local_variable_ty(db, file, offset, site)
+            .and_then(|ty| params_from_function_ty(db, file, &ty)),
         _ => None,
     }
 }
@@ -605,7 +606,7 @@ fn function_params_for_completion(
                 .filter_map(|param| {
                     param.name.as_ref().map(|name| CallParamCompletion {
                         name: name.as_str().to_string(),
-                        ty: utils::display_ty(&param.ty),
+                        ty: utils::display_ty_for_file(db, file, &param.ty),
                         optional: param.is_optional(),
                     })
                 })
@@ -628,7 +629,11 @@ fn function_params_for_completion(
     params
 }
 
-fn params_from_function_ty(ty: &Ty) -> Option<Vec<CallParamCompletion>> {
+fn params_from_function_ty(
+    db: &dyn Db,
+    file: SourceFile,
+    ty: &Ty,
+) -> Option<Vec<CallParamCompletion>> {
     let Ty::Function { params, .. } = ty else {
         return None;
     };
@@ -638,7 +643,7 @@ fn params_from_function_ty(ty: &Ty) -> Option<Vec<CallParamCompletion>> {
             .filter_map(|param| {
                 param.name.as_ref().map(|name| CallParamCompletion {
                     name: name.as_str().to_string(),
-                    ty: utils::display_ty(&param.ty),
+                    ty: utils::display_ty_for_file(db, file, &param.ty),
                     optional: param.is_optional(),
                 })
             })
@@ -783,7 +788,7 @@ fn completions_for_field_access(
         ty = ty.and_then(|t| resolve_field_type(db, &t, seg));
     }
 
-    ty.map(|t| completions_for_ty_members(db, &t))
+    ty.map(|t| completions_for_ty_members(db, file, &t))
         .unwrap_or_default()
 }
 
@@ -1112,7 +1117,7 @@ fn find_path_segments_for_word_after_dot(token: &baml_compiler_syntax::SyntaxTok
 }
 
 /// Returns completions for the members of `ty`.
-fn completions_for_ty_members(db: &dyn Db, ty: &Ty) -> Vec<Completion> {
+fn completions_for_ty_members(db: &dyn Db, file: SourceFile, ty: &Ty) -> Vec<Completion> {
     match ty {
         Ty::Class(qn, _, _) => {
             // Find the class definition and return its fields and methods.
@@ -1132,7 +1137,7 @@ fn completions_for_ty_members(db: &dyn Db, ty: &Ty) -> Vec<Completion> {
             for (field_name, field_ty, _field_attrs) in &resolved.fields {
                 items.push(
                     Completion::new(field_name.as_str(), CompletionKind::Field)
-                        .with_detail(utils::display_ty(field_ty))
+                        .with_detail(utils::display_ty_for_file(db, file, field_ty))
                         .with_sort(format!("0_{}", field_name.as_str())),
                 );
             }
@@ -1609,6 +1614,12 @@ fn completions_for_top_level() -> Vec<Completion> {
         Completion::new("type", CompletionKind::Keyword)
             .with_detail("type alias declaration")
             .with_sort("08_type"),
+        Completion::new("interface", CompletionKind::Keyword)
+            .with_detail("interface declaration")
+            .with_sort("09_interface"),
+        Completion::new("implements", CompletionKind::Keyword)
+            .with_detail("out-of-body interface implementation")
+            .with_sort("10_implements"),
     ]
 }
 

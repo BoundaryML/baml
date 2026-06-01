@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 10313
 ---
 === MIR2 ===
 fn user.Box.from_json(j: baml.json.json) -> Box<void> {
@@ -20,7 +21,7 @@ fn user.Box.from_json(j: baml.json.json) -> Box<void> {
     }
 
     bb2: {
-        _0 = user.Box<TypeArgRef(0)> { copy _2 };
+        _0 = user.Box<#0> { copy _2 };
         goto -> bb3;
     }
 

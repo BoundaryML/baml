@@ -1,3 +1,5 @@
+use bex_heap::TlabHolder;
+use bex_str::BexStr;
 use bex_vm_types::Value;
 
 use super::{BamlClassFloat, PackageBamlImpl};
@@ -35,15 +37,15 @@ fn float_to_int(value: f64, op: &str) -> Result<i64, VmRustFnError> {
 
 impl BamlClassFloat for PackageBamlImpl {
     fn to_json(vm: &mut BexVm, float: f64) -> Value {
-        vm.alloc_float(float)
+        Value::object(vm.alloc_float(float))
     }
 
-    fn to_string(float: f64) -> String {
+    fn to_string(float: f64) -> BexStr {
         // Rust's `f64::to_string` uses the shortest round-trip
         // representation for finite values, and prints `NaN` / `inf` /
         // `-inf` for non-finite values. Matches BEP-049's "display form"
         // expectation for `${float}` in untagged backticks (§11).
-        float.to_string()
+        BexStr::from(float.to_string())
     }
 
     // ── Predicates ────────────────────────────────────────────────────────────
@@ -197,10 +199,11 @@ impl BamlClassFloat for PackageBamlImpl {
 
     // ── Parsing / randomness ──────────────────────────────────────────────────
 
-    fn parse(text: &str) -> Result<f64, VmRustFnError> {
-        text.parse::<f64>().map_err(|e| {
+    fn parse(text: &bex_str::BexStr) -> Result<f64, VmRustFnError> {
+        let s = text.as_str();
+        s.parse::<f64>().map_err(|e| {
             VmBamlError::ParseError {
-                message: format!("float.parse: cannot parse {text:?} as float: {e}"),
+                message: format!("float.parse: cannot parse {s:?} as float: {e}"),
             }
             .into()
         })

@@ -53,7 +53,7 @@ function user.test_err_extra_arg() -> string throws never {
     transform(fmt, "hello") : string
   }
   !! 474..497: expected 1 argument(s), got 2
-  !! 484..487: type mismatch: expected string, got user.Formatter
+  !! 484..487: type mismatch: expected string, got Formatter
 }
 function user.test_err_missing_self() -> string throws never {
   { : string
@@ -68,14 +68,14 @@ function user.test_err_bound_type_mismatch() -> int throws never {
     let inc: (Counter) -> int = c.increment : () -> int throws never -> (user.Counter) -> int throws never
     0 : 0
   }
-  !! 789..801: type mismatch: expected (user.Counter) -> int throws never, got () -> int throws never
+  !! 789..801: type mismatch: expected (Counter) -> int throws never, got () -> int throws never
 }
 function user.test_err_unbound_type_mismatch() -> string throws never {
   { : ""
     let f: () -> string = Employee.full_name : (self: user.Employee) -> string throws never -> () -> string throws never
     "" : ""
   }
-  !! 947..966: type mismatch: expected () -> string throws never, got (self: user.Employee) -> string throws never
+  !! 947..966: type mismatch: expected () -> string throws never, got (self: Employee) -> string throws never
 }
 function user.takes_unbound(f: (user.Employee) -> string throws never) -> string throws never {
   { : string
@@ -88,7 +88,7 @@ function user.test_err_bound_for_unbound() -> string throws never {
     let e = Employee { first: "Alice", last: "Smith" } : user.Employee
     takes_unbound<__effect_param_0>(e.full_name) : string
   }
-  !! 1259..1270: type mismatch: expected (user.Employee) -> string throws never, got () -> string throws never
+  !! 1259..1270: type mismatch: expected (Employee) -> string throws never, got () -> string throws never
 }
 class user.Formatter$stream {
   prefix: null | string

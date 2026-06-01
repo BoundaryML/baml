@@ -395,7 +395,11 @@ impl ProjectTest {
         writeln!(out, "{} {}  {}:{}", desc.kind, desc.name, filename, line).unwrap();
         if let Some(ref doc) = desc.docstring {
             for line in doc.lines() {
-                writeln!(out, "/// {line}").unwrap();
+                if line.is_empty() {
+                    writeln!(out, "///").unwrap();
+                } else {
+                    writeln!(out, "/// {line}").unwrap();
+                }
             }
         }
         writeln!(out, "shape: {}", desc.shape).unwrap();

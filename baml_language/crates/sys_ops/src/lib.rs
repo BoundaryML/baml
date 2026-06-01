@@ -1185,6 +1185,19 @@ impl io::IoNamespaceHost for DefaultIoOps {
     }
 }
 
+impl io::IoClassTimeInstant for DefaultIoOps {
+    fn now(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::time::Instant> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+}
+
+impl io::IoNamespaceTime for DefaultIoOps {}
+
 impl io::IoPackageBaml for DefaultIoOps {}
 
 /// Builder for composing an [`io::SysOps`] table by overriding namespaces.
@@ -1607,6 +1620,27 @@ impl IoSysOpsBuilder {
     #[must_use]
     pub fn with_host<T: io::IoNamespaceHost + Default + Send + Sync + 'static>(self) -> Self {
         self.with_host_instance(Arc::new(T::default()))
+    }
+
+    /// Override the `time` namespace (`Instant.now`) with a pre-built instance.
+    #[must_use]
+    pub fn with_time_instance(
+        mut self,
+        instance: Arc<dyn io::IoNamespaceTime + Send + Sync + 'static>,
+    ) -> Self {
+        self.inner.baml_time_instant_now = {
+            let t = instance;
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_time_instant_now(heap, permit, args, ctx, call_id)
+            })
+        };
+        self
+    }
+
+    /// Override the `time` namespace with a default-constructible type.
+    #[must_use]
+    pub fn with_time<T: io::IoNamespaceTime + Default + Send + Sync + 'static>(self) -> Self {
+        self.with_time_instance(Arc::new(T::default()))
     }
 }
 

@@ -40,7 +40,7 @@ pub fn is_auto_cli_primitive(ty: &Ty) -> bool {
 /// survives nontrivial shell quoting.
 pub fn parse_cli_value(raw: &str, ty: &Ty) -> Result<BexExternalValue> {
     match ty {
-        Ty::String { .. } => Ok(BexExternalValue::String(raw.to_string())),
+        Ty::String { .. } => Ok(BexExternalValue::String(raw.into())),
 
         Ty::Int { .. } => {
             let v: i64 = raw

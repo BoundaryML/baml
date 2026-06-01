@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 4965
 ---
 function user.BacktickEquality() -> bool {
     load_const true
@@ -153,7 +152,7 @@ function user.BacktickM3ForLoop(xs: string[]) -> string {
   L0:
     load_var __for_idx
     load_var xs
-    call baml.Array.length
+    container_len
     cmp_int_op <
     pop_jump_if_false L1
     jump L2

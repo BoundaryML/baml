@@ -12,8 +12,8 @@
 use baml_base::SourceFile;
 
 use crate::ids::{
-    ClassMarker, ClientMarker, EnumMarker, FunctionMarker, GeneratorMarker, LetMarker, LocalItemId,
-    RetryPolicyMarker, TemplateStringMarker, TestMarker, TypeAliasMarker,
+    ClassMarker, ClientMarker, EnumMarker, FunctionMarker, GeneratorMarker, InterfaceMarker,
+    LetMarker, LocalItemId, RetryPolicyMarker, TemplateStringMarker, TestMarker, TypeAliasMarker,
 };
 
 #[salsa::interned]
@@ -32,6 +32,12 @@ pub struct ClassLoc<'db> {
 pub struct EnumLoc<'db> {
     pub file: SourceFile,
     pub id: LocalItemId<EnumMarker>,
+}
+
+#[salsa::interned]
+pub struct InterfaceLoc<'db> {
+    pub file: SourceFile,
+    pub id: LocalItemId<InterfaceMarker>,
 }
 
 #[salsa::interned]
@@ -98,6 +104,12 @@ impl std::fmt::Debug for EnumLoc<'_> {
     }
 }
 
+impl std::fmt::Debug for InterfaceLoc<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "InterfaceLoc(..)")
+    }
+}
+
 impl std::fmt::Debug for TypeAliasLoc<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "TypeAliasLoc(..)")
@@ -148,6 +160,7 @@ pub enum ItemId<'db> {
     Function(FunctionLoc<'db>),
     Class(ClassLoc<'db>),
     Enum(EnumLoc<'db>),
+    Interface(InterfaceLoc<'db>),
     TypeAlias(TypeAliasLoc<'db>),
     Client(ClientLoc<'db>),
     Test(TestLoc<'db>),
@@ -163,6 +176,7 @@ impl std::fmt::Debug for ItemId<'_> {
             ItemId::Function(_) => write!(f, "ItemId::Function(..)"),
             ItemId::Class(_) => write!(f, "ItemId::Class(..)"),
             ItemId::Enum(_) => write!(f, "ItemId::Enum(..)"),
+            ItemId::Interface(_) => write!(f, "ItemId::Interface(..)"),
             ItemId::TypeAlias(_) => write!(f, "ItemId::TypeAlias(..)"),
             ItemId::Client(_) => write!(f, "ItemId::Client(..)"),
             ItemId::Test(_) => write!(f, "ItemId::Test(..)"),

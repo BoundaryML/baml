@@ -45,6 +45,16 @@ pub enum TokenKind {
     Class,
     #[token("enum")]
     Enum,
+    #[token("interface")]
+    Interface,
+    #[token("implements")]
+    Implements,
+    #[token("implement")]
+    Implement,
+    #[token("extends")]
+    Extends,
+    #[token("requires")]
+    Requires,
     #[token("function")]
     Function,
     #[token("client")]
@@ -294,6 +304,11 @@ impl std::fmt::Display for TokenKind {
             // Keywords
             TokenKind::Class => "class",
             TokenKind::Enum => "enum",
+            TokenKind::Interface => "interface",
+            TokenKind::Implements => "implements",
+            TokenKind::Implement => "implement",
+            TokenKind::Extends => "extends",
+            TokenKind::Requires => "requires",
             TokenKind::Function => "function",
             TokenKind::Client => "client",
             TokenKind::Generator => "generator",

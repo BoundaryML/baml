@@ -5,64 +5,61 @@
 class String {
   /// Serializes this string to a JSON value.
   //baml:mut_vm
-  function to_json(self) -> baml.json.json {
+  function to_json(self) -> baml.json.json throws never {
     $rust_function
   }
 
   /// Returns `self` unchanged. Provided so BEP-049 backtick-string
   /// interpolation (§11) can unconditionally wrap each `${...}` value
   /// with `.to_string()` without special-casing strings.
-  function to_string(self) -> string {
-    $rust_function
-  }
-
-  /// Returns the length of the string in **UTF-8 bytes**.
-  ///
-  /// This is `O(1)`. For ASCII text the byte length equals the character
-  /// count, but for any string containing multi-byte characters the two
-  /// differ — e.g. `"héllo".length() == 6` because `é` is two bytes.
-  ///
-  /// To count Unicode code points (`O(n)`), use `char_count()`.
-  ///
-  /// # Examples
-  /// ```
-  /// "hello".length()  // 5
-  /// "héllo".length()  // 6 (é is 2 bytes in UTF-8)
-  /// "".length()       // 0
-  /// ```
-  function length(self) -> int {
+  function to_string(self) -> string throws never {
     $rust_function
   }
 
   /// Returns the number of **Unicode code points** (characters) in the string.
   ///
-  /// This is `O(n)` because it iterates the string. For ASCII text it equals
-  /// `length()`, but for strings with multi-byte UTF-8 characters they differ.
-  ///
-  /// Note: a code point is not always one user-perceived character — e.g. a
-  /// flag emoji like `🇺🇸` is composed of two code points, and combining marks
-  /// (like `é` written as `e` + U+0301) count as multiple. For most practical
-  /// purposes (counting characters in Latin/CJK text) this returns what you
-  /// expect.
+  /// This is `O(1)` — the count is cached at construction time. For ASCII
+  /// text it equals `byte_length()`, but for strings with multi-byte UTF-8
+  /// characters they differ.
   ///
   /// # Examples
   /// ```
-  /// "hello".char_count()  // 5
-  /// "héllo".char_count()  // 5  (`length()` is 6)
-  /// "🐑".char_count()  // 1  (`length()` is 4)
-  /// "".char_count()       // 0
+  /// "hello".length()  // 5
+  /// "héllo".length()  // 5
+  /// "😀".length()     // 1
+  /// "".length()       // 0
   /// ```
-  function char_count(self) -> int {
+  function length(self) -> int throws never {
+    $rust_function
+  }
+
+  /// Alias for `length()`.
+  function char_count(self) -> int throws never {
+    $rust_function
+  }
+
+  /// Returns the length of the string in **UTF-8 bytes**.
+  ///
+  /// This is `O(1)`. Useful for serialization, network I/O, and buffer
+  /// allocation where byte size matters.
+  ///
+  /// # Examples
+  /// ```
+  /// "hello".byte_length()  // 5
+  /// "héllo".byte_length()  // 6
+  /// "😀".byte_length()     // 4
+  /// ```
+  function byte_length(self) -> int throws never {
     $rust_function
   }
 
   /// Returns the string with all Unicode characters converted to lowercase.
-  function to_lower_case(self) -> string {
+  function to_lower_case(self) -> string throws never {
     $rust_function
   }
 
   /// Returns the string with all Unicode characters converted to uppercase.
-  function to_upper_case(self) -> string {
+  function to_upper_case(self) -> string throws never {
     $rust_function
   }
 
@@ -77,7 +74,7 @@ class String {
   /// "\n\thi\n".trim()  // "hi"
   /// "hi".trim()        // "hi"
   /// ```
-  function trim(self) -> string {
+  function trim(self) -> string throws never {
     $rust_function
   }
 
@@ -89,7 +86,7 @@ class String {
   /// "  hi  ".trim_start()  // "hi  "
   /// "\nhi".trim_start()    // "hi"
   /// ```
-  function trim_start(self) -> string {
+  function trim_start(self) -> string throws never {
     $rust_function
   }
 
@@ -101,22 +98,22 @@ class String {
   /// "  hi  ".trim_end()  // "  hi"
   /// "hi\n".trim_end()    // "hi"
   /// ```
-  function trim_end(self) -> string {
+  function trim_end(self) -> string throws never {
     $rust_function
   }
 
   /// Returns true if `search` appears anywhere in the string.
-  function includes(self, search: string) -> bool {
+  function includes(self, search: string) -> bool throws never {
     $rust_function
   }
 
   /// Returns true if the string starts with `prefix`.
-  function starts_with(self, prefix: string) -> bool {
+  function starts_with(self, prefix: string) -> bool throws never {
     $rust_function
   }
 
   /// Returns true if the string ends with `suffix`.
-  function ends_with(self, suffix: string) -> bool {
+  function ends_with(self, suffix: string) -> bool throws never {
     $rust_function
   }
 
@@ -128,7 +125,7 @@ class String {
   /// "hello".split("")      // ["h", "e", "l", "l", "o"]
   /// "no match".split(",")  // ["no match"]
   /// ```
-  function split(self, delimiter: string) -> string[] {
+  function split(self, delimiter: string) -> string[] throws never {
     $rust_function
   }
 
@@ -144,98 +141,85 @@ class String {
   /// "".lines()           // []
   /// "\n".lines()         // [""]
   /// ```
-  function lines(self) -> string[] {
+  function lines(self) -> string[] throws never {
     $rust_function
   }
 
-  /// Returns the substring between two **byte** offsets `[start, end)`.
+  /// Returns the substring between two **character** offsets `[start, end)`.
   ///
-  /// Both `start` and `end` are byte indices, matching `length()`. They are
-  /// clamped to the range `[0, length()]`, and `end` is further clamped so
-  /// that `end >= start` (an empty string is returned if `end < start` after
-  /// clamping).
-  ///
-  /// Throws `InvalidArgument` if either clamped offset falls in the middle
-  /// of a multi-byte UTF-8 character, since the result would not be a valid
-  /// string.
+  /// Both `start` and `end` are codepoint indices, matching `length()`. They
+  /// are clamped to the range `[0, length()]`, and `end` is further clamped
+  /// so that `end >= start`. Out-of-bounds indices are silently clamped —
+  /// this method never throws.
   ///
   /// # Examples
   /// ```
   /// "hello world".substring(0, 5)   // "hello"
   /// "hello".substring(2, 100)       // "llo" (end clamped)
-  /// "héllo".substring(0, 3)         // "hé"
-  /// "héllo".substring(0, 2)         // throws — index 2 is mid-`é`
+  /// "😀hello".substring(0, 1)       // "😀"
+  /// "😀hello".substring(1, 4)       // "hel"
   /// ```
   function substring(self, start: int, end: int) -> string throws root.errors.InvalidArgument {
     $rust_function
   }
 
   /// Replaces the first occurrence of `search` with `replacement`.
-  function replace(self, search: string, replacement: string) -> string {
+  function replace(self, search: string, replacement: string) -> string throws never {
     $rust_function
   }
 
-  /// Returns the **byte offset** of the first occurrence of `search`, or `-1`
-  /// if not found. The returned offset is suitable for use with `substring`,
-  /// `char_at`, and `code_point_at`.
+  /// Returns the **character index** of the first occurrence of `search`, or
+  /// `-1` if not found.
   ///
   /// # Examples
   /// ```
   /// "hello world".index_of("world")  // 6
-  /// "héllo".index_of("l")            // 3 (after the 2-byte `é`)
+  /// "héllo".index_of("l")            // 2
+  /// "😀hello".index_of("h")          // 1
   /// "abc".index_of("z")              // -1
   /// ```
-  function index_of(self, search: string) -> int {
+  function index_of(self, search: string) -> int throws never {
     $rust_function
   }
 
-  /// Returns the single character that starts at the given **byte offset**,
-  /// as a one-character string.
+  /// Returns the character at the given **codepoint index** as a
+  /// one-character string.
   ///
-  /// `index` is a byte index (matching `length()`). If `index == length()`
-  /// the result is an empty string. Throws `InvalidArgument` if `index` is
-  /// negative, beyond `length()`, or falls in the middle of a multi-byte
-  /// UTF-8 character.
+  /// Returns an empty string if `index >= length()`. Throws
+  /// `InvalidArgument` if `index` is negative.
   ///
   /// # Examples
   /// ```
   /// "hello".char_at(0)   // "h"
   /// "héllo".char_at(1)   // "é"
-  /// "héllo".char_at(3)   // "l" (the `é` occupies bytes 1..3)
-  /// "héllo".char_at(2)   // throws — index 2 is mid-`é`
-  /// "hi".char_at(2)      // ""  (one past the end)
+  /// "héllo".char_at(2)   // "l"
+  /// "😀hello".char_at(0) // "😀"
+  /// "hi".char_at(99)     // ""
   /// ```
   function char_at(self, index: int) -> string throws root.errors.InvalidArgument {
     $rust_function
   }
 
-  /// Returns the Unicode code point starting at the given **byte offset** as
-  /// an integer in the range `[0, 0x10FFFF]`.
-  ///
-  /// `index` is a byte index (matching `length()`). Throws `InvalidArgument`
-  /// if `index` is negative, beyond `length() - 1`, or falls in the middle of
-  /// a multi-byte UTF-8 character. Note that, unlike `char_at`, requesting the
-  /// position one past the end (`index == length()`) is also an error since
-  /// there is no code point there.
+  /// Returns a new string that repeats `self` the given number of times.
+  /// Negative counts are treated as 0.
   ///
   /// # Examples
   /// ```
-  /// "hi".code_point_at(0)     // 104  (ASCII 'h')
-  /// "héllo".code_point_at(1)  // 233  (U+00E9 'é')
-  /// "🐑".code_point_at(0)     // 128017 (U+1F411)
-  /// "héllo".code_point_at(2)  // throws — index 2 is mid-`é`
+  /// "ab".repeat(3)   // "ababab"
+  /// "hi".repeat(0)   // ""
+  /// "hi".repeat(-1)  // ""
   /// ```
-  function code_point_at(self, index: int) -> int throws root.errors.InvalidArgument {
+  function repeat(self, count: int) -> string throws never {
     $rust_function
   }
 
   /// Returns true if the string contains the given `substring`.
-  function matches(self, substring: string) -> bool {
+  function matches(self, substring: string) -> bool throws never {
     $rust_function
   }
 
   /// Replaces all occurrences of `search` with `replacement`.
-  function replace_all(self, search: string, replacement: string) -> string {
+  function replace_all(self, search: string, replacement: string) -> string throws never {
     $rust_function
   }
 
@@ -257,7 +241,7 @@ class String {
   /// "12a".is_numeric()    // false
   /// "".is_numeric()       // true (vacuous)
   /// ```
-  function is_numeric(self) -> bool {
+  function is_numeric(self) -> bool throws never {
     $rust_function
   }
 
@@ -270,7 +254,7 @@ class String {
   /// "漢字".is_alphabetic()    // true
   /// "abc1".is_alphabetic()   // false
   /// ```
-  function is_alphabetic(self) -> bool {
+  function is_alphabetic(self) -> bool throws never {
     $rust_function
   }
 
@@ -284,7 +268,7 @@ class String {
   /// "héllo7".is_alphanumeric()  // true
   /// "a b".is_alphanumeric()     // false (space is not)
   /// ```
-  function is_alphanumeric(self) -> bool {
+  function is_alphanumeric(self) -> bool throws never {
     $rust_function
   }
 
@@ -299,7 +283,7 @@ class String {
   /// "Hello".is_uppercase()  // false
   /// "123".is_uppercase()    // false (digits aren't uppercase)
   /// ```
-  function is_uppercase(self) -> bool {
+  function is_uppercase(self) -> bool throws never {
     $rust_function
   }
 
@@ -312,7 +296,7 @@ class String {
   /// "hello".is_lowercase()  // true
   /// "Hello".is_lowercase()  // false
   /// ```
-  function is_lowercase(self) -> bool {
+  function is_lowercase(self) -> bool throws never {
     $rust_function
   }
 
@@ -326,7 +310,7 @@ class String {
   /// " \t\n".is_whitespace()    // true
   /// "a b".is_whitespace()      // false
   /// ```
-  function is_whitespace(self) -> bool {
+  function is_whitespace(self) -> bool throws never {
     $rust_function
   }
 
@@ -338,7 +322,7 @@ class String {
   /// "\n\t".is_control()  // true
   /// "a".is_control()     // false
   /// ```
-  function is_control(self) -> bool {
+  function is_control(self) -> bool throws never {
     $rust_function
   }
 
@@ -355,7 +339,7 @@ class String {
   /// "a b".is_graphic()      // false (space is not graphic)
   /// "a\n".is_graphic()      // false (newline is control)
   /// ```
-  function is_graphic(self) -> bool {
+  function is_graphic(self) -> bool throws never {
     $rust_function
   }
 
@@ -372,7 +356,7 @@ class String {
   /// "hello".is_ascii()    // true
   /// "héllo".is_ascii()    // false (`é` is U+00E9)
   /// ```
-  function is_ascii(self) -> bool {
+  function is_ascii(self) -> bool throws never {
     $rust_function
   }
 
@@ -385,31 +369,31 @@ class String {
   /// "12345".is_ascii_numeric()  // true
   /// "Ⅷ".is_ascii_numeric()      // false (Roman numeral)
   /// ```
-  function is_ascii_numeric(self) -> bool {
+  function is_ascii_numeric(self) -> bool throws never {
     $rust_function
   }
 
   /// Returns true if every character is an ASCII letter (`A`..=`Z` or
   /// `a`..=`z`). Empty string returns true.
-  function is_ascii_alphabetic(self) -> bool {
+  function is_ascii_alphabetic(self) -> bool throws never {
     $rust_function
   }
 
   /// Returns true if every character is an ASCII letter or digit. Empty
   /// string returns true.
-  function is_ascii_alphanumeric(self) -> bool {
+  function is_ascii_alphanumeric(self) -> bool throws never {
     $rust_function
   }
 
   /// Returns true if every character is an ASCII uppercase letter
   /// (`A`..=`Z`). Empty string returns true.
-  function is_ascii_uppercase(self) -> bool {
+  function is_ascii_uppercase(self) -> bool throws never {
     $rust_function
   }
 
   /// Returns true if every character is an ASCII lowercase letter
   /// (`a`..=`z`). Empty string returns true.
-  function is_ascii_lowercase(self) -> bool {
+  function is_ascii_lowercase(self) -> bool throws never {
     $rust_function
   }
 
@@ -417,20 +401,20 @@ class String {
   /// horizontal tab (`\t`), line feed (`\n`), form feed (`\x0C`), or
   /// carriage return (`\r`). Note this is narrower than `is_whitespace`,
   /// which accepts Unicode whitespace like NBSP.
-  function is_ascii_whitespace(self) -> bool {
+  function is_ascii_whitespace(self) -> bool throws never {
     $rust_function
   }
 
   /// Returns true if every character is an ASCII control character — code
   /// points `[0x00, 0x1F]` plus DEL (`0x7F`). Empty string returns true.
-  function is_ascii_control(self) -> bool {
+  function is_ascii_control(self) -> bool throws never {
     $rust_function
   }
 
   /// Returns true if every character is an ASCII "graphic" character —
   /// printable, non-space, non-control: code points `[0x21, 0x7E]`. Note
   /// the ASCII space is *not* graphic. Empty string returns true.
-  function is_ascii_graphic(self) -> bool {
+  function is_ascii_graphic(self) -> bool throws never {
     $rust_function
   }
 
@@ -442,13 +426,13 @@ class String {
   /// "deadBEEF".is_ascii_hex()  // true
   /// "0x123".is_ascii_hex()     // false (`x` is not a hex digit)
   /// ```
-  function is_ascii_hex(self) -> bool {
+  function is_ascii_hex(self) -> bool throws never {
     $rust_function
   }
 
   /// Returns the string encoded as a `uint8array` of UTF-8 bytes.
   ///
-  /// The resulting byte array has length `self.length()`. Inverse of the
+  /// The resulting byte array has length `self.byte_length()`. Inverse of the
   /// static `string.from_utf8(bytes)`.
   ///
   /// # Examples
@@ -457,7 +441,7 @@ class String {
   /// "é".to_utf8()      // [0xC3, 0xA9]
   /// "".to_utf8()       // []
   /// ```
-  function to_utf8(self) -> uint8array {
+  function to_utf8(self) -> uint8array throws never {
     $rust_function
   }
 

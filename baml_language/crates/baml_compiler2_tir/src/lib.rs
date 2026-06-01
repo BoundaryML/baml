@@ -24,6 +24,7 @@ pub mod exhaustiveness;
 pub mod generics;
 pub mod infer_context;
 pub mod inference;
+pub mod interfaces;
 pub mod lower_type_expr;
 pub mod narrowing;
 pub mod normalize;
