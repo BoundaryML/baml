@@ -1570,8 +1570,7 @@ function baml.http.Response.ok(self: baml.http.Response) -> bool {
     pop 1
     load_var self
     load_field .status_code
-    load_const 300
-    cmp_int_op <
+    cmp_int_lt_const 300
 
   L0:
     return
@@ -2353,10 +2352,7 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
     jump L10
 
   L9:
-    load_var __for_idx
-    load_const 1
-    add_int
-    store_var __for_idx
+    add_int_var_const_store 6 1 6
     jump L5
 
   L10:
@@ -2366,10 +2362,7 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
     load_array_element
     call baml.Array.push
     pop 1
-    load_var __for_idx_1
-    load_const 1
-    add_int
-    store_var __for_idx_1
+    add_int_var_const_store 8 1 8
     jump L8
 
   L11:
@@ -2408,8 +2401,7 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
     jump L4
 
   L1:
-    load_var _3
-    store_var r
+    move_local 4 3
     alloc_array 0
     store_var result
     load_var r
@@ -2458,8 +2450,7 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
     jump L7
 
   L6:
-    load_var next
-    store_var current_delay
+    move_local 6 9
     jump L8
 
   L7:
@@ -2486,10 +2477,7 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
     jump L11
 
   L10:
-    load_var attempt
-    load_const 1
-    add_int
-    store_var attempt
+    add_int_var_const_store 7 3 7
     jump L2
 
   L11:
@@ -2502,10 +2490,7 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
     init_instance baml.llm.OrchestrationStep .primitive_client, .delay_ms
     call baml.Array.push
     pop 1
-    load_var __for_idx
-    load_const 1
-    add_int
-    store_var __for_idx
+    add_int_var_const_store 11 3 11
     jump L9
 }
 
@@ -2584,10 +2569,7 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
     jump L8
     load_var e
     throw_if_panic
-    load_var __for_idx
-    load_const 1
-    add_int
-    store_var __for_idx
+    add_int_var_const_store 14 1 14
     jump L5
 
   L8:
@@ -2754,10 +2736,7 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
     jump L8
     load_var e
     throw_if_panic
-    load_var __for_idx
-    load_const 1
-    add_int
-    store_var __for_idx
+    add_int_var_const_store 10 1 10
     jump L5
 
   L8:
@@ -2817,8 +2796,8 @@ function baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.ll
     jump L9
 
   L1:
-    load_var _4
-    store_var_load_var r
+    move_local 5 4
+    load_var r
     load_field .initial_delay_ms
     load_const 0.0
     bin_op +
@@ -2840,8 +2819,7 @@ function baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.ll
     throw
 
   L4:
-    load_var inherited_delay_ms
-    store_var attempt_delay
+    move_local 8 3
     load_var attempt
     load_const 0
     cmp_int_op >
@@ -2863,8 +2841,7 @@ function baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.ll
     jump L6
 
   L5:
-    load_var next
-    store_var current_delay
+    move_local 6 9
     jump L7
 
   L6:
@@ -2880,8 +2857,7 @@ function baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.ll
     load_field .max_retries
     cmp_int_op ==
     pop_jump_if_false L8
-    load_var inherited_delay_ms
-    store_var attempt_delay
+    move_local 8 3
 
   L8:
     load_type #0
@@ -2892,10 +2868,7 @@ function baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.ll
     jump L9
     load_var e
     throw_if_panic
-    load_var attempt
-    load_const 1
-    add_int
-    store_var attempt
+    add_int_var_const_store 7 5 7
     jump L2
 
   L9:
@@ -2920,8 +2893,8 @@ function baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm
     jump L9
 
   L1:
-    load_var _4
-    store_var_load_var r
+    move_local 5 4
+    load_var r
     load_field .initial_delay_ms
     load_const 0.0
     bin_op +
@@ -2943,8 +2916,7 @@ function baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm
     throw
 
   L4:
-    load_var inherited_delay_ms
-    store_var attempt_delay
+    move_local 8 3
     load_var attempt
     load_const 0
     cmp_int_op >
@@ -2966,8 +2938,7 @@ function baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm
     jump L6
 
   L5:
-    load_var next
-    store_var current_delay
+    move_local 6 9
     jump L7
 
   L6:
@@ -2983,8 +2954,7 @@ function baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm
     load_field .max_retries
     cmp_int_op ==
     pop_jump_if_false L8
-    load_var inherited_delay_ms
-    store_var attempt_delay
+    move_local 8 3
 
   L8:
     load_type #0
@@ -2996,10 +2966,7 @@ function baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm
     jump L9
     load_var e
     throw_if_panic
-    load_var attempt
-    load_const 1
-    add_int
-    store_var attempt
+    add_int_var_const_store 7 6 7
     jump L2
 
   L9:
@@ -3341,16 +3308,10 @@ function baml.llm.PlannerState.rr_local_offset(self: baml.llm.PlannerState, clie
     load_var client_name
     cmp_op ==
     pop_jump_if_false L3
-    load_var offset
-    load_const 1
-    add_int
-    store_var offset
+    add_int_var_const_store 3 1 3
 
   L3:
-    load_var __for_idx
-    load_const 1
-    add_int
-    store_var __for_idx
+    add_int_var_const_store 5 1 5
     jump L0
 }
 
@@ -3364,9 +3325,7 @@ function baml.llm.PlannerState.rr_pick_index(self: baml.llm.PlannerState, client
     load_var client_name
     call baml.Array.push
     pop 1
-    load_var counter
-    load_var local_offset
-    add_int
+    add_int_var_var 3 5
     load_var sub_client_count
     mod_int
     return

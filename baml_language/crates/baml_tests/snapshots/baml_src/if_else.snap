@@ -299,15 +299,13 @@ function if_else.else_if_return_locals(a: bool, b: bool) -> int {
 
 function if_else.else_if_with_comparisons_fn() -> int {
     load_const 5
-    load_const 0
-    cmp_int_op <
+    cmp_int_lt_const 0
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_const 5
-    load_const 10
-    cmp_int_op <
+    cmp_int_lt_const 10
     pop_jump_if_false L1
     jump L2
 
@@ -484,8 +482,7 @@ function if_else.nested_block_with_if_fn() -> int {
     load_const 1
     store_var a
     load_const 2
-    load_const 3
-    add_int
+    add_int_const 3
     store_var_load_var a
     load_const 5
     cmp_int_op ==

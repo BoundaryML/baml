@@ -838,8 +838,7 @@ function json_auto_derive.optional_primitive_field_from_json_sum() -> int {
     jump L1
 
   L0:
-    load_var _8
-    store_var v1
+    move_local 5 6
     jump L2
 
   L1:
@@ -857,8 +856,7 @@ function json_auto_derive.optional_primitive_field_from_json_sum() -> int {
     jump L4
 
   L3:
-    load_var _12
-    store_var v2
+    move_local 7 8
     jump L5
 
   L4:
@@ -867,9 +865,7 @@ function json_auto_derive.optional_primitive_field_from_json_sum() -> int {
     store_var v2
 
   L5:
-    load_var v1
-    load_var v2
-    add_int
+    add_int_var_var 5 7
     return
 }
 

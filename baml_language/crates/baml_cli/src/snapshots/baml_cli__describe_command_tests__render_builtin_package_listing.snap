@@ -32,7 +32,6 @@ class            errors.GenericSdkError           <builtin>/baml/ns_errors/error
 class            errors.CompilationError          <builtin>/baml/ns_errors/errors.baml:75
 class            errors.StackFrame                <builtin>/baml/ns_errors/stack_trace.baml:2
 class            errors.StackTrace                <builtin>/baml/ns_errors/stack_trace.baml:9
-function         events.send                      <builtin>/baml/ns_events/events.baml:3
 class            fs.File                          <builtin>/baml/ns_fs/fs.baml:2
 function         fs.open                          <builtin>/baml/ns_fs/fs.baml:50
 function         fs.exists                        <builtin>/baml/ns_fs/fs.baml:55

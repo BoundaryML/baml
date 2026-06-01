@@ -39,8 +39,7 @@ function user.capture_before_after_shadow() -> int {
     load_var _6
     load_const 10
     mul_int
-    load_var _8
-    add_int
+    add_int_var _8
     return
 }
 
@@ -74,17 +73,13 @@ function user.for_loop_restores_outer() -> int {
     load_var __for_idx
     load_array_element
     store_var x
-    load_var __for_idx
-    load_const 1
-    add_int
-    store_var __for_idx
+    add_int_var_const_store 2 3 2
     jump L0
 }
 
 function user.initializer_uses_previous() -> int {
     load_const 1
-    load_const 1
-    add_int
+    add_int_const 1
     return
 }
 
@@ -120,9 +115,7 @@ function user.same_scope_shadow() -> int {
 }
 
 function user.shadow_param(x: int) -> int {
-    load_var x
-    load_const 1
-    add_int
+    add_int_var_const 1 0
     return
 }
 

@@ -131,22 +131,11 @@ function class_type_args_at_runtime.closure_inside_method_survives_gc_fn() -> st
     store_var i
 
   L0:
-    load_var i
-    load_const 500
-    cmp_int_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    cmp_int_lt_var_const_br_true 2 2 +4
     load_var describe
     call_indirect
     return
-
-  L2:
-    load_var i
-    load_const 1
-    add_int
-    store_var i
+    add_int_var_const_store 2 3 2
     jump L0
 }
 

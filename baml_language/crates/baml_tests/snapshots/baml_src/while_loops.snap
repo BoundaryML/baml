@@ -65,19 +65,12 @@ function while_loops.while_loops_break_at_two() -> int {
     store_var a
 
   L0:
+    cmp_int_lt_var_const_br_false 1 1 +6
+    add_int_var_const_store 1 0 1
     load_var a
-    load_const 5
-    cmp_int_op <
-    pop_jump_if_false L1
-    load_var a
-    load_const 1
-    add_int
-    store_var_load_var a
     load_const 2
     cmp_int_op ==
     pop_jump_if_false L0
-
-  L1:
     load_var a
     return
 }
@@ -89,16 +82,10 @@ function while_loops.while_loops_break_nested() -> int {
     pop_jump_if_false L1
     load_const true
     pop_jump_if_false L0
-    load_var a
-    load_const 1
-    add_int
-    store_var a
+    add_int_var_const_store 1 2 1
 
   L0:
-    load_var a
-    load_const 1
-    add_int
-    store_var a
+    add_int_var_const_store 1 2 1
 
   L1:
     load_var a
@@ -112,16 +99,10 @@ function while_loops.while_loops_break_nested_var(x: bool, y: bool) -> int {
     pop_jump_if_false L1
     load_var y
     pop_jump_if_false L0
-    load_var a
-    load_const 1
-    add_int
-    store_var a
+    add_int_var_const_store 3 1 3
 
   L0:
-    load_var a
-    load_const 1
-    add_int
-    store_var a
+    add_int_var_const_store 3 1 3
 
   L1:
     load_var a
@@ -164,13 +145,8 @@ function while_loops.while_loops_count_down(n: int) -> int {
   L0:
     load_const true
     pop_jump_if_false L1
-    load_var result
-    load_var n
-    add_int
-    store_var result
-    load_var n
-    load_const 1
-    sub_int
+    add_int_var_var_store 2 1 2
+    sub_int_var_const 1 2
     store_var_load_var n
     load_const 0
     cmp_int_op ==
@@ -199,9 +175,7 @@ function while_loops.while_loops_factorial_break(limit: int) -> int {
     load_var limit
     mul_int
     store_var result
-    load_var limit
-    load_const 1
-    sub_int
+    sub_int_var_const 1 0
     store_var limit
     jump L0
 
@@ -230,9 +204,7 @@ function while_loops.while_loops_factorial_continue(limit: int) -> int {
     load_var limit
     mul_int
     store_var result
-    load_var limit
-    load_const 1
-    sub_int
+    sub_int_var_const 1 0
     store_var_load_var limit
     load_const 0
     cmp_int_op !=
@@ -263,18 +235,11 @@ function while_loops.while_loops_fib(n: int) -> int {
     return
 
   L2:
-    load_var n
-    load_const 1
-    sub_int
+    sub_int_var_const 1 1
     store_var n
-    load_var a
-    load_var b
-    add_int
-    store_var t
-    load_var a
-    store_var b
-    load_var t
-    store_var a
+    add_int_var_var_store 2 3 4
+    move_local 3 2
+    move_local 2 4
     jump L0
 }
 
@@ -298,16 +263,12 @@ function while_loops.while_loops_gcd(a: int, b: int) -> int {
     jump L4
 
   L3:
-    load_var b
-    load_var a
-    sub_int
+    sub_int_var_var 2 1
     store_var b
     jump L0
 
   L4:
-    load_var a
-    load_var b
-    sub_int
+    sub_int_var_var 1 2
     store_var a
     jump L0
 }

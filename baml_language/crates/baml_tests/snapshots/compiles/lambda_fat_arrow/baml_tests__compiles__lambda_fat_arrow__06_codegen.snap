@@ -51,9 +51,7 @@ function user.test_mixed() -> int {
     make_closure .<lambda(test_mixed, 1)>, 0
     call_indirect
     store_var _5
-    load_var _3
-    load_var _5
-    add_int
+    add_int_var_var 1 2
     return
 }
 

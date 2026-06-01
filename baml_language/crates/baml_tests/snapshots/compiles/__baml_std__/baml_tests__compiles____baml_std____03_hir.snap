@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 3999
 ---
 === HIR2 ===
 
@@ -331,7 +330,6 @@ function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
 function baml.errors.to_string(self: ?) -> string  [builtin]
 
 --- <builtin>/baml/ns_events/events.baml ---
-function baml.events.send(event_name: string, data: map<string, unknown>) -> void  [builtin]
 
 --- <builtin>/baml/ns_fs/fs.baml ---
 class baml.fs.DirEntry {

@@ -3369,9 +3369,7 @@ function exceptions.sequential_catches_both_recover_fn() -> int {
     store_var b
 
   L1:
-    load_var a
-    load_var b
-    add_int
+    add_int_var_var 1 3
     return
 }
 

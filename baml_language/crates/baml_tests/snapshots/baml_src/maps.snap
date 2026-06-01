@@ -258,8 +258,7 @@ function maps.map_clear_then_reuse_main() -> int {
     load_const "b"
     call baml.Map.get
     store_var _5
-    load_var _5
-    store_var _0
+    move_local 1 3
     load_var _5
     load_const null
     cmp_op ==
@@ -317,8 +316,7 @@ function maps.map_delete_does_not_affect_other_keys_main() -> int {
     load_const "b"
     call baml.Map.get
     store_var _5
-    load_var _5
-    store_var _0
+    move_local 1 3
     load_var _5
     load_const null
     cmp_op ==
@@ -382,8 +380,7 @@ function maps.map_get_or_insert_does_not_overwrite_main() -> int {
     load_const "k"
     call baml.Map.get
     store_var _4
-    load_var _4
-    store_var _0
+    move_local 1 3
     load_var _4
     load_const null
     cmp_op ==
@@ -433,8 +430,7 @@ function maps.map_get_or_insert_persists_main() -> int {
     load_const "k"
     call baml.Map.get
     store_var _3
-    load_var _3
-    store_var _0
+    move_local 1 3
     load_var _3
     load_const null
     cmp_op ==
@@ -584,8 +580,7 @@ function maps.map_set_then_get_main() -> int {
     load_const "a"
     call baml.Map.get
     store_var _4
-    load_var _4
-    store_var _0
+    move_local 1 3
     load_var _4
     load_const null
     cmp_op ==

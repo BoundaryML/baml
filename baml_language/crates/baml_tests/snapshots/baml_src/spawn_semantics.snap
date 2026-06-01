@@ -47,8 +47,7 @@ function spawn_semantics.mid() -> int {
     store_var _3
     load_var _3
     await
-    load_const 10
-    add_int
+    add_int_const 10
     return
 }
 
@@ -57,8 +56,8 @@ function spawn_semantics.multiple_awaits_on_same_future_return_cached_value_fn()
     load_const null
     spawn
     store_var _3
-    load_var _3
-    store_var_load_var f
+    move_local 1 2
+    load_var f
     await
     store_var a
     load_var f
@@ -67,11 +66,8 @@ function spawn_semantics.multiple_awaits_on_same_future_return_cached_value_fn()
     load_var f
     await
     store_var c
-    load_var a
-    load_var b
-    add_int
-    load_var c
-    add_int
+    add_int_var_var 3 4
+    add_int_var c
     return
 }
 
@@ -101,7 +97,6 @@ function spawn_semantics.top() -> int {
     store_var _3
     load_var _3
     await
-    load_const 100
-    add_int
+    add_int_const 100
     return
 }

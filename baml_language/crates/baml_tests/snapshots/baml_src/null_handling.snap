@@ -92,8 +92,7 @@ function null_handling.nh_combined_lhs_null(node: null_handling.NhNode?, items: 
     store_var _6
 
   L3:
-    load_var _6
-    store_var _5
+    move_local 3 4
     load_var _6
     load_const null
     cmp_op ==
@@ -154,8 +153,7 @@ function null_handling.nh_combined_rhs_null(node: null_handling.NhNode?, items: 
     store_var _6
 
   L3:
-    load_var _6
-    store_var _5
+    move_local 3 4
     load_var _6
     load_const null
     cmp_op ==

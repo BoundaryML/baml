@@ -41,8 +41,8 @@ function future_methods.methods_after_cancel() -> baml.future.FutureState {
     load_const null
     spawn
     store_var _3
-    load_var _3
-    store_var_load_var f
+    move_local 1 2
+    load_var f
     call baml.future.Future.cancel
     pop 1
     load_var f
@@ -55,8 +55,8 @@ function future_methods.methods_after_successful_settle() -> bool[] {
     load_const null
     spawn
     store_var _3
-    load_var _3
-    store_var_load_var f
+    move_local 1 2
+    load_var f
     await
     pop 1
     load_var f
@@ -78,8 +78,8 @@ function future_methods.methods_on_errored_future() -> baml.future.FutureState {
     load_const null
     spawn
     store_var _3
-    load_var _3
-    store_var_load_var f
+    move_local 1 2
+    load_var f
     await
     pop 1
     jump L1
@@ -103,8 +103,8 @@ function future_methods.methods_on_pending_future() -> baml.future.FutureState {
     load_const null
     spawn
     store_var _3
-    load_var _3
-    store_var_load_var f
+    move_local 1 2
+    load_var f
     call baml.future.Future.is_settled
     pop 1
     load_var f

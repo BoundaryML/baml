@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 4252
 ---
 === MIR2 ===
 
@@ -1436,8 +1435,6 @@ fn baml.errors.StackFrame.to_json(self: baml.errors.StackFrame) -> baml.json.jso
 }
 
 fn baml.errors.StackTrace.to_string = builtin(vm)
-
-fn baml.events.send = builtin(intrinsic)
 
 fn baml.fs.File.bytes = builtin(io)
 

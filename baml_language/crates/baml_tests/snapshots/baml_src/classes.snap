@@ -166,12 +166,9 @@ function classes.constructor_with_preceding_variables_fn() -> int {
     load_var obj
     load_field .y
     add_int
-    load_const 10
-    add_int
-    load_const 20
-    add_int
-    load_const 30
-    add_int
+    add_int_const 10
+    add_int_const 20
+    add_int_const 30
     return
 }
 
@@ -281,10 +278,8 @@ function classes.nested_constructor_with_preceding_variables_fn() -> int {
     load_var obj
     load_field .x
     add_int
-    load_const 5
-    add_int
-    load_const 10
-    add_int
+    add_int_const 5
+    add_int_const 10
     return
 }
 

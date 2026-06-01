@@ -24,8 +24,7 @@ function user.sum_array(arr: int[]) -> int {
     jump L5
 
   L1:
-    load_var total
-    store_var _12
+    move_local 6 3
     load_const 0
     store_var __for_idx_1
 
@@ -47,10 +46,7 @@ function user.sum_array(arr: int[]) -> int {
     load_array_element
     call_indirect
     pop 1
-    load_var __for_idx_1
-    load_const 1
-    add_int
-    store_var __for_idx_1
+    add_int_var_const_store 7 1 7
     jump L2
 
   L5:
@@ -67,9 +63,6 @@ function user.sum_array(arr: int[]) -> int {
     make_closure .<lambda(sum_array, 0)>, 2
     call baml.Array.push
     pop 1
-    load_var __for_idx
-    load_const 1
-    add_int
-    store_var __for_idx
+    add_int_var_const_store 4 1 4
     jump L0
 }

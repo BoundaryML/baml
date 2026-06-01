@@ -343,28 +343,14 @@ function user.test_shadowing() -> string {
     store_var i
 
   L3:
-    load_var i
-    load_var y
-    cmp_int_op <
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
-    load_var __for_idx
-    load_const 1
-    add_int
-    store_var __for_idx
+    cmp_int_lt_var_var_br_true 5 4 +3
+    add_int_var_const_store 3 1 3
     jump L0
-
-  L5:
     load_var x
     load_const "1"
     bin_op +
     store_var x
-    load_var i
-    load_const 1
-    add_int
-    store_var i
+    add_int_var_const_store 5 1 5
     jump L3
 }
 

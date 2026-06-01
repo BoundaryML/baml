@@ -192,24 +192,18 @@ function watch.WPointWithSet.set(self: watch.WPointWithSet, x: int, y: int) -> w
 }
 
 function watch.block_notification_basic_fn() -> int {
-    notify_block entering_computation
     load_const 1
-    load_const 2
-    add_int
+    add_int_const 2
     return
 }
 
 function watch.block_notification_multiple_fn() -> int {
-    notify_block first_block
-    notify_block second_block
     load_const 1
-    load_const 2
-    add_int
+    add_int_const 2
     return
 }
 
 function watch.header_before_if() -> int {
-    notify_block MyHeader
     load_const true
     pop_jump_if_false L0
     jump L1
@@ -228,24 +222,12 @@ function watch.header_before_if() -> int {
 function watch.header_before_while() -> int {
     load_const 0
     store_var x
-    notify_block LoopHeader
 
   L0:
-    load_var x
-    load_const 1
-    cmp_int_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    cmp_int_lt_var_const_br_true 1 1 +3
     load_var x
     return
-
-  L2:
-    load_var x
-    load_const 1
-    add_int
-    store_var x
+    add_int_var_const_store 1 1 1
     jump L0
 }
 
@@ -266,8 +248,6 @@ function watch.if_no_header() -> int {
 }
 
 function watch.multiple_headers() -> int {
-    notify_block FirstHeader
-    notify_block SecondHeader
     load_const 1
     load_const 0
     cmp_int_op >
@@ -286,7 +266,6 @@ function watch.multiple_headers() -> int {
 }
 
 function watch.standalone_header() -> int {
-    notify_block JustAHeader
     load_const 5
     return
 }
@@ -360,19 +339,10 @@ function watch.watch_break_unwatches_fn() -> int {
     jump L2
 
   L1:
-    load_var x
-    load_const 9
-    add_int
-    store_var x
-    load_var total
-    load_var x
-    add_int
-    store_var total
+    add_int_var_const_store 4 6 4
+    add_int_var_var_store 1 4 1
     unwatch x
-    load_var __for_idx
-    load_const 1
-    add_int
-    store_var __for_idx
+    add_int_var_const_store 3 1 3
     jump L0
 
   L2:
@@ -405,9 +375,7 @@ function watch.watch_catch_arm_fallthrough_fn() -> int {
     unwatch x
 
   L0:
-    load_var result
-    load_const 1
-    add_int
+    add_int_var_const 1 4
     return
 }
 
@@ -511,14 +479,8 @@ function watch.watch_continue_unwatches_fn() -> int {
     jump L4
 
   L3:
-    load_var x
-    load_const 10
-    add_int
-    store_var x
-    load_var total
-    load_var x
-    add_int
-    store_var total
+    add_int_var_const_store 4 6 4
+    add_int_var_var_store 1 4 1
     unwatch x
     jump L5
 
@@ -526,10 +488,7 @@ function watch.watch_continue_unwatches_fn() -> int {
     unwatch x
 
   L5:
-    load_var __for_idx
-    load_const 1
-    add_int
-    store_var __for_idx
+    add_int_var_const_store 3 1 3
     jump L0
 }
 
@@ -663,15 +622,9 @@ function watch.watch_for_throw_fails() -> int {
     jump L4
 
   L3:
-    load_var x
-    load_const 9
-    add_int
-    store_var x
+    add_int_var_const_store 3 6 3
     unwatch x
-    load_var __for_idx
-    load_const 1
-    add_int
-    store_var __for_idx
+    add_int_var_const_store 2 0 2
     jump L0
 
   L4:
@@ -749,9 +702,7 @@ function watch.watch_match_arm_fallthrough_entry(input: int) -> int {
     unwatch x
 
   L2:
-    load_var result
-    load_const 1
-    add_int
+    add_int_var_const 2 0
     return
 }
 
@@ -924,8 +875,7 @@ function watch.watch_scope_exit_fn() -> int {
     load_var point
     load_const 1
     store_field .x
-    load_var point
-    store_var outter_point
+    move_local 1 2
     unwatch point
     load_var outter_point
     load_const 2
@@ -971,9 +921,7 @@ function watch.watch_switch_arm_fallthrough_entry(input: int) -> int {
     store_var result
 
   L5:
-    load_var result
-    load_const 1
-    add_int
+    add_int_var_const 2 8
     return
 }
 
@@ -1024,41 +972,26 @@ function watch.watch_while_throw_fails() -> int {
     store_var i
 
   L0:
-    load_var i
-    load_const 3
-    cmp_int_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    cmp_int_lt_var_const_br_true 1 1 +3
     load_const 0
     return
-
-  L2:
-    load_var i
-    store_var x
+    move_local 2 1
     load_const "x"
     load_const null
     watch x
     load_var x
     load_const 1
     cmp_int_op ==
-    pop_jump_if_false L3
-    jump L4
+    pop_jump_if_false L1
+    jump L2
 
-  L3:
-    load_var x
-    load_const 10
-    add_int
-    store_var x
-    load_var i
-    load_const 1
-    add_int
-    store_var i
+  L1:
+    add_int_var_const_store 2 5 2
+    add_int_var_const_store 1 4 1
     unwatch x
     jump L0
 
-  L4:
+  L2:
     unwatch x
     load_const "boom"
     throw

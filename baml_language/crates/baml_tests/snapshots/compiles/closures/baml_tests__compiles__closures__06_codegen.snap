@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 7540
 ---
 function user.Box.from_json(j: baml.json.json) -> Box<void> {
     load_var j
@@ -45,9 +44,7 @@ function user.Calculator.compute(self: Calculator, a: int, b: int) -> int {
     jump L2
 
   L1:
-    load_var a
-    load_var b
-    add_int
+    add_int_var_var 2 3
 
   L2:
     return

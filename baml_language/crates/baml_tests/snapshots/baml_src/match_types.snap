@@ -907,8 +907,8 @@ function match_types.match_typed_pattern_with_field_access() -> int {
     jump L2
 
   L1:
-    load_var shape
-    store_var_load_var p
+    move_local 2 1
+    load_var p
     load_field .x
     load_var p
     load_field .y

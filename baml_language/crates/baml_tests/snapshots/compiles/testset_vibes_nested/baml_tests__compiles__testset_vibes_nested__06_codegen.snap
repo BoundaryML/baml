@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 28035
 ---
 function $init() -> null {
     call $init_let_0
@@ -167,25 +166,14 @@ function user.Foo() -> string | image {
     store_var i
 
   L0:
-    load_var i
-    load_const 2
-    cmp_int_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    cmp_int_lt_var_const_br_true 2 2 +3
     load_var x
     return
-
-  L2:
     load_const "hi:  "
     load_var x
     bin_op +
     store_var x
-    load_var i
-    load_const 1
-    add_int
-    store_var i
+    add_int_var_const_store 2 4 2
     jump L0
 }
 

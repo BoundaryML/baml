@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 19199
 ---
 function $init() -> null {
     call $init_let_0
@@ -204,9 +203,7 @@ function user.HostEntry(query: string, max_results: int, filter: string?) -> int
     jump L3
 
   L2:
-    load_var max_results
-    load_const 100
-    add_int
+    add_int_var_const 2 3
     jump L4
 
   L3:

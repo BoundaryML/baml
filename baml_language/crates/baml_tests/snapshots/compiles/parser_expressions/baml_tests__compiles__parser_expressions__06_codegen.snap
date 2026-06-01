@@ -1,20 +1,16 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 20190
 ---
 function user.Calculate() -> int {
     load_const 3
     load_const 3
     mul_int
     store_var b
-    load_const 3
-    load_var b
-    add_int
+    add_int_var_const 1 0
     load_var b
     load_const 2
     div_int
-    load_const 1
-    sub_int
+    sub_int_const 1
     mul_int
     return
 }

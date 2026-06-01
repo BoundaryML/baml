@@ -92,8 +92,7 @@ function optional_function_parameters.combine(x: int, a: int, b: int) -> int {
     load_const 10
     mul_int
     add_int
-    load_var b
-    add_int
+    add_int_var b
     return
 }
 
@@ -126,8 +125,7 @@ function optional_function_parameters.ofp_mutable_default_array_is_fresh_per_cal
     load_var _2
     load_const 10
     mul_int
-    load_var _3
-    add_int
+    add_int_var _3
     return
 }
 
@@ -169,8 +167,7 @@ function optional_function_parameters.pair(a: int, b: int) -> int {
     load_var a
     load_const 10
     mul_int
-    load_var b
-    add_int
+    add_int_var b
     return
 }
 
@@ -234,10 +231,7 @@ function optional_function_parameters.score(query: string, max_results: int, fil
     store_var filter_bonus
 
   L5:
-    load_var max_results
-    load_var chunk_size
-    add_int
-    load_var filter_bonus
-    add_int
+    add_int_var_var 2 4
+    add_int_var filter_bonus
     return
 }

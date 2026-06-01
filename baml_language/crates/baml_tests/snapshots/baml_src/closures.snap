@@ -87,9 +87,7 @@ function closures.ClsCalculator.compute(self: closures.ClsCalculator, a: int, b:
     jump L2
 
   L1:
-    load_var a
-    load_var b
-    add_int
+    add_int_var_var 2 3
 
   L2:
     return
@@ -165,20 +163,12 @@ function closures.ClsRangeCheck.is_valid(self: closures.ClsRangeCheck, n: int) -
 }
 
 function closures.ClsWorker.risky(self: closures.ClsWorker, value: int) -> int {
-    load_var value
-    load_const 0
-    cmp_int_op <
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    cmp_int_lt_var_const_br_true 2 0 +6
     load_var self
     load_field .factor
     load_var value
     mul_int
     return
-
-  L1:
     load_const "negative"
     throw
 }
