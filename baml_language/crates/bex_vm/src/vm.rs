@@ -2634,34 +2634,42 @@ impl BexVm {
         // the caller pushed resumes — with the host result on the stack — once
         // the engine completes the op, exactly as for a bytecode callback's
         // return value.
-        if matches!(self.get_object(callee_ptr), Object::HostClosure(_)) {
+        // Classify the callee with a single heap deref. A plain `Function` —
+        // the overwhelmingly common case, including all recursion — needs
+        // neither closure captures nor bound-method class args, so it takes the
+        // empty fast path. `closure_type_args` are the Closure's captured type
+        // args; `bound_method_class_type_args` are the receiver's class type
+        // args (De Bruijn ordering: class args ++ explicit call-site args,
+        // matching enclosing_generic_params() which puts class params first).
+        // Both are injected into the new BytecodeFrame after it is created.
+        let (is_host, closure_type_args, bound_method_class_type_args): (
+            bool,
+            Box<[baml_type::Ty]>,
+            Box<[baml_type::Ty]>,
+        ) = match self.get_object(callee_ptr) {
+            Object::HostClosure(_) => (true, Box::new([]), Box::new([])),
+            Object::Closure(c) => (false, c.captured_type_args.clone(), Box::new([])),
+            Object::BoundMethod(bm) => {
+                let bm_args: Box<[baml_type::Ty]> = match bm.receiver.as_object_ptr() {
+                    Some(recv_ptr) => match self.get_object(recv_ptr) {
+                        Object::Instance(inst) => inst.class_type_args.clone().into_boxed_slice(),
+                        _ => Box::new([]),
+                    },
+                    None => Box::new([]),
+                };
+                (false, Box::new([]), bm_args)
+            }
+            // Plain Function (fast path) and everything else: no extra args.
+            _ => (false, Box::new([]), Box::new([])),
+        };
+
+        // A host closure isn't a Function/Closure/BoundMethod and dispatches via
+        // a single-yield sys-op rather than a pushed frame (reached when a host
+        // callable is invoked indirectly, e.g. through `array.map(f)`).
+        if is_host {
             let user_args: Vec<Value> = self.stack.drain(locals_offset..).collect();
             return Ok(Some(self.host_closure_call_sysop(callee_ptr, user_args)));
         }
-
-        // Extract captured_type_args from a Closure callee before we discard
-        // the concrete Closure type in favour of the inner Function.
-        // These are injected into the new BytecodeFrame after it is created.
-        let closure_type_args: Box<[baml_type::Ty]> = match self.get_object(callee_ptr) {
-            Object::Closure(c) => c.captured_type_args.clone(),
-            _ => Box::new([]),
-        };
-
-        // For BoundMethod callees, extract the receiver's class_type_args so
-        // they can seed frame.type_args before call-site explicit type args are
-        // appended.  This implements the De Bruijn ordering:
-        //   frame.type_args = receiver.class_type_args ++ explicit_call_site_args
-        // matching enclosing_generic_params() which puts class params first.
-        let bound_method_class_type_args: Box<[baml_type::Ty]> = match self.get_object(callee_ptr) {
-            Object::BoundMethod(bm) => match bm.receiver.as_object_ptr() {
-                Some(recv_ptr) => match self.get_object(recv_ptr) {
-                    Object::Instance(inst) => inst.class_type_args.clone().into_boxed_slice(),
-                    _ => Box::new([]),
-                },
-                None => Box::new([]),
-            },
-            _ => Box::new([]),
-        };
 
         // Resolve the callee: either a plain Function, a Closure, or a BoundMethod wrapping one.
         let callee = match self.get_object(callee_ptr) {
