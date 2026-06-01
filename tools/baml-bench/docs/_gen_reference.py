@@ -15,12 +15,30 @@ OUT = HERE / "reference.md"
 
 
 def first_line(doc: str | None) -> str:
+    """Return the first line of a docstring, or an undocumented placeholder.
+
+    Args:
+        doc: The raw docstring/JSDoc summary text, or None.
+
+    Returns:
+        The first non-empty line, whitespace-collapsed, or "_(undocumented)_".
+    """
     if not doc:
         return "_(undocumented)_"
     return " ".join(doc.strip().splitlines()[0].split())
 
 
 def sig(args: ast.arguments) -> str:
+    """Render a function's parameter names as a signature string.
+
+    Drops ``self``/``cls`` and prefixes ``*args``/``**kwargs`` appropriately.
+
+    Args:
+        args: The AST arguments node of a function or method.
+
+    Returns:
+        A comma-separated parameter list (names only, no types or defaults).
+    """
     names = [a.arg for a in args.posonlyargs + args.args if a.arg not in ("self", "cls")]
     if args.vararg:
         names.append("*" + args.vararg.arg)
@@ -31,6 +49,17 @@ def sig(args: ast.arguments) -> str:
 
 
 def py_section(path: Path) -> list[str]:
+    """Build the markdown reference lines for one Python module.
+
+    Lists each top-level function and class (with its methods), each annotated
+    with its one-line docstring summary.
+
+    Args:
+        path: The .py file to document.
+
+    Returns:
+        Markdown lines: a section header plus one bullet per symbol.
+    """
     tree = ast.parse(path.read_text())
     rel = path.relative_to(ROOT)
     lines = [f"### `{rel}`", ""]
@@ -50,6 +79,17 @@ JSDOC = re.compile(r"/\*\*(.*?)\*/\s*export const (\w+)\s*=", re.S)
 
 
 def ts_section(path: Path) -> list[str]:
+    """Build the markdown reference lines for one TypeScript module.
+
+    Extracts each ``export const`` preceded by a JSDoc block, using the block's
+    first non-tag line as the summary.
+
+    Args:
+        path: The .ts file to document.
+
+    Returns:
+        Markdown lines: a section header plus one bullet per exported symbol.
+    """
     text = path.read_text()
     rel = path.relative_to(ROOT)
     lines = [f"### `{rel}`", ""]
@@ -62,6 +102,11 @@ def ts_section(path: Path) -> list[str]:
 
 
 def main() -> None:
+    """Generate docs/reference.md from the bench_core Python and convex TypeScript sources.
+
+    Walks ``libs/bench_core/*.py`` and ``convex/*.ts``, assembles the consolidated
+    reference, and writes it to ``reference.md`` next to this script.
+    """
     out = [
         "# API reference",
         "",

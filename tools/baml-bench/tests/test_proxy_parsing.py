@@ -4,6 +4,12 @@ from services.claude_proxy import runner
 
 
 def test_parse_claude_session():
+    """parse_claude_session extracts the session summary from the agent's stdout.
+
+    Verifies it pulls the turn and tool-call counts, the session id, and the token
+    usage (including the cache-write count) out of the final JSON line, ignoring
+    surrounding log noise.
+    """
     stdout = "\n".join([
         "some log noise",
         json.dumps({
@@ -18,6 +24,12 @@ def test_parse_claude_session():
 
 
 def test_parse_turn_log_indexes_and_backfills():
+    """parse_turn_log builds 1-indexed turns and backfills tool results from the log.
+
+    Verifies turns are numbered from 1 (matching the worker's anchors), api calls
+    are counted, each tool_use is paired with its tool_result preview and error
+    flag, and the thinking preview is captured.
+    """
     lines = [
         {"type": "assistant", "message": {"content": [
             {"type": "thinking", "thinking": "let me think"},
@@ -47,6 +59,11 @@ def test_parse_turn_log_indexes_and_backfills():
 
 
 def test_validate_relative_path_rejects_traversal():
+    """validate_relative_path rejects parent-traversal and absolute paths.
+
+    Verifies that a "../" traversal and an absolute path each raise ValueError,
+    while an ordinary relative path is accepted.
+    """
     import pytest
     with pytest.raises(ValueError):
         runner.validate_relative_path("../etc/passwd")

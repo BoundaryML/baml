@@ -16,7 +16,11 @@ from services.claude_proxy.app import app as proxy_app
     "app", [api_app, ingress_app, proxy_app], ids=["api", "ingress", "claude_proxy"]
 )
 def test_healthz_ok(app):
-    """GET /healthz returns 200/"ok" for each constructed app."""
+    """GET /healthz returns 200/"ok" for each constructed app.
+
+    Args:
+        app: The FastAPI app under test (api, ingress, or claude_proxy).
+    """
     with TestClient(app) as client:
         r = client.get("/healthz")
     assert r.status_code == 200
