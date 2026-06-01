@@ -127,7 +127,8 @@ pub(crate) fn display_instruction(
     let metadata = match instruction {
         Instruction::LoadConst(index)
         | Instruction::AddIntConst(index)
-        | Instruction::CmpIntLtConst(index) => {
+        | Instruction::CmpIntLtConst(index)
+        | Instruction::SubIntConst(index) => {
             // Prefer resolved_constants (runtime), fall back to constants (compile-time)
             if let Some(value) = function.bytecode.resolved_constants.get(*index) {
                 format!("({})", display_value(*value))
@@ -148,6 +149,7 @@ pub(crate) fn display_instruction(
         | Instruction::StoreVarLoadVar(index)
         | Instruction::AddIntVar(index)
         | Instruction::CmpIntLtVar(index)
+        | Instruction::SubIntVar(index)
         | Instruction::Watch(index)
         | Instruction::Unwatch(index)
         | Instruction::Notify(index) => match function.local_names.get(*index) {
@@ -225,6 +227,8 @@ pub(crate) fn display_instruction(
         | Instruction::CmpIntLtVarConstBrFalse(..)
         | Instruction::CmpIntLtVarVarBrTrue(..)
         | Instruction::CmpIntLtVarConstBrTrue(..)
+        | Instruction::SubIntVarVar(..)
+        | Instruction::SubIntVarConst(..)
         | Instruction::UnaryOp(_)
         | Instruction::AllocArray(_)
         | Instruction::AllocMap(_)
@@ -403,6 +407,10 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::CmpIntLtVarConst(..)
         | Instruction::AddIntVarVarStore(..)
         | Instruction::AddIntVarConstStore(..)
+        | Instruction::SubIntVar(_)
+        | Instruction::SubIntConst(_)
+        | Instruction::SubIntVarVar(..)
+        | Instruction::SubIntVarConst(..)
         | Instruction::UnaryOp(_) => Style::new().blue().bright(),
         Instruction::Jump(_)
         | Instruction::PopJumpIfFalse(_)
@@ -848,6 +856,10 @@ fn display_instruction_textual(
         Instruction::CmpIntLtVarConstBrTrue(a, c, o) => {
             format!("cmp_int_lt_var_const_br_true {a} {c} {o:+}")
         }
+        Instruction::SubIntVar(idx) => format!("sub_int_var {}", meta_str(idx)),
+        Instruction::SubIntConst(_) => format!("sub_int_const {}", meta_str(&"")),
+        Instruction::SubIntVarVar(a, b) => format!("sub_int_var_var {a} {b}"),
+        Instruction::SubIntVarConst(a, c) => format!("sub_int_var_const {a} {c}"),
         Instruction::SubInt => "sub_int".to_string(),
         Instruction::MulInt => "mul_int".to_string(),
         Instruction::DivInt => "div_int".to_string(),
@@ -1340,7 +1352,9 @@ pub fn display_compact_bytecode(
             | OpCode::AddIntVar
             | OpCode::AddIntConst
             | OpCode::CmpIntLtVar
-            | OpCode::CmpIntLtConst => {
+            | OpCode::CmpIntLtConst
+            | OpCode::SubIntVar
+            | OpCode::SubIntConst => {
                 let val = read_u32(code, &mut pc);
                 writeln!(f, "{val}")?;
             }
@@ -1389,7 +1403,9 @@ pub fn display_compact_bytecode(
             | OpCode::AddIntVarConst
             | OpCode::CmpIntLtVarVar
             | OpCode::CmpIntLtVarConst
-            | OpCode::MoveLocal => {
+            | OpCode::MoveLocal
+            | OpCode::SubIntVarVar
+            | OpCode::SubIntVarConst => {
                 let a = read_u32(code, &mut pc);
                 let b = read_u32(code, &mut pc);
                 writeln!(f, "{a} {b}")?;

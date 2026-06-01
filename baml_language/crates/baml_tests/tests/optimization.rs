@@ -51,17 +51,15 @@ fn constant_fold_int_arithmetic_chain() {
             (10 * 3) + (100 - 50) - 1
         }
     "#;
-    insta::assert_snapshot!(unoptimized(source), @"
+    insta::assert_snapshot!(unoptimized(source), @r"
     function main() -> int {
         load_const 10
         load_const 3
         mul_int
         load_const 100
-        load_const 50
-        sub_int
+        sub_int_const 50
         add_int
-        load_const 1
-        sub_int
+        sub_int_const 1
         return
     }
     ");

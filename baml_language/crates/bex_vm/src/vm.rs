@@ -5562,6 +5562,56 @@ impl BexVm {
                     let l = self.stack.ensure_pop();
                     self.stack.push(Value::tagged_int_sub(l, r));
                 }
+
+                // ── Fused subtraction (operand order preserved: left - right) ──
+                OpCode::SubIntVar => {
+                    let slot = { read_u32_unchecked(code, pc) as usize };
+                    #[allow(unsafe_code)]
+                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
+                    else {
+                        unreachable!()
+                    };
+                    let r = self
+                        .stack
+                        .get_at(Self::local_slot_stack_index(bf.locals_offset, slot));
+                    let l = self.stack.ensure_pop();
+                    self.stack.push(Value::tagged_int_sub(l, r));
+                }
+                OpCode::SubIntConst => {
+                    let idx = { read_u32_unchecked(code, pc) as usize };
+                    #[allow(unsafe_code)]
+                    let r = *unsafe { function.bytecode.resolved_constants.get_unchecked(idx) };
+                    let l = self.stack.ensure_pop();
+                    self.stack.push(Value::tagged_int_sub(l, r));
+                }
+                OpCode::SubIntVarVar => {
+                    let a = { read_u32_unchecked(code, pc) as usize };
+                    let b = { read_u32_unchecked(code, pc) as usize };
+                    #[allow(unsafe_code)]
+                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
+                    else {
+                        unreachable!()
+                    };
+                    let off = bf.locals_offset;
+                    let va = self.stack.get_at(Self::local_slot_stack_index(off, a));
+                    let vb = self.stack.get_at(Self::local_slot_stack_index(off, b));
+                    self.stack.push(Value::tagged_int_sub(va, vb));
+                }
+                OpCode::SubIntVarConst => {
+                    let a = { read_u32_unchecked(code, pc) as usize };
+                    let c = { read_u32_unchecked(code, pc) as usize };
+                    #[allow(unsafe_code)]
+                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
+                    else {
+                        unreachable!()
+                    };
+                    let va = self
+                        .stack
+                        .get_at(Self::local_slot_stack_index(bf.locals_offset, a));
+                    #[allow(unsafe_code)]
+                    let vc = *unsafe { function.bytecode.resolved_constants.get_unchecked(c) };
+                    self.stack.push(Value::tagged_int_sub(va, vc));
+                }
                 OpCode::MulInt => {
                     let Some(r) = self.stack.ensure_pop().as_int() else {
                         std::hint::unreachable_unchecked()

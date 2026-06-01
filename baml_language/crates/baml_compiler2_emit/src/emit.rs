@@ -1244,6 +1244,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         let single = match (self.bytecode.instructions[n - 1], specialized) {
             (Instruction::LoadVar(v), Instruction::AddInt) => Instruction::AddIntVar(v),
             (Instruction::LoadConst(c), Instruction::AddInt) => Instruction::AddIntConst(c),
+            (Instruction::LoadVar(v), Instruction::SubInt) => Instruction::SubIntVar(v),
+            (Instruction::LoadConst(c), Instruction::SubInt) => Instruction::SubIntConst(c),
             (Instruction::LoadVar(v), Instruction::CmpIntOp(CmpOp::Lt)) => {
                 Instruction::CmpIntLtVar(v)
             }
@@ -1270,6 +1272,14 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 // Add commutes, so `const + var` becomes `var + const`.
                 (Instruction::LoadConst(c), Instruction::AddIntVar(b)) => {
                     Some(Instruction::AddIntVarConst(b, c))
+                }
+                // Subtraction does NOT commute, so only fold a var/const left
+                // operand into the order-preserving forms (left - right).
+                (Instruction::LoadVar(a), Instruction::SubIntVar(b)) => {
+                    Some(Instruction::SubIntVarVar(a, b))
+                }
+                (Instruction::LoadVar(a), Instruction::SubIntConst(c)) => {
+                    Some(Instruction::SubIntVarConst(a, c))
                 }
                 (Instruction::LoadVar(a), Instruction::CmpIntLtVar(b)) => {
                     Some(Instruction::CmpIntLtVarVar(a, b))

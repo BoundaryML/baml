@@ -784,6 +784,17 @@ pub enum Instruction {
     CmpIntLtVarVarBrTrue(usize, usize, isize),
     /// Branch by `offset` if `local[a] < const[c]`.
     CmpIntLtVarConstBrTrue(usize, usize, isize),
+
+    // ── Fused integer subtraction (mirrors the AddInt family; not commutative,
+    // so operand order is preserved: `left - right`). ─────────────────────────
+    /// Fused `LoadVar(i); SubInt`: pop left int, push `left - local[i]`.
+    SubIntVar(usize),
+    /// Fused `LoadConst(i); SubInt`: pop left int, push `left - const[i]`.
+    SubIntConst(usize),
+    /// `local[a] - local[b]`.
+    SubIntVarVar(usize, usize),
+    /// `local[a] - const[c]`.
+    SubIntVarConst(usize, usize),
 }
 
 /// Compact bytecode opcodes.
@@ -949,6 +960,12 @@ pub enum OpCode {
     CmpIntLtVarConstBrFalse,
     CmpIntLtVarVarBrTrue,
     CmpIntLtVarConstBrTrue,
+
+    // ── Fused integer subtraction ──
+    SubIntVar,
+    SubIntConst,
+    SubIntVarVar,
+    SubIntVarConst,
 }
 
 impl OpCode {
@@ -1070,7 +1087,9 @@ impl OpCode {
             | Self::AddIntVar
             | Self::AddIntConst
             | Self::CmpIntLtVar
-            | Self::CmpIntLtConst => 5,
+            | Self::CmpIntLtConst
+            | Self::SubIntVar
+            | Self::SubIntConst => 5,
 
             // 7-byte: opcode + u32 + u16 (type-arg threading)
             Self::AllocInstance | Self::Call => 7,
@@ -1087,6 +1106,9 @@ impl OpCode {
             | Self::CmpIntLtVarVar
             | Self::CmpIntLtVarConst
             | Self::MoveLocal => 9,
+
+            // 9-byte: opcode + u32 + u32 (double-folded subtraction)
+            Self::SubIntVarVar | Self::SubIntVarConst => 9,
 
             // 13-byte: opcode + u32 + u32 + u32 (triple-folded store binops)
             Self::AddIntVarVarStore | Self::AddIntVarConstStore => 13,
@@ -1231,6 +1253,10 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::CmpIntLtVarConstBrFalse as u8 => Ok(Self::CmpIntLtVarConstBrFalse),
             x if x == Self::CmpIntLtVarVarBrTrue as u8 => Ok(Self::CmpIntLtVarVarBrTrue),
             x if x == Self::CmpIntLtVarConstBrTrue as u8 => Ok(Self::CmpIntLtVarConstBrTrue),
+            x if x == Self::SubIntVar as u8 => Ok(Self::SubIntVar),
+            x if x == Self::SubIntConst as u8 => Ok(Self::SubIntConst),
+            x if x == Self::SubIntVarVar as u8 => Ok(Self::SubIntVarVar),
+            x if x == Self::SubIntVarConst as u8 => Ok(Self::SubIntVarConst),
             _ => Err(byte),
         }
     }
@@ -1365,6 +1391,10 @@ impl std::fmt::Display for OpCode {
             Self::CmpIntLtVarConstBrFalse => "CMP_INT_LT_VAR_CONST_BR_FALSE",
             Self::CmpIntLtVarVarBrTrue => "CMP_INT_LT_VAR_VAR_BR_TRUE",
             Self::CmpIntLtVarConstBrTrue => "CMP_INT_LT_VAR_CONST_BR_TRUE",
+            Self::SubIntVar => "SUB_INT_VAR",
+            Self::SubIntConst => "SUB_INT_CONST",
+            Self::SubIntVarVar => "SUB_INT_VAR_VAR",
+            Self::SubIntVarConst => "SUB_INT_VAR_CONST",
         };
         f.write_str(name)
     }
@@ -1520,6 +1550,10 @@ impl std::fmt::Display for Instruction {
             Instruction::CmpIntLtVarConstBrTrue(a, c, o) => {
                 write!(f, "CMP_INT_LT_VAR_CONST_BR_TRUE {a} {c} {o:+}")
             }
+            Instruction::SubIntVar(i) => write!(f, "SUB_INT_VAR {i}"),
+            Instruction::SubIntConst(i) => write!(f, "SUB_INT_CONST {i}"),
+            Instruction::SubIntVarVar(a, b) => write!(f, "SUB_INT_VAR_VAR {a} {b}"),
+            Instruction::SubIntVarConst(a, c) => write!(f, "SUB_INT_VAR_CONST {a} {c}"),
             Instruction::SubInt => f.write_str("SUB_INT"),
             Instruction::MulInt => f.write_str("MUL_INT"),
             Instruction::DivInt => f.write_str("DIV_INT"),
@@ -2051,7 +2085,9 @@ impl Bytecode {
                 | Instruction::AddIntVar(v)
                 | Instruction::AddIntConst(v)
                 | Instruction::CmpIntLtVar(v)
-                | Instruction::CmpIntLtConst(v) => {
+                | Instruction::CmpIntLtConst(v)
+                | Instruction::SubIntVar(v)
+                | Instruction::SubIntConst(v) => {
                     code.extend_from_slice(
                         &u32::try_from(*v).expect("operand fits u32").to_le_bytes(),
                     );
@@ -2062,6 +2098,8 @@ impl Bytecode {
                 | Instruction::AddIntVarConst(a, b)
                 | Instruction::CmpIntLtVarVar(a, b)
                 | Instruction::CmpIntLtVarConst(a, b)
+                | Instruction::SubIntVarVar(a, b)
+                | Instruction::SubIntVarConst(a, b)
                 | Instruction::MoveLocal(a, b) => {
                     code.extend_from_slice(
                         &u32::try_from(*a).expect("operand fits u32").to_le_bytes(),
@@ -2397,6 +2435,10 @@ impl Bytecode {
             Instruction::CmpIntLtVarConstBrFalse(..) => OpCode::CmpIntLtVarConstBrFalse,
             Instruction::CmpIntLtVarVarBrTrue(..) => OpCode::CmpIntLtVarVarBrTrue,
             Instruction::CmpIntLtVarConstBrTrue(..) => OpCode::CmpIntLtVarConstBrTrue,
+            Instruction::SubIntVar(_) => OpCode::SubIntVar,
+            Instruction::SubIntConst(_) => OpCode::SubIntConst,
+            Instruction::SubIntVarVar(..) => OpCode::SubIntVarVar,
+            Instruction::SubIntVarConst(..) => OpCode::SubIntVarConst,
 
             // Specialized arithmetic (dedicated opcodes, skip type dispatch)
             Instruction::AddInt => OpCode::AddInt,
