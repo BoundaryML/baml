@@ -57,6 +57,12 @@ pub struct PpirExpansionItems<'db> {
 // -- Block attributes ---------------------------------------------------------
 
 /// Collect all @@ block attributes per type across all files.
+///
+/// Salsa-tracked and keyed on the whole `Project`, so the per-file
+/// `ppir_expansion_items` query (which calls this once per file) computes it a
+/// single time per revision instead of re-lowering every file on every call —
+/// turning the prior O(files²) AST re-lowering into O(files).
+#[salsa::tracked(returns(ref))]
 pub fn collect_block_attrs(
     db: &dyn crate::Db,
     project: baml_workspace::Project,
@@ -88,6 +94,11 @@ pub fn collect_block_attrs(
 }
 
 /// Collect type alias bodies (qualified path → `PpirTy`) across all files.
+///
+/// Salsa-tracked and keyed on the whole `Project` (see [`collect_block_attrs`]):
+/// computed once per revision rather than re-lowering every file per
+/// `ppir_expansion_items` call.
+#[salsa::tracked(returns(ref))]
 pub fn collect_alias_bodies(
     db: &dyn crate::Db,
     project: baml_workspace::Project,
@@ -210,8 +221,8 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                         namespace_path: &pkg_info.namespace_path,
                         package_items,
                         all_package_items: &all_package_items,
-                        block_attrs: &block_attrs,
-                        alias_bodies: &alias_bodies,
+                        block_attrs,
+                        alias_bodies,
                     };
                     let (stream_type, sap_attrs) = stream_expand(&ppir_ty, &ctx);
 
@@ -297,8 +308,8 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     namespace_path: &pkg_info.namespace_path,
                     package_items,
                     all_package_items: &all_package_items,
-                    block_attrs: &block_attrs,
-                    alias_bodies: &alias_bodies,
+                    block_attrs,
+                    alias_bodies,
                 };
                 let expanded_body = expand_partial(&ty, &ctx);
 
@@ -351,8 +362,8 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     namespace_path: &pkg_info.namespace_path,
                     package_items,
                     all_package_items: &all_package_items,
-                    block_attrs: &block_attrs,
-                    alias_bodies: &alias_bodies,
+                    block_attrs,
+                    alias_bodies,
                 };
                 let (stream_type, _sap_attrs) = stream_expand(&ppir_ty, &ctx);
                 let stream_type_expr = stream_type.to_type_expr();

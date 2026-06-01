@@ -21,8 +21,9 @@ use baml_compiler2_hir::{
     package::PackageId,
 };
 use baml_compiler2_mir::{
-    BuiltinKind, Local, MirFunctionBody, MirFunctionKind, Operand, Place, ResolvedAliases, Rvalue,
-    StatementKind, Terminator, def_to_item_ref, lower_function, lower_let_body,
+    BuiltinKind, Local, MirFunction, MirFunctionBody, MirFunctionKind, Operand, Place,
+    ResolvedAliases, Rvalue, StatementKind, Terminator, def_to_item_ref, lower_function,
+    lower_let_body,
 };
 // Use the PPIR item tree (which includes synthetic *$stream items) rather than
 // the bare HIR item tree, to stay consistent with TIR's LocalItemId indices.
@@ -303,6 +304,15 @@ pub fn generate_project_bytecode_with_opt(
     let mut globals: HashMap<String, usize> = HashMap::new();
     let mut global_idx = 0usize;
 
+    // Per-call memo of lowered MIR. `lower_function` is NOT salsa-memoized, so
+    // without this the entire `LoweringContext` build runs twice per function —
+    // once here in Pass 1 (slot assignment) and again in Pass 4 (codegen). We
+    // lower each function exactly once in Pass 1 and reuse it in Pass 4. Keyed
+    // by `FunctionLoc` (an interned salsa id: Copy + Eq + Hash). Output is
+    // byte-identical: Pass 4 consumes the same `lower_function(db, func_loc, opt)`
+    // value it would have recomputed.
+    let mut mir_cache: HashMap<FunctionLoc, MirFunction> = HashMap::new();
+
     // First sub-pass: assign slots to all functions across all files.
     // Intrinsic functions are skipped: they are lowered to StatementKind::Intrinsic
     // at call sites and never appear as callable objects in the globals pool.
@@ -314,10 +324,15 @@ pub fn generate_project_bytecode_with_opt(
             let func_loc = FunctionLoc::new(db, *file, *local_id);
             let mir = lower_function(db, func_loc, opt);
             // Skip intrinsic functions — they are never called via Call instruction.
-            if matches!(mir.kind, MirFunctionKind::Builtin(BuiltinKind::Intrinsic)) {
+            let is_intrinsic =
+                matches!(mir.kind, MirFunctionKind::Builtin(BuiltinKind::Intrinsic));
+            let fq_name = mir.item_ref.to_string();
+            // Cache the lowered MIR for reuse in Pass 4 (intrinsics included, so
+            // Pass 4 never re-lowers regardless of which kind it encounters).
+            mir_cache.insert(func_loc, mir);
+            if is_intrinsic {
                 continue;
             }
-            let fq_name = mir.item_ref.to_string();
             globals.entry(fq_name).or_insert_with(|| {
                 let idx = global_idx;
                 global_idx += 1;
@@ -536,7 +551,12 @@ pub fn generate_project_bytecode_with_opt(
         let cache_pass4 = &alias_caches[&pkg_info_pass4.package];
         for (local_id, func_data) in &item_tree.functions {
             let func_loc = FunctionLoc::new(db, *file, *local_id);
-            let mir = lower_function(db, func_loc, opt);
+            // Reuse the MIR lowered in Pass 1; fall back to lowering on the
+            // (unexpected) miss so behavior is identical even if the Pass 1 / Pass 4
+            // iteration sets ever diverge.
+            let mir = mir_cache
+                .remove(&func_loc)
+                .unwrap_or_else(|| lower_function(db, func_loc, opt));
             let fq_name = mir.item_ref.to_string();
 
             let mut compiled_fn = match &mir.kind {
