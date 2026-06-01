@@ -765,6 +765,16 @@ pub enum Instruction {
     AddIntVarVarStore(usize, usize, usize),
     /// `local[dst] = local[a] + const[c]`.
     AddIntVarConstStore(usize, usize, usize),
+
+    // ── Compare-and-branch (fused loop condition) ──────────────────────────
+    // Fuses `CmpIntLt*; PopJumpIfFalse(target)`: evaluates the comparison
+    // directly from operands (no bool pushed) and branches by `offset` (an
+    // instruction-relative jump offset, like `Jump`) when the comparison is
+    // false. `(a, b_or_c, offset)`.
+    /// Branch by `offset` if NOT `local[a] < local[b]`.
+    CmpIntLtVarVarBrFalse(usize, usize, isize),
+    /// Branch by `offset` if NOT `local[a] < const[c]`.
+    CmpIntLtVarConstBrFalse(usize, usize, isize),
 }
 
 /// Compact bytecode opcodes.
@@ -924,6 +934,10 @@ pub enum OpCode {
     // ── Triple-folded store binops: three u32 operands (13 bytes) ──
     AddIntVarVarStore,
     AddIntVarConstStore,
+
+    // ── Compare-and-branch: u32 + u32 + i32 offset (13 bytes) ──
+    CmpIntLtVarVarBrFalse,
+    CmpIntLtVarConstBrFalse,
 }
 
 impl OpCode {
@@ -1065,6 +1079,9 @@ impl OpCode {
 
             // 13-byte: opcode + u32 + u32 + u32 (triple-folded store binops)
             Self::AddIntVarVarStore | Self::AddIntVarConstStore => 13,
+
+            // 13-byte: opcode + u32 + u32 + i32 (compare-and-branch)
+            Self::CmpIntLtVarVarBrFalse | Self::CmpIntLtVarConstBrFalse => 13,
         }
     }
 }
@@ -1196,6 +1213,8 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::MoveLocal as u8 => Ok(Self::MoveLocal),
             x if x == Self::AddIntVarVarStore as u8 => Ok(Self::AddIntVarVarStore),
             x if x == Self::AddIntVarConstStore as u8 => Ok(Self::AddIntVarConstStore),
+            x if x == Self::CmpIntLtVarVarBrFalse as u8 => Ok(Self::CmpIntLtVarVarBrFalse),
+            x if x == Self::CmpIntLtVarConstBrFalse as u8 => Ok(Self::CmpIntLtVarConstBrFalse),
             _ => Err(byte),
         }
     }
@@ -1326,6 +1345,8 @@ impl std::fmt::Display for OpCode {
             Self::MoveLocal => "MOVE_LOCAL",
             Self::AddIntVarVarStore => "ADD_INT_VAR_VAR_STORE",
             Self::AddIntVarConstStore => "ADD_INT_VAR_CONST_STORE",
+            Self::CmpIntLtVarVarBrFalse => "CMP_INT_LT_VAR_VAR_BR_FALSE",
+            Self::CmpIntLtVarConstBrFalse => "CMP_INT_LT_VAR_CONST_BR_FALSE",
         };
         f.write_str(name)
     }
@@ -1468,6 +1489,12 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::AddIntVarConstStore(a, c, dst) => {
                 write!(f, "ADD_INT_VAR_CONST_STORE {a} {c} {dst}")
+            }
+            Instruction::CmpIntLtVarVarBrFalse(a, b, o) => {
+                write!(f, "CMP_INT_LT_VAR_VAR_BR_FALSE {a} {b} {o:+}")
+            }
+            Instruction::CmpIntLtVarConstBrFalse(a, c, o) => {
+                write!(f, "CMP_INT_LT_VAR_CONST_BR_FALSE {a} {c} {o:+}")
             }
             Instruction::SubInt => f.write_str("SUB_INT"),
             Instruction::MulInt => f.write_str("MUL_INT"),
@@ -2096,6 +2123,24 @@ impl Bytecode {
                     code.extend_from_slice(&(byte_delta as i32).to_le_bytes());
                 }
 
+                // ── Compare-and-branch: u32 a + u32 b + i32 jump offset ──────
+                Instruction::CmpIntLtVarVarBrFalse(a, b, offset)
+                | Instruction::CmpIntLtVarConstBrFalse(a, b, offset) => {
+                    code.extend_from_slice(
+                        &u32::try_from(*a).expect("operand fits u32").to_le_bytes(),
+                    );
+                    code.extend_from_slice(
+                        &u32::try_from(*b).expect("operand fits u32").to_le_bytes(),
+                    );
+                    // Same instruction-relative -> byte-relative-to-end
+                    // translation as the plain jumps above.
+                    let target_instr = (i as isize + offset) as usize;
+                    let target_byte = index_to_offset[target_instr];
+                    let instr_end = index_to_offset[i] + op.encoded_size();
+                    let byte_delta = target_byte as i64 - instr_end as i64;
+                    code.extend_from_slice(&(byte_delta as i32).to_le_bytes());
+                }
+
                 // ── JumpTable: u32 table_idx + i32 default_offset ───
                 Instruction::JumpTable(table_idx) => {
                     code.extend_from_slice(
@@ -2322,6 +2367,8 @@ impl Bytecode {
             Instruction::MoveLocal(..) => OpCode::MoveLocal,
             Instruction::AddIntVarVarStore(..) => OpCode::AddIntVarVarStore,
             Instruction::AddIntVarConstStore(..) => OpCode::AddIntVarConstStore,
+            Instruction::CmpIntLtVarVarBrFalse(..) => OpCode::CmpIntLtVarVarBrFalse,
+            Instruction::CmpIntLtVarConstBrFalse(..) => OpCode::CmpIntLtVarConstBrFalse,
 
             // Specialized arithmetic (dedicated opcodes, skip type dispatch)
             Instruction::AddInt => OpCode::AddInt,

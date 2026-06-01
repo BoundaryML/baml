@@ -221,6 +221,8 @@ pub(crate) fn display_instruction(
         | Instruction::MoveLocal(..)
         | Instruction::AddIntVarVarStore(..)
         | Instruction::AddIntVarConstStore(..)
+        | Instruction::CmpIntLtVarVarBrFalse(..)
+        | Instruction::CmpIntLtVarConstBrFalse(..)
         | Instruction::UnaryOp(_)
         | Instruction::AllocArray(_)
         | Instruction::AllocMap(_)
@@ -403,6 +405,8 @@ fn instruction_style(instruction: &Instruction) -> Style {
         Instruction::Jump(_)
         | Instruction::PopJumpIfFalse(_)
         | Instruction::JumpIfFalse(_)
+        | Instruction::CmpIntLtVarVarBrFalse(..)
+        | Instruction::CmpIntLtVarConstBrFalse(..)
         | Instruction::JumpTable { .. }
         | Instruction::DenseTag(_) => Style::new().yellow(),
         Instruction::Call { .. } | Instruction::CallIndirect => Style::new().magenta(),
@@ -827,6 +831,12 @@ fn display_instruction_textual(
         Instruction::AddIntVarVarStore(a, b, dst) => format!("add_int_var_var_store {a} {b} {dst}"),
         Instruction::AddIntVarConstStore(a, c, dst) => {
             format!("add_int_var_const_store {a} {c} {dst}")
+        }
+        Instruction::CmpIntLtVarVarBrFalse(a, b, o) => {
+            format!("cmp_int_lt_var_var_br_false {a} {b} {o:+}")
+        }
+        Instruction::CmpIntLtVarConstBrFalse(a, c, o) => {
+            format!("cmp_int_lt_var_const_br_false {a} {c} {o:+}")
         }
         Instruction::SubInt => "sub_int".to_string(),
         Instruction::MulInt => "mul_int".to_string(),
@@ -1381,6 +1391,15 @@ pub fn display_compact_bytecode(
                 let b = read_u32(code, &mut pc);
                 let dst = read_u32(code, &mut pc);
                 writeln!(f, "{a} {b} {dst}")?;
+            }
+
+            // u32 + u32 + i32 jump offset (compare-and-branch)
+            OpCode::CmpIntLtVarVarBrFalse | OpCode::CmpIntLtVarConstBrFalse => {
+                let a = read_u32(code, &mut pc);
+                let b = read_u32(code, &mut pc);
+                let offset_val = read_i32(code, &mut pc);
+                let target = (pc as i64 + offset_val as i64) as usize;
+                writeln!(f, "{a} {b}  {offset_val:+} (-> {target:04})")?;
             }
         }
     }

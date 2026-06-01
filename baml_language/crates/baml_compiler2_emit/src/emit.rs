@@ -1159,6 +1159,32 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         self.set_var_operand(inst, slot);
     }
 
+    /// Emit a `PopJumpIfFalse` to `target`, fusing a just-emitted `CmpIntLt*`
+    /// into a single compare-and-branch op (no bool materialized). Registers
+    /// the pending jump on whichever instruction carries the branch offset.
+    /// Confined to the current basic block, like the other peepholes.
+    fn emit_pop_jump_if_false(&mut self, target: PendingJumpTarget) {
+        let n = self.bytecode.instructions.len();
+        if n > self.current_block_start {
+            let fused = match self.bytecode.instructions[n - 1] {
+                Instruction::CmpIntLtVarVar(a, b) => {
+                    Some(Instruction::CmpIntLtVarVarBrFalse(a, b, 0))
+                }
+                Instruction::CmpIntLtVarConst(a, c) => {
+                    Some(Instruction::CmpIntLtVarConstBrFalse(a, c, 0))
+                }
+                _ => None,
+            };
+            if let Some(fused) = fused {
+                self.bytecode.instructions[n - 1] = fused;
+                self.pending_jumps.push((n - 1, target));
+                return;
+            }
+        }
+        let idx = self.emit(Instruction::PopJumpIfFalse(0));
+        self.pending_jumps.push((idx, target));
+    }
+
     /// Drop the most recently emitted instruction, keeping `meta` and the
     /// line table in sync. Used by the binop peephole when it folds two loads
     /// into one fused op (so the trailing operand slot is removed). Only ever
@@ -2016,11 +2042,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     self.emit_jump_unless_fallthrough(*then_block);
                 } else {
                     self.emit_operand_pull(condition);
-                    // PopJumpIfFalse to else_block (pops condition from stack)
+                    // PopJumpIfFalse to else_block (pops condition from stack),
+                    // fusing a preceding CmpIntLt* into a compare-and-branch.
                     // Apply jump threading to resolve through empty blocks
                     let resolved_else = self.resolve_pending_target(*else_block);
-                    let else_jump = self.emit(Instruction::PopJumpIfFalse(0));
-                    self.pending_jumps.push((else_jump, resolved_else));
+                    self.emit_pop_jump_if_false(resolved_else);
                     // Jump to then_block (may be elided if it's next)
                     self.emit_jump_unless_fallthrough(*then_block);
                 }
@@ -2281,6 +2307,14 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
             Instruction::JumpIfFalse(_) => {
                 self.bytecode.instructions[instruction_idx] = Instruction::JumpIfFalse(offset);
+            }
+            Instruction::CmpIntLtVarVarBrFalse(a, b, _) => {
+                self.bytecode.instructions[instruction_idx] =
+                    Instruction::CmpIntLtVarVarBrFalse(a, b, offset);
+            }
+            Instruction::CmpIntLtVarConstBrFalse(a, c, _) => {
+                self.bytecode.instructions[instruction_idx] =
+                    Instruction::CmpIntLtVarConstBrFalse(a, c, offset);
             }
             _ => panic!("expected jump instruction at index {instruction_idx}"),
         }
