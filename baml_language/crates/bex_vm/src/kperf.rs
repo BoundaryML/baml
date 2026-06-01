@@ -151,20 +151,23 @@ mod imp {
         let i = ACC_INSTRS.load(Ordering::Relaxed);
         let ops = ACC_OPS.load(Ordering::Relaxed);
         let calls = EXEC_CALLS.load(Ordering::Relaxed);
-        if ops == 0 {
-            eprintln!("[kperf] no VM ops measured");
-            return;
-        }
+        // Total instructions/cycles come straight from the hardware counters and
+        // are the primary metric — always reported. The per-op breakdown needs
+        // the VM op counter, which is only populated under the `kperf` feature.
         eprintln!(
             "[kperf] exec calls={calls}  VM ops={ops}\n\
-             [kperf]   cycles={:.3}e9  instructions={:.3}e9  IPC={:.3}\n\
-             [kperf]   per VM-op: {:.2} cyc/op   {:.2} instr/op",
+             [kperf]   cycles={:.3}e9  instructions={:.3}e9  IPC={:.3}",
             c as f64 / 1e9,
             i as f64 / 1e9,
             i as f64 / c.max(1) as f64,
-            c as f64 / ops as f64,
-            i as f64 / ops as f64,
         );
+        if ops > 0 {
+            eprintln!(
+                "[kperf]   per VM-op: {:.2} cyc/op   {:.2} instr/op",
+                c as f64 / ops as f64,
+                i as f64 / ops as f64,
+            );
+        }
     }
 }
 

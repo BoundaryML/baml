@@ -233,8 +233,6 @@ mod tests {
             stack: EvalStack::new(),
             op_count: 0,
             cur_pc: 0,
-            dbg_skip_faultpc: std::env::var("BAML_NO_FAULTPC").as_deref() == Ok("1"),
-            dbg_skip_opcount: std::env::var("BAML_NO_OPCOUNT").as_deref() == Ok("1"),
             heap: Arc::clone(&heap),
             early_yield: early_yield_for_test(),
             tlab: Tlab::new(heap),
@@ -578,7 +576,8 @@ pub struct BexVm {
     /// This stack only stores values.
     pub stack: EvalStack,
 
-    /// Total bytecode ops dispatched (for the `BAML_KPERF` profiler only).
+    /// Total bytecode ops dispatched (for the `kperf` profiler only; only
+    /// incremented when the `kperf` feature is enabled).
     pub op_count: u64,
 
     /// Start-PC of the instruction currently executing in the innermost
@@ -587,12 +586,6 @@ pub struct BexVm {
     /// call-site PC into `faulting_pc` at call time; the innermost frame's live
     /// PC is read from here. Used for exception-handler lookup and stack traces.
     pub cur_pc: usize,
-
-    /// Per-op-cost bisection gates (read from env once at construction; used
-    /// only to attribute instructions-per-op under `BAML_KPERF`). Each skips a
-    /// chunk of per-op work so its instruction cost shows up as the delta.
-    pub dbg_skip_faultpc: bool,
-    pub dbg_skip_opcount: bool,
 
     /// Reference to the shared heap (long-lived, shared across VMs).
     pub heap: Arc<BexHeap>,
@@ -1016,8 +1009,6 @@ impl BexVm {
             stack: EvalStack::new(),
             op_count: 0,
             cur_pc: 0,
-            dbg_skip_faultpc: std::env::var("BAML_NO_FAULTPC").as_deref() == Ok("1"),
-            dbg_skip_opcount: std::env::var("BAML_NO_OPCOUNT").as_deref() == Ok("1"),
             heap,
             early_yield,
             tlab,
@@ -3763,8 +3754,14 @@ impl BexVm {
         #[allow(unsafe_code)]
         let op_byte = unsafe { *code.get_unchecked(*pc) };
         *pc += 1;
-        if !self.dbg_skip_opcount {
-            self.op_count += 1; // BAML_KPERF op counter
+        // VM-op counter for the `kperf` profiler. Compiled out entirely in
+        // normal builds (it is pure measurement scaffolding and adds a store +
+        // memory dependency on the hottest path); kperf reads cycles and
+        // instructions retired straight from the hardware counters, so the op
+        // count is only needed for the informational per-op breakdown.
+        #[cfg(feature = "kperf")]
+        {
+            self.op_count += 1;
         }
 
         // Record the innermost frame's current instruction start cheaply (one
@@ -3772,9 +3769,7 @@ impl BexVm {
         // op (which needs a bounds-checked index + enum match + store). Outer
         // frames record their call-site PC at call time; read sites resolve the
         // innermost frame from `cur_pc`.
-        if !self.dbg_skip_faultpc {
-            self.cur_pc = *pc - 1;
-        }
+        self.cur_pc = *pc - 1;
 
         // SAFETY: OpCode is #[repr(u8)] and the compact bytecode is produced by our
         // own encoder which only emits valid opcode bytes.
