@@ -183,6 +183,14 @@ fn load_speedtest_workloads(
         ));
     }
 
+    // The exporter (via speedtest.loader) warns to stderr when a workload `.md`
+    // fails to parse and is dropped. Surface those so a malformed workload can't
+    // silently disappear from the generated suite behind a still-green build.
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    for line in stderr.lines().map(str::trim).filter(|l| !l.is_empty()) {
+        println!("cargo:warning=speedtest export: {line}");
+    }
+
     let value: serde_json::Value = serde_json::from_slice(&output.stdout)
         .map_err(|e| format!("failed to parse export_baml.py JSON: {e}"))?;
     let arr = value
