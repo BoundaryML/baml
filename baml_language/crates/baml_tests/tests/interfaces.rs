@@ -1991,6 +1991,150 @@ async fn default_method_dispatch_through_interface_var() {
 }
 
 #[tokio::test]
+async fn interface_default_method_calls_self_param_method() {
+    // BEP-044 Self-as-type-variable: the default method `neq` calls the
+    // required `Self`-param method `eq` on `self`. Inside the interface, `self`
+    // is a `Self` type variable bound by the interface, so this is sound —
+    // unlike a call on a bare interface *value* (see `bad(...)` cases), which
+    // stays an error. Invoked here through a generic bound so the receiver is a
+    // single concrete type.
+    let output = baml_test!(
+        r#"
+        interface Equatable {
+            function eq(self, other: Self) -> bool
+            function neq(self, other: Self) -> bool {
+                return !self.eq(other)
+            }
+        }
+        class Pair {
+            a: int
+            implements Equatable {
+                function eq(self, other: Self) -> bool { return self.a == other.a }
+            }
+        }
+        function differ<T extends Equatable>(x: T, y: T) -> bool {
+            return x.neq(y)
+        }
+        function main() -> bool {
+            return differ<Pair>(Pair { a: 1 }, Pair { a: 2 })
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
+}
+
+#[tokio::test]
+async fn generic_bound_self_param_method_call() {
+    // A generic `T extends Equatable` may call a `Self`-param method on a value
+    // of type `T`: `T` is a single concrete type, so the argument (also `T`)
+    // satisfies the `Self` parameter.
+    let output = baml_test!(
+        r#"
+        interface Equatable {
+            function eq(self, other: Self) -> bool
+        }
+        class Pair {
+            a: int
+            implements Equatable {
+                function eq(self, other: Self) -> bool { return self.a == other.a }
+            }
+        }
+        function same<T extends Equatable>(x: T, y: T) -> bool {
+            return x.eq(y)
+        }
+        function main() -> bool {
+            return same<Pair>(Pair { a: 7 }, Pair { a: 7 })
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
+}
+
+#[test]
+fn self_param_method_rejects_heterogeneous_generic_args() {
+    // Soundness: `Self` is rigid per receiver. `x: S` pins `Self = S`, so the
+    // `other: Self` argument must also be `S`. Passing `y: U` (an unrelated
+    // generic param) must NOT unify `S := U` — it is a type error.
+    assert_compile_error_contains(
+        r#"
+        interface Equatable {
+            function eq(self, other: Self) -> bool
+        }
+        function cmp<S extends Equatable, U extends Equatable>(x: S, y: U) -> bool {
+            return x.eq(y)
+        }
+        "#,
+        "U",
+    );
+}
+
+#[test]
+fn self_param_method_rejects_mismatched_literal_arg() {
+    // `x: T` pins `Self = T`; the rigid `Self` must not be inferred to `int`
+    // from the `5` argument. Passing a concrete literal where `Self` is rigid
+    // is a type error.
+    assert_compile_error_contains(
+        r#"
+        interface Equatable {
+            function eq(self, other: Self) -> bool
+        }
+        function bad<T extends Equatable>(x: T) -> bool {
+            return x.eq(5)
+        }
+        "#,
+        "expected T",
+    );
+}
+
+#[test]
+fn self_param_method_rejects_nested_self_mismatch() {
+    // Rigid `Self` must be enforced even when it appears *nested* in the
+    // parameter type (`Self[]`). `x: T` pins `Self = T`, so `others: Self[]`
+    // requires a `T[]`; passing a `U[]` (unrelated generic param) must error —
+    // not silently skip validation just because the type still contains a
+    // variable.
+    assert_compile_error_contains(
+        r#"
+        interface Adder {
+            function addAll(self, others: Self[]) -> int
+        }
+        function cross<T extends Adder, U extends Adder>(x: T, ys: U[]) -> int {
+            return x.addAll(ys)
+        }
+        "#,
+        "got U[]",
+    );
+}
+
+#[tokio::test]
+async fn self_param_method_accepts_matching_nested_self() {
+    // The matching case still type-checks and runs: `Self[]` accepts a `T[]`
+    // when the receiver is that same `T`.
+    let output = baml_test!(
+        r#"
+        interface Adder {
+            function addAll(self, others: Self[]) -> int
+        }
+        class Acc {
+            base: int
+            implements Adder {
+                function addAll(self, others: Self[]) -> int {
+                    return self.base + others[0].base
+                }
+            }
+        }
+        function combine<T extends Adder>(x: T, ys: T[]) -> int {
+            return x.addAll(ys)
+        }
+        function main() -> int {
+            return combine<Acc>(Acc { base: 10 }, [Acc { base: 5 }])
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(15));
+}
+
+#[tokio::test]
 async fn interface_default_method_reference_accepts_explicit_receiver() {
     let output = baml_test!(
         r#"

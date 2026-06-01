@@ -164,6 +164,16 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
             method_to_class.push((method_id, *class_id));
         }
     }
+    // Out-of-body `implement Interface for Type` methods: their `Self` resolves
+    // to the `for` target and the block's generic params are in scope. Bodied
+    // (`$rust_function`/builtin) impl methods skip the scope-inference path, so
+    // without this their signatures would leave `Self` unresolved here.
+    let mut method_to_impl = Vec::new();
+    for imp in &item_tree.implements_for {
+        for &method_id in &imp.methods {
+            method_to_impl.push((method_id, imp));
+        }
+    }
 
     for (local_id, func_data) in &item_tree.functions {
         let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
@@ -192,17 +202,43 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
             merged.extend(generic_params);
             generic_params = merged;
         }
+        // BEP-044: inside an out-of-body `implement Interface for Type` block,
+        // `Self` is the `for` target and the block's generic params are in scope.
+        let enclosing_impl = method_to_impl
+            .iter()
+            .find(|(mid, _)| mid == local_id)
+            .map(|(_, imp)| *imp);
+        if let Some(imp) = enclosing_impl {
+            let mut merged = imp.generic_params.clone();
+            merged.extend(generic_params);
+            generic_params = merged;
+        }
+        // Pre-resolve `Self` to the enclosing impl's `for` target before lowering
+        // signature types, mirroring the body path in `tir::inference`.
+        let self_replacement = enclosing_impl.map(|imp| imp.for_target.expr.clone());
+        let lower_sig_te = |te: &baml_compiler2_ast::TypeExpr,
+                            generic_params: &[Name],
+                            diags: &mut Vec<baml_compiler2_tir::infer_context::TirTypeError>|
+         -> Ty {
+            let resolved = match &self_replacement {
+                Some(replacement) => {
+                    baml_compiler2_tir::lower_type_expr::substitute_self_in(te, replacement)
+                }
+                None => te.clone(),
+            };
+            baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+                db,
+                &resolved,
+                pkg_items,
+                &pkg_info.namespace_path,
+                generic_params,
+                diags,
+            )
+        };
 
         // Check return type — use the span from the item tree's SpannedTypeExpr.
         if let Some(ret_te) = &sig.return_type {
-            baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-                db,
-                ret_te,
-                pkg_items,
-                &pkg_info.namespace_path,
-                &generic_params,
-                &mut type_errors,
-            );
+            lower_sig_te(ret_te, &generic_params, &mut type_errors);
             if !type_errors.is_empty() {
                 if let Some(ret_spanned) = &func_data.return_type {
                     for error in type_errors.drain(..) {
@@ -250,14 +286,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                         attr: TyAttr::default(),
                     })
             } else {
-                baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-                    db,
-                    &param.ty,
-                    pkg_items,
-                    &pkg_info.namespace_path,
-                    &generic_params,
-                    &mut type_errors,
-                )
+                lower_sig_te(&param.ty, &generic_params, &mut type_errors)
             };
             if !type_errors.is_empty() {
                 if let Some(param) = func_data.params.get(i) {

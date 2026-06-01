@@ -405,6 +405,11 @@ struct CallCheckRequest<'a> {
     /// site. `Some(map)` means the caller already validated arity and resolved each `TypeExpr`;
     /// `None` means use the existing forward/reverse inference paths.
     explicit_type_arg_bindings: Option<FxHashMap<Name, Ty>>,
+    /// The rigid `Self` type variable for a Self-pinned interface method call —
+    /// argument inference never binds it and the argument is checked against it
+    /// by identity (rustc's `ty::Param`). `None` for every ordinary call, which
+    /// leaves their inference completely unchanged.
+    rigid_self_var: Option<Name>,
 }
 
 #[derive(Clone, Copy)]
@@ -525,6 +530,13 @@ pub struct TypeInferenceBuilder<'db> {
     /// required methods do not have a `FunctionLoc`, so this supplements
     /// `resolutions` for explicit call-site type-arg checking.
     interface_method_generic_params: FxHashMap<ExprId, (Name, Vec<Name>)>,
+    /// For a Self-pinned interface method call (resolved through a type-variable
+    /// receiver — `self` in a default method, or a generic `T extends I`), the
+    /// rigid `Self` type variable, keyed by the callee (member-access) expr.
+    /// The call site treats it like rustc's `ty::Param`: argument inference
+    /// never binds it, and the argument is checked against it by identity. Empty
+    /// for every non-Self-pinned call, so ordinary inference is unaffected.
+    self_pinned_rigid_var: FxHashMap<ExprId, Name>,
     /// Parameter types for this scope (populated for lambda/function scopes).
     /// Used by LSP to resolve lambda parameter types.
     pub param_types: Vec<(Name, Ty)>,
@@ -743,6 +755,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             path_segment_types: FxHashMap::default(),
             path_member_resolutions: FxHashMap::default(),
             interface_method_generic_params: FxHashMap::default(),
+            self_pinned_rigid_var: FxHashMap::default(),
             param_types: Vec::new(),
             call_plans: FxHashMap::default(),
             function_coercions: FxHashMap::default(),
@@ -1806,6 +1819,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let saved_path_member_resolutions = std::mem::take(&mut self.path_member_resolutions);
         let saved_interface_method_generic_params =
             std::mem::take(&mut self.interface_method_generic_params);
+        let saved_self_pinned_rigid_var = std::mem::take(&mut self.self_pinned_rigid_var);
         let saved_call_plans = std::mem::take(&mut self.call_plans);
         let saved_function_coercions = std::mem::take(&mut self.function_coercions);
         let saved_lambda_effective_throws = std::mem::take(&mut self.lambda_effective_throws);
@@ -1898,6 +1912,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.path_segment_types = saved_path_segment_types;
         self.path_member_resolutions = saved_path_member_resolutions;
         self.interface_method_generic_params = saved_interface_method_generic_params;
+        self.self_pinned_rigid_var = saved_self_pinned_rigid_var;
         self.call_plans = saved_call_plans;
         self.function_coercions = saved_function_coercions;
         self.lambda_effective_throws = saved_lambda_effective_throws;
@@ -2438,6 +2453,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             is_method_call,
             is_optional_call,
             explicit_type_arg_bindings,
+            rigid_self_var,
         } = request;
         let explicit_args_used = explicit_type_arg_bindings.is_some();
         let callee_ty = self.expand_alias_chains(callee_ty);
@@ -2512,7 +2528,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                         } else {
                             self.infer_expr(*arg, body)
                         };
-                        crate::generics::infer_bindings(param_ty, &arg_ty, &mut bindings);
+                        crate::generics::infer_bindings_rigid_self(
+                            param_ty,
+                            &arg_ty,
+                            &mut bindings,
+                            rigid_self_var.as_ref(),
+                        );
                     }
 
                     for (param, arg) in &param_arg_pairs {
@@ -2538,7 +2559,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                         } else {
                             self.infer_expr(*arg, body)
                         };
-                        crate::generics::infer_bindings(param_ty, &arg_ty, &mut bindings);
+                        crate::generics::infer_bindings_rigid_self(
+                            param_ty,
+                            &arg_ty,
+                            &mut bindings,
+                            rigid_self_var.as_ref(),
+                        );
                     }
                 } else {
                     // Explicit type args: still need to type-check all value arguments.
@@ -2575,8 +2601,20 @@ impl<'db> TypeInferenceBuilder<'db> {
                         continue;
                     }
 
+                    // The rigid `Self` of a Self-pinned call is never inferred,
+                    // so it survives substitution as a `TypeVar` — possibly
+                    // nested (`Self[]`, `Self?`, `map<_, Self>`). Validate the
+                    // argument against it by identity (Unit-A reflexivity accepts
+                    // the same variable, rejects a different one or a concrete
+                    // mismatch) — this is what makes `other: Self` sound. We only
+                    // defer when some *other* (genuinely uninferred) type variable
+                    // remains; an expected type whose sole variable is the rigid
+                    // `Self` is checked here rather than skipped.
                     if matches!(expected_arg_ty, Ty::Unknown { .. } | Ty::Error { .. })
-                        || crate::generics::contains_typevar(&expected_arg_ty)
+                        || crate::generics::contains_typevar_other_than(
+                            &expected_arg_ty,
+                            rigid_self_var.as_ref(),
+                        )
                     {
                         continue;
                     }
@@ -2740,6 +2778,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         is_method_call,
                         is_optional_call,
                         explicit_type_arg_bindings,
+                        rigid_self_var,
                     });
                 }
 
@@ -2856,6 +2895,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             is_method_call,
             is_optional_call: true,
             explicit_type_arg_bindings: None,
+            rigid_self_var: self.self_pinned_rigid_var.get(&callee_id).cloned(),
         });
         let final_ty = Self::make_optional(checked.result);
         self.report_result_type_mismatch(expr_id, &final_ty, expected);
@@ -3900,6 +3940,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             is_method_call,
             is_optional_call: false,
             explicit_type_arg_bindings,
+            rigid_self_var: self.self_pinned_rigid_var.get(&callee).cloned(),
         });
 
         if !checked.bindings_from_inference {
@@ -7271,9 +7312,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 {
                     let iface_qtn = iface_qtn.clone();
                     let iface_args = iface_args.clone();
-                    if let Some(ty) =
-                        self.resolve_interface_member(&iface_qtn, &iface_args, member, at, bound)
-                    {
+                    if let Some(ty) = self.resolve_interface_member(
+                        &iface_qtn,
+                        &iface_args,
+                        member,
+                        at,
+                        bound,
+                        None,
+                    ) {
                         return ty;
                     }
                 }
@@ -7331,7 +7377,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             Ty::Interface(iface_name, type_args, _) => {
                 if let Some(ty) =
-                    self.resolve_interface_member(iface_name, type_args, member, at, bound)
+                    self.resolve_interface_member(iface_name, type_args, member, at, bound, None)
                 {
                     return ty;
                 }
@@ -7642,7 +7688,27 @@ impl<'db> TypeInferenceBuilder<'db> {
                     && self.generic_param_bounds.contains_key(name) =>
             {
                 let bound_ty = self.generic_param_bounds[name].clone();
-                self.resolve_member(&bound_ty, member, at, bound)
+                // The receiver is a single concrete type (the type variable),
+                // so an interface-bound member resolves with `Self` pinned to
+                // that variable — `Self`-typed parameters are sound here. This
+                // is what lets a generic `T extends Equals` (and an interface's
+                // own `self`) call `Self`-param methods, while a bare interface
+                // (existential) receiver still cannot.
+                if let Ty::Interface(iface_qtn, iface_args, _) = &bound_ty {
+                    self.resolve_interface_member(
+                        iface_qtn,
+                        iface_args,
+                        member,
+                        at,
+                        bound,
+                        Some(name),
+                    )
+                    .unwrap_or(Ty::Unknown {
+                        attr: TyAttr::default(),
+                    })
+                } else {
+                    self.resolve_member(&bound_ty, member, at, bound)
+                }
             }
             Ty::TypeVar(_, _) if member.as_str() == "to_json" => {
                 // Type-check: every BAML type has `to_json(self) -> json` after Phase 5b.1.
@@ -7936,8 +8002,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             Ty::Interface(iface_name, type_args, _) => {
-                if let Some(ty) =
-                    self.resolve_interface_member(iface_name, type_args, member, path_id, bound)
+                if let Some(ty) = self
+                    .resolve_interface_member(iface_name, type_args, member, path_id, bound, None)
                 {
                     return ty;
                 }
@@ -8555,6 +8621,17 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// lowered straight from the `InterfaceMethodSig` since they don't have
     /// function locs. Returns `None` when the member isn't found anywhere
     /// in the chain (the caller emits the `UnresolvedMember` diagnostic).
+    /// Resolve `member` on interface `iface_name`.
+    ///
+    /// `self_pin` is `Some(name)` when the call reaches the interface through a
+    /// *type variable* bound by it — i.e. `self` inside the interface's own
+    /// default method, or a generic `T extends Equals`. The receiver is then a
+    /// single (if abstract) type, so the object-safety restriction
+    /// (`InvalidSelfCallThroughInterface`) does not apply: a `Self`-typed
+    /// argument is itself that bounded type variable and type-checks against
+    /// the parameter by subtyping. A bare `Ty::Interface` receiver (the
+    /// existential) passes `None` and the restriction stands — mirroring Rust's
+    /// `Self`-vs-`dyn Trait` split and Swift's `Self`-vs-`any Protocol`.
     fn resolve_interface_member(
         &mut self,
         iface_name: &crate::ty::QualifiedTypeName,
@@ -8562,12 +8639,20 @@ impl<'db> TypeInferenceBuilder<'db> {
         member: &Name,
         at: ExprId,
         bound: bool,
+        self_pin: Option<&Name>,
     ) -> Option<Ty> {
         let pkg_items = self.resolve_class_pkg_items(iface_name.package())?;
         let def = pkg_items.lookup_type(iface_name.namespace(), iface_name.name())?;
         let Definition::Interface(root_loc) = def else {
             return None;
         };
+        // Record the rigid `Self` variable for a Self-pinned call so the call
+        // site treats it like `ty::Param` (never inferred from an argument,
+        // checked by identity). Keyed by the member-access expr, which is the
+        // callee of the eventual method call.
+        if let Some(pin) = self_pin {
+            self.self_pinned_rigid_var.insert(at, pin.clone());
+        }
         let db = self.context.db();
         let root_pkg = baml_compiler2_hir::file_package::file_package(db, root_loc.file(db));
         let pkg_ns = &root_pkg.namespace_path;
@@ -8670,12 +8755,21 @@ impl<'db> TypeInferenceBuilder<'db> {
                         .or_insert_with(|| Ty::TypeVar(generic_param.clone(), TyAttr::default()));
                 }
                 let mut all_generic_params = iface_data.generic_params.clone();
-                if let Some(receiver_generic) = &receiver_generic {
-                    bindings.insert(
-                        receiver_generic.clone(),
-                        Ty::TypeVar(receiver_generic.clone(), TyAttr::default()),
-                    );
-                    all_generic_params.push(receiver_generic.clone());
+                // The receiver's `Self` type variable: a pinned receiver
+                // (`self_pin` — `self` in a default method, or a generic
+                // `T extends I`) takes precedence over the fresh generic used
+                // for an unbound reference. It is registered as a known type
+                // variable so `Self` lowers to it, but inserted into the
+                // interface's type-arg bindings with `or_insert` so it can never
+                // clobber an identically-named interface generic parameter.
+                let self_ty_var = self_pin.cloned().or_else(|| receiver_generic.clone());
+                if let Some(name) = &self_ty_var {
+                    bindings
+                        .entry(name.clone())
+                        .or_insert_with(|| Ty::TypeVar(name.clone(), TyAttr::default()));
+                    if !all_generic_params.contains(name) {
+                        all_generic_params.push(name.clone());
+                    }
                 }
                 all_generic_params.extend(sig.user_generic_params.iter().cloned());
                 let iface_ty = Ty::Interface(
@@ -8692,15 +8786,20 @@ impl<'db> TypeInferenceBuilder<'db> {
                     TyAttr::default(),
                 );
                 let callable_throws = crate::callable::callable_throws(db, func_loc).clone();
-                let receiver_ty = receiver_generic
+                let receiver_ty = self_ty_var
                     .as_ref()
                     .map(|name| Ty::TypeVar(name.clone(), TyAttr::default()))
                     .unwrap_or_else(|| iface_ty.clone());
-                let self_replacement = receiver_generic
+                let self_replacement = self_ty_var
                     .as_ref()
                     .map(|name| crate::lower_type_expr::type_expr_for_name(name.clone()))
                     .unwrap_or_else(|| Self::interface_self_type_expr(iface_data));
-                if bound
+                // A pinned `Self` (type-var receiver) is a single concrete type,
+                // so `Self`-typed parameters are sound; the object-safety
+                // restriction only applies to a bare interface (existential)
+                // receiver.
+                if self_pin.is_none()
+                    && bound
                     && sig
                         .params
                         .iter()
@@ -8886,12 +8985,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                         .or_insert_with(|| Ty::TypeVar(generic_param.clone(), TyAttr::default()));
                 }
                 let mut all_generic_params = iface_data.generic_params.clone();
-                if let Some(receiver_generic) = &receiver_generic {
-                    bindings.insert(
-                        receiver_generic.clone(),
-                        Ty::TypeVar(receiver_generic.clone(), TyAttr::default()),
-                    );
-                    all_generic_params.push(receiver_generic.clone());
+                // See the default-method loop above: a pinned `Self` is the
+                // receiver type variable, registered without clobbering an
+                // identically-named interface generic parameter.
+                let self_ty_var = self_pin.cloned().or_else(|| receiver_generic.clone());
+                if let Some(name) = &self_ty_var {
+                    bindings
+                        .entry(name.clone())
+                        .or_insert_with(|| Ty::TypeVar(name.clone(), TyAttr::default()));
+                    if !all_generic_params.contains(name) {
+                        all_generic_params.push(name.clone());
+                    }
                 }
                 all_generic_params.extend(sig.generic_params.iter().cloned());
                 let iface_ty = Ty::Interface(
@@ -8908,15 +9012,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                     TyAttr::default(),
                 );
                 let mut diags = Vec::new();
-                let receiver_ty = receiver_generic
+                let receiver_ty = self_ty_var
                     .as_ref()
                     .map(|name| Ty::TypeVar(name.clone(), TyAttr::default()))
                     .unwrap_or_else(|| iface_ty.clone());
-                let self_replacement = receiver_generic
+                let self_replacement = self_ty_var
                     .as_ref()
                     .map(|name| crate::lower_type_expr::type_expr_for_name(name.clone()))
                     .unwrap_or_else(|| Self::interface_self_type_expr(iface_data));
-                if bound
+                if self_pin.is_none()
+                    && bound
                     && sig
                         .params
                         .iter()
@@ -10089,7 +10194,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             [(iface_qtn, iface_args)] => {
                 let iface_qtn = iface_qtn.clone();
                 let iface_args = iface_args.clone();
-                self.resolve_interface_member(&iface_qtn, &iface_args, member, at, bound)
+                self.resolve_interface_member(&iface_qtn, &iface_args, member, at, bound, None)
             }
             _ => {
                 let sources = self.format_interface_method_sources(reg.iter().cloned());
@@ -12215,6 +12320,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let saved_path_member_resolutions = std::mem::take(&mut self.path_member_resolutions);
         let saved_interface_method_generic_params =
             std::mem::take(&mut self.interface_method_generic_params);
+        let saved_self_pinned_rigid_var = std::mem::take(&mut self.self_pinned_rigid_var);
         let saved_lambda_effective_throws = std::mem::take(&mut self.lambda_effective_throws);
         let saved_call_plans = std::mem::take(&mut self.call_plans);
         let saved_function_coercions = std::mem::take(&mut self.function_coercions);
@@ -12318,6 +12424,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.path_segment_types = saved_path_segment_types;
         self.path_member_resolutions = saved_path_member_resolutions;
         self.interface_method_generic_params = saved_interface_method_generic_params;
+        self.self_pinned_rigid_var = saved_self_pinned_rigid_var;
         self.lambda_effective_throws = saved_lambda_effective_throws;
         self.call_plans = saved_call_plans;
         self.function_coercions = saved_function_coercions;

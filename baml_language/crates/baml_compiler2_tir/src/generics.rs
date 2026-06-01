@@ -403,6 +403,50 @@ pub fn contains_typevar(ty: &Ty) -> bool {
     }
 }
 
+/// Like [`contains_typevar`] but ignores a single rigid variable (`rigid`) — the
+/// pinned `Self` of an interface method call. Returns `true` only if some *other*
+/// type variable is present.
+///
+/// Call-argument validation defers when the expected type still has an
+/// uninferred (non-rigid) variable, but it must *not* defer when the only
+/// variable left is the rigid `Self`: that case is validated by identity (a
+/// `Self`-typed argument must itself be that `Self`), including when `Self`
+/// appears nested, e.g. `Self[]` or `Self?`. With `rigid == None` this is
+/// exactly [`contains_typevar`].
+pub fn contains_typevar_other_than(ty: &Ty, rigid: Option<&Name>) -> bool {
+    match ty {
+        Ty::TypeVar(name, _) => rigid != Some(name),
+        Ty::List(inner, _) | Ty::Optional(inner, _) | Ty::EvolvingList(inner, _) => {
+            contains_typevar_other_than(inner, rigid)
+        }
+        Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) => {
+            contains_typevar_other_than(k, rigid) || contains_typevar_other_than(v, rigid)
+        }
+        Ty::Union(tys, _) => tys.iter().any(|t| contains_typevar_other_than(t, rigid)),
+        Ty::Function {
+            generic_param_bounds,
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            generic_param_bounds.iter().any(|bound| {
+                bound
+                    .as_ref()
+                    .is_some_and(|b| contains_typevar_other_than(b, rigid))
+            }) || params
+                .iter()
+                .any(|param| contains_typevar_other_than(&param.ty, rigid))
+                || contains_typevar_other_than(ret, rigid)
+                || contains_typevar_other_than(throws, rigid)
+        }
+        Ty::Class(_, type_args, _) | Ty::Interface(_, type_args, _) => type_args
+            .iter()
+            .any(|t| contains_typevar_other_than(t, rigid)),
+        _ => false,
+    }
+}
+
 /// Infer type variable bindings by walking formal and actual types in parallel.
 ///
 /// When `formal` is `Ty::TypeVar("T", TyAttr::default())` and `actual` is `Ty::Primitive(Int, TyAttr::default())`,
@@ -413,9 +457,19 @@ fn infer_bindings_inner(
     actual: &Ty,
     bindings: &mut FxHashMap<Name, Ty>,
     allow_typevar_actuals: bool,
+    // A *rigid* type variable that must never be bound from an argument — the
+    // pinned `Self` of an interface method call (mirrors rustc's `ty::Param`,
+    // which unification never instantiates). `None` = no rigid variable (the
+    // historical behavior). This is the only thing that distinguishes a
+    // Self-pinned call from any other; ordinary calls pass `None`, so their
+    // inference is completely unchanged.
+    rigid: Option<&Name>,
 ) {
     match (formal, actual) {
         (Ty::TypeVar(name, _), actual_ty) => {
+            if rigid == Some(name) {
+                return;
+            }
             // Skip TypeVar-to-TypeVar bindings by default — they usually provide
             // no information for ordinary call inference. Some higher-order
             // callable-summary paths opt into preserving them explicitly.
@@ -428,14 +482,14 @@ fn infer_bindings_inner(
                 .or_insert_with(|| actual_ty.clone());
         }
         (Ty::List(f, _), Ty::List(a, _)) => {
-            infer_bindings_inner(f, a, bindings, allow_typevar_actuals);
+            infer_bindings_inner(f, a, bindings, allow_typevar_actuals, rigid);
         }
         (Ty::Map(fk, fv, _), Ty::Map(ak, av, _)) => {
-            infer_bindings_inner(fk, ak, bindings, allow_typevar_actuals);
-            infer_bindings_inner(fv, av, bindings, allow_typevar_actuals);
+            infer_bindings_inner(fk, ak, bindings, allow_typevar_actuals, rigid);
+            infer_bindings_inner(fv, av, bindings, allow_typevar_actuals, rigid);
         }
         (Ty::Optional(f, _), Ty::Optional(a, _)) => {
-            infer_bindings_inner(f, a, bindings, allow_typevar_actuals);
+            infer_bindings_inner(f, a, bindings, allow_typevar_actuals, rigid);
         }
         (
             Ty::Function {
@@ -452,17 +506,17 @@ fn infer_bindings_inner(
             },
         ) => {
             for (fp, ap) in fp.iter().zip(ap.iter()) {
-                infer_bindings_inner(&fp.ty, &ap.ty, bindings, allow_typevar_actuals);
+                infer_bindings_inner(&fp.ty, &ap.ty, bindings, allow_typevar_actuals, rigid);
             }
-            infer_bindings_inner(fr, ar, bindings, allow_typevar_actuals);
-            infer_bindings_inner(fth, ath, bindings, allow_typevar_actuals);
+            infer_bindings_inner(fr, ar, bindings, allow_typevar_actuals, rigid);
+            infer_bindings_inner(fth, ath, bindings, allow_typevar_actuals, rigid);
         }
         (Ty::Class(fn_name, f_args, _), Ty::Class(an_name, a_args, _))
         | (Ty::Interface(fn_name, f_args, _), Ty::Interface(an_name, a_args, _))
             if fn_name == an_name =>
         {
             for (ft, at) in f_args.iter().zip(a_args.iter()) {
-                infer_bindings_inner(ft, at, bindings, allow_typevar_actuals);
+                infer_bindings_inner(ft, at, bindings, allow_typevar_actuals, rigid);
             }
         }
         // Builtin container bridging: Array<T> ↔ List(T), Map<K,V> ↔ Map(K,V)
@@ -471,24 +525,54 @@ fn infer_bindings_inner(
         (Ty::Class(class_name, f_args, _), Ty::List(actual_inner, _))
             if class_name.is_builtin_root_type("Array") && f_args.len() == 1 =>
         {
-            infer_bindings_inner(&f_args[0], actual_inner, bindings, allow_typevar_actuals);
+            infer_bindings_inner(
+                &f_args[0],
+                actual_inner,
+                bindings,
+                allow_typevar_actuals,
+                rigid,
+            );
         }
         (Ty::Class(class_name, f_args, _), Ty::Map(actual_key, actual_val, _))
             if class_name.is_builtin_root_type("Map") && f_args.len() == 2 =>
         {
-            infer_bindings_inner(&f_args[0], actual_key, bindings, allow_typevar_actuals);
-            infer_bindings_inner(&f_args[1], actual_val, bindings, allow_typevar_actuals);
+            infer_bindings_inner(
+                &f_args[0],
+                actual_key,
+                bindings,
+                allow_typevar_actuals,
+                rigid,
+            );
+            infer_bindings_inner(
+                &f_args[1],
+                actual_val,
+                bindings,
+                allow_typevar_actuals,
+                rigid,
+            );
         }
         _ => {} // Concrete types: nothing to infer
     }
 }
 
 pub fn infer_bindings(formal: &Ty, actual: &Ty, bindings: &mut FxHashMap<Name, Ty>) {
-    infer_bindings_inner(formal, actual, bindings, false);
+    infer_bindings_inner(formal, actual, bindings, false, None);
 }
 
 pub fn infer_bindings_allow_typevars(formal: &Ty, actual: &Ty, bindings: &mut FxHashMap<Name, Ty>) {
-    infer_bindings_inner(formal, actual, bindings, true);
+    infer_bindings_inner(formal, actual, bindings, true, None);
+}
+
+/// Like [`infer_bindings`] but treats `rigid` (when `Some`) as a rigid type
+/// variable that is never bound from an argument — the pinned `Self` of an
+/// interface method call. Every other variable infers exactly as before.
+pub fn infer_bindings_rigid_self(
+    formal: &Ty,
+    actual: &Ty,
+    bindings: &mut FxHashMap<Name, Ty>,
+    rigid: Option<&Name>,
+) {
+    infer_bindings_inner(formal, actual, bindings, false, rigid);
 }
 
 /// Combine two types into a union, deduplicating members.

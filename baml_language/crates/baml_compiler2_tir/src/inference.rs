@@ -666,6 +666,46 @@ pub fn infer_scope_types<'db>(
                             }
                         }
                     }
+                    // BEP-044 (Self-as-type-variable): inside an interface's own
+                    // method, `self` is a `Self` type variable *bound by* the
+                    // interface — the implementing type, like Rust's `Self` or
+                    // Swift's conforming type — as opposed to the interface
+                    // *existential* (`Ty::Interface`). Registering it lets
+                    // `self.method(other: Self)` resolve with `Self` pinned (so
+                    // `Self`-typed parameters are sound and the object-safety
+                    // restriction does not apply), while a bare interface value
+                    // still cannot call such methods.
+                    let interface_self_bound: Option<Ty> = if enclosing_impl.is_none() {
+                        scope.parent.and_then(|parent_idx| {
+                            let parent = &index.scopes[parent_idx.index() as usize];
+                            if !matches!(parent.kind, ScopeKind::Class) {
+                                return None;
+                            }
+                            let cn = parent.name.as_ref()?;
+                            let def = pkg_items.lookup_type(&pkg_info.namespace_path, cn)?;
+                            if !matches!(
+                                def,
+                                baml_compiler2_hir::contributions::Definition::Interface(_)
+                            ) {
+                                return None;
+                            }
+                            let qtn = crate::lower_type_expr::qualify_def(db, def, cn);
+                            let iface = item_tree.interfaces.values().find(|i| &i.name == cn)?;
+                            let args = iface
+                                .generic_params
+                                .iter()
+                                .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
+                                .collect();
+                            Some(Ty::Interface(qtn, args, TyAttr::default()))
+                        })
+                    } else {
+                        None
+                    };
+                    if interface_self_bound.is_some()
+                        && !generic_params.iter().any(|p| p.as_str() == "Self")
+                    {
+                        generic_params.push(Name::new("Self"));
+                    }
                     builder.set_generic_params(generic_params.clone());
                     // BEP-044 generic bounds: lower each `extends Iface`
                     // expression to a TIR `Ty` and bind it under the
@@ -673,6 +713,9 @@ pub fn infer_scope_types<'db>(
                     // walks this map to expose the bound's contract.
                     let mut bounds: rustc_hash::FxHashMap<Name, Ty> =
                         rustc_hash::FxHashMap::default();
+                    if let Some(bound) = &interface_self_bound {
+                        bounds.insert(Name::new("Self"), bound.clone());
+                    }
                     let mut bound_param_names = Vec::new();
                     let mut bound_exprs = Vec::new();
                     if let Some(imp) = enclosing_impl {
@@ -745,13 +788,21 @@ pub fn infer_scope_types<'db>(
                         // implementation, `Self` is the rule receiver pattern
                         // (`Box<T>` or `T`). Otherwise it is the enclosing
                         // class/interface type.
-                        let self_replacement = enclosing_impl
-                            .map(|imp| imp.for_target.expr.clone())
-                            .or_else(|| {
-                                enclosing_class_name.as_ref().map(|cn| {
-                                    crate::lower_type_expr::type_expr_for_name(cn.clone())
+                        let self_replacement = if interface_self_bound.is_some() {
+                            // Interface method: `Self` is the bound type variable,
+                            // not the interface existential.
+                            Some(crate::lower_type_expr::type_expr_for_name(Name::new(
+                                "Self",
+                            )))
+                        } else {
+                            enclosing_impl
+                                .map(|imp| imp.for_target.expr.clone())
+                                .or_else(|| {
+                                    enclosing_class_name.as_ref().map(|cn| {
+                                        crate::lower_type_expr::type_expr_for_name(cn.clone())
+                                    })
                                 })
-                            });
+                        };
                         let lower_with_self = |te: &baml_compiler2_ast::TypeExpr,
                                                diags: &mut Vec<
                             crate::infer_context::TirTypeError,
@@ -823,12 +874,18 @@ pub fn infer_scope_types<'db>(
                                         }
                                     }
                                     ty
+                                } else if interface_self_bound.is_some() {
+                                    // BEP-044 Self-as-type-variable: inside an
+                                    // interface's own method `self` is the `Self`
+                                    // type variable (bound by this interface), not
+                                    // the interface existential — so `self.method(
+                                    // other: Self)` resolves with `Self` pinned.
+                                    // Member resolution walks the registered bound
+                                    // to reach the interface contract.
+                                    Ty::TypeVar(Name::new("Self"), TyAttr::default())
                                 } else {
                                     // `self` parameter with no type annotation — infer from
-                                    // enclosing class. For BEP-044 interface default methods
-                                    // the enclosing scope is the interface, so we produce
-                                    // `Ty::Interface` so member resolution dispatches through
-                                    // the interface contract.
+                                    // enclosing class.
                                     enclosing_class_name
                                         .as_ref()
                                         .and_then(|cn| {

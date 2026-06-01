@@ -1756,6 +1756,30 @@ impl<'db> LoweringContext<'db> {
                 generic_param_bounds.insert(name.clone(), bound_ty);
             }
         }
+        // BEP-044 Self-as-type-variable: an interface default method's `self` is
+        // a `Self` type variable bound by the interface (matching the TIR
+        // typing in `inference.rs`). Registering the bound lets member access on
+        // `self` dispatch through the interface — `interface_dispatch_target_for_tir_ty`
+        // already follows type-var bounds — so default methods keep dispatching
+        // through the concrete implementor.
+        for iface in item_tree.interfaces.values() {
+            if iface.default_methods.contains(&func_loc.id(db))
+                && let Some(def) =
+                    pkg_items_for_bounds.lookup_type(&pkg_info.namespace_path, &iface.name)
+            {
+                let qtn = baml_compiler2_tir::lower_type_expr::qualify_def(db, def, &iface.name);
+                let args = iface
+                    .generic_params
+                    .iter()
+                    .map(|p| Tir2Ty::TypeVar(p.clone(), baml_compiler2_tir::ty::TyAttr::default()))
+                    .collect();
+                generic_param_bounds.insert(
+                    Name::new("Self"),
+                    Tir2Ty::Interface(qtn, args, baml_compiler2_tir::ty::TyAttr::default()),
+                );
+                break;
+            }
+        }
 
         // Class/enum/interface schema + resolved aliases, memoized per package
         // (was rebuilt — and every class field re-lowered — per function).
