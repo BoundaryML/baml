@@ -1125,6 +1125,40 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         self.set_var_operand(inst, slot);
     }
 
+    /// Emit a store to a (non-captured) local slot, folding a just-emitted
+    /// `LoadVar(src)` into a single `MoveLocal(dst, src)` — every `x = y`. Like
+    /// [`Self::emit_load_var`], rewrites the previous instruction in place and
+    /// only within the current basic block, so jump targets and block
+    /// addresses are unaffected.
+    fn emit_store_var(&mut self, slot: usize) {
+        let n = self.bytecode.instructions.len();
+        if n > 0 {
+            let last_idx = n - 1;
+            if last_idx >= self.current_block_start {
+                let fused = match self.bytecode.instructions[last_idx] {
+                    Instruction::LoadVar(src) => Some(Instruction::MoveLocal(slot, src)),
+                    // Triple-fold: a double-folded binop whose result is stored
+                    // straight into this local. The binop's only consumer is
+                    // this store (stack effect 0), so folding is sound.
+                    Instruction::AddIntVarVar(a, b) => {
+                        Some(Instruction::AddIntVarVarStore(a, b, slot))
+                    }
+                    Instruction::AddIntVarConst(a, c) => {
+                        Some(Instruction::AddIntVarConstStore(a, c, slot))
+                    }
+                    _ => None,
+                };
+                if let Some(fused) = fused {
+                    self.bytecode.instructions[last_idx] = fused;
+                    self.set_var_operand(last_idx, slot);
+                    return;
+                }
+            }
+        }
+        let inst = self.emit(Instruction::StoreVar(slot));
+        self.set_var_operand(inst, slot);
+    }
+
     /// Drop the most recently emitted instruction, keeping `meta` and the
     /// line table in sync. Used by the binop peephole when it folds two loads
     /// into one fused op (so the trailing operand slot is removed). Only ever
@@ -1931,9 +1965,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                             // Captured local: store through the cell.
                             self.emit(Instruction::StoreDeref(slot));
                         } else {
-                            // Normal local: direct slot store.
-                            let inst = self.emit(Instruction::StoreVar(slot));
-                            self.set_var_operand(inst, slot);
+                            // Normal local: direct slot store (fuses a preceding
+                            // LoadVar into MoveLocal).
+                            self.emit_store_var(slot);
                         }
                     }
                     LocalStoreBehavior::KeepOnStack => {

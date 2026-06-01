@@ -218,6 +218,9 @@ pub(crate) fn display_instruction(
         | Instruction::AddIntVarConst(..)
         | Instruction::CmpIntLtVarVar(..)
         | Instruction::CmpIntLtVarConst(..)
+        | Instruction::MoveLocal(..)
+        | Instruction::AddIntVarVarStore(..)
+        | Instruction::AddIntVarConstStore(..)
         | Instruction::UnaryOp(_)
         | Instruction::AllocArray(_)
         | Instruction::AllocMap(_)
@@ -355,6 +358,7 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::LoadMapElement => Style::new().blue(),
         Instruction::StoreVar(_)
         | Instruction::StoreVarLoadVar(_)
+        | Instruction::MoveLocal(..)
         | Instruction::StoreGlobal(_)
         | Instruction::StoreField(_)
         | Instruction::InitField(_)
@@ -393,6 +397,8 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::AddIntVarConst(..)
         | Instruction::CmpIntLtVarVar(..)
         | Instruction::CmpIntLtVarConst(..)
+        | Instruction::AddIntVarVarStore(..)
+        | Instruction::AddIntVarConstStore(..)
         | Instruction::UnaryOp(_) => Style::new().blue().bright(),
         Instruction::Jump(_)
         | Instruction::PopJumpIfFalse(_)
@@ -817,6 +823,11 @@ fn display_instruction_textual(
         Instruction::AddIntVarConst(a, c) => format!("add_int_var_const {a} {c}"),
         Instruction::CmpIntLtVarVar(a, b) => format!("cmp_int_lt_var_var {a} {b}"),
         Instruction::CmpIntLtVarConst(a, c) => format!("cmp_int_lt_var_const {a} {c}"),
+        Instruction::MoveLocal(dst, src) => format!("move_local {dst} {src}"),
+        Instruction::AddIntVarVarStore(a, b, dst) => format!("add_int_var_var_store {a} {b} {dst}"),
+        Instruction::AddIntVarConstStore(a, c, dst) => {
+            format!("add_int_var_const_store {a} {c} {dst}")
+        }
         Instruction::SubInt => "sub_int".to_string(),
         Instruction::MulInt => "mul_int".to_string(),
         Instruction::DivInt => "div_int".to_string(),
@@ -1357,10 +1368,19 @@ pub fn display_compact_bytecode(
             OpCode::AddIntVarVar
             | OpCode::AddIntVarConst
             | OpCode::CmpIntLtVarVar
-            | OpCode::CmpIntLtVarConst => {
+            | OpCode::CmpIntLtVarConst
+            | OpCode::MoveLocal => {
                 let a = read_u32(code, &mut pc);
                 let b = read_u32(code, &mut pc);
                 writeln!(f, "{a} {b}")?;
+            }
+
+            // Three u32 operands (triple-folded store binops)
+            OpCode::AddIntVarVarStore | OpCode::AddIntVarConstStore => {
+                let a = read_u32(code, &mut pc);
+                let b = read_u32(code, &mut pc);
+                let dst = read_u32(code, &mut pc);
+                writeln!(f, "{a} {b} {dst}")?;
             }
         }
     }

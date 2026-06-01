@@ -750,6 +750,21 @@ pub enum Instruction {
     CmpIntLtVarVar(usize, usize),
     /// `local[a] < const[c]`.
     CmpIntLtVarConst(usize, usize),
+
+    /// Fused `LoadVar(src); StoreVar(dst)` — copy local `src` into local `dst`
+    /// without round-tripping through the eval stack. `(dst, src)`. Stores via
+    /// the normal store path, so cell-wrapped destinations stay correct.
+    MoveLocal(usize, usize),
+
+    // ── Triple-folded: double-folded binop whose result is stored directly ──
+    // Produced when a double-folded binop is immediately followed by a store
+    // to a (non-captured) local: `local[dst] = local[a] OP <rhs>`. Reads both
+    // operands directly and stores the result via the normal store path; the
+    // result never touches the eval stack. `(a, b_or_c, dst)`.
+    /// `local[dst] = local[a] + local[b]`.
+    AddIntVarVarStore(usize, usize, usize),
+    /// `local[dst] = local[a] + const[c]`.
+    AddIntVarConstStore(usize, usize, usize),
 }
 
 /// Compact bytecode opcodes.
@@ -904,6 +919,11 @@ pub enum OpCode {
     AddIntVarConst,
     CmpIntLtVarVar,
     CmpIntLtVarConst,
+    MoveLocal,
+
+    // ── Triple-folded store binops: three u32 operands (13 bytes) ──
+    AddIntVarVarStore,
+    AddIntVarConstStore,
 }
 
 impl OpCode {
@@ -1036,11 +1056,15 @@ impl OpCode {
             // 9-byte: opcode + u32 + i32
             Self::JumpTable => 9,
 
-            // 9-byte: opcode + u32 + u32 (double-folded fused binops)
+            // 9-byte: opcode + u32 + u32 (double-folded fused binops, move-local)
             Self::AddIntVarVar
             | Self::AddIntVarConst
             | Self::CmpIntLtVarVar
-            | Self::CmpIntLtVarConst => 9,
+            | Self::CmpIntLtVarConst
+            | Self::MoveLocal => 9,
+
+            // 13-byte: opcode + u32 + u32 + u32 (triple-folded store binops)
+            Self::AddIntVarVarStore | Self::AddIntVarConstStore => 13,
         }
     }
 }
@@ -1169,6 +1193,9 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::AddIntVarConst as u8 => Ok(Self::AddIntVarConst),
             x if x == Self::CmpIntLtVarVar as u8 => Ok(Self::CmpIntLtVarVar),
             x if x == Self::CmpIntLtVarConst as u8 => Ok(Self::CmpIntLtVarConst),
+            x if x == Self::MoveLocal as u8 => Ok(Self::MoveLocal),
+            x if x == Self::AddIntVarVarStore as u8 => Ok(Self::AddIntVarVarStore),
+            x if x == Self::AddIntVarConstStore as u8 => Ok(Self::AddIntVarConstStore),
             _ => Err(byte),
         }
     }
@@ -1296,6 +1323,9 @@ impl std::fmt::Display for OpCode {
             Self::AddIntVarConst => "ADD_INT_VAR_CONST",
             Self::CmpIntLtVarVar => "CMP_INT_LT_VAR_VAR",
             Self::CmpIntLtVarConst => "CMP_INT_LT_VAR_CONST",
+            Self::MoveLocal => "MOVE_LOCAL",
+            Self::AddIntVarVarStore => "ADD_INT_VAR_VAR_STORE",
+            Self::AddIntVarConstStore => "ADD_INT_VAR_CONST_STORE",
         };
         f.write_str(name)
     }
@@ -1432,6 +1462,13 @@ impl std::fmt::Display for Instruction {
             Instruction::AddIntVarConst(a, c) => write!(f, "ADD_INT_VAR_CONST {a} {c}"),
             Instruction::CmpIntLtVarVar(a, b) => write!(f, "CMP_INT_LT_VAR_VAR {a} {b}"),
             Instruction::CmpIntLtVarConst(a, c) => write!(f, "CMP_INT_LT_VAR_CONST {a} {c}"),
+            Instruction::MoveLocal(dst, src) => write!(f, "MOVE_LOCAL {dst} {src}"),
+            Instruction::AddIntVarVarStore(a, b, dst) => {
+                write!(f, "ADD_INT_VAR_VAR_STORE {a} {b} {dst}")
+            }
+            Instruction::AddIntVarConstStore(a, c, dst) => {
+                write!(f, "ADD_INT_VAR_CONST_STORE {a} {c} {dst}")
+            }
             Instruction::SubInt => f.write_str("SUB_INT"),
             Instruction::MulInt => f.write_str("MUL_INT"),
             Instruction::DivInt => f.write_str("DIV_INT"),
@@ -1973,12 +2010,27 @@ impl Bytecode {
                 Instruction::AddIntVarVar(a, b)
                 | Instruction::AddIntVarConst(a, b)
                 | Instruction::CmpIntLtVarVar(a, b)
-                | Instruction::CmpIntLtVarConst(a, b) => {
+                | Instruction::CmpIntLtVarConst(a, b)
+                | Instruction::MoveLocal(a, b) => {
                     code.extend_from_slice(
                         &u32::try_from(*a).expect("operand fits u32").to_le_bytes(),
                     );
                     code.extend_from_slice(
                         &u32::try_from(*b).expect("operand fits u32").to_le_bytes(),
+                    );
+                }
+
+                // ── Three usize operands → u32 + u32 + u32 (store binops) ──
+                Instruction::AddIntVarVarStore(a, b, dst)
+                | Instruction::AddIntVarConstStore(a, b, dst) => {
+                    code.extend_from_slice(
+                        &u32::try_from(*a).expect("operand fits u32").to_le_bytes(),
+                    );
+                    code.extend_from_slice(
+                        &u32::try_from(*b).expect("operand fits u32").to_le_bytes(),
+                    );
+                    code.extend_from_slice(
+                        &u32::try_from(*dst).expect("operand fits u32").to_le_bytes(),
                     );
                 }
 
@@ -2267,6 +2319,9 @@ impl Bytecode {
             Instruction::AddIntVarConst(..) => OpCode::AddIntVarConst,
             Instruction::CmpIntLtVarVar(..) => OpCode::CmpIntLtVarVar,
             Instruction::CmpIntLtVarConst(..) => OpCode::CmpIntLtVarConst,
+            Instruction::MoveLocal(..) => OpCode::MoveLocal,
+            Instruction::AddIntVarVarStore(..) => OpCode::AddIntVarVarStore,
+            Instruction::AddIntVarConstStore(..) => OpCode::AddIntVarConstStore,
 
             // Specialized arithmetic (dedicated opcodes, skip type dispatch)
             Instruction::AddInt => OpCode::AddInt,
