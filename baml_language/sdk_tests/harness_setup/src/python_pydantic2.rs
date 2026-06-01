@@ -115,9 +115,13 @@ fn codegen_fixture(
     fs::create_dir_all(&baml_sdk).unwrap();
 
     let pool = loaded.pool;
-    let user_baml_files = loaded.user_baml_files;
+    let baml_bytecode = loaded.baml_bytecode;
     let codegen_result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-        codegen_python::to_source_code(&pool, &user_baml_files, NamingConvention::PreserveCase)
+        codegen_python::to_source_code_with_bytecode(
+            &pool,
+            &baml_bytecode,
+            NamingConvention::PreserveCase,
+        )
     }));
     match codegen_result {
         Ok(output) => {

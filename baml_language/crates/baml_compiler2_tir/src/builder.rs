@@ -5455,7 +5455,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             } else {
                 self.resolve_type_expr_silent(&ty_expr)
             };
-            if matches!(ty, Ty::Class(..) | Ty::Unknown { .. } | Ty::Error { .. }) {
+            if matches!(
+                ty,
+                Ty::Class(..) | Ty::Interface(..) | Ty::Unknown { .. } | Ty::Error { .. }
+            ) {
                 return ty;
             }
             if let Some((pat_id, fallback)) = anchor {
@@ -5475,9 +5478,13 @@ impl<'db> TypeInferenceBuilder<'db> {
             };
         }
 
-        if let Some((_source, ty @ Ty::Class(..))) =
-            self.res_ctx
-                .resolve_type(self.context.db(), class, &self.ns_context)
+        // Accept both class heads (`Dog { ... }`) and interface heads
+        // (`Animal { ... }`). An interface destructure matches any implementor
+        // and binds the interface's fields through their views — see the
+        // interface branch in `lower_class_pat`.
+        if let Some((_source, ty @ (Ty::Class(..) | Ty::Interface(..)))) = self
+            .res_ctx
+            .resolve_type(self.context.db(), class, &self.ns_context)
         {
             return ty;
         }
@@ -12727,6 +12734,50 @@ impl TypeInferenceBuilder<'_> {
         // tuple as a fallback for `report_at_pat_or_expr`.
         let class_ty =
             self.resolve_class_pattern_type(class, generic_args, Some((pat_id, at_expr)));
+
+        // BEP-044: destructuring an interface head (`Animal { name, age }`).
+        // The interface has no positional field layout — it matches any
+        // implementor and binds each named field through the interface's
+        // field view (the same projection used by `iface_value.field`). Field
+        // *types* come from `resolve_interface_member`; the runtime extraction
+        // is wired by `project_interface_pattern_field` in MIR. Because every
+        // implementor necessarily provides the interface's declared fields,
+        // the pattern matches all of them, so its `DPat` is the interface's
+        // (wildcard-like) type cover — `Animal { name } => …` alone is
+        // exhaustive over an `Animal` scrutinee, with no `_` needed.
+        if let Ty::Interface(iface_name, type_args, _) = &class_ty {
+            let iface_name = iface_name.clone();
+            let type_args = type_args.clone();
+            let mut bindings: Vec<PatternBinding> = Vec::new();
+            for fp in fields {
+                let field_ty = self
+                    .resolve_interface_member(&iface_name, &type_args, &fp.field, at_expr, true)
+                    .unwrap_or_else(|| {
+                        self.report_at_pat_or_expr(
+                            TirTypeError::UnresolvedMember {
+                                base_type: class_ty.clone(),
+                                member: fp.field.clone(),
+                            },
+                            pat_id,
+                            at_expr,
+                        );
+                        Ty::Unknown {
+                            attr: TyAttr::default(),
+                        }
+                    });
+                let r = self.analyze_and_lower(fp.pat, &field_ty, body, at_expr);
+                bindings.extend(r.bindings);
+            }
+            let dpat = self.dpat_for_type(&class_ty, scrut_ty);
+            let matched_ty = self.intersect_pattern_flow_types(scrut_ty, &class_ty);
+            return PatternResult {
+                dpat,
+                required_ty: Some(class_ty.clone()),
+                matched_ty,
+                bindings,
+            };
+        }
+
         if !matches!(class_ty, Ty::Class(..)) {
             // Resolution failed; bail out with a wildcard so downstream
             // can keep going. Diagnostics already emitted by resolver.

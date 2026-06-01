@@ -16,6 +16,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use bex_engine::BexEngine;
 use bex_project::Bex;
 use bridge_ctypes::{DecodeFromBuffer, HANDLE_TABLE, kwargs_to_bex_values};
 use futures::future::FutureExt;
@@ -99,21 +100,53 @@ pub fn initialize_runtime(
         .map(|(k, v)| (bex_project::FsPath::from_str(k), v))
         .collect();
 
-    let event_sink = Some(
+    let event_sink = runtime_event_sink();
+
+    let rt: Arc<dyn Bex> =
+        bex_project::new(vfs_path, bex_project::SysOps::native(), files, event_sink)?;
+
+    replace_runtime(rt.clone())?;
+
+    Ok(rt)
+}
+
+/// Initialize the global runtime from serialized BAML bytecode.
+///
+/// The payload is the same borsh-encoded [`bex_vm_types::Program`] that
+/// `baml pack` embeds in its pack envelope.
+pub fn initialize_runtime_from_bytecode(bytecode: &[u8]) -> Result<Arc<dyn Bex>, BridgeError> {
+    let program: bex_vm_types::Program = borsh::from_slice(bytecode)
+        .map_err(|e| BridgeError::Internal(format!("Failed to deserialize BAML bytecode: {e}")))?;
+
+    let engine = BexEngine::new(
+        program,
+        Arc::new(bex_project::SysOps::native()),
+        runtime_event_sink(),
+        vec![],
+    )
+    .map_err(bex_project::RuntimeError::from)?;
+    let rt: Arc<dyn Bex> = Arc::new(engine);
+
+    replace_runtime(rt.clone())?;
+
+    Ok(rt)
+}
+
+fn runtime_event_sink() -> Option<Arc<dyn bex_events::EventSink>> {
+    Some(
         std::env::var("BAML_TRACE_FILE")
             .ok()
             .map(|trace_file| bex_events_native::start(trace_file.into()))
             .unwrap_or_else(bex_events_native::start_stderr),
-    );
+    )
+}
 
-    let rt = bex_project::new(vfs_path, bex_project::SysOps::native(), files, event_sink)?;
-
+fn replace_runtime(rt: Arc<dyn Bex>) -> Result<(), BridgeError> {
     let mut guard = RUNTIME_INSTANCE
         .write()
         .map_err(|_| BridgeError::LockPoisoned)?;
-    *guard = Some(rt.clone());
-
-    Ok(rt)
+    *guard = Some(rt);
+    Ok(())
 }
 
 /// Flush the current runtime's event sink. Called by `bridge_python::flush_events()`.

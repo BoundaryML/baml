@@ -1882,9 +1882,12 @@ checksum = "36f64beae40a84da1b4b26ff2761a5b895c12adc41dc25aaee1c4f2bbfe97a6e"
 name = "bridge_cffi"
 version = "0.218.1"
 dependencies = [
+ "bex_engine",
  "bex_events",
  "bex_events_native",
  "bex_project",
+ "bex_vm_types",
+ "borsh",
  "bridge_ctypes",
  "cbindgen",
  "futures",
@@ -7035,6 +7038,7 @@ dependencies = [
  "baml_db",
  "baml_project",
  "baml_workspace",
+ "borsh",
  "codegen_nodejs",
  "codegen_python",
 ]

@@ -173,6 +173,11 @@ class BamlRuntime:
         * `root_path` - Root path for BAML files
         * `files` - Map of filename to file content
         """
+    @staticmethod
+    def initialize_runtime_from_bytecode(bytecode: bytes) -> BamlRuntime:
+        r"""
+        Initialize the process-global runtime from serialized BAML bytecode.
+        """
     def call_function(self, function_name: str, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None, collectors: typing.Optional[typing.Sequence["Collector"]] = None, abort_controller: typing.Optional["AbortController"] = None) -> typing.Any:
         r"""
         Call a BAML function asynchronously.
