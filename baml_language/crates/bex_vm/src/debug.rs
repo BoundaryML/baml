@@ -223,6 +223,8 @@ pub(crate) fn display_instruction(
         | Instruction::AddIntVarConstStore(..)
         | Instruction::CmpIntLtVarVarBrFalse(..)
         | Instruction::CmpIntLtVarConstBrFalse(..)
+        | Instruction::CmpIntLtVarVarBrTrue(..)
+        | Instruction::CmpIntLtVarConstBrTrue(..)
         | Instruction::UnaryOp(_)
         | Instruction::AllocArray(_)
         | Instruction::AllocMap(_)
@@ -407,6 +409,8 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::JumpIfFalse(_)
         | Instruction::CmpIntLtVarVarBrFalse(..)
         | Instruction::CmpIntLtVarConstBrFalse(..)
+        | Instruction::CmpIntLtVarVarBrTrue(..)
+        | Instruction::CmpIntLtVarConstBrTrue(..)
         | Instruction::JumpTable { .. }
         | Instruction::DenseTag(_) => Style::new().yellow(),
         Instruction::Call { .. } | Instruction::CallIndirect => Style::new().magenta(),
@@ -837,6 +841,12 @@ fn display_instruction_textual(
         }
         Instruction::CmpIntLtVarConstBrFalse(a, c, o) => {
             format!("cmp_int_lt_var_const_br_false {a} {c} {o:+}")
+        }
+        Instruction::CmpIntLtVarVarBrTrue(a, b, o) => {
+            format!("cmp_int_lt_var_var_br_true {a} {b} {o:+}")
+        }
+        Instruction::CmpIntLtVarConstBrTrue(a, c, o) => {
+            format!("cmp_int_lt_var_const_br_true {a} {c} {o:+}")
         }
         Instruction::SubInt => "sub_int".to_string(),
         Instruction::MulInt => "mul_int".to_string(),
@@ -1394,7 +1404,10 @@ pub fn display_compact_bytecode(
             }
 
             // u32 + u32 + i32 jump offset (compare-and-branch)
-            OpCode::CmpIntLtVarVarBrFalse | OpCode::CmpIntLtVarConstBrFalse => {
+            OpCode::CmpIntLtVarVarBrFalse
+            | OpCode::CmpIntLtVarConstBrFalse
+            | OpCode::CmpIntLtVarVarBrTrue
+            | OpCode::CmpIntLtVarConstBrTrue => {
                 let a = read_u32(code, &mut pc);
                 let b = read_u32(code, &mut pc);
                 let offset_val = read_i32(code, &mut pc);

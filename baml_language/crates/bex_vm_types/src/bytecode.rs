@@ -775,6 +775,15 @@ pub enum Instruction {
     CmpIntLtVarVarBrFalse(usize, usize, isize),
     /// Branch by `offset` if NOT `local[a] < const[c]`.
     CmpIntLtVarConstBrFalse(usize, usize, isize),
+
+    // ── Compare-and-branch, inverted polarity (branch when TRUE) ───────────
+    // Emitted instead of `…BrFalse + Jump(then)` when the else successor is the
+    // fall-through block, so the unconditional jump to the then block is
+    // eliminated. `(a, b_or_c, offset)`.
+    /// Branch by `offset` if `local[a] < local[b]`.
+    CmpIntLtVarVarBrTrue(usize, usize, isize),
+    /// Branch by `offset` if `local[a] < const[c]`.
+    CmpIntLtVarConstBrTrue(usize, usize, isize),
 }
 
 /// Compact bytecode opcodes.
@@ -938,6 +947,8 @@ pub enum OpCode {
     // ── Compare-and-branch: u32 + u32 + i32 offset (13 bytes) ──
     CmpIntLtVarVarBrFalse,
     CmpIntLtVarConstBrFalse,
+    CmpIntLtVarVarBrTrue,
+    CmpIntLtVarConstBrTrue,
 }
 
 impl OpCode {
@@ -1081,7 +1092,10 @@ impl OpCode {
             Self::AddIntVarVarStore | Self::AddIntVarConstStore => 13,
 
             // 13-byte: opcode + u32 + u32 + i32 (compare-and-branch)
-            Self::CmpIntLtVarVarBrFalse | Self::CmpIntLtVarConstBrFalse => 13,
+            Self::CmpIntLtVarVarBrFalse
+            | Self::CmpIntLtVarConstBrFalse
+            | Self::CmpIntLtVarVarBrTrue
+            | Self::CmpIntLtVarConstBrTrue => 13,
         }
     }
 }
@@ -1215,6 +1229,8 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::AddIntVarConstStore as u8 => Ok(Self::AddIntVarConstStore),
             x if x == Self::CmpIntLtVarVarBrFalse as u8 => Ok(Self::CmpIntLtVarVarBrFalse),
             x if x == Self::CmpIntLtVarConstBrFalse as u8 => Ok(Self::CmpIntLtVarConstBrFalse),
+            x if x == Self::CmpIntLtVarVarBrTrue as u8 => Ok(Self::CmpIntLtVarVarBrTrue),
+            x if x == Self::CmpIntLtVarConstBrTrue as u8 => Ok(Self::CmpIntLtVarConstBrTrue),
             _ => Err(byte),
         }
     }
@@ -1347,6 +1363,8 @@ impl std::fmt::Display for OpCode {
             Self::AddIntVarConstStore => "ADD_INT_VAR_CONST_STORE",
             Self::CmpIntLtVarVarBrFalse => "CMP_INT_LT_VAR_VAR_BR_FALSE",
             Self::CmpIntLtVarConstBrFalse => "CMP_INT_LT_VAR_CONST_BR_FALSE",
+            Self::CmpIntLtVarVarBrTrue => "CMP_INT_LT_VAR_VAR_BR_TRUE",
+            Self::CmpIntLtVarConstBrTrue => "CMP_INT_LT_VAR_CONST_BR_TRUE",
         };
         f.write_str(name)
     }
@@ -1495,6 +1513,12 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::CmpIntLtVarConstBrFalse(a, c, o) => {
                 write!(f, "CMP_INT_LT_VAR_CONST_BR_FALSE {a} {c} {o:+}")
+            }
+            Instruction::CmpIntLtVarVarBrTrue(a, b, o) => {
+                write!(f, "CMP_INT_LT_VAR_VAR_BR_TRUE {a} {b} {o:+}")
+            }
+            Instruction::CmpIntLtVarConstBrTrue(a, c, o) => {
+                write!(f, "CMP_INT_LT_VAR_CONST_BR_TRUE {a} {c} {o:+}")
             }
             Instruction::SubInt => f.write_str("SUB_INT"),
             Instruction::MulInt => f.write_str("MUL_INT"),
@@ -2125,7 +2149,9 @@ impl Bytecode {
 
                 // ── Compare-and-branch: u32 a + u32 b + i32 jump offset ──────
                 Instruction::CmpIntLtVarVarBrFalse(a, b, offset)
-                | Instruction::CmpIntLtVarConstBrFalse(a, b, offset) => {
+                | Instruction::CmpIntLtVarConstBrFalse(a, b, offset)
+                | Instruction::CmpIntLtVarVarBrTrue(a, b, offset)
+                | Instruction::CmpIntLtVarConstBrTrue(a, b, offset) => {
                     code.extend_from_slice(
                         &u32::try_from(*a).expect("operand fits u32").to_le_bytes(),
                     );
@@ -2369,6 +2395,8 @@ impl Bytecode {
             Instruction::AddIntVarConstStore(..) => OpCode::AddIntVarConstStore,
             Instruction::CmpIntLtVarVarBrFalse(..) => OpCode::CmpIntLtVarVarBrFalse,
             Instruction::CmpIntLtVarConstBrFalse(..) => OpCode::CmpIntLtVarConstBrFalse,
+            Instruction::CmpIntLtVarVarBrTrue(..) => OpCode::CmpIntLtVarVarBrTrue,
+            Instruction::CmpIntLtVarConstBrTrue(..) => OpCode::CmpIntLtVarConstBrTrue,
 
             // Specialized arithmetic (dedicated opcodes, skip type dispatch)
             Instruction::AddInt => OpCode::AddInt,

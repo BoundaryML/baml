@@ -1185,6 +1185,33 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         self.pending_jumps.push((idx, target));
     }
 
+    /// If the just-emitted condition is a fusible `CmpIntLt*`, rewrite it in
+    /// place into an inverted compare-and-branch (branch to `target` when the
+    /// comparison is TRUE) and register the pending jump on it. Returns false
+    /// without emitting anything when the previous instruction is not a fusible
+    /// comparison, so the caller can fall back to the normal polarity. Confined
+    /// to the current basic block, like the other peepholes.
+    fn try_emit_inverted_cmp_branch(&mut self, target: PendingJumpTarget) -> bool {
+        let n = self.bytecode.instructions.len();
+        if n > self.current_block_start {
+            let fused = match self.bytecode.instructions[n - 1] {
+                Instruction::CmpIntLtVarVar(a, b) => {
+                    Some(Instruction::CmpIntLtVarVarBrTrue(a, b, 0))
+                }
+                Instruction::CmpIntLtVarConst(a, c) => {
+                    Some(Instruction::CmpIntLtVarConstBrTrue(a, c, 0))
+                }
+                _ => None,
+            };
+            if let Some(fused) = fused {
+                self.bytecode.instructions[n - 1] = fused;
+                self.pending_jumps.push((n - 1, target));
+                return true;
+            }
+        }
+        false
+    }
+
     /// Drop the most recently emitted instruction, keeping `meta` and the
     /// line table in sync. Used by the binop peephole when it folds two loads
     /// into one fused op (so the trailing operand slot is removed). Only ever
@@ -2042,13 +2069,29 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     self.emit_jump_unless_fallthrough(*then_block);
                 } else {
                     self.emit_operand_pull(condition);
-                    // PopJumpIfFalse to else_block (pops condition from stack),
-                    // fusing a preceding CmpIntLt* into a compare-and-branch.
-                    // Apply jump threading to resolve through empty blocks
+                    // Apply jump threading to resolve through empty blocks.
+                    let resolved_then = self.resolve_pending_target(*then_block);
                     let resolved_else = self.resolve_pending_target(*else_block);
-                    self.emit_pop_jump_if_false(resolved_else);
-                    // Jump to then_block (may be elided if it's next)
-                    self.emit_jump_unless_fallthrough(*then_block);
+                    // Pick the branch polarity whose fall-through successor is
+                    // the next emitted block, so the unconditional jump to the
+                    // other successor is elided. When the else block is the
+                    // fall-through (and the then block is not), invert: branch
+                    // to `then` when the condition is TRUE.
+                    let is_next = |t: PendingJumpTarget| matches!(t, PendingJumpTarget::Block(b) if self.next_block == Some(b));
+                    if is_next(resolved_else)
+                        && !is_next(resolved_then)
+                        && self.try_emit_inverted_cmp_branch(resolved_then)
+                    {
+                        // Inverted compare-and-branch emitted (branch to `then`
+                        // when true); fall through to else_block (jump elided).
+                        self.emit_jump_unless_fallthrough(*else_block);
+                    } else {
+                        // PopJumpIfFalse to else_block (pops condition), fusing a
+                        // preceding CmpIntLt* into a compare-and-branch.
+                        self.emit_pop_jump_if_false(resolved_else);
+                        // Jump to then_block (may be elided if it's next).
+                        self.emit_jump_unless_fallthrough(*then_block);
+                    }
                 }
             }
 
@@ -2315,6 +2358,14 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Instruction::CmpIntLtVarConstBrFalse(a, c, _) => {
                 self.bytecode.instructions[instruction_idx] =
                     Instruction::CmpIntLtVarConstBrFalse(a, c, offset);
+            }
+            Instruction::CmpIntLtVarVarBrTrue(a, b, _) => {
+                self.bytecode.instructions[instruction_idx] =
+                    Instruction::CmpIntLtVarVarBrTrue(a, b, offset);
+            }
+            Instruction::CmpIntLtVarConstBrTrue(a, c, _) => {
+                self.bytecode.instructions[instruction_idx] =
+                    Instruction::CmpIntLtVarConstBrTrue(a, c, offset);
             }
             _ => panic!("expected jump instruction at index {instruction_idx}"),
         }

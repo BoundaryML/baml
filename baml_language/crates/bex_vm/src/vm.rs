@@ -4645,6 +4645,49 @@ impl BexVm {
                     }
                 }
 
+                // ── Compare-and-branch, inverted: branch when the comparison
+                // is TRUE (used when the else-block is the fall-through).
+                OpCode::CmpIntLtVarVarBrTrue => {
+                    let a = { read_u32_unchecked(code, pc) as usize };
+                    let b = { read_u32_unchecked(code, pc) as usize };
+                    let offset = read_i32_unchecked(code, pc);
+                    #[allow(unsafe_code)]
+                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
+                    else {
+                        unreachable!()
+                    };
+                    let off = bf.locals_offset;
+                    let va = self.stack.get_at(Self::local_slot_stack_index(off, a));
+                    let vb = self.stack.get_at(Self::local_slot_stack_index(off, b));
+                    if (va.bits() as i64) < (vb.bits() as i64) {
+                        *pc = (*pc as i64 + offset as i64) as usize;
+                    }
+                    if self.early_yield.should_early_yield() {
+                        return Ok(Some(VmExecState::EarlyYield));
+                    }
+                }
+                OpCode::CmpIntLtVarConstBrTrue => {
+                    let a = { read_u32_unchecked(code, pc) as usize };
+                    let c = { read_u32_unchecked(code, pc) as usize };
+                    let offset = read_i32_unchecked(code, pc);
+                    #[allow(unsafe_code)]
+                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
+                    else {
+                        unreachable!()
+                    };
+                    let va = self
+                        .stack
+                        .get_at(Self::local_slot_stack_index(bf.locals_offset, a));
+                    #[allow(unsafe_code)]
+                    let vc = *unsafe { function.bytecode.resolved_constants.get_unchecked(c) };
+                    if (va.bits() as i64) < (vc.bits() as i64) {
+                        *pc = (*pc as i64 + offset as i64) as usize;
+                    }
+                    if self.early_yield.should_early_yield() {
+                        return Ok(Some(VmExecState::EarlyYield));
+                    }
+                }
+
                 // ── JumpTable ─────────────────────────────────────────────────
                 OpCode::JumpTable => {
                     let table_idx = read_u32_unchecked(code, pc) as usize;
