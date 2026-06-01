@@ -764,3 +764,232 @@ function float_random_distinct_values() -> bool {
 test "float_random_distinct_values" {
     assert.is_true(float_random_distinct_values())
 }
+
+// ─── Equality (== / !=) ───────────────────────────────────────────────────────
+//
+// Float `==`/`!=` follow JS/TS (IEEE 754) semantics: NaN != NaN, NaN == NaN is
+// false, +0.0 == -0.0, +inf == +inf, +inf != -inf. int/float mix is allowed
+// (int widened to f64); float-vs-bigint is the one rejected pairing (compile
+// error E0004 — bigint past 2^53 can't round-trip f64).
+//
+// Two distinct code paths are exercised: the compiler constant-folds `==` on two
+// float literals (try_fold_binary), while a non-literal operand forces the VM
+// float-compare opcode. Cases below cover both so a divergence would be caught.
+
+// Constant-folded path (both operands literals — folded by the compiler)
+
+test "float_eq_float_eq_int_literal_fold" {
+    assert.is_true(3.0 == 3)
+}
+
+test "float_eq_float_neq_int_distinct_fold" {
+    assert.is_true(2.5 != 2)
+}
+
+test "float_eq_fold_ordinary_equal" {
+    assert.is_true(1.5 == 1.5)
+}
+
+test "float_eq_fold_ordinary_unequal_false" {
+    assert.is_true((1.5 == 2.5) == false)
+}
+
+test "float_eq_int_eq_float_literal_fold" {
+    assert.is_true(2 == 2.0)
+}
+
+test "float_eq_large_integer_valued_fold" {
+    assert.is_true(1000000.0 == 1000000)
+}
+
+test "float_eq_neg_zero_lit_equals_neg_zero_lit_fold" {
+    assert.is_true(-0.0 == -0.0)
+}
+
+test "float_eq_positive_zero_equals_negative_zero_fold" {
+    assert.is_true(0.0 == -0.0)
+}
+
+// Folded or runtime depending on operand shape
+
+test "float_eq_null_eq_float_symmetric_false" {
+    assert.is_true((null == 2.0) == false)
+}
+
+test "float_eq_two_pow_53_exact" {
+    assert.is_true(9007199254740992.0 == 9007199254740992)
+}
+
+// Runtime VM path (≥1 non-literal operand forces the float-eq opcode)
+
+test "float_eq_classic_imprecision_sum" {
+    assert.is_true(0.1 + 0.2 != 0.3)
+}
+
+test "float_eq_div_third_eq_shortest" {
+    assert.is_true(1.0 / 3.0 == 0.3333333333333333)
+}
+
+test "float_eq_div_third_ne_truncated" {
+    assert.is_true(1.0 / 3.0 != 0.333)
+}
+
+test "float_eq_float_eq_null_is_false" {
+    assert.is_true((float.parse("1.5") == null) == false)
+}
+
+test "float_eq_float_neq_null_is_true" {
+    assert.is_true(float.parse("1.5") != null)
+}
+
+test "float_eq_half_underflow_to_zero" {
+    assert.is_true((float.parse("5e-324") / 2.0) == 0.0)
+}
+
+test "float_eq_inf_minus_inf_is_nan_ne_self" {
+    assert.is_true((float.inf() - float.inf()) != (float.inf() - float.inf()))
+}
+
+test "float_eq_inf_plus_one_equals_inf" {
+    assert.is_true(float.inf() == (float.inf() + 1.0))
+}
+
+test "float_eq_large_magnitude_precision_loss" {
+    assert.is_true(float.parse("1e16") + 1.0 == float.parse("1e16"))
+}
+
+test "float_eq_max_finite_ne_inf" {
+    assert.is_true(float.parse("1.7976931348623157e308") != float.inf())
+}
+
+test "float_eq_mul_imprecision_eq_rounded" {
+    assert.is_true(0.1 * 3.0 == 0.30000000000000004)
+}
+
+test "float_eq_mul_imprecision_ne_point3" {
+    assert.is_true(0.1 * 3.0 != 0.3)
+}
+
+test "float_eq_nan_arith_propagates_ne_self" {
+    assert.is_true((float.nan() + 1.0) != (float.nan() + 1.0))
+}
+
+test "float_eq_nan_const_not_equal_number" {
+    assert.is_true((float.nan() == 1.5) == false)
+}
+
+test "float_eq_nan_eq_null_is_false" {
+    assert.is_true((float.nan() == null) == false)
+}
+
+test "float_eq_nan_ne_number_is_true" {
+    assert.is_true(float.nan() != 0.0)
+}
+
+test "float_eq_nan_ne_self_is_true" {
+    assert.is_true(float.parse("nan") != float.parse("nan"))
+}
+
+test "float_eq_nan_not_equal_infinity" {
+    assert.is_true((float.nan() == float.inf()) == false)
+}
+
+test "float_eq_nan_not_equal_to_self" {
+    assert.is_true((float.parse("nan") == float.parse("nan")) == false)
+}
+
+test "float_eq_neg_inf_equals_neg_inf" {
+    assert.is_true(-float.inf() == -float.inf())
+}
+
+test "float_eq_neg_zero_from_division" {
+    assert.is_true((-1.0 / float.inf()) == 0.0)
+}
+
+test "float_eq_neg_zero_ne_pos_zero_runtime_false" {
+    assert.is_true((float.parse("-0.0") != 0.0) == false)
+}
+
+test "float_eq_overflow_to_inf" {
+    assert.is_true(float.parse("1.0e308") * 10.0 == float.inf())
+}
+
+test "float_eq_parse_inf_equals_inf_const" {
+    assert.is_true(float.parse("inf") == float.inf())
+}
+
+test "float_eq_parse_inf_ne_neg_inf" {
+    assert.is_true(float.parse("inf") != float.parse("-inf"))
+}
+
+test "float_eq_parse_neg_inf_equals_neg_inf_const" {
+    assert.is_true(float.parse("-inf") == -float.inf())
+}
+
+test "float_eq_parse_roundtrip" {
+    assert.is_true(float.parse("1.5") == 1.5)
+}
+
+test "float_eq_parse_roundtrip_imprecise_all_runtime" {
+    assert.is_true(float.parse("0.1") + float.parse("0.2") != float.parse("0.3"))
+}
+
+test "float_eq_pi_eq_pi" {
+    assert.is_true(float.pi() == float.pi())
+}
+
+test "float_eq_pi_ne_truncated" {
+    assert.is_true(float.pi() != 3.14)
+}
+
+test "float_eq_pos_inf_equals_pos_inf" {
+    assert.is_true(float.inf() == float.inf())
+}
+
+test "float_eq_pos_inf_ne_neg_inf" {
+    assert.is_true(float.inf() != -float.inf())
+}
+
+test "float_eq_runtime_float_eq_int" {
+    assert.is_true(float.parse("2") == 2)
+}
+
+test "float_eq_runtime_float_neq_int_distinct" {
+    assert.is_true(float.parse("2.5") != 2)
+}
+
+test "float_eq_runtime_int_eq_float" {
+    assert.is_true(5 == float.parse("5.0"))
+}
+
+test "float_eq_runtime_int_neq_float_distinct" {
+    assert.is_true(3 != float.parse("3.5"))
+}
+
+test "float_eq_runtime_ordinary_unequal_false" {
+    assert.is_true((float.parse("1.5") == 2.5) == false)
+}
+
+test "float_eq_runtime_signed_zero" {
+    assert.is_true(float.parse("-0.0") == 0.0)
+}
+
+test "float_eq_self_equal_nonliteral" {
+    assert.is_true(float.parse("0.1") == float.parse("0.1"))
+}
+
+test "float_eq_sqrt_irrational_ne_two" {
+    assert.is_true((2.0).sqrt() * (2.0).sqrt() != 2.0)
+}
+
+test "float_eq_sqrt_irrational_property" {
+    assert.is_true(((2.0).sqrt() * (2.0).sqrt()) == 2.0000000000000004)
+}
+
+test "float_eq_subnormal_nonzero" {
+    assert.is_true(float.parse("5e-324") != 0.0)
+}
+
+test "float_eq_sum_equals_exact_rounded" {
+    assert.is_true(0.1 + 0.2 == 0.30000000000000004)
+}
