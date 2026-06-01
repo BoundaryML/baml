@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 26659
 ---
 function $init_test(registry: unknown) -> null {
     load_var ?1
@@ -32,7 +33,7 @@ function user.Foo.from_json(j: baml.json.json) -> Foo {
     return
 }
 
-function user.Foo.to_json(self: null) -> baml.json.json {
+function user.Foo.to_json(self: Foo) -> baml.json.json {
     load_var self
     load_field .x
     call baml.Int.to_json
@@ -53,7 +54,7 @@ function user.HasWith.from_json(j: baml.json.json) -> HasWith {
     return
 }
 
-function user.HasWith.to_json(self: null) -> baml.json.json {
+function user.HasWith.to_json(self: HasWith) -> baml.json.json {
     load_var self
     load_field .with
     call baml.Int.to_json

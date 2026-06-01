@@ -170,7 +170,7 @@ pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
             // Look up the inferred type.
             let Some(ty) = inference.binding_type(*pattern) else {
                 // Try other scopes for nested blocks.
-                let ty_str = find_binding_ty_any_scope(db, index, *pattern);
+                let ty_str = find_binding_ty_any_scope(db, file, index, *pattern);
                 if let Some(ty_str) = ty_str {
                     // Emit hint: position at end of pattern span.
                     let pat_span = source_map.pattern_span(*pattern);
@@ -192,7 +192,7 @@ pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
                 continue;
             }
 
-            let ty_str = utils::display_ty(ty);
+            let ty_str = utils::display_ty_for_file(db, file, ty);
 
             // Position the hint at the end of the pattern span (after the var name).
             let pat_span = source_map.pattern_span(*pattern);
@@ -299,6 +299,7 @@ fn should_suppress_type(ty: &Ty) -> bool {
 /// string directly to avoid allocating a `Ty`.
 fn find_binding_ty_any_scope(
     db: &dyn Db,
+    file: SourceFile,
     index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
     pat_id: baml_compiler2_ast::PatId,
 ) -> Option<String> {
@@ -308,7 +309,7 @@ fn find_binding_ty_any_scope(
             if should_suppress_type(ty) {
                 return None;
             }
-            return Some(utils::display_ty(ty));
+            return Some(utils::display_ty_for_file(db, file, ty));
         }
     }
     None

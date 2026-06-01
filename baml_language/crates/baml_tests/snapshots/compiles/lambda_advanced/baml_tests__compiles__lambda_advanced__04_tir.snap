@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 13112
 ---
 === TIR2 ===
 function user.test_chained_map() -> int[] throws never {
@@ -90,8 +91,8 @@ lambda user.test_deep_capture {
 }
 function user.test_generic_multi_instantiation() -> int throws never {
   { : int
-    let id = : (x: T) -> T throws never
-      <T>(x: T) -> T { ... } : (x: T) -> T throws never
+    let id = : <T>(x: T) -> T throws never
+      <T>(x: T) -> T { ... } : <T>(x: T) -> T throws never
         {
           x
         }
@@ -350,8 +351,8 @@ lambda user.test_deep_capture_inferred {
 }
 function user.test_generic_apply_inferred() -> int throws never {
   { : int
-    let apply = : (f: (T) -> U throws never, x: T) -> U throws never
-      <T, U>(f: (T) -> U, x: T) -> U { ... } : (f: (T) -> U throws never, x: T) -> U throws never
+    let apply = : <T, U>(f: (T) -> U throws never, x: T) -> U throws never
+      <T, U>(f: (T) -> U, x: T) -> U { ... } : <T, U>(f: (T) -> U throws never, x: T) -> U throws never
         {
           f(x)
         }

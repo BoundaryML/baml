@@ -66,13 +66,13 @@ function closures.$init_test_ns_closures_closures(registry: testing.TestCollecto
     return
 }
 
-function closures.ClsBox.unwrap(self: null) -> void {
+function closures.ClsBox.unwrap(self: closures.ClsBox) -> void {
     load_var self
     load_field .value
     return
 }
 
-function closures.ClsCalculator.compute(self: null, a: int, b: int) -> int {
+function closures.ClsCalculator.compute(self: closures.ClsCalculator, a: int, b: int) -> int {
     load_var self
     load_field .op
     load_const "add"
@@ -95,7 +95,7 @@ function closures.ClsCalculator.compute(self: null, a: int, b: int) -> int {
     return
 }
 
-function closures.ClsCounter.increment(self: null) -> int {
+function closures.ClsCounter.increment(self: closures.ClsCounter) -> int {
     load_var self
     copy 0
     load_field .value
@@ -107,7 +107,7 @@ function closures.ClsCounter.increment(self: null) -> int {
     return
 }
 
-function closures.ClsEmployee.full_name(self: null) -> string {
+function closures.ClsEmployee.full_name(self: closures.ClsEmployee) -> string {
     load_var self
     load_field .first
     load_const " "
@@ -118,7 +118,7 @@ function closures.ClsEmployee.full_name(self: null) -> string {
     return
 }
 
-function closures.ClsEmployee2.greet(self: null, greeting: string) -> string {
+function closures.ClsEmployee2.greet(self: closures.ClsEmployee2, greeting: string) -> string {
     load_var greeting
     load_const ", "
     bin_op +
@@ -128,7 +128,7 @@ function closures.ClsEmployee2.greet(self: null, greeting: string) -> string {
     return
 }
 
-function closures.ClsEncoder.encode(self: null, data: string) -> string {
+function closures.ClsEncoder.encode(self: closures.ClsEncoder, data: string) -> string {
     load_const "["
     load_var self
     load_field .charset
@@ -140,7 +140,7 @@ function closures.ClsEncoder.encode(self: null, data: string) -> string {
     return
 }
 
-function closures.ClsFormatter.format(self: null, text: string) -> string {
+function closures.ClsFormatter.format(self: closures.ClsFormatter, text: string) -> string {
     load_var self
     load_field .prefix
     load_var text
@@ -148,7 +148,7 @@ function closures.ClsFormatter.format(self: null, text: string) -> string {
     return
 }
 
-function closures.ClsRangeCheck.is_valid(self: null, n: int) -> bool {
+function closures.ClsRangeCheck.is_valid(self: closures.ClsRangeCheck, n: int) -> bool {
     load_var n
     load_var self
     load_field .min
@@ -164,7 +164,7 @@ function closures.ClsRangeCheck.is_valid(self: null, n: int) -> bool {
     return
 }
 
-function closures.ClsWorker.risky(self: null, value: int) -> int {
+function closures.ClsWorker.risky(self: closures.ClsWorker, value: int) -> int {
     load_var value
     load_const 0
     cmp_int_op <
@@ -276,7 +276,8 @@ function closures.closures_field_chain_bind() -> string {
 
 function closures.closures_generic_unwrap() -> int {
     load_const 42
-    init_instance user.closures.ClsBox .value
+    load_type int
+    init_instance<1> user.closures.ClsBox .value
     make_bound_method user.closures.ClsBox.unwrap
     call_indirect
     return

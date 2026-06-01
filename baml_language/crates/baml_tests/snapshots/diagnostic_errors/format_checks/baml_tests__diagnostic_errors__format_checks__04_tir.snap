@@ -185,27 +185,27 @@ function user.ChainExprs(user: user.ChainUser, items: user.ChainItem[], m: map<s
     user.name : string
   }
   !! 1809..1862: type `string` has no member `len`
-  !! 1865..1879: type `user.ChainItem[]` has no member `len`
-  !! 1882..1949: type `user.ChainItem[]` has no member `get`
-  !! 1953..2143: type `user.ChainItem[]` has no member `get`
-  !! 2309..2508: type `user.ChainItem[]` has no member `get`
+  !! 1865..1879: type `ChainItem[]` has no member `len`
+  !! 1882..1949: type `ChainItem[]` has no member `get`
+  !! 1953..2143: type `ChainItem[]` has no member `get`
+  !! 2309..2508: type `ChainItem[]` has no member `get`
   !! 3397..3449: type `string` has no member `len`
   !! 3464..3580: type `string` has no member `len`
   !! 3766..3769: type `string` has no member `len`
-  !! 3820..3898: type `user.ChainItem[]` has no member `get`
-  !! 3899..3921: type `user.ChainItem[]` has no member `len`
-  !! 3929..3952: type `user.ChainItem[]` has no member `len`
-  !! 3960..3983: type `user.ChainItem[]` has no member `len`
+  !! 3820..3898: type `ChainItem[]` has no member `get`
+  !! 3899..3921: type `ChainItem[]` has no member `len`
+  !! 3929..3952: type `ChainItem[]` has no member `len`
+  !! 3960..3983: type `ChainItem[]` has no member `len`
   !! 3997..4155: expected 2 argument(s), got 3
-  !! 4085..4108: type `user.ChainItem[]` has no member `len`
+  !! 4085..4108: type `ChainItem[]` has no member `len`
   !! 4156..4569: type `string` has no member `len`
   !! 4846..5308: type `string` has no member `len`
-  !! 5624..5900: type `user.ChainItem[]` has no member `get`
-  !! 5921..5981: type `user.ChainItem[]` has no member `len`
-  !! 5989..6012: type `user.ChainItem[]` has no member `len`
+  !! 5624..5900: type `ChainItem[]` has no member `get`
+  !! 5921..5981: type `ChainItem[]` has no member `len`
+  !! 5989..6012: type `ChainItem[]` has no member `len`
   !! 6234..6249: type `int[][]` has no member `len`
   !! 6272..6275: type `int[]` has no member `len`
-  !! 6364..6382: type `user.ChainItem[]` has no member `get`
+  !! 6364..6382: type `ChainItem[]` has no member `get`
   !! 6464..6467: type `string` has no member `len`
   !! 6513..6516: type `string` has no member `len`
 }

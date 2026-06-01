@@ -18,10 +18,7 @@ use baml_compiler2_hir::{
 };
 use text_size::TextRange;
 
-use crate::{
-    ty::Ty,
-    user_facing::{humanize_ty, humanize_type_names},
-};
+use crate::ty::Ty;
 
 // ── Error kinds ──────────────────────────────────────────────────────────────
 
@@ -220,6 +217,94 @@ pub enum TirTypeError {
         /// The full expression text (e.g. `a.name`)
         expr: String,
     },
+
+    /// BEP-044 §"Method Disambiguation": an unqualified call resolves to
+    /// a method declared by two or more interfaces — the receiver carries
+    /// no information to pick one. `sources` lists every contributing
+    /// interface as a namespace-qualified display string (e.g. `zoo.Animal`)
+    /// so colliding same-simple-name interfaces from different namespaces are
+    /// distinguishable and the suggested `as<…>` fix actually compiles.
+    AmbiguousInterfaceMethod {
+        class_name: Name,
+        method_name: Name,
+        sources: Vec<String>,
+    },
+
+    /// BEP-044 interface fields live in per-interface namespaces. A bare
+    /// field access is ambiguous when multiple implemented interfaces provide
+    /// the same field name and the class does not shadow it with an own field.
+    AmbiguousInterfaceField {
+        class_name: Name,
+        field_name: Name,
+        sources: Vec<Name>,
+    },
+
+    /// A concrete-typed receiver tried to access an interface field name that
+    /// is only available after projecting to the interface view.
+    InterfaceFieldRequiresProjection {
+        class_name: Name,
+        field_name: Name,
+        interface_name: Name,
+    },
+
+    /// Interface-qualified field keys such as `Animal.name` are not class
+    /// constructor fields. Interface fields are satisfied by class-owned fields
+    /// or explicit `field as class_field` links.
+    InterfaceFieldRequiresQualifiedConstruction {
+        field_name: Name,
+        qualified_name: Name,
+    },
+
+    /// The old `value.Interface.member` projection syntax has been replaced by
+    /// `.as<Interface>.member`.
+    DeprecatedInterfaceProjection {
+        interface_name: Name,
+        /// The `.as<...>` projection target with type args (e.g. `Container<int>`),
+        /// which may differ from the bare `interface_name` the user wrote.
+        as_target: String,
+    },
+
+    /// `.as<T>` is an interface projection/upcast; the target must be an
+    /// interface type.
+    InvalidInterfaceUpcastTarget { target: Ty },
+
+    /// Interface members are instance/view members, not static members on the
+    /// interface type. Call through an interface-typed value or `.as<I>`.
+    InterfaceMemberRequiresReceiver {
+        interface_name: Name,
+        member_name: Name,
+    },
+
+    /// Interface-typed receivers cannot call methods with additional `Self`
+    /// parameters. The concrete implementor must be known for those arguments.
+    InvalidSelfCallThroughInterface {
+        interface_name: Name,
+        method_name: Name,
+    },
+
+    /// BEP-044 §"default keyword scoping rules": `default.method()` on a
+    /// required method (no default body) is a compile error.
+    DefaultOnRequiredMethod {
+        interface_name: Name,
+        method_name: Name,
+    },
+    /// BEP-044: bare `default` (not `default.method(...)`) used as a value.
+    /// `default` is only meaningful in call position.
+    BareDefaultKeyword,
+    /// BEP-044: `value.as<I>` where the concrete `value`'s type does not
+    /// implement interface `I`. A clearer form of the generic type-mismatch.
+    TypeDoesNotImplementInterface {
+        value_type: Ty,
+        interface_name: Name,
+    },
+    /// BEP-044: a value almost satisfies an interface via a blanket impl, but a
+    /// generic bound (`T extends Bound`) is not met. Names the failed bound.
+    BlanketBoundNotSatisfied { value_type: Ty, bound: Ty },
+    /// BEP-044 wf3 #18: a class provides the SAME interface instantiation via
+    /// more than one `implements` block (distinct generic blocks that collapse
+    /// under the concrete type args, e.g. `Getter<L>`+`Getter<R>` at
+    /// `Pair<int, int>`). Coercing to that interface is ambiguous.
+    AmbiguousInterfaceInstantiation { class_name: Name, interface: Ty },
 }
 
 impl fmt::Display for TirTypeError {
@@ -229,15 +314,15 @@ impl fmt::Display for TirTypeError {
                 write!(
                     f,
                     "type mismatch: expected {}, got {}",
-                    humanize_ty(expected),
-                    humanize_ty(got)
+                    expected.render_user_facing(),
+                    got.render_user_facing()
                 )
             }
             TirTypeError::UnresolvedMember { base_type, member } => {
                 write!(
                     f,
                     "type `{}` has no member `{member}`",
-                    humanize_ty(base_type)
+                    base_type.render_user_facing()
                 )
             }
             TirTypeError::UnresolvedName { name } => {
@@ -264,28 +349,28 @@ impl fmt::Display for TirTypeError {
                 write!(
                     f,
                     "`{}` is not a function — it cannot be called",
-                    humanize_ty(ty)
+                    ty.render_user_facing()
                 )
             }
             TirTypeError::NotIterable { ty } => {
-                write!(f, "cannot iterate over type `{}`", humanize_ty(ty))
+                write!(f, "cannot iterate over type `{}`", ty.render_user_facing())
             }
             TirTypeError::NotIndexable { ty } => {
-                write!(f, "type `{}` is not indexable", humanize_ty(ty))
+                write!(f, "type `{}` is not indexable", ty.render_user_facing())
             }
             TirTypeError::InvalidBinaryOp { op, lhs, rhs } => {
                 write!(
                     f,
                     "operator `{op:?}` cannot be applied to `{}` and `{}`",
-                    humanize_ty(lhs),
-                    humanize_ty(rhs)
+                    lhs.render_user_facing(),
+                    rhs.render_user_facing()
                 )
             }
             TirTypeError::InvalidUnaryOp { op, operand } => {
                 write!(
                     f,
                     "operator `{op:?}` cannot be applied to `{}`",
-                    humanize_ty(operand)
+                    operand.render_user_facing()
                 )
             }
             TirTypeError::UnresolvedType { name, suggestions } => {
@@ -342,7 +427,11 @@ impl fmt::Display for TirTypeError {
                 )
             }
             TirTypeError::MissingReturn { expected } => {
-                write!(f, "missing return: expected `{}`", humanize_ty(expected))
+                write!(
+                    f,
+                    "missing return: expected `{}`",
+                    expected.render_user_facing()
+                )
             }
             TirTypeError::AliasCycle { name } => {
                 write!(f, "recursive type alias cycle: {name}")
@@ -357,7 +446,7 @@ impl fmt::Display for TirTypeError {
                 write!(
                     f,
                     "non-exhaustive match on `{}`; missing: {}",
-                    humanize_ty(scrutinee_type),
+                    scrutinee_type.render_user_facing(),
                     missing_cases.join(", ")
                 )
             }
@@ -370,8 +459,8 @@ impl fmt::Display for TirTypeError {
                 f,
                 "Or-pattern alternatives bind `{}` with conflicting types: `{}` vs `{}`",
                 name,
-                humanize_ty(first_type),
-                humanize_ty(other_type)
+                first_type.render_user_facing(),
+                other_type.render_user_facing()
             ),
             TirTypeError::GenericClassDestructureRequiresTypeArgs { class_name } => write!(
                 f,
@@ -393,7 +482,7 @@ impl fmt::Display for TirTypeError {
             TirTypeError::LetElseMustDiverge { got } => write!(
                 f,
                 "`let … else` requires a diverging else block (`return`, `throw`, `break`, or `continue`); got `{}`",
-                humanize_ty(got)
+                got.render_user_facing()
             ),
             TirTypeError::IrrefutablePatternInLetElse => write!(
                 f,
@@ -407,12 +496,11 @@ impl fmt::Display for TirTypeError {
                 declared,
                 extra_types,
             } => {
-                let extra_types = humanize_type_names(extra_types.iter().map(String::as_str));
                 write!(
                     f,
-                    "throws contract violation: `{}` is missing {}",
-                    humanize_ty(declared),
-                    extra_types.join(", ")
+                    "declared throws is `{}`, but this function may also throw `{}`",
+                    declared.render_user_facing(),
+                    extra_types.join(" | ")
                 )
             }
             TirTypeError::CallbackThrowsContractViolation {
@@ -423,13 +511,13 @@ impl fmt::Display for TirTypeError {
                 write!(
                     f,
                     "this body may throw through callback `{callback_name}`, but declared throws is `{}`. ",
-                    humanize_ty(declared)
+                    declared.render_user_facing()
                 )?;
                 if let Some(concrete_throws) = concrete_throws {
                     write!(
                         f,
                         "Add `throws {}` to the callback, catch the call, or make the callback non-throwing.",
-                        humanize_ty(concrete_throws)
+                        concrete_throws.render_user_facing()
                     )
                 } else {
                     write!(
@@ -439,7 +527,6 @@ impl fmt::Display for TirTypeError {
                 }
             }
             TirTypeError::ExtraneousThrowsDeclaration { extra_types } => {
-                let extra_types = humanize_type_names(extra_types.iter().map(String::as_str));
                 write!(
                     f,
                     "extraneous throws declaration: {}",
@@ -547,6 +634,126 @@ impl fmt::Display for TirTypeError {
                     "did you mean `{suggested}`? `{expr}` does not handle the case when `{base}` is null"
                 )
             }
+            TirTypeError::AmbiguousInterfaceMethod {
+                class_name,
+                method_name,
+                sources,
+            } => {
+                let iface_list = sources
+                    .iter()
+                    .map(|n| format!("`{n}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let hint = sources
+                    .iter()
+                    .map(|n| format!("obj.as<{n}>.{method_name}()"))
+                    .collect::<Vec<_>>()
+                    .join(" or ");
+                write!(
+                    f,
+                    "method `{method_name}` on class `{class_name}` is declared by \
+                     multiple interfaces: {iface_list}; unqualified calls will be \
+                    ambiguous — use {hint}"
+                )
+            }
+            TirTypeError::AmbiguousInterfaceField {
+                class_name,
+                field_name,
+                sources,
+            } => {
+                let iface_list = sources
+                    .iter()
+                    .map(|n| format!("`{n}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let hint = sources
+                    .iter()
+                    .map(|n| format!("obj.as<{n}>.{field_name}"))
+                    .collect::<Vec<_>>()
+                    .join(" or ");
+                write!(
+                    f,
+                    "field `{field_name}` on class `{class_name}` is ambiguous because it is declared by multiple interfaces: {iface_list}; use {hint}"
+                )
+            }
+            TirTypeError::InterfaceFieldRequiresProjection {
+                class_name,
+                field_name,
+                interface_name,
+            } => write!(
+                f,
+                "field `{field_name}` is an interface field on `{interface_name}`, not a concrete field on class `{class_name}`; use obj.as<{interface_name}>.{field_name}"
+            ),
+            TirTypeError::InterfaceFieldRequiresQualifiedConstruction {
+                field_name,
+                qualified_name,
+            } => write!(
+                f,
+                "interface-qualified field `{field_name}` cannot be used in a class constructor; use class field `{qualified_name}`"
+            ),
+            TirTypeError::DeprecatedInterfaceProjection {
+                interface_name,
+                as_target,
+            } => write!(
+                f,
+                "interface projection uses `.as<{as_target}>`, not `.{interface_name}`"
+            ),
+            TirTypeError::InvalidInterfaceUpcastTarget { target } => {
+                write!(f, "`.as<T>` target must be an interface, got `{target}`")
+            }
+            TirTypeError::InterfaceMemberRequiresReceiver {
+                interface_name,
+                member_name,
+            } => write!(
+                f,
+                "interface member `{member_name}` on `{interface_name}` must be accessed through a value; use value.as<{interface_name}>.{member_name}"
+            ),
+            TirTypeError::InvalidSelfCallThroughInterface {
+                interface_name,
+                method_name,
+            } => write!(
+                f,
+                "method `{method_name}` on interface `{interface_name}` uses `Self` in \
+                 its parameters and requires a concrete receiver"
+            ),
+            TirTypeError::DefaultOnRequiredMethod {
+                interface_name,
+                method_name,
+            } => write!(
+                f,
+                "`default.{method_name}()` is invalid: method `{method_name}` on interface \
+                 `{interface_name}` has no default body"
+            ),
+            TirTypeError::BareDefaultKeyword => write!(
+                f,
+                "`default` may only be used to call an interface default method, as \
+                 `default.method(...)`"
+            ),
+            TirTypeError::TypeDoesNotImplementInterface {
+                value_type,
+                interface_name,
+            } => write!(
+                f,
+                "type `{}` does not implement interface `{interface_name}`",
+                value_type.render_user_facing()
+            ),
+            TirTypeError::BlanketBoundNotSatisfied { value_type, bound } => write!(
+                f,
+                "type `{}` does not satisfy the bound `{}` required by the blanket \
+                 `implements` rule",
+                value_type.render_user_facing(),
+                bound.render_user_facing()
+            ),
+            TirTypeError::AmbiguousInterfaceInstantiation {
+                class_name,
+                interface,
+            } => write!(
+                f,
+                "class `{class_name}` implements `{}` through more than one `implements` block at \
+                 this instantiation (distinct generic blocks collapse to the same type); the \
+                 projection is ambiguous",
+                interface.render_user_facing()
+            ),
         }
     }
 }

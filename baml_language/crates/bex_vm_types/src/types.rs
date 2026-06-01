@@ -94,6 +94,17 @@ pub struct Program {
     /// Only recursive aliases are stored (non-recursive ones are expanded inline).
     /// Keyed by [`baml_type::TypeName`] for consistent identity with `Ty::TypeAlias`.
     pub recursive_type_alias_defs: IndexMap<baml_type::TypeName, Ty>,
+
+    /// Per-program interface implementation registry (BEP-044).
+    ///
+    /// Maps each interface's `TypeName` to the list of class `TypeName`s that
+    /// nominally implement it (transitively through `extends`). Used by the
+    /// runtime reflection methods `type.implementors()`, `type.implements()`,
+    /// and `type.implemented_by()`.
+    ///
+    /// Empty for programs without interfaces.
+    pub interface_implementors:
+        IndexMap<baml_type::TypeName, Vec<(baml_type::TypeName, Vec<baml_type::Ty>)>>,
 }
 
 /// Metadata for building a client tree at runtime.
@@ -1665,17 +1676,9 @@ pub enum Object {
     Sentinel(SentinelKind),
 }
 
-// BexStr is larger than String on wasm32 (20 vs 12 bytes) due to u64 fields,
-// so allow 88 bytes on 32-bit targets.
-#[cfg(target_pointer_width = "64")]
 const _: () = assert!(
-    std::mem::size_of::<Object>() <= 80,
-    "Object enum size regression — expected <= 80 bytes (64-bit)"
-);
-#[cfg(target_pointer_width = "32")]
-const _: () = assert!(
-    std::mem::size_of::<Object>() <= 88,
-    "Object enum size regression — expected <= 88 bytes (32-bit)"
+    std::mem::size_of::<Object>() <= 64,
+    "Object enum size regression — expected <= 64 bytes"
 );
 
 // Custom borsh for Object: RustData and Collector contain non-serializable
@@ -1802,7 +1805,7 @@ pub struct Closure {
     /// Pointer to the underlying `Object::Function`.
     pub function: HeapPtr,
     /// Captured cells, one per closed-over variable (each is `Object::Cell`).
-    pub captures: Vec<Value>,
+    pub captures: Box<[Value]>,
     /// Type arguments captured from the enclosing generic context at the time
     /// the closure is created by `MakeClosure`.
     ///
@@ -1811,7 +1814,7 @@ pub struct Closure {
     /// before the cell captures.  These become `frame.type_args` when the
     /// closure is invoked, so that `LoadType(TypeArgRef(N))` inside the
     /// closure body resolves correctly.
-    pub captured_type_args: Vec<baml_type::Ty>,
+    pub captured_type_args: Box<[baml_type::Ty]>,
 }
 
 /// A method bound to a specific receiver instance.

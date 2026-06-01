@@ -7,9 +7,9 @@ fn user.MyAwsClient$new() -> null {
     let _0: null // _0 // return
     let _1: baml.llm.PrimitiveClientOptions
     let _2: baml.llm.BedrockOptions
-    let _3: map<void, void>
-    let _4: map<void, void>
-    let _5: map<void, void>
+    let _3: map<string, string>
+    let _4: map<string, string>
+    let _5: map<string, unknown>
 
     bb0: {
         _2 = baml.llm.BedrockOptions { const null, const null, const null, const null, const null, const null, const null, const 100_i64, const 0.7_f64, const null };

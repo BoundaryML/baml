@@ -2,16 +2,6 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: unresolved type: B
-    ╭─[ classes.baml:40:11 ]
-    │
- 40 │     second B
-    │           ─┬  
-    │            ╰── unresolved type: B
-    │ 
-    │ Note: Error code: E0002
-────╯
-
   [type] error: type mismatch: expected T, got string
     ╭─[ classes.baml:75:26 ]
     │
@@ -46,12 +36,12 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0001
 ─────╯
 
-  [type] error: type mismatch: expected T, got 42
-     ╭─[ classes.baml:124:18 ]
+  [type] error: type mismatch: expected B, got "two"
+     ╭─[ classes.baml:134:35 ]
      │
- 124 │     Box { value: 42 }
-     │                  ─┬  
-     │                   ╰── type mismatch: expected T, got 42
+ 134 │     Pair<int> { first: 1, second: "two" }
+     │                                   ──┬──  
+     │                                     ╰──── type mismatch: expected B, got "two"
      │ 
      │ Note: Error code: E0001
 ─────╯

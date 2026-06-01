@@ -247,9 +247,9 @@ fn user.OpenAIImageResponses$new() -> null {
     let _0: null // _0 // return
     let _1: baml.llm.PrimitiveClientOptions
     let _2: string
-    let _3: map<void, void>
-    let _4: map<void, void>
-    let _5: map<string, void[]>
+    let _3: map<string, string>
+    let _4: map<string, string>
+    let _5: map<string, unknown>
     let _6: void[]
 
     bb0: {

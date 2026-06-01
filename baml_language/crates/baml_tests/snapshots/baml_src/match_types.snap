@@ -547,17 +547,17 @@ function match_types.classify_result_guarded(result: match_types.SuccessCode | m
 
 function match_types.classify_status(s: match_types.Status) -> string {
     load_var s
-    load_const user.match_types.Status.Active
-    alloc_variant user.match_types.Status
-    cmp_op ==
+    discriminant
+    load_const Status.Active
+    cmp_int_op ==
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var s
-    load_const user.match_types.Status.Inactive
-    alloc_variant user.match_types.Status
-    cmp_op ==
+    discriminant
+    load_const Status.Inactive
+    cmp_int_op ==
     pop_jump_if_false L1
     jump L2
 

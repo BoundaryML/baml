@@ -55,14 +55,14 @@ function ContinueNested() -> int {
 //     │     
 //     │     Note: Error code: E0001
 // ────╯
-// error: missing return: expected `int`
+// error: missing return value of type int
 //     ╭─[ loops_continue.baml:30:33 ]
 //     │
 //  30 │ ╭─▶ function ContinueNested() -> int {
 //     ┆ ┆   
 //  36 │ ├─▶ }
 //     │ │       
-//     │ ╰─────── missing return: expected `int`
+//     │ ╰─────── missing return value of type int
 //     │     
 //     │     Note: Error code: E0029
 // ────╯

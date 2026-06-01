@@ -242,7 +242,6 @@ pyo3-stub-gen = { version = "0.22", default-features = false }
 napi = { version = "3.8.4", default-features = false }
 napi-derive = "3.5.3"
 napi-build = "2.3.1"
-wee_alloc = "0.4"
 wiremock = "0.6"
 vfs = "0.12"
 wasm-logger = "0.2.0"

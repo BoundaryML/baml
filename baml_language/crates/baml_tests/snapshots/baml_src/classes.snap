@@ -120,7 +120,7 @@ function classes.$init_test_ns_classes_classes(registry: testing.TestCollector) 
     return
 }
 
-function classes.MutableNumber.add(self: null, other: classes.MutableNumber) -> bool {
+function classes.MutableNumber.add(self: classes.MutableNumber, other: classes.MutableNumber) -> bool {
     load_var self
     copy 0
     load_field .value
@@ -132,7 +132,7 @@ function classes.MutableNumber.add(self: null, other: classes.MutableNumber) -> 
     return
 }
 
-function classes.Number.add(self: null, other: classes.Number) -> classes.Number {
+function classes.Number.add(self: classes.Number, other: classes.Number) -> classes.Number {
     load_var self
     load_field .value
     load_var other

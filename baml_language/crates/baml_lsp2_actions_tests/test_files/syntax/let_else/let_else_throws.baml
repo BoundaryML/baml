@@ -22,12 +22,12 @@ function ThrowsContractViolationInElse(v: int | string) -> int throws never {
 
 //----
 //- diagnostics
-// error: throws contract violation: `never` is missing string
+// error: declared throws is `never`, but this function may also throw `string`
 //     ╭─[ let_else_let_else_throws.baml:18:70 ]
 //     │
 //  18 │ function ThrowsContractViolationInElse(v: int | string) -> int throws never {
 //     │                                                                      ───┬──  
-//     │                                                                         ╰──── throws contract violation: `never` is missing string
+//     │                                                                         ╰──── declared throws is `never`, but this function may also throw `string`
 //     │ 
 //     │ Note: Error code: E0096
 // ────╯

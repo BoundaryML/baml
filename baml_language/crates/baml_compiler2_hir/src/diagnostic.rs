@@ -79,6 +79,170 @@ pub enum Hir2Diagnostic {
         /// Names that appear in some alternatives but not all.
         mismatched_names: Vec<Name>,
     },
+
+    // ─── Interface diagnostics (BEP-044) ────────────────────────────────────
+    /// `implements I {}` names something that isn't a known interface
+    /// (name does not exist at all).
+    UnknownInterface {
+        /// Class that contains the bad `implements` block.
+        class_name: Name,
+        /// What the user wrote after `implements`.
+        target_name: String,
+        span: TextRange,
+    },
+    /// `implements X {}` references a type that exists but is not an interface
+    /// (e.g. a class or enum).
+    NotAnInterface {
+        class_name: Name,
+        target_name: String,
+        span: TextRange,
+    },
+    /// `interface I requires X` where `X` exists but is not an interface (a
+    /// class or enum). Reported at the `requires` clause, not at an implementor.
+    InterfaceRequiresNonInterface {
+        interface_name: Name,
+        target_name: String,
+        span: TextRange,
+    },
+    /// `interface I requires X` where `X` does not name any type at all.
+    /// Distinct from [`Self::InterfaceRequiresNonInterface`] (which is for a
+    /// real-but-wrong-kind target) so the message matches the `implements`
+    /// path's "no interface with that name is in scope" (E0112) instead of
+    /// wrongly claiming `X` "is not an interface".
+    UnknownRequiredInterface {
+        interface_name: Name,
+        target_name: String,
+        span: TextRange,
+    },
+    /// A class is missing a body for a required (no-default) interface method.
+    MissingInterfaceMethod {
+        class_name: Name,
+        interface_name: Name,
+        method_name: Name,
+        /// Span of the offending `implements I { ... }` block.
+        span: TextRange,
+    },
+    /// The same `implements I` block appears twice on a class.
+    DuplicateImplementsBlock {
+        class_name: Name,
+        interface_name: Name,
+        /// All sites in source order; first is the "winner".
+        sites: Vec<TextRange>,
+    },
+    /// A method body inside `implements I { ... }` names something that
+    /// isn't declared on I (neither required nor default).
+    UnknownInterfaceMember {
+        interface_name: Name,
+        method_name: Name,
+        span: TextRange,
+    },
+    /// A class field has a different type than the interface declares for
+    /// that name.
+    InterfaceFieldTypeMismatch {
+        class_name: Name,
+        field_name: Name,
+        /// The interface's own field name, which differs from `field_name`
+        /// when the implements block aliases it (`name as name_count`).
+        interface_field_name: Name,
+        interface_name: Name,
+        /// User-rendered class type.
+        class_type: String,
+        /// User-rendered interface type.
+        interface_type: String,
+        span: TextRange,
+    },
+    /// Two interfaces require the same field name with different types and a
+    /// class implements both — there is no single type to inject.
+    ConflictingInterfaceFieldTypes {
+        class_name: Name,
+        field_name: Name,
+        first_interface: Name,
+        first_type: String,
+        second_interface: Name,
+        second_type: String,
+        span: TextRange,
+    },
+    /// An interface's `extends` chain forms a cycle (`A extends B`, `B extends A`).
+    InterfaceExtendsCycle { chain: Vec<Name>, span: TextRange },
+    /// An interface inherits conflicting types for the same field name from
+    /// two parent interfaces in its `extends` list.
+    InterfaceExtendsFieldConflict {
+        interface_name: Name,
+        field_name: Name,
+        first_interface: Name,
+        first_type: String,
+        second_interface: Name,
+        second_type: String,
+        span: TextRange,
+    },
+    /// A method declared in an `implements` block has a different signature
+    /// from the one the interface requires.
+    InterfaceMethodSignatureMismatch {
+        class_name: Name,
+        interface_name: Name,
+        method_name: Name,
+        /// Human-readable rendering of the implementing signature.
+        actual: String,
+        /// Human-readable rendering of the interface signature.
+        expected: String,
+        span: TextRange,
+    },
+    /// A class has the same method name declared in two or more `implements`
+    /// blocks. The user must qualify (`obj.A.foo()` vs `obj.B.foo()`) at
+    /// call sites (BEP-044 §"Method Disambiguation").
+    ///
+    /// `sources` is `(interface_name, declaration_span)` for every block
+    /// that declares `method_name`, in source order. There can be more than
+    /// two — e.g. a class implementing three interfaces each redeclaring
+    /// `to_string`.
+    AmbiguousInterfaceMethod {
+        class_name: Name,
+        method_name: Name,
+        sources: Vec<(Name, TextRange)>,
+    },
+    /// An `implements` block is missing a required field from the interface.
+    MissingInterfaceField {
+        class_name: Name,
+        interface_name: Name,
+        field_name: Name,
+        /// Span of the `implements` block.
+        span: TextRange,
+    },
+    /// The left side of `field as class_field` does not name a field on the
+    /// target interface.
+    UnknownInterfaceFieldLink {
+        interface_name: Name,
+        field_name: Name,
+        span: TextRange,
+    },
+    /// The right side of `field as class_field` does not name a class field.
+    UnknownClassFieldInInterfaceLink {
+        class_name: Name,
+        interface_name: Name,
+        field_name: Name,
+        span: TextRange,
+    },
+    /// The same interface field is linked more than once in one implements block.
+    DuplicateInterfaceFieldLink {
+        interface_name: Name,
+        field_name: Name,
+        sites: Vec<TextRange>,
+    },
+    /// A class implements an interface whose `requires` parents are not
+    /// all explicitly implemented by the same class.
+    MissingRequiredInterface {
+        class_name: Name,
+        interface_name: Name,
+        missing_parents: Vec<Name>,
+        span: TextRange,
+    },
+    /// Top-level `implements I for T` cannot implement an interface that
+    /// declares fields, because `T`'s data shape is already fixed.
+    OutOfBodyImplementsFieldInterface {
+        target_name: String,
+        interface_name: Name,
+        span: TextRange,
+    },
 }
 
 impl Hir2Diagnostic {
@@ -262,6 +426,439 @@ impl Hir2Diagnostic {
                 )
                 .with_phase(DiagnosticPhase::Hir)
             }
+            Hir2Diagnostic::UnknownInterface {
+                class_name,
+                target_name,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::UnknownInterface,
+                format!(
+                    "class `{class_name}` cannot implement `{target_name}`: \
+                     no interface with that name is in scope"
+                ),
+            )
+            .with_primary(
+                Span {
+                    file_id,
+                    range: *span,
+                },
+                "interface not found",
+            )
+            .with_phase(DiagnosticPhase::Hir),
+            Hir2Diagnostic::NotAnInterface {
+                class_name,
+                target_name,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::NotAnInterface,
+                format!(
+                    "`{target_name}` is not an interface; \
+                     class `{class_name}` can only implement interfaces"
+                ),
+            )
+            .with_primary(
+                Span {
+                    file_id,
+                    range: *span,
+                },
+                "not an interface",
+            )
+            .with_phase(DiagnosticPhase::Hir),
+            Hir2Diagnostic::InterfaceRequiresNonInterface {
+                interface_name,
+                target_name,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::InterfaceRequiresNonInterface,
+                format!(
+                    "`{target_name}` is not an interface; \
+                     interface `{interface_name}` can only require interfaces"
+                ),
+            )
+            .with_primary(
+                Span {
+                    file_id,
+                    range: *span,
+                },
+                "not an interface",
+            )
+            .with_phase(DiagnosticPhase::Hir),
+            Hir2Diagnostic::UnknownRequiredInterface {
+                interface_name,
+                target_name,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::UnknownInterface,
+                format!(
+                    "interface `{interface_name}` cannot require `{target_name}`: \
+                     no interface with that name is in scope"
+                ),
+            )
+            .with_primary(
+                Span {
+                    file_id,
+                    range: *span,
+                },
+                "interface not found",
+            )
+            .with_phase(DiagnosticPhase::Hir),
+            Hir2Diagnostic::MissingInterfaceMethod {
+                class_name,
+                interface_name,
+                method_name,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::MissingInterfaceMethod,
+                format!(
+                    "class `{class_name}` does not implement required method `{method_name}` of \
+                     interface `{interface_name}`"
+                ),
+            )
+            .with_primary(
+                Span {
+                    file_id,
+                    range: *span,
+                },
+                format!("missing `{method_name}` here"),
+            )
+            .with_phase(DiagnosticPhase::Hir),
+            Hir2Diagnostic::DuplicateImplementsBlock {
+                class_name,
+                interface_name,
+                sites,
+            } => {
+                let first = sites.first().copied().unwrap_or_default();
+                let rest = sites.get(1..).unwrap_or(&[]);
+                let mut diag = Diagnostic::error(
+                    DiagnosticId::DuplicateImplementsBlock,
+                    format!(
+                        "class `{class_name}` has multiple `implements {interface_name}` blocks; \
+                         a class may implement each interface at most once"
+                    ),
+                )
+                .with_secondary(
+                    Span {
+                        file_id,
+                        range: first,
+                    },
+                    "first `implements` block here",
+                );
+                for r in rest {
+                    diag = diag.with_primary(
+                        Span {
+                            file_id,
+                            range: *r,
+                        },
+                        "duplicate `implements` block",
+                    );
+                }
+                diag.with_phase(DiagnosticPhase::Hir)
+            }
+            Hir2Diagnostic::UnknownInterfaceMember {
+                interface_name,
+                method_name,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::UnknownInterfaceMember,
+                format!(
+                    "method `{method_name}` is not declared on interface `{interface_name}`; \
+                     remove it or add it to the interface"
+                ),
+            )
+            .with_primary(
+                Span {
+                    file_id,
+                    range: *span,
+                },
+                "not a member of the interface",
+            )
+            .with_phase(DiagnosticPhase::Hir),
+            Hir2Diagnostic::InterfaceFieldTypeMismatch {
+                class_name,
+                field_name,
+                interface_field_name,
+                interface_name,
+                class_type,
+                interface_type,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::InterfaceFieldTypeMismatch,
+                format!(
+                    "class `{class_name}` declares field `{field_name}: {class_type}` but \
+                     interface `{interface_name}` requires `{interface_field_name}` to have type `{interface_type}`"
+                ),
+            )
+            .with_primary(
+                Span {
+                    file_id,
+                    range: *span,
+                },
+                format!("expected `{interface_type}`, found `{class_type}`"),
+            )
+            .with_phase(DiagnosticPhase::Hir),
+            Hir2Diagnostic::ConflictingInterfaceFieldTypes {
+                class_name,
+                field_name,
+                first_interface,
+                first_type,
+                second_interface,
+                second_type,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::ConflictingInterfaceFieldTypes,
+                format!(
+                    "class `{class_name}` cannot implement both `{first_interface}` and \
+                     `{second_interface}`: field `{field_name}` is declared as `{first_type}` \
+                     in `{first_interface}` but `{second_type}` in `{second_interface}`"
+                ),
+            )
+            .with_primary(
+                Span {
+                    file_id,
+                    range: *span,
+                },
+                "conflicting field types from two interfaces",
+            )
+            .with_phase(DiagnosticPhase::Hir),
+            Hir2Diagnostic::InterfaceExtendsCycle { chain, span } => {
+                let chain_str = chain
+                    .iter()
+                    .map(std::string::ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(" -> ");
+                Diagnostic::error(
+                    DiagnosticId::InterfaceExtendsCycle,
+                    format!("interface `requires` chain forms a cycle: {chain_str}"),
+                )
+                .with_primary(
+                    Span {
+                        file_id,
+                        range: *span,
+                    },
+                    "cyclic `requires`",
+                )
+                .with_phase(DiagnosticPhase::Hir)
+            }
+            Hir2Diagnostic::InterfaceExtendsFieldConflict {
+                interface_name,
+                field_name,
+                first_interface,
+                first_type,
+                second_interface,
+                second_type,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::InterfaceExtendsFieldConflict,
+                format!(
+                    "interface `{interface_name}` inherits conflicting types for field `{field_name}`: \
+                     `{first_type}` from `{first_interface}`, `{second_type}` from `{second_interface}`"
+                ),
+            )
+            .with_primary(
+                Span {
+                    file_id,
+                    range: *span,
+                },
+                "conflicting field types inherited via `requires`",
+            )
+            .with_phase(DiagnosticPhase::Hir),
+            Hir2Diagnostic::InterfaceMethodSignatureMismatch {
+                class_name,
+                interface_name,
+                method_name,
+                actual,
+                expected,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::InterfaceMethodSignatureMismatch,
+                format!(
+                    "method `{method_name}` in class `{class_name}` does not match interface \
+                     `{interface_name}`: expected `{expected}`, found `{actual}`"
+                ),
+            )
+            .with_primary(
+                Span {
+                    file_id,
+                    range: *span,
+                },
+                "signature mismatch",
+            )
+            .with_phase(DiagnosticPhase::Hir),
+            Hir2Diagnostic::AmbiguousInterfaceMethod {
+                class_name,
+                method_name,
+                sources,
+            } => {
+                let iface_list = sources
+                    .iter()
+                    .map(|(iface, _)| format!("`{iface}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let hint = sources
+                    .iter()
+                    .map(|(iface, _)| format!("obj.{iface}.{method_name}()"))
+                    .collect::<Vec<_>>()
+                    .join(" or ");
+                let mut diag = Diagnostic::error(
+                    DiagnosticId::AmbiguousInterfaceMethod,
+                    format!(
+                        "method `{method_name}` on class `{class_name}` is declared by multiple \
+                         interfaces: {iface_list}; unqualified calls will be ambiguous — use \
+                         {hint}"
+                    ),
+                );
+                if let Some(((first_iface, first_span), rest)) = sources.split_first() {
+                    diag = diag.with_secondary(
+                        Span {
+                            file_id,
+                            range: *first_span,
+                        },
+                        format!("first declared in `implements {first_iface}` here"),
+                    );
+                    for (iface, span) in rest {
+                        diag = diag.with_primary(
+                            Span {
+                                file_id,
+                                range: *span,
+                            },
+                            format!("also declared in `implements {iface}`"),
+                        );
+                    }
+                }
+                diag.with_phase(DiagnosticPhase::Hir)
+            }
+            Hir2Diagnostic::MissingInterfaceField {
+                class_name,
+                interface_name,
+                field_name,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::MissingInterfaceField,
+                format!(
+                    "class `{class_name}` does not provide field `{field_name}` required by \
+                     interface `{interface_name}`"
+                ),
+            )
+            .with_primary(
+                Span {
+                    file_id,
+                    range: *span,
+                },
+                format!("add class field `{field_name}`, or link it with `{field_name} as class_field`"),
+            )
+            .with_phase(DiagnosticPhase::Hir),
+            Hir2Diagnostic::UnknownInterfaceFieldLink {
+                interface_name,
+                field_name,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::UnknownInterfaceFieldLink,
+                format!("interface `{interface_name}` has no field `{field_name}`"),
+            )
+            .with_primary(
+                Span {
+                    file_id,
+                    range: *span,
+                },
+                "not a field of the interface",
+            )
+            .with_phase(DiagnosticPhase::Hir),
+            Hir2Diagnostic::UnknownClassFieldInInterfaceLink {
+                class_name,
+                interface_name,
+                field_name,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::UnknownClassFieldInInterfaceLink,
+                format!(
+                    "class `{class_name}` has no field `{field_name}` to link for interface `{interface_name}`"
+                ),
+            )
+            .with_primary(
+                Span {
+                    file_id,
+                    range: *span,
+                },
+                "not a field of the class",
+            )
+            .with_phase(DiagnosticPhase::Hir),
+            Hir2Diagnostic::DuplicateInterfaceFieldLink {
+                interface_name,
+                field_name,
+                sites,
+            } => {
+                let mut diag = Diagnostic::error(
+                    DiagnosticId::DuplicateInterfaceFieldLink,
+                    format!(
+                        "field `{field_name}` of interface `{interface_name}` is linked more than once"
+                    ),
+                );
+                if let Some((first, rest)) = sites.split_first() {
+                    diag = diag.with_secondary(
+                        Span {
+                            file_id,
+                            range: *first,
+                        },
+                        "first link here",
+                    );
+                    for span in rest {
+                        diag = diag.with_primary(
+                            Span {
+                                file_id,
+                                range: *span,
+                            },
+                            "duplicate link here",
+                        );
+                    }
+                }
+                diag.with_phase(DiagnosticPhase::Hir)
+            }
+            Hir2Diagnostic::MissingRequiredInterface {
+                class_name,
+                interface_name,
+                missing_parents,
+                span,
+            } => {
+                let list = missing_parents
+                    .iter()
+                    .map(|n| format!("`{n}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                Diagnostic::error(
+                    DiagnosticId::MissingRequiredInterface,
+                    format!(
+                        "class `{class_name}` implements `{interface_name}`, which requires \
+                         {list}, but `{class_name}` does not implement them"
+                    ),
+                )
+                .with_primary(
+                    Span {
+                        file_id,
+                        range: *span,
+                    },
+                    format!("requires {list}"),
+                )
+                .with_phase(DiagnosticPhase::Hir)
+            }
+            Hir2Diagnostic::OutOfBodyImplementsFieldInterface {
+                target_name,
+                interface_name,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::OutOfBodyImplementsFieldInterface,
+                format!(
+                    "`implements {interface_name} for {target_name}` cannot implement \
+                     field-bearing interface `{interface_name}` outside the class body"
+                ),
+            )
+            .with_primary(
+                Span {
+                    file_id,
+                    range: *span,
+                },
+                "field-bearing interfaces must be implemented inside the class body",
+            )
+            .with_phase(DiagnosticPhase::Hir),
         }
     }
 }

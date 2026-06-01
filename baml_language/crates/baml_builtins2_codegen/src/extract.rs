@@ -707,8 +707,22 @@ fn func_node_has_name(func_node: &SyntaxNode, method_name: &str) -> bool {
             if tok.kind().is_trivia() || tok.kind() == SyntaxKind::KW_FUNCTION {
                 continue;
             }
-            // First non-trivia, non-keyword token should be the function name.
-            return tok.kind() == SyntaxKind::WORD && tok.text() == method_name;
+            // First non-trivia, non-`function` token is the function name.
+            // BEP-044 introduced `implements`, `extends`, and `interface` as
+            // top-level keywords; the parser still accepts them as method
+            // names so reflection methods like `TypeValue.implements(...)`
+            // can keep their natural spelling.
+            let kind = tok.kind();
+            let is_name_token = matches!(
+                kind,
+                SyntaxKind::WORD
+                    | SyntaxKind::KW_IMPLEMENTS
+                    | SyntaxKind::KW_IMPLEMENT
+                    | SyntaxKind::KW_EXTENDS
+                    | SyntaxKind::KW_REQUIRES
+                    | SyntaxKind::KW_INTERFACE
+            );
+            return is_name_token && tok.text() == method_name;
         }
         // Encountered a child node — past the name.
         break;

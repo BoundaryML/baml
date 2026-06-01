@@ -15,21 +15,21 @@ function ThrowsMixed(x: int) -> string throws string | Errors {
 
 //----
 //- diagnostics
-// error: throws contract violation: `string | user.Errors` is missing user.Errors.AuthError
+// error: declared throws is `string | Errors`, but this function may also throw `Errors.AuthError`
 //    ╭─[ throw_throws_mixed.baml:9:46 ]
 //    │
 //  9 │ function ThrowsMixed(x: int) -> string throws string | Errors {
 //    │                                              ────────┬───────  
-//    │                                                      ╰───────── throws contract violation: `string | user.Errors` is missing user.Errors.AuthError
+//    │                                                      ╰───────── declared throws is `string | Errors`, but this function may also throw `Errors.AuthError`
 //    │ 
 //    │ Note: Error code: E0096
 // ───╯
-// warning: extraneous throws declaration: user.Errors
+// warning: extraneous throws declaration: Errors
 //    ╭─[ throw_throws_mixed.baml:9:46 ]
 //    │
 //  9 │ function ThrowsMixed(x: int) -> string throws string | Errors {
 //    │                                              ────────┬───────  
-//    │                                                      ╰───────── extraneous throws declaration: user.Errors
+//    │                                                      ╰───────── extraneous throws declaration: Errors
 //    │ 
 //    │ Note: Error code: E0097
 // ───╯

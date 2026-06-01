@@ -37,13 +37,13 @@ function Remand(s: Situation) -> string {
 
 //----
 //- diagnostics
-// error: type mismatch: expected user.Pet, got user.Rock
+// error: type mismatch: expected Pet, got Rock
 //     ╭─[ functions_v2_match.baml:30:32 ]
 //     │
 //  30 │ ╭─▶       let dog: Dog => "Bowwow",
 //  31 │ ├─▶       let rock: Rock => "...",
 //     │ │                                    
-//     │ ╰──────────────────────────────────── type mismatch: expected user.Pet, got user.Rock
+//     │ ╰──────────────────────────────────── type mismatch: expected Pet, got Rock
 //     │     
 //     │     Note: Error code: E0001
 // ────╯

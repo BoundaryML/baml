@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 12210
 ---
 function user.User.from_json(j: baml.json.json) -> User {
     load_var j
@@ -20,7 +21,7 @@ function user.User.from_json(j: baml.json.json) -> User {
     return
 }
 
-function user.User.to_json(self: null) -> baml.json.json {
+function user.User.to_json(self: User) -> baml.json.json {
     load_var self
     load_field .name
     call baml.String.to_json

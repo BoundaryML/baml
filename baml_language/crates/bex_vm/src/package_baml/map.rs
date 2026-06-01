@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use bex_heap::TlabHolder;
 use bex_vm_types::{BexStr, HeapPtr, types::Value};
 use indexmap::IndexMap;
 
@@ -36,7 +37,7 @@ impl Continuation for MapToJsonContinuation {
 
         if self.idx >= self.entries.len() {
             // All entries have been processed — return the completed map.
-            return NativeCallResult::Done(vm.alloc_map(self.results));
+            return NativeCallResult::Done(Value::object(vm.alloc_map(self.results)));
         }
 
         // Yield to call to_json on the next value.
@@ -102,7 +103,9 @@ impl BamlClassMap for PackageBamlImpl {
     }
 
     fn keys(vm: &mut BexVm, map: &IndexMap<BexStr, Value>) -> Vec<Value> {
-        map.keys().map(|k| vm.alloc_string(k.clone())).collect()
+        map.keys()
+            .map(|k| Value::object(vm.alloc_string(k.clone())))
+            .collect()
     }
 
     fn values(map: &IndexMap<BexStr, Value>) -> Vec<Value> {
@@ -151,7 +154,7 @@ impl BamlClassMap for PackageBamlImpl {
         let entries: Vec<(BexStr, Value)> = map.iter().map(|(k, v)| (k.clone(), *v)).collect();
 
         if entries.is_empty() {
-            return NativeCallResult::Done(vm.alloc_map(IndexMap::new()));
+            return NativeCallResult::Done(Value::object(vm.alloc_map(IndexMap::new())));
         }
 
         let first_val = entries[0].1;
