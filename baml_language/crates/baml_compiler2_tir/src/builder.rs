@@ -400,6 +400,15 @@ struct CallCheckRequest<'a> {
     context: CallContext<'a>,
     callee_ty: Ty,
     is_method_call: bool,
+    /// `true` when the callee is a function *value* (a local/param holding a
+    /// function), as opposed to a direct reference to a function/method
+    /// declaration. For value callees the callee type's `generic_params`
+    /// accurately lists the still-inferable params, so call-site inference is
+    /// restricted to them — keeping rigid ambient type vars (e.g. from an
+    /// instantiation value `let f = foo<T>`) from being re-inferred. Declaration
+    /// callees keep the existing behavior (their `generic_params` is cleared by
+    /// receiver/class substitution, so the restriction would be wrong there).
+    is_value_call: bool,
     is_optional_call: bool,
     /// Pre-computed type-arg bindings when explicit `<T1, T2, ...>` were written at the call
     /// site. `Some(map)` means the caller already validated arity and resolved each `TypeExpr`;
@@ -2574,6 +2583,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 },
             callee_ty,
             is_method_call,
+            is_value_call,
             is_optional_call,
             explicit_type_arg_bindings,
         } = request;
@@ -2692,6 +2702,26 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 }
 
+                // Soundness for *value* callees: a function value's type may
+                // mention rigid type vars from the enclosing scope that are NOT
+                // among its still-inferable params — e.g. an instantiation value
+                // `let f = foo<T>; f(1)` (type `(T) -> T`, `generic_params`
+                // cleared) or a higher-order param `g: (T) -> T`. Inference above
+                // may have bound such a `T` from an argument; drop anything not
+                // in the value's own `generic_params` so it stays rigid and the
+                // call is checked structurally (`int` is not a subtype of a rigid
+                // `T` → mismatch) instead of silently collapsing `foo<T>` to
+                // `foo<int>`. This is gated on value calls because a *declaration*
+                // callee (free/method/static) reaches here with `generic_params`
+                // cleared by receiver/class substitution yet its own params still
+                // inferable — restricting there would wrongly freeze `arr.map`'s
+                // `U` or `StreamCache.new`'s class params.
+                if is_value_call {
+                    bindings.retain(|name, _| {
+                        crate::generics::is_value_call_inferable(name, generic_params)
+                    });
+                }
+
                 self.validate_function_generic_bounds(
                     expr_id,
                     generic_params,
@@ -2713,8 +2743,22 @@ impl<'db> TypeInferenceBuilder<'db> {
                         continue;
                     }
 
+                    // Skip a genuine inference hole (an unresolved param, reported
+                    // elsewhere). For a value call, a type var that is NOT one of
+                    // the value's own `generic_params` is a *rigid* ambient var,
+                    // not a hole: it must be matched structurally so a mismatched
+                    // arg is reported (`int` vs a rigid `T`). For declaration
+                    // calls, preserve the original behavior (skip any type var).
+                    let still_a_hole = if is_value_call {
+                        crate::generics::contains_inferable_typevar(
+                            &expected_arg_ty,
+                            generic_params,
+                        )
+                    } else {
+                        crate::generics::contains_typevar(&expected_arg_ty)
+                    };
                     if matches!(expected_arg_ty, Ty::Unknown { .. } | Ty::Error { .. })
-                        || crate::generics::contains_typevar(&expected_arg_ty)
+                        || still_a_hole
                     {
                         continue;
                     }
@@ -2876,6 +2920,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         },
                         callee_ty: folded_fn,
                         is_method_call,
+                        is_value_call,
                         is_optional_call,
                         explicit_type_arg_bindings,
                     });
@@ -2967,6 +3012,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             context: call,
             callee_ty: callee_info.inner,
             is_method_call,
+            // Optional calls are always member accesses (`x?.foo(...)`), never a
+            // bare-local value callee.
+            is_value_call: false,
             is_optional_call: true,
             explicit_type_arg_bindings: None,
         });
@@ -3994,6 +4042,18 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             _ => false,
         };
+        // A "value call" is one whose callee is a function *value* held in a
+        // local/param (e.g. `let f = foo<int>; f(x)` or a higher-order param
+        // `g`), as opposed to a direct reference to a function/method
+        // declaration. Only a bare single-segment path bound in the local scope
+        // qualifies — member accesses, qualified paths, and references to
+        // top-level functions are declaration calls. For value callees the
+        // callee type's `generic_params` is an accurate list of the still-
+        // inferable params, so inference can be restricted to them.
+        let is_value_call = matches!(
+            &body.exprs[callee],
+            Expr::Path(segs) if segs.len() == 1 && self.locals.contains_key(&segs[0])
+        );
         let callee_ty = self.infer_expr(callee, body);
 
         // When explicit type args are written at the call site (e.g. `foo<int, T>(x)`),
@@ -4014,6 +4074,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             },
             callee_ty,
             is_method_call,
+            is_value_call,
             is_optional_call: false,
             explicit_type_arg_bindings,
         });

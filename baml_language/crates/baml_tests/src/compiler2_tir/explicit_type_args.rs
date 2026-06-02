@@ -411,3 +411,80 @@ function caller() -> string {
     }
     "#);
 }
+
+/// A *param-dependent instantiation value* (`let f = foo<T>` inside a generic
+/// body) is a function value whose type `(T) -> T` mentions the enclosing,
+/// rigid `T`. Calling it with a mismatched concrete argument must be rejected —
+/// `T` is fixed by `pd`'s caller, so `f(1)` is a type error rather than silently
+/// re-inferring `T = int` and collapsing `foo<T>` to `foo<int>`.
+#[test]
+fn instantiation_value_call_keeps_ambient_typevar_rigid() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function identity<T>(x: T) -> T { x }
+function pd<T>(y: T) -> int {
+    let f = identity<T>;
+    f(1)
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.identity<T>(x: T) -> T throws never {
+      { : T
+        x : T
+      }
+    }
+    function user.pd<T>(y: T) -> int throws never {
+      { : T
+        let f = identity<...> : (x: T) -> T throws never
+        f<T>(1) : T
+      }
+      !! 100..101: type mismatch: expected T, got 1
+      !! 98..102: type mismatch: expected int, got T
+    }
+    "#);
+}
+
+/// Companion to the above: calling the same value with a *matching* argument
+/// (`y : T`) is fine, and an *uninstantiated* generic value (`let g = identity`)
+/// still infers its own type param from the argument. The rigidity only applies
+/// to type vars that are NOT among the value's own `generic_params`.
+#[test]
+fn instantiation_value_call_preserves_valid_inference() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function identity<T>(x: T) -> T { x }
+function fwd<T>(y: T) -> T {
+    let f = identity<T>;
+    f(y)
+}
+function uses() -> int {
+    let g = identity;
+    g(5)
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.identity<T>(x: T) -> T throws never {
+      { : T
+        x : T
+      }
+    }
+    function user.fwd<T>(y: T) -> T throws never {
+      { : T
+        let f = identity<...> : (x: T) -> T throws never
+        f<T>(y) : T
+      }
+    }
+    function user.uses() -> int throws never {
+      { : int | 5
+        let g = identity : <T>(x: T) -> T throws never
+        g<T>(5) : int | 5
+      }
+    }
+    "#);
+}

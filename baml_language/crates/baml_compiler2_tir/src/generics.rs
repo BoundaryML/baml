@@ -403,6 +403,62 @@ pub fn contains_typevar(ty: &Ty) -> bool {
     }
 }
 
+/// Whether `name` is an *inferable* type var for a value call: either one of the
+/// callee's declared `generic_params`, or a synthetic effect-polymorphism param
+/// introduced by effect inference (`__effect_param_N`). Anything else is a
+/// *rigid ambient* var (e.g. the caller's `T` in an instantiation value
+/// `foo<T>`), which must be matched structurally rather than inferred.
+fn is_inferable_typevar(name: &Name, generic_params: &[Name]) -> bool {
+    generic_params.contains(name) || crate::ty::is_synthetic_effect_param(name)
+}
+
+/// Like [`contains_typevar`], but only counts type variables that are still
+/// *inferable* for a value call (see [`is_inferable_typevar`]). Used to tell the
+/// callee's own unresolved params (genuine inference holes) apart from rigid
+/// ambient type vars that must be matched structurally.
+pub fn contains_inferable_typevar(ty: &Ty, generic_params: &[Name]) -> bool {
+    match ty {
+        Ty::TypeVar(name, _) => is_inferable_typevar(name, generic_params),
+        Ty::List(inner, _) | Ty::Optional(inner, _) | Ty::EvolvingList(inner, _) => {
+            contains_inferable_typevar(inner, generic_params)
+        }
+        Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) => {
+            contains_inferable_typevar(k, generic_params)
+                || contains_inferable_typevar(v, generic_params)
+        }
+        Ty::Union(tys, _) => tys
+            .iter()
+            .any(|t| contains_inferable_typevar(t, generic_params)),
+        Ty::Function {
+            generic_param_bounds,
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            generic_param_bounds.iter().any(|bound| {
+                bound
+                    .as_ref()
+                    .is_some_and(|b| contains_inferable_typevar(b, generic_params))
+            }) || params
+                .iter()
+                .any(|param| contains_inferable_typevar(&param.ty, generic_params))
+                || contains_inferable_typevar(ret, generic_params)
+                || contains_inferable_typevar(throws, generic_params)
+        }
+        Ty::Class(_, type_args, _) | Ty::Interface(_, type_args, _) => type_args
+            .iter()
+            .any(|t| contains_inferable_typevar(t, generic_params)),
+        _ => false,
+    }
+}
+
+/// Whether `name` is an inferable type var for a value call. Exposed for
+/// call-site inference's binding-retention filter.
+pub fn is_value_call_inferable(name: &Name, generic_params: &[Name]) -> bool {
+    is_inferable_typevar(name, generic_params)
+}
+
 /// Infer type variable bindings by walking formal and actual types in parallel.
 ///
 /// When `formal` is `Ty::TypeVar("T", TyAttr::default())` and `actual` is `Ty::Primitive(Int, TyAttr::default())`,
