@@ -81,6 +81,7 @@ pub fn qtn_to_type_name(qtn: &QualifiedTypeName) -> TypeName {
 /// Pre-computed type alias data for inline expansion in `convert_tir2_ty`.
 ///
 /// Bundles the alias map and recursion info that are always passed together.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ResolvedAliases {
     pub aliases: HashMap<QualifiedTypeName, Tir2Ty>,
     pub recursive: HashSet<QualifiedTypeName>,
@@ -776,7 +777,7 @@ use baml_compiler2_ast::{
 use baml_compiler2_hir::{
     body::{FunctionBody, LetBody, let_body, let_body_source_map},
     loc::{FunctionLoc, LetLoc},
-    package::{PackageId, package_dependencies, package_items},
+    package::{PackageId, package_items},
     scope::FileScopeId,
     semantic_index::{BindingId, DefinitionSite},
 };
@@ -791,7 +792,7 @@ type ClassFieldIndices = IndexMap<TypeName, IndexMap<String, usize>>;
 type ClassFieldTypes = IndexMap<TypeName, IndexMap<String, Ty>>;
 type EnumVariantIndices = IndexMap<QualifiedTypeName, IndexMap<String, usize>>;
 type InterfaceImplementors = IndexMap<TypeName, Vec<TypeName>>;
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 struct InterfaceTypeImplementor {
     runtime_ty: Ty,
     tir_ty: Tir2Ty,
@@ -903,6 +904,111 @@ struct PackagePopulation<'a> {
     enum_variants: &'a mut EnumVariantIndices,
     interface_implementors: &'a mut InterfaceImplementors,
     interface_type_implementors: &'a mut InterfaceTypeImplementors,
+}
+
+/// All package-invariant data needed to construct a [`LoweringContext`]: the
+/// class/enum/interface schema maps plus resolved type aliases.
+///
+/// `LoweringContext::new` runs once per function, but every function in a
+/// package sees the *same* schema. Building this inline per function made MIR
+/// lowering `O(functions × classes)` — each function re-lowered every class
+/// field type (`populate_from_package`) and recomputed every alias
+/// (`ResolvedAliases::for_package`, which also re-runs `find_recursive_aliases`
+/// over the whole project). Computing it once in the [`package_lowering_data`]
+/// Salsa query collapses that to `O(classes)` total; the maps are then borrowed
+/// (not cloned) into each `LoweringContext`.
+#[derive(Clone, PartialEq, Eq, Default)]
+struct PackageLoweringData {
+    class_fields: ClassFieldIndices,
+    class_field_types: ClassFieldTypes,
+    enum_variants: EnumVariantIndices,
+    interface_implementors: InterfaceImplementors,
+    interface_type_implementors: InterfaceTypeImplementors,
+    resolved_aliases: ResolvedAliases,
+}
+
+/// # Safety
+///
+/// Mirrors [`baml_compiler2_hir::package::PackageItems`]'s impl. The contained
+/// maps hold no Salsa-interned (`'db`) data, so storing them by value is sound;
+/// `maybe_update` uses `PartialEq` for proper Salsa early-cutoff.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for PackageLoweringData {
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        // SAFETY: `old_pointer` is valid, aligned, and Salsa-owned.
+        #[allow(unsafe_code)]
+        let old = unsafe { &*old_pointer };
+        if old == &new_value {
+            false
+        } else {
+            #[allow(unsafe_code)]
+            unsafe {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            true
+        }
+    }
+}
+
+/// Build the package-invariant [`PackageLoweringData`] once per package,
+/// memoized by Salsa and shared across every function's `LoweringContext`.
+#[salsa::tracked(returns(ref))]
+fn package_lowering_data<'db>(
+    db: &'db dyn crate::Db,
+    pkg_id: baml_compiler2_hir::package::PackageId<'db>,
+) -> PackageLoweringData {
+    use baml_compiler2_hir::package::{package_dependencies, package_items};
+
+    let resolved_aliases = ResolvedAliases::for_package(db, pkg_id);
+
+    let mut class_fields = ClassFieldIndices::default();
+    let mut class_field_types = ClassFieldTypes::default();
+    let mut enum_variants = EnumVariantIndices::default();
+    let mut interface_implementors = InterfaceImplementors::default();
+    let mut interface_type_implementors = InterfaceTypeImplementors::default();
+    {
+        let mut population = PackagePopulation {
+            class_fields: &mut class_fields,
+            class_field_types: &mut class_field_types,
+            enum_variants: &mut enum_variants,
+            interface_implementors: &mut interface_implementors,
+            interface_type_implementors: &mut interface_type_implementors,
+        };
+
+        // Dependency packages first (e.g., "baml" builtins); current-package
+        // items overwrite on collision.
+        for &dep_id in package_dependencies(db, pkg_id) {
+            let dep_items = package_items(db, dep_id);
+            let dep_name = dep_id.name(db);
+            LoweringContext::populate_from_package(
+                db,
+                dep_items,
+                &dep_name,
+                &mut population,
+                &resolved_aliases,
+            );
+        }
+
+        let pkg_items = package_items(db, pkg_id);
+        let pkg_name = pkg_id.name(db);
+        LoweringContext::populate_from_package(
+            db,
+            pkg_items,
+            &pkg_name,
+            &mut population,
+            &resolved_aliases,
+        );
+    }
+
+    PackageLoweringData {
+        class_fields,
+        class_field_types,
+        enum_variants,
+        interface_implementors,
+        interface_type_implementors,
+        resolved_aliases,
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -1019,9 +1125,12 @@ struct LoweringContext<'db> {
     // so that e.g. baml.http.Request and a user-defined Request are distinct.
     // enum_variants is keyed by QualifiedTypeName for the same reason: distinct
     // namespaces can define enums with the same short name.
-    class_fields: IndexMap<TypeName, IndexMap<String, usize>>,
-    class_field_types: IndexMap<TypeName, IndexMap<String, Ty>>,
-    enum_variants: EnumVariantIndices,
+    // Borrowed from the package-keyed `package_lowering_data` query so every
+    // function in a package shares one computation instead of rebuilding these
+    // (see [`PackageLoweringData`]).
+    class_fields: &'db ClassFieldIndices,
+    class_field_types: &'db ClassFieldTypes,
+    enum_variants: &'db EnumVariantIndices,
     /// Pre-computed type tags for class types, used by `SwitchKind::TypeTag`
     /// for union-type switch optimization (ported from MIR 1).
     class_type_tags: IndexMap<TypeName, i64>,
@@ -1029,12 +1138,12 @@ struct LoweringContext<'db> {
     /// (directly or transitively through interface `requires`). Lets the field-access
     /// and method-call lowering paths emit a type-tag switch over the
     /// implementor set when the static receiver type is an interface.
-    interface_implementors: IndexMap<TypeName, Vec<TypeName>>,
+    interface_implementors: &'db InterfaceImplementors,
     /// BEP-044: non-class concrete implementors, such as
     /// `implements Debuggable for int`. These are kept separate from
     /// `interface_implementors` because reflection/runtime metadata stores
     /// named classes, while dispatch can use primitive type tags directly.
-    interface_type_implementors: InterfaceTypeImplementors,
+    interface_type_implementors: &'db InterfaceTypeImplementors,
 
     // Pre-computed type alias data for inline expansion in convert_tir2_ty
     resolved_aliases: ResolvedAliases,
@@ -1615,7 +1724,6 @@ impl<'db> LoweringContext<'db> {
         // --- Build class_fields / enum_variants from PackageItems ---
         let pkg_info = file_package(db, file);
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
-        let resolved_aliases = ResolvedAliases::for_package(db, pkg_id);
         let pkg_items_for_bounds = package_items(db, pkg_id);
         let (bound_param_names, bound_exprs) = item_tree
             .implements_for
@@ -1647,44 +1755,9 @@ impl<'db> LoweringContext<'db> {
             }
         }
 
-        let mut class_fields: ClassFieldIndices = IndexMap::new();
-        let mut class_field_types: ClassFieldTypes = IndexMap::new();
-        let mut enum_variants: EnumVariantIndices = IndexMap::new();
-        let mut interface_implementors: InterfaceImplementors = IndexMap::new();
-        let mut interface_type_implementors: InterfaceTypeImplementors = IndexMap::new();
-        {
-            let mut package_population = PackagePopulation {
-                class_fields: &mut class_fields,
-                class_field_types: &mut class_field_types,
-                enum_variants: &mut enum_variants,
-                interface_implementors: &mut interface_implementors,
-                interface_type_implementors: &mut interface_type_implementors,
-            };
-
-            // Include classes from dependency packages first (e.g., "baml" builtins).
-            // Inserted first so current-package classes take priority on collision.
-            for &dep_id in package_dependencies(db, pkg_id) {
-                let dep_items = package_items(db, dep_id);
-                let dep_name = dep_id.name(db);
-                Self::populate_from_package(
-                    db,
-                    dep_items,
-                    &dep_name,
-                    &mut package_population,
-                    &resolved_aliases,
-                );
-            }
-
-            // Include classes from the current package (overwrites on collision).
-            let pkg_items = package_items(db, pkg_id);
-            Self::populate_from_package(
-                db,
-                pkg_items,
-                &pkg_info.package,
-                &mut package_population,
-                &resolved_aliases,
-            );
-        }
+        // Class/enum/interface schema + resolved aliases, memoized per package
+        // (was rebuilt — and every class field re-lowered — per function).
+        let pkg_data = package_lowering_data(db, pkg_id);
 
         // Build class_type_tags using the same file-iteration order as the emitter,
         // so that switch arms get the same integer tags as runtime class.type_tag fields.
@@ -1741,16 +1814,16 @@ impl<'db> LoweringContext<'db> {
             file,
             func_loc: Some(func_loc),
             scope_func_name: Some(func_data.name.clone()),
-            class_fields,
-            class_field_types,
-            enum_variants,
+            class_fields: &pkg_data.class_fields,
+            class_field_types: &pkg_data.class_field_types,
+            enum_variants: &pkg_data.enum_variants,
             class_type_tags,
-            interface_implementors,
-            interface_type_implementors,
+            interface_implementors: &pkg_data.interface_implementors,
+            interface_type_implementors: &pkg_data.interface_type_implementors,
             pending_lambdas: Vec::new(),
             capture_indices: None,
             transitive_captures_needed: Vec::new(),
-            resolved_aliases,
+            resolved_aliases: pkg_data.resolved_aliases.clone(),
             watched_locals_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
             chain_null_exits: Vec::new(),
@@ -1924,47 +1997,11 @@ impl<'db> LoweringContext<'db> {
         }
 
         // --- Build class_fields / enum_variants from PackageItems ---
-        let pkg_info = file_package(db, file);
-        let pkg_id = PackageId::new(db, pkg_info.package.clone());
-        let resolved_aliases = ResolvedAliases::for_package(db, pkg_id);
+        let pkg_id = PackageId::new(db, file_package(db, file).package);
 
-        let mut class_fields: ClassFieldIndices = IndexMap::new();
-        let mut class_field_types: ClassFieldTypes = IndexMap::new();
-        let mut enum_variants: EnumVariantIndices = IndexMap::new();
-        let mut interface_implementors: InterfaceImplementors = IndexMap::new();
-        let mut interface_type_implementors: InterfaceTypeImplementors = IndexMap::new();
-        {
-            let mut package_population = PackagePopulation {
-                class_fields: &mut class_fields,
-                class_field_types: &mut class_field_types,
-                enum_variants: &mut enum_variants,
-                interface_implementors: &mut interface_implementors,
-                interface_type_implementors: &mut interface_type_implementors,
-            };
-
-            // Include classes from dependency packages first.
-            for &dep_id in package_dependencies(db, pkg_id) {
-                let dep_items = package_items(db, dep_id);
-                let dep_name = dep_id.name(db);
-                Self::populate_from_package(
-                    db,
-                    dep_items,
-                    &dep_name,
-                    &mut package_population,
-                    &resolved_aliases,
-                );
-            }
-
-            // Include classes from the current package (overwrites on collision).
-            let pkg_items = package_items(db, pkg_id);
-            Self::populate_from_package(
-                db,
-                pkg_items,
-                &pkg_info.package,
-                &mut package_population,
-                &resolved_aliases,
-            );
-        }
+        // Class/enum/interface schema + resolved aliases, memoized per package
+        // (was rebuilt — and every class field re-lowered — per let binding).
+        let pkg_data = package_lowering_data(db, pkg_id);
 
         // Build class_type_tags using the same file-iteration order as the emitter,
         // so that switch arms get the same integer tags as runtime class.type_tag fields.
@@ -1995,13 +2032,13 @@ impl<'db> LoweringContext<'db> {
             file,
             func_loc: None,
             scope_func_name: Some(let_name),
-            class_fields,
-            class_field_types,
-            enum_variants,
+            class_fields: &pkg_data.class_fields,
+            class_field_types: &pkg_data.class_field_types,
+            enum_variants: &pkg_data.enum_variants,
             class_type_tags,
-            interface_implementors,
-            interface_type_implementors,
-            resolved_aliases,
+            interface_implementors: &pkg_data.interface_implementors,
+            interface_type_implementors: &pkg_data.interface_type_implementors,
+            resolved_aliases: pkg_data.resolved_aliases.clone(),
             watched_locals_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
             pending_lambdas: Vec::new(),
