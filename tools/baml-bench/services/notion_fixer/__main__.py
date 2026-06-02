@@ -168,8 +168,11 @@ class FixDispatch(Processor):
     async def process(self, issue: dict[str, Any]) -> None:
         """Dispatch a fix for one claimed approved issue.
 
-        Idempotent: an issue that already carries ``fixSlackTs`` is skipped. A
-        no-op (logs a warning) when no Cursor API key is configured. Otherwise
+        Idempotent: an issue that already carries ``fixSlackTs`` is skipped, and
+        the launch uses a stable ``agentId`` derived from the issue id so a
+        re-dispatch after a crash (before ``fixSlackTs`` was persisted) returns
+        409 and is treated as already launched rather than spawning a duplicate.
+        A no-op (logs a warning) when no Cursor API key is configured. Otherwise
         launches a Cursor cloud agent, records its reference, posts a
         (non-triggering) Slack note linking the agent, and flips the Notion page
         to fixing.
@@ -185,17 +188,25 @@ class FixDispatch(Processor):
             log.warning("no CURSOR_API_KEY configured; cannot dispatch issue %s", issue_id)
             return
         repo = fixer.repo_url(issue["kind"])
-        # Launch a Cursor cloud agent directly (the real automated path).
+        # Launch a Cursor cloud agent directly (the real automated path). The
+        # agentId is derived from the issue id so a re-dispatch after a crash
+        # (before fixSlackTs was persisted) is idempotent: Cursor returns 409 and
+        # launch_agent reports it as already launched instead of spawning a
+        # duplicate agent/PR.
+        agent_id = f"notion-fixer-{issue_id}"
         result = await cursor_client.launch_agent(
             CURSOR_API_KEY, fixer.cursor_prompt(issue), repo, fixer.CURSOR_BRANCH,
-            auto_create_pr=True, model=CURSOR_MODEL,
+            agent_id=agent_id, auto_create_pr=True, model=CURSOR_MODEL,
         )
         agent = result.get("agent") or result  # response may nest under "agent"
-        ref = agent.get("id") or "launched"
+        ref = agent.get("id") or agent_id
         url = agent.get("url")
+        # Persist the dispatch reference for BOTH a fresh launch and a 409
+        # already-launched result, so the guard above short-circuits next time.
         await self.service.update(self.table, issue_id, {"fixSlackTs": ref})
         # Visibility note in Slack (a bot post; not a trigger) with the agent link.
-        if SLACK_FIX_CHANNEL and SLACK_BOT_TOKEN:
+        # Skipped on an idempotent re-dispatch to avoid a duplicate note.
+        if not result.get("alreadyLaunched") and SLACK_FIX_CHANNEL and SLACK_BOT_TOKEN:
             link = f"<{url}|view agent>  ·  " if url else ""
             await slack_client.post_message(
                 SLACK_BOT_TOKEN, SLACK_FIX_CHANNEL,

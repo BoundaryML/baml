@@ -23,6 +23,7 @@ async def launch_agent(
     repo_url: str,
     ref: str,
     *,
+    agent_id: Optional[str] = None,
     auto_create_pr: bool = True,
     model: Optional[str] = None,
     timeout: float = 60.0,
@@ -30,22 +31,29 @@ async def launch_agent(
     """Launch a Cursor cloud agent to work a fix on a GitHub repo.
 
     Posts to the Cursor Cloud Agents API (`POST /v1/agents`) with HTTP Basic auth
-    (the API key as the username, empty password).
+    (the API key as the username, empty password). When `agent_id` is supplied it
+    is sent as the request's `agentId`; reusing the same id makes the launch
+    idempotent (Cursor returns 409 `agent_id_conflict`, which is treated here as
+    "already launched" so a crashed/retried dispatch never spawns a duplicate).
 
     Args:
         api_key: Cursor API key used for HTTP Basic auth.
         prompt_text: Instruction text handed to the agent.
         repo_url: GitHub repository the agent works in.
         ref: Git ref the agent branches from (its starting ref).
+        agent_id: Optional client-supplied, stable agent id for idempotent launch.
         auto_create_pr: Whether the agent opens a pull request with its changes.
         model: Optional Cursor model id; omitted to use the account default.
         timeout: HTTP timeout in seconds for the launch request.
 
     Returns:
-        The created agent object (includes `id` and `latestRunId`).
+        The created agent object (includes `id` and `latestRunId`) on a fresh
+        launch, or `{"id": agent_id, "alreadyLaunched": True}` when the id was
+        already used (409 `agent_id_conflict`).
 
     Raises:
-        httpx.HTTPStatusError: If the Cursor API returns a non-2xx response.
+        httpx.HTTPStatusError: If the Cursor API returns a non-2xx response other
+            than 409.
     """
     auth = base64.b64encode(f"{api_key}:".encode()).decode()
     body: dict[str, Any] = {
@@ -53,6 +61,8 @@ async def launch_agent(
         "repos": [{"url": repo_url, "startingRef": ref}],
         "autoCreatePR": auto_create_pr,
     }
+    if agent_id:
+        body["agentId"] = agent_id
     if model:
         body["model"] = {"id": model}
     async with httpx.AsyncClient(timeout=timeout) as c:
@@ -61,5 +71,10 @@ async def launch_agent(
             json=body,
             headers={"Authorization": f"Basic {auth}", "Content-Type": "application/json"},
         )
+        # A reused agentId means this issue was already dispatched (an idempotent
+        # re-dispatch after a crash). Treat it as already launched rather than
+        # spawning a duplicate agent/PR.
+        if r.status_code == 409 and agent_id:
+            return {"id": agent_id, "alreadyLaunched": True}
         r.raise_for_status()
         return r.json()
