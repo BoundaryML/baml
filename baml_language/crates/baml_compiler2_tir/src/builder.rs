@@ -8925,6 +8925,79 @@ impl<'db> TypeInferenceBuilder<'db> {
             .collect()
     }
 
+    /// Interface field `(name, type)` pairs in requires-closure order with
+    /// generic substitution applied. This mirrors `resolve_interface_member`
+    /// but is side-effect-free for matrix construction.
+    fn interface_field_infos_ordered(
+        &self,
+        iface_name: &crate::ty::QualifiedTypeName,
+        iface_type_args: &[Ty],
+    ) -> Vec<(Name, Ty)> {
+        let mut out = Vec::new();
+        let mut seen = FxHashSet::default();
+        let Some(pkg_items) = self.resolve_class_pkg_items(iface_name.package()) else {
+            return out;
+        };
+        let Some(Definition::Interface(root_loc)) =
+            pkg_items.lookup_type(iface_name.namespace(), iface_name.name())
+        else {
+            return out;
+        };
+
+        let db = self.context.db();
+        let root_pkg = baml_compiler2_hir::file_package::file_package(db, root_loc.file(db));
+        for (iface_loc, closure_args) in crate::interfaces::interface_closure_locs_with_args(
+            db,
+            root_loc,
+            iface_type_args,
+            pkg_items,
+            &root_pkg.namespace_path,
+        ) {
+            let file = iface_loc.file(db);
+            let iface_tree = baml_compiler2_ppir::file_item_tree(db, file);
+            let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
+                continue;
+            };
+            let iface_ns = baml_compiler2_hir::file_package::file_package(db, file)
+                .namespace_path
+                .clone();
+            let bindings =
+                crate::generics::bind_type_vars(&iface_data.generic_params, &closure_args);
+
+            for field in &iface_data.fields {
+                if !seen.insert(field.name.clone()) {
+                    continue;
+                }
+                let ty = field
+                    .type_expr
+                    .as_ref()
+                    .map(|te| {
+                        let mut diags = Vec::new();
+                        if bindings.is_empty() {
+                            crate::lower_type_expr::lower_type_expr_in_ns(
+                                db,
+                                &te.expr,
+                                pkg_items,
+                                &iface_ns,
+                                &iface_data.generic_params,
+                                &mut diags,
+                            )
+                        } else {
+                            crate::generics::lower_type_expr_with_generics(
+                                db, &te.expr, pkg_items, &iface_ns, &bindings, &mut diags,
+                            )
+                        }
+                    })
+                    .unwrap_or(Ty::Unknown {
+                        attr: TyAttr::default(),
+                    });
+                out.push((field.name.clone(), ty));
+            }
+        }
+
+        out
+    }
+
     /// Check whether a class has a field or method with the given name.
     ///
     /// Unlike `lookup_class_fields`, this does NOT call `lower_type_expr_in_ns`
@@ -11875,6 +11948,16 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
             .collect()
     }
 
+    fn interface_field_types(&self, ty: &Ty) -> Vec<Ty> {
+        let Ty::Interface(qtn, args, _) = ty else {
+            return Vec::new();
+        };
+        self.interface_field_infos_ordered(qtn, args)
+            .into_iter()
+            .map(|(_, ft)| self.matrix_normalize_scrut(&ft))
+            .collect()
+    }
+
     fn list_element_type(&self, ty: &Ty) -> Ty {
         let elem = match self.expand_alias_chains(ty.clone()) {
             Ty::List(elem, _) | Ty::EvolvingList(elem, _) => *elem,
@@ -12739,36 +12822,54 @@ impl TypeInferenceBuilder<'_> {
         // The interface has no positional field layout — it matches any
         // implementor and binds each named field through the interface's
         // field view (the same projection used by `iface_value.field`). Field
-        // *types* come from `resolve_interface_member`; the runtime extraction
+        // *types* come from the interface field view; the runtime extraction
         // is wired by `project_interface_pattern_field` in MIR. Because every
         // implementor necessarily provides the interface's declared fields,
-        // the pattern matches all of them, so its `DPat` is the interface's
-        // (wildcard-like) type cover — `Animal { name } => …` alone is
-        // exhaustive over an `Animal` scrutinee, with no `_` needed.
+        // elided fields are wildcarded, while named fields preserve their
+        // lowered subpatterns for exhaustiveness/refutability.
         if let Ty::Interface(iface_name, type_args, _) = &class_ty {
             let iface_name = iface_name.clone();
             let type_args = type_args.clone();
-            let mut bindings: Vec<PatternBinding> = Vec::new();
+            let mut by_name: FxHashMap<Name, &ast::FieldPat> = FxHashMap::default();
             for fp in fields {
-                let field_ty = self
-                    .resolve_interface_member(&iface_name, &type_args, &fp.field, at_expr, true)
-                    .unwrap_or_else(|| {
-                        self.report_at_pat_or_expr(
-                            TirTypeError::UnresolvedMember {
-                                base_type: class_ty.clone(),
-                                member: fp.field.clone(),
-                            },
-                            pat_id,
-                            at_expr,
-                        );
-                        Ty::Unknown {
-                            attr: TyAttr::default(),
-                        }
-                    });
-                let r = self.analyze_and_lower(fp.pat, &field_ty, body, at_expr);
+                by_name.insert(fp.field.clone(), fp);
+            }
+
+            let field_infos = self.interface_field_infos_ordered(&iface_name, &type_args);
+            let mut declared_fields: FxHashSet<Name> = FxHashSet::default();
+            let mut sub_dpats: Vec<DPat> = Vec::with_capacity(field_infos.len());
+            let mut bindings: Vec<PatternBinding> = Vec::new();
+            for (field_name, field_ty) in field_infos {
+                declared_fields.insert(field_name.clone());
+                match by_name.get(&field_name) {
+                    Some(fp) => {
+                        let r = self.analyze_and_lower(fp.pat, &field_ty, body, at_expr);
+                        sub_dpats.push(r.dpat);
+                        bindings.extend(r.bindings);
+                    }
+                    None => sub_dpats.push(DPat::wildcard(field_ty)),
+                }
+            }
+
+            for fp in fields {
+                if declared_fields.contains(&fp.field) {
+                    continue;
+                }
+                self.report_at_pat_or_expr(
+                    TirTypeError::UnresolvedMember {
+                        base_type: class_ty.clone(),
+                        member: fp.field.clone(),
+                    },
+                    pat_id,
+                    at_expr,
+                );
+                let unknown = Ty::Unknown {
+                    attr: TyAttr::default(),
+                };
+                let r = self.analyze_and_lower(fp.pat, &unknown, body, at_expr);
                 bindings.extend(r.bindings);
             }
-            let dpat = self.dpat_for_type(&class_ty, scrut_ty);
+            let dpat = DPat::interface(class_ty.clone(), sub_dpats, scrut_ty.clone());
             let matched_ty = self.intersect_pattern_flow_types(scrut_ty, &class_ty);
             return PatternResult {
                 dpat,

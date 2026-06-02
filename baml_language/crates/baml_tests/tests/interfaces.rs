@@ -2182,6 +2182,36 @@ async fn match_destructures_interface_fields_directly() {
     );
 }
 
+#[tokio::test]
+async fn match_interface_destructure_respects_field_subpatterns() {
+    let output = baml_test!(
+        r#"
+        interface Switch {
+            active: bool
+        }
+        class Lamp {
+            active: bool
+            implements Switch {}
+        }
+
+        function describe(s: Switch) -> string {
+            return match (s) {
+                Switch { active: true } => "on"
+                Switch { active: false } => "off"
+            }
+        }
+        function main() -> string {
+            let s: Switch = Lamp { active: false }
+            return describe(s)
+        }
+    "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("off".into())
+    );
+}
+
 /// Narrowing an interface-typed value with a concrete-implementor *destructure*
 /// pattern (`Dog { name } => ...`) also works — it binds the class's own fields.
 #[tokio::test]

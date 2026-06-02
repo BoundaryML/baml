@@ -54,6 +54,9 @@ pub enum Ctor {
     /// Class destructure. Sub-patterns' types come from the class's fields,
     /// with generic substitution applied.
     Class(QualifiedTypeName),
+    /// Interface destructure. Sub-patterns' types come from the interface's
+    /// field view, with generic substitution applied.
+    Interface(Ty),
 
     /// "Which member of a union" tag, with arity 1. Sub-pattern's type is
     /// the member type carried by the ctor. Specialising on `UnionMember(M)`
@@ -87,11 +90,14 @@ pub enum Ctor {
 
 impl PartialEq for Ctor {
     fn eq(&self, other: &Self) -> bool {
-        use Ctor::{Class, Missing, NonExhaustive, Or, Single, Slice, UnionMember, Wildcard};
+        use Ctor::{
+            Class, Interface, Missing, NonExhaustive, Or, Single, Slice, UnionMember, Wildcard,
+        };
         match (self, other) {
             (Single(a), Single(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
             (Slice(a), Slice(b)) => a == b,
             (Class(a), Class(b)) => a == b,
+            (Interface(a), Interface(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
             (UnionMember(a), UnionMember(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
             (Or, Or)
             | (Wildcard, Wildcard)
@@ -105,12 +111,15 @@ impl Eq for Ctor {}
 
 impl std::hash::Hash for Ctor {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        use Ctor::{Class, Missing, NonExhaustive, Or, Single, Slice, UnionMember, Wildcard};
+        use Ctor::{
+            Class, Interface, Missing, NonExhaustive, Or, Single, Slice, UnionMember, Wildcard,
+        };
         std::mem::discriminant(self).hash(state);
         match self {
             Single(ty) => ty_ctor_identity(ty).hash(state),
             Slice(s) => s.hash(state),
             Class(qtn) => qtn.hash(state),
+            Interface(ty) => ty_ctor_identity(ty).hash(state),
             UnionMember(ty) => ty_ctor_identity(ty).hash(state),
             Or | Wildcard | NonExhaustive | Missing => {}
         }
@@ -150,6 +159,7 @@ impl Ctor {
             Ctor::UnionMember(_) => 1,
             Ctor::Slice(shape) => shape.arity(),
             Ctor::Class(qtn) => cx.class_field_types(qtn, ty).len(),
+            Ctor::Interface(iface_ty) => cx.interface_field_types(iface_ty).len(),
         }
     }
 
@@ -159,12 +169,15 @@ impl Ctor {
     /// not handled here — Or rows are handled by matrix-level expansion
     /// before any normal cover check runs.
     pub fn covers(&self, other: &Ctor) -> bool {
-        use Ctor::{Class, Missing, NonExhaustive, Or, Single, Slice, UnionMember, Wildcard};
+        use Ctor::{
+            Class, Interface, Missing, NonExhaustive, Or, Single, Slice, UnionMember, Wildcard,
+        };
         match (self, other) {
             (Wildcard, _) => true,
             (_, Wildcard) => false,
             (Single(a), Single(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
             (Class(a), Class(b)) => a == b,
+            (Interface(a), Interface(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
             (Slice(a), Slice(b)) => slice_covers(a, b),
             (UnionMember(a), UnionMember(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
             (NonExhaustive, NonExhaustive) => true,
@@ -380,6 +393,14 @@ impl DPat {
             ty,
         }
     }
+    pub fn interface(iface_ty: Ty, fields: Vec<DPat>, ty: Ty) -> Self {
+        Self {
+            ctor: Ctor::Interface(iface_ty),
+            arity: fields.len(),
+            fields,
+            ty,
+        }
+    }
     pub fn slice(shape: SliceShape, fields: Vec<DPat>, ty: Ty) -> Self {
         debug_assert_eq!(shape.arity(), fields.len());
         Self {
@@ -479,6 +500,19 @@ impl fmt::Display for WitnessPat {
                 }
                 write!(f, " }}")
             }
+            Ctor::Interface(ty) => {
+                if self.fields.is_empty() {
+                    return write!(f, "{ty} {{}}");
+                }
+                write!(f, "{ty} {{ ")?;
+                for (i, fld) in self.fields.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{fld}")?;
+                }
+                write!(f, " }}")
+            }
             Ctor::Slice(shape) => {
                 write!(f, "[")?;
                 match shape {
@@ -566,6 +600,13 @@ pub trait PatCtx {
     /// type arguments), return the ordered field types after substitution. The
     /// `Vec` length is the class's field count.
     fn class_field_types(&self, qtn: &QualifiedTypeName, ty: &Ty) -> Vec<Ty>;
+
+    /// For an interface ctor, return the ordered field-view types after
+    /// substitution. Test contexts that do not model interfaces can use the
+    /// empty default.
+    fn interface_field_types(&self, _ty: &Ty) -> Vec<Ty> {
+        Vec::new()
+    }
 
     /// For a slice ctor at column type `ty` (an array/list type), return the
     /// sub-pattern types — which is just the element type repeated `arity`
@@ -1082,6 +1123,13 @@ fn split_ctors(cx: &dyn PatCtx, col_ty: &Ty, matrix: &Matrix<'_>) -> (Vec<Ctor>,
     let all = cx.enumerate_ctors(col_ty);
 
     if all.iter().any(|c| matches!(c, Ctor::NonExhaustive)) {
+        if matches!(col_ty, Ty::Interface(..))
+            && present_no_wild
+                .iter()
+                .any(|c| matches!(c, Ctor::Interface(_)))
+        {
+            return (present_no_wild, vec![]);
+        }
         // Infinite alphabet (raw int/string/float, generics, opaque types).
         let mut split: Vec<Ctor> = present_no_wild;
         let missing = vec![Ctor::NonExhaustive];
@@ -1243,6 +1291,7 @@ fn dedup_ctors(ctors: Vec<Ctor>) -> Vec<Ctor> {
 fn ctor_sub_tys(cx: &dyn PatCtx, ctor: &Ctor, col_ty: &Ty) -> Vec<Ty> {
     match ctor {
         Ctor::Class(qtn) => cx.class_field_types(qtn, col_ty),
+        Ctor::Interface(iface_ty) => cx.interface_field_types(iface_ty),
         Ctor::Slice(shape) => cx.slice_field_types(shape, col_ty),
         // UnionMember projects a column from the union type down to the
         // member type. Specialise recurses with that single sub-column.
