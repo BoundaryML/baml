@@ -476,6 +476,15 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
             let args: Vec<String> = type_arg_templates.iter().map(ToString::to_string).collect();
             write!(f, "make_generic_function {item}<{}>", args.join(", "))
         }
+        Rvalue::MakeGenericFunctionFromValue {
+            value,
+            type_arg_templates,
+        } => {
+            write!(f, "make_generic_function_from_value(")?;
+            write_operand(f, value)?;
+            let args: Vec<String> = type_arg_templates.iter().map(ToString::to_string).collect();
+            write!(f, ")<{}>", args.join(", "))
+        }
     }
 }
 

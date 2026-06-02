@@ -90,6 +90,12 @@ pub(crate) trait PullSink {
         ntypeargs: usize,
     ) -> Result<(), Self::Error>;
 
+    /// Specialize a runtime callable *value* (`g<int>`): the callable and
+    /// `ntypeargs` `Object::Type` values are already on the stack (pushed by
+    /// preceding `load_type` calls and the value operand); emit
+    /// `MakeGenericFunctionFromValue`.
+    fn make_generic_function_from_value(&mut self, ntypeargs: usize) -> Result<(), Self::Error>;
+
     /// Load a captured variable from the current closure's captures array.
     /// Emits `LoadCapture(idx)` in the bytecode emitter.
     fn load_capture(&mut self, idx: usize) -> Result<(), Self::Error>;
@@ -457,6 +463,19 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
                 sink.load_type(template)?;
             }
             sink.make_generic_function(item, type_arg_templates.len())
+        }
+        Rvalue::MakeGenericFunctionFromValue {
+            value,
+            type_arg_templates,
+        } => {
+            // Push the type-arg templates (resolved against the current frame),
+            // then the callable value, then specialize it. The value is pushed
+            // last so the opcode pops it off the top before the type args.
+            for template in type_arg_templates {
+                sink.load_type(template)?;
+            }
+            walk_operand_pull(sink, value)?;
+            sink.make_generic_function_from_value(type_arg_templates.len())
         }
         Rvalue::LoadType(template) => sink.load_type(template),
     }

@@ -62,6 +62,24 @@ function instantiation_expr.$init_test_ns_instantiation_expr_instantiation_expr(
     load_const null
     call testing.TestCollector.register_test
     pop 1
+    load_var registry
+    load_const "local_value_specialization_runs"
+    make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "local_value_specialization_reflects_T"
+    make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "local_value_param_dependent_reflects_T"
+    make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
     load_const null
     return
 }
@@ -74,6 +92,22 @@ function instantiation_expr.describe() -> string {
 
 function instantiation_expr.describe_user_value_fn() -> string {
     load_const user.instantiation_expr.describe<...>
+    call_indirect
+    return
+}
+
+function instantiation_expr.describe_via_local_value() -> string {
+    load_type instantiation_expr.User
+    load_global user.instantiation_expr.describe
+    make_generic_function_from_value ntypeargs=1
+    call_indirect
+    return
+}
+
+function instantiation_expr.describe_via_local_value_param() -> string {
+    load_type #0
+    load_global user.instantiation_expr.describe
+    make_generic_function_from_value ntypeargs=1
     call_indirect
     return
 }
@@ -126,6 +160,15 @@ function instantiation_expr.identity_same_specialization() -> bool {
     load_const user.instantiation_expr.identity<...>
     load_const user.instantiation_expr.identity<...>
     call baml.deep_equals
+    return
+}
+
+function instantiation_expr.identity_via_local_value() -> int {
+    load_const 9
+    load_type int
+    load_global user.instantiation_expr.identity
+    make_generic_function_from_value ntypeargs=1
+    call_indirect
     return
 }
 

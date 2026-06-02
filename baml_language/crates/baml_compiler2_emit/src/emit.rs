@@ -705,6 +705,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Rvalue::Uint8Array(_) | Rvalue::LoadType(_) | Rvalue::MakeGenericFunction { .. } => {
                 false
             }
+            Rvalue::MakeGenericFunctionFromValue { value, .. } => {
+                self.operand_reads_spawn_captured_local(value, seen)
+            }
             Rvalue::Map(entries) => entries.iter().any(|(key, value)| {
                 self.operand_reads_spawn_captured_local(key, seen)
                     || self.operand_reads_spawn_captured_local(value, seen)
@@ -3181,6 +3184,14 @@ impl PullSink for StackifyCodegen<'_, '_> {
             ntypeargs,
         });
         self.set_operand(inst, OperandMeta::Global(func_name));
+        Ok(())
+    }
+
+    fn make_generic_function_from_value(&mut self, ntypeargs: usize) -> Result<(), Self::Error> {
+        // The callable value and `ntypeargs` `Object::Type` values are already
+        // on the stack (pushed by `walk_rvalue_pull`); just emit the opcode.
+        let ntypeargs = u16::try_from(ntypeargs).expect("ntypeargs fits u16");
+        self.emit(Instruction::MakeGenericFunctionFromValue { ntypeargs });
         Ok(())
     }
 

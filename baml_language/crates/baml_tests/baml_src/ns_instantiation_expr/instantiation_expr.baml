@@ -18,8 +18,12 @@ test "identity_int_value_runs" {
     assert.is_true(baml.deep_equals(identity_int_value_fn(), 5))
 }
 
-// Pointer-stable identity: two evaluations of `identity<int>` are interned to
-// the SAME pooled object, and a different specialization is a different object.
+// Two evaluations of `identity<int>` compare equal. NOTE: `deep_equals` is
+// structural, so this only guards against the value regressing to *inequality*
+// — it does not prove the pooled, pointer-stable identity (`foo<int> ===
+// foo<int>`). BAML has no in-language identity operator, so that guarantee is
+// asserted in a Rust harness that inspects the compiled object pool directly:
+// see `tests/instantiation_interning.rs`.
 function identity_same_specialization() -> bool {
     let a = identity<int>;
     let b = identity<int>;
@@ -123,4 +127,45 @@ test "qualified_namespaced_value_reflects" {
 }
 test "qualified_namespaced_value_runs" {
     assert.is_true(baml.deep_equals(qualified_value_id_fn(), 7))
+}
+
+// Specializing a runtime callable VALUE (`g<int>` where `g` is a local holding
+// a bare generic function, not a compile-time function reference). There is no
+// function global to pool, so the value is specialized at runtime by wrapping
+// it in a closure carrying the type args. Previously the type args were erased
+// here, so the value behaved as the un-specialized generic function.
+function identity_via_local_value() -> int {
+    let g = identity;
+    let h = g<int>;
+    h(9)
+}
+
+test "local_value_specialization_runs" {
+    assert.is_true(baml.deep_equals(identity_via_local_value(), 9))
+}
+
+// The runtime specialization seeds frame.type_args, so a body that REFLECTS on
+// T resolves it correctly even when the specialized callable came from a local
+// value (previously erased → reflected "unknown").
+function describe_via_local_value() -> string {
+    let g = describe;
+    let h = g<User>;
+    h()
+}
+
+test "local_value_specialization_reflects_T" {
+    assert.is_true(baml.deep_equals(describe_via_local_value(), "instantiation_expr.User"))
+}
+
+// Param-dependent specialization of a local value: `g<T>` where `g` is a local
+// and `T` is the enclosing frame's type param — resolved against the frame at
+// runtime.
+function describe_via_local_value_param<T>() -> string {
+    let g = describe;
+    let h = g<T>;
+    h()
+}
+
+test "local_value_param_dependent_reflects_T" {
+    assert.is_true(baml.deep_equals(describe_via_local_value_param<int>(), "int"))
 }

@@ -5560,9 +5560,19 @@ impl LoweringContext<'_> {
     /// or param-dependent args (`foo<T>` inside a generic function).
     fn lower_generic_apply(&mut self, base: AstExprId, type_args: &[AstTypeExpr], dest: Place) {
         let Some(item) = self.try_resolve_generic_apply_base(base) else {
-            // Exotic base (bound method, lambda, …): no function ItemRef to
-            // wrap, so erase the type args and lower the base value.
-            self.lower_expr(base, dest);
+            // Non-`ItemRef` base (a local/captured generic function value):
+            // there is no function global to pool, so specialize the *runtime
+            // value* — evaluate it and wrap it in a closure carrying the
+            // (frame-resolved) type args — instead of silently erasing them.
+            let value = self.lower_to_operand(base);
+            let type_arg_templates = self.generic_apply_type_arg_templates(type_args);
+            self.builder.assign(
+                dest,
+                Rvalue::MakeGenericFunctionFromValue {
+                    value,
+                    type_arg_templates,
+                },
+            );
             return;
         };
         let templates = self.generic_apply_type_arg_templates(type_args);

@@ -699,6 +699,21 @@ pub enum Rvalue {
         type_arg_templates: Vec<TyTemplate>,
     },
 
+    /// Specialize a runtime callable *value* with explicit type arguments
+    /// (`g<int>` where `g` is a local/captured function value, not a
+    /// compile-time-resolvable function reference). The emitter pushes a
+    /// `LoadType` for each template then a `MakeGenericFunctionFromValue`
+    /// instruction, which wraps the evaluated `value` in a `Closure` carrying
+    /// the types as `captured_type_args`. Used when `lower_generic_apply`'s base
+    /// is not an `ItemRef`; the `ItemRef` cases use `Constant::GenericFunction`
+    /// (concrete) or `MakeGenericFunction` (param-dependent) instead.
+    MakeGenericFunctionFromValue {
+        /// The callable value to specialize.
+        value: Operand,
+        /// One template per type argument; may contain `TypeArgRef(N)`.
+        type_arg_templates: Vec<TyTemplate>,
+    },
+
     /// Materialize a `Ty` from a `TyTemplate`.
     ///
     /// For concrete templates (`TyTemplate::Concrete`), the `Ty` is baked in

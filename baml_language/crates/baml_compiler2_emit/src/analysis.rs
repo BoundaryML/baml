@@ -732,6 +732,9 @@ fn walk_rvalue_locals(rvalue: &Rvalue, f: &mut impl FnMut(Local)) {
         Rvalue::LoadType(_) | Rvalue::MakeGenericFunction { .. } => {
             // No local operands — the templates are compile-time data.
         }
+        Rvalue::MakeGenericFunctionFromValue { value, .. } => {
+            walk_operand_locals(value, f);
+        }
     }
 }
 
@@ -1473,6 +1476,7 @@ fn rvalue_has_projection_reads(rvalue: &Rvalue) -> bool {
         Rvalue::MakeClosure { captures, .. } => captures.iter().any(operand_has_projection),
         Rvalue::MakeBoundMethod { receiver, .. } => operand_has_projection(receiver),
         Rvalue::LoadType(_) | Rvalue::MakeGenericFunction { .. } => false,
+        Rvalue::MakeGenericFunctionFromValue { value, .. } => operand_has_projection(value),
     }
 }
 

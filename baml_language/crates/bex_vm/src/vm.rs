@@ -5060,6 +5060,56 @@ impl BexVm {
                     self.stack.push(Value::object(ptr));
                 }
 
+                // ── MakeGenericFunctionFromValue ──────────────────────────────
+                // Specialize a runtime callable value with explicit type args
+                // (`g<int>` where `g` is a local function value). Wrap it in a
+                // Closure whose `captured_type_args` are seeded into the frame on
+                // call — reusing the closure call path so the specialization is
+                // honoured at runtime instead of being erased.
+                OpCode::MakeGenericFunctionFromValue => {
+                    let ntypeargs = { read_u16_unchecked(code, pc) as usize };
+                    // The callable value was pushed last (top of stack); the
+                    // resolved `Object::Type` args sit beneath it.
+                    let callable = self.stack.ensure_pop();
+                    let mut type_args: Vec<baml_type::Ty> = Vec::with_capacity(ntypeargs);
+                    for _ in 0..ntypeargs {
+                        let v = self.stack.ensure_pop();
+                        let ptr = self.as_object_ptr(v, ObjectType::Type)?;
+                        let Object::Type(ty) = self.get_object(ptr) else {
+                            unreachable!("as_object_ptr guarantees Type variant");
+                        };
+                        type_args.push(*ty.clone());
+                    }
+                    type_args.reverse();
+                    // Resolve the callable to its inner Function pointer (and any
+                    // captures, if it is already a closure).
+                    let callable_ptr =
+                        self.as_object_ptr(callable, FunctionType::Callable.into())?;
+                    let (function_ptr, captures): (HeapPtr, Vec<Value>) =
+                        match self.get_object(callable_ptr) {
+                            Object::Function(_) => (callable_ptr, Vec::new()),
+                            Object::Closure(c) => (c.function, c.captures.to_vec()),
+                            // GenericFunction / BoundMethod do not reach here: TIR
+                            // rejects type args on an already-specialized (non-
+                            // generic) value, static methods take the pooled
+                            // ItemRef path, and lambdas are not generic.
+                            other => {
+                                return Err(VmInternalError::TypeError {
+                                    expected: FunctionType::Callable.into(),
+                                    got: ObjectType::of(other).into(),
+                                }
+                                .into());
+                            }
+                        };
+                    let closure = Object::Closure(Closure {
+                        function: function_ptr,
+                        captures: captures.into_boxed_slice(),
+                        captured_type_args: type_args.into_boxed_slice(),
+                    });
+                    let ptr = self.tlab.alloc(closure);
+                    self.stack.push(Value::object(ptr));
+                }
+
                 // ── LoadDeref / StoreDeref ────────────────────────────────────
                 OpCode::LoadDeref => {
                     let slot = { read_u32_unchecked(code, pc) as usize };
