@@ -2319,6 +2319,185 @@ fn mixed_interface_and_concrete_destructures_project_aliased_fields() {
 }
 
 #[test]
+fn mixed_interface_and_generic_concrete_destructures_project_class_type_args() {
+    assert_zero_compile_errors(
+        r#"
+        interface Slot<T> {
+            value: T
+        }
+        class Pair<L, R> {
+            left: L
+            right: R
+            implements Slot<L> {
+                value as left
+            }
+        }
+
+        function describe(s: Slot<int>) -> string {
+            return match (s) {
+                Pair<int, string> { right: "seven" } => "pair"
+                Slot<int> { value: int } => "slot"
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn mixed_interface_and_generic_concrete_destructures_project_swapped_class_type_args() {
+    assert_zero_compile_errors(
+        r#"
+        interface Cell<T> {
+            item: T
+        }
+        class Pair<L, R> {
+            left: L
+            right: R
+            implements Cell<R> {
+                item as right
+            }
+        }
+
+        function describe(c: Cell<string>) -> string {
+            return match (c) {
+                Pair<int, string> { left: 7 } => "pair"
+                Cell<string> { item: string } => "cell"
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn mixed_interface_and_generic_concrete_destructures_project_second_implements_block() {
+    assert_zero_compile_errors(
+        r#"
+        interface Slot<T> {
+            value: T
+        }
+        class Pair<L, R> {
+            left: L
+            right: R
+            implements Slot<L> {
+                value as left
+            }
+            implements Slot<R> {
+                value as right
+            }
+        }
+
+        function describe(s: Slot<string>) -> string {
+            return match (s) {
+                Pair<int, string> { left: 7 } => "pair"
+                Slot<string> { value: string } => "slot"
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn generic_interface_and_concrete_destructures_still_report_partial_coverage() {
+    assert_compile_error_code(
+        r#"
+        interface Slot<T> {
+            value: T
+        }
+        class Pair<L, R> {
+            left: L
+            right: R
+            implements Slot<L> {
+                value as left
+            }
+        }
+
+        function describe(s: Slot<int>) -> string {
+            return match (s) {
+                Pair<int, string> { right: "seven" } => "pair"
+                Slot<int> { value: 1 } => "one"
+            }
+        }
+        "#,
+        "E0062",
+    );
+}
+
+#[test]
+fn union_of_generic_interfaces_allows_mixed_interface_and_concrete_destructures() {
+    assert_zero_compile_errors(
+        r#"
+        interface Slot<T> {
+            value: T
+        }
+        class Pair<L, R> {
+            left: L
+            right: R
+            implements Slot<L> {
+                value as left
+            }
+        }
+
+        interface Cargo<T> {
+            payload: T
+        }
+        class Box<T> {
+            inner: T
+            label: string
+            implements Cargo<T> {
+                payload as inner
+            }
+        }
+
+        function describe(x: Slot<int> | Cargo<string>) -> string {
+            return match (x) {
+                Pair<int, string> { right: "tag" } => "pair"
+                Slot<int> { value: int } => "slot"
+                Box<string> { label: "crate" } => "box"
+                Cargo<string> { payload: string } => "cargo"
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn union_of_generic_interfaces_reports_missing_interface_branch() {
+    assert_compile_error_code(
+        r#"
+        interface Slot<T> {
+            value: T
+        }
+        class Pair<L, R> {
+            left: L
+            right: R
+            implements Slot<L> {
+                value as left
+            }
+        }
+
+        interface Cargo<T> {
+            payload: T
+        }
+        class Box<T> {
+            inner: T
+            label: string
+            implements Cargo<T> {
+                payload as inner
+            }
+        }
+
+        function describe(x: Slot<int> | Cargo<string>) -> string {
+            return match (x) {
+                Pair<int, string> { right: "tag" } => "pair"
+                Slot<int> { value: int } => "slot"
+            }
+        }
+        "#,
+        "E0062",
+    );
+}
+
+#[test]
 fn union_of_interfaces_allows_mixed_interface_and_concrete_destructures() {
     assert_zero_compile_errors(
         r#"

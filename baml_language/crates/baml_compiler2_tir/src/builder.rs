@@ -12023,7 +12023,7 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
                     Ctor::Single(Ty::EnumVariant(qtn.clone(), variant, TyAttr::default()))
                 })
                 .collect(),
-            Ty::Class(qtn, _, _) => vec![Ctor::Class(qtn.clone())],
+            Ty::Class(qtn, args, _) => vec![Ctor::Class(qtn.clone(), args.clone())],
             // Open interfaces always require a wildcard — new implementors
             // can appear in any file. See BEP-044 §"Interaction with match".
             Ty::Interface(_, _, _) => vec![Ctor::NonExhaustive],
@@ -12074,11 +12074,12 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
         &self,
         iface_ty: &Ty,
         class_qtn: &crate::ty::QualifiedTypeName,
+        class_type_args: &[Ty],
     ) -> Option<Vec<usize>> {
         let Ty::Interface(iface_qtn, iface_args, _) = iface_ty else {
             return None;
         };
-        let class_fields = self.class_field_infos_ordered(class_qtn, &[]);
+        let class_fields = self.class_field_infos_ordered(class_qtn, class_type_args);
         let class_indices: FxHashMap<Name, usize> = class_fields
             .into_iter()
             .enumerate()
@@ -12089,7 +12090,7 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
         for (interface_field, _) in interface_fields {
             let class_field = self.class_field_name_for_interface_field(
                 class_qtn,
-                &[],
+                class_type_args,
                 iface_qtn,
                 iface_args,
                 &interface_field,
@@ -12896,7 +12897,7 @@ impl TypeInferenceBuilder<'_> {
             Ty::Class(qtn, args, _) => {
                 let field_tys = self.class_field_types_ordered(qtn, args);
                 let fields = field_tys.into_iter().map(DPat::wildcard).collect();
-                DPat::class(qtn.clone(), fields, scrut_ty.clone())
+                DPat::class_inst(qtn.clone(), args.clone(), fields, scrut_ty.clone())
             }
             // Opaque alphabets — best-effort: wildcard. Imprecise when
             // the scrutinee is a union containing this type plus other
@@ -13079,7 +13080,7 @@ impl TypeInferenceBuilder<'_> {
         }
 
         PatternResult {
-            dpat: DPat::class(qtn, sub_dpats, scrut_ty.clone()),
+            dpat: DPat::class_inst(qtn, args, sub_dpats, scrut_ty.clone()),
             required_ty: Some(class_ty.clone()),
             matched_ty: class_ty,
             bindings,
@@ -13096,7 +13097,7 @@ impl TypeInferenceBuilder<'_> {
 
         use crate::exhaustiveness::Ctor;
         match &w.ctor {
-            Ctor::Class(qtn) => {
+            Ctor::Class(qtn, _) => {
                 let names = self.class_field_names_ordered(qtn);
                 if w.fields.is_empty() {
                     return format!("{qtn} {{}}");

@@ -30,7 +30,7 @@ use std::fmt;
 use baml_base::Literal;
 use rustc_hash::FxHashSet;
 
-use crate::ty::{PrimitiveType, QualifiedTypeName, Ty};
+use crate::ty::{PrimitiveType, QualifiedTypeName, Ty, TyAttr};
 
 // ── Constructors ─────────────────────────────────────────────────────────────
 
@@ -53,7 +53,7 @@ pub enum Ctor {
     Slice(SliceShape),
     /// Class destructure. Sub-patterns' types come from the class's fields,
     /// with generic substitution applied.
-    Class(QualifiedTypeName),
+    Class(QualifiedTypeName, Vec<Ty>),
     /// Interface destructure. Sub-patterns' types come from the interface's
     /// field view, with generic substitution applied.
     Interface(Ty),
@@ -96,7 +96,7 @@ impl PartialEq for Ctor {
         match (self, other) {
             (Single(a), Single(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
             (Slice(a), Slice(b)) => a == b,
-            (Class(a), Class(b)) => a == b,
+            (Class(a, _), Class(b, _)) => a == b,
             (Interface(a), Interface(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
             (UnionMember(a), UnionMember(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
             (Or, Or)
@@ -118,7 +118,9 @@ impl std::hash::Hash for Ctor {
         match self {
             Single(ty) => ty_ctor_identity(ty).hash(state),
             Slice(s) => s.hash(state),
-            Class(qtn) => qtn.hash(state),
+            Class(qtn, _) => {
+                qtn.hash(state);
+            }
             Interface(ty) => ty_ctor_identity(ty).hash(state),
             UnionMember(ty) => ty_ctor_identity(ty).hash(state),
             Or | Wildcard | NonExhaustive | Missing => {}
@@ -158,7 +160,9 @@ impl Ctor {
             Ctor::Single(_) | Ctor::Wildcard | Ctor::NonExhaustive | Ctor::Missing | Ctor::Or => 0,
             Ctor::UnionMember(_) => 1,
             Ctor::Slice(shape) => shape.arity(),
-            Ctor::Class(qtn) => cx.class_field_types(qtn, ty).len(),
+            Ctor::Class(qtn, args) => cx
+                .class_field_types(qtn, &class_ty_for_ctor(qtn, args, ty))
+                .len(),
             Ctor::Interface(iface_ty) => cx.interface_field_types(iface_ty).len(),
         }
     }
@@ -176,7 +180,7 @@ impl Ctor {
             (Wildcard, _) => true,
             (_, Wildcard) => false,
             (Single(a), Single(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
-            (Class(a), Class(b)) => a == b,
+            (Class(a, _), Class(b, _)) => a == b,
             (Interface(a), Interface(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
             (Slice(a), Slice(b)) => slice_covers(a, b),
             (UnionMember(a), UnionMember(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
@@ -185,6 +189,13 @@ impl Ctor {
             (Or, Or) => true,
             _ => false,
         }
+    }
+}
+
+fn class_ty_for_ctor(qtn: &QualifiedTypeName, args: &[Ty], fallback: &Ty) -> Ty {
+    match fallback {
+        Ty::Class(fallback_qtn, _, _) if fallback_qtn == qtn => fallback.clone(),
+        _ => Ty::Class(qtn.clone(), args.to_vec(), TyAttr::default()),
     }
 }
 
@@ -387,7 +398,15 @@ impl DPat {
     }
     pub fn class(qtn: QualifiedTypeName, fields: Vec<DPat>, ty: Ty) -> Self {
         Self {
-            ctor: Ctor::Class(qtn),
+            ctor: Ctor::Class(qtn, Vec::new()),
+            arity: fields.len(),
+            fields,
+            ty,
+        }
+    }
+    pub fn class_inst(qtn: QualifiedTypeName, args: Vec<Ty>, fields: Vec<DPat>, ty: Ty) -> Self {
+        Self {
+            ctor: Ctor::Class(qtn, args),
             arity: fields.len(),
             fields,
             ty,
@@ -487,7 +506,7 @@ impl fmt::Display for WitnessPat {
                 _ => write_member_ty_witness(f, member_ty),
             },
             Ctor::Single(ty) => write_single_witness(f, ty),
-            Ctor::Class(qtn) => {
+            Ctor::Class(qtn, _) => {
                 if self.fields.is_empty() {
                     return write!(f, "{qtn} {{}}");
                 }
@@ -615,6 +634,7 @@ pub trait PatCtx {
         &self,
         _iface_ty: &Ty,
         _class_qtn: &QualifiedTypeName,
+        _class_type_args: &[Ty],
     ) -> Option<Vec<usize>> {
         None
     }
@@ -793,8 +813,8 @@ impl<'p> Matrix<'p> {
                 }
                 _ => {
                     let interface_projection = match (&head.ctor, ctor) {
-                        (Ctor::Interface(iface_ty), Ctor::Class(class_qtn)) => {
-                            cx.interface_field_projection_for_class(iface_ty, class_qtn)
+                        (Ctor::Interface(iface_ty), Ctor::Class(class_qtn, class_args)) => {
+                            cx.interface_field_projection_for_class(iface_ty, class_qtn, class_args)
                         }
                         _ => None,
                     };
@@ -1327,7 +1347,7 @@ fn dedup_ctors(ctors: Vec<Ctor>) -> Vec<Ctor> {
 
 fn ctor_sub_tys(cx: &dyn PatCtx, ctor: &Ctor, col_ty: &Ty) -> Vec<Ty> {
     match ctor {
-        Ctor::Class(qtn) => cx.class_field_types(qtn, col_ty),
+        Ctor::Class(qtn, args) => cx.class_field_types(qtn, &class_ty_for_ctor(qtn, args, col_ty)),
         Ctor::Interface(iface_ty) => cx.interface_field_types(iface_ty),
         Ctor::Slice(shape) => cx.slice_field_types(shape, col_ty),
         // UnionMember projects a column from the union type down to the
@@ -1741,7 +1761,7 @@ mod tests {
                 Ty::Literal(_, _, _) | Ty::EnumVariant(_, _, _) => {
                     vec![Ctor::Single(ty.clone())]
                 }
-                Ty::Class(qtn, _, _) => vec![Ctor::Class(qtn.clone())],
+                Ty::Class(qtn, args, _) => vec![Ctor::Class(qtn.clone(), args.clone())],
                 // For slices, split_ctors handles enumeration via slice splitting;
                 // returning NonExhaustive here is OK because the slice path is taken
                 // before this is consulted.
@@ -3997,7 +4017,7 @@ mod tests {
                 Ty::Literal(_, _, _) | Ty::EnumVariant(_, _, _) => {
                     vec![Ctor::Single(ty.clone())]
                 }
-                Ty::Class(qtn, _, _) => vec![Ctor::Class(qtn.clone())],
+                Ty::Class(qtn, args, _) => vec![Ctor::Class(qtn.clone(), args.clone())],
                 Ty::List(_, _) | Ty::EvolvingList(_, _) => vec![],
                 Ty::Never { .. } => vec![],
                 Ty::TypeVar(_, _) => vec![Ctor::NonExhaustive],
@@ -4400,7 +4420,7 @@ mod tests {
                             Default::default(),
                         )),
                     ],
-                    Ty::Class(_, _, _) => vec![Ctor::Class(self.0.clone())],
+                    Ty::Class(_, args, _) => vec![Ctor::Class(self.0.clone(), args.clone())],
                     Ty::Literal(_, _, _) => vec![Ctor::Single(ty.clone())],
                     _ => vec![Ctor::NonExhaustive],
                 }
