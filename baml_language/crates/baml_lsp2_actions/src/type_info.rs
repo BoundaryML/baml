@@ -59,6 +59,18 @@ impl FunctionParamInfo {
     }
 }
 
+/// A class method, captured for the hover "has methods?" check and the
+/// describe/test renderers. The full describe listing (with docstring and line
+/// range) is carried separately by `describe::MethodRef`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MethodSig {
+    pub name: String,
+    /// Canonical one-line signature, e.g. `function Greet(self) -> string`.
+    pub signature: String,
+    /// `true` when the first parameter is named `self`.
+    pub is_instance: bool,
+}
+
 /// Structured type/signature info at a cursor position.
 ///
 /// Returned by `type_at`. The LSP layer (`request.rs`) formats this into hover
@@ -77,8 +89,19 @@ pub enum TypeInfo {
     /// A class definition: name, fields (name + type string), implemented interfaces.
     Class {
         name: String,
+        /// Generic type parameter names (e.g. `["T"]`). Rendered as `<T>` after
+        /// the class name in the body block; empty for non-generic classes.
+        generic_params: Vec<String>,
         fields: Vec<(String, String)>,
         implements: Vec<String>,
+        /// Instance + static methods (signatures only). Drives the hover hint
+        /// and feeds the test/describe renderers; not shown inline in hover.
+        methods: Vec<MethodSig>,
+        /// The class's full `///` docstring (all lines), if any.
+        docstring: Option<String>,
+        /// Canonical FQN for the hover "Run `baml describe …`" hint (`string`,
+        /// `Foo`, `root.ns.Foo`, `baml.json.JsonObject`).
+        canonical_fqn: String,
     },
     /// An enum definition: name, variants.
     Enum { name: String, variants: Vec<String> },
@@ -93,17 +116,19 @@ pub enum TypeInfo {
 }
 
 impl TypeInfo {
-    /// Format this `TypeInfo` as hover markdown.
-    ///
-    /// The caller (request.rs) wraps the result in an LSP `MarkupContent`.
-    pub fn to_hover_markdown(&self) -> String {
+    /// The canonical BAML block for this item, without code fences, docstring,
+    /// or any trailing hint/note. For a class this is the **fields-only** body
+    /// (`class Foo {\n    bar: int,\n}`): methods are surfaced separately by
+    /// `describe`, never inside the body block. Shared by
+    /// [`Self::to_hover_markdown`] (which wraps it) and `describe::build_shape`.
+    pub fn to_describe_block(&self) -> String {
         match self {
             TypeInfo::Function {
                 name,
                 params,
                 return_type,
                 throws,
-                note,
+                ..
             } => {
                 let param_strs: Vec<String> =
                     params.iter().map(FunctionParamInfo::render).collect();
@@ -115,26 +140,30 @@ impl TypeInfo {
                     .as_deref()
                     .map(|t| format!(" throws {t}"))
                     .unwrap_or_default();
-                let mut out = format!(
-                    "```baml\nfunction {}({}){}{throws}\n```",
+                format!(
+                    "function {}({}){}{throws}",
                     name,
                     param_strs.join(", "),
-                    ret,
-                );
-                if let Some(note) = note {
-                    out.push_str("\n\n");
-                    out.push_str(note);
-                }
-                out
+                    ret
+                )
             }
             TypeInfo::Class {
                 name,
+                generic_params,
                 fields,
                 implements,
+                ..
             } => {
+                // Fields-only canonical body: `name: type,` with trailing comma,
+                // 4-space indent. Methods are never rendered here.
+                let generics = if generic_params.is_empty() {
+                    String::new()
+                } else {
+                    format!("<{}>", generic_params.join(", "))
+                };
                 let mut member_strs: Vec<String> = fields
                     .iter()
-                    .map(|(n, t)| format!("    {n}: {t}"))
+                    .map(|(n, t)| format!("    {n}: {t},"))
                     .collect();
                 member_strs.extend(
                     implements
@@ -143,38 +172,66 @@ impl TypeInfo {
                 );
 
                 if member_strs.is_empty() {
-                    format!("```baml\nclass {name} {{}}\n```")
+                    format!("class {name}{generics} {{}}")
                 } else {
-                    format!(
-                        "```baml\nclass {name} {{\n{}\n}}\n```",
-                        member_strs.join("\n")
-                    )
+                    format!("class {name}{generics} {{\n{}\n}}", member_strs.join("\n"))
                 }
             }
             TypeInfo::Enum { name, variants } => {
                 let variant_strs: Vec<String> =
                     variants.iter().map(|v| format!("    {v}")).collect();
                 if variant_strs.is_empty() {
-                    format!("```baml\nenum {name} {{}}\n```")
+                    format!("enum {name} {{}}")
                 } else {
-                    format!(
-                        "```baml\nenum {name} {{\n{}\n}}\n```",
-                        variant_strs.join("\n")
-                    )
+                    format!("enum {name} {{\n{}\n}}", variant_strs.join("\n"))
                 }
             }
-            TypeInfo::TypeAlias { name, expansion } => {
-                format!("```baml\ntype {name} = {expansion}\n```")
+            TypeInfo::TypeAlias { name, expansion } => format!("type {name} = {expansion}"),
+            TypeInfo::TemplateString { name } => format!("template_string {name}"),
+            TypeInfo::LocalVar { name, ty } => format!("{name}: {ty}"),
+            TypeInfo::OtherItem { name, kind } => format!("{kind} {name}"),
+        }
+    }
+
+    /// Format this `TypeInfo` as hover markdown.
+    ///
+    /// The caller (request.rs) wraps the result in an LSP `MarkupContent`.
+    pub fn to_hover_markdown(&self) -> String {
+        match self {
+            TypeInfo::Class {
+                docstring,
+                methods,
+                canonical_fqn,
+                ..
+            } => {
+                // Docstring lines live inside the fenced block, above the class.
+                let mut inner = String::new();
+                if let Some(doc) = docstring {
+                    for line in doc.lines() {
+                        inner.push_str("/// ");
+                        inner.push_str(line);
+                        inner.push('\n');
+                    }
+                }
+                inner.push_str(&self.to_describe_block());
+                let mut out = format!("```baml\n{inner}\n```");
+                // Only a class with methods points the user at `baml describe`.
+                if !methods.is_empty() {
+                    out.push_str("\n\nRun `baml describe ");
+                    out.push_str(canonical_fqn);
+                    out.push_str("` for methods and details.");
+                }
+                out
             }
-            TypeInfo::TemplateString { name } => {
-                format!("```baml\ntemplate_string {name}\n```")
+            TypeInfo::Function { note, .. } => {
+                let mut out = format!("```baml\n{}\n```", self.to_describe_block());
+                if let Some(note) = note {
+                    out.push_str("\n\n");
+                    out.push_str(note);
+                }
+                out
             }
-            TypeInfo::LocalVar { name, ty } => {
-                format!("```baml\n{name}: {ty}\n```")
-            }
-            TypeInfo::OtherItem { name, kind } => {
-                format!("```baml\n{kind} {name}\n```")
-            }
+            _ => format!("```baml\n{}\n```", self.to_describe_block()),
         }
     }
 }
@@ -329,7 +386,8 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
             let class_data = &item_tree[class_loc.id(db)];
             let class_name = class_data.name.as_str().to_string();
 
-            // Use resolved field types (Salsa-cached).
+            // Use resolved field types (Salsa-cached), rendered canonically so
+            // builtin companion classes collapse to their alias (`string`).
             let resolved = baml_compiler2_tir::inference::resolve_class_fields(db, class_loc);
             let fields = resolved
                 .fields
@@ -337,7 +395,7 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
                 .map(|(field_name, ty, _attrs)| {
                     (
                         field_name.as_str().to_string(),
-                        utils::display_ty_for_file(db, class_loc.file(db), ty),
+                        utils::display_ty_canonical_for_file(db, class_loc.file(db), ty),
                     )
                 })
                 .collect();
@@ -347,10 +405,24 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
                 .map(|block| format!("{}", block.target.expr))
                 .collect();
 
+            let qtn = baml_compiler2_tir::lower_type_expr::qualify_def(db, def, &class_data.name);
+            let canonical_fqn = utils::canonical_fqn_string(&qtn);
+            let methods = crate::describe::class_method_sigs(db, class_loc);
+
+            let generic_params = class_data
+                .generic_params
+                .iter()
+                .map(|n| n.as_str().to_string())
+                .collect();
+
             TypeInfo::Class {
                 name: class_name,
+                generic_params,
                 fields,
                 implements,
+                methods,
+                docstring: class_data.docstring.clone(),
+                canonical_fqn,
             }
         }
 

@@ -9,7 +9,9 @@ use baml_db::baml_compiler2_hir;
 use baml_lsp2_actions::ResolvedTarget;
 use baml_project::ProjectDatabase;
 
-use crate::describe_command::{dispatch, write_description, write_keyword, write_listing};
+use crate::describe_command::{
+    definition_line_range, dispatch, write_description, write_keyword, write_listing,
+};
 
 // ── Test helpers ────────────────────────────────────────────────────────────
 
@@ -550,27 +552,257 @@ fn suggest_is_case_insensitive() {
     );
 }
 
-// ── Truncation hint tests ────────────────────────────────────────────────────
+// ── Class method tests ───────────────────────────────────────────────────────
 
-/// Truncated output shows `[INFO]` hint with correct line counts.
+/// A project of user classes with methods: instance-only (`User`), mixed
+/// instance + static (`Counter`), and a generic class with a cross-type
+/// dependency (`Wrapper<T>` referencing `WrapperMarker`).
+fn methods_project() -> ProjectDatabase {
+    make_db(&[(
+        "methods.baml",
+        r#"
+class User {
+    name string
+    age int
+
+    function Greet(self) -> string {
+        "Hello"
+    }
+
+    function IsAdult(self) -> bool {
+        self.age >= 18
+    }
+}
+
+class Counter {
+    count int
+
+    function increment(self) -> Counter {
+        Counter { count: self.count + 1 }
+    }
+
+    function make() -> Counter {
+        Counter { count: 0 }
+    }
+}
+
+class WrapperMarker {
+    reason string
+}
+
+class Wrapper<T> {
+    value T
+
+    function get_value(self) -> T {
+        self.value
+    }
+
+    function get_or_marker(self) -> T | WrapperMarker {
+        self.value
+    }
+}
+"#,
+    )])
+}
+
+/// A user class with only instance methods: each shows its canonical signature
+/// in a `methods:` section, and the body block is fields-only.
 #[test]
-fn render_describe_truncation_hint() {
-    // Use a builtin with many methods (e.g., String, which has ~40+ methods).
+fn render_describe_class_with_methods() {
+    let db = methods_project();
+    let files = baml_compiler2_hir::compiler2_all_files(&db);
+    let descs = baml_lsp2_actions::describe(&db, &files, "User");
+    assert_eq!(descs.len(), 1);
+    insta::assert_snapshot!(capture_description(&db, &descs[0], 30));
+}
+
+/// A class with both an instance method (`increment`) and a static method
+/// (`make`) renders both `methods:` and `static_methods:` sections.
+#[test]
+fn render_describe_class_with_static_methods() {
+    let db = methods_project();
+    let files = baml_compiler2_hir::compiler2_all_files(&db);
+    let descs = baml_lsp2_actions::describe(&db, &files, "Counter");
+    assert_eq!(descs.len(), 1);
+    let output = capture_description(&db, &descs[0], 30);
+    assert!(output.contains("methods:"));
+    assert!(output.contains("static_methods:"));
+    insta::assert_snapshot!(output);
+}
+
+/// A generic class renders `class Wrapper<T>` in the body, type-variable return
+/// types (`-> T`), and a cross-type dependency (`WrapperMarker`).
+#[test]
+fn render_describe_generic_class_with_methods() {
+    let db = methods_project();
+    let files = baml_compiler2_hir::compiler2_all_files(&db);
+    let descs = baml_lsp2_actions::describe(&db, &files, "Wrapper");
+    assert_eq!(descs.len(), 1);
+    insta::assert_snapshot!(capture_description(&db, &descs[0], 30));
+}
+
+/// `baml describe string` resolves the builtin `baml.String` class via its
+/// lowercase alias and renders it (header shows `(string)`).
+#[test]
+fn render_describe_alias_string() {
+    let db = simple_project();
+    insta::assert_snapshot!(describe_via_dispatch(&db, "string"));
+}
+
+/// Lowercase primitive/keyword aliases route to their builtin `baml` class.
+#[test]
+fn dispatch_lowercase_aliases_resolve_to_items() {
+    let db = simple_project();
+    for alias in ["string", "int", "bigint", "float", "bool", "image", "json"] {
+        assert!(
+            matches!(dispatch(&db, alias), Some(ResolvedTarget::Item(_))),
+            "alias `{alias}` should resolve to a builtin class item"
+        );
+    }
+}
+
+/// Comment stripping is CST-token based, so a line that *looks* like a comment
+/// but lives inside a block string (e.g. an LLM prompt) is preserved, while a
+/// real `//` comment is removed. A line-based stripper would corrupt the string.
+#[test]
+fn describe_preserves_comment_like_lines_inside_strings() {
+    let db = make_db(&[(
+        "prompt.baml",
+        r##"
+function PromptFn() -> string {
+    // a real comment that must be stripped
+    #"
+// not a comment — this is prompt content
+keep this line
+"#
+}
+"##,
+    )]);
+    let files = baml_compiler2_hir::compiler2_all_files(&db);
+    let descs = baml_lsp2_actions::describe(&db, &files, "PromptFn");
+    assert_eq!(descs.len(), 1);
+    let output = capture_description(&db, &descs[0], 30);
+
+    assert!(
+        !output.contains("a real comment that must be stripped"),
+        "real `//` comment should be stripped:\n{output}"
+    );
+    assert!(
+        output.contains("not a comment — this is prompt content")
+            && output.contains("keep this line"),
+        "comment-like lines inside a block string must be preserved:\n{output}"
+    );
+}
+
+/// Drilling into a user method (`User.Greet`) renders its signature and body.
+#[test]
+fn describe_user_method_drill_in_shows_body() {
+    let db = methods_project();
+    let output = describe_via_dispatch(&db, "User.Greet");
+    assert!(
+        output.contains("function Greet(self) -> string"),
+        "expected method signature:\n{output}"
+    );
+    assert!(
+        output.contains("\"Hello\""),
+        "drill-in should show the method body:\n{output}"
+    );
+    assert!(
+        output.contains("container:") && output.contains("User"),
+        "owning class should be the container:\n{output}"
+    );
+    insta::assert_snapshot!(output);
+}
+
+/// Drilling into a builtin method (`string.length`, via the alias) resolves and
+/// shows the signature, with the native body elided.
+#[test]
+fn describe_builtin_method_drill_in_via_alias() {
+    let db = simple_project();
+    let output = describe_via_dispatch(&db, "string.length");
+    assert!(
+        output.contains("function length(self) -> int"),
+        "expected resolved builtin method signature:\n{output}"
+    );
+    assert!(
+        !output.contains("$rust_function"),
+        "native body marker must not appear:\n{output}"
+    );
+    assert!(
+        !output.starts_with("NOT FOUND") && !output.starts_with("NO DESCRIPTION"),
+        "`string.length` should resolve via the alias:\n{output}"
+    );
+}
+
+// ── definition_line_range tests ──────────────────────────────────────────────
+
+#[test]
+fn definition_line_range_trims_leading_trivia_and_trailing_ws() {
+    // line 1 blank, 2 doc, 3 comment, 4 decl, 5 body, 6 close brace, 7 trailing
+    let text = "\n/// doc\n// note\nclass Foo {\n  x int\n}\n";
+    // Range covers the whole thing (trivia-inclusive node range).
+    let (start, end) = definition_line_range(text, 0, text.len());
+    assert_eq!((start, end), (4, 6), "start at `class`, end at `}}`");
+}
+
+#[test]
+fn definition_line_range_comment_only_span_does_not_reverse() {
+    // A span with no declaration content must never yield start > end.
+    let text = "// just a comment\n// another\n";
+    let (start, end) = definition_line_range(text, 0, text.len());
+    assert!(start <= end, "range must not reverse: {start}-{end}");
+}
+
+// ── Truncation / budget tests ────────────────────────────────────────────────
+
+/// Methods are always discoverable. They are rendered after the body and
+/// bypass the body budget entirely, so even at budget 5 every method of
+/// `String` (40+) is still present, and the `methods:`/`static_methods:`
+/// sections are byte-identical regardless of budget.
+#[test]
+fn render_describe_methods_never_truncated() {
     let db = simple_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
     let descs = baml_lsp2_actions::describe(&db, &files, "String");
     assert_eq!(descs.len(), 1);
-    let output = capture_description(&db, &descs[0], 30);
-    // The output should contain the [INFO] hint since String has more than 30 lines.
+
+    let tight = capture_description(&db, &descs[0], 5);
+    let full = capture_description(&db, &descs[0], 1000);
+
+    for needle in [
+        "methods:",
+        "function to_json(self) -> json",
+        "static_methods:",
+        "function from_code_points(unicode: int[]) -> string",
+    ] {
+        assert!(
+            tight.contains(needle),
+            "`{needle}` missing from describe output under budget 5:\n{tight}"
+        );
+    }
+
+    // The method sections are unaffected by the budget (only the body block is).
+    let methods_onward = |s: &str| s[s.find("\nmethods:").expect("methods section")..].to_string();
+    assert_eq!(methods_onward(&tight), methods_onward(&full));
+}
+
+/// A class with a fields-only body (no docstring) renders identically at a tight
+/// budget and a generous one — the body fits any reasonable budget. This is the
+/// spec's `baml describe User --budget 5` guarantee.
+#[test]
+fn render_describe_fields_only_body_fits_tight_budget() {
+    let db = methods_project();
+    let files = baml_compiler2_hir::compiler2_all_files(&db);
+    let descs = baml_lsp2_actions::describe(&db, &files, "User");
+    assert_eq!(descs.len(), 1);
+
+    let tight = capture_description(&db, &descs[0], 5);
+    let full = capture_description(&db, &descs[0], 1000);
     assert!(
-        output.contains("[INFO] Showing"),
-        "expected [INFO] truncation hint in output:\n{output}"
+        !tight.contains("[INFO] Showing"),
+        "fields-only body must not truncate at budget 5:\n{tight}"
     );
-    assert!(
-        output.contains("--budget"),
-        "expected --budget in truncation hint:\n{output}"
-    );
-    insta::assert_snapshot!(output);
+    assert_eq!(tight, full);
 }
 
 /// Full budget shows no truncation hint.

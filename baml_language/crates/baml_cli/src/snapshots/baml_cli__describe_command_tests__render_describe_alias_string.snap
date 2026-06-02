@@ -1,6 +1,6 @@
 ---
 source: crates/baml_cli/src/describe_command_tests.rs
-expression: output
+expression: "describe_via_dispatch(&db, \"string\")"
 ---
 class String  (string)  <builtin>/baml/string.baml:5-475
 
