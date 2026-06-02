@@ -5,7 +5,7 @@
 //! directory: runtime/cross-leaf imports, child-namespace re-exports, and
 //! real TS bodies for every top — classes, enums, type aliases, and
 //! `defineFunction(...)` / `defineInstanceFunction(...)` bindings. The five
-//! runtime-owned stdlib types re-export from `@boundaryml/baml-core` instead
+//! runtime-owned stdlib types re-export from `@boundaryml/baml-core-node` instead
 //! of getting a generated body.
 //!
 //! Codegen emits only `index.ts` — no sibling `index.d.ts`. The generated
@@ -33,7 +33,7 @@ use crate::{
     translate_ty::{TranslateCtx, TranslatedType, translate_ty},
 };
 
-const RUNTIME_PKG: &str = "@boundaryml/baml-core";
+const RUNTIME_PKG: &str = "@boundaryml/baml-core-node";
 
 /// All symbols that land in one leaf's body, in final render order.
 pub(crate) struct LeafBody {
@@ -175,18 +175,98 @@ impl RenderState {
     }
 }
 
-/// Emit a `JSDoc` block for a top-level docstring, if present.
-fn write_doc(out: &mut String, doc: Option<&str>) {
+fn write_doc_with_raises(out: &mut String, doc: Option<&str>, raises_names: &[String]) {
+    let has_doc = doc.is_some_and(|d| !d.trim().is_empty());
+    if !has_doc && raises_names.is_empty() {
+        return;
+    }
+
+    out.push_str("/**\n");
     if let Some(d) = doc {
-        if d.trim().is_empty() {
-            return;
-        }
-        out.push_str("/**\n");
         for line in d.lines() {
             let _ = writeln!(out, " * {line}");
         }
-        out.push_str(" */\n");
     }
+    for name in raises_names {
+        let _ = writeln!(out, " * @throws {name}");
+    }
+    out.push_str(" */\n");
+}
+
+fn write_class_doc(out: &mut String, c: &NodeClass) {
+    let documented_fields = c.properties.iter().any(|p| p.docstring.is_some());
+    let has_doc = c.docstring.as_deref().is_some_and(|d| !d.trim().is_empty());
+    if !has_doc && !documented_fields {
+        return;
+    }
+
+    out.push_str("/**\n");
+    if let Some(doc) = c.docstring.as_deref() {
+        for line in doc.lines() {
+            let _ = writeln!(out, " * {line}");
+        }
+    }
+    if documented_fields {
+        if has_doc {
+            out.push_str(" *\n");
+        }
+        out.push_str(" * Attributes:\n");
+        for prop in &c.properties {
+            match prop.docstring.as_deref() {
+                Some(doc) if !doc.trim().is_empty() => {
+                    let mut lines = doc.lines();
+                    if let Some(first) = lines.next() {
+                        let _ = writeln!(out, " *   {}: {}", prop.name, first);
+                    }
+                    for line in lines {
+                        let _ = writeln!(out, " *     {line}");
+                    }
+                }
+                _ => {
+                    let _ = writeln!(out, " *   {}", prop.name);
+                }
+            }
+        }
+    }
+    out.push_str(" */\n");
+}
+
+fn write_enum_doc(out: &mut String, e: &NodeEnum) {
+    let documented_variants = e.variants.iter().any(|v| v.docstring.is_some());
+    let has_doc = e.docstring.as_deref().is_some_and(|d| !d.trim().is_empty());
+    if !has_doc && !documented_variants {
+        return;
+    }
+
+    out.push_str("/**\n");
+    if let Some(doc) = e.docstring.as_deref() {
+        for line in doc.lines() {
+            let _ = writeln!(out, " * {line}");
+        }
+    }
+    if documented_variants {
+        if has_doc {
+            out.push_str(" *\n");
+        }
+        out.push_str(" * Members:\n");
+        for variant in &e.variants {
+            match variant.docstring.as_deref() {
+                Some(doc) if !doc.trim().is_empty() => {
+                    let mut lines = doc.lines();
+                    if let Some(first) = lines.next() {
+                        let _ = writeln!(out, " *   {}: {}", variant.ident, first);
+                    }
+                    for line in lines {
+                        let _ = writeln!(out, " *     {line}");
+                    }
+                }
+                _ => {
+                    let _ = writeln!(out, " *   {}", variant.ident);
+                }
+            }
+        }
+    }
+    out.push_str(" */\n");
 }
 
 /// `<T, U>` generic-parameter list, or empty.
@@ -357,13 +437,13 @@ fn write_preamble_ts(
     if is_root {
         out.push_str(&runtime_import_line(
             state,
-            &["initializeRuntime", "setTypeMap"],
+            &["initializeRuntimeFromBytecode", "setTypeMap"],
         ));
         out.push_str("import * as _inlinedbaml from \"./_inlinedbaml\";\n");
         out.push_str("import { _TYPE_MAP } from \"./_typemap\";\n");
         out.push_str(&cross_leaf_imports(state, &body.leaf));
         out.push('\n');
-        out.push_str("initializeRuntime(\"baml_src\", _inlinedbaml.FILES);\n");
+        out.push_str("initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE);\n");
         out.push_str("setTypeMap(_TYPE_MAP);\n");
         if !kids.is_empty() {
             out.push('\n');
@@ -413,7 +493,7 @@ fn render_media_reexport_ts(out: &mut String, local: &str, rust_name: &str) {
 }
 
 fn render_enum(out: &mut String, e: &NodeEnum) {
-    write_doc(out, e.docstring.as_deref());
+    write_enum_doc(out, e);
     let _ = writeln!(out, "export enum {} {{", e.name);
     for v in &e.variants {
         let _ = writeln!(out, "  {} = {},", v.ident, crate::ts_string(&v.value));
@@ -434,7 +514,7 @@ fn render_type_alias(
 }
 
 fn render_class_ts(out: &mut String, c: &NodeClass, ctx: &TranslateCtx, state: &mut RenderState) {
-    write_doc(out, c.docstring.as_deref());
+    write_class_doc(out, c);
     let generics = generic_decl(&c.generic_params);
 
     // Translate each property type once; reuse for field + constructor.
@@ -525,7 +605,7 @@ fn render_method_binding_ts(
     ctx: &TranslateCtx,
     state: &mut RenderState,
 ) {
-    write_doc(out, m.docstring.as_deref());
+    write_doc_with_raises(out, m.docstring.as_deref(), &m.raises_names);
     let (names, tys, ret) = binding_surface(m, ctx, state);
     let is_async = m.mode == SyncAsync::Async;
     let sig_generics = method_sig_generics(m, class_generics);
@@ -561,7 +641,7 @@ fn render_function_ts(
     ctx: &TranslateCtx,
     state: &mut RenderState,
 ) {
-    write_doc(out, f.docstring.as_deref());
+    write_doc_with_raises(out, f.docstring.as_deref(), &f.raises_names);
     state.uses_define_function = true;
     let tys: Vec<TranslatedType> = f
         .arg_tys
@@ -674,7 +754,6 @@ mod tests {
             baml_fqn: fqn.to_string(),
             mode,
             param_names: params.iter().map(|(n, _)| n.to_string()).collect(),
-            arg_defaults: params.iter().map(|_| None).collect(),
             arg_tys: params.into_iter().map(|(_, t)| t).collect(),
             return_ty: ret,
             generic_params: Vec::new(),
@@ -737,7 +816,7 @@ mod tests {
             ],
         );
         let ts = render_index_ts(&b, &BTreeSet::new(), false);
-        assert!(ts.contains("import { defineFunction } from \"@boundaryml/baml-core\";"));
+        assert!(ts.contains("import { defineFunction } from \"@boundaryml/baml-core-node\";"));
         assert!(ts.contains("export const extract = defineFunction(\"user.lorem.extract\", \"sync\", [\"text\"]) as (text: string) => number;"));
         assert!(ts.contains("export const extract_async = defineFunction(\"user.lorem.extract\", \"async\", [\"text\"]) as (text: string) => Promise<number>;"));
     }
@@ -768,7 +847,7 @@ mod tests {
             )],
         );
         let ts = render_index_ts(&b, &BTreeSet::new(), false);
-        assert!(ts.contains("import { BamlImage as Image } from \"@boundaryml/baml-core\";"));
+        assert!(ts.contains("import { BamlImage as Image } from \"@boundaryml/baml-core-node\";"));
         assert!(ts.contains("export { Image };"));
         // The class binding already provides the type; no separate `export type`.
         assert!(!ts.contains("export type Image"));
@@ -799,10 +878,10 @@ mod tests {
         let mut kids = BTreeSet::new();
         kids.insert("lorem".to_string());
         let ts = render_index_ts(&b, &kids, true);
-        assert!(ts.contains("initializeRuntime(\"baml_src\", _inlinedbaml.FILES);"));
+        assert!(ts.contains("initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE);"));
         assert!(ts.contains("setTypeMap(_TYPE_MAP);"));
         assert!(ts.contains("export * as lorem from \"./lorem\";"));
         assert!(ts.contains("export const make_foo = defineFunction("));
-        assert!(ts.contains("import { defineFunction, initializeRuntime, setTypeMap } from \"@boundaryml/baml-core\";"));
+        assert!(ts.contains("import { defineFunction, initializeRuntimeFromBytecode, setTypeMap } from \"@boundaryml/baml-core-node\";"));
     }
 }

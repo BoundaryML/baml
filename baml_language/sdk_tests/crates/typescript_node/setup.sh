@@ -19,6 +19,7 @@ set -euo pipefail
 cd "$(dirname "$0")"  # baml_language/sdk_tests/crates/typescript_node
 
 WORKSPACE_ROOT="$(cd ../../.. && pwd)"
+REPO_ROOT="$(cd "$WORKSPACE_ROOT/.." && pwd)"
 BRIDGE_NODEJS="$WORKSPACE_ROOT/sdks/nodejs/bridge_nodejs"
 
 # Shared pnpm store under target/ so per-fixture installs hardlink from
@@ -26,26 +27,31 @@ BRIDGE_NODEJS="$WORKSPACE_ROOT/sdks/nodejs/bridge_nodejs"
 export npm_config_store_dir="$WORKSPACE_ROOT/target/pnpm-store"
 mkdir -p "$npm_config_store_dir"
 
-# 1. Native `.node` addon. `pnpm build:debug` chains build:proto →
+# 1. Workspace deps. bridge_nodejs is a member of the repo-root
+#    pnpm-workspace.yaml, and `pnpm build:debug` needs that workspace
+#    install to have populated bridge_nodejs/node_modules.
+echo "==> pnpm install at repo root"
+(cd "$REPO_ROOT" && pnpm install)
+
+# 2. Bridge-local deps. The bridge package has its own lockfile and build
+#    scripts invoke tools from bridge_nodejs/node_modules (for example
+#    node_modules/protobufjs-cli/bin/pbjs), so make that install explicit.
+echo "==> pnpm install in sdks/nodejs/bridge_nodejs"
+(cd "$BRIDGE_NODEJS" && pnpm install --ignore-workspace --ignore-scripts)
+
+# 3. Native `.node` addon. `pnpm build:debug` chains build:proto →
 #    build:napi-debug → build:ts_build → build:tag-generated-files; all
 #    incremental, no-op steady-state is cheap. Skipping this step makes
 #    every per-fixture jest fail with "Cannot find module
 #    './baml_node.<triple>.node'".
-#
-#    We do NOT `pnpm install` here — bridge_nodejs is a member of the
-#    repo-root pnpm-workspace.yaml. `pnpm install --ignore-workspace`
-#    inside it would wipe the workspace-installed `node_modules/` and
-#    reinstall with broken peer-dep resolution. If `node_modules/` is
-#    missing, `build:debug` fails with `pbjs: command not found` —
-#    that's the cue to run `pnpm install` at the repo root once.
 echo "==> pnpm build:debug in sdks/nodejs/bridge_nodejs"
 (cd "$BRIDGE_NODEJS" && pnpm build:debug)
 
-# 2. Per-fixture `pnpm install`. `--ignore-workspace` is required so pnpm
+# 4. Per-fixture `pnpm install`. `--ignore-workspace` is required so pnpm
 #    doesn't walk up to the repo-root workspace and skip the install.
 #    The per-fixture `package.json` `file:`-points at bridge_nodejs, so
 #    the install resolves the dev toolchain (jest, ts-jest, typescript)
-#    plus the `@boundaryml/baml-core` runtime dep against the addon we
+#    plus the `@boundaryml/baml-core-node` runtime dep against the addon we
 #    just built.
 for fixture_dir in */generated; do
     [[ -d "$fixture_dir" ]] || continue

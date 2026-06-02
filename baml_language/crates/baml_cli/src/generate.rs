@@ -153,9 +153,9 @@ impl GenerateArgs {
                         generator.naming_convention,
                     )
                 }
-                OutputType::TypescriptNode => codegen_nodejs::to_source_code(
+                OutputType::TypescriptNode => codegen_nodejs::to_source_code_with_bytecode(
                     &pool,
-                    &user_baml_files,
+                    &baml_bytecode,
                     generator.naming_convention,
                 ),
             };

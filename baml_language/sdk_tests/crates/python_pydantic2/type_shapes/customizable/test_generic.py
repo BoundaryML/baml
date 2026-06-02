@@ -30,7 +30,7 @@ import pytest
     "fails the union-member check. Tracked in 23a §'Engine boundary "
     "substitution' / 22f. Flip back to enabled when Ty::TypeVar lands."
 )
-def test_generic_wrapper_get_value_or_marker():
+def test_generic():
     """`WrapperMethods<string>.get_value_or_marker()` should still round-trip
     a string when the declared return is `T | WrapperMarker`.
 

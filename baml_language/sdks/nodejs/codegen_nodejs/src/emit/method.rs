@@ -1,14 +1,12 @@
 //! `NodeMethodBinding` — one rendered factory line for a static or
-//! instance method on a class. Phase 2 builds these (so the fan-out and
-//! sort logic are a faithful port) but does not render them — methods
-//! live inside their parent class's body, which is a placeholder until
-//! Phase 4.
+//! instance method on a class, rendered inside the parent class's body:
+//! static methods as `static x = defineFunction(...)`, instance methods as
+//! `x = defineInstanceFunction(...).bind(this)`.
 
-use baml_codegen_types::{FunctionArgumentDefault, Ty};
+use baml_codegen_types::Ty;
 
 use crate::emit::function::SyncAsync;
 
-#[allow(dead_code)]
 pub(crate) struct NodeMethodBinding {
     /// TS identifier on the LHS of the binding. Sync form is the bare
     /// method name; async form has `_async` appended.
@@ -19,8 +17,6 @@ pub(crate) struct NodeMethodBinding {
     /// Inline parameter-name list. For instance methods, `"self"` is
     /// already prepended at expand time.
     pub(crate) param_names: Vec<String>,
-    /// Default metadata matching `arg_tys` (receiver `self` not included).
-    pub(crate) arg_defaults: Vec<Option<FunctionArgumentDefault>>,
     /// Static vs. instance — drives the Phase 4 binding shape.
     pub(crate) kind: MethodKind,
     /// Parameter types matching the IR's `arguments` (no `self`).

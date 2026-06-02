@@ -12,7 +12,7 @@ pub(crate) mod method;
 pub(crate) mod type_alias;
 pub(crate) mod typemap_file;
 
-use baml_codegen_types::{FunctionArgumentDefault, Name, Symbol, SymbolPool, Ty};
+use baml_codegen_types::{Name, Symbol, SymbolPool, Ty};
 
 use crate::{
     emit::{
@@ -31,19 +31,6 @@ pub(crate) enum EmittedSymbol {
     Enum(NodeEnum),
     TypeAlias(NodeTypeAlias),
     Function(NodeFunction),
-}
-
-impl EmittedSymbol {
-    /// The TypeScript identifier this symbol binds.
-    #[allow(dead_code)]
-    pub(crate) fn name(&self) -> &str {
-        match self {
-            EmittedSymbol::Class(c) => &c.name,
-            EmittedSymbol::Enum(e) => &e.name,
-            EmittedSymbol::TypeAlias(a) => &a.name,
-            EmittedSymbol::Function(f) => &f.name,
-        }
-    }
 }
 
 /// Build-time sort key. Tuple of `(source_file_path, span_start)`
@@ -176,7 +163,7 @@ fn expand_function(
         &fqn_root,
         &f.arguments,
         &f.return_type,
-        |name, fqn, mode, params, arg_tys, arg_defaults, return_ty| {
+        |name, fqn, mode, params, arg_tys, return_ty| {
             out.push((
                 leaf.clone(),
                 EmittedSymbol::Function(NodeFunction {
@@ -184,7 +171,6 @@ fn expand_function(
                     baml_fqn: fqn,
                     mode,
                     param_names: params,
-                    arg_defaults,
                     arg_tys,
                     return_ty,
                     generic_params: func_generic_params.clone(),
@@ -253,7 +239,7 @@ fn expand_methods(
             &fqn_root,
             &m.arguments,
             &m.return_type,
-            |name, fqn, mode, params, arg_tys, arg_defaults, return_ty| {
+            |name, fqn, mode, params, arg_tys, return_ty| {
                 let param_names = match kind {
                     MethodKind::Static => params,
                     MethodKind::Instance => {
@@ -268,7 +254,6 @@ fn expand_methods(
                     baml_fqn: fqn,
                     mode,
                     param_names,
-                    arg_defaults,
                     kind,
                     arg_tys,
                     return_ty,
@@ -304,30 +289,19 @@ fn expand_callable<F>(
     return_type: &Ty,
     mut emit: F,
 ) where
-    F: FnMut(
-        String,
-        String,
-        SyncAsync,
-        Vec<String>,
-        Vec<Ty>,
-        Vec<Option<FunctionArgumentDefault>>,
-        Ty,
-    ),
+    F: FnMut(String, String, SyncAsync, Vec<String>, Vec<Ty>, Ty),
 {
     let params: Vec<String> = arguments
         .iter()
         .map(|a| a.name.as_str().to_string())
         .collect();
     let arg_types: Vec<Ty> = arguments.iter().map(|a| a.ty.clone()).collect();
-    let arg_defaults: Vec<Option<FunctionArgumentDefault>> =
-        arguments.iter().map(|a| a.default.clone()).collect();
     emit(
         bare.to_string(),
         fqn_root.to_string(),
         SyncAsync::Sync,
         params.clone(),
         arg_types.clone(),
-        arg_defaults.clone(),
         return_type.clone(),
     );
     emit(
@@ -336,7 +310,6 @@ fn expand_callable<F>(
         SyncAsync::Async,
         params,
         arg_types,
-        arg_defaults,
         return_type.clone(),
     );
 }

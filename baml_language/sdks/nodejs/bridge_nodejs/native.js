@@ -85,7 +85,7 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@boundaryml/baml-core-android-arm64')
+        return require('@boundaryml/baml-core-node-android-arm64')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -96,7 +96,7 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@boundaryml/baml-core-android-arm-eabi')
+        return require('@boundaryml/baml-core-node-android-arm-eabi')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -111,7 +111,7 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@boundaryml/baml-core-win32-x64-msvc')
+        return require('@boundaryml/baml-core-node-win32-x64-msvc')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -122,7 +122,7 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@boundaryml/baml-core-win32-ia32-msvc')
+        return require('@boundaryml/baml-core-node-win32-ia32-msvc')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -133,7 +133,7 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@boundaryml/baml-core-win32-arm64-msvc')
+        return require('@boundaryml/baml-core-node-win32-arm64-msvc')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -147,7 +147,7 @@ function requireNative() {
       loadErrors.push(e)
     }
     try {
-      return require('@boundaryml/baml-core-darwin-universal')
+      return require('@boundaryml/baml-core-node-darwin-universal')
     } catch (e) {
       loadErrors.push(e)
     }
@@ -158,7 +158,7 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@boundaryml/baml-core-darwin-x64')
+        return require('@boundaryml/baml-core-node-darwin-x64')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -169,7 +169,7 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@boundaryml/baml-core-darwin-arm64')
+        return require('@boundaryml/baml-core-node-darwin-arm64')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -184,7 +184,7 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@boundaryml/baml-core-freebsd-x64')
+        return require('@boundaryml/baml-core-node-freebsd-x64')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -195,7 +195,7 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@boundaryml/baml-core-freebsd-arm64')
+        return require('@boundaryml/baml-core-node-freebsd-arm64')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -211,7 +211,7 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          return require('@boundaryml/baml-core-linux-x64-musl')
+          return require('@boundaryml/baml-core-node-linux-x64-musl')
         } catch (e) {
           loadErrors.push(e)
         }
@@ -222,7 +222,7 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          return require('@boundaryml/baml-core-linux-x64-gnu')
+          return require('@boundaryml/baml-core-node-linux-x64-gnu')
         } catch (e) {
           loadErrors.push(e)
         }
@@ -235,7 +235,7 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          return require('@boundaryml/baml-core-linux-arm64-musl')
+          return require('@boundaryml/baml-core-node-linux-arm64-musl')
         } catch (e) {
           loadErrors.push(e)
         }
@@ -246,7 +246,7 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          return require('@boundaryml/baml-core-linux-arm64-gnu')
+          return require('@boundaryml/baml-core-node-linux-arm64-gnu')
         } catch (e) {
           loadErrors.push(e)
         }
@@ -259,7 +259,7 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          return require('@boundaryml/baml-core-linux-arm-musleabihf')
+          return require('@boundaryml/baml-core-node-linux-arm-musleabihf')
         } catch (e) {
           loadErrors.push(e)
         }
@@ -270,7 +270,7 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          return require('@boundaryml/baml-core-linux-arm-gnueabihf')
+          return require('@boundaryml/baml-core-node-linux-arm-gnueabihf')
         } catch (e) {
           loadErrors.push(e)
         }
@@ -283,7 +283,7 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          return require('@boundaryml/baml-core-linux-riscv64-musl')
+          return require('@boundaryml/baml-core-node-linux-riscv64-musl')
         } catch (e) {
           loadErrors.push(e)
         }
@@ -294,7 +294,7 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          return require('@boundaryml/baml-core-linux-riscv64-gnu')
+          return require('@boundaryml/baml-core-node-linux-riscv64-gnu')
         } catch (e) {
           loadErrors.push(e)
         }
@@ -306,7 +306,7 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@boundaryml/baml-core-linux-ppc64-gnu')
+        return require('@boundaryml/baml-core-node-linux-ppc64-gnu')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -317,7 +317,7 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@boundaryml/baml-core-linux-s390x-gnu')
+        return require('@boundaryml/baml-core-node-linux-s390x-gnu')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -332,7 +332,7 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@boundaryml/baml-core-linux-arm64-ohos')
+        return require('@boundaryml/baml-core-node-linux-arm64-ohos')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -343,7 +343,7 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@boundaryml/baml-core-linux-x64-ohos')
+        return require('@boundaryml/baml-core-node-linux-x64-ohos')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -354,7 +354,7 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@boundaryml/baml-core-linux-arm-ohos')
+        return require('@boundaryml/baml-core-node-linux-arm-ohos')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -378,7 +378,7 @@ if (!nativeBinding || process.env.NAPI_RS_FORCE_WASI) {
   }
   if (!nativeBinding) {
     try {
-      nativeBinding = require('@boundaryml/baml-core-wasm32-wasi')
+      nativeBinding = require('@boundaryml/baml-core-node-wasm32-wasi')
     } catch (err) {
       if (process.env.NAPI_RS_FORCE_WASI) {
         loadErrors.push(err)

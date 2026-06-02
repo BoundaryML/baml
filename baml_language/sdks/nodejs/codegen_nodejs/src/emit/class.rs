@@ -1,19 +1,18 @@
 //! `NodeClass` — TypeScript class definition.
 //!
 //! Covers user-code classes, stdlib classes (`baml.http.Response`, …),
-//! and `$stream` companion classes. Phase 2 renders every class as a
-//! `BAML_PLACEHOLDER` (except the five runtime-owned stdlib types, which
-//! re-export from `@boundaryml/baml-core`); Phase 4 emits the real
-//! `export class`.
+//! and `$stream` companion classes. Emits `export class` (with fields and a
+//! field-object constructor); the five runtime-owned stdlib types
+//! (media + stream) instead re-export from `@boundaryml/baml-core-node`.
 
 use baml_codegen_types::{Name, Ty};
 
 use crate::emit::method::NodeMethodBinding;
 
-#[allow(dead_code)]
 pub(crate) struct NodeClass {
-    /// TS identifier (bare name). `$stream` suffix is stripped — it
-    /// influenced routing, not the class name.
+    /// TS identifier (bare name). The `$stream` suffix is preserved verbatim
+    /// (e.g. `Resume$stream`) — `$` is a valid TS identifier char, so the
+    /// stream companion is emitted beside its base type in the same module.
     pub(crate) name: String,
     /// Source pool key. Retained for typemap registration and to detect
     /// the five runtime-owned stdlib types (media + stream).
@@ -30,7 +29,6 @@ pub(crate) struct NodeClass {
     pub(crate) instance_methods: Vec<NodeMethodBinding>,
 }
 
-#[allow(dead_code)]
 pub(crate) struct NodeClassProperty {
     pub(crate) name: String,
     pub(crate) ty: Ty,

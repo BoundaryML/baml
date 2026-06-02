@@ -43,6 +43,15 @@ impl BamlRuntime {
         }
     }
 
+    /// Initialize the process-global runtime from precompiled BAML bytecode.
+    #[napi(factory, js_name = "initializeRuntimeFromBytecode")]
+    pub fn initialize_runtime_from_bytecode(bytecode: Buffer) -> napi::Result<Self> {
+        match bridge_cffi::initialize_runtime_from_bytecode(bytecode.as_ref()) {
+            Ok(_bex) => Ok(BamlRuntime {}),
+            Err(e) => Err(bridge_error_to_napi(e)),
+        }
+    }
+
     /// Call a BAML function synchronously (blocking).
     #[napi]
     pub fn call_function_sync(

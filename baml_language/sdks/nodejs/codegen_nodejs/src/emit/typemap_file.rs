@@ -9,7 +9,7 @@
 //! (`baml_sdk/_typemap.ts`): `() => require("./lorem").Resume`. A thunk
 //! (rather than the Python-style `[module_path, attr]` pair) is required
 //! because resolution must happen in the generated SDK's module scope — the
-//! runtime `BamlTypeMap` lives in `@boundaryml/baml-core` and cannot resolve
+//! runtime `BamlTypeMap` lives in `@boundaryml/baml-core-node` and cannot resolve
 //! a `baml_sdk/...` path. The require is deferred (lazy) so importing
 //! `_typemap.ts` does not eagerly load every leaf, and so the root's own
 //! `require(".")` does not deadlock the circular `index ↔ _typemap` import.
@@ -53,7 +53,7 @@ pub(crate) fn render_typemap_module(
     aliases.sort();
 
     let mut out = String::new();
-    out.push_str("import { BamlTypeMap } from \"@boundaryml/baml-core\";\n\n");
+    out.push_str("import { BamlTypeMap } from \"@boundaryml/baml-core-node\";\n\n");
 
     write_entries(&mut out, "_CLASS_ENTRIES", &classes);
     out.push('\n');

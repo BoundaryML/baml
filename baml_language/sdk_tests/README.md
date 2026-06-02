@@ -68,7 +68,7 @@ Targets in tree:
   `build_diagnostics` test).
 - **`sdk_test_typescript_node`** — TypeScript on Node.js. Two
   checks per fixture: `tsc` (`node node_modules/typescript/bin/tsc
-  --noEmit`) and `jest` (`node node_modules/jest/bin/jest.js`).
+  --noEmit`) and `jest` (`pnpm exec jest`).
   Every test in this crate — `tsc`, `jest`, and
   `build_diagnostics` — is `#[ignore]`d while
   [`codegen_nodejs`](../sdks/nodejs/codegen_nodejs/) is a stub that

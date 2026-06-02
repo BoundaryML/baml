@@ -1,18 +1,15 @@
 // Mirrors python_pydantic2/customizable/docstrings_etc/test_main.py.
-//
-// Asserts on the runtime shape of the generated symbols for BAML
-// `///` doc-comment lowering. TS doesn't expose docstrings at
-// runtime the way Python's `__doc__` does, so the doc-rendering
-// assertions from the python suite are deferred until we settle on a
-// strategy (e.g. parsing the emitted .d.ts via the TypeScript
-// compiler API). For now this file pins the import + enum-shape
-// invariants — enough to keep tsc + jest red until
-// `codegen_nodejs::to_source_code` is implemented.
+// TypeScript does not expose JSDoc at runtime, so these assertions read
+// the generated SDK source directly.
 
 import { describe, it, expect } from "@jest/globals";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
-import * as docs from "./baml_sdk/docs";
 import { Doc, Note, Priority, Sentiment } from "./baml_sdk/docs";
+
+const docsSource = () =>
+  readFileSync(join(__dirname, "baml_sdk", "docs", "index.ts"), "utf8").replace(/\r\n/g, "\n");
 
 describe("docstrings_etc", () => {
   it("imports all documented symbols from baml_sdk/docs", () => {
@@ -22,18 +19,54 @@ describe("docstrings_etc", () => {
     expect(Sentiment).toBeDefined();
   });
 
-  it("Sentiment enum has expected members", () => {
-    // Python: `{v.name for v in Sentiment} == {"HAPPY", "SAD", "NEUTRAL"}`
-    const members = Object.keys(Sentiment).filter((k) => isNaN(Number(k)));
-    expect(new Set(members)).toEqual(new Set(["HAPPY", "SAD", "NEUTRAL"]));
+  it("renders class summaries and Attributes sections as JSDoc", () => {
+    const src = docsSource();
+
+    expect(src).toContain(`/**
+ * A document with a title and an optional body.
+ *
+ * Attributes:
+ *   title: Title shown in lists and search results.
+ *   body: Free-form body text.
+ */
+export class Doc {`);
+
+    expect(src).toContain(`/**
+ * A multi-line summary.
+ * Continuation line of the summary, preserved verbatim in the
+ * rendered block-form docstring.
+ *
+ * Attributes:
+ *   id: Stable identifier — surfaces in URLs.
+ *   text
+ */
+export class Note {`);
   });
 
-  it("Priority enum has expected members", () => {
-    const members = Object.keys(Priority).filter((k) => isNaN(Number(k)));
-    expect(new Set(members)).toEqual(new Set(["HIGH", "MEDIUM", "LOW"]));
+  it("renders enum summaries and Members sections as JSDoc", () => {
+    const src = docsSource();
+
+    expect(src).toContain(`/**
+ * Sentiment labels surfaced by the model.
+ *
+ * Members:
+ *   HAPPY: Smiling face.
+ *   SAD: Frowning face.
+ *   NEUTRAL
+ */
+export enum Sentiment {`);
+
+    expect(src).toContain(`/**
+ * Pin the "summary only, no member rollup" case: this enum has a
+ * class-level \`///\` but every variant is bare.
+ */
+export enum Priority {`);
   });
 
-  it("baml_sdk/docs module exports are non-empty", () => {
-    expect(Object.keys(docs).length).toBeGreaterThan(0);
+  it("does not emit inline field or variant doc artifacts", () => {
+    const src = docsSource();
+
+    expect(src).not.toContain("// Title shown in lists");
+    expect(src).not.toContain("// Smiling face");
   });
 });

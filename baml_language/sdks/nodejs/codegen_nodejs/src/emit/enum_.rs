@@ -1,11 +1,9 @@
 //! `NodeEnum` — TypeScript enum definition.
 //!
-//! Phase 2 renders as a `BAML_PLACEHOLDER`; Phase 4 emits the real
-//! `export enum Foo { … }` with `<VARIANT> = "<value>"` members.
+//! Emits `export enum Foo { … }` with `<VARIANT> = "<value>"` members.
 
 use baml_codegen_types::Name;
 
-#[allow(dead_code)]
 pub(crate) struct NodeEnum {
     pub(crate) name: String,
     pub(crate) source: Name,
@@ -15,7 +13,6 @@ pub(crate) struct NodeEnum {
     pub(crate) docstring: Option<String>,
 }
 
-#[allow(dead_code)]
 pub(crate) struct NodeEnumVariant {
     /// LHS identifier.
     pub(crate) ident: String,

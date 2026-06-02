@@ -102,7 +102,7 @@ $root.baml_core = (function() {
                 function BamlHandle(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -143,9 +143,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlHandle.encode = function encode(message, writer) {
+                BamlHandle.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.key != null && Object.hasOwnProperty.call(message, "key"))
                         writer.uint32(/* id 1, wireType 0 =*/8).uint64(message.key);
                     if (message.handleType != null && Object.hasOwnProperty.call(message, "handleType"))
@@ -177,9 +181,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlHandle.decode = function decode(reader, length, error) {
+                BamlHandle.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlHandle();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -195,7 +203,7 @@ $root.baml_core = (function() {
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -226,9 +234,13 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlHandle.verify = function verify(message) {
+                BamlHandle.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.key != null && message.hasOwnProperty("key"))
                         if (!$util.isInteger(message.key) && !(message.key && $util.isInteger(message.key.low) && $util.isInteger(message.key.high)))
                             return "key: integer|Long expected";
@@ -263,13 +275,19 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlHandle} BamlHandle
                  */
-                BamlHandle.fromObject = function fromObject(object) {
+                BamlHandle.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlHandle)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlHandle: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlHandle();
                     if (object.key != null)
                         if ($util.Long)
-                            (message.key = $util.Long.fromValue(object.key)).unsigned = true;
+                            message.key = $util.Long.fromValue(object.key, true);
                         else if (typeof object.key === "string")
                             message.key = parseInt(object.key, 10);
                         else if (typeof object.key === "number")
@@ -352,20 +370,26 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlHandle.toObject = function toObject(message, options) {
+                BamlHandle.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.defaults) {
                         if ($util.Long) {
                             var long = new $util.Long(0, 0, true);
-                            object.key = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                            object.key = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : typeof BigInt !== "undefined" && options.longs === BigInt ? long.toBigInt() : long;
                         } else
-                            object.key = options.longs === String ? "0" : 0;
+                            object.key = options.longs === String ? "0" : typeof BigInt !== "undefined" && options.longs === BigInt ? BigInt("0") : 0;
                         object.handleType = options.enums === String ? "HANDLE_UNSPECIFIED" : 0;
                     }
                     if (message.key != null && message.hasOwnProperty("key"))
-                        if (typeof message.key === "number")
+                        if (typeof BigInt !== "undefined" && options.longs === BigInt)
+                            object.key = typeof message.key === "number" ? BigInt(message.key) : $util.Long.fromBits(message.key.low >>> 0, message.key.high >>> 0, true).toBigInt();
+                        else if (typeof message.key === "number")
                             object.key = options.longs === String ? String(message.key) : message.key;
                         else
                             object.key = options.longs === String ? $util.Long.prototype.toString.call(message.key) : options.longs === Number ? new $util.LongBits(message.key.low >>> 0, message.key.high >>> 0).toNumber(true) : message.key;
@@ -433,7 +457,7 @@ $root.baml_core = (function() {
                 function InboundValue(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -560,9 +584,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                InboundValue.encode = function encode(message, writer) {
+                InboundValue.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.stringValue != null && Object.hasOwnProperty.call(message, "stringValue"))
                         writer.uint32(/* id 2, wireType 2 =*/18).string(message.stringValue);
                     if (message.intValue != null && Object.hasOwnProperty.call(message, "intValue"))
@@ -572,15 +600,15 @@ $root.baml_core = (function() {
                     if (message.boolValue != null && Object.hasOwnProperty.call(message, "boolValue"))
                         writer.uint32(/* id 5, wireType 0 =*/40).bool(message.boolValue);
                     if (message.listValue != null && Object.hasOwnProperty.call(message, "listValue"))
-                        $root.baml_core.cffi.v1.InboundListValue.encode(message.listValue, writer.uint32(/* id 6, wireType 2 =*/50).fork()).ldelim();
+                        $root.baml_core.cffi.v1.InboundListValue.encode(message.listValue, writer.uint32(/* id 6, wireType 2 =*/50).fork(), q + 1).ldelim();
                     if (message.mapValue != null && Object.hasOwnProperty.call(message, "mapValue"))
-                        $root.baml_core.cffi.v1.InboundMapValue.encode(message.mapValue, writer.uint32(/* id 7, wireType 2 =*/58).fork()).ldelim();
+                        $root.baml_core.cffi.v1.InboundMapValue.encode(message.mapValue, writer.uint32(/* id 7, wireType 2 =*/58).fork(), q + 1).ldelim();
                     if (message.classValue != null && Object.hasOwnProperty.call(message, "classValue"))
-                        $root.baml_core.cffi.v1.InboundClassValue.encode(message.classValue, writer.uint32(/* id 8, wireType 2 =*/66).fork()).ldelim();
+                        $root.baml_core.cffi.v1.InboundClassValue.encode(message.classValue, writer.uint32(/* id 8, wireType 2 =*/66).fork(), q + 1).ldelim();
                     if (message.enumValue != null && Object.hasOwnProperty.call(message, "enumValue"))
-                        $root.baml_core.cffi.v1.InboundEnumValue.encode(message.enumValue, writer.uint32(/* id 9, wireType 2 =*/74).fork()).ldelim();
+                        $root.baml_core.cffi.v1.InboundEnumValue.encode(message.enumValue, writer.uint32(/* id 9, wireType 2 =*/74).fork(), q + 1).ldelim();
                     if (message.handle != null && Object.hasOwnProperty.call(message, "handle"))
-                        $root.baml_core.cffi.v1.BamlHandle.encode(message.handle, writer.uint32(/* id 10, wireType 2 =*/82).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlHandle.encode(message.handle, writer.uint32(/* id 10, wireType 2 =*/82).fork(), q + 1).ldelim();
                     if (message.uint8arrayValue != null && Object.hasOwnProperty.call(message, "uint8arrayValue"))
                         writer.uint32(/* id 11, wireType 2 =*/90).bytes(message.uint8arrayValue);
                     if (message.bigintValue != null && Object.hasOwnProperty.call(message, "bigintValue"))
@@ -612,9 +640,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                InboundValue.decode = function decode(reader, length, error) {
+                InboundValue.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.InboundValue();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -638,23 +670,23 @@ $root.baml_core = (function() {
                                 break;
                             }
                         case 6: {
-                                message.listValue = $root.baml_core.cffi.v1.InboundListValue.decode(reader, reader.uint32());
+                                message.listValue = $root.baml_core.cffi.v1.InboundListValue.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 7: {
-                                message.mapValue = $root.baml_core.cffi.v1.InboundMapValue.decode(reader, reader.uint32());
+                                message.mapValue = $root.baml_core.cffi.v1.InboundMapValue.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 8: {
-                                message.classValue = $root.baml_core.cffi.v1.InboundClassValue.decode(reader, reader.uint32());
+                                message.classValue = $root.baml_core.cffi.v1.InboundClassValue.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 9: {
-                                message.enumValue = $root.baml_core.cffi.v1.InboundEnumValue.decode(reader, reader.uint32());
+                                message.enumValue = $root.baml_core.cffi.v1.InboundEnumValue.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 10: {
-                                message.handle = $root.baml_core.cffi.v1.BamlHandle.decode(reader, reader.uint32());
+                                message.handle = $root.baml_core.cffi.v1.BamlHandle.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 11: {
@@ -666,7 +698,7 @@ $root.baml_core = (function() {
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -697,9 +729,13 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                InboundValue.verify = function verify(message) {
+                InboundValue.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     var properties = {};
                     if (message.stringValue != null && message.hasOwnProperty("stringValue")) {
                         properties.value = 1;
@@ -732,7 +768,7 @@ $root.baml_core = (function() {
                             return "value: multiple values";
                         properties.value = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.InboundListValue.verify(message.listValue);
+                            var error = $root.baml_core.cffi.v1.InboundListValue.verify(message.listValue, long + 1);
                             if (error)
                                 return "listValue." + error;
                         }
@@ -742,7 +778,7 @@ $root.baml_core = (function() {
                             return "value: multiple values";
                         properties.value = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.InboundMapValue.verify(message.mapValue);
+                            var error = $root.baml_core.cffi.v1.InboundMapValue.verify(message.mapValue, long + 1);
                             if (error)
                                 return "mapValue." + error;
                         }
@@ -752,7 +788,7 @@ $root.baml_core = (function() {
                             return "value: multiple values";
                         properties.value = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.InboundClassValue.verify(message.classValue);
+                            var error = $root.baml_core.cffi.v1.InboundClassValue.verify(message.classValue, long + 1);
                             if (error)
                                 return "classValue." + error;
                         }
@@ -762,7 +798,7 @@ $root.baml_core = (function() {
                             return "value: multiple values";
                         properties.value = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.InboundEnumValue.verify(message.enumValue);
+                            var error = $root.baml_core.cffi.v1.InboundEnumValue.verify(message.enumValue, long + 1);
                             if (error)
                                 return "enumValue." + error;
                         }
@@ -772,7 +808,7 @@ $root.baml_core = (function() {
                             return "value: multiple values";
                         properties.value = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlHandle.verify(message.handle);
+                            var error = $root.baml_core.cffi.v1.BamlHandle.verify(message.handle, long + 1);
                             if (error)
                                 return "handle." + error;
                         }
@@ -802,15 +838,21 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.InboundValue} InboundValue
                  */
-                InboundValue.fromObject = function fromObject(object) {
+                InboundValue.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.InboundValue)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.InboundValue: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.InboundValue();
                     if (object.stringValue != null)
                         message.stringValue = String(object.stringValue);
                     if (object.intValue != null)
                         if ($util.Long)
-                            (message.intValue = $util.Long.fromValue(object.intValue)).unsigned = false;
+                            message.intValue = $util.Long.fromValue(object.intValue, false);
                         else if (typeof object.intValue === "string")
                             message.intValue = parseInt(object.intValue, 10);
                         else if (typeof object.intValue === "number")
@@ -822,29 +864,29 @@ $root.baml_core = (function() {
                     if (object.boolValue != null)
                         message.boolValue = Boolean(object.boolValue);
                     if (object.listValue != null) {
-                        if (typeof object.listValue !== "object")
+                        if (!$util.isObject(object.listValue))
                             throw TypeError(".baml_core.cffi.v1.InboundValue.listValue: object expected");
-                        message.listValue = $root.baml_core.cffi.v1.InboundListValue.fromObject(object.listValue);
+                        message.listValue = $root.baml_core.cffi.v1.InboundListValue.fromObject(object.listValue, long + 1);
                     }
                     if (object.mapValue != null) {
-                        if (typeof object.mapValue !== "object")
+                        if (!$util.isObject(object.mapValue))
                             throw TypeError(".baml_core.cffi.v1.InboundValue.mapValue: object expected");
-                        message.mapValue = $root.baml_core.cffi.v1.InboundMapValue.fromObject(object.mapValue);
+                        message.mapValue = $root.baml_core.cffi.v1.InboundMapValue.fromObject(object.mapValue, long + 1);
                     }
                     if (object.classValue != null) {
-                        if (typeof object.classValue !== "object")
+                        if (!$util.isObject(object.classValue))
                             throw TypeError(".baml_core.cffi.v1.InboundValue.classValue: object expected");
-                        message.classValue = $root.baml_core.cffi.v1.InboundClassValue.fromObject(object.classValue);
+                        message.classValue = $root.baml_core.cffi.v1.InboundClassValue.fromObject(object.classValue, long + 1);
                     }
                     if (object.enumValue != null) {
-                        if (typeof object.enumValue !== "object")
+                        if (!$util.isObject(object.enumValue))
                             throw TypeError(".baml_core.cffi.v1.InboundValue.enumValue: object expected");
-                        message.enumValue = $root.baml_core.cffi.v1.InboundEnumValue.fromObject(object.enumValue);
+                        message.enumValue = $root.baml_core.cffi.v1.InboundEnumValue.fromObject(object.enumValue, long + 1);
                     }
                     if (object.handle != null) {
-                        if (typeof object.handle !== "object")
+                        if (!$util.isObject(object.handle))
                             throw TypeError(".baml_core.cffi.v1.InboundValue.handle: object expected");
-                        message.handle = $root.baml_core.cffi.v1.BamlHandle.fromObject(object.handle);
+                        message.handle = $root.baml_core.cffi.v1.BamlHandle.fromObject(object.handle, long + 1);
                     }
                     if (object.uint8arrayValue != null)
                         if (typeof object.uint8arrayValue === "string")
@@ -865,9 +907,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                InboundValue.toObject = function toObject(message, options) {
+                InboundValue.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (message.stringValue != null && message.hasOwnProperty("stringValue")) {
                         object.stringValue = message.stringValue;
@@ -875,7 +921,9 @@ $root.baml_core = (function() {
                             object.value = "stringValue";
                     }
                     if (message.intValue != null && message.hasOwnProperty("intValue")) {
-                        if (typeof message.intValue === "number")
+                        if (typeof BigInt !== "undefined" && options.longs === BigInt)
+                            object.intValue = typeof message.intValue === "number" ? BigInt(message.intValue) : $util.Long.fromBits(message.intValue.low >>> 0, message.intValue.high >>> 0, false).toBigInt();
+                        else if (typeof message.intValue === "number")
                             object.intValue = options.longs === String ? String(message.intValue) : message.intValue;
                         else
                             object.intValue = options.longs === String ? $util.Long.prototype.toString.call(message.intValue) : options.longs === Number ? new $util.LongBits(message.intValue.low >>> 0, message.intValue.high >>> 0).toNumber() : message.intValue;
@@ -893,27 +941,27 @@ $root.baml_core = (function() {
                             object.value = "boolValue";
                     }
                     if (message.listValue != null && message.hasOwnProperty("listValue")) {
-                        object.listValue = $root.baml_core.cffi.v1.InboundListValue.toObject(message.listValue, options);
+                        object.listValue = $root.baml_core.cffi.v1.InboundListValue.toObject(message.listValue, options, q + 1);
                         if (options.oneofs)
                             object.value = "listValue";
                     }
                     if (message.mapValue != null && message.hasOwnProperty("mapValue")) {
-                        object.mapValue = $root.baml_core.cffi.v1.InboundMapValue.toObject(message.mapValue, options);
+                        object.mapValue = $root.baml_core.cffi.v1.InboundMapValue.toObject(message.mapValue, options, q + 1);
                         if (options.oneofs)
                             object.value = "mapValue";
                     }
                     if (message.classValue != null && message.hasOwnProperty("classValue")) {
-                        object.classValue = $root.baml_core.cffi.v1.InboundClassValue.toObject(message.classValue, options);
+                        object.classValue = $root.baml_core.cffi.v1.InboundClassValue.toObject(message.classValue, options, q + 1);
                         if (options.oneofs)
                             object.value = "classValue";
                     }
                     if (message.enumValue != null && message.hasOwnProperty("enumValue")) {
-                        object.enumValue = $root.baml_core.cffi.v1.InboundEnumValue.toObject(message.enumValue, options);
+                        object.enumValue = $root.baml_core.cffi.v1.InboundEnumValue.toObject(message.enumValue, options, q + 1);
                         if (options.oneofs)
                             object.value = "enumValue";
                     }
                     if (message.handle != null && message.hasOwnProperty("handle")) {
-                        object.handle = $root.baml_core.cffi.v1.BamlHandle.toObject(message.handle, options);
+                        object.handle = $root.baml_core.cffi.v1.BamlHandle.toObject(message.handle, options, q + 1);
                         if (options.oneofs)
                             object.value = "handle";
                     }
@@ -980,7 +1028,7 @@ $root.baml_core = (function() {
                     this.values = [];
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -1013,12 +1061,16 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                InboundListValue.encode = function encode(message, writer) {
+                InboundListValue.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.values != null && message.values.length)
                         for (var i = 0; i < message.values.length; ++i)
-                            $root.baml_core.cffi.v1.InboundValue.encode(message.values[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+                            $root.baml_core.cffi.v1.InboundValue.encode(message.values[i], writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -1046,9 +1098,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                InboundListValue.decode = function decode(reader, length, error) {
+                InboundListValue.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.InboundListValue();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -1058,11 +1114,11 @@ $root.baml_core = (function() {
                         case 1: {
                                 if (!(message.values && message.values.length))
                                     message.values = [];
-                                message.values.push($root.baml_core.cffi.v1.InboundValue.decode(reader, reader.uint32()));
+                                message.values.push($root.baml_core.cffi.v1.InboundValue.decode(reader, reader.uint32(), undefined, long + 1));
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -1093,14 +1149,18 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                InboundListValue.verify = function verify(message) {
+                InboundListValue.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.values != null && message.hasOwnProperty("values")) {
                         if (!Array.isArray(message.values))
                             return "values: array expected";
                         for (var i = 0; i < message.values.length; ++i) {
-                            var error = $root.baml_core.cffi.v1.InboundValue.verify(message.values[i]);
+                            var error = $root.baml_core.cffi.v1.InboundValue.verify(message.values[i], long + 1);
                             if (error)
                                 return "values." + error;
                         }
@@ -1116,18 +1176,24 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.InboundListValue} InboundListValue
                  */
-                InboundListValue.fromObject = function fromObject(object) {
+                InboundListValue.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.InboundListValue)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.InboundListValue: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.InboundListValue();
                     if (object.values) {
                         if (!Array.isArray(object.values))
                             throw TypeError(".baml_core.cffi.v1.InboundListValue.values: array expected");
                         message.values = [];
                         for (var i = 0; i < object.values.length; ++i) {
-                            if (typeof object.values[i] !== "object")
+                            if (!$util.isObject(object.values[i]))
                                 throw TypeError(".baml_core.cffi.v1.InboundListValue.values: object expected");
-                            message.values[i] = $root.baml_core.cffi.v1.InboundValue.fromObject(object.values[i]);
+                            message.values[i] = $root.baml_core.cffi.v1.InboundValue.fromObject(object.values[i], long + 1);
                         }
                     }
                     return message;
@@ -1142,16 +1208,20 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                InboundListValue.toObject = function toObject(message, options) {
+                InboundListValue.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.arrays || options.defaults)
                         object.values = [];
                     if (message.values && message.values.length) {
                         object.values = [];
                         for (var j = 0; j < message.values.length; ++j)
-                            object.values[j] = $root.baml_core.cffi.v1.InboundValue.toObject(message.values[j], options);
+                            object.values[j] = $root.baml_core.cffi.v1.InboundValue.toObject(message.values[j], options, q + 1);
                     }
                     return object;
                 };
@@ -1206,7 +1276,7 @@ $root.baml_core = (function() {
                     this.entries = [];
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -1239,12 +1309,16 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                InboundMapValue.encode = function encode(message, writer) {
+                InboundMapValue.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.entries != null && message.entries.length)
                         for (var i = 0; i < message.entries.length; ++i)
-                            $root.baml_core.cffi.v1.InboundMapEntry.encode(message.entries[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+                            $root.baml_core.cffi.v1.InboundMapEntry.encode(message.entries[i], writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -1272,9 +1346,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                InboundMapValue.decode = function decode(reader, length, error) {
+                InboundMapValue.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.InboundMapValue();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -1284,11 +1362,11 @@ $root.baml_core = (function() {
                         case 1: {
                                 if (!(message.entries && message.entries.length))
                                     message.entries = [];
-                                message.entries.push($root.baml_core.cffi.v1.InboundMapEntry.decode(reader, reader.uint32()));
+                                message.entries.push($root.baml_core.cffi.v1.InboundMapEntry.decode(reader, reader.uint32(), undefined, long + 1));
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -1319,14 +1397,18 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                InboundMapValue.verify = function verify(message) {
+                InboundMapValue.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.entries != null && message.hasOwnProperty("entries")) {
                         if (!Array.isArray(message.entries))
                             return "entries: array expected";
                         for (var i = 0; i < message.entries.length; ++i) {
-                            var error = $root.baml_core.cffi.v1.InboundMapEntry.verify(message.entries[i]);
+                            var error = $root.baml_core.cffi.v1.InboundMapEntry.verify(message.entries[i], long + 1);
                             if (error)
                                 return "entries." + error;
                         }
@@ -1342,18 +1424,24 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.InboundMapValue} InboundMapValue
                  */
-                InboundMapValue.fromObject = function fromObject(object) {
+                InboundMapValue.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.InboundMapValue)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.InboundMapValue: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.InboundMapValue();
                     if (object.entries) {
                         if (!Array.isArray(object.entries))
                             throw TypeError(".baml_core.cffi.v1.InboundMapValue.entries: array expected");
                         message.entries = [];
                         for (var i = 0; i < object.entries.length; ++i) {
-                            if (typeof object.entries[i] !== "object")
+                            if (!$util.isObject(object.entries[i]))
                                 throw TypeError(".baml_core.cffi.v1.InboundMapValue.entries: object expected");
-                            message.entries[i] = $root.baml_core.cffi.v1.InboundMapEntry.fromObject(object.entries[i]);
+                            message.entries[i] = $root.baml_core.cffi.v1.InboundMapEntry.fromObject(object.entries[i], long + 1);
                         }
                     }
                     return message;
@@ -1368,16 +1456,20 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                InboundMapValue.toObject = function toObject(message, options) {
+                InboundMapValue.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.arrays || options.defaults)
                         object.entries = [];
                     if (message.entries && message.entries.length) {
                         object.entries = [];
                         for (var j = 0; j < message.entries.length; ++j)
-                            object.entries[j] = $root.baml_core.cffi.v1.InboundMapEntry.toObject(message.entries[j], options);
+                            object.entries[j] = $root.baml_core.cffi.v1.InboundMapEntry.toObject(message.entries[j], options, q + 1);
                     }
                     return object;
                 };
@@ -1435,7 +1527,7 @@ $root.baml_core = (function() {
                 function InboundMapEntry(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -1514,9 +1606,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                InboundMapEntry.encode = function encode(message, writer) {
+                InboundMapEntry.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.stringKey != null && Object.hasOwnProperty.call(message, "stringKey"))
                         writer.uint32(/* id 1, wireType 2 =*/10).string(message.stringKey);
                     if (message.intKey != null && Object.hasOwnProperty.call(message, "intKey"))
@@ -1524,9 +1620,9 @@ $root.baml_core = (function() {
                     if (message.boolKey != null && Object.hasOwnProperty.call(message, "boolKey"))
                         writer.uint32(/* id 3, wireType 0 =*/24).bool(message.boolKey);
                     if (message.enumKey != null && Object.hasOwnProperty.call(message, "enumKey"))
-                        $root.baml_core.cffi.v1.InboundEnumValue.encode(message.enumKey, writer.uint32(/* id 5, wireType 2 =*/42).fork()).ldelim();
+                        $root.baml_core.cffi.v1.InboundEnumValue.encode(message.enumKey, writer.uint32(/* id 5, wireType 2 =*/42).fork(), q + 1).ldelim();
                     if (message.value != null && Object.hasOwnProperty.call(message, "value"))
-                        $root.baml_core.cffi.v1.InboundValue.encode(message.value, writer.uint32(/* id 6, wireType 2 =*/50).fork()).ldelim();
+                        $root.baml_core.cffi.v1.InboundValue.encode(message.value, writer.uint32(/* id 6, wireType 2 =*/50).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -1554,9 +1650,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                InboundMapEntry.decode = function decode(reader, length, error) {
+                InboundMapEntry.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.InboundMapEntry();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -1576,15 +1676,15 @@ $root.baml_core = (function() {
                                 break;
                             }
                         case 5: {
-                                message.enumKey = $root.baml_core.cffi.v1.InboundEnumValue.decode(reader, reader.uint32());
+                                message.enumKey = $root.baml_core.cffi.v1.InboundEnumValue.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 6: {
-                                message.value = $root.baml_core.cffi.v1.InboundValue.decode(reader, reader.uint32());
+                                message.value = $root.baml_core.cffi.v1.InboundValue.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -1615,9 +1715,13 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                InboundMapEntry.verify = function verify(message) {
+                InboundMapEntry.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     var properties = {};
                     if (message.stringKey != null && message.hasOwnProperty("stringKey")) {
                         properties.key = 1;
@@ -1643,13 +1747,13 @@ $root.baml_core = (function() {
                             return "key: multiple values";
                         properties.key = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.InboundEnumValue.verify(message.enumKey);
+                            var error = $root.baml_core.cffi.v1.InboundEnumValue.verify(message.enumKey, long + 1);
                             if (error)
                                 return "enumKey." + error;
                         }
                     }
                     if (message.value != null && message.hasOwnProperty("value")) {
-                        var error = $root.baml_core.cffi.v1.InboundValue.verify(message.value);
+                        var error = $root.baml_core.cffi.v1.InboundValue.verify(message.value, long + 1);
                         if (error)
                             return "value." + error;
                     }
@@ -1664,15 +1768,21 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.InboundMapEntry} InboundMapEntry
                  */
-                InboundMapEntry.fromObject = function fromObject(object) {
+                InboundMapEntry.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.InboundMapEntry)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.InboundMapEntry: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.InboundMapEntry();
                     if (object.stringKey != null)
                         message.stringKey = String(object.stringKey);
                     if (object.intKey != null)
                         if ($util.Long)
-                            (message.intKey = $util.Long.fromValue(object.intKey)).unsigned = false;
+                            message.intKey = $util.Long.fromValue(object.intKey, false);
                         else if (typeof object.intKey === "string")
                             message.intKey = parseInt(object.intKey, 10);
                         else if (typeof object.intKey === "number")
@@ -1682,14 +1792,14 @@ $root.baml_core = (function() {
                     if (object.boolKey != null)
                         message.boolKey = Boolean(object.boolKey);
                     if (object.enumKey != null) {
-                        if (typeof object.enumKey !== "object")
+                        if (!$util.isObject(object.enumKey))
                             throw TypeError(".baml_core.cffi.v1.InboundMapEntry.enumKey: object expected");
-                        message.enumKey = $root.baml_core.cffi.v1.InboundEnumValue.fromObject(object.enumKey);
+                        message.enumKey = $root.baml_core.cffi.v1.InboundEnumValue.fromObject(object.enumKey, long + 1);
                     }
                     if (object.value != null) {
-                        if (typeof object.value !== "object")
+                        if (!$util.isObject(object.value))
                             throw TypeError(".baml_core.cffi.v1.InboundMapEntry.value: object expected");
-                        message.value = $root.baml_core.cffi.v1.InboundValue.fromObject(object.value);
+                        message.value = $root.baml_core.cffi.v1.InboundValue.fromObject(object.value, long + 1);
                     }
                     return message;
                 };
@@ -1703,9 +1813,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                InboundMapEntry.toObject = function toObject(message, options) {
+                InboundMapEntry.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.defaults)
                         object.value = null;
@@ -1715,7 +1829,9 @@ $root.baml_core = (function() {
                             object.key = "stringKey";
                     }
                     if (message.intKey != null && message.hasOwnProperty("intKey")) {
-                        if (typeof message.intKey === "number")
+                        if (typeof BigInt !== "undefined" && options.longs === BigInt)
+                            object.intKey = typeof message.intKey === "number" ? BigInt(message.intKey) : $util.Long.fromBits(message.intKey.low >>> 0, message.intKey.high >>> 0, false).toBigInt();
+                        else if (typeof message.intKey === "number")
                             object.intKey = options.longs === String ? String(message.intKey) : message.intKey;
                         else
                             object.intKey = options.longs === String ? $util.Long.prototype.toString.call(message.intKey) : options.longs === Number ? new $util.LongBits(message.intKey.low >>> 0, message.intKey.high >>> 0).toNumber() : message.intKey;
@@ -1728,12 +1844,12 @@ $root.baml_core = (function() {
                             object.key = "boolKey";
                     }
                     if (message.enumKey != null && message.hasOwnProperty("enumKey")) {
-                        object.enumKey = $root.baml_core.cffi.v1.InboundEnumValue.toObject(message.enumKey, options);
+                        object.enumKey = $root.baml_core.cffi.v1.InboundEnumValue.toObject(message.enumKey, options, q + 1);
                         if (options.oneofs)
                             object.key = "enumKey";
                     }
                     if (message.value != null && message.hasOwnProperty("value"))
-                        object.value = $root.baml_core.cffi.v1.InboundValue.toObject(message.value, options);
+                        object.value = $root.baml_core.cffi.v1.InboundValue.toObject(message.value, options, q + 1);
                     return object;
                 };
 
@@ -1788,7 +1904,7 @@ $root.baml_core = (function() {
                     this.fields = [];
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -1829,14 +1945,18 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                InboundClassValue.encode = function encode(message, writer) {
+                InboundClassValue.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.name != null && Object.hasOwnProperty.call(message, "name"))
                         writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
                     if (message.fields != null && message.fields.length)
                         for (var i = 0; i < message.fields.length; ++i)
-                            $root.baml_core.cffi.v1.InboundMapEntry.encode(message.fields[i], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+                            $root.baml_core.cffi.v1.InboundMapEntry.encode(message.fields[i], writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -1864,9 +1984,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                InboundClassValue.decode = function decode(reader, length, error) {
+                InboundClassValue.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.InboundClassValue();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -1880,11 +2004,11 @@ $root.baml_core = (function() {
                         case 2: {
                                 if (!(message.fields && message.fields.length))
                                     message.fields = [];
-                                message.fields.push($root.baml_core.cffi.v1.InboundMapEntry.decode(reader, reader.uint32()));
+                                message.fields.push($root.baml_core.cffi.v1.InboundMapEntry.decode(reader, reader.uint32(), undefined, long + 1));
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -1915,9 +2039,13 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                InboundClassValue.verify = function verify(message) {
+                InboundClassValue.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.name != null && message.hasOwnProperty("name"))
                         if (!$util.isString(message.name))
                             return "name: string expected";
@@ -1925,7 +2053,7 @@ $root.baml_core = (function() {
                         if (!Array.isArray(message.fields))
                             return "fields: array expected";
                         for (var i = 0; i < message.fields.length; ++i) {
-                            var error = $root.baml_core.cffi.v1.InboundMapEntry.verify(message.fields[i]);
+                            var error = $root.baml_core.cffi.v1.InboundMapEntry.verify(message.fields[i], long + 1);
                             if (error)
                                 return "fields." + error;
                         }
@@ -1941,9 +2069,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.InboundClassValue} InboundClassValue
                  */
-                InboundClassValue.fromObject = function fromObject(object) {
+                InboundClassValue.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.InboundClassValue)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.InboundClassValue: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.InboundClassValue();
                     if (object.name != null)
                         message.name = String(object.name);
@@ -1952,9 +2086,9 @@ $root.baml_core = (function() {
                             throw TypeError(".baml_core.cffi.v1.InboundClassValue.fields: array expected");
                         message.fields = [];
                         for (var i = 0; i < object.fields.length; ++i) {
-                            if (typeof object.fields[i] !== "object")
+                            if (!$util.isObject(object.fields[i]))
                                 throw TypeError(".baml_core.cffi.v1.InboundClassValue.fields: object expected");
-                            message.fields[i] = $root.baml_core.cffi.v1.InboundMapEntry.fromObject(object.fields[i]);
+                            message.fields[i] = $root.baml_core.cffi.v1.InboundMapEntry.fromObject(object.fields[i], long + 1);
                         }
                     }
                     return message;
@@ -1969,9 +2103,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                InboundClassValue.toObject = function toObject(message, options) {
+                InboundClassValue.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.arrays || options.defaults)
                         object.fields = [];
@@ -1982,7 +2120,7 @@ $root.baml_core = (function() {
                     if (message.fields && message.fields.length) {
                         object.fields = [];
                         for (var j = 0; j < message.fields.length; ++j)
-                            object.fields[j] = $root.baml_core.cffi.v1.InboundMapEntry.toObject(message.fields[j], options);
+                            object.fields[j] = $root.baml_core.cffi.v1.InboundMapEntry.toObject(message.fields[j], options, q + 1);
                     }
                     return object;
                 };
@@ -2037,7 +2175,7 @@ $root.baml_core = (function() {
                 function InboundEnumValue(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -2078,9 +2216,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                InboundEnumValue.encode = function encode(message, writer) {
+                InboundEnumValue.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.name != null && Object.hasOwnProperty.call(message, "name"))
                         writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
                     if (message.value != null && Object.hasOwnProperty.call(message, "value"))
@@ -2112,9 +2254,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                InboundEnumValue.decode = function decode(reader, length, error) {
+                InboundEnumValue.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.InboundEnumValue();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -2130,7 +2276,7 @@ $root.baml_core = (function() {
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -2161,9 +2307,13 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                InboundEnumValue.verify = function verify(message) {
+                InboundEnumValue.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.name != null && message.hasOwnProperty("name"))
                         if (!$util.isString(message.name))
                             return "name: string expected";
@@ -2181,9 +2331,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.InboundEnumValue} InboundEnumValue
                  */
-                InboundEnumValue.fromObject = function fromObject(object) {
+                InboundEnumValue.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.InboundEnumValue)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.InboundEnumValue: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.InboundEnumValue();
                     if (object.name != null)
                         message.name = String(object.name);
@@ -2201,9 +2357,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                InboundEnumValue.toObject = function toObject(message, options) {
+                InboundEnumValue.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.defaults) {
                         object.name = "";
@@ -2287,7 +2447,7 @@ $root.baml_core = (function() {
                 function HostCallableError(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -2367,9 +2527,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                HostCallableError.encode = function encode(message, writer) {
+                HostCallableError.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.className != null && Object.hasOwnProperty.call(message, "className"))
                         writer.uint32(/* id 1, wireType 2 =*/10).string(message.className);
                     if (message.message != null && Object.hasOwnProperty.call(message, "message"))
@@ -2407,9 +2571,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                HostCallableError.decode = function decode(reader, length, error) {
+                HostCallableError.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.HostCallableError();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -2437,7 +2605,7 @@ $root.baml_core = (function() {
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -2468,9 +2636,13 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                HostCallableError.verify = function verify(message) {
+                HostCallableError.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     var properties = {};
                     if (message.className != null && message.hasOwnProperty("className"))
                         if (!$util.isString(message.className))
@@ -2509,9 +2681,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.HostCallableError} HostCallableError
                  */
-                HostCallableError.fromObject = function fromObject(object) {
+                HostCallableError.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.HostCallableError)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.HostCallableError: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.HostCallableError();
                     if (object.className != null)
                         message.className = String(object.className);
@@ -2557,9 +2735,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                HostCallableError.toObject = function toObject(message, options) {
+                HostCallableError.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.defaults) {
                         object.className = "";
@@ -2635,7 +2817,7 @@ $root.baml_core = (function() {
                     this.kwargs = [];
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -2668,12 +2850,16 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                CallFunctionArgs.encode = function encode(message, writer) {
+                CallFunctionArgs.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.kwargs != null && message.kwargs.length)
                         for (var i = 0; i < message.kwargs.length; ++i)
-                            $root.baml_core.cffi.v1.InboundMapEntry.encode(message.kwargs[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+                            $root.baml_core.cffi.v1.InboundMapEntry.encode(message.kwargs[i], writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -2701,9 +2887,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                CallFunctionArgs.decode = function decode(reader, length, error) {
+                CallFunctionArgs.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.CallFunctionArgs();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -2713,11 +2903,11 @@ $root.baml_core = (function() {
                         case 1: {
                                 if (!(message.kwargs && message.kwargs.length))
                                     message.kwargs = [];
-                                message.kwargs.push($root.baml_core.cffi.v1.InboundMapEntry.decode(reader, reader.uint32()));
+                                message.kwargs.push($root.baml_core.cffi.v1.InboundMapEntry.decode(reader, reader.uint32(), undefined, long + 1));
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -2748,14 +2938,18 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                CallFunctionArgs.verify = function verify(message) {
+                CallFunctionArgs.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.kwargs != null && message.hasOwnProperty("kwargs")) {
                         if (!Array.isArray(message.kwargs))
                             return "kwargs: array expected";
                         for (var i = 0; i < message.kwargs.length; ++i) {
-                            var error = $root.baml_core.cffi.v1.InboundMapEntry.verify(message.kwargs[i]);
+                            var error = $root.baml_core.cffi.v1.InboundMapEntry.verify(message.kwargs[i], long + 1);
                             if (error)
                                 return "kwargs." + error;
                         }
@@ -2771,18 +2965,24 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.CallFunctionArgs} CallFunctionArgs
                  */
-                CallFunctionArgs.fromObject = function fromObject(object) {
+                CallFunctionArgs.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.CallFunctionArgs)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.CallFunctionArgs: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.CallFunctionArgs();
                     if (object.kwargs) {
                         if (!Array.isArray(object.kwargs))
                             throw TypeError(".baml_core.cffi.v1.CallFunctionArgs.kwargs: array expected");
                         message.kwargs = [];
                         for (var i = 0; i < object.kwargs.length; ++i) {
-                            if (typeof object.kwargs[i] !== "object")
+                            if (!$util.isObject(object.kwargs[i]))
                                 throw TypeError(".baml_core.cffi.v1.CallFunctionArgs.kwargs: object expected");
-                            message.kwargs[i] = $root.baml_core.cffi.v1.InboundMapEntry.fromObject(object.kwargs[i]);
+                            message.kwargs[i] = $root.baml_core.cffi.v1.InboundMapEntry.fromObject(object.kwargs[i], long + 1);
                         }
                     }
                     return message;
@@ -2797,16 +2997,20 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                CallFunctionArgs.toObject = function toObject(message, options) {
+                CallFunctionArgs.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.arrays || options.defaults)
                         object.kwargs = [];
                     if (message.kwargs && message.kwargs.length) {
                         object.kwargs = [];
                         for (var j = 0; j < message.kwargs.length; ++j)
-                            object.kwargs[j] = $root.baml_core.cffi.v1.InboundMapEntry.toObject(message.kwargs[j], options);
+                            object.kwargs[j] = $root.baml_core.cffi.v1.InboundMapEntry.toObject(message.kwargs[j], options, q + 1);
                     }
                     return object;
                 };
@@ -2860,7 +3064,7 @@ $root.baml_core = (function() {
                 function CallAck(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -2907,9 +3111,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                CallAck.encode = function encode(message, writer) {
+                CallAck.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.error != null && Object.hasOwnProperty.call(message, "error"))
                         writer.uint32(/* id 1, wireType 2 =*/10).string(message.error);
                     return writer;
@@ -2939,9 +3147,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                CallAck.decode = function decode(reader, length, error) {
+                CallAck.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.CallAck();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -2953,7 +3165,7 @@ $root.baml_core = (function() {
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -2984,9 +3196,13 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                CallAck.verify = function verify(message) {
+                CallAck.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     var properties = {};
                     if (message.error != null && message.hasOwnProperty("error")) {
                         properties.response = 1;
@@ -3004,9 +3220,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.CallAck} CallAck
                  */
-                CallAck.fromObject = function fromObject(object) {
+                CallAck.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.CallAck)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.CallAck: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.CallAck();
                     if (object.error != null)
                         message.error = String(object.error);
@@ -3022,9 +3244,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                CallAck.toObject = function toObject(message, options) {
+                CallAck.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (message.error != null && message.hasOwnProperty("error")) {
                         object.error = message.error;
@@ -3085,7 +3311,7 @@ $root.baml_core = (function() {
                 function BamlOutboundResult(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -3148,15 +3374,19 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlOutboundResult.encode = function encode(message, writer) {
+                BamlOutboundResult.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.ok != null && Object.hasOwnProperty.call(message, "ok"))
-                        $root.baml_core.cffi.v1.BamlOutboundValue.encode(message.ok, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlOutboundValue.encode(message.ok, writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
                     if (message.error != null && Object.hasOwnProperty.call(message, "error"))
-                        $root.baml_core.cffi.v1.BamlOutboundError.encode(message.error, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlOutboundError.encode(message.error, writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
                     if (message.panic != null && Object.hasOwnProperty.call(message, "panic"))
-                        $root.baml_core.cffi.v1.BamlOutboundPanic.encode(message.panic, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlOutboundPanic.encode(message.panic, writer.uint32(/* id 3, wireType 2 =*/26).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -3184,9 +3414,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlOutboundResult.decode = function decode(reader, length, error) {
+                BamlOutboundResult.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlOutboundResult();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -3194,19 +3428,19 @@ $root.baml_core = (function() {
                             break;
                         switch (tag >>> 3) {
                         case 1: {
-                                message.ok = $root.baml_core.cffi.v1.BamlOutboundValue.decode(reader, reader.uint32());
+                                message.ok = $root.baml_core.cffi.v1.BamlOutboundValue.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 2: {
-                                message.error = $root.baml_core.cffi.v1.BamlOutboundError.decode(reader, reader.uint32());
+                                message.error = $root.baml_core.cffi.v1.BamlOutboundError.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 3: {
-                                message.panic = $root.baml_core.cffi.v1.BamlOutboundPanic.decode(reader, reader.uint32());
+                                message.panic = $root.baml_core.cffi.v1.BamlOutboundPanic.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -3237,14 +3471,18 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlOutboundResult.verify = function verify(message) {
+                BamlOutboundResult.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     var properties = {};
                     if (message.ok != null && message.hasOwnProperty("ok")) {
                         properties.result = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlOutboundValue.verify(message.ok);
+                            var error = $root.baml_core.cffi.v1.BamlOutboundValue.verify(message.ok, long + 1);
                             if (error)
                                 return "ok." + error;
                         }
@@ -3254,7 +3492,7 @@ $root.baml_core = (function() {
                             return "result: multiple values";
                         properties.result = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlOutboundError.verify(message.error);
+                            var error = $root.baml_core.cffi.v1.BamlOutboundError.verify(message.error, long + 1);
                             if (error)
                                 return "error." + error;
                         }
@@ -3264,7 +3502,7 @@ $root.baml_core = (function() {
                             return "result: multiple values";
                         properties.result = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlOutboundPanic.verify(message.panic);
+                            var error = $root.baml_core.cffi.v1.BamlOutboundPanic.verify(message.panic, long + 1);
                             if (error)
                                 return "panic." + error;
                         }
@@ -3280,24 +3518,30 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlOutboundResult} BamlOutboundResult
                  */
-                BamlOutboundResult.fromObject = function fromObject(object) {
+                BamlOutboundResult.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlOutboundResult)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlOutboundResult: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlOutboundResult();
                     if (object.ok != null) {
-                        if (typeof object.ok !== "object")
+                        if (!$util.isObject(object.ok))
                             throw TypeError(".baml_core.cffi.v1.BamlOutboundResult.ok: object expected");
-                        message.ok = $root.baml_core.cffi.v1.BamlOutboundValue.fromObject(object.ok);
+                        message.ok = $root.baml_core.cffi.v1.BamlOutboundValue.fromObject(object.ok, long + 1);
                     }
                     if (object.error != null) {
-                        if (typeof object.error !== "object")
+                        if (!$util.isObject(object.error))
                             throw TypeError(".baml_core.cffi.v1.BamlOutboundResult.error: object expected");
-                        message.error = $root.baml_core.cffi.v1.BamlOutboundError.fromObject(object.error);
+                        message.error = $root.baml_core.cffi.v1.BamlOutboundError.fromObject(object.error, long + 1);
                     }
                     if (object.panic != null) {
-                        if (typeof object.panic !== "object")
+                        if (!$util.isObject(object.panic))
                             throw TypeError(".baml_core.cffi.v1.BamlOutboundResult.panic: object expected");
-                        message.panic = $root.baml_core.cffi.v1.BamlOutboundPanic.fromObject(object.panic);
+                        message.panic = $root.baml_core.cffi.v1.BamlOutboundPanic.fromObject(object.panic, long + 1);
                     }
                     return message;
                 };
@@ -3311,22 +3555,26 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlOutboundResult.toObject = function toObject(message, options) {
+                BamlOutboundResult.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (message.ok != null && message.hasOwnProperty("ok")) {
-                        object.ok = $root.baml_core.cffi.v1.BamlOutboundValue.toObject(message.ok, options);
+                        object.ok = $root.baml_core.cffi.v1.BamlOutboundValue.toObject(message.ok, options, q + 1);
                         if (options.oneofs)
                             object.result = "ok";
                     }
                     if (message.error != null && message.hasOwnProperty("error")) {
-                        object.error = $root.baml_core.cffi.v1.BamlOutboundError.toObject(message.error, options);
+                        object.error = $root.baml_core.cffi.v1.BamlOutboundError.toObject(message.error, options, q + 1);
                         if (options.oneofs)
                             object.result = "error";
                     }
                     if (message.panic != null && message.hasOwnProperty("panic")) {
-                        object.panic = $root.baml_core.cffi.v1.BamlOutboundPanic.toObject(message.panic, options);
+                        object.panic = $root.baml_core.cffi.v1.BamlOutboundPanic.toObject(message.panic, options, q + 1);
                         if (options.oneofs)
                             object.result = "panic";
                     }
@@ -3384,7 +3632,7 @@ $root.baml_core = (function() {
                     this.trace = [];
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -3425,11 +3673,15 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlOutboundError.encode = function encode(message, writer) {
+                BamlOutboundError.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.value != null && Object.hasOwnProperty.call(message, "value"))
-                        $root.baml_core.cffi.v1.BamlOutboundValue.encode(message.value, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlOutboundValue.encode(message.value, writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
                     if (message.trace != null && message.trace.length)
                         for (var i = 0; i < message.trace.length; ++i)
                             writer.uint32(/* id 2, wireType 2 =*/18).string(message.trace[i]);
@@ -3460,9 +3712,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlOutboundError.decode = function decode(reader, length, error) {
+                BamlOutboundError.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlOutboundError();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -3470,7 +3726,7 @@ $root.baml_core = (function() {
                             break;
                         switch (tag >>> 3) {
                         case 1: {
-                                message.value = $root.baml_core.cffi.v1.BamlOutboundValue.decode(reader, reader.uint32());
+                                message.value = $root.baml_core.cffi.v1.BamlOutboundValue.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 2: {
@@ -3480,7 +3736,7 @@ $root.baml_core = (function() {
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -3511,11 +3767,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlOutboundError.verify = function verify(message) {
+                BamlOutboundError.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.value != null && message.hasOwnProperty("value")) {
-                        var error = $root.baml_core.cffi.v1.BamlOutboundValue.verify(message.value);
+                        var error = $root.baml_core.cffi.v1.BamlOutboundValue.verify(message.value, long + 1);
                         if (error)
                             return "value." + error;
                     }
@@ -3537,14 +3797,20 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlOutboundError} BamlOutboundError
                  */
-                BamlOutboundError.fromObject = function fromObject(object) {
+                BamlOutboundError.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlOutboundError)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlOutboundError: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlOutboundError();
                     if (object.value != null) {
-                        if (typeof object.value !== "object")
+                        if (!$util.isObject(object.value))
                             throw TypeError(".baml_core.cffi.v1.BamlOutboundError.value: object expected");
-                        message.value = $root.baml_core.cffi.v1.BamlOutboundValue.fromObject(object.value);
+                        message.value = $root.baml_core.cffi.v1.BamlOutboundValue.fromObject(object.value, long + 1);
                     }
                     if (object.trace) {
                         if (!Array.isArray(object.trace))
@@ -3565,16 +3831,20 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlOutboundError.toObject = function toObject(message, options) {
+                BamlOutboundError.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.arrays || options.defaults)
                         object.trace = [];
                     if (options.defaults)
                         object.value = null;
                     if (message.value != null && message.hasOwnProperty("value"))
-                        object.value = $root.baml_core.cffi.v1.BamlOutboundValue.toObject(message.value, options);
+                        object.value = $root.baml_core.cffi.v1.BamlOutboundValue.toObject(message.value, options, q + 1);
                     if (message.trace && message.trace.length) {
                         object.trace = [];
                         for (var j = 0; j < message.trace.length; ++j)
@@ -3636,7 +3906,7 @@ $root.baml_core = (function() {
                     this.trace = [];
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -3693,11 +3963,15 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlOutboundPanic.encode = function encode(message, writer) {
+                BamlOutboundPanic.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.value != null && Object.hasOwnProperty.call(message, "value"))
-                        $root.baml_core.cffi.v1.BamlOutboundValue.encode(message.value, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlOutboundValue.encode(message.value, writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
                     if (message.trace != null && message.trace.length)
                         for (var i = 0; i < message.trace.length; ++i)
                             writer.uint32(/* id 2, wireType 2 =*/18).string(message.trace[i]);
@@ -3732,9 +4006,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlOutboundPanic.decode = function decode(reader, length, error) {
+                BamlOutboundPanic.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlOutboundPanic();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -3742,7 +4020,7 @@ $root.baml_core = (function() {
                             break;
                         switch (tag >>> 3) {
                         case 1: {
-                                message.value = $root.baml_core.cffi.v1.BamlOutboundValue.decode(reader, reader.uint32());
+                                message.value = $root.baml_core.cffi.v1.BamlOutboundValue.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 2: {
@@ -3760,7 +4038,7 @@ $root.baml_core = (function() {
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -3791,11 +4069,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlOutboundPanic.verify = function verify(message) {
+                BamlOutboundPanic.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.value != null && message.hasOwnProperty("value")) {
-                        var error = $root.baml_core.cffi.v1.BamlOutboundValue.verify(message.value);
+                        var error = $root.baml_core.cffi.v1.BamlOutboundValue.verify(message.value, long + 1);
                         if (error)
                             return "value." + error;
                     }
@@ -3823,14 +4105,20 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlOutboundPanic} BamlOutboundPanic
                  */
-                BamlOutboundPanic.fromObject = function fromObject(object) {
+                BamlOutboundPanic.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlOutboundPanic)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlOutboundPanic: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlOutboundPanic();
                     if (object.value != null) {
-                        if (typeof object.value !== "object")
+                        if (!$util.isObject(object.value))
                             throw TypeError(".baml_core.cffi.v1.BamlOutboundPanic.value: object expected");
-                        message.value = $root.baml_core.cffi.v1.BamlOutboundValue.fromObject(object.value);
+                        message.value = $root.baml_core.cffi.v1.BamlOutboundValue.fromObject(object.value, long + 1);
                     }
                     if (object.trace) {
                         if (!Array.isArray(object.trace))
@@ -3843,7 +4131,7 @@ $root.baml_core = (function() {
                         message.isExitPanic = Boolean(object.isExitPanic);
                     if (object.exitCode != null)
                         if ($util.Long)
-                            (message.exitCode = $util.Long.fromValue(object.exitCode)).unsigned = false;
+                            message.exitCode = $util.Long.fromValue(object.exitCode, false);
                         else if (typeof object.exitCode === "string")
                             message.exitCode = parseInt(object.exitCode, 10);
                         else if (typeof object.exitCode === "number")
@@ -3862,9 +4150,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlOutboundPanic.toObject = function toObject(message, options) {
+                BamlOutboundPanic.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.arrays || options.defaults)
                         object.trace = [];
@@ -3873,12 +4165,12 @@ $root.baml_core = (function() {
                         object.isExitPanic = false;
                         if ($util.Long) {
                             var long = new $util.Long(0, 0, false);
-                            object.exitCode = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                            object.exitCode = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : typeof BigInt !== "undefined" && options.longs === BigInt ? long.toBigInt() : long;
                         } else
-                            object.exitCode = options.longs === String ? "0" : 0;
+                            object.exitCode = options.longs === String ? "0" : typeof BigInt !== "undefined" && options.longs === BigInt ? BigInt("0") : 0;
                     }
                     if (message.value != null && message.hasOwnProperty("value"))
-                        object.value = $root.baml_core.cffi.v1.BamlOutboundValue.toObject(message.value, options);
+                        object.value = $root.baml_core.cffi.v1.BamlOutboundValue.toObject(message.value, options, q + 1);
                     if (message.trace && message.trace.length) {
                         object.trace = [];
                         for (var j = 0; j < message.trace.length; ++j)
@@ -3887,7 +4179,9 @@ $root.baml_core = (function() {
                     if (message.isExitPanic != null && message.hasOwnProperty("isExitPanic"))
                         object.isExitPanic = message.isExitPanic;
                     if (message.exitCode != null && message.hasOwnProperty("exitCode"))
-                        if (typeof message.exitCode === "number")
+                        if (typeof BigInt !== "undefined" && options.longs === BigInt)
+                            object.exitCode = typeof message.exitCode === "number" ? BigInt(message.exitCode) : $util.Long.fromBits(message.exitCode.low >>> 0, message.exitCode.high >>> 0, false).toBigInt();
+                        else if (typeof message.exitCode === "number")
                             object.exitCode = options.longs === String ? String(message.exitCode) : message.exitCode;
                         else
                             object.exitCode = options.longs === String ? $util.Long.prototype.toString.call(message.exitCode) : options.longs === Number ? new $util.LongBits(message.exitCode.low >>> 0, message.exitCode.high >>> 0).toNumber() : message.exitCode;
@@ -3958,7 +4252,7 @@ $root.baml_core = (function() {
                 function BamlOutboundValue(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -4125,11 +4419,15 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlOutboundValue.encode = function encode(message, writer) {
+                BamlOutboundValue.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.nullValue != null && Object.hasOwnProperty.call(message, "nullValue"))
-                        $root.baml_core.cffi.v1.BamlValueNull.encode(message.nullValue, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlValueNull.encode(message.nullValue, writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
                     if (message.stringValue != null && Object.hasOwnProperty.call(message, "stringValue"))
                         writer.uint32(/* id 3, wireType 2 =*/26).string(message.stringValue);
                     if (message.intValue != null && Object.hasOwnProperty.call(message, "intValue"))
@@ -4139,23 +4437,23 @@ $root.baml_core = (function() {
                     if (message.boolValue != null && Object.hasOwnProperty.call(message, "boolValue"))
                         writer.uint32(/* id 6, wireType 0 =*/48).bool(message.boolValue);
                     if (message.classValue != null && Object.hasOwnProperty.call(message, "classValue"))
-                        $root.baml_core.cffi.v1.BamlValueClass.encode(message.classValue, writer.uint32(/* id 7, wireType 2 =*/58).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlValueClass.encode(message.classValue, writer.uint32(/* id 7, wireType 2 =*/58).fork(), q + 1).ldelim();
                     if (message.enumValue != null && Object.hasOwnProperty.call(message, "enumValue"))
-                        $root.baml_core.cffi.v1.BamlValueEnum.encode(message.enumValue, writer.uint32(/* id 8, wireType 2 =*/66).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlValueEnum.encode(message.enumValue, writer.uint32(/* id 8, wireType 2 =*/66).fork(), q + 1).ldelim();
                     if (message.literalValue != null && Object.hasOwnProperty.call(message, "literalValue"))
-                        $root.baml_core.cffi.v1.BamlTyLiteral.encode(message.literalValue, writer.uint32(/* id 9, wireType 2 =*/74).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTyLiteral.encode(message.literalValue, writer.uint32(/* id 9, wireType 2 =*/74).fork(), q + 1).ldelim();
                     if (message.listValue != null && Object.hasOwnProperty.call(message, "listValue"))
-                        $root.baml_core.cffi.v1.BamlValueList.encode(message.listValue, writer.uint32(/* id 11, wireType 2 =*/90).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlValueList.encode(message.listValue, writer.uint32(/* id 11, wireType 2 =*/90).fork(), q + 1).ldelim();
                     if (message.mapValue != null && Object.hasOwnProperty.call(message, "mapValue"))
-                        $root.baml_core.cffi.v1.BamlValueMap.encode(message.mapValue, writer.uint32(/* id 12, wireType 2 =*/98).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlValueMap.encode(message.mapValue, writer.uint32(/* id 12, wireType 2 =*/98).fork(), q + 1).ldelim();
                     if (message.unionVariantValue != null && Object.hasOwnProperty.call(message, "unionVariantValue"))
-                        $root.baml_core.cffi.v1.BamlValueUnionVariant.encode(message.unionVariantValue, writer.uint32(/* id 13, wireType 2 =*/106).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlValueUnionVariant.encode(message.unionVariantValue, writer.uint32(/* id 13, wireType 2 =*/106).fork(), q + 1).ldelim();
                     if (message.handleValue != null && Object.hasOwnProperty.call(message, "handleValue"))
-                        $root.baml_core.cffi.v1.BamlOutboundHandle.encode(message.handleValue, writer.uint32(/* id 16, wireType 2 =*/130).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlOutboundHandle.encode(message.handleValue, writer.uint32(/* id 16, wireType 2 =*/130).fork(), q + 1).ldelim();
                     if (message.mediaValue != null && Object.hasOwnProperty.call(message, "mediaValue"))
-                        $root.baml_core.cffi.v1.BamlValueMedia.encode(message.mediaValue, writer.uint32(/* id 17, wireType 2 =*/138).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlValueMedia.encode(message.mediaValue, writer.uint32(/* id 17, wireType 2 =*/138).fork(), q + 1).ldelim();
                     if (message.promptAstValue != null && Object.hasOwnProperty.call(message, "promptAstValue"))
-                        $root.baml_core.cffi.v1.BamlValuePromptAst.encode(message.promptAstValue, writer.uint32(/* id 18, wireType 2 =*/146).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlValuePromptAst.encode(message.promptAstValue, writer.uint32(/* id 18, wireType 2 =*/146).fork(), q + 1).ldelim();
                     if (message.uint8arrayValue != null && Object.hasOwnProperty.call(message, "uint8arrayValue"))
                         writer.uint32(/* id 19, wireType 2 =*/154).bytes(message.uint8arrayValue);
                     if (message.bigintValue != null && Object.hasOwnProperty.call(message, "bigintValue"))
@@ -4187,9 +4485,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlOutboundValue.decode = function decode(reader, length, error) {
+                BamlOutboundValue.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlOutboundValue();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -4197,7 +4499,7 @@ $root.baml_core = (function() {
                             break;
                         switch (tag >>> 3) {
                         case 2: {
-                                message.nullValue = $root.baml_core.cffi.v1.BamlValueNull.decode(reader, reader.uint32());
+                                message.nullValue = $root.baml_core.cffi.v1.BamlValueNull.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 3: {
@@ -4217,39 +4519,39 @@ $root.baml_core = (function() {
                                 break;
                             }
                         case 7: {
-                                message.classValue = $root.baml_core.cffi.v1.BamlValueClass.decode(reader, reader.uint32());
+                                message.classValue = $root.baml_core.cffi.v1.BamlValueClass.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 8: {
-                                message.enumValue = $root.baml_core.cffi.v1.BamlValueEnum.decode(reader, reader.uint32());
+                                message.enumValue = $root.baml_core.cffi.v1.BamlValueEnum.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 9: {
-                                message.literalValue = $root.baml_core.cffi.v1.BamlTyLiteral.decode(reader, reader.uint32());
+                                message.literalValue = $root.baml_core.cffi.v1.BamlTyLiteral.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 11: {
-                                message.listValue = $root.baml_core.cffi.v1.BamlValueList.decode(reader, reader.uint32());
+                                message.listValue = $root.baml_core.cffi.v1.BamlValueList.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 12: {
-                                message.mapValue = $root.baml_core.cffi.v1.BamlValueMap.decode(reader, reader.uint32());
+                                message.mapValue = $root.baml_core.cffi.v1.BamlValueMap.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 13: {
-                                message.unionVariantValue = $root.baml_core.cffi.v1.BamlValueUnionVariant.decode(reader, reader.uint32());
+                                message.unionVariantValue = $root.baml_core.cffi.v1.BamlValueUnionVariant.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 16: {
-                                message.handleValue = $root.baml_core.cffi.v1.BamlOutboundHandle.decode(reader, reader.uint32());
+                                message.handleValue = $root.baml_core.cffi.v1.BamlOutboundHandle.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 17: {
-                                message.mediaValue = $root.baml_core.cffi.v1.BamlValueMedia.decode(reader, reader.uint32());
+                                message.mediaValue = $root.baml_core.cffi.v1.BamlValueMedia.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 18: {
-                                message.promptAstValue = $root.baml_core.cffi.v1.BamlValuePromptAst.decode(reader, reader.uint32());
+                                message.promptAstValue = $root.baml_core.cffi.v1.BamlValuePromptAst.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 19: {
@@ -4261,7 +4563,7 @@ $root.baml_core = (function() {
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -4292,14 +4594,18 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlOutboundValue.verify = function verify(message) {
+                BamlOutboundValue.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     var properties = {};
                     if (message.nullValue != null && message.hasOwnProperty("nullValue")) {
                         properties.value = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlValueNull.verify(message.nullValue);
+                            var error = $root.baml_core.cffi.v1.BamlValueNull.verify(message.nullValue, long + 1);
                             if (error)
                                 return "nullValue." + error;
                         }
@@ -4337,7 +4643,7 @@ $root.baml_core = (function() {
                             return "value: multiple values";
                         properties.value = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlValueClass.verify(message.classValue);
+                            var error = $root.baml_core.cffi.v1.BamlValueClass.verify(message.classValue, long + 1);
                             if (error)
                                 return "classValue." + error;
                         }
@@ -4347,7 +4653,7 @@ $root.baml_core = (function() {
                             return "value: multiple values";
                         properties.value = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlValueEnum.verify(message.enumValue);
+                            var error = $root.baml_core.cffi.v1.BamlValueEnum.verify(message.enumValue, long + 1);
                             if (error)
                                 return "enumValue." + error;
                         }
@@ -4357,7 +4663,7 @@ $root.baml_core = (function() {
                             return "value: multiple values";
                         properties.value = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlTyLiteral.verify(message.literalValue);
+                            var error = $root.baml_core.cffi.v1.BamlTyLiteral.verify(message.literalValue, long + 1);
                             if (error)
                                 return "literalValue." + error;
                         }
@@ -4367,7 +4673,7 @@ $root.baml_core = (function() {
                             return "value: multiple values";
                         properties.value = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlValueList.verify(message.listValue);
+                            var error = $root.baml_core.cffi.v1.BamlValueList.verify(message.listValue, long + 1);
                             if (error)
                                 return "listValue." + error;
                         }
@@ -4377,7 +4683,7 @@ $root.baml_core = (function() {
                             return "value: multiple values";
                         properties.value = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlValueMap.verify(message.mapValue);
+                            var error = $root.baml_core.cffi.v1.BamlValueMap.verify(message.mapValue, long + 1);
                             if (error)
                                 return "mapValue." + error;
                         }
@@ -4387,7 +4693,7 @@ $root.baml_core = (function() {
                             return "value: multiple values";
                         properties.value = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlValueUnionVariant.verify(message.unionVariantValue);
+                            var error = $root.baml_core.cffi.v1.BamlValueUnionVariant.verify(message.unionVariantValue, long + 1);
                             if (error)
                                 return "unionVariantValue." + error;
                         }
@@ -4397,7 +4703,7 @@ $root.baml_core = (function() {
                             return "value: multiple values";
                         properties.value = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlOutboundHandle.verify(message.handleValue);
+                            var error = $root.baml_core.cffi.v1.BamlOutboundHandle.verify(message.handleValue, long + 1);
                             if (error)
                                 return "handleValue." + error;
                         }
@@ -4407,7 +4713,7 @@ $root.baml_core = (function() {
                             return "value: multiple values";
                         properties.value = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlValueMedia.verify(message.mediaValue);
+                            var error = $root.baml_core.cffi.v1.BamlValueMedia.verify(message.mediaValue, long + 1);
                             if (error)
                                 return "mediaValue." + error;
                         }
@@ -4417,7 +4723,7 @@ $root.baml_core = (function() {
                             return "value: multiple values";
                         properties.value = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlValuePromptAst.verify(message.promptAstValue);
+                            var error = $root.baml_core.cffi.v1.BamlValuePromptAst.verify(message.promptAstValue, long + 1);
                             if (error)
                                 return "promptAstValue." + error;
                         }
@@ -4447,20 +4753,26 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlOutboundValue} BamlOutboundValue
                  */
-                BamlOutboundValue.fromObject = function fromObject(object) {
+                BamlOutboundValue.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlOutboundValue)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlOutboundValue: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlOutboundValue();
                     if (object.nullValue != null) {
-                        if (typeof object.nullValue !== "object")
+                        if (!$util.isObject(object.nullValue))
                             throw TypeError(".baml_core.cffi.v1.BamlOutboundValue.nullValue: object expected");
-                        message.nullValue = $root.baml_core.cffi.v1.BamlValueNull.fromObject(object.nullValue);
+                        message.nullValue = $root.baml_core.cffi.v1.BamlValueNull.fromObject(object.nullValue, long + 1);
                     }
                     if (object.stringValue != null)
                         message.stringValue = String(object.stringValue);
                     if (object.intValue != null)
                         if ($util.Long)
-                            (message.intValue = $util.Long.fromValue(object.intValue)).unsigned = false;
+                            message.intValue = $util.Long.fromValue(object.intValue, false);
                         else if (typeof object.intValue === "string")
                             message.intValue = parseInt(object.intValue, 10);
                         else if (typeof object.intValue === "number")
@@ -4472,49 +4784,49 @@ $root.baml_core = (function() {
                     if (object.boolValue != null)
                         message.boolValue = Boolean(object.boolValue);
                     if (object.classValue != null) {
-                        if (typeof object.classValue !== "object")
+                        if (!$util.isObject(object.classValue))
                             throw TypeError(".baml_core.cffi.v1.BamlOutboundValue.classValue: object expected");
-                        message.classValue = $root.baml_core.cffi.v1.BamlValueClass.fromObject(object.classValue);
+                        message.classValue = $root.baml_core.cffi.v1.BamlValueClass.fromObject(object.classValue, long + 1);
                     }
                     if (object.enumValue != null) {
-                        if (typeof object.enumValue !== "object")
+                        if (!$util.isObject(object.enumValue))
                             throw TypeError(".baml_core.cffi.v1.BamlOutboundValue.enumValue: object expected");
-                        message.enumValue = $root.baml_core.cffi.v1.BamlValueEnum.fromObject(object.enumValue);
+                        message.enumValue = $root.baml_core.cffi.v1.BamlValueEnum.fromObject(object.enumValue, long + 1);
                     }
                     if (object.literalValue != null) {
-                        if (typeof object.literalValue !== "object")
+                        if (!$util.isObject(object.literalValue))
                             throw TypeError(".baml_core.cffi.v1.BamlOutboundValue.literalValue: object expected");
-                        message.literalValue = $root.baml_core.cffi.v1.BamlTyLiteral.fromObject(object.literalValue);
+                        message.literalValue = $root.baml_core.cffi.v1.BamlTyLiteral.fromObject(object.literalValue, long + 1);
                     }
                     if (object.listValue != null) {
-                        if (typeof object.listValue !== "object")
+                        if (!$util.isObject(object.listValue))
                             throw TypeError(".baml_core.cffi.v1.BamlOutboundValue.listValue: object expected");
-                        message.listValue = $root.baml_core.cffi.v1.BamlValueList.fromObject(object.listValue);
+                        message.listValue = $root.baml_core.cffi.v1.BamlValueList.fromObject(object.listValue, long + 1);
                     }
                     if (object.mapValue != null) {
-                        if (typeof object.mapValue !== "object")
+                        if (!$util.isObject(object.mapValue))
                             throw TypeError(".baml_core.cffi.v1.BamlOutboundValue.mapValue: object expected");
-                        message.mapValue = $root.baml_core.cffi.v1.BamlValueMap.fromObject(object.mapValue);
+                        message.mapValue = $root.baml_core.cffi.v1.BamlValueMap.fromObject(object.mapValue, long + 1);
                     }
                     if (object.unionVariantValue != null) {
-                        if (typeof object.unionVariantValue !== "object")
+                        if (!$util.isObject(object.unionVariantValue))
                             throw TypeError(".baml_core.cffi.v1.BamlOutboundValue.unionVariantValue: object expected");
-                        message.unionVariantValue = $root.baml_core.cffi.v1.BamlValueUnionVariant.fromObject(object.unionVariantValue);
+                        message.unionVariantValue = $root.baml_core.cffi.v1.BamlValueUnionVariant.fromObject(object.unionVariantValue, long + 1);
                     }
                     if (object.handleValue != null) {
-                        if (typeof object.handleValue !== "object")
+                        if (!$util.isObject(object.handleValue))
                             throw TypeError(".baml_core.cffi.v1.BamlOutboundValue.handleValue: object expected");
-                        message.handleValue = $root.baml_core.cffi.v1.BamlOutboundHandle.fromObject(object.handleValue);
+                        message.handleValue = $root.baml_core.cffi.v1.BamlOutboundHandle.fromObject(object.handleValue, long + 1);
                     }
                     if (object.mediaValue != null) {
-                        if (typeof object.mediaValue !== "object")
+                        if (!$util.isObject(object.mediaValue))
                             throw TypeError(".baml_core.cffi.v1.BamlOutboundValue.mediaValue: object expected");
-                        message.mediaValue = $root.baml_core.cffi.v1.BamlValueMedia.fromObject(object.mediaValue);
+                        message.mediaValue = $root.baml_core.cffi.v1.BamlValueMedia.fromObject(object.mediaValue, long + 1);
                     }
                     if (object.promptAstValue != null) {
-                        if (typeof object.promptAstValue !== "object")
+                        if (!$util.isObject(object.promptAstValue))
                             throw TypeError(".baml_core.cffi.v1.BamlOutboundValue.promptAstValue: object expected");
-                        message.promptAstValue = $root.baml_core.cffi.v1.BamlValuePromptAst.fromObject(object.promptAstValue);
+                        message.promptAstValue = $root.baml_core.cffi.v1.BamlValuePromptAst.fromObject(object.promptAstValue, long + 1);
                     }
                     if (object.uint8arrayValue != null)
                         if (typeof object.uint8arrayValue === "string")
@@ -4535,12 +4847,16 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlOutboundValue.toObject = function toObject(message, options) {
+                BamlOutboundValue.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (message.nullValue != null && message.hasOwnProperty("nullValue")) {
-                        object.nullValue = $root.baml_core.cffi.v1.BamlValueNull.toObject(message.nullValue, options);
+                        object.nullValue = $root.baml_core.cffi.v1.BamlValueNull.toObject(message.nullValue, options, q + 1);
                         if (options.oneofs)
                             object.value = "nullValue";
                     }
@@ -4550,7 +4866,9 @@ $root.baml_core = (function() {
                             object.value = "stringValue";
                     }
                     if (message.intValue != null && message.hasOwnProperty("intValue")) {
-                        if (typeof message.intValue === "number")
+                        if (typeof BigInt !== "undefined" && options.longs === BigInt)
+                            object.intValue = typeof message.intValue === "number" ? BigInt(message.intValue) : $util.Long.fromBits(message.intValue.low >>> 0, message.intValue.high >>> 0, false).toBigInt();
+                        else if (typeof message.intValue === "number")
                             object.intValue = options.longs === String ? String(message.intValue) : message.intValue;
                         else
                             object.intValue = options.longs === String ? $util.Long.prototype.toString.call(message.intValue) : options.longs === Number ? new $util.LongBits(message.intValue.low >>> 0, message.intValue.high >>> 0).toNumber() : message.intValue;
@@ -4568,47 +4886,47 @@ $root.baml_core = (function() {
                             object.value = "boolValue";
                     }
                     if (message.classValue != null && message.hasOwnProperty("classValue")) {
-                        object.classValue = $root.baml_core.cffi.v1.BamlValueClass.toObject(message.classValue, options);
+                        object.classValue = $root.baml_core.cffi.v1.BamlValueClass.toObject(message.classValue, options, q + 1);
                         if (options.oneofs)
                             object.value = "classValue";
                     }
                     if (message.enumValue != null && message.hasOwnProperty("enumValue")) {
-                        object.enumValue = $root.baml_core.cffi.v1.BamlValueEnum.toObject(message.enumValue, options);
+                        object.enumValue = $root.baml_core.cffi.v1.BamlValueEnum.toObject(message.enumValue, options, q + 1);
                         if (options.oneofs)
                             object.value = "enumValue";
                     }
                     if (message.literalValue != null && message.hasOwnProperty("literalValue")) {
-                        object.literalValue = $root.baml_core.cffi.v1.BamlTyLiteral.toObject(message.literalValue, options);
+                        object.literalValue = $root.baml_core.cffi.v1.BamlTyLiteral.toObject(message.literalValue, options, q + 1);
                         if (options.oneofs)
                             object.value = "literalValue";
                     }
                     if (message.listValue != null && message.hasOwnProperty("listValue")) {
-                        object.listValue = $root.baml_core.cffi.v1.BamlValueList.toObject(message.listValue, options);
+                        object.listValue = $root.baml_core.cffi.v1.BamlValueList.toObject(message.listValue, options, q + 1);
                         if (options.oneofs)
                             object.value = "listValue";
                     }
                     if (message.mapValue != null && message.hasOwnProperty("mapValue")) {
-                        object.mapValue = $root.baml_core.cffi.v1.BamlValueMap.toObject(message.mapValue, options);
+                        object.mapValue = $root.baml_core.cffi.v1.BamlValueMap.toObject(message.mapValue, options, q + 1);
                         if (options.oneofs)
                             object.value = "mapValue";
                     }
                     if (message.unionVariantValue != null && message.hasOwnProperty("unionVariantValue")) {
-                        object.unionVariantValue = $root.baml_core.cffi.v1.BamlValueUnionVariant.toObject(message.unionVariantValue, options);
+                        object.unionVariantValue = $root.baml_core.cffi.v1.BamlValueUnionVariant.toObject(message.unionVariantValue, options, q + 1);
                         if (options.oneofs)
                             object.value = "unionVariantValue";
                     }
                     if (message.handleValue != null && message.hasOwnProperty("handleValue")) {
-                        object.handleValue = $root.baml_core.cffi.v1.BamlOutboundHandle.toObject(message.handleValue, options);
+                        object.handleValue = $root.baml_core.cffi.v1.BamlOutboundHandle.toObject(message.handleValue, options, q + 1);
                         if (options.oneofs)
                             object.value = "handleValue";
                     }
                     if (message.mediaValue != null && message.hasOwnProperty("mediaValue")) {
-                        object.mediaValue = $root.baml_core.cffi.v1.BamlValueMedia.toObject(message.mediaValue, options);
+                        object.mediaValue = $root.baml_core.cffi.v1.BamlValueMedia.toObject(message.mediaValue, options, q + 1);
                         if (options.oneofs)
                             object.value = "mediaValue";
                     }
                     if (message.promptAstValue != null && message.hasOwnProperty("promptAstValue")) {
-                        object.promptAstValue = $root.baml_core.cffi.v1.BamlValuePromptAst.toObject(message.promptAstValue, options);
+                        object.promptAstValue = $root.baml_core.cffi.v1.BamlValuePromptAst.toObject(message.promptAstValue, options, q + 1);
                         if (options.oneofs)
                             object.value = "promptAstValue";
                     }
@@ -4676,7 +4994,7 @@ $root.baml_core = (function() {
                 function BamlOutboundHandle(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -4725,15 +5043,19 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlOutboundHandle.encode = function encode(message, writer) {
+                BamlOutboundHandle.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.key != null && Object.hasOwnProperty.call(message, "key"))
                         writer.uint32(/* id 1, wireType 0 =*/8).uint64(message.key);
                     if (message.handleType != null && Object.hasOwnProperty.call(message, "handleType"))
                         writer.uint32(/* id 2, wireType 0 =*/16).int32(message.handleType);
                     if (message.name != null && Object.hasOwnProperty.call(message, "name"))
-                        $root.baml_core.cffi.v1.BamlTyName.encode(message.name, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTyName.encode(message.name, writer.uint32(/* id 3, wireType 2 =*/26).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -4761,9 +5083,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlOutboundHandle.decode = function decode(reader, length, error) {
+                BamlOutboundHandle.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlOutboundHandle();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -4779,11 +5105,11 @@ $root.baml_core = (function() {
                                 break;
                             }
                         case 3: {
-                                message.name = $root.baml_core.cffi.v1.BamlTyName.decode(reader, reader.uint32());
+                                message.name = $root.baml_core.cffi.v1.BamlTyName.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -4814,9 +5140,13 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlOutboundHandle.verify = function verify(message) {
+                BamlOutboundHandle.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.key != null && message.hasOwnProperty("key"))
                         if (!$util.isInteger(message.key) && !(message.key && $util.isInteger(message.key.low) && $util.isInteger(message.key.high)))
                             return "key: integer|Long expected";
@@ -4841,7 +5171,7 @@ $root.baml_core = (function() {
                             break;
                         }
                     if (message.name != null && message.hasOwnProperty("name")) {
-                        var error = $root.baml_core.cffi.v1.BamlTyName.verify(message.name);
+                        var error = $root.baml_core.cffi.v1.BamlTyName.verify(message.name, long + 1);
                         if (error)
                             return "name." + error;
                     }
@@ -4856,13 +5186,19 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlOutboundHandle} BamlOutboundHandle
                  */
-                BamlOutboundHandle.fromObject = function fromObject(object) {
+                BamlOutboundHandle.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlOutboundHandle)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlOutboundHandle: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlOutboundHandle();
                     if (object.key != null)
                         if ($util.Long)
-                            (message.key = $util.Long.fromValue(object.key)).unsigned = true;
+                            message.key = $util.Long.fromValue(object.key, true);
                         else if (typeof object.key === "string")
                             message.key = parseInt(object.key, 10);
                         else if (typeof object.key === "number")
@@ -4934,9 +5270,9 @@ $root.baml_core = (function() {
                         break;
                     }
                     if (object.name != null) {
-                        if (typeof object.name !== "object")
+                        if (!$util.isObject(object.name))
                             throw TypeError(".baml_core.cffi.v1.BamlOutboundHandle.name: object expected");
-                        message.name = $root.baml_core.cffi.v1.BamlTyName.fromObject(object.name);
+                        message.name = $root.baml_core.cffi.v1.BamlTyName.fromObject(object.name, long + 1);
                     }
                     return message;
                 };
@@ -4950,28 +5286,34 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlOutboundHandle.toObject = function toObject(message, options) {
+                BamlOutboundHandle.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.defaults) {
                         if ($util.Long) {
                             var long = new $util.Long(0, 0, true);
-                            object.key = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                            object.key = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : typeof BigInt !== "undefined" && options.longs === BigInt ? long.toBigInt() : long;
                         } else
-                            object.key = options.longs === String ? "0" : 0;
+                            object.key = options.longs === String ? "0" : typeof BigInt !== "undefined" && options.longs === BigInt ? BigInt("0") : 0;
                         object.handleType = options.enums === String ? "HANDLE_UNSPECIFIED" : 0;
                         object.name = null;
                     }
                     if (message.key != null && message.hasOwnProperty("key"))
-                        if (typeof message.key === "number")
+                        if (typeof BigInt !== "undefined" && options.longs === BigInt)
+                            object.key = typeof message.key === "number" ? BigInt(message.key) : $util.Long.fromBits(message.key.low >>> 0, message.key.high >>> 0, true).toBigInt();
+                        else if (typeof message.key === "number")
                             object.key = options.longs === String ? String(message.key) : message.key;
                         else
                             object.key = options.longs === String ? $util.Long.prototype.toString.call(message.key) : options.longs === Number ? new $util.LongBits(message.key.low >>> 0, message.key.high >>> 0).toNumber(true) : message.key;
                     if (message.handleType != null && message.hasOwnProperty("handleType"))
                         object.handleType = options.enums === String ? $root.baml_core.cffi.v1.BamlHandleType[message.handleType] === undefined ? message.handleType : $root.baml_core.cffi.v1.BamlHandleType[message.handleType] : message.handleType;
                     if (message.name != null && message.hasOwnProperty("name"))
-                        object.name = $root.baml_core.cffi.v1.BamlTyName.toObject(message.name, options);
+                        object.name = $root.baml_core.cffi.v1.BamlTyName.toObject(message.name, options, q + 1);
                     return object;
                 };
 
@@ -5026,7 +5368,7 @@ $root.baml_core = (function() {
                     this.genericArgs = [];
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -5067,14 +5409,18 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlTyName.encode = function encode(message, writer) {
+                BamlTyName.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.name != null && Object.hasOwnProperty.call(message, "name"))
                         writer.uint32(/* id 2, wireType 2 =*/18).string(message.name);
                     if (message.genericArgs != null && message.genericArgs.length)
                         for (var i = 0; i < message.genericArgs.length; ++i)
-                            $root.baml_core.cffi.v1.BamlTyGenericArg.encode(message.genericArgs[i], writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+                            $root.baml_core.cffi.v1.BamlTyGenericArg.encode(message.genericArgs[i], writer.uint32(/* id 3, wireType 2 =*/26).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -5102,9 +5448,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlTyName.decode = function decode(reader, length, error) {
+                BamlTyName.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlTyName();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -5118,11 +5468,11 @@ $root.baml_core = (function() {
                         case 3: {
                                 if (!(message.genericArgs && message.genericArgs.length))
                                     message.genericArgs = [];
-                                message.genericArgs.push($root.baml_core.cffi.v1.BamlTyGenericArg.decode(reader, reader.uint32()));
+                                message.genericArgs.push($root.baml_core.cffi.v1.BamlTyGenericArg.decode(reader, reader.uint32(), undefined, long + 1));
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -5153,9 +5503,13 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlTyName.verify = function verify(message) {
+                BamlTyName.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.name != null && message.hasOwnProperty("name"))
                         if (!$util.isString(message.name))
                             return "name: string expected";
@@ -5163,7 +5517,7 @@ $root.baml_core = (function() {
                         if (!Array.isArray(message.genericArgs))
                             return "genericArgs: array expected";
                         for (var i = 0; i < message.genericArgs.length; ++i) {
-                            var error = $root.baml_core.cffi.v1.BamlTyGenericArg.verify(message.genericArgs[i]);
+                            var error = $root.baml_core.cffi.v1.BamlTyGenericArg.verify(message.genericArgs[i], long + 1);
                             if (error)
                                 return "genericArgs." + error;
                         }
@@ -5179,9 +5533,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlTyName} BamlTyName
                  */
-                BamlTyName.fromObject = function fromObject(object) {
+                BamlTyName.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlTyName)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlTyName: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlTyName();
                     if (object.name != null)
                         message.name = String(object.name);
@@ -5190,9 +5550,9 @@ $root.baml_core = (function() {
                             throw TypeError(".baml_core.cffi.v1.BamlTyName.genericArgs: array expected");
                         message.genericArgs = [];
                         for (var i = 0; i < object.genericArgs.length; ++i) {
-                            if (typeof object.genericArgs[i] !== "object")
+                            if (!$util.isObject(object.genericArgs[i]))
                                 throw TypeError(".baml_core.cffi.v1.BamlTyName.genericArgs: object expected");
-                            message.genericArgs[i] = $root.baml_core.cffi.v1.BamlTyGenericArg.fromObject(object.genericArgs[i]);
+                            message.genericArgs[i] = $root.baml_core.cffi.v1.BamlTyGenericArg.fromObject(object.genericArgs[i], long + 1);
                         }
                     }
                     return message;
@@ -5207,9 +5567,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlTyName.toObject = function toObject(message, options) {
+                BamlTyName.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.arrays || options.defaults)
                         object.genericArgs = [];
@@ -5220,7 +5584,7 @@ $root.baml_core = (function() {
                     if (message.genericArgs && message.genericArgs.length) {
                         object.genericArgs = [];
                         for (var j = 0; j < message.genericArgs.length; ++j)
-                            object.genericArgs[j] = $root.baml_core.cffi.v1.BamlTyGenericArg.toObject(message.genericArgs[j], options);
+                            object.genericArgs[j] = $root.baml_core.cffi.v1.BamlTyGenericArg.toObject(message.genericArgs[j], options, q + 1);
                     }
                     return object;
                 };
@@ -5275,7 +5639,7 @@ $root.baml_core = (function() {
                 function BamlTyGenericArg(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -5316,13 +5680,17 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlTyGenericArg.encode = function encode(message, writer) {
+                BamlTyGenericArg.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.name != null && Object.hasOwnProperty.call(message, "name"))
                         writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
                     if (message.ty != null && Object.hasOwnProperty.call(message, "ty"))
-                        $root.baml_core.cffi.v1.BamlTy.encode(message.ty, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTy.encode(message.ty, writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -5350,9 +5718,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlTyGenericArg.decode = function decode(reader, length, error) {
+                BamlTyGenericArg.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlTyGenericArg();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -5364,11 +5736,11 @@ $root.baml_core = (function() {
                                 break;
                             }
                         case 2: {
-                                message.ty = $root.baml_core.cffi.v1.BamlTy.decode(reader, reader.uint32());
+                                message.ty = $root.baml_core.cffi.v1.BamlTy.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -5399,14 +5771,18 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlTyGenericArg.verify = function verify(message) {
+                BamlTyGenericArg.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.name != null && message.hasOwnProperty("name"))
                         if (!$util.isString(message.name))
                             return "name: string expected";
                     if (message.ty != null && message.hasOwnProperty("ty")) {
-                        var error = $root.baml_core.cffi.v1.BamlTy.verify(message.ty);
+                        var error = $root.baml_core.cffi.v1.BamlTy.verify(message.ty, long + 1);
                         if (error)
                             return "ty." + error;
                     }
@@ -5421,16 +5797,22 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlTyGenericArg} BamlTyGenericArg
                  */
-                BamlTyGenericArg.fromObject = function fromObject(object) {
+                BamlTyGenericArg.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlTyGenericArg)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlTyGenericArg: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlTyGenericArg();
                     if (object.name != null)
                         message.name = String(object.name);
                     if (object.ty != null) {
-                        if (typeof object.ty !== "object")
+                        if (!$util.isObject(object.ty))
                             throw TypeError(".baml_core.cffi.v1.BamlTyGenericArg.ty: object expected");
-                        message.ty = $root.baml_core.cffi.v1.BamlTy.fromObject(object.ty);
+                        message.ty = $root.baml_core.cffi.v1.BamlTy.fromObject(object.ty, long + 1);
                     }
                     return message;
                 };
@@ -5444,9 +5826,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlTyGenericArg.toObject = function toObject(message, options) {
+                BamlTyGenericArg.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.defaults) {
                         object.name = "";
@@ -5455,7 +5841,7 @@ $root.baml_core = (function() {
                     if (message.name != null && message.hasOwnProperty("name"))
                         object.name = message.name;
                     if (message.ty != null && message.hasOwnProperty("ty"))
-                        object.ty = $root.baml_core.cffi.v1.BamlTy.toObject(message.ty, options);
+                        object.ty = $root.baml_core.cffi.v1.BamlTy.toObject(message.ty, options, q + 1);
                     return object;
                 };
 
@@ -5507,7 +5893,7 @@ $root.baml_core = (function() {
                 function BamlValueNull(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -5532,9 +5918,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlValueNull.encode = function encode(message, writer) {
+                BamlValueNull.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     return writer;
                 };
 
@@ -5562,9 +5952,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlValueNull.decode = function decode(reader, length, error) {
+                BamlValueNull.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlValueNull();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -5572,7 +5966,7 @@ $root.baml_core = (function() {
                             break;
                         switch (tag >>> 3) {
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -5603,9 +5997,13 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlValueNull.verify = function verify(message) {
+                BamlValueNull.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     return null;
                 };
 
@@ -5617,9 +6015,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlValueNull} BamlValueNull
                  */
-                BamlValueNull.fromObject = function fromObject(object) {
+                BamlValueNull.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlValueNull)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlValueNull: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     return new $root.baml_core.cffi.v1.BamlValueNull();
                 };
 
@@ -5687,7 +6091,7 @@ $root.baml_core = (function() {
                     this.items = [];
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -5728,14 +6132,18 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlValueList.encode = function encode(message, writer) {
+                BamlValueList.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.itemType != null && Object.hasOwnProperty.call(message, "itemType"))
-                        $root.baml_core.cffi.v1.BamlTy.encode(message.itemType, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTy.encode(message.itemType, writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
                     if (message.items != null && message.items.length)
                         for (var i = 0; i < message.items.length; ++i)
-                            $root.baml_core.cffi.v1.BamlOutboundValue.encode(message.items[i], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+                            $root.baml_core.cffi.v1.BamlOutboundValue.encode(message.items[i], writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -5763,9 +6171,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlValueList.decode = function decode(reader, length, error) {
+                BamlValueList.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlValueList();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -5773,17 +6185,17 @@ $root.baml_core = (function() {
                             break;
                         switch (tag >>> 3) {
                         case 1: {
-                                message.itemType = $root.baml_core.cffi.v1.BamlTy.decode(reader, reader.uint32());
+                                message.itemType = $root.baml_core.cffi.v1.BamlTy.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 2: {
                                 if (!(message.items && message.items.length))
                                     message.items = [];
-                                message.items.push($root.baml_core.cffi.v1.BamlOutboundValue.decode(reader, reader.uint32()));
+                                message.items.push($root.baml_core.cffi.v1.BamlOutboundValue.decode(reader, reader.uint32(), undefined, long + 1));
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -5814,11 +6226,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlValueList.verify = function verify(message) {
+                BamlValueList.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.itemType != null && message.hasOwnProperty("itemType")) {
-                        var error = $root.baml_core.cffi.v1.BamlTy.verify(message.itemType);
+                        var error = $root.baml_core.cffi.v1.BamlTy.verify(message.itemType, long + 1);
                         if (error)
                             return "itemType." + error;
                     }
@@ -5826,7 +6242,7 @@ $root.baml_core = (function() {
                         if (!Array.isArray(message.items))
                             return "items: array expected";
                         for (var i = 0; i < message.items.length; ++i) {
-                            var error = $root.baml_core.cffi.v1.BamlOutboundValue.verify(message.items[i]);
+                            var error = $root.baml_core.cffi.v1.BamlOutboundValue.verify(message.items[i], long + 1);
                             if (error)
                                 return "items." + error;
                         }
@@ -5842,23 +6258,29 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlValueList} BamlValueList
                  */
-                BamlValueList.fromObject = function fromObject(object) {
+                BamlValueList.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlValueList)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlValueList: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlValueList();
                     if (object.itemType != null) {
-                        if (typeof object.itemType !== "object")
+                        if (!$util.isObject(object.itemType))
                             throw TypeError(".baml_core.cffi.v1.BamlValueList.itemType: object expected");
-                        message.itemType = $root.baml_core.cffi.v1.BamlTy.fromObject(object.itemType);
+                        message.itemType = $root.baml_core.cffi.v1.BamlTy.fromObject(object.itemType, long + 1);
                     }
                     if (object.items) {
                         if (!Array.isArray(object.items))
                             throw TypeError(".baml_core.cffi.v1.BamlValueList.items: array expected");
                         message.items = [];
                         for (var i = 0; i < object.items.length; ++i) {
-                            if (typeof object.items[i] !== "object")
+                            if (!$util.isObject(object.items[i]))
                                 throw TypeError(".baml_core.cffi.v1.BamlValueList.items: object expected");
-                            message.items[i] = $root.baml_core.cffi.v1.BamlOutboundValue.fromObject(object.items[i]);
+                            message.items[i] = $root.baml_core.cffi.v1.BamlOutboundValue.fromObject(object.items[i], long + 1);
                         }
                     }
                     return message;
@@ -5873,20 +6295,24 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlValueList.toObject = function toObject(message, options) {
+                BamlValueList.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.arrays || options.defaults)
                         object.items = [];
                     if (options.defaults)
                         object.itemType = null;
                     if (message.itemType != null && message.hasOwnProperty("itemType"))
-                        object.itemType = $root.baml_core.cffi.v1.BamlTy.toObject(message.itemType, options);
+                        object.itemType = $root.baml_core.cffi.v1.BamlTy.toObject(message.itemType, options, q + 1);
                     if (message.items && message.items.length) {
                         object.items = [];
                         for (var j = 0; j < message.items.length; ++j)
-                            object.items[j] = $root.baml_core.cffi.v1.BamlOutboundValue.toObject(message.items[j], options);
+                            object.items[j] = $root.baml_core.cffi.v1.BamlOutboundValue.toObject(message.items[j], options, q + 1);
                     }
                     return object;
                 };
@@ -5941,7 +6367,7 @@ $root.baml_core = (function() {
                 function BamlOutboundMapEntry(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -5982,13 +6408,17 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlOutboundMapEntry.encode = function encode(message, writer) {
+                BamlOutboundMapEntry.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.key != null && Object.hasOwnProperty.call(message, "key"))
                         writer.uint32(/* id 1, wireType 2 =*/10).string(message.key);
                     if (message.value != null && Object.hasOwnProperty.call(message, "value"))
-                        $root.baml_core.cffi.v1.BamlOutboundValue.encode(message.value, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlOutboundValue.encode(message.value, writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -6016,9 +6446,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlOutboundMapEntry.decode = function decode(reader, length, error) {
+                BamlOutboundMapEntry.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlOutboundMapEntry();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -6030,11 +6464,11 @@ $root.baml_core = (function() {
                                 break;
                             }
                         case 2: {
-                                message.value = $root.baml_core.cffi.v1.BamlOutboundValue.decode(reader, reader.uint32());
+                                message.value = $root.baml_core.cffi.v1.BamlOutboundValue.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -6065,14 +6499,18 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlOutboundMapEntry.verify = function verify(message) {
+                BamlOutboundMapEntry.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.key != null && message.hasOwnProperty("key"))
                         if (!$util.isString(message.key))
                             return "key: string expected";
                     if (message.value != null && message.hasOwnProperty("value")) {
-                        var error = $root.baml_core.cffi.v1.BamlOutboundValue.verify(message.value);
+                        var error = $root.baml_core.cffi.v1.BamlOutboundValue.verify(message.value, long + 1);
                         if (error)
                             return "value." + error;
                     }
@@ -6087,16 +6525,22 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlOutboundMapEntry} BamlOutboundMapEntry
                  */
-                BamlOutboundMapEntry.fromObject = function fromObject(object) {
+                BamlOutboundMapEntry.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlOutboundMapEntry)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlOutboundMapEntry: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlOutboundMapEntry();
                     if (object.key != null)
                         message.key = String(object.key);
                     if (object.value != null) {
-                        if (typeof object.value !== "object")
+                        if (!$util.isObject(object.value))
                             throw TypeError(".baml_core.cffi.v1.BamlOutboundMapEntry.value: object expected");
-                        message.value = $root.baml_core.cffi.v1.BamlOutboundValue.fromObject(object.value);
+                        message.value = $root.baml_core.cffi.v1.BamlOutboundValue.fromObject(object.value, long + 1);
                     }
                     return message;
                 };
@@ -6110,9 +6554,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlOutboundMapEntry.toObject = function toObject(message, options) {
+                BamlOutboundMapEntry.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.defaults) {
                         object.key = "";
@@ -6121,7 +6569,7 @@ $root.baml_core = (function() {
                     if (message.key != null && message.hasOwnProperty("key"))
                         object.key = message.key;
                     if (message.value != null && message.hasOwnProperty("value"))
-                        object.value = $root.baml_core.cffi.v1.BamlOutboundValue.toObject(message.value, options);
+                        object.value = $root.baml_core.cffi.v1.BamlOutboundValue.toObject(message.value, options, q + 1);
                     return object;
                 };
 
@@ -6177,7 +6625,7 @@ $root.baml_core = (function() {
                     this.entries = [];
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -6226,16 +6674,20 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlValueMap.encode = function encode(message, writer) {
+                BamlValueMap.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.keyType != null && Object.hasOwnProperty.call(message, "keyType"))
-                        $root.baml_core.cffi.v1.BamlTy.encode(message.keyType, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTy.encode(message.keyType, writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
                     if (message.valueType != null && Object.hasOwnProperty.call(message, "valueType"))
-                        $root.baml_core.cffi.v1.BamlTy.encode(message.valueType, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTy.encode(message.valueType, writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
                     if (message.entries != null && message.entries.length)
                         for (var i = 0; i < message.entries.length; ++i)
-                            $root.baml_core.cffi.v1.BamlOutboundMapEntry.encode(message.entries[i], writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+                            $root.baml_core.cffi.v1.BamlOutboundMapEntry.encode(message.entries[i], writer.uint32(/* id 3, wireType 2 =*/26).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -6263,9 +6715,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlValueMap.decode = function decode(reader, length, error) {
+                BamlValueMap.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlValueMap();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -6273,21 +6729,21 @@ $root.baml_core = (function() {
                             break;
                         switch (tag >>> 3) {
                         case 1: {
-                                message.keyType = $root.baml_core.cffi.v1.BamlTy.decode(reader, reader.uint32());
+                                message.keyType = $root.baml_core.cffi.v1.BamlTy.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 2: {
-                                message.valueType = $root.baml_core.cffi.v1.BamlTy.decode(reader, reader.uint32());
+                                message.valueType = $root.baml_core.cffi.v1.BamlTy.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 3: {
                                 if (!(message.entries && message.entries.length))
                                     message.entries = [];
-                                message.entries.push($root.baml_core.cffi.v1.BamlOutboundMapEntry.decode(reader, reader.uint32()));
+                                message.entries.push($root.baml_core.cffi.v1.BamlOutboundMapEntry.decode(reader, reader.uint32(), undefined, long + 1));
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -6318,16 +6774,20 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlValueMap.verify = function verify(message) {
+                BamlValueMap.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.keyType != null && message.hasOwnProperty("keyType")) {
-                        var error = $root.baml_core.cffi.v1.BamlTy.verify(message.keyType);
+                        var error = $root.baml_core.cffi.v1.BamlTy.verify(message.keyType, long + 1);
                         if (error)
                             return "keyType." + error;
                     }
                     if (message.valueType != null && message.hasOwnProperty("valueType")) {
-                        var error = $root.baml_core.cffi.v1.BamlTy.verify(message.valueType);
+                        var error = $root.baml_core.cffi.v1.BamlTy.verify(message.valueType, long + 1);
                         if (error)
                             return "valueType." + error;
                     }
@@ -6335,7 +6795,7 @@ $root.baml_core = (function() {
                         if (!Array.isArray(message.entries))
                             return "entries: array expected";
                         for (var i = 0; i < message.entries.length; ++i) {
-                            var error = $root.baml_core.cffi.v1.BamlOutboundMapEntry.verify(message.entries[i]);
+                            var error = $root.baml_core.cffi.v1.BamlOutboundMapEntry.verify(message.entries[i], long + 1);
                             if (error)
                                 return "entries." + error;
                         }
@@ -6351,28 +6811,34 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlValueMap} BamlValueMap
                  */
-                BamlValueMap.fromObject = function fromObject(object) {
+                BamlValueMap.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlValueMap)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlValueMap: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlValueMap();
                     if (object.keyType != null) {
-                        if (typeof object.keyType !== "object")
+                        if (!$util.isObject(object.keyType))
                             throw TypeError(".baml_core.cffi.v1.BamlValueMap.keyType: object expected");
-                        message.keyType = $root.baml_core.cffi.v1.BamlTy.fromObject(object.keyType);
+                        message.keyType = $root.baml_core.cffi.v1.BamlTy.fromObject(object.keyType, long + 1);
                     }
                     if (object.valueType != null) {
-                        if (typeof object.valueType !== "object")
+                        if (!$util.isObject(object.valueType))
                             throw TypeError(".baml_core.cffi.v1.BamlValueMap.valueType: object expected");
-                        message.valueType = $root.baml_core.cffi.v1.BamlTy.fromObject(object.valueType);
+                        message.valueType = $root.baml_core.cffi.v1.BamlTy.fromObject(object.valueType, long + 1);
                     }
                     if (object.entries) {
                         if (!Array.isArray(object.entries))
                             throw TypeError(".baml_core.cffi.v1.BamlValueMap.entries: array expected");
                         message.entries = [];
                         for (var i = 0; i < object.entries.length; ++i) {
-                            if (typeof object.entries[i] !== "object")
+                            if (!$util.isObject(object.entries[i]))
                                 throw TypeError(".baml_core.cffi.v1.BamlValueMap.entries: object expected");
-                            message.entries[i] = $root.baml_core.cffi.v1.BamlOutboundMapEntry.fromObject(object.entries[i]);
+                            message.entries[i] = $root.baml_core.cffi.v1.BamlOutboundMapEntry.fromObject(object.entries[i], long + 1);
                         }
                     }
                     return message;
@@ -6387,9 +6853,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlValueMap.toObject = function toObject(message, options) {
+                BamlValueMap.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.arrays || options.defaults)
                         object.entries = [];
@@ -6398,13 +6868,13 @@ $root.baml_core = (function() {
                         object.valueType = null;
                     }
                     if (message.keyType != null && message.hasOwnProperty("keyType"))
-                        object.keyType = $root.baml_core.cffi.v1.BamlTy.toObject(message.keyType, options);
+                        object.keyType = $root.baml_core.cffi.v1.BamlTy.toObject(message.keyType, options, q + 1);
                     if (message.valueType != null && message.hasOwnProperty("valueType"))
-                        object.valueType = $root.baml_core.cffi.v1.BamlTy.toObject(message.valueType, options);
+                        object.valueType = $root.baml_core.cffi.v1.BamlTy.toObject(message.valueType, options, q + 1);
                     if (message.entries && message.entries.length) {
                         object.entries = [];
                         for (var j = 0; j < message.entries.length; ++j)
-                            object.entries[j] = $root.baml_core.cffi.v1.BamlOutboundMapEntry.toObject(message.entries[j], options);
+                            object.entries[j] = $root.baml_core.cffi.v1.BamlOutboundMapEntry.toObject(message.entries[j], options, q + 1);
                     }
                     return object;
                 };
@@ -6460,7 +6930,7 @@ $root.baml_core = (function() {
                     this.fields = [];
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -6501,14 +6971,18 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlValueClass.encode = function encode(message, writer) {
+                BamlValueClass.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.name != null && Object.hasOwnProperty.call(message, "name"))
-                        $root.baml_core.cffi.v1.BamlTyName.encode(message.name, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTyName.encode(message.name, writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
                     if (message.fields != null && message.fields.length)
                         for (var i = 0; i < message.fields.length; ++i)
-                            $root.baml_core.cffi.v1.BamlOutboundMapEntry.encode(message.fields[i], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+                            $root.baml_core.cffi.v1.BamlOutboundMapEntry.encode(message.fields[i], writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -6536,9 +7010,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlValueClass.decode = function decode(reader, length, error) {
+                BamlValueClass.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlValueClass();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -6546,17 +7024,17 @@ $root.baml_core = (function() {
                             break;
                         switch (tag >>> 3) {
                         case 1: {
-                                message.name = $root.baml_core.cffi.v1.BamlTyName.decode(reader, reader.uint32());
+                                message.name = $root.baml_core.cffi.v1.BamlTyName.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 2: {
                                 if (!(message.fields && message.fields.length))
                                     message.fields = [];
-                                message.fields.push($root.baml_core.cffi.v1.BamlOutboundMapEntry.decode(reader, reader.uint32()));
+                                message.fields.push($root.baml_core.cffi.v1.BamlOutboundMapEntry.decode(reader, reader.uint32(), undefined, long + 1));
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -6587,11 +7065,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlValueClass.verify = function verify(message) {
+                BamlValueClass.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.name != null && message.hasOwnProperty("name")) {
-                        var error = $root.baml_core.cffi.v1.BamlTyName.verify(message.name);
+                        var error = $root.baml_core.cffi.v1.BamlTyName.verify(message.name, long + 1);
                         if (error)
                             return "name." + error;
                     }
@@ -6599,7 +7081,7 @@ $root.baml_core = (function() {
                         if (!Array.isArray(message.fields))
                             return "fields: array expected";
                         for (var i = 0; i < message.fields.length; ++i) {
-                            var error = $root.baml_core.cffi.v1.BamlOutboundMapEntry.verify(message.fields[i]);
+                            var error = $root.baml_core.cffi.v1.BamlOutboundMapEntry.verify(message.fields[i], long + 1);
                             if (error)
                                 return "fields." + error;
                         }
@@ -6615,23 +7097,29 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlValueClass} BamlValueClass
                  */
-                BamlValueClass.fromObject = function fromObject(object) {
+                BamlValueClass.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlValueClass)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlValueClass: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlValueClass();
                     if (object.name != null) {
-                        if (typeof object.name !== "object")
+                        if (!$util.isObject(object.name))
                             throw TypeError(".baml_core.cffi.v1.BamlValueClass.name: object expected");
-                        message.name = $root.baml_core.cffi.v1.BamlTyName.fromObject(object.name);
+                        message.name = $root.baml_core.cffi.v1.BamlTyName.fromObject(object.name, long + 1);
                     }
                     if (object.fields) {
                         if (!Array.isArray(object.fields))
                             throw TypeError(".baml_core.cffi.v1.BamlValueClass.fields: array expected");
                         message.fields = [];
                         for (var i = 0; i < object.fields.length; ++i) {
-                            if (typeof object.fields[i] !== "object")
+                            if (!$util.isObject(object.fields[i]))
                                 throw TypeError(".baml_core.cffi.v1.BamlValueClass.fields: object expected");
-                            message.fields[i] = $root.baml_core.cffi.v1.BamlOutboundMapEntry.fromObject(object.fields[i]);
+                            message.fields[i] = $root.baml_core.cffi.v1.BamlOutboundMapEntry.fromObject(object.fields[i], long + 1);
                         }
                     }
                     return message;
@@ -6646,20 +7134,24 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlValueClass.toObject = function toObject(message, options) {
+                BamlValueClass.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.arrays || options.defaults)
                         object.fields = [];
                     if (options.defaults)
                         object.name = null;
                     if (message.name != null && message.hasOwnProperty("name"))
-                        object.name = $root.baml_core.cffi.v1.BamlTyName.toObject(message.name, options);
+                        object.name = $root.baml_core.cffi.v1.BamlTyName.toObject(message.name, options, q + 1);
                     if (message.fields && message.fields.length) {
                         object.fields = [];
                         for (var j = 0; j < message.fields.length; ++j)
-                            object.fields[j] = $root.baml_core.cffi.v1.BamlOutboundMapEntry.toObject(message.fields[j], options);
+                            object.fields[j] = $root.baml_core.cffi.v1.BamlOutboundMapEntry.toObject(message.fields[j], options, q + 1);
                     }
                     return object;
                 };
@@ -6715,7 +7207,7 @@ $root.baml_core = (function() {
                 function BamlValueEnum(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -6764,11 +7256,15 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlValueEnum.encode = function encode(message, writer) {
+                BamlValueEnum.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.name != null && Object.hasOwnProperty.call(message, "name"))
-                        $root.baml_core.cffi.v1.BamlTyName.encode(message.name, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTyName.encode(message.name, writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
                     if (message.value != null && Object.hasOwnProperty.call(message, "value"))
                         writer.uint32(/* id 2, wireType 2 =*/18).string(message.value);
                     if (message.isDynamic != null && Object.hasOwnProperty.call(message, "isDynamic"))
@@ -6800,9 +7296,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlValueEnum.decode = function decode(reader, length, error) {
+                BamlValueEnum.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlValueEnum();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -6810,7 +7310,7 @@ $root.baml_core = (function() {
                             break;
                         switch (tag >>> 3) {
                         case 1: {
-                                message.name = $root.baml_core.cffi.v1.BamlTyName.decode(reader, reader.uint32());
+                                message.name = $root.baml_core.cffi.v1.BamlTyName.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 2: {
@@ -6822,7 +7322,7 @@ $root.baml_core = (function() {
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -6853,11 +7353,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlValueEnum.verify = function verify(message) {
+                BamlValueEnum.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.name != null && message.hasOwnProperty("name")) {
-                        var error = $root.baml_core.cffi.v1.BamlTyName.verify(message.name);
+                        var error = $root.baml_core.cffi.v1.BamlTyName.verify(message.name, long + 1);
                         if (error)
                             return "name." + error;
                     }
@@ -6878,14 +7382,20 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlValueEnum} BamlValueEnum
                  */
-                BamlValueEnum.fromObject = function fromObject(object) {
+                BamlValueEnum.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlValueEnum)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlValueEnum: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlValueEnum();
                     if (object.name != null) {
-                        if (typeof object.name !== "object")
+                        if (!$util.isObject(object.name))
                             throw TypeError(".baml_core.cffi.v1.BamlValueEnum.name: object expected");
-                        message.name = $root.baml_core.cffi.v1.BamlTyName.fromObject(object.name);
+                        message.name = $root.baml_core.cffi.v1.BamlTyName.fromObject(object.name, long + 1);
                     }
                     if (object.value != null)
                         message.value = String(object.value);
@@ -6903,9 +7413,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlValueEnum.toObject = function toObject(message, options) {
+                BamlValueEnum.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.defaults) {
                         object.name = null;
@@ -6913,7 +7427,7 @@ $root.baml_core = (function() {
                         object.isDynamic = false;
                     }
                     if (message.name != null && message.hasOwnProperty("name"))
-                        object.name = $root.baml_core.cffi.v1.BamlTyName.toObject(message.name, options);
+                        object.name = $root.baml_core.cffi.v1.BamlTyName.toObject(message.name, options, q + 1);
                     if (message.value != null && message.hasOwnProperty("value"))
                         object.value = message.value;
                     if (message.isDynamic != null && message.hasOwnProperty("isDynamic"))
@@ -6975,7 +7489,7 @@ $root.baml_core = (function() {
                 function BamlValueUnionVariant(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -7048,21 +7562,25 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlValueUnionVariant.encode = function encode(message, writer) {
+                BamlValueUnionVariant.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.name != null && Object.hasOwnProperty.call(message, "name"))
-                        $root.baml_core.cffi.v1.BamlTyName.encode(message.name, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTyName.encode(message.name, writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
                     if (message.isOptional != null && Object.hasOwnProperty.call(message, "isOptional"))
                         writer.uint32(/* id 2, wireType 0 =*/16).bool(message.isOptional);
                     if (message.isSinglePattern != null && Object.hasOwnProperty.call(message, "isSinglePattern"))
                         writer.uint32(/* id 3, wireType 0 =*/24).bool(message.isSinglePattern);
                     if (message.selfType != null && Object.hasOwnProperty.call(message, "selfType"))
-                        $root.baml_core.cffi.v1.BamlTy.encode(message.selfType, writer.uint32(/* id 4, wireType 2 =*/34).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTy.encode(message.selfType, writer.uint32(/* id 4, wireType 2 =*/34).fork(), q + 1).ldelim();
                     if (message.valueOptionName != null && Object.hasOwnProperty.call(message, "valueOptionName"))
                         writer.uint32(/* id 5, wireType 2 =*/42).string(message.valueOptionName);
                     if (message.value != null && Object.hasOwnProperty.call(message, "value"))
-                        $root.baml_core.cffi.v1.BamlOutboundValue.encode(message.value, writer.uint32(/* id 6, wireType 2 =*/50).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlOutboundValue.encode(message.value, writer.uint32(/* id 6, wireType 2 =*/50).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -7090,9 +7608,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlValueUnionVariant.decode = function decode(reader, length, error) {
+                BamlValueUnionVariant.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlValueUnionVariant();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -7100,7 +7622,7 @@ $root.baml_core = (function() {
                             break;
                         switch (tag >>> 3) {
                         case 1: {
-                                message.name = $root.baml_core.cffi.v1.BamlTyName.decode(reader, reader.uint32());
+                                message.name = $root.baml_core.cffi.v1.BamlTyName.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 2: {
@@ -7112,7 +7634,7 @@ $root.baml_core = (function() {
                                 break;
                             }
                         case 4: {
-                                message.selfType = $root.baml_core.cffi.v1.BamlTy.decode(reader, reader.uint32());
+                                message.selfType = $root.baml_core.cffi.v1.BamlTy.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 5: {
@@ -7120,11 +7642,11 @@ $root.baml_core = (function() {
                                 break;
                             }
                         case 6: {
-                                message.value = $root.baml_core.cffi.v1.BamlOutboundValue.decode(reader, reader.uint32());
+                                message.value = $root.baml_core.cffi.v1.BamlOutboundValue.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -7155,11 +7677,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlValueUnionVariant.verify = function verify(message) {
+                BamlValueUnionVariant.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.name != null && message.hasOwnProperty("name")) {
-                        var error = $root.baml_core.cffi.v1.BamlTyName.verify(message.name);
+                        var error = $root.baml_core.cffi.v1.BamlTyName.verify(message.name, long + 1);
                         if (error)
                             return "name." + error;
                     }
@@ -7170,7 +7696,7 @@ $root.baml_core = (function() {
                         if (typeof message.isSinglePattern !== "boolean")
                             return "isSinglePattern: boolean expected";
                     if (message.selfType != null && message.hasOwnProperty("selfType")) {
-                        var error = $root.baml_core.cffi.v1.BamlTy.verify(message.selfType);
+                        var error = $root.baml_core.cffi.v1.BamlTy.verify(message.selfType, long + 1);
                         if (error)
                             return "selfType." + error;
                     }
@@ -7178,7 +7704,7 @@ $root.baml_core = (function() {
                         if (!$util.isString(message.valueOptionName))
                             return "valueOptionName: string expected";
                     if (message.value != null && message.hasOwnProperty("value")) {
-                        var error = $root.baml_core.cffi.v1.BamlOutboundValue.verify(message.value);
+                        var error = $root.baml_core.cffi.v1.BamlOutboundValue.verify(message.value, long + 1);
                         if (error)
                             return "value." + error;
                     }
@@ -7193,30 +7719,36 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlValueUnionVariant} BamlValueUnionVariant
                  */
-                BamlValueUnionVariant.fromObject = function fromObject(object) {
+                BamlValueUnionVariant.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlValueUnionVariant)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlValueUnionVariant: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlValueUnionVariant();
                     if (object.name != null) {
-                        if (typeof object.name !== "object")
+                        if (!$util.isObject(object.name))
                             throw TypeError(".baml_core.cffi.v1.BamlValueUnionVariant.name: object expected");
-                        message.name = $root.baml_core.cffi.v1.BamlTyName.fromObject(object.name);
+                        message.name = $root.baml_core.cffi.v1.BamlTyName.fromObject(object.name, long + 1);
                     }
                     if (object.isOptional != null)
                         message.isOptional = Boolean(object.isOptional);
                     if (object.isSinglePattern != null)
                         message.isSinglePattern = Boolean(object.isSinglePattern);
                     if (object.selfType != null) {
-                        if (typeof object.selfType !== "object")
+                        if (!$util.isObject(object.selfType))
                             throw TypeError(".baml_core.cffi.v1.BamlValueUnionVariant.selfType: object expected");
-                        message.selfType = $root.baml_core.cffi.v1.BamlTy.fromObject(object.selfType);
+                        message.selfType = $root.baml_core.cffi.v1.BamlTy.fromObject(object.selfType, long + 1);
                     }
                     if (object.valueOptionName != null)
                         message.valueOptionName = String(object.valueOptionName);
                     if (object.value != null) {
-                        if (typeof object.value !== "object")
+                        if (!$util.isObject(object.value))
                             throw TypeError(".baml_core.cffi.v1.BamlValueUnionVariant.value: object expected");
-                        message.value = $root.baml_core.cffi.v1.BamlOutboundValue.fromObject(object.value);
+                        message.value = $root.baml_core.cffi.v1.BamlOutboundValue.fromObject(object.value, long + 1);
                     }
                     return message;
                 };
@@ -7230,9 +7762,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlValueUnionVariant.toObject = function toObject(message, options) {
+                BamlValueUnionVariant.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.defaults) {
                         object.name = null;
@@ -7243,17 +7779,17 @@ $root.baml_core = (function() {
                         object.value = null;
                     }
                     if (message.name != null && message.hasOwnProperty("name"))
-                        object.name = $root.baml_core.cffi.v1.BamlTyName.toObject(message.name, options);
+                        object.name = $root.baml_core.cffi.v1.BamlTyName.toObject(message.name, options, q + 1);
                     if (message.isOptional != null && message.hasOwnProperty("isOptional"))
                         object.isOptional = message.isOptional;
                     if (message.isSinglePattern != null && message.hasOwnProperty("isSinglePattern"))
                         object.isSinglePattern = message.isSinglePattern;
                     if (message.selfType != null && message.hasOwnProperty("selfType"))
-                        object.selfType = $root.baml_core.cffi.v1.BamlTy.toObject(message.selfType, options);
+                        object.selfType = $root.baml_core.cffi.v1.BamlTy.toObject(message.selfType, options, q + 1);
                     if (message.valueOptionName != null && message.hasOwnProperty("valueOptionName"))
                         object.valueOptionName = message.valueOptionName;
                     if (message.value != null && message.hasOwnProperty("value"))
-                        object.value = $root.baml_core.cffi.v1.BamlOutboundValue.toObject(message.value, options);
+                        object.value = $root.baml_core.cffi.v1.BamlOutboundValue.toObject(message.value, options, q + 1);
                     return object;
                 };
 
@@ -7332,7 +7868,7 @@ $root.baml_core = (function() {
                 function BamlValueMedia(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -7417,9 +7953,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlValueMedia.encode = function encode(message, writer) {
+                BamlValueMedia.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.media != null && Object.hasOwnProperty.call(message, "media"))
                         writer.uint32(/* id 1, wireType 0 =*/8).int32(message.media);
                     if (message.mimeType != null && Object.hasOwnProperty.call(message, "mimeType"))
@@ -7457,9 +7997,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlValueMedia.decode = function decode(reader, length, error) {
+                BamlValueMedia.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlValueMedia();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -7487,7 +8031,7 @@ $root.baml_core = (function() {
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -7518,9 +8062,13 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlValueMedia.verify = function verify(message) {
+                BamlValueMedia.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     var properties = {};
                     if (message.media != null && message.hasOwnProperty("media"))
                         switch (message.media) {
@@ -7569,9 +8117,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlValueMedia} BamlValueMedia
                  */
-                BamlValueMedia.fromObject = function fromObject(object) {
+                BamlValueMedia.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlValueMedia)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlValueMedia: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlValueMedia();
                     switch (object.media) {
                     default:
@@ -7625,9 +8179,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlValueMedia.toObject = function toObject(message, options) {
+                BamlValueMedia.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.defaults)
                         object.media = options.enums === String ? "MEDIA_TYPE_UNSPECIFIED" : 0;
@@ -7707,7 +8265,7 @@ $root.baml_core = (function() {
                 function BamlValuePromptAst(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -7770,15 +8328,19 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlValuePromptAst.encode = function encode(message, writer) {
+                BamlValuePromptAst.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.simple != null && Object.hasOwnProperty.call(message, "simple"))
-                        $root.baml_core.cffi.v1.BamlValuePromptAstSimple.encode(message.simple, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlValuePromptAstSimple.encode(message.simple, writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
                     if (message.message != null && Object.hasOwnProperty.call(message, "message"))
-                        $root.baml_core.cffi.v1.BamlValuePromptAstMessage.encode(message.message, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlValuePromptAstMessage.encode(message.message, writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
                     if (message.multiple != null && Object.hasOwnProperty.call(message, "multiple"))
-                        $root.baml_core.cffi.v1.BamlValuePromptAstMultiple.encode(message.multiple, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlValuePromptAstMultiple.encode(message.multiple, writer.uint32(/* id 3, wireType 2 =*/26).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -7806,9 +8368,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlValuePromptAst.decode = function decode(reader, length, error) {
+                BamlValuePromptAst.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlValuePromptAst();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -7816,19 +8382,19 @@ $root.baml_core = (function() {
                             break;
                         switch (tag >>> 3) {
                         case 1: {
-                                message.simple = $root.baml_core.cffi.v1.BamlValuePromptAstSimple.decode(reader, reader.uint32());
+                                message.simple = $root.baml_core.cffi.v1.BamlValuePromptAstSimple.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 2: {
-                                message.message = $root.baml_core.cffi.v1.BamlValuePromptAstMessage.decode(reader, reader.uint32());
+                                message.message = $root.baml_core.cffi.v1.BamlValuePromptAstMessage.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 3: {
-                                message.multiple = $root.baml_core.cffi.v1.BamlValuePromptAstMultiple.decode(reader, reader.uint32());
+                                message.multiple = $root.baml_core.cffi.v1.BamlValuePromptAstMultiple.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -7859,14 +8425,18 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlValuePromptAst.verify = function verify(message) {
+                BamlValuePromptAst.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     var properties = {};
                     if (message.simple != null && message.hasOwnProperty("simple")) {
                         properties.value = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlValuePromptAstSimple.verify(message.simple);
+                            var error = $root.baml_core.cffi.v1.BamlValuePromptAstSimple.verify(message.simple, long + 1);
                             if (error)
                                 return "simple." + error;
                         }
@@ -7876,7 +8446,7 @@ $root.baml_core = (function() {
                             return "value: multiple values";
                         properties.value = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlValuePromptAstMessage.verify(message.message);
+                            var error = $root.baml_core.cffi.v1.BamlValuePromptAstMessage.verify(message.message, long + 1);
                             if (error)
                                 return "message." + error;
                         }
@@ -7886,7 +8456,7 @@ $root.baml_core = (function() {
                             return "value: multiple values";
                         properties.value = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlValuePromptAstMultiple.verify(message.multiple);
+                            var error = $root.baml_core.cffi.v1.BamlValuePromptAstMultiple.verify(message.multiple, long + 1);
                             if (error)
                                 return "multiple." + error;
                         }
@@ -7902,24 +8472,30 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlValuePromptAst} BamlValuePromptAst
                  */
-                BamlValuePromptAst.fromObject = function fromObject(object) {
+                BamlValuePromptAst.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlValuePromptAst)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlValuePromptAst: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlValuePromptAst();
                     if (object.simple != null) {
-                        if (typeof object.simple !== "object")
+                        if (!$util.isObject(object.simple))
                             throw TypeError(".baml_core.cffi.v1.BamlValuePromptAst.simple: object expected");
-                        message.simple = $root.baml_core.cffi.v1.BamlValuePromptAstSimple.fromObject(object.simple);
+                        message.simple = $root.baml_core.cffi.v1.BamlValuePromptAstSimple.fromObject(object.simple, long + 1);
                     }
                     if (object.message != null) {
-                        if (typeof object.message !== "object")
+                        if (!$util.isObject(object.message))
                             throw TypeError(".baml_core.cffi.v1.BamlValuePromptAst.message: object expected");
-                        message.message = $root.baml_core.cffi.v1.BamlValuePromptAstMessage.fromObject(object.message);
+                        message.message = $root.baml_core.cffi.v1.BamlValuePromptAstMessage.fromObject(object.message, long + 1);
                     }
                     if (object.multiple != null) {
-                        if (typeof object.multiple !== "object")
+                        if (!$util.isObject(object.multiple))
                             throw TypeError(".baml_core.cffi.v1.BamlValuePromptAst.multiple: object expected");
-                        message.multiple = $root.baml_core.cffi.v1.BamlValuePromptAstMultiple.fromObject(object.multiple);
+                        message.multiple = $root.baml_core.cffi.v1.BamlValuePromptAstMultiple.fromObject(object.multiple, long + 1);
                     }
                     return message;
                 };
@@ -7933,22 +8509,26 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlValuePromptAst.toObject = function toObject(message, options) {
+                BamlValuePromptAst.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (message.simple != null && message.hasOwnProperty("simple")) {
-                        object.simple = $root.baml_core.cffi.v1.BamlValuePromptAstSimple.toObject(message.simple, options);
+                        object.simple = $root.baml_core.cffi.v1.BamlValuePromptAstSimple.toObject(message.simple, options, q + 1);
                         if (options.oneofs)
                             object.value = "simple";
                     }
                     if (message.message != null && message.hasOwnProperty("message")) {
-                        object.message = $root.baml_core.cffi.v1.BamlValuePromptAstMessage.toObject(message.message, options);
+                        object.message = $root.baml_core.cffi.v1.BamlValuePromptAstMessage.toObject(message.message, options, q + 1);
                         if (options.oneofs)
                             object.value = "message";
                     }
                     if (message.multiple != null && message.hasOwnProperty("multiple")) {
-                        object.multiple = $root.baml_core.cffi.v1.BamlValuePromptAstMultiple.toObject(message.multiple, options);
+                        object.multiple = $root.baml_core.cffi.v1.BamlValuePromptAstMultiple.toObject(message.multiple, options, q + 1);
                         if (options.oneofs)
                             object.value = "multiple";
                     }
@@ -8006,7 +8586,7 @@ $root.baml_core = (function() {
                 function BamlValuePromptAstMessage(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -8055,13 +8635,17 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlValuePromptAstMessage.encode = function encode(message, writer) {
+                BamlValuePromptAstMessage.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.role != null && Object.hasOwnProperty.call(message, "role"))
                         writer.uint32(/* id 1, wireType 2 =*/10).string(message.role);
                     if (message.content != null && Object.hasOwnProperty.call(message, "content"))
-                        $root.baml_core.cffi.v1.BamlValuePromptAstSimple.encode(message.content, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlValuePromptAstSimple.encode(message.content, writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
                     if (message.metadataAsJson != null && Object.hasOwnProperty.call(message, "metadataAsJson"))
                         writer.uint32(/* id 3, wireType 2 =*/26).string(message.metadataAsJson);
                     return writer;
@@ -8091,9 +8675,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlValuePromptAstMessage.decode = function decode(reader, length, error) {
+                BamlValuePromptAstMessage.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlValuePromptAstMessage();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -8105,7 +8693,7 @@ $root.baml_core = (function() {
                                 break;
                             }
                         case 2: {
-                                message.content = $root.baml_core.cffi.v1.BamlValuePromptAstSimple.decode(reader, reader.uint32());
+                                message.content = $root.baml_core.cffi.v1.BamlValuePromptAstSimple.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 3: {
@@ -8113,7 +8701,7 @@ $root.baml_core = (function() {
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -8144,14 +8732,18 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlValuePromptAstMessage.verify = function verify(message) {
+                BamlValuePromptAstMessage.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.role != null && message.hasOwnProperty("role"))
                         if (!$util.isString(message.role))
                             return "role: string expected";
                     if (message.content != null && message.hasOwnProperty("content")) {
-                        var error = $root.baml_core.cffi.v1.BamlValuePromptAstSimple.verify(message.content);
+                        var error = $root.baml_core.cffi.v1.BamlValuePromptAstSimple.verify(message.content, long + 1);
                         if (error)
                             return "content." + error;
                     }
@@ -8169,16 +8761,22 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlValuePromptAstMessage} BamlValuePromptAstMessage
                  */
-                BamlValuePromptAstMessage.fromObject = function fromObject(object) {
+                BamlValuePromptAstMessage.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlValuePromptAstMessage)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlValuePromptAstMessage: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlValuePromptAstMessage();
                     if (object.role != null)
                         message.role = String(object.role);
                     if (object.content != null) {
-                        if (typeof object.content !== "object")
+                        if (!$util.isObject(object.content))
                             throw TypeError(".baml_core.cffi.v1.BamlValuePromptAstMessage.content: object expected");
-                        message.content = $root.baml_core.cffi.v1.BamlValuePromptAstSimple.fromObject(object.content);
+                        message.content = $root.baml_core.cffi.v1.BamlValuePromptAstSimple.fromObject(object.content, long + 1);
                     }
                     if (object.metadataAsJson != null)
                         message.metadataAsJson = String(object.metadataAsJson);
@@ -8194,9 +8792,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlValuePromptAstMessage.toObject = function toObject(message, options) {
+                BamlValuePromptAstMessage.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.defaults) {
                         object.role = "";
@@ -8206,7 +8808,7 @@ $root.baml_core = (function() {
                     if (message.role != null && message.hasOwnProperty("role"))
                         object.role = message.role;
                     if (message.content != null && message.hasOwnProperty("content"))
-                        object.content = $root.baml_core.cffi.v1.BamlValuePromptAstSimple.toObject(message.content, options);
+                        object.content = $root.baml_core.cffi.v1.BamlValuePromptAstSimple.toObject(message.content, options, q + 1);
                     if (message.metadataAsJson != null && message.hasOwnProperty("metadataAsJson"))
                         object.metadataAsJson = message.metadataAsJson;
                     return object;
@@ -8262,7 +8864,7 @@ $root.baml_core = (function() {
                     this.items = [];
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -8295,12 +8897,16 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlValuePromptAstMultiple.encode = function encode(message, writer) {
+                BamlValuePromptAstMultiple.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.items != null && message.items.length)
                         for (var i = 0; i < message.items.length; ++i)
-                            $root.baml_core.cffi.v1.BamlValuePromptAst.encode(message.items[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+                            $root.baml_core.cffi.v1.BamlValuePromptAst.encode(message.items[i], writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -8328,9 +8934,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlValuePromptAstMultiple.decode = function decode(reader, length, error) {
+                BamlValuePromptAstMultiple.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlValuePromptAstMultiple();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -8340,11 +8950,11 @@ $root.baml_core = (function() {
                         case 1: {
                                 if (!(message.items && message.items.length))
                                     message.items = [];
-                                message.items.push($root.baml_core.cffi.v1.BamlValuePromptAst.decode(reader, reader.uint32()));
+                                message.items.push($root.baml_core.cffi.v1.BamlValuePromptAst.decode(reader, reader.uint32(), undefined, long + 1));
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -8375,14 +8985,18 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlValuePromptAstMultiple.verify = function verify(message) {
+                BamlValuePromptAstMultiple.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.items != null && message.hasOwnProperty("items")) {
                         if (!Array.isArray(message.items))
                             return "items: array expected";
                         for (var i = 0; i < message.items.length; ++i) {
-                            var error = $root.baml_core.cffi.v1.BamlValuePromptAst.verify(message.items[i]);
+                            var error = $root.baml_core.cffi.v1.BamlValuePromptAst.verify(message.items[i], long + 1);
                             if (error)
                                 return "items." + error;
                         }
@@ -8398,18 +9012,24 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlValuePromptAstMultiple} BamlValuePromptAstMultiple
                  */
-                BamlValuePromptAstMultiple.fromObject = function fromObject(object) {
+                BamlValuePromptAstMultiple.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlValuePromptAstMultiple)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlValuePromptAstMultiple: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlValuePromptAstMultiple();
                     if (object.items) {
                         if (!Array.isArray(object.items))
                             throw TypeError(".baml_core.cffi.v1.BamlValuePromptAstMultiple.items: array expected");
                         message.items = [];
                         for (var i = 0; i < object.items.length; ++i) {
-                            if (typeof object.items[i] !== "object")
+                            if (!$util.isObject(object.items[i]))
                                 throw TypeError(".baml_core.cffi.v1.BamlValuePromptAstMultiple.items: object expected");
-                            message.items[i] = $root.baml_core.cffi.v1.BamlValuePromptAst.fromObject(object.items[i]);
+                            message.items[i] = $root.baml_core.cffi.v1.BamlValuePromptAst.fromObject(object.items[i], long + 1);
                         }
                     }
                     return message;
@@ -8424,16 +9044,20 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlValuePromptAstMultiple.toObject = function toObject(message, options) {
+                BamlValuePromptAstMultiple.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.arrays || options.defaults)
                         object.items = [];
                     if (message.items && message.items.length) {
                         object.items = [];
                         for (var j = 0; j < message.items.length; ++j)
-                            object.items[j] = $root.baml_core.cffi.v1.BamlValuePromptAst.toObject(message.items[j], options);
+                            object.items[j] = $root.baml_core.cffi.v1.BamlValuePromptAst.toObject(message.items[j], options, q + 1);
                     }
                     return object;
                 };
@@ -8489,7 +9113,7 @@ $root.baml_core = (function() {
                 function BamlValuePromptAstSimple(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -8552,15 +9176,19 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlValuePromptAstSimple.encode = function encode(message, writer) {
+                BamlValuePromptAstSimple.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.string != null && Object.hasOwnProperty.call(message, "string"))
                         writer.uint32(/* id 1, wireType 2 =*/10).string(message.string);
                     if (message.media != null && Object.hasOwnProperty.call(message, "media"))
-                        $root.baml_core.cffi.v1.BamlValueMedia.encode(message.media, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlValueMedia.encode(message.media, writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
                     if (message.multiple != null && Object.hasOwnProperty.call(message, "multiple"))
-                        $root.baml_core.cffi.v1.BamlValuePromptAstSimpleMultiple.encode(message.multiple, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlValuePromptAstSimpleMultiple.encode(message.multiple, writer.uint32(/* id 3, wireType 2 =*/26).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -8588,9 +9216,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlValuePromptAstSimple.decode = function decode(reader, length, error) {
+                BamlValuePromptAstSimple.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlValuePromptAstSimple();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -8602,15 +9234,15 @@ $root.baml_core = (function() {
                                 break;
                             }
                         case 2: {
-                                message.media = $root.baml_core.cffi.v1.BamlValueMedia.decode(reader, reader.uint32());
+                                message.media = $root.baml_core.cffi.v1.BamlValueMedia.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 3: {
-                                message.multiple = $root.baml_core.cffi.v1.BamlValuePromptAstSimpleMultiple.decode(reader, reader.uint32());
+                                message.multiple = $root.baml_core.cffi.v1.BamlValuePromptAstSimpleMultiple.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -8641,9 +9273,13 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlValuePromptAstSimple.verify = function verify(message) {
+                BamlValuePromptAstSimple.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     var properties = {};
                     if (message.string != null && message.hasOwnProperty("string")) {
                         properties.value = 1;
@@ -8655,7 +9291,7 @@ $root.baml_core = (function() {
                             return "value: multiple values";
                         properties.value = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlValueMedia.verify(message.media);
+                            var error = $root.baml_core.cffi.v1.BamlValueMedia.verify(message.media, long + 1);
                             if (error)
                                 return "media." + error;
                         }
@@ -8665,7 +9301,7 @@ $root.baml_core = (function() {
                             return "value: multiple values";
                         properties.value = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlValuePromptAstSimpleMultiple.verify(message.multiple);
+                            var error = $root.baml_core.cffi.v1.BamlValuePromptAstSimpleMultiple.verify(message.multiple, long + 1);
                             if (error)
                                 return "multiple." + error;
                         }
@@ -8681,21 +9317,27 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlValuePromptAstSimple} BamlValuePromptAstSimple
                  */
-                BamlValuePromptAstSimple.fromObject = function fromObject(object) {
+                BamlValuePromptAstSimple.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlValuePromptAstSimple)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlValuePromptAstSimple: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlValuePromptAstSimple();
                     if (object.string != null)
                         message.string = String(object.string);
                     if (object.media != null) {
-                        if (typeof object.media !== "object")
+                        if (!$util.isObject(object.media))
                             throw TypeError(".baml_core.cffi.v1.BamlValuePromptAstSimple.media: object expected");
-                        message.media = $root.baml_core.cffi.v1.BamlValueMedia.fromObject(object.media);
+                        message.media = $root.baml_core.cffi.v1.BamlValueMedia.fromObject(object.media, long + 1);
                     }
                     if (object.multiple != null) {
-                        if (typeof object.multiple !== "object")
+                        if (!$util.isObject(object.multiple))
                             throw TypeError(".baml_core.cffi.v1.BamlValuePromptAstSimple.multiple: object expected");
-                        message.multiple = $root.baml_core.cffi.v1.BamlValuePromptAstSimpleMultiple.fromObject(object.multiple);
+                        message.multiple = $root.baml_core.cffi.v1.BamlValuePromptAstSimpleMultiple.fromObject(object.multiple, long + 1);
                     }
                     return message;
                 };
@@ -8709,9 +9351,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlValuePromptAstSimple.toObject = function toObject(message, options) {
+                BamlValuePromptAstSimple.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (message.string != null && message.hasOwnProperty("string")) {
                         object.string = message.string;
@@ -8719,12 +9365,12 @@ $root.baml_core = (function() {
                             object.value = "string";
                     }
                     if (message.media != null && message.hasOwnProperty("media")) {
-                        object.media = $root.baml_core.cffi.v1.BamlValueMedia.toObject(message.media, options);
+                        object.media = $root.baml_core.cffi.v1.BamlValueMedia.toObject(message.media, options, q + 1);
                         if (options.oneofs)
                             object.value = "media";
                     }
                     if (message.multiple != null && message.hasOwnProperty("multiple")) {
-                        object.multiple = $root.baml_core.cffi.v1.BamlValuePromptAstSimpleMultiple.toObject(message.multiple, options);
+                        object.multiple = $root.baml_core.cffi.v1.BamlValuePromptAstSimpleMultiple.toObject(message.multiple, options, q + 1);
                         if (options.oneofs)
                             object.value = "multiple";
                     }
@@ -8781,7 +9427,7 @@ $root.baml_core = (function() {
                     this.items = [];
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -8814,12 +9460,16 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlValuePromptAstSimpleMultiple.encode = function encode(message, writer) {
+                BamlValuePromptAstSimpleMultiple.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.items != null && message.items.length)
                         for (var i = 0; i < message.items.length; ++i)
-                            $root.baml_core.cffi.v1.BamlValuePromptAstSimple.encode(message.items[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+                            $root.baml_core.cffi.v1.BamlValuePromptAstSimple.encode(message.items[i], writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -8847,9 +9497,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlValuePromptAstSimpleMultiple.decode = function decode(reader, length, error) {
+                BamlValuePromptAstSimpleMultiple.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlValuePromptAstSimpleMultiple();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -8859,11 +9513,11 @@ $root.baml_core = (function() {
                         case 1: {
                                 if (!(message.items && message.items.length))
                                     message.items = [];
-                                message.items.push($root.baml_core.cffi.v1.BamlValuePromptAstSimple.decode(reader, reader.uint32()));
+                                message.items.push($root.baml_core.cffi.v1.BamlValuePromptAstSimple.decode(reader, reader.uint32(), undefined, long + 1));
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -8894,14 +9548,18 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlValuePromptAstSimpleMultiple.verify = function verify(message) {
+                BamlValuePromptAstSimpleMultiple.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.items != null && message.hasOwnProperty("items")) {
                         if (!Array.isArray(message.items))
                             return "items: array expected";
                         for (var i = 0; i < message.items.length; ++i) {
-                            var error = $root.baml_core.cffi.v1.BamlValuePromptAstSimple.verify(message.items[i]);
+                            var error = $root.baml_core.cffi.v1.BamlValuePromptAstSimple.verify(message.items[i], long + 1);
                             if (error)
                                 return "items." + error;
                         }
@@ -8917,18 +9575,24 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlValuePromptAstSimpleMultiple} BamlValuePromptAstSimpleMultiple
                  */
-                BamlValuePromptAstSimpleMultiple.fromObject = function fromObject(object) {
+                BamlValuePromptAstSimpleMultiple.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlValuePromptAstSimpleMultiple)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlValuePromptAstSimpleMultiple: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlValuePromptAstSimpleMultiple();
                     if (object.items) {
                         if (!Array.isArray(object.items))
                             throw TypeError(".baml_core.cffi.v1.BamlValuePromptAstSimpleMultiple.items: array expected");
                         message.items = [];
                         for (var i = 0; i < object.items.length; ++i) {
-                            if (typeof object.items[i] !== "object")
+                            if (!$util.isObject(object.items[i]))
                                 throw TypeError(".baml_core.cffi.v1.BamlValuePromptAstSimpleMultiple.items: object expected");
-                            message.items[i] = $root.baml_core.cffi.v1.BamlValuePromptAstSimple.fromObject(object.items[i]);
+                            message.items[i] = $root.baml_core.cffi.v1.BamlValuePromptAstSimple.fromObject(object.items[i], long + 1);
                         }
                     }
                     return message;
@@ -8943,16 +9607,20 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlValuePromptAstSimpleMultiple.toObject = function toObject(message, options) {
+                BamlValuePromptAstSimpleMultiple.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.arrays || options.defaults)
                         object.items = [];
                     if (message.items && message.items.length) {
                         object.items = [];
                         for (var j = 0; j < message.items.length; ++j)
-                            object.items[j] = $root.baml_core.cffi.v1.BamlValuePromptAstSimple.toObject(message.items[j], options);
+                            object.items[j] = $root.baml_core.cffi.v1.BamlValuePromptAstSimple.toObject(message.items[j], options, q + 1);
                     }
                     return object;
                 };
@@ -9023,7 +9691,7 @@ $root.baml_core = (function() {
                 function BamlTy(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -9206,45 +9874,49 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlTy.encode = function encode(message, writer) {
+                BamlTy.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.stringType != null && Object.hasOwnProperty.call(message, "stringType"))
-                        $root.baml_core.cffi.v1.BamlTyString.encode(message.stringType, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTyString.encode(message.stringType, writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
                     if (message.intType != null && Object.hasOwnProperty.call(message, "intType"))
-                        $root.baml_core.cffi.v1.BamlTyInt.encode(message.intType, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTyInt.encode(message.intType, writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
                     if (message.floatType != null && Object.hasOwnProperty.call(message, "floatType"))
-                        $root.baml_core.cffi.v1.BamlTyFloat.encode(message.floatType, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTyFloat.encode(message.floatType, writer.uint32(/* id 3, wireType 2 =*/26).fork(), q + 1).ldelim();
                     if (message.boolType != null && Object.hasOwnProperty.call(message, "boolType"))
-                        $root.baml_core.cffi.v1.BamlTyBool.encode(message.boolType, writer.uint32(/* id 4, wireType 2 =*/34).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTyBool.encode(message.boolType, writer.uint32(/* id 4, wireType 2 =*/34).fork(), q + 1).ldelim();
                     if (message.nullType != null && Object.hasOwnProperty.call(message, "nullType"))
-                        $root.baml_core.cffi.v1.BamlTyNull.encode(message.nullType, writer.uint32(/* id 5, wireType 2 =*/42).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTyNull.encode(message.nullType, writer.uint32(/* id 5, wireType 2 =*/42).fork(), q + 1).ldelim();
                     if (message.literalType != null && Object.hasOwnProperty.call(message, "literalType"))
-                        $root.baml_core.cffi.v1.BamlTyLiteral.encode(message.literalType, writer.uint32(/* id 6, wireType 2 =*/50).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTyLiteral.encode(message.literalType, writer.uint32(/* id 6, wireType 2 =*/50).fork(), q + 1).ldelim();
                     if (message.mediaType != null && Object.hasOwnProperty.call(message, "mediaType"))
-                        $root.baml_core.cffi.v1.BamlTyMedia.encode(message.mediaType, writer.uint32(/* id 7, wireType 2 =*/58).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTyMedia.encode(message.mediaType, writer.uint32(/* id 7, wireType 2 =*/58).fork(), q + 1).ldelim();
                     if (message.enumType != null && Object.hasOwnProperty.call(message, "enumType"))
-                        $root.baml_core.cffi.v1.BamlTyEnum.encode(message.enumType, writer.uint32(/* id 8, wireType 2 =*/66).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTyEnum.encode(message.enumType, writer.uint32(/* id 8, wireType 2 =*/66).fork(), q + 1).ldelim();
                     if (message.classType != null && Object.hasOwnProperty.call(message, "classType"))
-                        $root.baml_core.cffi.v1.BamlTyClass.encode(message.classType, writer.uint32(/* id 9, wireType 2 =*/74).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTyClass.encode(message.classType, writer.uint32(/* id 9, wireType 2 =*/74).fork(), q + 1).ldelim();
                     if (message.typeAliasType != null && Object.hasOwnProperty.call(message, "typeAliasType"))
-                        $root.baml_core.cffi.v1.BamlTyTypeAlias.encode(message.typeAliasType, writer.uint32(/* id 10, wireType 2 =*/82).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTyTypeAlias.encode(message.typeAliasType, writer.uint32(/* id 10, wireType 2 =*/82).fork(), q + 1).ldelim();
                     if (message.listType != null && Object.hasOwnProperty.call(message, "listType"))
-                        $root.baml_core.cffi.v1.BamlTyList.encode(message.listType, writer.uint32(/* id 11, wireType 2 =*/90).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTyList.encode(message.listType, writer.uint32(/* id 11, wireType 2 =*/90).fork(), q + 1).ldelim();
                     if (message.mapType != null && Object.hasOwnProperty.call(message, "mapType"))
-                        $root.baml_core.cffi.v1.BamlTyMap.encode(message.mapType, writer.uint32(/* id 12, wireType 2 =*/98).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTyMap.encode(message.mapType, writer.uint32(/* id 12, wireType 2 =*/98).fork(), q + 1).ldelim();
                     if (message.unionVariantType != null && Object.hasOwnProperty.call(message, "unionVariantType"))
-                        $root.baml_core.cffi.v1.BamlTyUnionVariant.encode(message.unionVariantType, writer.uint32(/* id 14, wireType 2 =*/114).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTyUnionVariant.encode(message.unionVariantType, writer.uint32(/* id 14, wireType 2 =*/114).fork(), q + 1).ldelim();
                     if (message.optionalType != null && Object.hasOwnProperty.call(message, "optionalType"))
-                        $root.baml_core.cffi.v1.BamlTyOptional.encode(message.optionalType, writer.uint32(/* id 15, wireType 2 =*/122).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTyOptional.encode(message.optionalType, writer.uint32(/* id 15, wireType 2 =*/122).fork(), q + 1).ldelim();
                     if (message.anyType != null && Object.hasOwnProperty.call(message, "anyType"))
-                        $root.baml_core.cffi.v1.BamlTyAny.encode(message.anyType, writer.uint32(/* id 18, wireType 2 =*/146).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTyAny.encode(message.anyType, writer.uint32(/* id 18, wireType 2 =*/146).fork(), q + 1).ldelim();
                     if (message.uint8arrayType != null && Object.hasOwnProperty.call(message, "uint8arrayType"))
-                        $root.baml_core.cffi.v1.BamlTyUint8Array.encode(message.uint8arrayType, writer.uint32(/* id 19, wireType 2 =*/154).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTyUint8Array.encode(message.uint8arrayType, writer.uint32(/* id 19, wireType 2 =*/154).fork(), q + 1).ldelim();
                     if (message.unknownType != null && Object.hasOwnProperty.call(message, "unknownType"))
-                        $root.baml_core.cffi.v1.BamlTyUnknown.encode(message.unknownType, writer.uint32(/* id 20, wireType 2 =*/162).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTyUnknown.encode(message.unknownType, writer.uint32(/* id 20, wireType 2 =*/162).fork(), q + 1).ldelim();
                     if (message.bigintType != null && Object.hasOwnProperty.call(message, "bigintType"))
-                        $root.baml_core.cffi.v1.BamlTyBigint.encode(message.bigintType, writer.uint32(/* id 21, wireType 2 =*/170).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTyBigint.encode(message.bigintType, writer.uint32(/* id 21, wireType 2 =*/170).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -9272,9 +9944,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlTy.decode = function decode(reader, length, error) {
+                BamlTy.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlTy();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -9282,79 +9958,79 @@ $root.baml_core = (function() {
                             break;
                         switch (tag >>> 3) {
                         case 1: {
-                                message.stringType = $root.baml_core.cffi.v1.BamlTyString.decode(reader, reader.uint32());
+                                message.stringType = $root.baml_core.cffi.v1.BamlTyString.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 2: {
-                                message.intType = $root.baml_core.cffi.v1.BamlTyInt.decode(reader, reader.uint32());
+                                message.intType = $root.baml_core.cffi.v1.BamlTyInt.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 3: {
-                                message.floatType = $root.baml_core.cffi.v1.BamlTyFloat.decode(reader, reader.uint32());
+                                message.floatType = $root.baml_core.cffi.v1.BamlTyFloat.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 4: {
-                                message.boolType = $root.baml_core.cffi.v1.BamlTyBool.decode(reader, reader.uint32());
+                                message.boolType = $root.baml_core.cffi.v1.BamlTyBool.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 5: {
-                                message.nullType = $root.baml_core.cffi.v1.BamlTyNull.decode(reader, reader.uint32());
+                                message.nullType = $root.baml_core.cffi.v1.BamlTyNull.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 6: {
-                                message.literalType = $root.baml_core.cffi.v1.BamlTyLiteral.decode(reader, reader.uint32());
+                                message.literalType = $root.baml_core.cffi.v1.BamlTyLiteral.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 7: {
-                                message.mediaType = $root.baml_core.cffi.v1.BamlTyMedia.decode(reader, reader.uint32());
+                                message.mediaType = $root.baml_core.cffi.v1.BamlTyMedia.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 8: {
-                                message.enumType = $root.baml_core.cffi.v1.BamlTyEnum.decode(reader, reader.uint32());
+                                message.enumType = $root.baml_core.cffi.v1.BamlTyEnum.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 9: {
-                                message.classType = $root.baml_core.cffi.v1.BamlTyClass.decode(reader, reader.uint32());
+                                message.classType = $root.baml_core.cffi.v1.BamlTyClass.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 10: {
-                                message.typeAliasType = $root.baml_core.cffi.v1.BamlTyTypeAlias.decode(reader, reader.uint32());
+                                message.typeAliasType = $root.baml_core.cffi.v1.BamlTyTypeAlias.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 11: {
-                                message.listType = $root.baml_core.cffi.v1.BamlTyList.decode(reader, reader.uint32());
+                                message.listType = $root.baml_core.cffi.v1.BamlTyList.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 12: {
-                                message.mapType = $root.baml_core.cffi.v1.BamlTyMap.decode(reader, reader.uint32());
+                                message.mapType = $root.baml_core.cffi.v1.BamlTyMap.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 14: {
-                                message.unionVariantType = $root.baml_core.cffi.v1.BamlTyUnionVariant.decode(reader, reader.uint32());
+                                message.unionVariantType = $root.baml_core.cffi.v1.BamlTyUnionVariant.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 15: {
-                                message.optionalType = $root.baml_core.cffi.v1.BamlTyOptional.decode(reader, reader.uint32());
+                                message.optionalType = $root.baml_core.cffi.v1.BamlTyOptional.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 18: {
-                                message.anyType = $root.baml_core.cffi.v1.BamlTyAny.decode(reader, reader.uint32());
+                                message.anyType = $root.baml_core.cffi.v1.BamlTyAny.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 19: {
-                                message.uint8arrayType = $root.baml_core.cffi.v1.BamlTyUint8Array.decode(reader, reader.uint32());
+                                message.uint8arrayType = $root.baml_core.cffi.v1.BamlTyUint8Array.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 20: {
-                                message.unknownType = $root.baml_core.cffi.v1.BamlTyUnknown.decode(reader, reader.uint32());
+                                message.unknownType = $root.baml_core.cffi.v1.BamlTyUnknown.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 21: {
-                                message.bigintType = $root.baml_core.cffi.v1.BamlTyBigint.decode(reader, reader.uint32());
+                                message.bigintType = $root.baml_core.cffi.v1.BamlTyBigint.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -9385,14 +10061,18 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlTy.verify = function verify(message) {
+                BamlTy.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     var properties = {};
                     if (message.stringType != null && message.hasOwnProperty("stringType")) {
                         properties.type = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlTyString.verify(message.stringType);
+                            var error = $root.baml_core.cffi.v1.BamlTyString.verify(message.stringType, long + 1);
                             if (error)
                                 return "stringType." + error;
                         }
@@ -9402,7 +10082,7 @@ $root.baml_core = (function() {
                             return "type: multiple values";
                         properties.type = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlTyInt.verify(message.intType);
+                            var error = $root.baml_core.cffi.v1.BamlTyInt.verify(message.intType, long + 1);
                             if (error)
                                 return "intType." + error;
                         }
@@ -9412,7 +10092,7 @@ $root.baml_core = (function() {
                             return "type: multiple values";
                         properties.type = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlTyFloat.verify(message.floatType);
+                            var error = $root.baml_core.cffi.v1.BamlTyFloat.verify(message.floatType, long + 1);
                             if (error)
                                 return "floatType." + error;
                         }
@@ -9422,7 +10102,7 @@ $root.baml_core = (function() {
                             return "type: multiple values";
                         properties.type = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlTyBool.verify(message.boolType);
+                            var error = $root.baml_core.cffi.v1.BamlTyBool.verify(message.boolType, long + 1);
                             if (error)
                                 return "boolType." + error;
                         }
@@ -9432,7 +10112,7 @@ $root.baml_core = (function() {
                             return "type: multiple values";
                         properties.type = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlTyNull.verify(message.nullType);
+                            var error = $root.baml_core.cffi.v1.BamlTyNull.verify(message.nullType, long + 1);
                             if (error)
                                 return "nullType." + error;
                         }
@@ -9442,7 +10122,7 @@ $root.baml_core = (function() {
                             return "type: multiple values";
                         properties.type = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlTyLiteral.verify(message.literalType);
+                            var error = $root.baml_core.cffi.v1.BamlTyLiteral.verify(message.literalType, long + 1);
                             if (error)
                                 return "literalType." + error;
                         }
@@ -9452,7 +10132,7 @@ $root.baml_core = (function() {
                             return "type: multiple values";
                         properties.type = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlTyMedia.verify(message.mediaType);
+                            var error = $root.baml_core.cffi.v1.BamlTyMedia.verify(message.mediaType, long + 1);
                             if (error)
                                 return "mediaType." + error;
                         }
@@ -9462,7 +10142,7 @@ $root.baml_core = (function() {
                             return "type: multiple values";
                         properties.type = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlTyEnum.verify(message.enumType);
+                            var error = $root.baml_core.cffi.v1.BamlTyEnum.verify(message.enumType, long + 1);
                             if (error)
                                 return "enumType." + error;
                         }
@@ -9472,7 +10152,7 @@ $root.baml_core = (function() {
                             return "type: multiple values";
                         properties.type = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlTyClass.verify(message.classType);
+                            var error = $root.baml_core.cffi.v1.BamlTyClass.verify(message.classType, long + 1);
                             if (error)
                                 return "classType." + error;
                         }
@@ -9482,7 +10162,7 @@ $root.baml_core = (function() {
                             return "type: multiple values";
                         properties.type = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlTyTypeAlias.verify(message.typeAliasType);
+                            var error = $root.baml_core.cffi.v1.BamlTyTypeAlias.verify(message.typeAliasType, long + 1);
                             if (error)
                                 return "typeAliasType." + error;
                         }
@@ -9492,7 +10172,7 @@ $root.baml_core = (function() {
                             return "type: multiple values";
                         properties.type = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlTyList.verify(message.listType);
+                            var error = $root.baml_core.cffi.v1.BamlTyList.verify(message.listType, long + 1);
                             if (error)
                                 return "listType." + error;
                         }
@@ -9502,7 +10182,7 @@ $root.baml_core = (function() {
                             return "type: multiple values";
                         properties.type = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlTyMap.verify(message.mapType);
+                            var error = $root.baml_core.cffi.v1.BamlTyMap.verify(message.mapType, long + 1);
                             if (error)
                                 return "mapType." + error;
                         }
@@ -9512,7 +10192,7 @@ $root.baml_core = (function() {
                             return "type: multiple values";
                         properties.type = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlTyUnionVariant.verify(message.unionVariantType);
+                            var error = $root.baml_core.cffi.v1.BamlTyUnionVariant.verify(message.unionVariantType, long + 1);
                             if (error)
                                 return "unionVariantType." + error;
                         }
@@ -9522,7 +10202,7 @@ $root.baml_core = (function() {
                             return "type: multiple values";
                         properties.type = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlTyOptional.verify(message.optionalType);
+                            var error = $root.baml_core.cffi.v1.BamlTyOptional.verify(message.optionalType, long + 1);
                             if (error)
                                 return "optionalType." + error;
                         }
@@ -9532,7 +10212,7 @@ $root.baml_core = (function() {
                             return "type: multiple values";
                         properties.type = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlTyAny.verify(message.anyType);
+                            var error = $root.baml_core.cffi.v1.BamlTyAny.verify(message.anyType, long + 1);
                             if (error)
                                 return "anyType." + error;
                         }
@@ -9542,7 +10222,7 @@ $root.baml_core = (function() {
                             return "type: multiple values";
                         properties.type = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlTyUint8Array.verify(message.uint8arrayType);
+                            var error = $root.baml_core.cffi.v1.BamlTyUint8Array.verify(message.uint8arrayType, long + 1);
                             if (error)
                                 return "uint8arrayType." + error;
                         }
@@ -9552,7 +10232,7 @@ $root.baml_core = (function() {
                             return "type: multiple values";
                         properties.type = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlTyUnknown.verify(message.unknownType);
+                            var error = $root.baml_core.cffi.v1.BamlTyUnknown.verify(message.unknownType, long + 1);
                             if (error)
                                 return "unknownType." + error;
                         }
@@ -9562,7 +10242,7 @@ $root.baml_core = (function() {
                             return "type: multiple values";
                         properties.type = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlTyBigint.verify(message.bigintType);
+                            var error = $root.baml_core.cffi.v1.BamlTyBigint.verify(message.bigintType, long + 1);
                             if (error)
                                 return "bigintType." + error;
                         }
@@ -9578,99 +10258,105 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlTy} BamlTy
                  */
-                BamlTy.fromObject = function fromObject(object) {
+                BamlTy.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlTy)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlTy: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlTy();
                     if (object.stringType != null) {
-                        if (typeof object.stringType !== "object")
+                        if (!$util.isObject(object.stringType))
                             throw TypeError(".baml_core.cffi.v1.BamlTy.stringType: object expected");
-                        message.stringType = $root.baml_core.cffi.v1.BamlTyString.fromObject(object.stringType);
+                        message.stringType = $root.baml_core.cffi.v1.BamlTyString.fromObject(object.stringType, long + 1);
                     }
                     if (object.intType != null) {
-                        if (typeof object.intType !== "object")
+                        if (!$util.isObject(object.intType))
                             throw TypeError(".baml_core.cffi.v1.BamlTy.intType: object expected");
-                        message.intType = $root.baml_core.cffi.v1.BamlTyInt.fromObject(object.intType);
+                        message.intType = $root.baml_core.cffi.v1.BamlTyInt.fromObject(object.intType, long + 1);
                     }
                     if (object.floatType != null) {
-                        if (typeof object.floatType !== "object")
+                        if (!$util.isObject(object.floatType))
                             throw TypeError(".baml_core.cffi.v1.BamlTy.floatType: object expected");
-                        message.floatType = $root.baml_core.cffi.v1.BamlTyFloat.fromObject(object.floatType);
+                        message.floatType = $root.baml_core.cffi.v1.BamlTyFloat.fromObject(object.floatType, long + 1);
                     }
                     if (object.boolType != null) {
-                        if (typeof object.boolType !== "object")
+                        if (!$util.isObject(object.boolType))
                             throw TypeError(".baml_core.cffi.v1.BamlTy.boolType: object expected");
-                        message.boolType = $root.baml_core.cffi.v1.BamlTyBool.fromObject(object.boolType);
+                        message.boolType = $root.baml_core.cffi.v1.BamlTyBool.fromObject(object.boolType, long + 1);
                     }
                     if (object.nullType != null) {
-                        if (typeof object.nullType !== "object")
+                        if (!$util.isObject(object.nullType))
                             throw TypeError(".baml_core.cffi.v1.BamlTy.nullType: object expected");
-                        message.nullType = $root.baml_core.cffi.v1.BamlTyNull.fromObject(object.nullType);
+                        message.nullType = $root.baml_core.cffi.v1.BamlTyNull.fromObject(object.nullType, long + 1);
                     }
                     if (object.literalType != null) {
-                        if (typeof object.literalType !== "object")
+                        if (!$util.isObject(object.literalType))
                             throw TypeError(".baml_core.cffi.v1.BamlTy.literalType: object expected");
-                        message.literalType = $root.baml_core.cffi.v1.BamlTyLiteral.fromObject(object.literalType);
+                        message.literalType = $root.baml_core.cffi.v1.BamlTyLiteral.fromObject(object.literalType, long + 1);
                     }
                     if (object.mediaType != null) {
-                        if (typeof object.mediaType !== "object")
+                        if (!$util.isObject(object.mediaType))
                             throw TypeError(".baml_core.cffi.v1.BamlTy.mediaType: object expected");
-                        message.mediaType = $root.baml_core.cffi.v1.BamlTyMedia.fromObject(object.mediaType);
+                        message.mediaType = $root.baml_core.cffi.v1.BamlTyMedia.fromObject(object.mediaType, long + 1);
                     }
                     if (object.enumType != null) {
-                        if (typeof object.enumType !== "object")
+                        if (!$util.isObject(object.enumType))
                             throw TypeError(".baml_core.cffi.v1.BamlTy.enumType: object expected");
-                        message.enumType = $root.baml_core.cffi.v1.BamlTyEnum.fromObject(object.enumType);
+                        message.enumType = $root.baml_core.cffi.v1.BamlTyEnum.fromObject(object.enumType, long + 1);
                     }
                     if (object.classType != null) {
-                        if (typeof object.classType !== "object")
+                        if (!$util.isObject(object.classType))
                             throw TypeError(".baml_core.cffi.v1.BamlTy.classType: object expected");
-                        message.classType = $root.baml_core.cffi.v1.BamlTyClass.fromObject(object.classType);
+                        message.classType = $root.baml_core.cffi.v1.BamlTyClass.fromObject(object.classType, long + 1);
                     }
                     if (object.typeAliasType != null) {
-                        if (typeof object.typeAliasType !== "object")
+                        if (!$util.isObject(object.typeAliasType))
                             throw TypeError(".baml_core.cffi.v1.BamlTy.typeAliasType: object expected");
-                        message.typeAliasType = $root.baml_core.cffi.v1.BamlTyTypeAlias.fromObject(object.typeAliasType);
+                        message.typeAliasType = $root.baml_core.cffi.v1.BamlTyTypeAlias.fromObject(object.typeAliasType, long + 1);
                     }
                     if (object.listType != null) {
-                        if (typeof object.listType !== "object")
+                        if (!$util.isObject(object.listType))
                             throw TypeError(".baml_core.cffi.v1.BamlTy.listType: object expected");
-                        message.listType = $root.baml_core.cffi.v1.BamlTyList.fromObject(object.listType);
+                        message.listType = $root.baml_core.cffi.v1.BamlTyList.fromObject(object.listType, long + 1);
                     }
                     if (object.mapType != null) {
-                        if (typeof object.mapType !== "object")
+                        if (!$util.isObject(object.mapType))
                             throw TypeError(".baml_core.cffi.v1.BamlTy.mapType: object expected");
-                        message.mapType = $root.baml_core.cffi.v1.BamlTyMap.fromObject(object.mapType);
+                        message.mapType = $root.baml_core.cffi.v1.BamlTyMap.fromObject(object.mapType, long + 1);
                     }
                     if (object.unionVariantType != null) {
-                        if (typeof object.unionVariantType !== "object")
+                        if (!$util.isObject(object.unionVariantType))
                             throw TypeError(".baml_core.cffi.v1.BamlTy.unionVariantType: object expected");
-                        message.unionVariantType = $root.baml_core.cffi.v1.BamlTyUnionVariant.fromObject(object.unionVariantType);
+                        message.unionVariantType = $root.baml_core.cffi.v1.BamlTyUnionVariant.fromObject(object.unionVariantType, long + 1);
                     }
                     if (object.optionalType != null) {
-                        if (typeof object.optionalType !== "object")
+                        if (!$util.isObject(object.optionalType))
                             throw TypeError(".baml_core.cffi.v1.BamlTy.optionalType: object expected");
-                        message.optionalType = $root.baml_core.cffi.v1.BamlTyOptional.fromObject(object.optionalType);
+                        message.optionalType = $root.baml_core.cffi.v1.BamlTyOptional.fromObject(object.optionalType, long + 1);
                     }
                     if (object.anyType != null) {
-                        if (typeof object.anyType !== "object")
+                        if (!$util.isObject(object.anyType))
                             throw TypeError(".baml_core.cffi.v1.BamlTy.anyType: object expected");
-                        message.anyType = $root.baml_core.cffi.v1.BamlTyAny.fromObject(object.anyType);
+                        message.anyType = $root.baml_core.cffi.v1.BamlTyAny.fromObject(object.anyType, long + 1);
                     }
                     if (object.uint8arrayType != null) {
-                        if (typeof object.uint8arrayType !== "object")
+                        if (!$util.isObject(object.uint8arrayType))
                             throw TypeError(".baml_core.cffi.v1.BamlTy.uint8arrayType: object expected");
-                        message.uint8arrayType = $root.baml_core.cffi.v1.BamlTyUint8Array.fromObject(object.uint8arrayType);
+                        message.uint8arrayType = $root.baml_core.cffi.v1.BamlTyUint8Array.fromObject(object.uint8arrayType, long + 1);
                     }
                     if (object.unknownType != null) {
-                        if (typeof object.unknownType !== "object")
+                        if (!$util.isObject(object.unknownType))
                             throw TypeError(".baml_core.cffi.v1.BamlTy.unknownType: object expected");
-                        message.unknownType = $root.baml_core.cffi.v1.BamlTyUnknown.fromObject(object.unknownType);
+                        message.unknownType = $root.baml_core.cffi.v1.BamlTyUnknown.fromObject(object.unknownType, long + 1);
                     }
                     if (object.bigintType != null) {
-                        if (typeof object.bigintType !== "object")
+                        if (!$util.isObject(object.bigintType))
                             throw TypeError(".baml_core.cffi.v1.BamlTy.bigintType: object expected");
-                        message.bigintType = $root.baml_core.cffi.v1.BamlTyBigint.fromObject(object.bigintType);
+                        message.bigintType = $root.baml_core.cffi.v1.BamlTyBigint.fromObject(object.bigintType, long + 1);
                     }
                     return message;
                 };
@@ -9684,97 +10370,101 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlTy.toObject = function toObject(message, options) {
+                BamlTy.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (message.stringType != null && message.hasOwnProperty("stringType")) {
-                        object.stringType = $root.baml_core.cffi.v1.BamlTyString.toObject(message.stringType, options);
+                        object.stringType = $root.baml_core.cffi.v1.BamlTyString.toObject(message.stringType, options, q + 1);
                         if (options.oneofs)
                             object.type = "stringType";
                     }
                     if (message.intType != null && message.hasOwnProperty("intType")) {
-                        object.intType = $root.baml_core.cffi.v1.BamlTyInt.toObject(message.intType, options);
+                        object.intType = $root.baml_core.cffi.v1.BamlTyInt.toObject(message.intType, options, q + 1);
                         if (options.oneofs)
                             object.type = "intType";
                     }
                     if (message.floatType != null && message.hasOwnProperty("floatType")) {
-                        object.floatType = $root.baml_core.cffi.v1.BamlTyFloat.toObject(message.floatType, options);
+                        object.floatType = $root.baml_core.cffi.v1.BamlTyFloat.toObject(message.floatType, options, q + 1);
                         if (options.oneofs)
                             object.type = "floatType";
                     }
                     if (message.boolType != null && message.hasOwnProperty("boolType")) {
-                        object.boolType = $root.baml_core.cffi.v1.BamlTyBool.toObject(message.boolType, options);
+                        object.boolType = $root.baml_core.cffi.v1.BamlTyBool.toObject(message.boolType, options, q + 1);
                         if (options.oneofs)
                             object.type = "boolType";
                     }
                     if (message.nullType != null && message.hasOwnProperty("nullType")) {
-                        object.nullType = $root.baml_core.cffi.v1.BamlTyNull.toObject(message.nullType, options);
+                        object.nullType = $root.baml_core.cffi.v1.BamlTyNull.toObject(message.nullType, options, q + 1);
                         if (options.oneofs)
                             object.type = "nullType";
                     }
                     if (message.literalType != null && message.hasOwnProperty("literalType")) {
-                        object.literalType = $root.baml_core.cffi.v1.BamlTyLiteral.toObject(message.literalType, options);
+                        object.literalType = $root.baml_core.cffi.v1.BamlTyLiteral.toObject(message.literalType, options, q + 1);
                         if (options.oneofs)
                             object.type = "literalType";
                     }
                     if (message.mediaType != null && message.hasOwnProperty("mediaType")) {
-                        object.mediaType = $root.baml_core.cffi.v1.BamlTyMedia.toObject(message.mediaType, options);
+                        object.mediaType = $root.baml_core.cffi.v1.BamlTyMedia.toObject(message.mediaType, options, q + 1);
                         if (options.oneofs)
                             object.type = "mediaType";
                     }
                     if (message.enumType != null && message.hasOwnProperty("enumType")) {
-                        object.enumType = $root.baml_core.cffi.v1.BamlTyEnum.toObject(message.enumType, options);
+                        object.enumType = $root.baml_core.cffi.v1.BamlTyEnum.toObject(message.enumType, options, q + 1);
                         if (options.oneofs)
                             object.type = "enumType";
                     }
                     if (message.classType != null && message.hasOwnProperty("classType")) {
-                        object.classType = $root.baml_core.cffi.v1.BamlTyClass.toObject(message.classType, options);
+                        object.classType = $root.baml_core.cffi.v1.BamlTyClass.toObject(message.classType, options, q + 1);
                         if (options.oneofs)
                             object.type = "classType";
                     }
                     if (message.typeAliasType != null && message.hasOwnProperty("typeAliasType")) {
-                        object.typeAliasType = $root.baml_core.cffi.v1.BamlTyTypeAlias.toObject(message.typeAliasType, options);
+                        object.typeAliasType = $root.baml_core.cffi.v1.BamlTyTypeAlias.toObject(message.typeAliasType, options, q + 1);
                         if (options.oneofs)
                             object.type = "typeAliasType";
                     }
                     if (message.listType != null && message.hasOwnProperty("listType")) {
-                        object.listType = $root.baml_core.cffi.v1.BamlTyList.toObject(message.listType, options);
+                        object.listType = $root.baml_core.cffi.v1.BamlTyList.toObject(message.listType, options, q + 1);
                         if (options.oneofs)
                             object.type = "listType";
                     }
                     if (message.mapType != null && message.hasOwnProperty("mapType")) {
-                        object.mapType = $root.baml_core.cffi.v1.BamlTyMap.toObject(message.mapType, options);
+                        object.mapType = $root.baml_core.cffi.v1.BamlTyMap.toObject(message.mapType, options, q + 1);
                         if (options.oneofs)
                             object.type = "mapType";
                     }
                     if (message.unionVariantType != null && message.hasOwnProperty("unionVariantType")) {
-                        object.unionVariantType = $root.baml_core.cffi.v1.BamlTyUnionVariant.toObject(message.unionVariantType, options);
+                        object.unionVariantType = $root.baml_core.cffi.v1.BamlTyUnionVariant.toObject(message.unionVariantType, options, q + 1);
                         if (options.oneofs)
                             object.type = "unionVariantType";
                     }
                     if (message.optionalType != null && message.hasOwnProperty("optionalType")) {
-                        object.optionalType = $root.baml_core.cffi.v1.BamlTyOptional.toObject(message.optionalType, options);
+                        object.optionalType = $root.baml_core.cffi.v1.BamlTyOptional.toObject(message.optionalType, options, q + 1);
                         if (options.oneofs)
                             object.type = "optionalType";
                     }
                     if (message.anyType != null && message.hasOwnProperty("anyType")) {
-                        object.anyType = $root.baml_core.cffi.v1.BamlTyAny.toObject(message.anyType, options);
+                        object.anyType = $root.baml_core.cffi.v1.BamlTyAny.toObject(message.anyType, options, q + 1);
                         if (options.oneofs)
                             object.type = "anyType";
                     }
                     if (message.uint8arrayType != null && message.hasOwnProperty("uint8arrayType")) {
-                        object.uint8arrayType = $root.baml_core.cffi.v1.BamlTyUint8Array.toObject(message.uint8arrayType, options);
+                        object.uint8arrayType = $root.baml_core.cffi.v1.BamlTyUint8Array.toObject(message.uint8arrayType, options, q + 1);
                         if (options.oneofs)
                             object.type = "uint8arrayType";
                     }
                     if (message.unknownType != null && message.hasOwnProperty("unknownType")) {
-                        object.unknownType = $root.baml_core.cffi.v1.BamlTyUnknown.toObject(message.unknownType, options);
+                        object.unknownType = $root.baml_core.cffi.v1.BamlTyUnknown.toObject(message.unknownType, options, q + 1);
                         if (options.oneofs)
                             object.type = "unknownType";
                     }
                     if (message.bigintType != null && message.hasOwnProperty("bigintType")) {
-                        object.bigintType = $root.baml_core.cffi.v1.BamlTyBigint.toObject(message.bigintType, options);
+                        object.bigintType = $root.baml_core.cffi.v1.BamlTyBigint.toObject(message.bigintType, options, q + 1);
                         if (options.oneofs)
                             object.type = "bigintType";
                     }
@@ -9829,7 +10519,7 @@ $root.baml_core = (function() {
                 function BamlTyString(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -9854,9 +10544,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlTyString.encode = function encode(message, writer) {
+                BamlTyString.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     return writer;
                 };
 
@@ -9884,9 +10578,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlTyString.decode = function decode(reader, length, error) {
+                BamlTyString.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlTyString();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -9894,7 +10592,7 @@ $root.baml_core = (function() {
                             break;
                         switch (tag >>> 3) {
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -9925,9 +10623,13 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlTyString.verify = function verify(message) {
+                BamlTyString.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     return null;
                 };
 
@@ -9939,9 +10641,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlTyString} BamlTyString
                  */
-                BamlTyString.fromObject = function fromObject(object) {
+                BamlTyString.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlTyString)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlTyString: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     return new $root.baml_core.cffi.v1.BamlTyString();
                 };
 
@@ -10006,7 +10714,7 @@ $root.baml_core = (function() {
                 function BamlTyInt(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -10031,9 +10739,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlTyInt.encode = function encode(message, writer) {
+                BamlTyInt.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     return writer;
                 };
 
@@ -10061,9 +10773,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlTyInt.decode = function decode(reader, length, error) {
+                BamlTyInt.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlTyInt();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -10071,7 +10787,7 @@ $root.baml_core = (function() {
                             break;
                         switch (tag >>> 3) {
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -10102,9 +10818,13 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlTyInt.verify = function verify(message) {
+                BamlTyInt.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     return null;
                 };
 
@@ -10116,9 +10836,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlTyInt} BamlTyInt
                  */
-                BamlTyInt.fromObject = function fromObject(object) {
+                BamlTyInt.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlTyInt)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlTyInt: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     return new $root.baml_core.cffi.v1.BamlTyInt();
                 };
 
@@ -10183,7 +10909,7 @@ $root.baml_core = (function() {
                 function BamlTyFloat(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -10208,9 +10934,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlTyFloat.encode = function encode(message, writer) {
+                BamlTyFloat.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     return writer;
                 };
 
@@ -10238,9 +10968,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlTyFloat.decode = function decode(reader, length, error) {
+                BamlTyFloat.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlTyFloat();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -10248,7 +10982,7 @@ $root.baml_core = (function() {
                             break;
                         switch (tag >>> 3) {
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -10279,9 +11013,13 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlTyFloat.verify = function verify(message) {
+                BamlTyFloat.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     return null;
                 };
 
@@ -10293,9 +11031,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlTyFloat} BamlTyFloat
                  */
-                BamlTyFloat.fromObject = function fromObject(object) {
+                BamlTyFloat.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlTyFloat)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlTyFloat: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     return new $root.baml_core.cffi.v1.BamlTyFloat();
                 };
 
@@ -10360,7 +11104,7 @@ $root.baml_core = (function() {
                 function BamlTyBool(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -10385,9 +11129,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlTyBool.encode = function encode(message, writer) {
+                BamlTyBool.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     return writer;
                 };
 
@@ -10415,9 +11163,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlTyBool.decode = function decode(reader, length, error) {
+                BamlTyBool.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlTyBool();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -10425,7 +11177,7 @@ $root.baml_core = (function() {
                             break;
                         switch (tag >>> 3) {
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -10456,9 +11208,13 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlTyBool.verify = function verify(message) {
+                BamlTyBool.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     return null;
                 };
 
@@ -10470,9 +11226,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlTyBool} BamlTyBool
                  */
-                BamlTyBool.fromObject = function fromObject(object) {
+                BamlTyBool.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlTyBool)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlTyBool: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     return new $root.baml_core.cffi.v1.BamlTyBool();
                 };
 
@@ -10537,7 +11299,7 @@ $root.baml_core = (function() {
                 function BamlTyNull(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -10562,9 +11324,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlTyNull.encode = function encode(message, writer) {
+                BamlTyNull.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     return writer;
                 };
 
@@ -10592,9 +11358,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlTyNull.decode = function decode(reader, length, error) {
+                BamlTyNull.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlTyNull();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -10602,7 +11372,7 @@ $root.baml_core = (function() {
                             break;
                         switch (tag >>> 3) {
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -10633,9 +11403,13 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlTyNull.verify = function verify(message) {
+                BamlTyNull.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     return null;
                 };
 
@@ -10647,9 +11421,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlTyNull} BamlTyNull
                  */
-                BamlTyNull.fromObject = function fromObject(object) {
+                BamlTyNull.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlTyNull)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlTyNull: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     return new $root.baml_core.cffi.v1.BamlTyNull();
                 };
 
@@ -10714,7 +11494,7 @@ $root.baml_core = (function() {
                 function BamlTyUint8Array(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -10739,9 +11519,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlTyUint8Array.encode = function encode(message, writer) {
+                BamlTyUint8Array.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     return writer;
                 };
 
@@ -10769,9 +11553,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlTyUint8Array.decode = function decode(reader, length, error) {
+                BamlTyUint8Array.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlTyUint8Array();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -10779,7 +11567,7 @@ $root.baml_core = (function() {
                             break;
                         switch (tag >>> 3) {
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -10810,9 +11598,13 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlTyUint8Array.verify = function verify(message) {
+                BamlTyUint8Array.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     return null;
                 };
 
@@ -10824,9 +11616,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlTyUint8Array} BamlTyUint8Array
                  */
-                BamlTyUint8Array.fromObject = function fromObject(object) {
+                BamlTyUint8Array.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlTyUint8Array)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlTyUint8Array: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     return new $root.baml_core.cffi.v1.BamlTyUint8Array();
                 };
 
@@ -10891,7 +11689,7 @@ $root.baml_core = (function() {
                 function BamlTyAny(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -10916,9 +11714,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlTyAny.encode = function encode(message, writer) {
+                BamlTyAny.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     return writer;
                 };
 
@@ -10946,9 +11748,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlTyAny.decode = function decode(reader, length, error) {
+                BamlTyAny.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlTyAny();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -10956,7 +11762,7 @@ $root.baml_core = (function() {
                             break;
                         switch (tag >>> 3) {
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -10987,9 +11793,13 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlTyAny.verify = function verify(message) {
+                BamlTyAny.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     return null;
                 };
 
@@ -11001,9 +11811,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlTyAny} BamlTyAny
                  */
-                BamlTyAny.fromObject = function fromObject(object) {
+                BamlTyAny.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlTyAny)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlTyAny: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     return new $root.baml_core.cffi.v1.BamlTyAny();
                 };
 
@@ -11068,7 +11884,7 @@ $root.baml_core = (function() {
                 function BamlTyUnknown(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -11093,9 +11909,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlTyUnknown.encode = function encode(message, writer) {
+                BamlTyUnknown.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     return writer;
                 };
 
@@ -11123,9 +11943,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlTyUnknown.decode = function decode(reader, length, error) {
+                BamlTyUnknown.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlTyUnknown();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -11133,7 +11957,7 @@ $root.baml_core = (function() {
                             break;
                         switch (tag >>> 3) {
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -11164,9 +11988,13 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlTyUnknown.verify = function verify(message) {
+                BamlTyUnknown.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     return null;
                 };
 
@@ -11178,9 +12006,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlTyUnknown} BamlTyUnknown
                  */
-                BamlTyUnknown.fromObject = function fromObject(object) {
+                BamlTyUnknown.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlTyUnknown)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlTyUnknown: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     return new $root.baml_core.cffi.v1.BamlTyUnknown();
                 };
 
@@ -11245,7 +12079,7 @@ $root.baml_core = (function() {
                 function BamlTyBigint(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -11270,9 +12104,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlTyBigint.encode = function encode(message, writer) {
+                BamlTyBigint.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     return writer;
                 };
 
@@ -11300,9 +12138,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlTyBigint.decode = function decode(reader, length, error) {
+                BamlTyBigint.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlTyBigint();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -11310,7 +12152,7 @@ $root.baml_core = (function() {
                             break;
                         switch (tag >>> 3) {
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -11341,9 +12183,13 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlTyBigint.verify = function verify(message) {
+                BamlTyBigint.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     return null;
                 };
 
@@ -11355,9 +12201,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlTyBigint} BamlTyBigint
                  */
-                BamlTyBigint.fromObject = function fromObject(object) {
+                BamlTyBigint.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlTyBigint)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlTyBigint: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     return new $root.baml_core.cffi.v1.BamlTyBigint();
                 };
 
@@ -11423,7 +12275,7 @@ $root.baml_core = (function() {
                 function BamlLiteralString(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -11456,9 +12308,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlLiteralString.encode = function encode(message, writer) {
+                BamlLiteralString.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.value != null && Object.hasOwnProperty.call(message, "value"))
                         writer.uint32(/* id 1, wireType 2 =*/10).string(message.value);
                     return writer;
@@ -11488,9 +12344,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlLiteralString.decode = function decode(reader, length, error) {
+                BamlLiteralString.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlLiteralString();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -11502,7 +12362,7 @@ $root.baml_core = (function() {
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -11533,9 +12393,13 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlLiteralString.verify = function verify(message) {
+                BamlLiteralString.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.value != null && message.hasOwnProperty("value"))
                         if (!$util.isString(message.value))
                             return "value: string expected";
@@ -11550,9 +12414,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlLiteralString} BamlLiteralString
                  */
-                BamlLiteralString.fromObject = function fromObject(object) {
+                BamlLiteralString.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlLiteralString)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlLiteralString: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlLiteralString();
                     if (object.value != null)
                         message.value = String(object.value);
@@ -11568,9 +12438,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlLiteralString.toObject = function toObject(message, options) {
+                BamlLiteralString.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.defaults)
                         object.value = "";
@@ -11628,7 +12502,7 @@ $root.baml_core = (function() {
                 function BamlLiteralInt(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -11661,9 +12535,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlLiteralInt.encode = function encode(message, writer) {
+                BamlLiteralInt.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.value != null && Object.hasOwnProperty.call(message, "value"))
                         writer.uint32(/* id 1, wireType 0 =*/8).int64(message.value);
                     return writer;
@@ -11693,9 +12571,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlLiteralInt.decode = function decode(reader, length, error) {
+                BamlLiteralInt.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlLiteralInt();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -11707,7 +12589,7 @@ $root.baml_core = (function() {
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -11738,9 +12620,13 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlLiteralInt.verify = function verify(message) {
+                BamlLiteralInt.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.value != null && message.hasOwnProperty("value"))
                         if (!$util.isInteger(message.value) && !(message.value && $util.isInteger(message.value.low) && $util.isInteger(message.value.high)))
                             return "value: integer|Long expected";
@@ -11755,13 +12641,19 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlLiteralInt} BamlLiteralInt
                  */
-                BamlLiteralInt.fromObject = function fromObject(object) {
+                BamlLiteralInt.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlLiteralInt)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlLiteralInt: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlLiteralInt();
                     if (object.value != null)
                         if ($util.Long)
-                            (message.value = $util.Long.fromValue(object.value)).unsigned = false;
+                            message.value = $util.Long.fromValue(object.value, false);
                         else if (typeof object.value === "string")
                             message.value = parseInt(object.value, 10);
                         else if (typeof object.value === "number")
@@ -11780,18 +12672,24 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlLiteralInt.toObject = function toObject(message, options) {
+                BamlLiteralInt.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.defaults)
                         if ($util.Long) {
                             var long = new $util.Long(0, 0, false);
-                            object.value = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                            object.value = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : typeof BigInt !== "undefined" && options.longs === BigInt ? long.toBigInt() : long;
                         } else
-                            object.value = options.longs === String ? "0" : 0;
+                            object.value = options.longs === String ? "0" : typeof BigInt !== "undefined" && options.longs === BigInt ? BigInt("0") : 0;
                     if (message.value != null && message.hasOwnProperty("value"))
-                        if (typeof message.value === "number")
+                        if (typeof BigInt !== "undefined" && options.longs === BigInt)
+                            object.value = typeof message.value === "number" ? BigInt(message.value) : $util.Long.fromBits(message.value.low >>> 0, message.value.high >>> 0, false).toBigInt();
+                        else if (typeof message.value === "number")
                             object.value = options.longs === String ? String(message.value) : message.value;
                         else
                             object.value = options.longs === String ? $util.Long.prototype.toString.call(message.value) : options.longs === Number ? new $util.LongBits(message.value.low >>> 0, message.value.high >>> 0).toNumber() : message.value;
@@ -11847,7 +12745,7 @@ $root.baml_core = (function() {
                 function BamlLiteralBool(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -11880,9 +12778,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlLiteralBool.encode = function encode(message, writer) {
+                BamlLiteralBool.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.value != null && Object.hasOwnProperty.call(message, "value"))
                         writer.uint32(/* id 1, wireType 0 =*/8).bool(message.value);
                     return writer;
@@ -11912,9 +12814,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlLiteralBool.decode = function decode(reader, length, error) {
+                BamlLiteralBool.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlLiteralBool();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -11926,7 +12832,7 @@ $root.baml_core = (function() {
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -11957,9 +12863,13 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlLiteralBool.verify = function verify(message) {
+                BamlLiteralBool.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.value != null && message.hasOwnProperty("value"))
                         if (typeof message.value !== "boolean")
                             return "value: boolean expected";
@@ -11974,9 +12884,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlLiteralBool} BamlLiteralBool
                  */
-                BamlLiteralBool.fromObject = function fromObject(object) {
+                BamlLiteralBool.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlLiteralBool)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlLiteralBool: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlLiteralBool();
                     if (object.value != null)
                         message.value = Boolean(object.value);
@@ -11992,9 +12908,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlLiteralBool.toObject = function toObject(message, options) {
+                BamlLiteralBool.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.defaults)
                         object.value = false;
@@ -12052,7 +12972,7 @@ $root.baml_core = (function() {
                 function BamlLiteralBigint(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -12085,9 +13005,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlLiteralBigint.encode = function encode(message, writer) {
+                BamlLiteralBigint.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.value != null && Object.hasOwnProperty.call(message, "value"))
                         writer.uint32(/* id 1, wireType 2 =*/10).string(message.value);
                     return writer;
@@ -12117,9 +13041,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlLiteralBigint.decode = function decode(reader, length, error) {
+                BamlLiteralBigint.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlLiteralBigint();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -12131,7 +13059,7 @@ $root.baml_core = (function() {
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -12162,9 +13090,13 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlLiteralBigint.verify = function verify(message) {
+                BamlLiteralBigint.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.value != null && message.hasOwnProperty("value"))
                         if (!$util.isString(message.value))
                             return "value: string expected";
@@ -12179,9 +13111,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlLiteralBigint} BamlLiteralBigint
                  */
-                BamlLiteralBigint.fromObject = function fromObject(object) {
+                BamlLiteralBigint.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlLiteralBigint)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlLiteralBigint: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlLiteralBigint();
                     if (object.value != null)
                         message.value = String(object.value);
@@ -12197,9 +13135,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlLiteralBigint.toObject = function toObject(message, options) {
+                BamlLiteralBigint.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.defaults)
                         object.value = "";
@@ -12260,7 +13202,7 @@ $root.baml_core = (function() {
                 function BamlTyLiteral(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -12331,17 +13273,21 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlTyLiteral.encode = function encode(message, writer) {
+                BamlTyLiteral.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.stringLiteral != null && Object.hasOwnProperty.call(message, "stringLiteral"))
-                        $root.baml_core.cffi.v1.BamlLiteralString.encode(message.stringLiteral, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlLiteralString.encode(message.stringLiteral, writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
                     if (message.intLiteral != null && Object.hasOwnProperty.call(message, "intLiteral"))
-                        $root.baml_core.cffi.v1.BamlLiteralInt.encode(message.intLiteral, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlLiteralInt.encode(message.intLiteral, writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
                     if (message.boolLiteral != null && Object.hasOwnProperty.call(message, "boolLiteral"))
-                        $root.baml_core.cffi.v1.BamlLiteralBool.encode(message.boolLiteral, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlLiteralBool.encode(message.boolLiteral, writer.uint32(/* id 3, wireType 2 =*/26).fork(), q + 1).ldelim();
                     if (message.bigintLiteral != null && Object.hasOwnProperty.call(message, "bigintLiteral"))
-                        $root.baml_core.cffi.v1.BamlLiteralBigint.encode(message.bigintLiteral, writer.uint32(/* id 4, wireType 2 =*/34).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlLiteralBigint.encode(message.bigintLiteral, writer.uint32(/* id 4, wireType 2 =*/34).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -12369,9 +13315,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlTyLiteral.decode = function decode(reader, length, error) {
+                BamlTyLiteral.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlTyLiteral();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -12379,23 +13329,23 @@ $root.baml_core = (function() {
                             break;
                         switch (tag >>> 3) {
                         case 1: {
-                                message.stringLiteral = $root.baml_core.cffi.v1.BamlLiteralString.decode(reader, reader.uint32());
+                                message.stringLiteral = $root.baml_core.cffi.v1.BamlLiteralString.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 2: {
-                                message.intLiteral = $root.baml_core.cffi.v1.BamlLiteralInt.decode(reader, reader.uint32());
+                                message.intLiteral = $root.baml_core.cffi.v1.BamlLiteralInt.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 3: {
-                                message.boolLiteral = $root.baml_core.cffi.v1.BamlLiteralBool.decode(reader, reader.uint32());
+                                message.boolLiteral = $root.baml_core.cffi.v1.BamlLiteralBool.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 4: {
-                                message.bigintLiteral = $root.baml_core.cffi.v1.BamlLiteralBigint.decode(reader, reader.uint32());
+                                message.bigintLiteral = $root.baml_core.cffi.v1.BamlLiteralBigint.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -12426,14 +13376,18 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlTyLiteral.verify = function verify(message) {
+                BamlTyLiteral.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     var properties = {};
                     if (message.stringLiteral != null && message.hasOwnProperty("stringLiteral")) {
                         properties.literal = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlLiteralString.verify(message.stringLiteral);
+                            var error = $root.baml_core.cffi.v1.BamlLiteralString.verify(message.stringLiteral, long + 1);
                             if (error)
                                 return "stringLiteral." + error;
                         }
@@ -12443,7 +13397,7 @@ $root.baml_core = (function() {
                             return "literal: multiple values";
                         properties.literal = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlLiteralInt.verify(message.intLiteral);
+                            var error = $root.baml_core.cffi.v1.BamlLiteralInt.verify(message.intLiteral, long + 1);
                             if (error)
                                 return "intLiteral." + error;
                         }
@@ -12453,7 +13407,7 @@ $root.baml_core = (function() {
                             return "literal: multiple values";
                         properties.literal = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlLiteralBool.verify(message.boolLiteral);
+                            var error = $root.baml_core.cffi.v1.BamlLiteralBool.verify(message.boolLiteral, long + 1);
                             if (error)
                                 return "boolLiteral." + error;
                         }
@@ -12463,7 +13417,7 @@ $root.baml_core = (function() {
                             return "literal: multiple values";
                         properties.literal = 1;
                         {
-                            var error = $root.baml_core.cffi.v1.BamlLiteralBigint.verify(message.bigintLiteral);
+                            var error = $root.baml_core.cffi.v1.BamlLiteralBigint.verify(message.bigintLiteral, long + 1);
                             if (error)
                                 return "bigintLiteral." + error;
                         }
@@ -12479,29 +13433,35 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlTyLiteral} BamlTyLiteral
                  */
-                BamlTyLiteral.fromObject = function fromObject(object) {
+                BamlTyLiteral.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlTyLiteral)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlTyLiteral: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlTyLiteral();
                     if (object.stringLiteral != null) {
-                        if (typeof object.stringLiteral !== "object")
+                        if (!$util.isObject(object.stringLiteral))
                             throw TypeError(".baml_core.cffi.v1.BamlTyLiteral.stringLiteral: object expected");
-                        message.stringLiteral = $root.baml_core.cffi.v1.BamlLiteralString.fromObject(object.stringLiteral);
+                        message.stringLiteral = $root.baml_core.cffi.v1.BamlLiteralString.fromObject(object.stringLiteral, long + 1);
                     }
                     if (object.intLiteral != null) {
-                        if (typeof object.intLiteral !== "object")
+                        if (!$util.isObject(object.intLiteral))
                             throw TypeError(".baml_core.cffi.v1.BamlTyLiteral.intLiteral: object expected");
-                        message.intLiteral = $root.baml_core.cffi.v1.BamlLiteralInt.fromObject(object.intLiteral);
+                        message.intLiteral = $root.baml_core.cffi.v1.BamlLiteralInt.fromObject(object.intLiteral, long + 1);
                     }
                     if (object.boolLiteral != null) {
-                        if (typeof object.boolLiteral !== "object")
+                        if (!$util.isObject(object.boolLiteral))
                             throw TypeError(".baml_core.cffi.v1.BamlTyLiteral.boolLiteral: object expected");
-                        message.boolLiteral = $root.baml_core.cffi.v1.BamlLiteralBool.fromObject(object.boolLiteral);
+                        message.boolLiteral = $root.baml_core.cffi.v1.BamlLiteralBool.fromObject(object.boolLiteral, long + 1);
                     }
                     if (object.bigintLiteral != null) {
-                        if (typeof object.bigintLiteral !== "object")
+                        if (!$util.isObject(object.bigintLiteral))
                             throw TypeError(".baml_core.cffi.v1.BamlTyLiteral.bigintLiteral: object expected");
-                        message.bigintLiteral = $root.baml_core.cffi.v1.BamlLiteralBigint.fromObject(object.bigintLiteral);
+                        message.bigintLiteral = $root.baml_core.cffi.v1.BamlLiteralBigint.fromObject(object.bigintLiteral, long + 1);
                     }
                     return message;
                 };
@@ -12515,27 +13475,31 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlTyLiteral.toObject = function toObject(message, options) {
+                BamlTyLiteral.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (message.stringLiteral != null && message.hasOwnProperty("stringLiteral")) {
-                        object.stringLiteral = $root.baml_core.cffi.v1.BamlLiteralString.toObject(message.stringLiteral, options);
+                        object.stringLiteral = $root.baml_core.cffi.v1.BamlLiteralString.toObject(message.stringLiteral, options, q + 1);
                         if (options.oneofs)
                             object.literal = "stringLiteral";
                     }
                     if (message.intLiteral != null && message.hasOwnProperty("intLiteral")) {
-                        object.intLiteral = $root.baml_core.cffi.v1.BamlLiteralInt.toObject(message.intLiteral, options);
+                        object.intLiteral = $root.baml_core.cffi.v1.BamlLiteralInt.toObject(message.intLiteral, options, q + 1);
                         if (options.oneofs)
                             object.literal = "intLiteral";
                     }
                     if (message.boolLiteral != null && message.hasOwnProperty("boolLiteral")) {
-                        object.boolLiteral = $root.baml_core.cffi.v1.BamlLiteralBool.toObject(message.boolLiteral, options);
+                        object.boolLiteral = $root.baml_core.cffi.v1.BamlLiteralBool.toObject(message.boolLiteral, options, q + 1);
                         if (options.oneofs)
                             object.literal = "boolLiteral";
                     }
                     if (message.bigintLiteral != null && message.hasOwnProperty("bigintLiteral")) {
-                        object.bigintLiteral = $root.baml_core.cffi.v1.BamlLiteralBigint.toObject(message.bigintLiteral, options);
+                        object.bigintLiteral = $root.baml_core.cffi.v1.BamlLiteralBigint.toObject(message.bigintLiteral, options, q + 1);
                         if (options.oneofs)
                             object.literal = "bigintLiteral";
                     }
@@ -12591,7 +13555,7 @@ $root.baml_core = (function() {
                 function BamlTyMedia(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -12624,9 +13588,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlTyMedia.encode = function encode(message, writer) {
+                BamlTyMedia.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.media != null && Object.hasOwnProperty.call(message, "media"))
                         writer.uint32(/* id 1, wireType 0 =*/8).int32(message.media);
                     return writer;
@@ -12656,9 +13624,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlTyMedia.decode = function decode(reader, length, error) {
+                BamlTyMedia.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlTyMedia();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -12670,7 +13642,7 @@ $root.baml_core = (function() {
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -12701,9 +13673,13 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlTyMedia.verify = function verify(message) {
+                BamlTyMedia.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.media != null && message.hasOwnProperty("media"))
                         switch (message.media) {
                         default:
@@ -12727,9 +13703,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlTyMedia} BamlTyMedia
                  */
-                BamlTyMedia.fromObject = function fromObject(object) {
+                BamlTyMedia.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlTyMedia)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlTyMedia: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlTyMedia();
                     switch (object.media) {
                     default:
@@ -12775,9 +13757,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlTyMedia.toObject = function toObject(message, options) {
+                BamlTyMedia.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.defaults)
                         object.media = options.enums === String ? "MEDIA_TYPE_UNSPECIFIED" : 0;
@@ -12835,7 +13821,7 @@ $root.baml_core = (function() {
                 function BamlTyEnum(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -12868,9 +13854,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlTyEnum.encode = function encode(message, writer) {
+                BamlTyEnum.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.name != null && Object.hasOwnProperty.call(message, "name"))
                         writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
                     return writer;
@@ -12900,9 +13890,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlTyEnum.decode = function decode(reader, length, error) {
+                BamlTyEnum.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlTyEnum();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -12914,7 +13908,7 @@ $root.baml_core = (function() {
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -12945,9 +13939,13 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlTyEnum.verify = function verify(message) {
+                BamlTyEnum.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.name != null && message.hasOwnProperty("name"))
                         if (!$util.isString(message.name))
                             return "name: string expected";
@@ -12962,9 +13960,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlTyEnum} BamlTyEnum
                  */
-                BamlTyEnum.fromObject = function fromObject(object) {
+                BamlTyEnum.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlTyEnum)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlTyEnum: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlTyEnum();
                     if (object.name != null)
                         message.name = String(object.name);
@@ -12980,9 +13984,13 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlTyEnum.toObject = function toObject(message, options) {
+                BamlTyEnum.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.defaults)
                         object.name = "";
@@ -13040,7 +14048,7 @@ $root.baml_core = (function() {
                 function BamlTyClass(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -13073,11 +14081,15 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlTyClass.encode = function encode(message, writer) {
+                BamlTyClass.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.name != null && Object.hasOwnProperty.call(message, "name"))
-                        $root.baml_core.cffi.v1.BamlTyName.encode(message.name, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTyName.encode(message.name, writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -13105,9 +14117,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlTyClass.decode = function decode(reader, length, error) {
+                BamlTyClass.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlTyClass();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -13115,11 +14131,11 @@ $root.baml_core = (function() {
                             break;
                         switch (tag >>> 3) {
                         case 1: {
-                                message.name = $root.baml_core.cffi.v1.BamlTyName.decode(reader, reader.uint32());
+                                message.name = $root.baml_core.cffi.v1.BamlTyName.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -13150,11 +14166,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlTyClass.verify = function verify(message) {
+                BamlTyClass.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.name != null && message.hasOwnProperty("name")) {
-                        var error = $root.baml_core.cffi.v1.BamlTyName.verify(message.name);
+                        var error = $root.baml_core.cffi.v1.BamlTyName.verify(message.name, long + 1);
                         if (error)
                             return "name." + error;
                     }
@@ -13169,14 +14189,20 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlTyClass} BamlTyClass
                  */
-                BamlTyClass.fromObject = function fromObject(object) {
+                BamlTyClass.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlTyClass)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlTyClass: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlTyClass();
                     if (object.name != null) {
-                        if (typeof object.name !== "object")
+                        if (!$util.isObject(object.name))
                             throw TypeError(".baml_core.cffi.v1.BamlTyClass.name: object expected");
-                        message.name = $root.baml_core.cffi.v1.BamlTyName.fromObject(object.name);
+                        message.name = $root.baml_core.cffi.v1.BamlTyName.fromObject(object.name, long + 1);
                     }
                     return message;
                 };
@@ -13190,14 +14216,18 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlTyClass.toObject = function toObject(message, options) {
+                BamlTyClass.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.defaults)
                         object.name = null;
                     if (message.name != null && message.hasOwnProperty("name"))
-                        object.name = $root.baml_core.cffi.v1.BamlTyName.toObject(message.name, options);
+                        object.name = $root.baml_core.cffi.v1.BamlTyName.toObject(message.name, options, q + 1);
                     return object;
                 };
 
@@ -13250,7 +14280,7 @@ $root.baml_core = (function() {
                 function BamlTyTypeAlias(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -13283,11 +14313,15 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlTyTypeAlias.encode = function encode(message, writer) {
+                BamlTyTypeAlias.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.name != null && Object.hasOwnProperty.call(message, "name"))
-                        $root.baml_core.cffi.v1.BamlTyName.encode(message.name, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTyName.encode(message.name, writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -13315,9 +14349,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlTyTypeAlias.decode = function decode(reader, length, error) {
+                BamlTyTypeAlias.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlTyTypeAlias();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -13325,11 +14363,11 @@ $root.baml_core = (function() {
                             break;
                         switch (tag >>> 3) {
                         case 1: {
-                                message.name = $root.baml_core.cffi.v1.BamlTyName.decode(reader, reader.uint32());
+                                message.name = $root.baml_core.cffi.v1.BamlTyName.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -13360,11 +14398,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlTyTypeAlias.verify = function verify(message) {
+                BamlTyTypeAlias.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.name != null && message.hasOwnProperty("name")) {
-                        var error = $root.baml_core.cffi.v1.BamlTyName.verify(message.name);
+                        var error = $root.baml_core.cffi.v1.BamlTyName.verify(message.name, long + 1);
                         if (error)
                             return "name." + error;
                     }
@@ -13379,14 +14421,20 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlTyTypeAlias} BamlTyTypeAlias
                  */
-                BamlTyTypeAlias.fromObject = function fromObject(object) {
+                BamlTyTypeAlias.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlTyTypeAlias)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlTyTypeAlias: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlTyTypeAlias();
                     if (object.name != null) {
-                        if (typeof object.name !== "object")
+                        if (!$util.isObject(object.name))
                             throw TypeError(".baml_core.cffi.v1.BamlTyTypeAlias.name: object expected");
-                        message.name = $root.baml_core.cffi.v1.BamlTyName.fromObject(object.name);
+                        message.name = $root.baml_core.cffi.v1.BamlTyName.fromObject(object.name, long + 1);
                     }
                     return message;
                 };
@@ -13400,14 +14448,18 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlTyTypeAlias.toObject = function toObject(message, options) {
+                BamlTyTypeAlias.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.defaults)
                         object.name = null;
                     if (message.name != null && message.hasOwnProperty("name"))
-                        object.name = $root.baml_core.cffi.v1.BamlTyName.toObject(message.name, options);
+                        object.name = $root.baml_core.cffi.v1.BamlTyName.toObject(message.name, options, q + 1);
                     return object;
                 };
 
@@ -13460,7 +14512,7 @@ $root.baml_core = (function() {
                 function BamlTyList(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -13493,11 +14545,15 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlTyList.encode = function encode(message, writer) {
+                BamlTyList.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.itemType != null && Object.hasOwnProperty.call(message, "itemType"))
-                        $root.baml_core.cffi.v1.BamlTy.encode(message.itemType, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTy.encode(message.itemType, writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -13525,9 +14581,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlTyList.decode = function decode(reader, length, error) {
+                BamlTyList.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlTyList();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -13535,11 +14595,11 @@ $root.baml_core = (function() {
                             break;
                         switch (tag >>> 3) {
                         case 1: {
-                                message.itemType = $root.baml_core.cffi.v1.BamlTy.decode(reader, reader.uint32());
+                                message.itemType = $root.baml_core.cffi.v1.BamlTy.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -13570,11 +14630,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlTyList.verify = function verify(message) {
+                BamlTyList.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.itemType != null && message.hasOwnProperty("itemType")) {
-                        var error = $root.baml_core.cffi.v1.BamlTy.verify(message.itemType);
+                        var error = $root.baml_core.cffi.v1.BamlTy.verify(message.itemType, long + 1);
                         if (error)
                             return "itemType." + error;
                     }
@@ -13589,14 +14653,20 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlTyList} BamlTyList
                  */
-                BamlTyList.fromObject = function fromObject(object) {
+                BamlTyList.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlTyList)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlTyList: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlTyList();
                     if (object.itemType != null) {
-                        if (typeof object.itemType !== "object")
+                        if (!$util.isObject(object.itemType))
                             throw TypeError(".baml_core.cffi.v1.BamlTyList.itemType: object expected");
-                        message.itemType = $root.baml_core.cffi.v1.BamlTy.fromObject(object.itemType);
+                        message.itemType = $root.baml_core.cffi.v1.BamlTy.fromObject(object.itemType, long + 1);
                     }
                     return message;
                 };
@@ -13610,14 +14680,18 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlTyList.toObject = function toObject(message, options) {
+                BamlTyList.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.defaults)
                         object.itemType = null;
                     if (message.itemType != null && message.hasOwnProperty("itemType"))
-                        object.itemType = $root.baml_core.cffi.v1.BamlTy.toObject(message.itemType, options);
+                        object.itemType = $root.baml_core.cffi.v1.BamlTy.toObject(message.itemType, options, q + 1);
                     return object;
                 };
 
@@ -13671,7 +14745,7 @@ $root.baml_core = (function() {
                 function BamlTyMap(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -13712,13 +14786,17 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlTyMap.encode = function encode(message, writer) {
+                BamlTyMap.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.keyType != null && Object.hasOwnProperty.call(message, "keyType"))
-                        $root.baml_core.cffi.v1.BamlTy.encode(message.keyType, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTy.encode(message.keyType, writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
                     if (message.valueType != null && Object.hasOwnProperty.call(message, "valueType"))
-                        $root.baml_core.cffi.v1.BamlTy.encode(message.valueType, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTy.encode(message.valueType, writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -13746,9 +14824,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlTyMap.decode = function decode(reader, length, error) {
+                BamlTyMap.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlTyMap();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -13756,15 +14838,15 @@ $root.baml_core = (function() {
                             break;
                         switch (tag >>> 3) {
                         case 1: {
-                                message.keyType = $root.baml_core.cffi.v1.BamlTy.decode(reader, reader.uint32());
+                                message.keyType = $root.baml_core.cffi.v1.BamlTy.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 2: {
-                                message.valueType = $root.baml_core.cffi.v1.BamlTy.decode(reader, reader.uint32());
+                                message.valueType = $root.baml_core.cffi.v1.BamlTy.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -13795,16 +14877,20 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlTyMap.verify = function verify(message) {
+                BamlTyMap.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.keyType != null && message.hasOwnProperty("keyType")) {
-                        var error = $root.baml_core.cffi.v1.BamlTy.verify(message.keyType);
+                        var error = $root.baml_core.cffi.v1.BamlTy.verify(message.keyType, long + 1);
                         if (error)
                             return "keyType." + error;
                     }
                     if (message.valueType != null && message.hasOwnProperty("valueType")) {
-                        var error = $root.baml_core.cffi.v1.BamlTy.verify(message.valueType);
+                        var error = $root.baml_core.cffi.v1.BamlTy.verify(message.valueType, long + 1);
                         if (error)
                             return "valueType." + error;
                     }
@@ -13819,19 +14905,25 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlTyMap} BamlTyMap
                  */
-                BamlTyMap.fromObject = function fromObject(object) {
+                BamlTyMap.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlTyMap)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlTyMap: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlTyMap();
                     if (object.keyType != null) {
-                        if (typeof object.keyType !== "object")
+                        if (!$util.isObject(object.keyType))
                             throw TypeError(".baml_core.cffi.v1.BamlTyMap.keyType: object expected");
-                        message.keyType = $root.baml_core.cffi.v1.BamlTy.fromObject(object.keyType);
+                        message.keyType = $root.baml_core.cffi.v1.BamlTy.fromObject(object.keyType, long + 1);
                     }
                     if (object.valueType != null) {
-                        if (typeof object.valueType !== "object")
+                        if (!$util.isObject(object.valueType))
                             throw TypeError(".baml_core.cffi.v1.BamlTyMap.valueType: object expected");
-                        message.valueType = $root.baml_core.cffi.v1.BamlTy.fromObject(object.valueType);
+                        message.valueType = $root.baml_core.cffi.v1.BamlTy.fromObject(object.valueType, long + 1);
                     }
                     return message;
                 };
@@ -13845,18 +14937,22 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlTyMap.toObject = function toObject(message, options) {
+                BamlTyMap.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.defaults) {
                         object.keyType = null;
                         object.valueType = null;
                     }
                     if (message.keyType != null && message.hasOwnProperty("keyType"))
-                        object.keyType = $root.baml_core.cffi.v1.BamlTy.toObject(message.keyType, options);
+                        object.keyType = $root.baml_core.cffi.v1.BamlTy.toObject(message.keyType, options, q + 1);
                     if (message.valueType != null && message.hasOwnProperty("valueType"))
-                        object.valueType = $root.baml_core.cffi.v1.BamlTy.toObject(message.valueType, options);
+                        object.valueType = $root.baml_core.cffi.v1.BamlTy.toObject(message.valueType, options, q + 1);
                     return object;
                 };
 
@@ -13909,7 +15005,7 @@ $root.baml_core = (function() {
                 function BamlTyUnionVariant(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -13942,11 +15038,15 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlTyUnionVariant.encode = function encode(message, writer) {
+                BamlTyUnionVariant.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.name != null && Object.hasOwnProperty.call(message, "name"))
-                        $root.baml_core.cffi.v1.BamlTyName.encode(message.name, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTyName.encode(message.name, writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -13974,9 +15074,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlTyUnionVariant.decode = function decode(reader, length, error) {
+                BamlTyUnionVariant.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlTyUnionVariant();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -13984,11 +15088,11 @@ $root.baml_core = (function() {
                             break;
                         switch (tag >>> 3) {
                         case 1: {
-                                message.name = $root.baml_core.cffi.v1.BamlTyName.decode(reader, reader.uint32());
+                                message.name = $root.baml_core.cffi.v1.BamlTyName.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -14019,11 +15123,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlTyUnionVariant.verify = function verify(message) {
+                BamlTyUnionVariant.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.name != null && message.hasOwnProperty("name")) {
-                        var error = $root.baml_core.cffi.v1.BamlTyName.verify(message.name);
+                        var error = $root.baml_core.cffi.v1.BamlTyName.verify(message.name, long + 1);
                         if (error)
                             return "name." + error;
                     }
@@ -14038,14 +15146,20 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlTyUnionVariant} BamlTyUnionVariant
                  */
-                BamlTyUnionVariant.fromObject = function fromObject(object) {
+                BamlTyUnionVariant.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlTyUnionVariant)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlTyUnionVariant: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlTyUnionVariant();
                     if (object.name != null) {
-                        if (typeof object.name !== "object")
+                        if (!$util.isObject(object.name))
                             throw TypeError(".baml_core.cffi.v1.BamlTyUnionVariant.name: object expected");
-                        message.name = $root.baml_core.cffi.v1.BamlTyName.fromObject(object.name);
+                        message.name = $root.baml_core.cffi.v1.BamlTyName.fromObject(object.name, long + 1);
                     }
                     return message;
                 };
@@ -14059,14 +15173,18 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlTyUnionVariant.toObject = function toObject(message, options) {
+                BamlTyUnionVariant.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.defaults)
                         object.name = null;
                     if (message.name != null && message.hasOwnProperty("name"))
-                        object.name = $root.baml_core.cffi.v1.BamlTyName.toObject(message.name, options);
+                        object.name = $root.baml_core.cffi.v1.BamlTyName.toObject(message.name, options, q + 1);
                     return object;
                 };
 
@@ -14119,7 +15237,7 @@ $root.baml_core = (function() {
                 function BamlTyOptional(properties) {
                     if (properties)
                         for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
 
@@ -14152,11 +15270,15 @@ $root.baml_core = (function() {
                  * @param {$protobuf.Writer} [writer] Writer to encode to
                  * @returns {$protobuf.Writer} Writer
                  */
-                BamlTyOptional.encode = function encode(message, writer) {
+                BamlTyOptional.encode = function encode(message, writer, q) {
                     if (!writer)
                         writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     if (message.value != null && Object.hasOwnProperty.call(message, "value"))
-                        $root.baml_core.cffi.v1.BamlTy.encode(message.value, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+                        $root.baml_core.cffi.v1.BamlTy.encode(message.value, writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -14184,9 +15306,13 @@ $root.baml_core = (function() {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                BamlTyOptional.decode = function decode(reader, length, error) {
+                BamlTyOptional.decode = function decode(reader, length, error, long) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlTyOptional();
                     while (reader.pos < end) {
                         var tag = reader.uint32();
@@ -14194,11 +15320,11 @@ $root.baml_core = (function() {
                             break;
                         switch (tag >>> 3) {
                         case 1: {
-                                message.value = $root.baml_core.cffi.v1.BamlTy.decode(reader, reader.uint32());
+                                message.value = $root.baml_core.cffi.v1.BamlTy.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         default:
-                            reader.skipType(tag & 7);
+                            reader.skipType(tag & 7, long);
                             break;
                         }
                     }
@@ -14229,11 +15355,15 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} message Plain object to verify
                  * @returns {string|null} `null` if valid, otherwise the reason why it is not
                  */
-                BamlTyOptional.verify = function verify(message) {
+                BamlTyOptional.verify = function verify(message, long) {
                     if (typeof message !== "object" || message === null)
                         return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
                     if (message.value != null && message.hasOwnProperty("value")) {
-                        var error = $root.baml_core.cffi.v1.BamlTy.verify(message.value);
+                        var error = $root.baml_core.cffi.v1.BamlTy.verify(message.value, long + 1);
                         if (error)
                             return "value." + error;
                     }
@@ -14248,14 +15378,20 @@ $root.baml_core = (function() {
                  * @param {Object.<string,*>} object Plain object
                  * @returns {baml_core.cffi.v1.BamlTyOptional} BamlTyOptional
                  */
-                BamlTyOptional.fromObject = function fromObject(object) {
+                BamlTyOptional.fromObject = function fromObject(object, long) {
                     if (object instanceof $root.baml_core.cffi.v1.BamlTyOptional)
                         return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlTyOptional: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
                     var message = new $root.baml_core.cffi.v1.BamlTyOptional();
                     if (object.value != null) {
-                        if (typeof object.value !== "object")
+                        if (!$util.isObject(object.value))
                             throw TypeError(".baml_core.cffi.v1.BamlTyOptional.value: object expected");
-                        message.value = $root.baml_core.cffi.v1.BamlTy.fromObject(object.value);
+                        message.value = $root.baml_core.cffi.v1.BamlTy.fromObject(object.value, long + 1);
                     }
                     return message;
                 };
@@ -14269,14 +15405,18 @@ $root.baml_core = (function() {
                  * @param {$protobuf.IConversionOptions} [options] Conversion options
                  * @returns {Object.<string,*>} Plain object
                  */
-                BamlTyOptional.toObject = function toObject(message, options) {
+                BamlTyOptional.toObject = function toObject(message, options, q) {
                     if (!options)
                         options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
                     var object = {};
                     if (options.defaults)
                         object.value = null;
                     if (message.value != null && message.hasOwnProperty("value"))
-                        object.value = $root.baml_core.cffi.v1.BamlTy.toObject(message.value, options);
+                        object.value = $root.baml_core.cffi.v1.BamlTy.toObject(message.value, options, q + 1);
                     return object;
                 };
 

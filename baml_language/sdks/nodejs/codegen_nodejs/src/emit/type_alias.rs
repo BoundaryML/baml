@@ -1,12 +1,10 @@
 //! `NodeTypeAlias` — TypeScript type alias.
 //!
-//! Phase 2 renders as a `BAML_PLACEHOLDER`; Phase 4 emits the real
-//! `export type Foo = <RHS>`. `recursive` is consumed now by
+//! Emits `export type Foo = <RHS>`. `recursive` is consumed by
 //! `group_and_sort` (recursive aliases hoist to the front of the leaf).
 
 use baml_codegen_types::{Name, Ty};
 
-#[allow(dead_code)]
 pub(crate) struct NodeTypeAlias {
     pub(crate) name: String,
     pub(crate) source: Name,

@@ -8,9 +8,7 @@
 import { describe, it, expect } from "@jest/globals";
 
 import * as bamlSdk from "./baml_sdk";
-import * as b from "./baml_sdk";
 import { Foo } from "./baml_sdk";
-import { Sentiment } from "./baml_sdk/enums";
 import { Resume } from "./baml_sdk/lorem";
 import { Thing } from "./baml_sdk/a/b";
 import * as primitives from "./baml_sdk/primitives";
@@ -72,30 +70,5 @@ describe("type_shapes — representative symbols", () => {
 
   it("baml_sdk/a/b.Thing is reachable at the deep namespace", () => {
     expect(Thing).toBeDefined();
-  });
-});
-
-// Phase 5: typed value round-trips through the engine (non-LLM pure functions).
-describe("type_shapes — typed round-trips", () => {
-  it("round_trip_foo returns a typed Foo instance", () => {
-    const r = b.round_trip_foo({ v: 5 });
-    expect(r).toBeInstanceOf(Foo);
-    expect(r.v).toBe(5);
-  });
-
-  it("round_trip_foo_async returns a typed Foo instance", async () => {
-    const r = await b.round_trip_foo_async({ v: 7 });
-    expect(r).toBeInstanceOf(Foo);
-    expect(r.v).toBe(7);
-  });
-
-  it("pick_sentiment returns a typed Sentiment enum member", () => {
-    const r = enums.pick_sentiment(true);
-    expect(r).toBe(Sentiment.Positive);
-  });
-
-  it("round_trip_sentiment preserves the enum member", () => {
-    const r = enums.round_trip_sentiment(Sentiment.Negative);
-    expect(r).toBe(Sentiment.Negative);
   });
 });

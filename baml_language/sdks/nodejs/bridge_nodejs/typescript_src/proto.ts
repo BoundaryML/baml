@@ -347,10 +347,18 @@ function decodeValueHolder(
         // work; for now non-media handles decode to a bare BamlHandle.
         return handle;
     }
-    // FIXME: Unknown/unsupported outbound variants silently collapse to null, making them
-    // indistinguishable from a legitimate BAML null result. Legacy engine/ threw via Rust
-    // Err/anyhow. bridge_python has the same silent `return None` fallthrough. Leaving as-is
-    // for parity with bridge_python; fix both together if this becomes a forward-compat issue.
+    // Inline media / prompt AST are not expected on the Node FFI path — they
+    // travel via `handle_value`. Reject loudly rather than silently collapsing
+    // to null (mirrors bridge_python's proto.py, which raises here).
+    if (holder.mediaValue || holder.promptAstValue) {
+        const which = holder.mediaValue ? 'media_value' : 'prompt_ast_value';
+        throw new BamlError(
+            `BEX emitted ${which} on the FFI path — media/prompt AST are expected ` +
+            `via handle_value, not inline`,
+        );
+    }
+    // Any remaining unset oneof is a legitimate null: an all-default holder is a
+    // null BAML result.
     return null;
 }
 
@@ -435,24 +443,33 @@ export function decodeOutboundValue(data: Buffer | Uint8Array): unknown {
 }
 
 /**
- * Read the thrown value's class FQN (e.g. `baml.errors.GenericSdkError`) and
- * its `message` field off the wire holder. 32b surfaces error/panic arms as a
- * generic `Error` carrying these, with no structured Node type mapping.
+ * Decode the thrown value off the wire holder. Returns the fully decoded BAML
+ * `value` (a generated class instance when the FQN is mapped, else a plain
+ * object / primitive), the class FQN (`className`), and a readable `message`
+ * lifted from the value's `message` field when present. Mirrors
+ * bridge_python's `decode_value` + `_outbound_class_fqn` so the surfaced
+ * `BamlError`/`BamlPanic` carries the decoded value, not just a string.
+ *
+ * Decoding is defensive: a malformed/unsupported thrown payload must not mask
+ * the original error/panic, so a decode failure degrades to an undefined value
+ * (the formatted message and className are still surfaced).
  */
-function describeThrown(
+function decodeThrown(
     holder: baml_core.cffi.v1.IBamlOutboundValue | null | undefined
-): { className: string; message: string } {
-    let className = '';
-    let message = '';
-    if (holder?.classValue) {
-        className = holder.classValue.name?.name ?? '';
-        for (const entry of holder.classValue.fields || []) {
-            if (entry.key === 'message' && entry.value?.stringValue != null) {
-                message = entry.value.stringValue;
-            }
-        }
+): { value: unknown; className: string | undefined; message: string } {
+    const className = holder?.classValue?.name?.name ?? undefined;
+    let value: unknown;
+    try {
+        value = holder ? decodeValueHolder(holder, getTypeMap()) : undefined;
+    } catch {
+        value = undefined;
     }
-    return { className, message };
+    let message = '';
+    if (value != null && typeof value === 'object' && 'message' in (value as object)) {
+        const m = (value as Record<string, unknown>).message;
+        if (typeof m === 'string') message = m;
+    }
+    return { value, className, message };
 }
 
 function formatThrownMessage(kind: string, className: string, message: string, trace: string[]): string {
@@ -465,19 +482,24 @@ function formatThrownMessage(kind: string, className: string, message: string, t
 
 /**
  * Decode a `BamlOutboundResult` envelope (the engine's call-result wire shape
- * after 31c/31e). The `ok` arm returns the decoded value as before; the
- * `error`/`panic` arms **throw** a generic `Error` carrying the thrown value's
- * class name + message + BAML trace (32b: no structured Node error types). An
- * `is_exit_panic` (clean `baml.sys.exit`) terminates the process via
- * `process.exit(code)` rather than throwing.
+ * after 31c/31e). The `ok` arm returns the decoded value; the `error`/`panic`
+ * arms **throw** a `BamlError`/`BamlPanic` carrying the fully decoded thrown
+ * value (`.value`), the BAML trace (`.bamlTrace`), and the class FQN
+ * (`.className`), with a readable formatted `.message`. An `is_exit_panic`
+ * (clean `baml.sys.exit`) terminates the process via `process.exit(code)`
+ * rather than throwing.
  */
 export function decodeCallResult(data: Buffer | Uint8Array): unknown {
     const buf = data instanceof Buffer ? data : Buffer.from(data);
     const result = BamlOutboundResult.decode(buf);
     switch (result.result) {
         case 'error': {
-            const { className, message } = describeThrown(result.error?.value);
-            throw new BamlError(formatThrownMessage('error', className, message, result.error?.trace ?? []));
+            const { value, className, message } = decodeThrown(result.error?.value);
+            const trace = result.error?.trace ?? [];
+            throw new BamlError(
+                formatThrownMessage('error', className ?? '', message, trace),
+                { value, bamlTrace: trace, className },
+            );
         }
         case 'panic': {
             const panic = result.panic;
@@ -488,8 +510,12 @@ export function decodeCallResult(data: Buffer | Uint8Array): unknown {
                 const code = Number(panic.exitCode ?? 0);
                 process.exit(code);
             }
-            const { className, message } = describeThrown(panic?.value);
-            throw new BamlPanic(formatThrownMessage('panic', className, message, panic?.trace ?? []));
+            const { value, className, message } = decodeThrown(panic?.value);
+            const trace = panic?.trace ?? [];
+            throw new BamlPanic(
+                formatThrownMessage('panic', className ?? '', message, trace),
+                { value, bamlTrace: trace, className },
+            );
         }
         case 'ok':
         default:

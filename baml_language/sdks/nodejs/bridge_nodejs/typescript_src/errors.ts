@@ -2,10 +2,37 @@
 // Error types are encoded as prefixed strings in napi::Error messages.
 // This module provides helpers to identify error types from native errors.
 
+/**
+ * Structured detail carried by a thrown `BamlError` / `BamlPanic`, mirroring
+ * `bridge_python`'s `BamlError(value, baml_trace=..., class_name=...)`.
+ *
+ * - `value`: the fully decoded thrown BAML value (a generated class instance
+ *   when the FQN is mapped, else a plain object / primitive).
+ * - `bamlTrace`: the pre-rendered `File "...", line N, in fn` frame strings
+ *   from the BAML stack.
+ * - `className`: the thrown value's BAML FQN when known (e.g.
+ *   `baml.json.JsonParseError`).
+ */
+export interface BamlErrorDetail {
+    value?: unknown;
+    bamlTrace?: string[];
+    className?: string;
+}
+
 export class BamlError extends Error {
-    constructor(message: string) {
+    /** The decoded thrown BAML value, or `undefined` for SDK-internal errors. */
+    readonly value: unknown;
+    /** Pre-rendered BAML stack frames; empty for SDK-internal errors. */
+    readonly bamlTrace: string[];
+    /** The thrown value's BAML FQN, when known. */
+    readonly className: string | undefined;
+
+    constructor(message: string, detail?: BamlErrorDetail) {
         super(message);
         this.name = 'BamlError';
+        this.value = detail?.value;
+        this.bamlTrace = detail?.bamlTrace ? [...detail.bamlTrace] : [];
+        this.className = detail?.className;
     }
 }
 
@@ -37,8 +64,8 @@ export class BamlCancelledError extends BamlError {
  * except clean process-exit panics, which exit after flushing telemetry.
  */
 export class BamlPanic extends BamlError {
-    constructor(message: string) {
-        super(message);
+    constructor(message: string, detail?: BamlErrorDetail) {
+        super(message, detail);
         this.name = 'BamlPanic';
     }
 }

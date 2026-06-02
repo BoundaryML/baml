@@ -14,6 +14,7 @@ $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 
 $WorkspaceRoot = (Resolve-Path '..\..\..').Path
+$RepoRoot = (Resolve-Path (Join-Path $WorkspaceRoot '..')).Path
 $BridgeNodejs = Join-Path $WorkspaceRoot 'sdks\nodejs\bridge_nodejs'
 
 # Shared pnpm store under target/ so per-fixture installs hardlink from
@@ -21,8 +22,31 @@ $BridgeNodejs = Join-Path $WorkspaceRoot 'sdks\nodejs\bridge_nodejs'
 $env:npm_config_store_dir = Join-Path $WorkspaceRoot 'target\pnpm-store'
 New-Item -ItemType Directory -Force -Path $env:npm_config_store_dir | Out-Null
 
-# 1. Native `.node` addon. See setup.sh for why we do NOT `pnpm install`
-#    inside bridge_nodejs (it's a member of the repo-root workspace).
+# 1. Workspace deps. bridge_nodejs is a member of the repo-root
+#    pnpm-workspace.yaml, and `pnpm build:debug` needs that workspace
+#    install to have populated bridge_nodejs/node_modules.
+Write-Host '==> pnpm install at repo root'
+Push-Location $RepoRoot
+try {
+    pnpm install
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+} finally {
+    Pop-Location
+}
+
+# 2. Bridge-local deps. The bridge package has its own lockfile and build
+#    scripts invoke tools from bridge_nodejs/node_modules (for example
+#    node_modules/protobufjs-cli/bin/pbjs), so make that install explicit.
+Write-Host '==> pnpm install in sdks/nodejs/bridge_nodejs'
+Push-Location $BridgeNodejs
+try {
+    pnpm install --ignore-workspace --ignore-scripts
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+} finally {
+    Pop-Location
+}
+
+# 3. Native `.node` addon.
 Write-Host '==> pnpm build:debug in sdks/nodejs/bridge_nodejs'
 Push-Location $BridgeNodejs
 try {
@@ -32,7 +56,7 @@ try {
     Pop-Location
 }
 
-# 2. Per-fixture `pnpm install`. `--ignore-workspace` is required so pnpm
+# 4. Per-fixture `pnpm install`. `--ignore-workspace` is required so pnpm
 #    doesn't walk up to the repo-root workspace and skip the install.
 Get-ChildItem -Directory | ForEach-Object {
     $generated = Join-Path $_.FullName 'generated'

@@ -7,7 +7,7 @@
     "test": "jest"
   },
   "dependencies": {
-    "@boundaryml/baml-core": "file:../../../../../sdks/nodejs/bridge_nodejs"
+    "@boundaryml/baml-core-node": "file:../../../../../sdks/nodejs/bridge_nodejs"
   },
   "devDependencies": {
     "@jest/globals": "^29.7.0",

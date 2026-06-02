@@ -15,21 +15,21 @@ import {
   round_trip_resume_or_resume_stream,
   // spec2: stream companions keep their `$stream` suffix and live beside
   // their base type in the same leaf — no `stream_types/` namespace.
-  Resume$stream as StreamResume,
+  Resume$stream,
 } from "./baml_sdk/lorem";
-import { Foo$stream as StreamFoo } from "./baml_sdk";
+import { Foo$stream } from "./baml_sdk";
 
 describe("roundtrip streams", () => {
   it("round_trip_resume_stream", () => {
-    const r = new StreamResume({ name: "ada", email: null });
+    const r = new Resume$stream({ name: "ada", email: null });
     expect(round_trip_resume_stream(r)).toEqual(r);
   });
   it("round_trip_root_foo_stream", () => {
-    const f = new StreamFoo({ v: 3 });
+    const f = new Foo$stream({ v: 3 });
     expect(round_trip_root_foo_stream(f)).toEqual(f);
   });
   it("round_trip_box_of_resume_stream", () => {
-    const b = new Box({ v: new StreamResume({ name: "grace", email: null }) });
+    const b = new Box({ v: new Resume$stream({ name: "grace", email: null }) });
     expect(round_trip_box_of_resume_stream(b)).toEqual(b);
   });
   it("round_trip_resume_or_resume_stream", () => {

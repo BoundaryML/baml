@@ -1,7 +1,7 @@
 name: BAML SDK Release - Build Node.js
 
 # Per-platform NAPI prebuild matrix for the Node.js SDK runtime package
-# `@boundaryml/baml-core`. Mirrors `build-python-sdk.reusable.yaml` (same
+# `@boundaryml/baml-core-node`. Mirrors `build-python-sdk.reusable.yaml` (same
 # 8-target set), with `napi-rs` standing in for `maturin`. Each job builds
 # one `*.node` native addon and uploads it as `nodejs-sdk-<target>`; the
 # publish job in `release-sdk.yaml` downloads them all, runs
@@ -27,6 +27,7 @@ defaults:
 
 env:
   BRIDGE_DIR: baml_language/sdks/nodejs/bridge_nodejs
+  MACOSX_DEPLOYMENT_TARGET: "10.13"
 
 jobs:
   build:
@@ -34,60 +35,75 @@ jobs:
       fail-fast: false
       matrix:
         _:
-          - target: x86_64-unknown-linux-gnu
-            runs_on: ubuntu-latest
           - target: aarch64-unknown-linux-gnu
-            runs_on: ubuntu-latest
-          - target: x86_64-unknown-linux-musl
-            runs_on: ubuntu-latest
-          - target: aarch64-unknown-linux-musl
-            runs_on: ubuntu-latest
-          - target: x86_64-apple-darwin
-            runs_on: macos-latest
+            host: ubuntu-24.04-arm
+            # Target glibc 2.17. This is the oldest glibc we can practically support.
+            # Note that ubuntu-22.04-arm has glibc 2.35, but our users need older glibc.
+            # See https://github.com/BoundaryML/baml/issues/2736
+            container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64
+            before: |
+              echo "CFLAGS_aarch64_unknown_linux_gnu=-D__ARM_ARCH=8" >> "$GITHUB_ENV"
           - target: aarch64-apple-darwin
-            runs_on: macos-latest
+            host: macos-14
+          - target: x86_64-apple-darwin
+            host: macos-14
           - target: x86_64-pc-windows-msvc
-            runs_on: windows-latest
+            host: windows-latest
           - target: aarch64-pc-windows-msvc
-            runs_on: windows-11-arm
-            architecture: arm64
+            host: windows-11-arm
+          - target: x86_64-unknown-linux-gnu
+            # Do not use -latest, since it uses a newer glibc version.
+            host: ubuntu-22.04
+          - target: x86_64-unknown-linux-musl
+            host: ubuntu-22.04
+            before: |
+              sudo apt-get update
+              sudo apt-get install -y musl-tools
+              cat >>$GITHUB_ENV <<EOF
+              CC_x86_64_unknown_linux_musl=musl-gcc
+              RUSTFLAGS=-C target-feature=-crt-static --cfg tracing_unstable
+              EOF
+          - target: aarch64-unknown-linux-musl
+            host: ubuntu-24.04-arm
+            before: |
+              sudo apt-get update
+              sudo apt-get install -y musl-tools
+              cat >>$GITHUB_ENV <<EOF
+              CC_aarch64_unknown_linux_musl=musl-gcc
+              RUSTFLAGS=-C target-feature=-crt-static --cfg tracing_unstable
+              EOF
 
     name: ${{ matrix._.target }}
-    runs-on: ${{ matrix._.runs_on }}
+    runs-on: ${{ matrix._.host }}
+    container: ${{ matrix._.container }}
+    env:
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     steps:
-      - name: Setup build environment (ARM64 Windows)
-        if: matrix._.target == 'aarch64-pc-windows-msvc'
-        shell: powershell
-        run: |
-          # rustup is not preinstalled on aarch64 Windows runners
-          if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
-              Invoke-WebRequest -Uri "https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe" -OutFile "rustup-init.exe"
-              .\rustup-init.exe --default-toolchain stable -y
-              Remove-Item "rustup-init.exe"
-              Add-Content -Path "$env:GITHUB_PATH" -Value "$env:USERPROFILE\.cargo\bin" -Encoding utf8
-          }
-
       - uses: actions/checkout@v6
 
-      - name: Install Rust target
-        run: rustup target add ${{ matrix._.target }}
+      - name: Check GLIBC version
+        if: contains(matrix._.target, 'linux') && !contains(matrix._.target, 'musl')
+        run: ldd --version
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: ./.github/actions/setup-node
         with:
-          node-version: 20
-          architecture: ${{ matrix._.architecture }}
+          node-action-version: v6
+          install-dependencies: false
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
         with:
-          version: 9
+          targets: ${{ matrix._.target }}
+          workspace: baml_language
+          prefix-key: v5-rust-nodejs-sdk-${{ matrix._.target }}
+          cache-on-failure: true
+          enable-cross: false
+          skip-protoc: true
 
-      # musl targets cross-compile from a glibc host via zig; napi-rs
-      # supports `--cross-compile` with the zig linker for musl.
-      - name: Install zig (musl cross-compile)
-        if: contains(matrix._.target, 'musl')
-        uses: mlugg/setup-zig@v1
+      - name: Build tools setup
+        if: matrix._.before
+        run: ${{ matrix._.before }}
 
       - name: Install dependencies
         working-directory: ${{ env.BRIDGE_DIR }}
@@ -99,13 +115,7 @@ jobs:
 
       - name: Build native addon (${{ matrix._.target }})
         working-directory: ${{ env.BRIDGE_DIR }}
-        run: |
-          set -euo pipefail
-          if [[ "${{ matrix._.target }}" == *musl* ]]; then
-            pnpm exec napi build --platform --release --target ${{ matrix._.target }} --cross-compile --js native.js --dts native.d.ts
-          else
-            pnpm exec napi build --platform --release --target ${{ matrix._.target }} --js native.js --dts native.d.ts
-          fi
+        run: pnpm exec napi build --platform --release --target ${{ matrix._.target }} --js native.js --dts native.d.ts
 
       - name: Upload native addon
         uses: actions/upload-artifact@v7

@@ -27,7 +27,7 @@ on:
         default: false
         required: false
       publish_npm:
-        description: "Publish @boundaryml/baml-core to npm after building (false = build-only rehearsal)"
+        description: "Publish @boundaryml/baml-core-node to npm after building (false = build-only rehearsal)"
         type: boolean
         default: false
         required: false
@@ -139,7 +139,7 @@ jobs:
         working-directory: ${{ env.BRIDGE_DIR }}
         # `napi prepublish` (from @napi-rs/cli) reads `napi.targets` +
         # the downloaded `artifacts/*.node`, writes the per-platform
-        # `@boundaryml/baml-core-<triple>` sub-packages, and wires the
+        # `@boundaryml/baml-core-node-<triple>` sub-packages, and wires the
         # umbrella package's `optionalDependencies` to them.
         run: pnpm exec napi create-npm-dirs && pnpm exec napi artifacts --output-dir ./artifacts
       - name: Publish to npm

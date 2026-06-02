@@ -36,8 +36,8 @@ use baml_codegen_types::SymbolPool;
 use baml_db::baml_compiler_diagnostics::Severity;
 use baml_project::ProjectDatabase;
 
-pub mod typescript_node;
 pub mod python_pydantic2;
+pub mod typescript_node;
 
 /// Build-script-side soft-failure recorder. The two generator
 /// `run_all` entry points use this to capture env-dependent failures

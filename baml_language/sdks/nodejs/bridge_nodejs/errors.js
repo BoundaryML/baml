@@ -13,9 +13,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.BamlPanic = exports.BamlCancelledError = exports.BamlClientError = exports.BamlInvalidArgumentError = exports.BamlError = void 0;
 exports.wrapNativeError = wrapNativeError;
 class BamlError extends Error {
-    constructor(message) {
+    constructor(message, detail) {
         super(message);
         this.name = 'BamlError';
+        this.value = detail?.value;
+        this.bamlTrace = detail?.bamlTrace ? [...detail.bamlTrace] : [];
+        this.className = detail?.className;
     }
 }
 exports.BamlError = BamlError;
@@ -47,8 +50,8 @@ exports.BamlCancelledError = BamlCancelledError;
  * except clean process-exit panics, which exit after flushing telemetry.
  */
 class BamlPanic extends BamlError {
-    constructor(message) {
-        super(message);
+    constructor(message, detail) {
+        super(message, detail);
         this.name = 'BamlPanic';
     }
 }

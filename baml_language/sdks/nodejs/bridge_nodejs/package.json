@@ -1,5 +1,5 @@
 {
-  "name": "@boundaryml/baml-core",
+  "name": "@boundaryml/baml-core-node",
   "version": "0.0.0-beta",
   "main": "index.js",
   "types": "index.d.ts",
@@ -43,7 +43,7 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "protobufjs": "^7.4.0"
+    "protobufjs": "^7.6.2"
   },
   "jest": {
     "preset": "ts-jest",

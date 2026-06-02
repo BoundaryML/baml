@@ -8,7 +8,7 @@
 //!
 //! These four are runtime-owned stdlib value classes: codegen does NOT emit
 //! a structural class body for them — it re-exports them from
-//! `@boundaryml/baml-core` under aliases (`BamlImage as Image`, etc.). See
+//! `@boundaryml/baml-core-node` under aliases (`BamlImage as Image`, etc.). See
 //! `00a-spec-codegen-mappings.md` "Stdlib Re-Exports".
 //!
 //! The key is stored inline as a raw `(key, handle_type)` pair (rather than a

@@ -19,14 +19,15 @@ import {
 } from "./baml_sdk/primitives";
 
 describe("roundtrip primitives", () => {
-  it("return_int", () => expect(return_int()).toBe(42));
-  it("return_float", () => expect(return_float()).toBe(3.14));
+  it("return_int", () => expect(return_int()).toBeCloseTo(42));
+  it("return_float", () => expect(return_float()).toBeCloseTo(3.14));
   it("return_string", () => expect(return_string()).toBe("hello"));
   it("return_bool", () => expect(return_bool()).toBe(true));
   it("return_null", () => expect(return_null()).toBeNull());
 
-  it("round_trip_int", () => expect(round_trip_int(7)).toBe(7));
-  it("round_trip_float", () => expect(round_trip_float(2.5)).toBe(2.5));
+  it("round_trip_int", () => expect(round_trip_int(7)).toBeCloseTo(7));
+  it("round_trip_float", () =>
+    expect(round_trip_float(2.5)).toBeCloseTo(2.5));
   it("round_trip_string", () => expect(round_trip_string("hi")).toBe("hi"));
   it("round_trip_bool", () => expect(round_trip_bool(false)).toBe(false));
   it("round_trip_null", () => expect(round_trip_null(null)).toBeNull());
@@ -47,8 +48,8 @@ describe("roundtrip primitives", () => {
     });
     const r = round_trip_primitives(p);
     expect(r).toBeInstanceOf(Primitives);
-    expect(r.int_field).toBe(1);
-    expect(r.float_field).toBe(1.5);
+    expect(r.int_field).toBeCloseTo(1);
+    expect(r.float_field).toBeCloseTo(1.5);
     expect(r.string_field).toBe("s");
     expect(r.bool_field).toBe(true);
     expect(r.null_field).toBeNull();

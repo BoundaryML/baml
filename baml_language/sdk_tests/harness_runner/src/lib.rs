@@ -45,7 +45,10 @@ use std::{
 /// `npm_config_store_dir`, …).
 ///
 /// If `uv` is managed by mise but its shim isn't on PATH, the
-/// helper falls back to `mise which uv` before giving up.
+/// helper falls back to `mise which uv` before giving up. On Windows,
+/// `pnpm` is commonly exposed as `pnpm.cmd`; Rust's process launcher
+/// does not consistently apply shell-style `PATHEXT` expansion when
+/// asked to spawn `pnpm`, so the helper retries the explicit shim.
 pub fn run_test_cmd(fixture: &str, cmd: &str, cache_subdir: &str, cache_env_var: &str) {
     run_test_cmd_with_env(fixture, cmd, cache_subdir, cache_env_var, &[]);
 }
@@ -114,6 +117,18 @@ fn run_test_process(
     let output = command.output();
 
     match output {
+        #[cfg(windows)]
+        Err(err) if err.kind() == ErrorKind::NotFound && prog == "pnpm" => {
+            let mut fallback = Command::new("pnpm.cmd");
+            fallback
+                .args(args)
+                .current_dir(dir)
+                .env(cache_env_var, cache_dir);
+            for (k, v) in extra_env {
+                fallback.env(k, v);
+            }
+            fallback.output()
+        }
         Err(err) if err.kind() == ErrorKind::NotFound && prog == "uv" => {
             let uv = resolve_mise_uv()?;
             let mut fallback = Command::new(uv);

@@ -18,7 +18,7 @@
 // `Stream` on re-export (`export { BamlStream as Stream } from ...`).
 //
 // Spec note: at the codegen layer only async streaming is a real call
-// (`_stream_async`); the per-chunk `next`/`final` pulls here are unrelated to
+// (`$stream_async`); the per-chunk `next`/`final` pulls here are unrelated to
 // that function-level distinction. The wrapper exposes both sync and async
 // pulls, as Python does.
 Object.defineProperty(exports, "__esModule", { value: true });

@@ -1,11 +1,10 @@
-// test_typemap.test.ts — Phase 2.5 coverage for the runtime BamlTypeMap,
-// setTypeMap/getTypeMap, and the BAML_PLACEHOLDER sentinel.
+// test_typemap.test.ts — coverage for the runtime BamlTypeMap and
+// setTypeMap/getTypeMap.
 
 import {
     BamlTypeMap,
     setTypeMap,
     getTypeMap,
-    BAML_PLACEHOLDER,
     BamlError,
 } from '../index';
 
@@ -42,12 +41,5 @@ describe('BamlTypeMap', () => {
         const m = new BamlTypeMap();
         setTypeMap(m);
         expect(getTypeMap()).toBe(m);
-    });
-});
-
-describe('BAML_PLACEHOLDER', () => {
-    test('is a frozen, defined sentinel', () => {
-        expect(BAML_PLACEHOLDER).toBeDefined();
-        expect(Object.isFrozen(BAML_PLACEHOLDER)).toBe(true);
     });
 });

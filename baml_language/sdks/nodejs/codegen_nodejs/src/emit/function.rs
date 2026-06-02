@@ -1,11 +1,10 @@
 //! `NodeFunction` — top-level factory binding.
 //!
-//! Phase 2 renders these as `export const <name>: any = BAML_PLACEHOLDER;`
-//! placeholders; Phase 4 replaces them with `defineFunction(...)` calls.
-//! The richer fields (`param_names`, `arg_tys`, …) are carried now so
-//! Phase 3/4 don't have to re-thread them through `build_emitted`.
+//! Rendered as `export const <name> = defineFunction(...)` with an `_async`
+//! sibling. The fields (`param_names`, `arg_tys`, …) carry the data the
+//! renderer needs to emit the typed cast.
 
-use baml_codegen_types::{FunctionArgumentDefault, Ty};
+use baml_codegen_types::Ty;
 
 /// Async/sync marker carried by factory bindings. Each BAML `Function`
 /// (and each of its companions) fans out into one sync and one async
@@ -16,7 +15,6 @@ pub(crate) enum SyncAsync {
     Async,
 }
 
-#[allow(dead_code)]
 pub(crate) struct NodeFunction {
     /// TS identifier. Sync form = BAML name verbatim; async form =
     /// `<name>_async`. Companion forms keep their `$` suffix verbatim
@@ -29,8 +27,6 @@ pub(crate) struct NodeFunction {
     pub(crate) mode: SyncAsync,
     /// Inline parameter-name list.
     pub(crate) param_names: Vec<String>,
-    /// Default metadata matching `param_names`.
-    pub(crate) arg_defaults: Vec<Option<FunctionArgumentDefault>>,
     /// Parameter types matching `param_names`. Consumed when rendering the
     /// binding's `as (...) => ...` surface type in `index.ts`.
     pub(crate) arg_tys: Vec<Ty>,
