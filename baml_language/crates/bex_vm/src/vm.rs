@@ -5028,6 +5028,31 @@ impl BexVm {
                     self.stack.push(Value::object(ptr));
                 }
 
+                // ── MakeGenericFunction ───────────────────────────────────────
+                OpCode::MakeGenericFunction => {
+                    let raw = { read_u32_unchecked(code, pc) };
+                    let function = bex_vm_types::GlobalIndex::from_raw(raw as usize);
+                    let ntypeargs = { read_u16_unchecked(code, pc) as usize };
+                    // Pop the `ntypeargs` `Object::Type` values (resolved against
+                    // the current frame by the preceding LoadType instructions).
+                    let mut type_args: Vec<baml_type::Ty> = Vec::with_capacity(ntypeargs);
+                    for _ in 0..ntypeargs {
+                        let v = self.stack.ensure_pop();
+                        let ptr = self.as_object_ptr(v, ObjectType::Type)?;
+                        let Object::Type(ty) = self.get_object(ptr) else {
+                            unreachable!("as_object_ptr guarantees Type variant");
+                        };
+                        type_args.push(*ty.clone());
+                    }
+                    type_args.reverse();
+                    let gf = Object::GenericFunction(bex_vm_types::GenericFunction {
+                        function,
+                        type_args: type_args.into_boxed_slice(),
+                    });
+                    let ptr = self.tlab.alloc(gf);
+                    self.stack.push(Value::object(ptr));
+                }
+
                 // ── LoadDeref / StoreDeref ────────────────────────────────────
                 OpCode::LoadDeref => {
                     let slot = { read_u32_unchecked(code, pc) as usize };

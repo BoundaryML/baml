@@ -84,8 +84,8 @@ test "json_native_through_value" {
 }
 
 // Param-dependent instantiation (`identity<T>` where T is the enclosing
-// function's type param) cannot be a compile-time-pooled constant; it falls
-// back to erasure but still runs for param/return-only type args.
+// function's type param) is built at runtime (MakeGenericFunction resolves the
+// type arg against the current frame), so it runs AND reflects on T correctly.
 function forward<T>(x: T) -> T {
     let f = identity<T>;
     f(x)
@@ -93,4 +93,16 @@ function forward<T>(x: T) -> T {
 
 test "param_dependent_instantiation_runs" {
     assert.is_true(baml.deep_equals(forward<int>(7), 7))
+}
+
+// Param-dependent value whose body REFLECTS on T: the runtime path seeds T from
+// the enclosing frame, so reflect.type_of<T> resolves correctly (previously
+// erased to "unknown").
+function forward_reflect<T>() -> string {
+    let g = describe<T>;
+    g()
+}
+
+test "param_dependent_reflect_resolves_T" {
+    assert.is_true(baml.deep_equals(forward_reflect<int>(), "int"))
 }

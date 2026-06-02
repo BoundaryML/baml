@@ -469,6 +469,13 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
         Rvalue::LoadType(template) => {
             write!(f, "load_type({template})")
         }
+        Rvalue::MakeGenericFunction {
+            item,
+            type_arg_templates,
+        } => {
+            let args: Vec<String> = type_arg_templates.iter().map(ToString::to_string).collect();
+            write!(f, "make_generic_function {item}<{}>", args.join(", "))
+        }
     }
 }
 

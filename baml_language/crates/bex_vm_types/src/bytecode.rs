@@ -682,6 +682,19 @@ pub enum Instruction {
     /// Stack: `[receiver]` -> `[bound_method]`
     MakeBoundMethod(GlobalIndex),
 
+    /// Create a generic-function value (`foo<T>`) from a base function's global
+    /// index, popping `ntypeargs` `Object::Type` values from the stack into its
+    /// `type_args`. Used for param-dependent instantiations; the fully-concrete
+    /// case is a pooled, interned constant loaded via `LoadConst`.
+    ///
+    /// Stack: `[type_args...]` -> `[generic_function]`
+    MakeGenericFunction {
+        /// Global index of the base function.
+        function: GlobalIndex,
+        /// Number of `Object::Type` values on the stack to pop into `type_args`.
+        ntypeargs: u16,
+    },
+
     /// Wrap the top-of-stack value in a `Cell` object.
     ///
     /// Stack: `[value]` -> `[cell]`
@@ -882,6 +895,9 @@ pub enum OpCode {
     // ── Two operands (9 bytes) ─────────────────────────────────
     JumpTable,   // u32 table_idx + i32 default_offset
     MakeClosure, // u32 object_idx (capture_count is popped from the stack)
+
+    // ── u32 + u16 (7 bytes) ────────────────────────────────────
+    MakeGenericFunction, // u32 function global + u16 ntypeargs
 }
 
 impl OpCode {
@@ -1005,7 +1021,7 @@ impl OpCode {
             | Self::JumpIfFalse => 5,
 
             // 7-byte: opcode + u32 + u16 (type-arg threading)
-            Self::AllocInstance | Self::Call => 7,
+            Self::AllocInstance | Self::Call | Self::MakeGenericFunction => 7,
 
             // 9-byte: opcode + u32 + u16 + u16 (closure with capture+typearg counts)
             Self::MakeClosure => 9,
@@ -1135,6 +1151,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::JumpIfFalse as u8 => Ok(Self::JumpIfFalse),
             x if x == Self::JumpTable as u8 => Ok(Self::JumpTable),
             x if x == Self::MakeClosure as u8 => Ok(Self::MakeClosure),
+            x if x == Self::MakeGenericFunction as u8 => Ok(Self::MakeGenericFunction),
             _ => Err(byte),
         }
     }
@@ -1257,6 +1274,7 @@ impl std::fmt::Display for OpCode {
             Self::JumpIfFalse => "JUMP_IF_FALSE",
             Self::JumpTable => "JUMP_TABLE",
             Self::MakeClosure => "MAKE_CLOSURE",
+            Self::MakeGenericFunction => "MAKE_GENERIC_FUNCTION",
         };
         f.write_str(name)
     }
@@ -1505,6 +1523,12 @@ impl std::fmt::Display for Instruction {
             Instruction::Await => f.write_str("AWAIT"),
             Instruction::Call { callee, ntypeargs } => {
                 write!(f, "CALL {callee} ntypeargs={ntypeargs}")
+            }
+            Instruction::MakeGenericFunction {
+                function,
+                ntypeargs,
+            } => {
+                write!(f, "MAKE_GENERIC_FUNCTION {function} ntypeargs={ntypeargs}")
             }
             Instruction::CallIndirect => f.write_str("CALL_INDIRECT"),
             Instruction::Throw => f.write_str("THROW"),
@@ -2028,6 +2052,19 @@ impl Bytecode {
                     code.extend_from_slice(&ntypeargs.to_le_bytes());
                 }
 
+                // ── MakeGenericFunction: u32 function + u16 ntypeargs ─
+                Instruction::MakeGenericFunction {
+                    function,
+                    ntypeargs,
+                } => {
+                    code.extend_from_slice(
+                        &u32::try_from(function.into_raw())
+                            .expect("global index fits u32")
+                            .to_le_bytes(),
+                    );
+                    code.extend_from_slice(&ntypeargs.to_le_bytes());
+                }
+
                 // ── ObjectIndex operand → u32 ───────────────────────
                 Instruction::AllocVariant(o) => {
                     code.extend_from_slice(
@@ -2338,6 +2375,7 @@ impl Bytecode {
             // Two-operand variants
             Instruction::JumpTable(_) => OpCode::JumpTable,
             Instruction::MakeClosure { .. } => OpCode::MakeClosure,
+            Instruction::MakeGenericFunction { .. } => OpCode::MakeGenericFunction,
         }
     }
 }

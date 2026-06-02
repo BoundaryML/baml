@@ -702,7 +702,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             } => elements
                 .iter()
                 .any(|operand| self.operand_reads_spawn_captured_local(operand, seen)),
-            Rvalue::Uint8Array(_) | Rvalue::LoadType(_) => false,
+            Rvalue::Uint8Array(_) | Rvalue::LoadType(_) | Rvalue::MakeGenericFunction { .. } => {
+                false
+            }
             Rvalue::Map(entries) => entries.iter().any(|(key, value)| {
                 self.operand_reads_spawn_captured_local(key, seen)
                     || self.operand_reads_spawn_captured_local(value, seen)
@@ -1787,6 +1789,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             self.set_operand(inst, OperandMeta::Global(func_name));
             return;
         }
+        // `MakeGenericFunction` needs no special handling here (it has no value
+        // captures) — `walk_rvalue_pull` emits it uniformly for both the direct
+        // and inlined paths.
         unwrap_infallible(pull_semantics::walk_rvalue_pull(self, rvalue));
     }
 
@@ -3157,6 +3162,25 @@ impl PullSink for StackifyCodegen<'_, '_> {
         ntypeargs: usize,
     ) -> Result<(), Self::Error> {
         self.emit_make_closure_bytecode(lambda_idx, capture_count, ntypeargs);
+        Ok(())
+    }
+
+    fn make_generic_function(
+        &mut self,
+        item: &baml_compiler2_mir::ItemRef,
+        ntypeargs: usize,
+    ) -> Result<(), Self::Error> {
+        let func_name = item.to_string();
+        let global_idx = *self
+            .globals
+            .get(&func_name)
+            .unwrap_or_else(|| panic!("MakeGenericFunction: global not found for {func_name}"));
+        let ntypeargs = u16::try_from(ntypeargs).expect("ntypeargs fits u16");
+        let inst = self.emit(Instruction::MakeGenericFunction {
+            function: GlobalIndex::from_raw(global_idx),
+            ntypeargs,
+        });
+        self.set_operand(inst, OperandMeta::Global(func_name));
         Ok(())
     }
 

@@ -686,6 +686,19 @@ pub enum Rvalue {
         receiver: Operand,
     },
 
+    /// Create a generic-function value (`foo<T>`) whose type arguments depend on
+    /// the enclosing frame's type params, so they cannot be a compile-time
+    /// constant. The emitter pushes a `LoadType` for each template (resolved
+    /// against `frame.type_args` at runtime) before the `MakeGenericFunction`
+    /// instruction, which builds an `Object::GenericFunction`. The
+    /// fully-concrete case uses the pooled, interned `Constant::GenericFunction`
+    /// instead.
+    MakeGenericFunction {
+        item: ItemRef,
+        /// One template per type argument; may contain `TypeArgRef(N)`.
+        type_arg_templates: Vec<TyTemplate>,
+    },
+
     /// Materialize a `Ty` from a `TyTemplate`.
     ///
     /// For concrete templates (`TyTemplate::Concrete`), the `Ty` is baked in

@@ -5522,9 +5522,17 @@ impl LoweringContext<'_> {
     /// value with type args erased — for exotic bases (bound methods, lambdas)
     /// or param-dependent args (`foo<T>` inside a generic function).
     fn lower_generic_apply(&mut self, base: AstExprId, type_args: &[AstTypeExpr], dest: Place) {
-        if let Some(item) = self.try_resolve_generic_apply_base(base)
-            && let Some(concrete) = self.concrete_type_args(type_args)
-        {
+        let Some(item) = self.try_resolve_generic_apply_base(base) else {
+            // Exotic base (bound method, lambda, …): no function ItemRef to
+            // wrap, so erase the type args and lower the base value.
+            self.lower_expr(base, dest);
+            return;
+        };
+        let templates = self.generic_apply_type_arg_templates(type_args);
+        if templates.iter().all(TyTemplate::is_fully_concrete) {
+            // Concrete args → pooled, interned compile-time constant
+            // (pointer-stable identity).
+            let concrete: Vec<Ty> = templates.iter().map(|t| t.substitute(&[])).collect();
             self.builder.assign(
                 dest,
                 Rvalue::Use(Operand::Constant(Constant::GenericFunction {
@@ -5532,9 +5540,18 @@ impl LoweringContext<'_> {
                     type_args: concrete,
                 })),
             );
-            return;
+        } else {
+            // A type arg depends on an enclosing generic param (`foo<T>` inside
+            // a generic fn) → build the value at runtime, resolving the
+            // templates against the current frame's type_args.
+            self.builder.assign(
+                dest,
+                Rvalue::MakeGenericFunction {
+                    item,
+                    type_arg_templates: templates,
+                },
+            );
         }
-        self.lower_expr(base, dest);
     }
 
     /// Resolve a `GenericApply` base to the underlying function `ItemRef` (free
@@ -5596,33 +5613,30 @@ impl LoweringContext<'_> {
         None
     }
 
-    /// Resolve `GenericApply` AST type args to fully-concrete `Ty`s. `None` if
-    /// any arg depends on an enclosing generic param (a `TypeArgRef` template) —
-    /// those cannot be a compile-time-pooled constant.
-    fn concrete_type_args(&self, type_args: &[AstTypeExpr]) -> Option<Vec<Ty>> {
+    /// Resolve `GenericApply` AST type args to `TyTemplate`s. A template is
+    /// `is_fully_concrete()` unless the arg references an enclosing generic
+    /// param (then it carries a `TypeArgRef`, resolved at runtime).
+    fn generic_apply_type_arg_templates(&self, type_args: &[AstTypeExpr]) -> Vec<TyTemplate> {
         use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
         let generic_params = self.enclosing_generic_params();
         let pkg_info = file_package(self.db, self.file);
         let pkg_id = PackageId::new(self.db, pkg_info.package);
         let pkg_items = package_items(self.db, pkg_id);
-        let mut out = Vec::with_capacity(type_args.len());
-        for type_arg in type_args {
-            let mut diags = Vec::new();
-            let tir_ty = lower_type_expr_in_ns(
-                self.db,
-                type_arg,
-                pkg_items,
-                &pkg_info.namespace_path,
-                &generic_params,
-                &mut diags,
-            );
-            let template = self.ty_to_template(&tir_ty, &generic_params);
-            if !template.is_fully_concrete() {
-                return None;
-            }
-            out.push(template.substitute(&[]));
-        }
-        Some(out)
+        type_args
+            .iter()
+            .map(|type_arg| {
+                let mut diags = Vec::new();
+                let tir_ty = lower_type_expr_in_ns(
+                    self.db,
+                    type_arg,
+                    pkg_items,
+                    &pkg_info.namespace_path,
+                    &generic_params,
+                    &mut diags,
+                );
+                self.ty_to_template(&tir_ty, &generic_params)
+            })
+            .collect()
     }
 }
 

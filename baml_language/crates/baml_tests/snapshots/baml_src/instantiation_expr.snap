@@ -44,6 +44,12 @@ function instantiation_expr.$init_test_ns_instantiation_expr_instantiation_expr(
     load_const null
     call testing.TestCollector.register_test
     pop 1
+    load_var registry
+    load_const "param_dependent_reflect_resolves_T"
+    make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
     load_const null
     return
 }
@@ -62,7 +68,16 @@ function instantiation_expr.describe_user_value_fn() -> string {
 
 function instantiation_expr.forward(x: void) -> void {
     load_var x
-    call user.instantiation_expr.identity
+    load_type #0
+    make_generic_function user.instantiation_expr.identity ntypeargs=1
+    call_indirect
+    return
+}
+
+function instantiation_expr.forward_reflect() -> string {
+    load_type #0
+    make_generic_function user.instantiation_expr.describe ntypeargs=1
+    call_indirect
     return
 }
 
