@@ -403,26 +403,21 @@ pub fn contains_typevar(ty: &Ty) -> bool {
     }
 }
 
-/// Like [`contains_typevar`] but ignores a single rigid variable (`rigid`) — the
-/// pinned `Self` of an interface method call. Returns `true` only if some *other*
-/// type variable is present.
-///
-/// Call-argument validation defers when the expected type still has an
-/// uninferred (non-rigid) variable, but it must *not* defer when the only
-/// variable left is the rigid `Self`: that case is validated by identity (a
-/// `Self`-typed argument must itself be that `Self`), including when `Self`
-/// appears nested, e.g. `Self[]` or `Self?`. With `rigid == None` this is
-/// exactly [`contains_typevar`].
-pub fn contains_typevar_other_than(ty: &Ty, rigid: Option<&Name>) -> bool {
+/// Returns `true` if `ty` contains any type variable for which `pred` returns
+/// `true`. A general form of [`contains_typevar`] used by call validation to
+/// distinguish *rigid* type variables (the pinned `Self`, caller-scope generic
+/// params) — which must be checked — from genuinely-uninferred ones (callee
+/// generics, free inference/effect vars) — which are deferred.
+pub fn contains_typevar_where(ty: &Ty, pred: &impl Fn(&Name) -> bool) -> bool {
     match ty {
-        Ty::TypeVar(name, _) => rigid != Some(name),
+        Ty::TypeVar(name, _) => pred(name),
         Ty::List(inner, _) | Ty::Optional(inner, _) | Ty::EvolvingList(inner, _) => {
-            contains_typevar_other_than(inner, rigid)
+            contains_typevar_where(inner, pred)
         }
         Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) => {
-            contains_typevar_other_than(k, rigid) || contains_typevar_other_than(v, rigid)
+            contains_typevar_where(k, pred) || contains_typevar_where(v, pred)
         }
-        Ty::Union(tys, _) => tys.iter().any(|t| contains_typevar_other_than(t, rigid)),
+        Ty::Union(tys, _) => tys.iter().any(|t| contains_typevar_where(t, pred)),
         Ty::Function {
             generic_param_bounds,
             params,
@@ -433,16 +428,16 @@ pub fn contains_typevar_other_than(ty: &Ty, rigid: Option<&Name>) -> bool {
             generic_param_bounds.iter().any(|bound| {
                 bound
                     .as_ref()
-                    .is_some_and(|b| contains_typevar_other_than(b, rigid))
+                    .is_some_and(|b| contains_typevar_where(b, pred))
             }) || params
                 .iter()
-                .any(|param| contains_typevar_other_than(&param.ty, rigid))
-                || contains_typevar_other_than(ret, rigid)
-                || contains_typevar_other_than(throws, rigid)
+                .any(|param| contains_typevar_where(&param.ty, pred))
+                || contains_typevar_where(ret, pred)
+                || contains_typevar_where(throws, pred)
         }
-        Ty::Class(_, type_args, _) | Ty::Interface(_, type_args, _) => type_args
-            .iter()
-            .any(|t| contains_typevar_other_than(t, rigid)),
+        Ty::Class(_, type_args, _) | Ty::Interface(_, type_args, _) => {
+            type_args.iter().any(|t| contains_typevar_where(t, pred))
+        }
         _ => false,
     }
 }

@@ -2643,20 +2643,30 @@ impl<'db> TypeInferenceBuilder<'db> {
                         continue;
                     }
 
-                    // The rigid `Self` of a Self-pinned call is never inferred,
-                    // so it survives substitution as a `TypeVar` — possibly
-                    // nested (`Self[]`, `Self?`, `map<_, Self>`). Validate the
-                    // argument against it by identity (Unit-A reflexivity accepts
-                    // the same variable, rejects a different one or a concrete
-                    // mismatch) — this is what makes `other: Self` sound. We only
-                    // defer when some *other* (genuinely uninferred) type variable
-                    // remains; an expected type whose sole variable is the rigid
-                    // `Self` is checked here rather than skipped.
+                    // Defer validation only for *genuinely uninferred* type
+                    // variables — a callee generic param still being solved, or a
+                    // free inference / effect variable. CHECK (don't defer) the
+                    // *rigid* ones:
+                    //   - the pinned `Self` of a Self-pinned call (never inferred,
+                    //     survives substitution as a `TypeVar`, possibly nested as
+                    //     `Self[]` / `Self?`), validated by identity (Unit-A
+                    //     reflexivity) — this is what makes `other: Self` sound; and
+                    //   - a caller-scope generic param that is not shadowed by a
+                    //     callee generic, so a bound-method value `let f = x.eq`
+                    //     keeps `Self` pinned to the caller's `T` and a later
+                    //     `f(y: U)` is still rejected rather than silently accepted.
+                    // A callee generic of the same name (a shadow) stays deferred,
+                    // which avoids confusing it with an identically-named caller
+                    // param.
+                    let defers_typevar =
+                        crate::generics::contains_typevar_where(&expected_arg_ty, &|name| {
+                            let rigid = rigid_self_var.as_ref() == Some(name)
+                                || (self.generic_param_bounds.contains_key(name)
+                                    && !generic_params.iter().any(|g| g == name));
+                            !rigid
+                        });
                     if matches!(expected_arg_ty, Ty::Unknown { .. } | Ty::Error { .. })
-                        || crate::generics::contains_typevar_other_than(
-                            &expected_arg_ty,
-                            rigid_self_var.as_ref(),
-                        )
+                        || defers_typevar
                     {
                         continue;
                     }

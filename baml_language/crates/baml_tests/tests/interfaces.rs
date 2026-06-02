@@ -2134,6 +2134,57 @@ async fn self_param_method_accepts_matching_nested_self() {
     assert_eq!(output.result.unwrap(), BexExternalValue::Int(15));
 }
 
+#[test]
+fn bound_self_method_value_rejects_heterogeneous_arg() {
+    // Binding a `Self`-param method to a value (`let f = x.addOne`) keeps `Self`
+    // pinned to the receiver's `T`. Calling that value with an unrelated `U` must
+    // still be rejected — the pin travels with the (non-generic) function value,
+    // so the indirect call is checked just like the direct `x.addOne(y)` form.
+    assert_compile_error_contains(
+        r#"
+        interface Adder {
+            function addOne(self, other: Self) -> int
+        }
+        function cross<T extends Adder, U extends Adder>(x: T, y: U) -> int {
+            let f = x.addOne
+            return f(y)
+        }
+        "#,
+        "got U",
+    );
+}
+
+#[tokio::test]
+async fn bound_self_method_value_accepts_matching_arg() {
+    // The matching case type-checks and runs: a bound method value obtained from
+    // a generic receiver (`let f = x.addOne`) binds the implementor's concrete
+    // method by the receiver's runtime type, so calling it with a same-`T`
+    // argument dispatches correctly.
+    let output = baml_test!(
+        r#"
+        interface Adder {
+            function addOne(self, other: Self) -> int
+        }
+        class Acc {
+            base: int
+            implements Adder {
+                function addOne(self, other: Self) -> int {
+                    return self.base + other.base
+                }
+            }
+        }
+        function combine<T extends Adder>(x: T, y: T) -> int {
+            let f = x.addOne
+            return f(y)
+        }
+        function main() -> int {
+            return combine<Acc>(Acc { base: 10 }, Acc { base: 5 })
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(15));
+}
+
 #[tokio::test]
 async fn interface_default_method_reference_accepts_explicit_receiver() {
     let output = baml_test!(
