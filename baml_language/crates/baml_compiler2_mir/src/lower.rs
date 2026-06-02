@@ -1145,8 +1145,10 @@ struct LoweringContext<'db> {
     /// named classes, while dispatch can use primitive type tags directly.
     interface_type_implementors: &'db InterfaceTypeImplementors,
 
-    // Pre-computed type alias data for inline expansion in convert_tir2_ty
-    resolved_aliases: ResolvedAliases,
+    // Pre-computed type alias data for inline expansion in convert_tir2_ty.
+    // Borrowed from `package_lowering_data` (shared across every function in
+    // the package) rather than cloned per context.
+    resolved_aliases: &'db ResolvedAliases,
 
     watched_locals_stack: Vec<Local>,
 
@@ -1823,7 +1825,7 @@ impl<'db> LoweringContext<'db> {
             pending_lambdas: Vec::new(),
             capture_indices: None,
             transitive_captures_needed: Vec::new(),
-            resolved_aliases: pkg_data.resolved_aliases.clone(),
+            resolved_aliases: &pkg_data.resolved_aliases,
             watched_locals_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
             chain_null_exits: Vec::new(),
@@ -2038,7 +2040,7 @@ impl<'db> LoweringContext<'db> {
             class_type_tags,
             interface_implementors: &pkg_data.interface_implementors,
             interface_type_implementors: &pkg_data.interface_type_implementors,
-            resolved_aliases: pkg_data.resolved_aliases.clone(),
+            resolved_aliases: &pkg_data.resolved_aliases,
             watched_locals_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
             pending_lambdas: Vec::new(),
@@ -2263,7 +2265,7 @@ impl<'db> LoweringContext<'db> {
 
     fn convert_tir_ty_for_runtime(&self, ty: &Tir2Ty) -> Ty {
         let erased = self.erase_bound_typevars_for_runtime(ty);
-        convert_tir2_ty(&erased, &self.resolved_aliases)
+        convert_tir2_ty(&erased, self.resolved_aliases)
     }
 
     fn interface_dispatch_target_for_tir_ty(&self, ty: &Tir2Ty) -> Option<(TypeName, Vec<Tir2Ty>)> {
@@ -2764,11 +2766,11 @@ impl<'db> LoweringContext<'db> {
         let mut adapter_builder =
             MirBuilder::new(Name::new(&adapter_name), coercion.target_params.len());
 
-        let ret_ty = convert_tir2_ty(&coercion.target_return, &self.resolved_aliases);
+        let ret_ty = convert_tir2_ty(&coercion.target_return, self.resolved_aliases);
         let ret = adapter_builder.declare_local(Some(Name::new("_0")), ret_ty, None, false);
 
         for param in &coercion.target_params {
-            let param_ty = convert_tir2_ty(&param.ty, &self.resolved_aliases);
+            let param_ty = convert_tir2_ty(&param.ty, self.resolved_aliases);
             adapter_builder.declare_local(param.name.clone(), param_ty, None, false);
         }
 
@@ -3999,8 +4001,7 @@ impl<'db> LoweringContext<'db> {
         // Build a TyTemplate with `TypeArgRef(N)` for each class-level
         // generic param, then substitute `class_type_args` so a field
         // declared as `T` resolves to the concrete receiver-side binding.
-        let template =
-            tir2_to_template(&tir_ty, &self.resolved_aliases, &class_data.generic_params);
+        let template = tir2_to_template(&tir_ty, self.resolved_aliases, &class_data.generic_params);
         template.substitute(class_type_args)
     }
 
@@ -5448,7 +5449,7 @@ impl LoweringContext<'_> {
         // drift apart again (C1). They were previously byte-for-byte twins; a
         // missing `Tir2Ty::Interface` arm in both voided generic interface args
         // to `Box<void>` (BEP-044 wf3 #6/#7).
-        tir2_to_template(ty, &self.resolved_aliases, generic_params)
+        tir2_to_template(ty, self.resolved_aliases, generic_params)
     }
 
     /// Return the list of generic parameter names in scope for the
@@ -7477,7 +7478,7 @@ impl<'db> LoweringContext<'db> {
                     args.iter()
                         .map(|arg| match arg {
                             Some(arg) => {
-                                tir2_to_template(arg, &self.resolved_aliases, &generic_params)
+                                tir2_to_template(arg, self.resolved_aliases, &generic_params)
                             }
                             None => TyTemplate::Wildcard,
                         })
@@ -9317,7 +9318,7 @@ impl LoweringContext<'_> {
 
     fn class_pattern_type_name(&self, pat_id: AstPatId) -> Option<TypeName> {
         let tir_ty = self.pat_types.get(&self.pat_metadata_key(pat_id))?;
-        match convert_tir2_ty(tir_ty, &self.resolved_aliases) {
+        match convert_tir2_ty(tir_ty, self.resolved_aliases) {
             Ty::Class(tn, _, _) => Some(tn),
             _ => None,
         }
@@ -9639,7 +9640,7 @@ impl LoweringContext<'_> {
                     let annotation_ty = self
                         .pat_types
                         .get(&self.pat_metadata_key(pat_id))
-                        .map(|tir_ty| convert_tir2_ty(tir_ty, &self.resolved_aliases))
+                        .map(|tir_ty| convert_tir2_ty(tir_ty, self.resolved_aliases))
                         .unwrap_or_else(|| self.resolve_type_annotation(ty_expr));
                     self.emit_is_type_branch(scrutinee, annotation_ty, success, failure);
                 }
@@ -9867,7 +9868,7 @@ impl LoweringContext<'_> {
                 } else {
                     self.pat_types
                         .get(&self.pat_metadata_key(pat_id))
-                        .map(|ty| convert_tir2_ty(ty, &self.resolved_aliases))
+                        .map(|ty| convert_tir2_ty(ty, self.resolved_aliases))
                         .unwrap_or_else(|| self.builder.local_ty(scrutinee))
                 };
                 let local = self
