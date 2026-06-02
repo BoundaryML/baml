@@ -12,4 +12,7 @@ methods:
   function get_value(self) -> T  methods.baml:34-36
   function get_or_marker(self) -> T | WrapperMarker  methods.baml:38-40
 
+dependencies:
+  class            WrapperMarker                    methods.baml:27
+
 references (0):

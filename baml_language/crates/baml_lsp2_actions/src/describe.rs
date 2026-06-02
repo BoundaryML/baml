@@ -257,23 +257,28 @@ fn describe_top_level(
     // ── CST body extraction ──────────────────────────────────────────────────
     let item_range = find_item_range(db, file, sym.name_span, sym.kind)?;
 
+    // Resolve the symbol's definition once; every downstream helper reuses it
+    // instead of re-running name resolution.
+    let definition = resolve_definition(db, file, sym);
+
     // ── Shape generation ─────────────────────────────────────────────────────
-    let shape = build_shape(db, file, sym);
+    let shape = build_shape(db, sym, definition);
 
     // ── Docstring extraction ─────────────────────────────────────────────────
     let docstring = extract_docstring(db, file, item_range);
 
     // ── Dependency discovery ─────────────────────────────────────────────────
-    let dependencies = find_dependencies(db, files, file, sym);
+    let dependencies = find_dependencies(db, files, file, sym, definition);
 
     // ── Resolved type ────────────────────────────────────────────────────────
-    let resolved_type = resolve_type_for_item(db, file, sym);
+    let resolved_type = resolve_type_for_item(db, definition);
 
     // ── Reference finding ────────────────────────────────────────────────────
     let references = find_references(db, files, file, sym.name_span, item_range);
 
     // ── Methods + canonical FQN (classes) ────────────────────────────────────
-    let (instance_methods, static_methods, canonical_fqn) = class_methods_and_fqn(db, file, sym);
+    let (instance_methods, static_methods, canonical_fqn) =
+        class_methods_and_fqn(db, sym, definition);
 
     // Body block, with non-doc comments removed (CST-token based, so `//`
     // inside string/prompt literals is never touched):
@@ -297,7 +302,8 @@ fn describe_top_level(
         body.push_str(&shape);
         body
     } else {
-        let body_range = builtin_signature_range(db, file, sym, item_range).unwrap_or(item_range);
+        let body_range =
+            builtin_signature_range(db, file, sym, item_range, definition).unwrap_or(item_range);
         clean_body_source(db, file, body_range)
     };
 
@@ -798,22 +804,30 @@ fn find_item_range(
 
 // ── Shape generation ─────────────────────────────────────────────────────────
 
+/// Resolve a symbol to its [`Definition`], once. Returns `None` for symbols
+/// that don't resolve to a top-level item/builtin (e.g. locals). Threaded
+/// through the describe helpers so name resolution runs a single time.
+fn resolve_definition<'db>(
+    db: &'db dyn Db,
+    file: SourceFile,
+    sym: &SymbolInfo,
+) -> Option<Definition<'db>> {
+    let name = baml_base::Name::new(&sym.name);
+    match baml_compiler2_tir::resolve::resolve_name_at(db, file, sym.name_span.start(), &name) {
+        baml_compiler2_tir::resolve::ResolvedName::Item(def)
+        | baml_compiler2_tir::resolve::ResolvedName::Builtin(def) => Some(def),
+        _ => None,
+    }
+}
+
 /// Build a compact shape string for a symbol.
 ///
 /// Uses `TypeInfo` from the existing `type_info` module for structured data,
 /// then formats it without the markdown code fences.
-fn build_shape(db: &dyn Db, file: SourceFile, sym: &SymbolInfo) -> String {
-    // Resolve the symbol to a Definition to reuse type_info_for_definition.
-    let name = baml_base::Name::new(&sym.name);
-    let resolved =
-        baml_compiler2_tir::resolve::resolve_name_at(db, file, sym.name_span.start(), &name);
-
-    let (baml_compiler2_tir::resolve::ResolvedName::Item(def)
-    | baml_compiler2_tir::resolve::ResolvedName::Builtin(def)) = resolved
-    else {
+fn build_shape<'db>(db: &'db dyn Db, sym: &SymbolInfo, def: Option<Definition<'db>>) -> String {
+    let Some(def) = def else {
         return format!("{} {}", sym.kind.as_str(), sym.name);
     };
-
     let type_info = type_info_for_definition(db, def);
     // The canonical block (fields-only for classes), without fences/docstring/hint.
     type_info.to_describe_block()
@@ -870,7 +884,12 @@ fn collect_class_methods_impl(
             continue;
         }
         let is_instance = m.params.first().is_some_and(|p| p.name.as_str() == "self");
-        let signature = render_method_signature(db, file, m, exported.and_then(|ms| ms.get(idx)));
+        let signature = render_method_signature(
+            db,
+            file,
+            m,
+            exported.and_then(|ms| exported_method(ms, idx, &m.name)),
+        );
         let docstring = m
             .docstring
             .as_ref()
@@ -1001,6 +1020,71 @@ pub(crate) fn class_method_sigs(
         .collect()
 }
 
+/// The resolved exported signature for the method at index `idx`, verified to
+/// match `name`. The package interface lowers class methods 1:1 with
+/// `class.methods` (same order), so the index aligns; the name check guards
+/// against a future reordering silently mispairing signatures, in which case
+/// callers fall back to the unresolved source types.
+fn exported_method<'a>(
+    methods: &'a [baml_compiler2_tir::package_interface::ExportedFunction],
+    idx: usize,
+    name: &baml_base::Name,
+) -> Option<&'a baml_compiler2_tir::package_interface::ExportedFunction> {
+    methods
+        .get(idx)
+        .filter(|ef| ef.name.as_str() == name.as_str())
+}
+
+/// Collect dependency types referenced in a class's method signatures
+/// (parameter, return, and inferred-throws types), using the resolved
+/// package-interface signatures. Auto-derived methods are skipped; builtin
+/// types resolve to nothing in the user-file outline; the class's own type is
+/// already in `seen`, so it is never listed as its own dependency.
+fn collect_method_signature_deps(
+    db: &dyn Db,
+    files: &[SourceFile],
+    class_loc: baml_compiler2_hir::loc::ClassLoc<'_>,
+    deps: &mut Vec<DepRef>,
+    seen: &mut std::collections::HashSet<String>,
+) {
+    use baml_compiler2_tir::package_interface::ExportedType;
+
+    let file = class_loc.file(db);
+    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    let class_data = &item_tree[class_loc.id(db)];
+
+    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
+    let iface = baml_compiler2_tir::package_interface::package_interface(db, pkg_id);
+    let Some(methods) = iface
+        .lookup_type(&pkg_info.namespace_path, &class_data.name)
+        .and_then(|t| match t {
+            ExportedType::Class { methods, .. } => Some(methods),
+            _ => None,
+        })
+    else {
+        return;
+    };
+
+    for (idx, method_id) in class_data.methods.iter().enumerate() {
+        let m = &item_tree[*method_id];
+        if matches!(
+            m.origin,
+            baml_compiler2_ast::ast::FunctionOrigin::AutoDerive
+        ) {
+            continue;
+        }
+        let Some(ef) = exported_method(methods, idx, &m.name) else {
+            continue;
+        };
+        for param in &ef.params {
+            collect_ty_deps(db, files, &param.ty, deps, seen);
+        }
+        collect_ty_deps(db, files, &ef.return_type, deps, seen);
+        collect_ty_deps(db, files, &ef.callable_throws, deps, seen);
+    }
+}
+
 /// Resolve a top-level symbol's methods (for classes) and canonical FQN.
 ///
 /// The canonical FQN is returned as `Some` only when it differs from the bare
@@ -1009,18 +1093,14 @@ pub(crate) fn class_method_sigs(
 /// `root.ns.Foo`). A user type at package root returns `None`.
 fn class_methods_and_fqn(
     db: &dyn Db,
-    file: SourceFile,
     sym: &SymbolInfo,
+    def: Option<Definition<'_>>,
 ) -> (Vec<MethodRef>, Vec<MethodRef>, Option<String>) {
-    let name = baml_base::Name::new(&sym.name);
-    let resolved =
-        baml_compiler2_tir::resolve::resolve_name_at(db, file, sym.name_span.start(), &name);
-    let (baml_compiler2_tir::resolve::ResolvedName::Item(def)
-    | baml_compiler2_tir::resolve::ResolvedName::Builtin(def)) = resolved
-    else {
+    let Some(def) = def else {
         return (Vec::new(), Vec::new(), None);
     };
 
+    let name = baml_base::Name::new(&sym.name);
     let qtn = baml_compiler2_tir::lower_type_expr::qualify_def(db, def, &name);
     let fqn = crate::utils::canonical_fqn_string(&qtn);
     let canonical_fqn = (fqn != sym.name).then_some(fqn);
@@ -1084,20 +1164,10 @@ fn resolve_member_type(db: &dyn Db, file: SourceFile, sym: &SymbolInfo) -> Optio
 /// For enums: variant list
 /// For type aliases: the expansion
 /// For locals: the inferred type
-fn resolve_type_for_item(db: &dyn Db, file: SourceFile, sym: &SymbolInfo) -> Option<String> {
+fn resolve_type_for_item(db: &dyn Db, def: Option<Definition<'_>>) -> Option<String> {
     use crate::type_info::TypeInfo;
 
-    let name = baml_base::Name::new(&sym.name);
-    let resolved =
-        baml_compiler2_tir::resolve::resolve_name_at(db, file, sym.name_span.start(), &name);
-
-    let (baml_compiler2_tir::resolve::ResolvedName::Item(def)
-    | baml_compiler2_tir::resolve::ResolvedName::Builtin(def)) = resolved
-    else {
-        return None;
-    };
-
-    let type_info = type_info_for_definition(db, def);
+    let type_info = type_info_for_definition(db, def?);
     match type_info {
         TypeInfo::Function {
             params,
@@ -1156,14 +1226,9 @@ fn find_dependencies(
     files: &[SourceFile],
     file: SourceFile,
     sym: &SymbolInfo,
+    def: Option<Definition<'_>>,
 ) -> Vec<DepRef> {
-    let name = baml_base::Name::new(&sym.name);
-    let resolved =
-        baml_compiler2_tir::resolve::resolve_name_at(db, file, sym.name_span.start(), &name);
-
-    let (baml_compiler2_tir::resolve::ResolvedName::Item(def)
-    | baml_compiler2_tir::resolve::ResolvedName::Builtin(def)) = resolved
-    else {
+    let Some(def) = def else {
         return Vec::new();
     };
 
@@ -1187,13 +1252,10 @@ fn find_dependencies(
             for (_field_name, ty, _attrs) in &resolved.fields {
                 collect_ty_deps(db, files, ty, &mut deps, &mut seen);
             }
-            // NOTE: types referenced only in method signatures (e.g. the spec's
-            // `WrapperMarker` in `-> T | WrapperMarker`) are intentionally NOT
-            // surfaced as dependencies yet. The class dependency path
-            // (`collect_ty_deps` → `resolve_dep_from_outline`) matches on the
-            // canonical `pkg.Name` string against short outline names, so it
-            // does not resolve user types reliably today; fixing that — and
-            // adding method-signature deps on top — is a separate follow-up.
+            // Types referenced in method signatures (params/return/throws) are
+            // dependencies too — e.g. `WrapperMarker` in `-> T | WrapperMarker`.
+            // The class's own name is in `seen`, so it is never its own dep.
+            collect_method_signature_deps(db, files, class_loc, &mut deps, &mut seen);
         }
         baml_compiler2_hir::contributions::Definition::Enum(_) => {
             // Enums are self-contained, no type dependencies.
@@ -1317,6 +1379,30 @@ fn collect_type_expr_deps(
 }
 
 /// Walk a resolved Ty and collect user-defined type names as `DepRefs`.
+/// Resolve a qualified type name to a dependency via outline search and push it
+/// (deduped). Only **local** (user-package) types are surfaced: builtin and
+/// dependency types (`baml.json.json`, `baml.errors.InvalidArgument`, …) are
+/// well-known and would just be noise. Lookup and dedup key on the **short**
+/// name, matching the flat outline index; the owning symbol's name is pre-seeded
+/// into `seen`, so a type is never listed as a dependency of itself.
+fn collect_qtn_dep(
+    db: &dyn Db,
+    files: &[SourceFile],
+    qtn: &baml_compiler2_tir::ty::QualifiedTypeName,
+    deps: &mut Vec<DepRef>,
+    seen: &mut std::collections::HashSet<String>,
+) {
+    if !qtn.is_local() {
+        return;
+    }
+    let short = qtn.name().as_str().to_string();
+    if seen.insert(short.clone()) {
+        if let Some(dep) = resolve_dep_from_outline(db, files, &short) {
+            deps.push(dep);
+        }
+    }
+}
+
 fn collect_ty_deps(
     db: &dyn Db,
     files: &[SourceFile],
@@ -1327,25 +1413,13 @@ fn collect_ty_deps(
     use baml_compiler2_tir::ty::Ty;
     match ty {
         Ty::Class(qtn, generics, _) => {
-            let name_str = qtn.to_string();
-            if seen.insert(name_str.clone()) {
-                // Look up the definition location via outline search.
-                if let Some(dep) = resolve_dep_from_outline(db, files, &name_str) {
-                    deps.push(dep);
-                }
-            }
+            collect_qtn_dep(db, files, qtn, deps, seen);
             for generic in generics {
                 collect_ty_deps(db, files, generic, deps, seen);
             }
         }
         Ty::Enum(qtn, _) | Ty::TypeAlias(qtn, _) => {
-            let name_str = qtn.to_string();
-            if seen.insert(name_str.clone()) {
-                // Look up the definition location via outline search.
-                if let Some(dep) = resolve_dep_from_outline(db, files, &name_str) {
-                    deps.push(dep);
-                }
-            }
+            collect_qtn_dep(db, files, qtn, deps, seen);
         }
         Ty::Optional(inner, _) | Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
             collect_ty_deps(db, files, inner, deps, seen);
@@ -1542,21 +1616,14 @@ fn builtin_signature_range(
     file: SourceFile,
     sym: &SymbolInfo,
     item_range: TextRange,
+    def: Option<Definition<'_>>,
 ) -> Option<TextRange> {
     if sym.kind != DefinitionKind::Function {
         return None;
     }
 
     // Confirm the body is builtin (not a user expression) via the HIR.
-    let name = baml_base::Name::new(&sym.name);
-    let resolved =
-        baml_compiler2_tir::resolve::resolve_name_at(db, file, sym.name_span.start(), &name);
-    let (baml_compiler2_tir::resolve::ResolvedName::Item(def)
-    | baml_compiler2_tir::resolve::ResolvedName::Builtin(def)) = resolved
-    else {
-        return None;
-    };
-    let Definition::Function(func_loc) = def else {
+    let Definition::Function(func_loc) = def? else {
         return None;
     };
     let item_tree = baml_compiler2_hir::file_item_tree(db, func_loc.file(db));
