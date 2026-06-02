@@ -60,14 +60,21 @@ def _safe_staging(prefix: str, raw: str, field: str) -> Path:
         The staging path ``STAGING_ROOT / f"{prefix}{id}"``.
 
     Raises:
-        HTTPException: 400 when the id is empty, has disallowed characters, or
-            resolves outside STAGING_ROOT.
+        HTTPException: 400 when the id is empty, too long, has disallowed
+            characters, lacks an alphanumeric (e.g. ".", "..", all-punctuation),
+            or resolves to anything other than a strict child of STAGING_ROOT.
     """
     rid = (raw or "").strip()
-    if not rid or not _SAFE_ID.match(rid):
+    # Whitelist the charset, cap the length (clean 400 instead of an OS error),
+    # and require an alphanumeric so dots/punctuation-only names (".", "..", "...")
+    # are rejected outright, regardless of prefix.
+    if (not rid or len(rid) > 128 or not _SAFE_ID.match(rid)
+            or not any(c.isalnum() for c in rid)):
         raise HTTPException(400, f"{field} required or invalid")
+    base = STAGING_ROOT.resolve()
     p = (STAGING_ROOT / f"{prefix}{rid}").resolve()
-    if not p.is_relative_to(STAGING_ROOT.resolve()):
+    # Strict descendant only: belt-and-suspenders against the root itself.
+    if p == base or not p.is_relative_to(base):
         raise HTTPException(400, f"{field} required or invalid")
     return p
 

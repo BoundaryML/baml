@@ -129,8 +129,9 @@ def main() -> None:
     out = [
         "# API reference",
         "",
-        "Consolidated index of every public function, method, and class, with a",
-        "one-line summary. Generated from the in-code docstrings / JSDoc (run",
+        "Consolidated index of every function, method, and class (private,",
+        "underscore-prefixed helpers included), with a one-line summary. Generated",
+        "from the in-code docstrings / JSDoc (run",
         "`python docs/_gen_reference.py` to refresh). Full parameter/return detail",
         "lives in the docstrings themselves.",
         "",

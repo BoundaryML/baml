@@ -36,7 +36,7 @@ Every "claimable" Convex table (`tasks`, `trophies`, `issues`, `bamlBuilds`)
 carries the same queue fields, spread in from `queueFields` in
 [`convex/schema.ts`](../convex/schema.ts):
 
-```
+```text
 status         per-table state machine (the claimable field)
 claimedBy      worker id holding the current claim
 claimedAt      when it was claimed
@@ -131,7 +131,7 @@ transitions the trophy to `done`.
 
 The lifecycle status:
 
-```
+```text
 open → confirmed → approved → fixing → closed | rejected
 ```
 
@@ -144,7 +144,7 @@ moves an issue toward `approved`; `ingress` `/notion/webhook` flips an issue to
 Running *alongside* the lifecycle is a **separate** Notion-sync queue on the
 `notionSyncStatus` field:
 
-```
+```text
 dirty → syncing → synced
 ```
 
