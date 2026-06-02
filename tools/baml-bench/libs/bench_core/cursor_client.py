@@ -14,6 +14,9 @@ from typing import Any, Optional
 
 import httpx
 
+# Default Cursor API base. launch_agent re-reads CURSOR_API_BASE at call time (falling
+# back to this), so a value set after import - e.g. tests pointing it at a stub - is
+# honored rather than frozen at module-import time.
 CURSOR_API_BASE = os.environ.get("CURSOR_API_BASE", "https://api.cursor.com")
 
 
@@ -55,6 +58,7 @@ async def launch_agent(
         httpx.HTTPStatusError: If the Cursor API returns a non-2xx response, other
             than a 409 whose body is `error.code == "agent_id_conflict"`.
     """
+    base = os.environ.get("CURSOR_API_BASE", CURSOR_API_BASE)
     auth = base64.b64encode(f"{api_key}:".encode()).decode()
     body: dict[str, Any] = {
         "prompt": {"text": prompt_text},
@@ -67,7 +71,7 @@ async def launch_agent(
         body["model"] = {"id": model}
     async with httpx.AsyncClient(timeout=timeout) as c:
         r = await c.post(
-            f"{CURSOR_API_BASE}/v1/agents",
+            f"{base}/v1/agents",
             json=body,
             headers={"Authorization": f"Basic {auth}", "Content-Type": "application/json"},
         )
