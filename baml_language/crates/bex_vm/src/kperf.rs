@@ -177,15 +177,15 @@ pub use imp::{enabled, exec_end, exec_start};
 // ── No-op shim for every other platform ──────────────────────────────────
 #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
 mod shim {
-    #[inline(always)]
+    #[inline]
     pub fn enabled() -> bool {
         false
     }
-    #[inline(always)]
+    #[inline]
     pub fn exec_start() -> (u64, u64) {
         (0, 0)
     }
-    #[inline(always)]
+    #[inline]
     pub fn exec_end(_start: (u64, u64), _ops: u64) {}
 }
 #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
