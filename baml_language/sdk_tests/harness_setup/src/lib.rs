@@ -14,7 +14,7 @@
 //! lives in the sibling `sdk_test_harness_runner` crate.
 //!
 //! Generator-specific entry points (`run_all`) live in submodules
-//! like [`python_pydantic2`] and [`nodejs_typescript`].
+//! like [`python_pydantic2`] and [`typescript_node`].
 //!
 //! Layout the helpers assume:
 //!
@@ -36,8 +36,8 @@ use baml_codegen_types::SymbolPool;
 use baml_db::baml_compiler_diagnostics::Severity;
 use baml_project::ProjectDatabase;
 
-pub mod nodejs_typescript;
 pub mod python_pydantic2;
+pub mod typescript_node;
 
 /// Build-script-side soft-failure recorder. The two generator
 /// `run_all` entry points use this to capture env-dependent failures
@@ -223,7 +223,7 @@ pub fn load_fixture(fixtures_root: &Path, fixture: &str) -> LoadedFixture {
 }
 
 /// Copy every file in `customizable_dir` into `dst_dir`. Used by
-/// the nodejs_typescript target: symlinks would force every parallel
+/// the typescript_node target: symlinks would force every parallel
 /// test process to either set `NODE_OPTIONS=--preserve-symlinks`
 /// (which breaks the pnpm CLI, itself a symlinked node script) or
 /// let node follow the symlink and resolve `node_modules` from

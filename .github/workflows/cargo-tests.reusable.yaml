@@ -368,10 +368,10 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      - name: "Install sccache, direnv, python, and uv"
+      - name: "Install sccache, direnv, python, uv, node, and pnpm"
         uses: ./.github/actions/setup-mise
         with:
-          install_args: "sccache direnv python uv"
+          install_args: "sccache direnv python uv node npm:pnpm"
 
       - name: "Verify sccache"
         run: sccache --version

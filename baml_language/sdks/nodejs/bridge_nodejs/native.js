@@ -85,7 +85,7 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@boundaryml/baml-node-android-arm64')
+        return require('@boundaryml/baml-core-node-android-arm64')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -96,7 +96,7 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@boundaryml/baml-node-android-arm-eabi')
+        return require('@boundaryml/baml-core-node-android-arm-eabi')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -111,7 +111,7 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@boundaryml/baml-node-win32-x64-msvc')
+        return require('@boundaryml/baml-core-node-win32-x64-msvc')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -122,7 +122,7 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@boundaryml/baml-node-win32-ia32-msvc')
+        return require('@boundaryml/baml-core-node-win32-ia32-msvc')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -133,7 +133,7 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@boundaryml/baml-node-win32-arm64-msvc')
+        return require('@boundaryml/baml-core-node-win32-arm64-msvc')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -147,7 +147,7 @@ function requireNative() {
       loadErrors.push(e)
     }
     try {
-      return require('@boundaryml/baml-node-darwin-universal')
+      return require('@boundaryml/baml-core-node-darwin-universal')
     } catch (e) {
       loadErrors.push(e)
     }
@@ -158,7 +158,7 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@boundaryml/baml-node-darwin-x64')
+        return require('@boundaryml/baml-core-node-darwin-x64')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -169,7 +169,7 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@boundaryml/baml-node-darwin-arm64')
+        return require('@boundaryml/baml-core-node-darwin-arm64')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -184,7 +184,7 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@boundaryml/baml-node-freebsd-x64')
+        return require('@boundaryml/baml-core-node-freebsd-x64')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -195,7 +195,7 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@boundaryml/baml-node-freebsd-arm64')
+        return require('@boundaryml/baml-core-node-freebsd-arm64')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -211,7 +211,7 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          return require('@boundaryml/baml-node-linux-x64-musl')
+          return require('@boundaryml/baml-core-node-linux-x64-musl')
         } catch (e) {
           loadErrors.push(e)
         }
@@ -222,7 +222,7 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          return require('@boundaryml/baml-node-linux-x64-gnu')
+          return require('@boundaryml/baml-core-node-linux-x64-gnu')
         } catch (e) {
           loadErrors.push(e)
         }
@@ -235,7 +235,7 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          return require('@boundaryml/baml-node-linux-arm64-musl')
+          return require('@boundaryml/baml-core-node-linux-arm64-musl')
         } catch (e) {
           loadErrors.push(e)
         }
@@ -246,7 +246,7 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          return require('@boundaryml/baml-node-linux-arm64-gnu')
+          return require('@boundaryml/baml-core-node-linux-arm64-gnu')
         } catch (e) {
           loadErrors.push(e)
         }
@@ -259,7 +259,7 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          return require('@boundaryml/baml-node-linux-arm-musleabihf')
+          return require('@boundaryml/baml-core-node-linux-arm-musleabihf')
         } catch (e) {
           loadErrors.push(e)
         }
@@ -270,7 +270,7 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          return require('@boundaryml/baml-node-linux-arm-gnueabihf')
+          return require('@boundaryml/baml-core-node-linux-arm-gnueabihf')
         } catch (e) {
           loadErrors.push(e)
         }
@@ -283,7 +283,7 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          return require('@boundaryml/baml-node-linux-riscv64-musl')
+          return require('@boundaryml/baml-core-node-linux-riscv64-musl')
         } catch (e) {
           loadErrors.push(e)
         }
@@ -294,7 +294,7 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          return require('@boundaryml/baml-node-linux-riscv64-gnu')
+          return require('@boundaryml/baml-core-node-linux-riscv64-gnu')
         } catch (e) {
           loadErrors.push(e)
         }
@@ -306,7 +306,7 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@boundaryml/baml-node-linux-ppc64-gnu')
+        return require('@boundaryml/baml-core-node-linux-ppc64-gnu')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -317,7 +317,7 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@boundaryml/baml-node-linux-s390x-gnu')
+        return require('@boundaryml/baml-core-node-linux-s390x-gnu')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -332,7 +332,7 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@boundaryml/baml-node-linux-arm64-ohos')
+        return require('@boundaryml/baml-core-node-linux-arm64-ohos')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -343,7 +343,7 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@boundaryml/baml-node-linux-x64-ohos')
+        return require('@boundaryml/baml-core-node-linux-x64-ohos')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -354,7 +354,7 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        return require('@boundaryml/baml-node-linux-arm-ohos')
+        return require('@boundaryml/baml-core-node-linux-arm-ohos')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -378,7 +378,7 @@ if (!nativeBinding || process.env.NAPI_RS_FORCE_WASI) {
   }
   if (!nativeBinding) {
     try {
-      nativeBinding = require('@boundaryml/baml-node-wasm32-wasi')
+      nativeBinding = require('@boundaryml/baml-core-node-wasm32-wasi')
     } catch (err) {
       if (process.env.NAPI_RS_FORCE_WASI) {
         loadErrors.push(err)
@@ -401,8 +401,12 @@ if (!nativeBinding) {
 
 module.exports = nativeBinding
 module.exports.AbortController = nativeBinding.AbortController
+module.exports.BamlAudio = nativeBinding.BamlAudio
 module.exports.BamlHandle = nativeBinding.BamlHandle
+module.exports.BamlImage = nativeBinding.BamlImage
+module.exports.BamlPdf = nativeBinding.BamlPdf
 module.exports.BamlRuntime = nativeBinding.BamlRuntime
+module.exports.BamlVideo = nativeBinding.BamlVideo
 module.exports.Collector = nativeBinding.Collector
 module.exports.FunctionLog = nativeBinding.FunctionLog
 module.exports.HostSpanManager = nativeBinding.HostSpanManager
@@ -410,8 +414,13 @@ module.exports.LlmCall = nativeBinding.LlmCall
 module.exports.LLMCall = nativeBinding.LLMCall
 module.exports.Timing = nativeBinding.Timing
 module.exports.Usage = nativeBinding.Usage
+module.exports._seedFunctionRefHandle = nativeBinding._seedFunctionRefHandle
+module.exports._seedGenericMediaHandle = nativeBinding._seedGenericMediaHandle
 module.exports.completeHostCall = nativeBinding.completeHostCall
 module.exports.flushEvents = nativeBinding.flushEvents
+module.exports.getRuntime = nativeBinding.getRuntime
 module.exports.getVersion = nativeBinding.getVersion
+module.exports.putHandleIntoTable = nativeBinding.putHandleIntoTable
 module.exports.registerHostCallable = nativeBinding.registerHostCallable
 module.exports.releaseHostCallable = nativeBinding.releaseHostCallable
+module.exports.takeHandleFromTable = nativeBinding.takeHandleFromTable

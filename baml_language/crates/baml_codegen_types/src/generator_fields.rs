@@ -13,6 +13,9 @@ pub enum OutputType {
     /// Python with Pydantic v1 models.
     #[strum(serialize = "python/pydantic/v1")]
     PythonPydanticV1,
+    /// TypeScript + Node.js SDK (`@boundaryml/baml-core-node` runtime).
+    #[strum(serialize = "typescript/node")]
+    TypescriptNode,
 }
 
 /// Identifier-casing policy a code generator must respect. Surfaces as

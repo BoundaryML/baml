@@ -1,0 +1,44 @@
+// Roundtrip coverage for the lorem stream-type / stdlib-routing suite —
+// ported from test_streams.py. Host-constructible shapes only: the
+// `baml.http.Response`-backed cases aren't host-mintable (the engine owns the
+// `_body` handle), and that handle round-trip is covered by
+// roundtrip_handles.test.ts instead.
+import "./baml_sdk";
+import { describe, it, expect } from "@jest/globals";
+import {
+  Box,
+  Resume,
+  round_trip_resume_stream,
+  round_trip_root_foo_stream,
+  round_trip_box_of_resume_stream,
+  round_trip_resume_or_http_response,
+  round_trip_resume_or_resume_stream,
+  // spec2: stream companions keep their `$stream` suffix and live beside
+  // their base type in the same leaf — no `stream_types/` namespace.
+  Resume$stream,
+} from "./baml_sdk/lorem";
+import { Foo$stream } from "./baml_sdk";
+
+describe("roundtrip streams", () => {
+  it("round_trip_resume_stream", () => {
+    const r = new Resume$stream({ name: "ada", email: null });
+    expect(round_trip_resume_stream(r)).toEqual(r);
+  });
+  it("round_trip_root_foo_stream", () => {
+    const f = new Foo$stream({ v: 3 });
+    expect(round_trip_root_foo_stream(f)).toEqual(f);
+  });
+  it("round_trip_box_of_resume_stream", () => {
+    const b = new Box({ v: new Resume$stream({ name: "grace", email: null }) });
+    expect(round_trip_box_of_resume_stream(b)).toEqual(b);
+  });
+  it("round_trip_resume_or_resume_stream", () => {
+    // Union arm `Resume` (the non-stream side) is host-constructible.
+    const r = new Resume({ name: "hopper", email: null });
+    expect(round_trip_resume_or_resume_stream(r)).toEqual(r);
+  });
+  it("round_trip_resume_or_http_response", () => {
+    const r = new Resume({ name: "lovelace", email: "a@x.com" });
+    expect(round_trip_resume_or_http_response(r)).toEqual(r);
+  });
+});

@@ -12,7 +12,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.CtxManager = void 0;
 const node_async_hooks_1 = require("node:async_hooks");
 const native_1 = require("./native");
-let exitHookInstalled = false;
+const exit_hook_1 = require("./exit_hook");
 class CtxManager {
     constructor(rt) {
         this.rt = rt;
@@ -23,15 +23,7 @@ class CtxManager {
         // Leaving as-is: get() and reset() already create fresh managers, and the legacy
         // engine/ had the same eager pattern without reported issues.
         this.ctx.enterWith(new native_1.HostSpanManager());
-        if (!exitHookInstalled) {
-            exitHookInstalled = true;
-            process.once('exit', () => {
-                try {
-                    (0, native_1.flushEvents)();
-                }
-                catch { }
-            });
-        }
+        (0, exit_hook_1.installFlushOnExit)();
     }
     get() {
         let mgr = this.ctx.getStore();

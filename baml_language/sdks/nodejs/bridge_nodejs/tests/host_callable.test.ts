@@ -40,7 +40,7 @@ function CallIntCb(callback: (int) -> int, x: int) -> int {
 `;
 
 function makeRuntime(): BamlRuntime {
-    return BamlRuntime.fromFiles('.', { 'main.baml': CALLBACK_BAML });
+    return BamlRuntime.initializeRuntime('.', { 'main.baml': CALLBACK_BAML });
 }
 
 describe('host-callable round-trip', () => {

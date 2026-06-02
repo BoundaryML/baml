@@ -31,11 +31,12 @@ export declare function encodeCallArgs(kwargs: Record<string, unknown>, syncMode
 export declare function decodeOutboundValue(data: Buffer | Uint8Array): unknown;
 /**
  * Decode a `BamlOutboundResult` envelope (the engine's call-result wire shape
- * after 31c/31e). The `ok` arm returns the decoded value as before; the
- * `error`/`panic` arms **throw** a generic `Error` carrying the thrown value's
- * class name + message + BAML trace (32b: no structured Node error types). An
- * `is_exit_panic` (clean `baml.sys.exit`) terminates the process via
- * `process.exit(code)` rather than throwing.
+ * after 31c/31e). The `ok` arm returns the decoded value; the `error`/`panic`
+ * arms **throw** a `BamlError`/`BamlPanic` carrying the fully decoded thrown
+ * value (`.value`), the BAML trace (`.bamlTrace`), and the class FQN
+ * (`.className`), with a readable formatted `.message`. An `is_exit_panic`
+ * (clean `baml.sys.exit`) terminates the process via `process.exit(code)`
+ * rather than throwing.
  */
 export declare function decodeCallResult(data: Buffer | Uint8Array): unknown;
 //# sourceMappingURL=proto.d.ts.map

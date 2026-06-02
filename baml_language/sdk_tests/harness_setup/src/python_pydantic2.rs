@@ -14,7 +14,7 @@
 //! `crates/python_pydantic2/setup.sh`, invoked by `cargo nextest run`
 //! via the setup-script binding in `.config/nextest.toml` (and run
 //! manually after `cargo test --no-run` for plain `cargo test`). This
-//! mirrors the nodejs_typescript target's `pnpm install` placement,
+//! mirrors the typescript_node target's `pnpm install` placement,
 //! keeps codegen deps the only thing build.rs pulls in, and — most
 //! importantly — lets setup.sh pass `--reinstall-package baml_core`
 //! so the maturin-built `.so` is rebuilt on incremental Rust edits
