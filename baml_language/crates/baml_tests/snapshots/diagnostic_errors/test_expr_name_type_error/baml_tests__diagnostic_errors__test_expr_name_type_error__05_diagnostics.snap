@@ -12,6 +12,16 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0001
 ───╯
 
+  [type] error: operator `Add` cannot be applied to `"a"` and `1`
+   ╭─[ main.baml:3:5 ]
+   │
+ 3 │ test "a" + 1 {
+   │     ────┬───  
+   │         ╰───── operator `Add` cannot be applied to `"a"` and `1`
+   │ 
+   │ Note: Error code: E0004
+───╯
+
   [type] error: type mismatch: expected string, got 42
    ╭─[ main.baml:7:6 ]
    │
