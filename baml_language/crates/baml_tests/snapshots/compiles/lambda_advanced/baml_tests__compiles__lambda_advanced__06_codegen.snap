@@ -323,8 +323,7 @@ function user.test_shadowing() -> string {
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _5
+    load_var2 3 2
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -335,22 +334,34 @@ function user.test_shadowing() -> string {
     return
 
   L2:
-    load_var _5
-    load_var __for_idx
+    load_var2 2 3
     load_array_element
     store_var y
     load_const 0
     store_var i
 
   L3:
-    cmp_int_lt_var_var_br_true 5 4 +3
-    add_int_var_const_store 3 1 3
+    load_var2 5 4
+    cmp_int_op <
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var __for_idx
+    load_const 1
+    add_int
+    store_var __for_idx
     jump L0
+
+  L5:
     load_var x
     load_const "1"
     bin_op +
     store_var x
-    add_int_var_const_store 5 1 5
+    load_var i
+    load_const 1
+    add_int
+    store_var i
     jump L3
 }
 

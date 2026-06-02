@@ -65,12 +65,14 @@ function soundness.call_result_right_operand_sub() -> int {
     call user.soundness.sound_id
     store_var _1
     load_const 1
-    sub_int_var _1
+    load_var _1
+    sub_int
     return
 }
 
 function soundness.copy_of_mutable_param_helper(x: int) -> int {
-    move_local 2 1
+    load_var x
+    store_var y
     load_const 2
     store_var x
     load_var y
@@ -111,7 +113,8 @@ function soundness.cross_block_let_mutation_true(c: bool) -> int {
 }
 
 function soundness.cross_block_param_mutation_helper(c: bool, p: int) -> int {
-    move_local 3 2
+    load_var p
+    store_var x
     load_var c
     pop_jump_if_false L0
     load_const 2
@@ -167,7 +170,8 @@ function soundness.sound_id(x: int) -> int {
 }
 
 function soundness.transitive_param_copy_mutation_helper(c: bool, p: int) -> int {
-    move_local 3 2
+    load_var p
+    store_var x
     load_var c
     pop_jump_if_false L0
     load_const 2

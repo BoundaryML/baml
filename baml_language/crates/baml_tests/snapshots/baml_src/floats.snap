@@ -867,30 +867,40 @@ function floats.float_random_distinct_values() -> bool {
     store_var i
 
   L0:
-    cmp_int_lt_var_const_br_true 3 3 +7
-    load_var max_seen
-    load_var min_seen
+    load_var i
+    load_const 100
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var2 2 1
     sub_float
     load_const 0.5
     cmp_float_op >
     return
-    call baml.Float.random
-    store_var r
-    load_var r
-    load_var min_seen
-    cmp_float_op <
-    pop_jump_if_false L1
-    move_local 1 4
-
-  L1:
-    load_var r
-    load_var max_seen
-    cmp_float_op >
-    pop_jump_if_false L2
-    move_local 2 4
 
   L2:
-    add_int_var_const_store 3 5 3
+    call baml.Float.random
+    store_var r
+    load_var2 4 1
+    cmp_float_op <
+    pop_jump_if_false L3
+    load_var r
+    store_var min_seen
+
+  L3:
+    load_var2 4 2
+    cmp_float_op >
+    pop_jump_if_false L4
+    load_var r
+    store_var max_seen
+
+  L4:
+    load_var i
+    load_const 1
+    add_int
+    store_var i
     jump L0
 }
 
@@ -905,58 +915,75 @@ function floats.float_random_in_unit_interval_and_covers_both_halves() -> bool {
     store_var i
 
   L0:
-    cmp_int_lt_var_const_br_true 4 2 +13
+    load_var i
+    load_const 1000
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
     load_var ok
-    jump_if_false L1
+    jump_if_false L2
     pop 1
     load_var below
     load_const 350
     cmp_int_op >=
 
-  L1:
-    jump_if_false L2
+  L2:
+    jump_if_false L3
     pop 1
     load_var above
     load_const 350
     cmp_int_op >=
 
-  L2:
+  L3:
     return
+
+  L4:
     call baml.Float.random
     store_var r
     load_var r
     load_const 0.0
     cmp_float_op <
-    jump_if_false L3
-    jump L4
+    jump_if_false L5
+    jump L6
 
-  L3:
+  L5:
     pop 1
     load_var r
     load_const 1.0
     cmp_float_op >=
 
-  L4:
-    pop_jump_if_false L5
+  L6:
+    pop_jump_if_false L7
     load_const false
     store_var ok
 
-  L5:
+  L7:
     load_var r
     load_const 0.5
     cmp_float_op <
-    pop_jump_if_false L6
-    jump L7
-
-  L6:
-    add_int_var_const_store 3 8 3
-    jump L8
-
-  L7:
-    add_int_var_const_store 2 8 2
+    pop_jump_if_false L8
+    jump L9
 
   L8:
-    add_int_var_const_store 4 8 4
+    load_var above
+    load_const 1
+    add_int
+    store_var above
+    jump L10
+
+  L9:
+    load_var below
+    load_const 1
+    add_int
+    store_var below
+
+  L10:
+    load_var i
+    load_const 1
+    add_int
+    store_var i
     jump L0
 }
 

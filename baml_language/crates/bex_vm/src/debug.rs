@@ -125,10 +125,7 @@ pub(crate) fn display_instruction(
         .and_then(|m| m.operand.as_ref());
 
     let metadata = match instruction {
-        Instruction::LoadConst(index)
-        | Instruction::AddIntConst(index)
-        | Instruction::CmpIntLtConst(index)
-        | Instruction::SubIntConst(index) => {
+        Instruction::LoadConst(index) => {
             // Prefer resolved_constants (runtime), fall back to constants (compile-time)
             if let Some(value) = function.bytecode.resolved_constants.get(*index) {
                 format!("({})", display_value(*value))
@@ -147,9 +144,6 @@ pub(crate) fn display_instruction(
         Instruction::LoadVar(index)
         | Instruction::StoreVar(index)
         | Instruction::StoreVarLoadVar(index)
-        | Instruction::AddIntVar(index)
-        | Instruction::CmpIntLtVar(index)
-        | Instruction::SubIntVar(index)
         | Instruction::Watch(index)
         | Instruction::Unwatch(index)
         | Instruction::Notify(index) => match function.local_names.get(*index) {
@@ -216,19 +210,8 @@ pub(crate) fn display_instruction(
         | Instruction::CmpIntOp(_)
         | Instruction::CmpFloatOp(_)
         | Instruction::CmpBigintOp(_)
-        | Instruction::AddIntVarVar(..)
-        | Instruction::AddIntVarConst(..)
-        | Instruction::CmpIntLtVarVar(..)
-        | Instruction::CmpIntLtVarConst(..)
-        | Instruction::MoveLocal(..)
-        | Instruction::AddIntVarVarStore(..)
-        | Instruction::AddIntVarConstStore(..)
-        | Instruction::CmpIntLtVarVarBrFalse(..)
-        | Instruction::CmpIntLtVarConstBrFalse(..)
-        | Instruction::CmpIntLtVarVarBrTrue(..)
-        | Instruction::CmpIntLtVarConstBrTrue(..)
-        | Instruction::SubIntVarVar(..)
-        | Instruction::SubIntVarConst(..)
+        | Instruction::LoadVar2(..)
+        | Instruction::StoreVar2(..)
         | Instruction::UnaryOp(_)
         | Instruction::AllocArray(_)
         | Instruction::AllocMap(_)
@@ -360,13 +343,14 @@ fn instruction_style(instruction: &Instruction) -> Style {
     match instruction {
         Instruction::LoadConst(_)
         | Instruction::LoadVar(_)
+        | Instruction::LoadVar2(..)
         | Instruction::LoadGlobal(_)
         | Instruction::LoadField(_)
         | Instruction::LoadArrayElement
         | Instruction::LoadMapElement => Style::new().blue(),
         Instruction::StoreVar(_)
         | Instruction::StoreVarLoadVar(_)
-        | Instruction::MoveLocal(..)
+        | Instruction::StoreVar2(..)
         | Instruction::StoreGlobal(_)
         | Instruction::StoreField(_)
         | Instruction::InitField(_)
@@ -397,28 +381,10 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::CmpIntOp(_)
         | Instruction::CmpFloatOp(_)
         | Instruction::CmpBigintOp(_)
-        | Instruction::AddIntVar(_)
-        | Instruction::AddIntConst(_)
-        | Instruction::CmpIntLtVar(_)
-        | Instruction::CmpIntLtConst(_)
-        | Instruction::AddIntVarVar(..)
-        | Instruction::AddIntVarConst(..)
-        | Instruction::CmpIntLtVarVar(..)
-        | Instruction::CmpIntLtVarConst(..)
-        | Instruction::AddIntVarVarStore(..)
-        | Instruction::AddIntVarConstStore(..)
-        | Instruction::SubIntVar(_)
-        | Instruction::SubIntConst(_)
-        | Instruction::SubIntVarVar(..)
-        | Instruction::SubIntVarConst(..)
         | Instruction::UnaryOp(_) => Style::new().blue().bright(),
         Instruction::Jump(_)
         | Instruction::PopJumpIfFalse(_)
         | Instruction::JumpIfFalse(_)
-        | Instruction::CmpIntLtVarVarBrFalse(..)
-        | Instruction::CmpIntLtVarConstBrFalse(..)
-        | Instruction::CmpIntLtVarVarBrTrue(..)
-        | Instruction::CmpIntLtVarConstBrTrue(..)
         | Instruction::JumpTable { .. }
         | Instruction::DenseTag(_) => Style::new().yellow(),
         Instruction::Call { .. } | Instruction::CallIndirect => Style::new().magenta(),
@@ -741,6 +707,8 @@ fn display_instruction_textual(
         Instruction::LoadVar(idx) => format!("load_var {}", meta_str(idx)),
         Instruction::StoreVar(idx) => format!("store_var {}", meta_str(idx)),
         Instruction::StoreVarLoadVar(idx) => format!("store_var_load_var {}", meta_str(idx)),
+        Instruction::LoadVar2(a, b) => format!("load_var2 {a} {b}"),
+        Instruction::StoreVar2(a, b) => format!("store_var2 {a} {b}"),
 
         // --- Globals ---
         Instruction::LoadGlobal(idx) => format!("load_global {}", meta_str(&idx.raw())),
@@ -831,35 +799,6 @@ fn display_instruction_textual(
         Instruction::BinOp(op) => format!("bin_op {op}"),
         Instruction::CmpOp(op) => format!("cmp_op {op}"),
         Instruction::AddInt => "add_int".to_string(),
-        Instruction::AddIntVar(idx) => format!("add_int_var {}", meta_str(idx)),
-        Instruction::AddIntConst(_) => format!("add_int_const {}", meta_str(&"")),
-        Instruction::CmpIntLtVar(idx) => format!("cmp_int_lt_var {}", meta_str(idx)),
-        Instruction::CmpIntLtConst(_) => format!("cmp_int_lt_const {}", meta_str(&"")),
-        Instruction::AddIntVarVar(a, b) => format!("add_int_var_var {a} {b}"),
-        Instruction::AddIntVarConst(a, c) => format!("add_int_var_const {a} {c}"),
-        Instruction::CmpIntLtVarVar(a, b) => format!("cmp_int_lt_var_var {a} {b}"),
-        Instruction::CmpIntLtVarConst(a, c) => format!("cmp_int_lt_var_const {a} {c}"),
-        Instruction::MoveLocal(dst, src) => format!("move_local {dst} {src}"),
-        Instruction::AddIntVarVarStore(a, b, dst) => format!("add_int_var_var_store {a} {b} {dst}"),
-        Instruction::AddIntVarConstStore(a, c, dst) => {
-            format!("add_int_var_const_store {a} {c} {dst}")
-        }
-        Instruction::CmpIntLtVarVarBrFalse(a, b, o) => {
-            format!("cmp_int_lt_var_var_br_false {a} {b} {o:+}")
-        }
-        Instruction::CmpIntLtVarConstBrFalse(a, c, o) => {
-            format!("cmp_int_lt_var_const_br_false {a} {c} {o:+}")
-        }
-        Instruction::CmpIntLtVarVarBrTrue(a, b, o) => {
-            format!("cmp_int_lt_var_var_br_true {a} {b} {o:+}")
-        }
-        Instruction::CmpIntLtVarConstBrTrue(a, c, o) => {
-            format!("cmp_int_lt_var_const_br_true {a} {c} {o:+}")
-        }
-        Instruction::SubIntVar(idx) => format!("sub_int_var {}", meta_str(idx)),
-        Instruction::SubIntConst(_) => format!("sub_int_const {}", meta_str(&"")),
-        Instruction::SubIntVarVar(a, b) => format!("sub_int_var_var {a} {b}"),
-        Instruction::SubIntVarConst(a, c) => format!("sub_int_var_const {a} {c}"),
         Instruction::SubInt => "sub_int".to_string(),
         Instruction::MulInt => "mul_int".to_string(),
         Instruction::DivInt => "div_int".to_string(),
@@ -1348,13 +1287,7 @@ pub fn display_compact_bytecode(
             | OpCode::StoreDeref
             | OpCode::LoadCapture
             | OpCode::StoreCapture
-            | OpCode::CaptureRef
-            | OpCode::AddIntVar
-            | OpCode::AddIntConst
-            | OpCode::CmpIntLtVar
-            | OpCode::CmpIntLtConst
-            | OpCode::SubIntVar
-            | OpCode::SubIntConst => {
+            | OpCode::CaptureRef => {
                 let val = read_u32(code, &mut pc);
                 writeln!(f, "{val}")?;
             }
@@ -1398,37 +1331,11 @@ pub fn display_compact_bytecode(
                 )?;
             }
 
-            // Two u32 operands (double-folded fused binops)
-            OpCode::AddIntVarVar
-            | OpCode::AddIntVarConst
-            | OpCode::CmpIntLtVarVar
-            | OpCode::CmpIntLtVarConst
-            | OpCode::MoveLocal
-            | OpCode::SubIntVarVar
-            | OpCode::SubIntVarConst => {
+            // Two u32 operands (operand-movement superinstructions)
+            OpCode::LoadVar2 | OpCode::StoreVar2 => {
                 let a = read_u32(code, &mut pc);
                 let b = read_u32(code, &mut pc);
                 writeln!(f, "{a} {b}")?;
-            }
-
-            // Three u32 operands (triple-folded store binops)
-            OpCode::AddIntVarVarStore | OpCode::AddIntVarConstStore => {
-                let a = read_u32(code, &mut pc);
-                let b = read_u32(code, &mut pc);
-                let dst = read_u32(code, &mut pc);
-                writeln!(f, "{a} {b} {dst}")?;
-            }
-
-            // u32 + u32 + i32 jump offset (compare-and-branch)
-            OpCode::CmpIntLtVarVarBrFalse
-            | OpCode::CmpIntLtVarConstBrFalse
-            | OpCode::CmpIntLtVarVarBrTrue
-            | OpCode::CmpIntLtVarConstBrTrue => {
-                let a = read_u32(code, &mut pc);
-                let b = read_u32(code, &mut pc);
-                let offset_val = read_i32(code, &mut pc);
-                let target = (pc as i64 + offset_val as i64) as usize;
-                writeln!(f, "{a} {b}  {offset_val:+} (-> {target:04})")?;
             }
         }
     }

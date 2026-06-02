@@ -166,14 +166,25 @@ function user.Foo() -> string | image {
     store_var i
 
   L0:
-    cmp_int_lt_var_const_br_true 2 2 +3
+    load_var i
+    load_const 2
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
     load_var x
     return
+
+  L2:
     load_const "hi:  "
     load_var x
     bin_op +
     store_var x
-    add_int_var_const_store 2 4 2
+    load_var i
+    load_const 1
+    add_int
+    store_var i
     jump L0
 }
 
@@ -207,8 +218,7 @@ function user.GenerateTests(count: int, topic: string) -> string[] {
     load_type string[]
     load_global user.GPT4o
     load_const "GenerateTests"
-    load_var count
-    load_var topic
+    load_var2 1 2
     load_const "count"
     load_const "topic"
     alloc_map 2
@@ -219,8 +229,7 @@ function user.GenerateTests(count: int, topic: string) -> string[] {
 function user.GenerateTests$build_request(count: int, topic: string) -> baml.http.Request {
     load_global user.GPT4o
     load_const "GenerateTests"
-    load_var count
-    load_var topic
+    load_var2 1 2
     load_const "count"
     load_const "topic"
     alloc_map 2
@@ -231,8 +240,7 @@ function user.GenerateTests$build_request(count: int, topic: string) -> baml.htt
 function user.GenerateTests$build_request_stream(count: int, topic: string) -> baml.http.Request {
     load_global user.GPT4o
     load_const "GenerateTests"
-    load_var count
-    load_var topic
+    load_var2 1 2
     load_const "count"
     load_const "topic"
     alloc_map 2
@@ -258,8 +266,7 @@ function user.GenerateTests$parse_stream(sse: baml.http.SseStream) -> baml.llm.S
 function user.GenerateTests$render_prompt(count: int, topic: string) -> baml.llm.PromptAst {
     load_global user.GPT4o
     load_const "GenerateTests"
-    load_var count
-    load_var topic
+    load_var2 1 2
     load_const "count"
     load_const "topic"
     alloc_map 2
@@ -270,8 +277,7 @@ function user.GenerateTests$render_prompt(count: int, topic: string) -> baml.llm
 function user.GenerateTests$stream(count: int, topic: string) -> baml.llm.Stream<string[], string[]> {
     load_global user.GPT4o
     load_const "GenerateTests"
-    load_var count
-    load_var topic
+    load_var2 1 2
     load_const "count"
     load_const "topic"
     alloc_map 2

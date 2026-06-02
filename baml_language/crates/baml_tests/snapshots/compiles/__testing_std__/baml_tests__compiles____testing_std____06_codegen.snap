@@ -2,8 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 function testing.$invoke_collector(collector: (testing.TestCollector) -> void throws unknown, c: testing.TestCollector) -> void {
-    load_var c
-    load_var collector
+    load_var2 2 1
     call_indirect
     return
 }
@@ -125,8 +124,7 @@ function testing.TestCollector.find_testset(self: testing.TestCollector, name: s
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _3
+    load_var2 4 3
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -139,8 +137,7 @@ function testing.TestCollector.find_testset(self: testing.TestCollector, name: s
     throw
 
   L2:
-    load_var _3
-    load_var __for_idx
+    load_var2 3 4
     load_array_element
     store_var_load_var ts
     load_field .name
@@ -150,7 +147,10 @@ function testing.TestCollector.find_testset(self: testing.TestCollector, name: s
     jump L4
 
   L3:
-    add_int_var_const_store 4 2 4
+    load_var __for_idx
+    load_const 1
+    add_int
+    store_var __for_idx
     jump L0
 
   L4:
@@ -211,7 +211,8 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
     jump L2
 
   L1:
-    move_local 5 2
+    load_var name
+    store_var full_name
 
   L2:
     load_const 0
@@ -227,8 +228,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
     store_var __for_idx
 
   L3:
-    load_var __for_idx
-    load_var _13
+    load_var2 9 8
     container_len
     cmp_int_op <
     pop_jump_if_false L4
@@ -242,7 +242,8 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
     jump L6
 
   L5:
-    move_local 11 5
+    load_var full_name
+    store_var final_name
     jump L7
 
   L6:
@@ -250,19 +251,19 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
     load_const "#"
     bin_op +
     store_var _28
-    add_int_var_const 6 5
+    load_var count
+    load_const 1
+    add_int
     call baml.unstable.string
     store_var _30
-    load_var _28
-    load_var _30
+    load_var2 12 13
     bin_op +
     store_var final_name
 
   L7:
     load_var self
     load_field .tests
-    load_var final_name
-    load_var body
+    load_var2 11 3
     load_var runner
     init_instance testing.TestRegistration .name, .body, .runner
     call baml.Array.push
@@ -271,8 +272,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
     return
 
   L8:
-    load_var _13
-    load_var __for_idx
+    load_var2 8 9
     load_array_element
     store_var_load_var t
     load_field .name
@@ -290,10 +290,16 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
 
   L10:
     pop_jump_if_false L11
-    add_int_var_const_store 6 5 6
+    load_var count
+    load_const 1
+    add_int
+    store_var count
 
   L11:
-    add_int_var_const_store 9 5 9
+    load_var __for_idx
+    load_const 1
+    add_int
+    store_var __for_idx
     jump L3
 }
 
@@ -316,7 +322,8 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
     jump L2
 
   L1:
-    move_local 5 2
+    load_var name
+    store_var full_name
 
   L2:
     load_const 0
@@ -332,8 +339,7 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
     store_var __for_idx
 
   L3:
-    load_var __for_idx
-    load_var _13
+    load_var2 9 8
     container_len
     cmp_int_op <
     pop_jump_if_false L4
@@ -347,7 +353,8 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
     jump L6
 
   L5:
-    move_local 11 5
+    load_var full_name
+    store_var final_name
     jump L7
 
   L6:
@@ -355,19 +362,19 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
     load_const "#"
     bin_op +
     store_var _28
-    add_int_var_const 6 5
+    load_var count
+    load_const 1
+    add_int
     call baml.unstable.string
     store_var _30
-    load_var _28
-    load_var _30
+    load_var2 12 13
     bin_op +
     store_var final_name
 
   L7:
     load_var self
     load_field .testsets
-    load_var final_name
-    load_var collector
+    load_var2 11 3
     load_var runner
     init_instance testing.TestSetRegistration .name, .collector, .runner
     call baml.Array.push
@@ -376,8 +383,7 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
     return
 
   L8:
-    load_var _13
-    load_var __for_idx
+    load_var2 8 9
     load_array_element
     store_var_load_var ts
     load_field .name
@@ -395,10 +401,16 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
 
   L10:
     pop_jump_if_false L11
-    add_int_var_const_store 6 5 6
+    load_var count
+    load_const 1
+    add_int
+    store_var count
 
   L11:
-    add_int_var_const_store 9 5 9
+    load_var __for_idx
+    load_const 1
+    add_int
+    store_var __for_idx
     jump L3
 }
 
@@ -462,8 +474,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _3
+    load_var2 4 3
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -478,8 +489,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
     store_var __for_idx_1
 
   L2:
-    load_var __for_idx_1
-    load_var _28
+    load_var2 10 9
     container_len
     cmp_int_op <
     pop_jump_if_false L3
@@ -492,8 +502,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
     throw
 
   L4:
-    load_var _28
-    load_var __for_idx_1
+    load_var2 9 10
     load_array_element
     store_var k
     load_var self
@@ -501,8 +510,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
     load_var k
     load_map_element
     store_var sub
-    load_var name
-    load_var k
+    load_var2 2 11
     load_const "/"
     bin_op +
     call baml.String.starts_with
@@ -510,18 +518,19 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
     jump L6
 
   L5:
-    add_int_var_const_store 10 3 10
+    load_var __for_idx_1
+    load_const 1
+    add_int
+    store_var __for_idx_1
     jump L2
 
   L6:
-    load_var sub
-    load_var name
+    load_var2 12 2
     call testing.TestRegistry.expand_set
     jump L10
 
   L7:
-    load_var _3
-    load_var __for_idx
+    load_var2 3 4
     load_array_element
     store_var_load_var ts
     load_field .name
@@ -531,7 +540,10 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
     jump L9
 
   L8:
-    add_int_var_const_store 4 3 4
+    load_var __for_idx
+    load_const 1
+    add_int
+    store_var __for_idx
     jump L0
 
   L9:
@@ -550,10 +562,10 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
     store_var _19
     load_var self
     load_field .expansions
-    load_var name
-    load_var sub_collector
+    load_var2 2 7
     alloc_map 0
-    sub_int_var_var 8 6
+    load_var2 8 6
+    sub_int
     init_instance testing.TestRegistry .collector, .expansions, .loading_time_ms
     call baml.Map.set
     pop 1
@@ -607,8 +619,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _3
+    load_var2 4 3
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -623,8 +634,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
     store_var __for_idx_1
 
   L2:
-    load_var __for_idx_1
-    load_var _13
+    load_var2 7 6
     container_len
     cmp_int_op <
     pop_jump_if_false L3
@@ -637,8 +647,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
     throw
 
   L4:
-    load_var _13
-    load_var __for_idx_1
+    load_var2 6 7
     load_array_element
     store_var k
     load_var self
@@ -646,8 +655,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
     load_var k
     load_map_element
     store_var sub
-    load_var name
-    load_var k
+    load_var2 2 8
     load_const "/"
     bin_op +
     call baml.String.starts_with
@@ -655,18 +663,19 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
     jump L6
 
   L5:
-    add_int_var_const_store 7 3 7
+    load_var __for_idx_1
+    load_const 1
+    add_int
+    store_var __for_idx_1
     jump L2
 
   L6:
-    load_var sub
-    load_var name
+    load_var2 9 2
     call testing.TestRegistry.run_test
     jump L10
 
   L7:
-    load_var _3
-    load_var __for_idx
+    load_var2 3 4
     load_array_element
     store_var_load_var t
     load_field .name
@@ -676,7 +685,10 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
     jump L9
 
   L8:
-    add_int_var_const_store 4 3 4
+    load_var __for_idx
+    load_const 1
+    add_int
+    store_var __for_idx
     jump L0
 
   L9:
@@ -701,8 +713,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _3
+    load_var2 4 3
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -717,8 +728,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
     store_var __for_idx_1
 
   L2:
-    load_var __for_idx_1
-    load_var _12
+    load_var2 6 5
     container_len
     cmp_int_op <
     pop_jump_if_false L3
@@ -729,8 +739,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
     return
 
   L4:
-    load_var _12
-    load_var __for_idx_1
+    load_var2 5 6
     load_array_element
     store_var ts
     load_var self
@@ -755,37 +764,41 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
     jump L7
 
   L6:
-    move_local 9 8
+    load_var expanded
+    store_var sub
     load_var ts
     load_field .name
     store_var _25
     load_var sub
     call testing.TestRegistry.serialize
     store_var _26
-    load_var items
-    load_var _25
-    load_var _26
-    load_var sub
+    load_var2 2 10
+    load_var2 11 9
     load_field .loading_time_ms
     init_instance testing.SerializedTestSet .name, .items, .loadingTimeMs
     call baml.Array.push
     pop 1
 
   L7:
-    add_int_var_const_store 6 3 6
+    load_var __for_idx_1
+    load_const 1
+    add_int
+    store_var __for_idx_1
     jump L2
 
   L8:
     load_var items
     load_const "test"
-    load_var _3
-    load_var __for_idx
+    load_var2 3 4
     load_array_element
     load_field .name
     init_instance testing.SerializedTest .type, .name
     call baml.Array.push
     pop 1
-    add_int_var_const_store 4 3 4
+    load_var __for_idx
+    load_const 1
+    add_int
+    store_var __for_idx
     jump L0
 }
 
@@ -955,8 +968,7 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> testi
     jump L1
 
   L0:
-    load_var base_run
-    load_var runner
+    load_var2 3 2
     call_indirect
     call_indirect
     jump L2
@@ -977,8 +989,7 @@ function testing.run_testset(run_children: () -> testing.TestSetReport throws ne
     jump L1
 
   L0:
-    load_var run_children
-    load_var runner
+    load_var2 1 2
     call_indirect
     call_indirect
     jump L2

@@ -336,8 +336,7 @@ function glob.scan_dot_pattern_matches_only_dot_files() -> string[] {
     load_const ".*"
     sys_op baml.glob.new
     store_var g
-    load_var g
-    load_var root
+    load_var2 3 1
     load_const true
     load_const null
     load_const null
@@ -444,8 +443,7 @@ function glob.scan_follows_symlinked_directory_checks() -> bool[] {
     load_const "**/*.txt"
     sys_op baml.glob.new
     store_var g
-    load_var g
-    load_var outer_root
+    load_var2 4 2
     load_const null
     load_const null
     load_const true
@@ -500,8 +498,7 @@ function glob.scan_matches_absolute_pattern_checks() -> bool[] {
     bin_op +
     sys_op baml.glob.new
     store_var g
-    load_var g
-    load_var root
+    load_var2 3 1
     load_const null
     load_const true
     load_const null
@@ -510,8 +507,7 @@ function glob.scan_matches_absolute_pattern_checks() -> bool[] {
     init_instance baml.glob.ScanOptions .cwd, .dot, .absolute, .follow_symlinks, .throw_error_on_broken_symlink, .only_files
     sys_op baml.glob.Glob.scan
     store_var result
-    load_var result
-    load_var root
+    load_var2 4 1
     load_const "/file.txt"
     bin_op +
     call baml.Array.includes
@@ -638,8 +634,7 @@ function glob.scan_opts_include_dot_absolute_and_dirs_checks() -> bool[] {
     load_const "**/*.txt"
     sys_op baml.glob.new
     store_var g
-    load_var g
-    load_var root
+    load_var2 3 1
     load_const true
     load_const true
     load_const null
@@ -648,20 +643,17 @@ function glob.scan_opts_include_dot_absolute_and_dirs_checks() -> bool[] {
     init_instance baml.glob.ScanOptions .cwd, .dot, .absolute, .follow_symlinks, .throw_error_on_broken_symlink, .only_files
     sys_op baml.glob.Glob.scan
     store_var result
-    load_var result
-    load_var root
+    load_var2 4 1
     load_const "/.hidden.txt"
     bin_op +
     call baml.Array.includes
     store_var _24
-    load_var result
-    load_var root
+    load_var2 4 1
     load_const "/dir.txt"
     bin_op +
     call baml.Array.includes
     store_var _27
-    load_var result
-    load_var root
+    load_var2 4 1
     load_const "/file.txt"
     bin_op +
     call baml.Array.includes
@@ -676,8 +668,7 @@ function glob.scan_opts_include_dot_absolute_and_dirs_checks() -> bool[] {
     container_len
     load_const 3
     cmp_int_op ==
-    load_var _24
-    load_var _27
+    load_var2 5 6
     load_var _30
     alloc_array 4
     return
@@ -755,8 +746,7 @@ function glob.scan_skips_broken_symlinks_by_default() -> string[] {
     load_const "*.txt"
     sys_op baml.glob.new
     store_var g
-    load_var g
-    load_var root
+    load_var2 3 1
     load_const null
     load_const null
     load_const true

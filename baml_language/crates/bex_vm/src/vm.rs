@@ -3880,6 +3880,47 @@ impl BexVm {
                     }
                 }
 
+                // ── Operand-movement superinstructions (CPython-style) ────────
+                // LoadVar2(a, b) == `LoadVar(a); LoadVar(b)`: push both locals.
+                OpCode::LoadVar2 => {
+                    let a = { read_u32_unchecked(code, pc) as usize };
+                    let b = { read_u32_unchecked(code, pc) as usize };
+                    #[allow(unsafe_code)]
+                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
+                    else {
+                        unreachable!()
+                    };
+                    let off = bf.locals_offset;
+                    let va = self.stack.get_at(Self::local_slot_stack_index(off, a));
+                    let vb = self.stack.get_at(Self::local_slot_stack_index(off, b));
+                    self.stack.push(va);
+                    self.stack.push(vb);
+                }
+                // StoreVar2(a, b) == `StoreVar(a); StoreVar(b)`: pop TOS into
+                // local[a], then pop into local[b]. Both stores complete before
+                // returning; in the rare case where both are watched locals and
+                // both produce notifications, only the first is surfaced (watch
+                // granularity, not store correctness).
+                OpCode::StoreVar2 => {
+                    let a = { read_u32_unchecked(code, pc) as usize };
+                    let b = { read_u32_unchecked(code, pc) as usize };
+                    #[allow(unsafe_code)]
+                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
+                    else {
+                        unreachable!()
+                    };
+                    let off = bf.locals_offset;
+                    let sa = Self::local_slot_stack_index(off, a);
+                    let sb = Self::local_slot_stack_index(off, b);
+                    let va = self.stack.ensure_pop();
+                    let vb = self.stack.ensure_pop();
+                    let y1 = self.store_local_value(sa, va)?;
+                    let y2 = self.store_local_value(sb, vb)?;
+                    if let Some(state) = y1.or(y2) {
+                        return Ok(Some(state));
+                    }
+                }
+
                 // ── LoadGlobal / StoreGlobal ──────────────────────────────────
                 OpCode::LoadGlobal => {
                     let raw = { read_u32_unchecked(code, pc) };
@@ -4609,93 +4650,6 @@ impl BexVm {
                     }
                 }
 
-                // ── Compare-and-branch: evaluate `local[a] < rhs` directly and
-                // branch (like PopJumpIfFalse) when the comparison is false,
-                // without materializing a bool on the stack.
-                OpCode::CmpIntLtVarVarBrFalse => {
-                    let a = { read_u32_unchecked(code, pc) as usize };
-                    let b = { read_u32_unchecked(code, pc) as usize };
-                    let offset = read_i32_unchecked(code, pc);
-                    #[allow(unsafe_code)]
-                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
-                    else {
-                        unreachable!()
-                    };
-                    let off = bf.locals_offset;
-                    let va = self.stack.get_at(Self::local_slot_stack_index(off, a));
-                    let vb = self.stack.get_at(Self::local_slot_stack_index(off, b));
-                    if (va.bits() as i64) >= (vb.bits() as i64) {
-                        *pc = (*pc as i64 + offset as i64) as usize;
-                    }
-                    if self.early_yield.should_early_yield() {
-                        return Ok(Some(VmExecState::EarlyYield));
-                    }
-                }
-                OpCode::CmpIntLtVarConstBrFalse => {
-                    let a = { read_u32_unchecked(code, pc) as usize };
-                    let c = { read_u32_unchecked(code, pc) as usize };
-                    let offset = read_i32_unchecked(code, pc);
-                    #[allow(unsafe_code)]
-                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
-                    else {
-                        unreachable!()
-                    };
-                    let va = self
-                        .stack
-                        .get_at(Self::local_slot_stack_index(bf.locals_offset, a));
-                    #[allow(unsafe_code)]
-                    let vc = *unsafe { function.bytecode.resolved_constants.get_unchecked(c) };
-                    if (va.bits() as i64) >= (vc.bits() as i64) {
-                        *pc = (*pc as i64 + offset as i64) as usize;
-                    }
-                    if self.early_yield.should_early_yield() {
-                        return Ok(Some(VmExecState::EarlyYield));
-                    }
-                }
-
-                // ── Compare-and-branch, inverted: branch when the comparison
-                // is TRUE (used when the else-block is the fall-through).
-                OpCode::CmpIntLtVarVarBrTrue => {
-                    let a = { read_u32_unchecked(code, pc) as usize };
-                    let b = { read_u32_unchecked(code, pc) as usize };
-                    let offset = read_i32_unchecked(code, pc);
-                    #[allow(unsafe_code)]
-                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
-                    else {
-                        unreachable!()
-                    };
-                    let off = bf.locals_offset;
-                    let va = self.stack.get_at(Self::local_slot_stack_index(off, a));
-                    let vb = self.stack.get_at(Self::local_slot_stack_index(off, b));
-                    if (va.bits() as i64) < (vb.bits() as i64) {
-                        *pc = (*pc as i64 + offset as i64) as usize;
-                    }
-                    if self.early_yield.should_early_yield() {
-                        return Ok(Some(VmExecState::EarlyYield));
-                    }
-                }
-                OpCode::CmpIntLtVarConstBrTrue => {
-                    let a = { read_u32_unchecked(code, pc) as usize };
-                    let c = { read_u32_unchecked(code, pc) as usize };
-                    let offset = read_i32_unchecked(code, pc);
-                    #[allow(unsafe_code)]
-                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
-                    else {
-                        unreachable!()
-                    };
-                    let va = self
-                        .stack
-                        .get_at(Self::local_slot_stack_index(bf.locals_offset, a));
-                    #[allow(unsafe_code)]
-                    let vc = *unsafe { function.bytecode.resolved_constants.get_unchecked(c) };
-                    if (va.bits() as i64) < (vc.bits() as i64) {
-                        *pc = (*pc as i64 + offset as i64) as usize;
-                    }
-                    if self.early_yield.should_early_yield() {
-                        return Ok(Some(VmExecState::EarlyYield));
-                    }
-                }
-
                 // ── JumpTable ─────────────────────────────────────────────────
                 OpCode::JumpTable => {
                     let table_idx = read_u32_unchecked(code, pc) as usize;
@@ -5391,226 +5345,10 @@ impl BexVm {
                     let l = self.stack.ensure_pop();
                     self.stack.push(Value::tagged_int_add(l, r));
                 }
-
-                // ── Fused superinstructions (binop with right operand folded) ─
-                // `AddIntVar(i)` == `LoadVar(i); AddInt`; the right operand is
-                // read straight out of the local slot instead of pushed/popped.
-                OpCode::AddIntVar => {
-                    let slot = { read_u32_unchecked(code, pc) as usize };
-                    #[allow(unsafe_code)]
-                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
-                    else {
-                        unreachable!()
-                    };
-                    let stack_slot = Self::local_slot_stack_index(bf.locals_offset, slot);
-                    let r = self.stack.get_at(stack_slot);
-                    let l = self.stack.ensure_pop();
-                    self.stack.push(Value::tagged_int_add(l, r));
-                }
-                OpCode::AddIntConst => {
-                    let idx = { read_u32_unchecked(code, pc) as usize };
-                    #[allow(unsafe_code)]
-                    let r = *unsafe { function.bytecode.resolved_constants.get_unchecked(idx) };
-                    let l = self.stack.ensure_pop();
-                    self.stack.push(Value::tagged_int_add(l, r));
-                }
-                OpCode::CmpIntLtVar => {
-                    let slot = { read_u32_unchecked(code, pc) as usize };
-                    #[allow(unsafe_code)]
-                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
-                    else {
-                        unreachable!()
-                    };
-                    let stack_slot = Self::local_slot_stack_index(bf.locals_offset, slot);
-                    let r = self.stack.get_at(stack_slot);
-                    let l = self.stack.ensure_pop();
-                    self.stack
-                        .push(Value::bool((l.bits() as i64) < (r.bits() as i64)));
-                }
-                OpCode::CmpIntLtConst => {
-                    let idx = { read_u32_unchecked(code, pc) as usize };
-                    #[allow(unsafe_code)]
-                    let r = *unsafe { function.bytecode.resolved_constants.get_unchecked(idx) };
-                    let l = self.stack.ensure_pop();
-                    self.stack
-                        .push(Value::bool((l.bits() as i64) < (r.bits() as i64)));
-                }
-
-                // ── Double-folded fused binops (both operands read directly) ──
-                // No stack pops: both operands come straight from local slots /
-                // the constant pool, and only the result is pushed.
-                OpCode::AddIntVarVar => {
-                    let a = { read_u32_unchecked(code, pc) as usize };
-                    let b = { read_u32_unchecked(code, pc) as usize };
-                    #[allow(unsafe_code)]
-                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
-                    else {
-                        unreachable!()
-                    };
-                    let sa = Self::local_slot_stack_index(bf.locals_offset, a);
-                    let sb = Self::local_slot_stack_index(bf.locals_offset, b);
-                    let va = self.stack.get_at(sa);
-                    let vb = self.stack.get_at(sb);
-                    self.stack.push(Value::tagged_int_add(va, vb));
-                }
-                OpCode::AddIntVarConst => {
-                    let a = { read_u32_unchecked(code, pc) as usize };
-                    let c = { read_u32_unchecked(code, pc) as usize };
-                    #[allow(unsafe_code)]
-                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
-                    else {
-                        unreachable!()
-                    };
-                    let va = self
-                        .stack
-                        .get_at(Self::local_slot_stack_index(bf.locals_offset, a));
-                    #[allow(unsafe_code)]
-                    let vc = *unsafe { function.bytecode.resolved_constants.get_unchecked(c) };
-                    self.stack.push(Value::tagged_int_add(va, vc));
-                }
-                OpCode::CmpIntLtVarVar => {
-                    let a = { read_u32_unchecked(code, pc) as usize };
-                    let b = { read_u32_unchecked(code, pc) as usize };
-                    #[allow(unsafe_code)]
-                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
-                    else {
-                        unreachable!()
-                    };
-                    let sa = Self::local_slot_stack_index(bf.locals_offset, a);
-                    let sb = Self::local_slot_stack_index(bf.locals_offset, b);
-                    let va = self.stack.get_at(sa);
-                    let vb = self.stack.get_at(sb);
-                    self.stack
-                        .push(Value::bool((va.bits() as i64) < (vb.bits() as i64)));
-                }
-                OpCode::CmpIntLtVarConst => {
-                    let a = { read_u32_unchecked(code, pc) as usize };
-                    let c = { read_u32_unchecked(code, pc) as usize };
-                    #[allow(unsafe_code)]
-                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
-                    else {
-                        unreachable!()
-                    };
-                    let va = self
-                        .stack
-                        .get_at(Self::local_slot_stack_index(bf.locals_offset, a));
-                    #[allow(unsafe_code)]
-                    let vc = *unsafe { function.bytecode.resolved_constants.get_unchecked(c) };
-                    self.stack
-                        .push(Value::bool((va.bits() as i64) < (vc.bits() as i64)));
-                }
-
-                // ── MoveLocal: copy local[src] -> local[dst] without touching
-                // the eval stack. Stores via store_local_value so cell-wrapped
-                // destinations (and any yield) behave exactly like StoreVar.
-                OpCode::MoveLocal => {
-                    let dst = { read_u32_unchecked(code, pc) as usize };
-                    let src = { read_u32_unchecked(code, pc) as usize };
-                    #[allow(unsafe_code)]
-                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
-                    else {
-                        unreachable!()
-                    };
-                    let src_slot = Self::local_slot_stack_index(bf.locals_offset, src);
-                    let dst_slot = Self::local_slot_stack_index(bf.locals_offset, dst);
-                    let val = self.stack.get_at(src_slot);
-                    if let Some(state) = self.store_local_value(dst_slot, val)? {
-                        return Ok(Some(state));
-                    }
-                }
-
-                // ── Triple-folded store binops (compute + store, no eval stack) ─
-                OpCode::AddIntVarVarStore => {
-                    let a = { read_u32_unchecked(code, pc) as usize };
-                    let b = { read_u32_unchecked(code, pc) as usize };
-                    let dst = { read_u32_unchecked(code, pc) as usize };
-                    #[allow(unsafe_code)]
-                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
-                    else {
-                        unreachable!()
-                    };
-                    let off = bf.locals_offset;
-                    let va = self.stack.get_at(Self::local_slot_stack_index(off, a));
-                    let vb = self.stack.get_at(Self::local_slot_stack_index(off, b));
-                    let res = Value::tagged_int_add(va, vb);
-                    let dst_slot = Self::local_slot_stack_index(off, dst);
-                    if let Some(state) = self.store_local_value(dst_slot, res)? {
-                        return Ok(Some(state));
-                    }
-                }
-                OpCode::AddIntVarConstStore => {
-                    let a = { read_u32_unchecked(code, pc) as usize };
-                    let c = { read_u32_unchecked(code, pc) as usize };
-                    let dst = { read_u32_unchecked(code, pc) as usize };
-                    #[allow(unsafe_code)]
-                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
-                    else {
-                        unreachable!()
-                    };
-                    let off = bf.locals_offset;
-                    let va = self.stack.get_at(Self::local_slot_stack_index(off, a));
-                    #[allow(unsafe_code)]
-                    let vc = *unsafe { function.bytecode.resolved_constants.get_unchecked(c) };
-                    let res = Value::tagged_int_add(va, vc);
-                    let dst_slot = Self::local_slot_stack_index(off, dst);
-                    if let Some(state) = self.store_local_value(dst_slot, res)? {
-                        return Ok(Some(state));
-                    }
-                }
                 OpCode::SubInt => {
                     let r = self.stack.ensure_pop();
                     let l = self.stack.ensure_pop();
                     self.stack.push(Value::tagged_int_sub(l, r));
-                }
-
-                // ── Fused subtraction (operand order preserved: left - right) ──
-                OpCode::SubIntVar => {
-                    let slot = { read_u32_unchecked(code, pc) as usize };
-                    #[allow(unsafe_code)]
-                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
-                    else {
-                        unreachable!()
-                    };
-                    let r = self
-                        .stack
-                        .get_at(Self::local_slot_stack_index(bf.locals_offset, slot));
-                    let l = self.stack.ensure_pop();
-                    self.stack.push(Value::tagged_int_sub(l, r));
-                }
-                OpCode::SubIntConst => {
-                    let idx = { read_u32_unchecked(code, pc) as usize };
-                    #[allow(unsafe_code)]
-                    let r = *unsafe { function.bytecode.resolved_constants.get_unchecked(idx) };
-                    let l = self.stack.ensure_pop();
-                    self.stack.push(Value::tagged_int_sub(l, r));
-                }
-                OpCode::SubIntVarVar => {
-                    let a = { read_u32_unchecked(code, pc) as usize };
-                    let b = { read_u32_unchecked(code, pc) as usize };
-                    #[allow(unsafe_code)]
-                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
-                    else {
-                        unreachable!()
-                    };
-                    let off = bf.locals_offset;
-                    let va = self.stack.get_at(Self::local_slot_stack_index(off, a));
-                    let vb = self.stack.get_at(Self::local_slot_stack_index(off, b));
-                    self.stack.push(Value::tagged_int_sub(va, vb));
-                }
-                OpCode::SubIntVarConst => {
-                    let a = { read_u32_unchecked(code, pc) as usize };
-                    let c = { read_u32_unchecked(code, pc) as usize };
-                    #[allow(unsafe_code)]
-                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
-                    else {
-                        unreachable!()
-                    };
-                    let va = self
-                        .stack
-                        .get_at(Self::local_slot_stack_index(bf.locals_offset, a));
-                    #[allow(unsafe_code)]
-                    let vc = *unsafe { function.bytecode.resolved_constants.get_unchecked(c) };
-                    self.stack.push(Value::tagged_int_sub(va, vc));
                 }
                 OpCode::MulInt => {
                     let Some(r) = self.stack.ensure_pop().as_int() else {

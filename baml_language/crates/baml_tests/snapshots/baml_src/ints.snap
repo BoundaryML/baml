@@ -565,7 +565,8 @@ function ints.count_zeros_plus_ones(n: int) -> int {
     load_var n
     call baml.Int.count_ones
     store_var _3
-    add_int_var_var 2 3
+    load_var2 2 3
+    add_int
     return
 }
 
@@ -578,25 +579,42 @@ function ints.int_random_distinct_values_in_wide_range() -> bool {
     store_var i
 
   L0:
-    cmp_int_lt_var_const_br_true 3 2 +5
-    sub_int_var_var 2 1
+    load_var i
+    load_const 100
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var2 2 1
+    sub_int
     load_const 500
     cmp_int_op >=
     return
+
+  L2:
     load_const 0
     load_const 1000
     call baml.Int.random
     store_var r
-    cmp_int_lt_var_var_br_false 4 1 +2
-    move_local 1 4
+    load_var2 4 1
+    cmp_int_op <
+    pop_jump_if_false L3
     load_var r
-    load_var max_seen
-    cmp_int_op >
-    pop_jump_if_false L1
-    move_local 2 4
+    store_var min_seen
 
-  L1:
-    add_int_var_const_store 3 4 3
+  L3:
+    load_var2 4 2
+    cmp_int_op >
+    pop_jump_if_false L4
+    load_var r
+    store_var max_seen
+
+  L4:
+    load_var i
+    load_const 1
+    add_int
+    store_var i
     jump L0
 }
 
@@ -605,21 +623,18 @@ function ints.int_random_full_range_returns_some_int() -> bool {
     store_var _2
     call baml.Int.max_value
     store_var _3
-    load_var _2
-    load_var _3
+    load_var2 2 3
     call baml.Int.random
     store_var r
     call baml.Int.min_value
     store_var _6
-    load_var r
-    load_var _6
+    load_var2 1 4
     cmp_int_op >=
     jump_if_false L0
     pop 1
     call baml.Int.max_value
     store_var _8
-    load_var r
-    load_var _8
+    load_var2 1 5
     cmp_int_op <=
 
   L0:
@@ -637,56 +652,69 @@ function ints.int_random_in_range_and_covers_endpoints() -> bool {
     store_var i
 
   L0:
-    cmp_int_lt_var_const_br_true 4 3 +9
+    load_var i
+    load_const 1000
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
     load_var ok
-    jump_if_false L1
+    jump_if_false L2
     pop 1
     load_var saw_lo
 
-  L1:
-    jump_if_false L2
+  L2:
+    jump_if_false L3
     pop 1
     load_var saw_hi
 
-  L2:
+  L3:
     return
+
+  L4:
     load_const 0
     load_const 10
     call baml.Int.random
     store_var r
-    cmp_int_lt_var_const 5 2
-    jump_if_false L3
-    jump L4
+    load_var r
+    load_const 0
+    cmp_int_op <
+    jump_if_false L5
+    jump L6
 
-  L3:
+  L5:
     pop 1
     load_var r
     load_const 10
     cmp_int_op >=
 
-  L4:
-    pop_jump_if_false L5
+  L6:
+    pop_jump_if_false L7
     load_const false
     store_var ok
 
-  L5:
+  L7:
     load_var r
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L6
+    pop_jump_if_false L8
     load_const true
     store_var saw_lo
 
-  L6:
+  L8:
     load_var r
     load_const 9
     cmp_int_op ==
-    pop_jump_if_false L7
+    pop_jump_if_false L9
     load_const true
     store_var saw_hi
 
-  L7:
-    add_int_var_const_store 4 6 4
+  L9:
+    load_var i
+    load_const 1
+    add_int
+    store_var i
     jump L0
 }
 
@@ -697,9 +725,17 @@ function ints.int_random_negative_range() -> bool {
     store_var i
 
   L0:
-    cmp_int_lt_var_const_br_true 2 2 +3
+    load_var i
+    load_const 200
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
     load_var ok
     return
+
+  L2:
     load_const 5
     unary_op -
     load_const 5
@@ -709,22 +745,25 @@ function ints.int_random_negative_range() -> bool {
     load_const 5
     unary_op -
     cmp_int_op <
-    jump_if_false L1
-    jump L2
+    jump_if_false L3
+    jump L4
 
-  L1:
+  L3:
     pop 1
     load_var r
     load_const 5
     cmp_int_op >=
 
-  L2:
-    pop_jump_if_false L3
+  L4:
+    pop_jump_if_false L5
     load_const false
     store_var ok
 
-  L3:
-    add_int_var_const_store 2 5 2
+  L5:
+    load_var i
+    load_const 1
+    add_int
+    store_var i
     jump L0
 }
 
@@ -735,19 +774,30 @@ function ints.int_random_single_element_range() -> bool {
     store_var i
 
   L0:
-    cmp_int_lt_var_const_br_true 2 2 +3
+    load_var i
+    load_const 50
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
     load_var ok
     return
+
+  L2:
     load_const 0
     load_const 1
     call baml.Int.random
     load_const 0
     cmp_int_op !=
-    pop_jump_if_false L1
+    pop_jump_if_false L3
     load_const false
     store_var ok
 
-  L1:
-    add_int_var_const_store 2 3 2
+  L3:
+    load_var i
+    load_const 1
+    add_int
+    store_var i
     jump L0
 }

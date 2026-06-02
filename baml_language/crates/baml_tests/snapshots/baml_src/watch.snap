@@ -181,11 +181,9 @@ function watch.$init_test_ns_watch_watch(registry: testing.TestCollector) -> nul
 }
 
 function watch.WPointWithSet.set(self: watch.WPointWithSet, x: int, y: int) -> watch.WPointWithSet {
-    load_var self
-    load_var x
+    load_var2 1 2
     store_field .x
-    load_var self
-    load_var y
+    load_var2 1 3
     store_field .y
     load_var self
     return
@@ -193,13 +191,15 @@ function watch.WPointWithSet.set(self: watch.WPointWithSet, x: int, y: int) -> w
 
 function watch.block_notification_basic_fn() -> int {
     load_const 1
-    add_int_const 2
+    load_const 2
+    add_int
     return
 }
 
 function watch.block_notification_multiple_fn() -> int {
     load_const 1
-    add_int_const 2
+    load_const 2
+    add_int
     return
 }
 
@@ -224,10 +224,21 @@ function watch.header_before_while() -> int {
     store_var x
 
   L0:
-    cmp_int_lt_var_const_br_true 1 1 +3
+    load_var x
+    load_const 1
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
     load_var x
     return
-    add_int_var_const_store 1 1 1
+
+  L2:
+    load_var x
+    load_const 1
+    add_int
+    store_var x
     jump L0
 }
 
@@ -320,13 +331,11 @@ function watch.watch_break_unwatches_fn() -> int {
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _2
+    load_var2 3 2
     container_len
     cmp_int_op <
     pop_jump_if_false L3
-    load_var _2
-    load_var __for_idx
+    load_var2 2 3
     load_array_element
     store_var x
     load_const "x"
@@ -339,10 +348,18 @@ function watch.watch_break_unwatches_fn() -> int {
     jump L2
 
   L1:
-    add_int_var_const_store 4 6 4
-    add_int_var_var_store 1 4 1
+    load_var x
+    load_const 9
+    add_int
+    store_var x
+    load_var2 1 4
+    add_int
+    store_var total
     unwatch x
-    add_int_var_const_store 3 1 3
+    load_var __for_idx
+    load_const 1
+    add_int
+    store_var __for_idx
     jump L0
 
   L2:
@@ -375,7 +392,9 @@ function watch.watch_catch_arm_fallthrough_fn() -> int {
     unwatch x
 
   L0:
-    add_int_var_const 1 4
+    load_var result
+    load_const 1
+    add_int
     return
 }
 
@@ -453,8 +472,7 @@ function watch.watch_continue_unwatches_fn() -> int {
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _2
+    load_var2 3 2
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -465,8 +483,7 @@ function watch.watch_continue_unwatches_fn() -> int {
     return
 
   L2:
-    load_var _2
-    load_var __for_idx
+    load_var2 2 3
     load_array_element
     store_var x
     load_const "x"
@@ -479,8 +496,13 @@ function watch.watch_continue_unwatches_fn() -> int {
     jump L4
 
   L3:
-    add_int_var_const_store 4 6 4
-    add_int_var_var_store 1 4 1
+    load_var x
+    load_const 10
+    add_int
+    store_var x
+    load_var2 1 4
+    add_int
+    store_var total
     unwatch x
     jump L5
 
@@ -488,7 +510,10 @@ function watch.watch_continue_unwatches_fn() -> int {
     unwatch x
 
   L5:
-    add_int_var_const_store 3 1 3
+    load_var __for_idx
+    load_const 1
+    add_int
+    store_var __for_idx
     jump L0
 }
 
@@ -515,20 +540,16 @@ function watch.watch_cyclic_graph_fn() -> int {
     load_const "v4"
     load_const null
     watch v4
-    load_var v1
-    load_var v2
+    load_var2 1 2
     alloc_array 1
     store_field .edges
-    load_var v2
-    load_var v3
+    load_var2 2 3
     alloc_array 1
     store_field .edges
-    load_var v3
-    load_var v4
+    load_var2 3 4
     alloc_array 1
     store_field .edges
-    load_var v4
-    load_var v1
+    load_var2 4 1
     alloc_array 1
     store_field .edges
     load_var v2
@@ -596,8 +617,7 @@ function watch.watch_for_throw_fails() -> int {
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _1
+    load_var2 2 1
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -608,8 +628,7 @@ function watch.watch_for_throw_fails() -> int {
     return
 
   L2:
-    load_var _1
-    load_var __for_idx
+    load_var2 1 2
     load_array_element
     store_var x
     load_const "x"
@@ -622,9 +641,15 @@ function watch.watch_for_throw_fails() -> int {
     jump L4
 
   L3:
-    add_int_var_const_store 3 6 3
+    load_var x
+    load_const 9
+    add_int
+    store_var x
     unwatch x
-    add_int_var_const_store 2 0 2
+    load_var __for_idx
+    load_const 1
+    add_int
+    store_var __for_idx
     jump L0
 
   L4:
@@ -702,7 +727,9 @@ function watch.watch_match_arm_fallthrough_entry(input: int) -> int {
     unwatch x
 
   L2:
-    add_int_var_const 2 0
+    load_var result
+    load_const 1
+    add_int
     return
 }
 
@@ -782,8 +809,7 @@ function watch.watch_nested_object_added_fn() -> int {
     init_instance user.watch.WValue .value
     init_instance user.watch.WPointV .x, .y
     store_var p
-    load_var vec
-    load_var p
+    load_var2 1 2
     store_field .p
     load_var p
     load_field .x
@@ -875,7 +901,8 @@ function watch.watch_scope_exit_fn() -> int {
     load_var point
     load_const 1
     store_field .x
-    move_local 1 2
+    load_var point
+    store_var outter_point
     unwatch point
     load_var outter_point
     load_const 2
@@ -921,7 +948,9 @@ function watch.watch_switch_arm_fallthrough_entry(input: int) -> int {
     store_var result
 
   L5:
-    add_int_var_const 2 8
+    load_var result
+    load_const 1
+    add_int
     return
 }
 
@@ -972,26 +1001,41 @@ function watch.watch_while_throw_fails() -> int {
     store_var i
 
   L0:
-    cmp_int_lt_var_const_br_true 1 1 +3
+    load_var i
+    load_const 3
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
     load_const 0
     return
-    move_local 2 1
+
+  L2:
+    load_var i
+    store_var x
     load_const "x"
     load_const null
     watch x
     load_var x
     load_const 1
     cmp_int_op ==
-    pop_jump_if_false L1
-    jump L2
+    pop_jump_if_false L3
+    jump L4
 
-  L1:
-    add_int_var_const_store 2 5 2
-    add_int_var_const_store 1 4 1
+  L3:
+    load_var x
+    load_const 10
+    add_int
+    store_var x
+    load_var i
+    load_const 1
+    add_int
+    store_var i
     unwatch x
     jump L0
 
-  L2:
+  L4:
     unwatch x
     load_const "boom"
     throw

@@ -162,7 +162,8 @@ function assignments.array_element_field() -> int {
 }
 
 function assignments.copy_of_mutable_param(x: int) -> int {
-    move_local 2 1
+    load_var x
+    store_var y
     load_const 2
     store_var x
     load_var y
@@ -170,7 +171,8 @@ function assignments.copy_of_mutable_param(x: int) -> int {
 }
 
 function assignments.cross_block_param_mutation(c: bool, p: int) -> int {
-    move_local 3 2
+    load_var p
+    store_var x
     load_var c
     pop_jump_if_false L0
     load_const 2
@@ -196,7 +198,8 @@ function assignments.cross_block_soundness(c: bool) -> int {
 }
 
 function assignments.cross_block_transitive_param_mutation(c: bool, p: int) -> int {
-    move_local 3 2
+    load_var p
+    store_var x
     load_var c
     pop_jump_if_false L0
     load_const 2

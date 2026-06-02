@@ -215,20 +215,29 @@ function control_flow.concat_oks(items: (control_flow.Ok | control_flow.Err)[]) 
     store_var i
 
   L0:
-    cmp_int_lt_var_const_br_true 3 2 +3
+    load_var i
+    load_const 3
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
     load_var acc
     return
-    load_var items
-    load_var i
+
+  L2:
+    load_var2 1 3
     load_array_element
     store_var item
-    add_int_var_const_store 3 3 3
-    move_local 5 4
-    load_var _9
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    load_var item
+    store_var_load_var _9
     is_type control_flow.Ok
     pop_jump_if_false L0
-    load_var acc
-    load_var _9
+    load_var2 2 5
     load_field .value
     bin_op +
     store_var acc
@@ -240,21 +249,35 @@ function control_flow.continue_loop(x: int) -> int {
     store_var i
 
   L0:
-    cmp_int_lt_var_const_br_true 2 1 +3
     load_var i
-    return
-    load_var x
-    load_const 1
-    cmp_int_op ==
+    load_const 3
+    cmp_int_op <
     pop_jump_if_false L1
     jump L2
 
   L1:
-    add_int_var_const_store 2 3 2
-    jump L0
+    load_var i
+    return
 
   L2:
-    add_int_var_const_store 2 2 2
+    load_var x
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var i
+    load_const 10
+    add_int
+    store_var i
+    jump L0
+
+  L4:
+    load_var i
+    load_const 1
+    add_int
+    store_var i
     jump L0
 }
 
@@ -492,9 +515,11 @@ function control_flow.pick_first_ok(items: (control_flow.Ok | control_flow.Err)[
     store_var i
 
   L0:
-    cmp_int_lt_var_const_br_false 3 2 +8
-    load_var items
     load_var i
+    load_const 3
+    cmp_int_op <
+    pop_jump_if_false L1
+    load_var2 1 3
     load_array_element
     store_var_load_var _9
     is_type control_flow.Ok
@@ -509,7 +534,10 @@ function control_flow.pick_first_ok(items: (control_flow.Ok | control_flow.Err)[
     load_var _9
     load_field .value
     store_var result
-    add_int_var_const_store 3 4 3
+    load_var i
+    load_const 1
+    add_int
+    store_var i
     jump L0
 }
 

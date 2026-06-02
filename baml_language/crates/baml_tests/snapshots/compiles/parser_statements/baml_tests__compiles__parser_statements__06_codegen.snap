@@ -2,15 +2,31 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.ConditionalLogic(age: int) -> string {
-    cmp_int_lt_var_const_br_true 1 0 +6
-    cmp_int_lt_var_const_br_true 1 1 +3
-    load_const "senior"
-    jump L0
-    load_const "adult"
-    jump L0
-    load_const "minor"
+    load_var age
+    load_const 18
+    cmp_int_op <
+    pop_jump_if_false L0
+    jump L3
 
   L0:
+    load_var age
+    load_const 65
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "senior"
+    jump L4
+
+  L2:
+    load_const "adult"
+    jump L4
+
+  L3:
+    load_const "minor"
+
+  L4:
     return
 }
 
@@ -70,7 +86,8 @@ function user.Point.to_json(self: Point) -> baml.json.json {
 function user.add_assign() -> int {
     load_const 10
     store_var_load_var x
-    add_int_const 5
+    load_const 5
+    add_int
     store_var_load_var x
     return
 }
@@ -82,23 +99,38 @@ function user.assign_in_loop() -> int {
     store_var i
 
   L0:
-    cmp_int_lt_var_const_br_true 2 1 +3
+    load_var i
+    load_const 5
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
     load_var sum
     return
-    add_int_var_var_store 1 2 1
-    add_int_var_const_store 2 2 2
+
+  L2:
+    load_var2 1 2
+    add_int
+    store_var sum
+    load_var i
+    load_const 1
+    add_int
+    store_var i
     jump L0
 }
 
 function user.block_with_tail() -> int {
     load_const 1
-    add_int_const 2
+    load_const 2
+    add_int
     return
 }
 
 function user.break_in_for() -> int {
     load_const 0
-    cmp_int_lt_const 10
+    load_const 10
+    cmp_int_op <
     pop_jump_if_false L0
 
   L0:
@@ -125,11 +157,24 @@ function user.c_style_for_loop() -> int {
     store_var i
 
   L0:
-    cmp_int_lt_var_const_br_true 2 1 +3
+    load_var i
+    load_const 10
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
     load_var result
     return
-    add_int_var_var_store 1 2 1
-    add_int_var_const_store 2 2 2
+
+  L2:
+    load_var2 1 2
+    add_int
+    store_var result
+    load_var i
+    load_const 1
+    add_int
+    store_var i
     jump L0
 }
 
@@ -138,10 +183,21 @@ function user.continue_in_for() -> int {
     store_var i
 
   L0:
-    cmp_int_lt_var_const_br_true 1 1 +3
+    load_var i
+    load_const 10
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
     load_const 2
     return
-    add_int_var_const_store 1 3 1
+
+  L2:
+    load_var i
+    load_const 1
+    add_int
+    store_var i
     jump L0
 }
 
@@ -216,8 +272,7 @@ function user.iterator_style_for_loop() -> int {
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _2
+    load_var2 3 2
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -228,27 +283,33 @@ function user.iterator_style_for_loop() -> int {
     return
 
   L2:
-    load_var result
-    load_var _2
+    load_var2 1 2
     load_var __for_idx
     load_array_element
     add_int
     store_var result
-    add_int_var_const_store 3 1 3
+    load_var __for_idx
+    load_const 1
+    add_int
+    store_var __for_idx
     jump L0
 }
 
 function user.let_mixed_semicolons() -> int {
     load_const 1
-    add_int_const 2
-    add_int_const 3
-    add_int_const 4
+    load_const 2
+    add_int
+    load_const 3
+    add_int
+    load_const 4
+    add_int
     return
 }
 
 function user.let_no_semicolons() -> int {
     load_const 1
-    add_int_const 2
+    load_const 2
+    add_int
     return
 }
 
@@ -283,7 +344,8 @@ function user.multi_assign() -> int {
     store_var a
     load_const 20
     store_var b
-    add_int_var_var 1 2
+    load_var2 1 2
+    add_int
     return
 }
 
@@ -310,8 +372,7 @@ function user.nested_for_loop() -> int {
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _2
+    load_var2 3 2
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -322,8 +383,7 @@ function user.nested_for_loop() -> int {
     return
 
   L2:
-    load_var _2
-    load_var __for_idx
+    load_var2 2 3
     load_array_element
     store_var i
     load_const 4
@@ -335,48 +395,59 @@ function user.nested_for_loop() -> int {
     store_var __for_idx_1
 
   L3:
-    load_var __for_idx_1
-    load_var _8
+    load_var2 6 5
     container_len
     cmp_int_op <
     pop_jump_if_false L4
     jump L5
 
   L4:
-    add_int_var_const_store 3 1 3
+    load_var __for_idx
+    load_const 1
+    add_int
+    store_var __for_idx
     jump L0
 
   L5:
-    load_var result
-    load_var i
-    load_var _8
-    load_var __for_idx_1
+    load_var2 1 4
+    load_var2 5 6
     load_array_element
     mul_int
     add_int
     store_var result
-    add_int_var_const_store 6 1 6
+    load_var __for_idx_1
+    load_const 1
+    add_int
+    store_var __for_idx_1
     jump L3
 }
 
 function user.nested_while_loop() -> int {
-    load_const 0
-    cmp_int_lt_const 10
-    pop_jump_if_false L0
-    jump L1
-
   L0:
     load_const 0
-    return
+    load_const 10
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
 
   L1:
     load_const 0
-    store_var j
+    return
 
   L2:
-    cmp_int_lt_var_const_br_false 1 1 -8
-    add_int_var_const_store 1 2 1
-    jump L2
+    load_const 0
+    store_var j
+
+  L3:
+    load_var j
+    load_const 10
+    cmp_int_op <
+    pop_jump_if_false L0
+    load_var j
+    load_const 1
+    add_int
+    store_var j
+    jump L3
 }
 
 function user.simple_assign() -> int {
@@ -412,17 +483,29 @@ function user.simple_while_loop() -> int {
     store_var i
 
   L0:
-    cmp_int_lt_var_const_br_true 1 1 +3
+    load_var i
+    load_const 10
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
     load_var i
     return
-    add_int_var_const_store 1 2 1
+
+  L2:
+    load_var i
+    load_const 1
+    add_int
+    store_var i
     jump L0
 }
 
 function user.sub_assign() -> int {
     load_const 10
     store_var_load_var x
-    sub_int_const 3
+    load_const 3
+    sub_int
     store_var_load_var x
     return
 }

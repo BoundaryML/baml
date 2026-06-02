@@ -28,8 +28,7 @@ function user.AskDocs(query: string, max_results: int, filter: string) -> string
     load_type string
     load_global user.TestClient
     load_const "AskDocs"
-    load_var query
-    load_var max_results
+    load_var2 1 2
     load_var filter
     load_const "query"
     load_const "max_results"
@@ -58,8 +57,7 @@ function user.AskDocs$build_request(query: string, max_results: int, filter: str
   L1:
     load_global user.TestClient
     load_const "AskDocs"
-    load_var query
-    load_var max_results
+    load_var2 1 2
     load_var filter
     load_const "query"
     load_const "max_results"
@@ -88,8 +86,7 @@ function user.AskDocs$build_request_stream(query: string, max_results: int, filt
   L1:
     load_global user.TestClient
     load_const "AskDocs"
-    load_var query
-    load_var max_results
+    load_var2 1 2
     load_var filter
     load_const "query"
     load_const "max_results"
@@ -133,8 +130,7 @@ function user.AskDocs$render_prompt(query: string, max_results: int, filter: str
   L1:
     load_global user.TestClient
     load_const "AskDocs"
-    load_var query
-    load_var max_results
+    load_var2 1 2
     load_var filter
     load_const "query"
     load_const "max_results"
@@ -163,8 +159,7 @@ function user.AskDocs$stream(query: string, max_results: int, filter: string) ->
   L1:
     load_global user.TestClient
     load_const "AskDocs"
-    load_var query
-    load_var max_results
+    load_var2 1 2
     load_var filter
     load_const "query"
     load_const "max_results"
@@ -203,7 +198,9 @@ function user.HostEntry(query: string, max_results: int, filter: string?) -> int
     jump L3
 
   L2:
-    add_int_var_const 2 3
+    load_var max_results
+    load_const 100
+    add_int
     jump L4
 
   L3:
@@ -291,8 +288,7 @@ function user.SearchService.Run(self: SearchService, query: string, limit: int) 
     store_var limit
 
   L0:
-    load_var query
-    load_var limit
+    load_var2 2 3
     load_var self
     load_field .base
     call user.Search

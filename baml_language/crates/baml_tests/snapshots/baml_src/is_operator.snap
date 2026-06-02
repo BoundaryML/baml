@@ -944,7 +944,9 @@ function is_operator.is_in_match_guard_fn() -> int {
     jump L5
 
   L4:
-    add_int_var_const 1 4
+    load_var n
+    load_const 1
+    add_int
 
   L5:
     return
@@ -981,8 +983,7 @@ function is_operator.is_inside_array_literal_fn() -> bool[] {
     store_var _4
 
   L5:
-    load_var _2
-    load_var _4
+    load_var2 1 2
     alloc_array 2
     return
 }
@@ -1016,7 +1017,9 @@ function is_operator.is_inside_while_condition_fn() -> int {
   L3:
     jump_if_false L4
     pop 1
-    cmp_int_lt_var_const 1 3
+    load_var count
+    load_const 3
+    cmp_int_op <
 
   L4:
     pop_jump_if_false L5
@@ -1027,8 +1030,10 @@ function is_operator.is_inside_while_condition_fn() -> int {
     return
 
   L6:
-    add_int_var_const_store 1 4 1
     load_var count
+    load_const 1
+    add_int
+    store_var_load_var count
     load_const 3
     cmp_int_op ==
     pop_jump_if_false L0
@@ -1472,7 +1477,8 @@ function is_operator.is_with_optional_chain_scrutinee_fn() -> bool {
 
 function is_operator.is_with_parenthesised_arithmetic_scrutinee_fn() -> bool {
     load_const 1
-    add_int_const 2
+    load_const 2
+    add_int
     is_type 3
     pop_jump_if_false L0
     jump L1
@@ -1607,7 +1613,8 @@ function is_operator.narrowing_else_branch_with_literal_pattern_keeps_original_f
 
   L3:
     load_const 5
-    add_int_const 1
+    load_const 1
+    add_int
     jump L5
 
   L4:
@@ -1670,9 +1677,11 @@ function is_operator.narrowing_persists_across_multiple_uses_in_then_fn() -> int
 
   L4:
     load_const 4
-    add_int_const 1
+    load_const 1
+    add_int
     load_const 4
-    add_int_const 2
+    load_const 2
+    add_int
     add_int
 
   L5:
@@ -1745,7 +1754,8 @@ function is_operator.narrowing_then_branch_picks_pattern_type_fn() -> int {
 
   L4:
     load_const 7
-    add_int_const 1
+    load_const 1
+    add_int
 
   L5:
     return
@@ -1771,7 +1781,8 @@ function is_operator.narrowing_through_negation_fn() -> int {
 
   L3:
     load_const 5
-    add_int_const 100
+    load_const 100
+    add_int
     jump L5
 
   L4:

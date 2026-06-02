@@ -221,8 +221,7 @@ function lambdas.lambdas_captures_loop_variable_accumulation() -> int {
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _4
+    load_var2 3 2
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -233,14 +232,16 @@ function lambdas.lambdas_captures_loop_variable_accumulation() -> int {
     return
 
   L2:
-    load_var _4
-    load_var __for_idx
+    load_var2 2 3
     load_array_element
     load_var sum
     make_closure .<lambda(lambdas_captures_loop_variable_accumulation, 0)>, 1
     call_indirect
     pop 1
-    add_int_var_const_store 3 1 3
+    load_var __for_idx
+    load_const 1
+    add_int
+    store_var __for_idx
     jump L0
 }
 
@@ -255,8 +256,7 @@ function lambdas.lambdas_captures_multiple_variables() -> int {
     store_deref ?1
     load_const 5
     store_deref ?2
-    load_var a
-    load_var b
+    load_var2 1 2
     make_closure .<lambda(lambdas_captures_multiple_variables, 0)>, 2
     call_indirect
     return
@@ -373,7 +373,8 @@ function lambdas.lambdas_issue_a_capture_read_after_mutation() -> int {
     load_var before
     load_const 10
     mul_int
-    add_int_var after
+    load_var after
+    add_int
     return
 }
 
@@ -410,8 +411,10 @@ function lambdas.lambdas_issue_a_interleaved_capture_reads_writes() -> int {
     load_var get_x
     call_indirect
     store_var c
-    add_int_var_var 4 5
-    add_int_var c
+    load_var2 4 5
+    add_int
+    load_var c
+    add_int
     return
 }
 
@@ -496,7 +499,8 @@ function lambdas.lambdas_issue_e_method_resolution_different_types() -> int {
     container_len
     load_const 10
     mul_int
-    add_int_var _6
+    load_var _6
+    add_int
     return
 }
 
@@ -522,7 +526,8 @@ function lambdas.lambdas_issue_f_shadowing_capture_correct_binding() -> int {
     load_var _6
     load_const 10
     mul_int
-    add_int_var _8
+    load_var _8
+    add_int
     return
 }
 
@@ -569,7 +574,8 @@ function lambdas.lambdas_lambda_param_shadows_annotated_outer_local() -> int {
     load_const "hi"
     make_closure .<lambda(lambdas_lambda_param_shadows_annotated_outer_local, 0)>, 0
     call_indirect
-    add_int_const 7
+    load_const 7
+    add_int
     return
 }
 

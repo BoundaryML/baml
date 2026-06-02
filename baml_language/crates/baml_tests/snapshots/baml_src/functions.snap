@@ -79,22 +79,22 @@ function functions.$init_test_ns_functions_functions(registry: testing.TestColle
 }
 
 function functions.add(a: int, b: int) -> int {
-    add_int_var_var 1 2
+    load_var2 1 2
+    add_int
     return
 }
 
 function functions.call_twice(f: (int, int) -> int throws never, x: int, y: int) -> int {
-    load_var x
-    load_var y
+    load_var2 2 3
     load_var f
     call_indirect
     store_var _4
-    load_var x
-    load_var y
+    load_var2 2 3
     load_var f
     call_indirect
     store_var _5
-    add_int_var_var 4 5
+    load_var2 4 5
+    add_int
     return
 }
 
@@ -113,7 +113,9 @@ function functions.early_return(x: int) -> int {
     jump L1
 
   L0:
-    add_int_var_const 1 1
+    load_var x
+    load_const 5
+    add_int
     jump L2
 
   L1:
@@ -173,12 +175,17 @@ function functions.fib(n: int) -> int {
     jump L1
 
   L0:
-    sub_int_var_const 1 0
+    load_var n
+    load_const 1
+    sub_int
     call user.functions.fib
     store_var _3
-    sub_int_var_const 1 1
+    load_var n
+    load_const 2
+    sub_int
     call user.functions.fib
-    add_int_var _3
+    load_var _3
+    add_int
     jump L2
 
   L1:
@@ -247,7 +254,8 @@ function functions.two() -> int {
 
 function functions.two_plus_one() -> int {
     call user.functions.two
-    add_int_const 1
+    load_const 1
+    add_int
     return
 }
 

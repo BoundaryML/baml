@@ -1109,15 +1109,24 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     }
 
     fn emit_load_var(&mut self, slot: usize) {
-        if matches!(
-            self.bytecode.instructions.last(),
-            Some(Instruction::StoreVar(prev_slot)) if *prev_slot == slot
-        ) {
-            let last_idx = self.bytecode.instructions.len() - 1;
-            if last_idx >= self.current_block_start {
-                self.bytecode.instructions[last_idx] = Instruction::StoreVarLoadVar(slot);
-                self.set_var_operand(last_idx, slot);
-                return;
+        // Superinstruction peepholes (CPython-style, operand-movement only),
+        // confined to the current basic block so jump targets / block addresses
+        // are never affected:
+        //  - StoreVar(slot); LoadVar(slot)  -> StoreVarLoadVar(slot)   (store-keep)
+        //  - LoadVar(a);     LoadVar(slot)  -> LoadVar2(a, slot)       (load pair)
+        let n = self.bytecode.instructions.len();
+        if n > self.current_block_start {
+            match self.bytecode.instructions[n - 1] {
+                Instruction::StoreVar(prev) if prev == slot => {
+                    self.bytecode.instructions[n - 1] = Instruction::StoreVarLoadVar(slot);
+                    self.set_var_operand(n - 1, slot);
+                    return;
+                }
+                Instruction::LoadVar(a) => {
+                    self.bytecode.instructions[n - 1] = Instruction::LoadVar2(a, slot);
+                    return;
+                }
+                _ => {}
             }
         }
 
@@ -1125,181 +1134,21 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         self.set_var_operand(inst, slot);
     }
 
-    /// Emit a store to a (non-captured) local slot, folding a just-emitted
-    /// `LoadVar(src)` into a single `MoveLocal(dst, src)` — every `x = y`. Like
-    /// [`Self::emit_load_var`], rewrites the previous instruction in place and
-    /// only within the current basic block, so jump targets and block
-    /// addresses are unaffected.
+    /// Emit a store to a (non-captured) local slot, folding `StoreVar(a);
+    /// StoreVar(slot)` into `StoreVar2(a, slot)` (`STORE_FAST_STORE_FAST`).
+    /// In-place rewrite confined to the current basic block, like
+    /// [`Self::emit_load_var`].
     fn emit_store_var(&mut self, slot: usize) {
         let n = self.bytecode.instructions.len();
-        if n > 0 {
-            let last_idx = n - 1;
-            if last_idx >= self.current_block_start {
-                let fused = match self.bytecode.instructions[last_idx] {
-                    Instruction::LoadVar(src) => Some(Instruction::MoveLocal(slot, src)),
-                    // Triple-fold: a double-folded binop whose result is stored
-                    // straight into this local. The binop's only consumer is
-                    // this store (stack effect 0), so folding is sound.
-                    Instruction::AddIntVarVar(a, b) => {
-                        Some(Instruction::AddIntVarVarStore(a, b, slot))
-                    }
-                    Instruction::AddIntVarConst(a, c) => {
-                        Some(Instruction::AddIntVarConstStore(a, c, slot))
-                    }
-                    _ => None,
-                };
-                if let Some(fused) = fused {
-                    self.bytecode.instructions[last_idx] = fused;
-                    self.set_var_operand(last_idx, slot);
-                    return;
-                }
+        if n > self.current_block_start {
+            if let Instruction::StoreVar(a) = self.bytecode.instructions[n - 1] {
+                self.bytecode.instructions[n - 1] = Instruction::StoreVar2(a, slot);
+                self.set_var_operand(n - 1, slot);
+                return;
             }
         }
         let inst = self.emit(Instruction::StoreVar(slot));
         self.set_var_operand(inst, slot);
-    }
-
-    /// Emit a `PopJumpIfFalse` to `target`, fusing a just-emitted `CmpIntLt*`
-    /// into a single compare-and-branch op (no bool materialized). Registers
-    /// the pending jump on whichever instruction carries the branch offset.
-    /// Confined to the current basic block, like the other peepholes.
-    fn emit_pop_jump_if_false(&mut self, target: PendingJumpTarget) {
-        let n = self.bytecode.instructions.len();
-        if n > self.current_block_start {
-            let fused = match self.bytecode.instructions[n - 1] {
-                Instruction::CmpIntLtVarVar(a, b) => {
-                    Some(Instruction::CmpIntLtVarVarBrFalse(a, b, 0))
-                }
-                Instruction::CmpIntLtVarConst(a, c) => {
-                    Some(Instruction::CmpIntLtVarConstBrFalse(a, c, 0))
-                }
-                _ => None,
-            };
-            if let Some(fused) = fused {
-                self.bytecode.instructions[n - 1] = fused;
-                self.pending_jumps.push((n - 1, target));
-                return;
-            }
-        }
-        let idx = self.emit(Instruction::PopJumpIfFalse(0));
-        self.pending_jumps.push((idx, target));
-    }
-
-    /// If the just-emitted condition is a fusible `CmpIntLt*`, rewrite it in
-    /// place into an inverted compare-and-branch (branch to `target` when the
-    /// comparison is TRUE) and register the pending jump on it. Returns false
-    /// without emitting anything when the previous instruction is not a fusible
-    /// comparison, so the caller can fall back to the normal polarity. Confined
-    /// to the current basic block, like the other peepholes.
-    fn try_emit_inverted_cmp_branch(&mut self, target: PendingJumpTarget) -> bool {
-        let n = self.bytecode.instructions.len();
-        if n > self.current_block_start {
-            let fused = match self.bytecode.instructions[n - 1] {
-                Instruction::CmpIntLtVarVar(a, b) => {
-                    Some(Instruction::CmpIntLtVarVarBrTrue(a, b, 0))
-                }
-                Instruction::CmpIntLtVarConst(a, c) => {
-                    Some(Instruction::CmpIntLtVarConstBrTrue(a, c, 0))
-                }
-                _ => None,
-            };
-            if let Some(fused) = fused {
-                self.bytecode.instructions[n - 1] = fused;
-                self.pending_jumps.push((n - 1, target));
-                return true;
-            }
-        }
-        false
-    }
-
-    /// Drop the most recently emitted instruction, keeping `meta` and the
-    /// line table in sync. Used by the binop peephole when it folds two loads
-    /// into one fused op (so the trailing operand slot is removed). Only ever
-    /// called on instructions in the current block, so jump targets and block
-    /// addresses — which point at block entries — are unaffected.
-    fn truncate_last_instruction(&mut self) {
-        let new_len = self.bytecode.instructions.len() - 1;
-        self.bytecode.instructions.truncate(new_len);
-        self.bytecode.meta.truncate(new_len);
-        while matches!(self.bytecode.line_table.last(), Some(e) if e.pc >= new_len) {
-            self.bytecode.line_table.pop();
-        }
-    }
-
-    /// Emit a type-specialized integer binop, folding the just-emitted operand
-    /// loads into a single fused superinstruction. Folds the *right* operand
-    /// load in place (like [`Self::emit_load_var`]), and — when the *left*
-    /// operand was also a plain load — folds that too, yielding a
-    /// double-folded op that reads both operands directly. Folding is confined
-    /// to the current basic block (`>= current_block_start`), so no jump target
-    /// or block address is ever fused across.
-    fn emit_fused_binop(&mut self, specialized: Instruction) {
-        let n = self.bytecode.instructions.len();
-        // Need the right-operand load to be in the current block.
-        if n == 0 || n - 1 < self.current_block_start {
-            self.emit(specialized);
-            return;
-        }
-        // First fold: collapse `<right load>; <binop>` into one op.
-        let single = match (self.bytecode.instructions[n - 1], specialized) {
-            (Instruction::LoadVar(v), Instruction::AddInt) => Instruction::AddIntVar(v),
-            (Instruction::LoadConst(c), Instruction::AddInt) => Instruction::AddIntConst(c),
-            (Instruction::LoadVar(v), Instruction::SubInt) => Instruction::SubIntVar(v),
-            (Instruction::LoadConst(c), Instruction::SubInt) => Instruction::SubIntConst(c),
-            (Instruction::LoadVar(v), Instruction::CmpIntOp(CmpOp::Lt)) => {
-                Instruction::CmpIntLtVar(v)
-            }
-            (Instruction::LoadConst(c), Instruction::CmpIntOp(CmpOp::Lt)) => {
-                Instruction::CmpIntLtConst(c)
-            }
-            _ => {
-                self.emit(specialized);
-                return;
-            }
-        };
-
-        // Second fold: if the *left* operand was also a plain load in this
-        // block, collapse `<left load>; <single-fold op>` into a double-fold op
-        // that reads both operands directly (no stack pushes for operands).
-        if n >= 2 && n - 2 >= self.current_block_start {
-            let double = match (self.bytecode.instructions[n - 2], single) {
-                (Instruction::LoadVar(a), Instruction::AddIntVar(b)) => {
-                    Some(Instruction::AddIntVarVar(a, b))
-                }
-                (Instruction::LoadVar(a), Instruction::AddIntConst(c)) => {
-                    Some(Instruction::AddIntVarConst(a, c))
-                }
-                // Add commutes, so `const + var` becomes `var + const`.
-                (Instruction::LoadConst(c), Instruction::AddIntVar(b)) => {
-                    Some(Instruction::AddIntVarConst(b, c))
-                }
-                // Subtraction does NOT commute, so only fold a var/const left
-                // operand into the order-preserving forms (left - right).
-                (Instruction::LoadVar(a), Instruction::SubIntVar(b)) => {
-                    Some(Instruction::SubIntVarVar(a, b))
-                }
-                (Instruction::LoadVar(a), Instruction::SubIntConst(c)) => {
-                    Some(Instruction::SubIntVarConst(a, c))
-                }
-                (Instruction::LoadVar(a), Instruction::CmpIntLtVar(b)) => {
-                    Some(Instruction::CmpIntLtVarVar(a, b))
-                }
-                (Instruction::LoadVar(a), Instruction::CmpIntLtConst(c)) => {
-                    Some(Instruction::CmpIntLtVarConst(a, c))
-                }
-                _ => None,
-            };
-            if let Some(double) = double {
-                // Left load (n-2) becomes the double-fold op; the right load
-                // slot (n-1) is no longer needed.
-                self.bytecode.instructions[n - 2] = double;
-                self.truncate_last_instruction();
-                return;
-            }
-        }
-
-        // Only the single fold applies: rewrite the right load in place.
-        self.bytecode.instructions[n - 1] = single;
     }
 
     /// Set the resolved operand metadata for an already-emitted instruction.
@@ -1888,7 +1737,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             if let Some(specialized) = self.try_specialize_binary_op(*op, left, right) {
                 self.emit_operand_pull(left);
                 self.emit_operand_pull(right);
-                self.emit_fused_binop(specialized);
+                self.emit(specialized);
                 return;
             }
         }
@@ -2079,29 +1928,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     self.emit_jump_unless_fallthrough(*then_block);
                 } else {
                     self.emit_operand_pull(condition);
-                    // Apply jump threading to resolve through empty blocks.
-                    let resolved_then = self.resolve_pending_target(*then_block);
+                    // PopJumpIfFalse to else_block (pops condition from stack)
+                    // Apply jump threading to resolve through empty blocks
                     let resolved_else = self.resolve_pending_target(*else_block);
-                    // Pick the branch polarity whose fall-through successor is
-                    // the next emitted block, so the unconditional jump to the
-                    // other successor is elided. When the else block is the
-                    // fall-through (and the then block is not), invert: branch
-                    // to `then` when the condition is TRUE.
-                    let is_next = |t: PendingJumpTarget| matches!(t, PendingJumpTarget::Block(b) if self.next_block == Some(b));
-                    if is_next(resolved_else)
-                        && !is_next(resolved_then)
-                        && self.try_emit_inverted_cmp_branch(resolved_then)
-                    {
-                        // Inverted compare-and-branch emitted (branch to `then`
-                        // when true); fall through to else_block (jump elided).
-                        self.emit_jump_unless_fallthrough(*else_block);
-                    } else {
-                        // PopJumpIfFalse to else_block (pops condition), fusing a
-                        // preceding CmpIntLt* into a compare-and-branch.
-                        self.emit_pop_jump_if_false(resolved_else);
-                        // Jump to then_block (may be elided if it's next).
-                        self.emit_jump_unless_fallthrough(*then_block);
-                    }
+                    let else_jump = self.emit(Instruction::PopJumpIfFalse(0));
+                    self.pending_jumps.push((else_jump, resolved_else));
+                    // Jump to then_block (may be elided if it's next)
+                    self.emit_jump_unless_fallthrough(*then_block);
                 }
             }
 
@@ -2360,22 +2193,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
             Instruction::JumpIfFalse(_) => {
                 self.bytecode.instructions[instruction_idx] = Instruction::JumpIfFalse(offset);
-            }
-            Instruction::CmpIntLtVarVarBrFalse(a, b, _) => {
-                self.bytecode.instructions[instruction_idx] =
-                    Instruction::CmpIntLtVarVarBrFalse(a, b, offset);
-            }
-            Instruction::CmpIntLtVarConstBrFalse(a, c, _) => {
-                self.bytecode.instructions[instruction_idx] =
-                    Instruction::CmpIntLtVarConstBrFalse(a, c, offset);
-            }
-            Instruction::CmpIntLtVarVarBrTrue(a, b, _) => {
-                self.bytecode.instructions[instruction_idx] =
-                    Instruction::CmpIntLtVarVarBrTrue(a, b, offset);
-            }
-            Instruction::CmpIntLtVarConstBrTrue(a, c, _) => {
-                self.bytecode.instructions[instruction_idx] =
-                    Instruction::CmpIntLtVarConstBrTrue(a, c, offset);
             }
             _ => panic!("expected jump instruction at index {instruction_idx}"),
         }

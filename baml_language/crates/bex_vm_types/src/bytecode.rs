@@ -720,81 +720,16 @@ pub enum Instruction {
     /// after the engine processes the event.
     SendEvent,
 
-    // ── Fused superinstructions (binop with right operand folded in) ──────
-    //
-    // The emit-time binop peephole folds the instruction that produced a
-    // binop's *right* operand into the binop itself, so a `LoadVar; AddInt`
-    // pair dispatches as a single op. Pure replace-in-place at emit time
-    // (like `StoreVarLoadVar`), so jump targets and block addresses are
-    // unaffected. Operand is the folded load's slot (Var) or constant pool
-    // index (Const).
-    /// Fused `LoadVar(i); AddInt`: pop left int, push `left + local[i]`.
-    AddIntVar(usize),
-    /// Fused `LoadConst(i); AddInt`: pop left int, push `left + const[i]`.
-    AddIntConst(usize),
-    /// Fused `LoadVar(i); CmpIntOp(Lt)`: pop left int, push `left < local[i]`.
-    CmpIntLtVar(usize),
-    /// Fused `LoadConst(i); CmpIntOp(Lt)`: pop left int, push `left < const[i]`.
-    CmpIntLtConst(usize),
-
-    // ── Double-folded superinstructions (both operands folded; no stack pop) ──
-    // Produced when the binop's *left* operand was also a plain load. Reads
-    // both operands directly from local slots / the constant pool and pushes
-    // the result — zero stack pops. `(a, b)` are local slots or constant pool
-    // indices per the variant name.
-    /// `local[a] + local[b]`.
-    AddIntVarVar(usize, usize),
-    /// `local[a] + const[c]` (add is commutative, so also covers const+var).
-    AddIntVarConst(usize, usize),
-    /// `local[a] < local[b]`.
-    CmpIntLtVarVar(usize, usize),
-    /// `local[a] < const[c]`.
-    CmpIntLtVarConst(usize, usize),
-
-    /// Fused `LoadVar(src); StoreVar(dst)` — copy local `src` into local `dst`
-    /// without round-tripping through the eval stack. `(dst, src)`. Stores via
-    /// the normal store path, so cell-wrapped destinations stay correct.
-    MoveLocal(usize, usize),
-
-    // ── Triple-folded: double-folded binop whose result is stored directly ──
-    // Produced when a double-folded binop is immediately followed by a store
-    // to a (non-captured) local: `local[dst] = local[a] OP <rhs>`. Reads both
-    // operands directly and stores the result via the normal store path; the
-    // result never touches the eval stack. `(a, b_or_c, dst)`.
-    /// `local[dst] = local[a] + local[b]`.
-    AddIntVarVarStore(usize, usize, usize),
-    /// `local[dst] = local[a] + const[c]`.
-    AddIntVarConstStore(usize, usize, usize),
-
-    // ── Compare-and-branch (fused loop condition) ──────────────────────────
-    // Fuses `CmpIntLt*; PopJumpIfFalse(target)`: evaluates the comparison
-    // directly from operands (no bool pushed) and branches by `offset` (an
-    // instruction-relative jump offset, like `Jump`) when the comparison is
-    // false. `(a, b_or_c, offset)`.
-    /// Branch by `offset` if NOT `local[a] < local[b]`.
-    CmpIntLtVarVarBrFalse(usize, usize, isize),
-    /// Branch by `offset` if NOT `local[a] < const[c]`.
-    CmpIntLtVarConstBrFalse(usize, usize, isize),
-
-    // ── Compare-and-branch, inverted polarity (branch when TRUE) ───────────
-    // Emitted instead of `…BrFalse + Jump(then)` when the else successor is the
-    // fall-through block, so the unconditional jump to the then block is
-    // eliminated. `(a, b_or_c, offset)`.
-    /// Branch by `offset` if `local[a] < local[b]`.
-    CmpIntLtVarVarBrTrue(usize, usize, isize),
-    /// Branch by `offset` if `local[a] < const[c]`.
-    CmpIntLtVarConstBrTrue(usize, usize, isize),
-
-    // ── Fused integer subtraction (mirrors the AddInt family; not commutative,
-    // so operand order is preserved: `left - right`). ─────────────────────────
-    /// Fused `LoadVar(i); SubInt`: pop left int, push `left - local[i]`.
-    SubIntVar(usize),
-    /// Fused `LoadConst(i); SubInt`: pop left int, push `left - const[i]`.
-    SubIntConst(usize),
-    /// `local[a] - local[b]`.
-    SubIntVarVar(usize, usize),
-    /// `local[a] - const[c]`.
-    SubIntVarConst(usize, usize),
+    // ── Operand-movement superinstructions (CPython-style) ────────────────
+    // Combine two adjacent local-movement ops into one dispatch. Pure
+    // replace-in-place at emit time (like `StoreVarLoadVar`), confined to the
+    // current basic block, so jump targets and block addresses are unaffected.
+    /// Fused `LoadVar(a); LoadVar(b)` — push `local[a]`, then `local[b]`.
+    /// (`CPython` `LOAD_FAST_LOAD_FAST`.)
+    LoadVar2(usize, usize),
+    /// Fused `StoreVar(a); StoreVar(b)` — pop into `local[a]`, then `local[b]`.
+    /// (`CPython` `STORE_FAST_STORE_FAST`.)
+    StoreVar2(usize, usize),
 }
 
 /// Compact bytecode opcodes.
@@ -938,34 +873,9 @@ pub enum OpCode {
     JumpTable,   // u32 table_idx + i32 default_offset
     MakeClosure, // u32 object_idx (capture_count is popped from the stack)
 
-    // ── Fused superinstructions: single u32 operand (5 bytes) ──
-    AddIntVar,
-    AddIntConst,
-    CmpIntLtVar,
-    CmpIntLtConst,
-
-    // ── Double-folded superinstructions: two u32 operands (9 bytes) ──
-    AddIntVarVar,
-    AddIntVarConst,
-    CmpIntLtVarVar,
-    CmpIntLtVarConst,
-    MoveLocal,
-
-    // ── Triple-folded store binops: three u32 operands (13 bytes) ──
-    AddIntVarVarStore,
-    AddIntVarConstStore,
-
-    // ── Compare-and-branch: u32 + u32 + i32 offset (13 bytes) ──
-    CmpIntLtVarVarBrFalse,
-    CmpIntLtVarConstBrFalse,
-    CmpIntLtVarVarBrTrue,
-    CmpIntLtVarConstBrTrue,
-
-    // ── Fused integer subtraction ──
-    SubIntVar,
-    SubIntConst,
-    SubIntVarVar,
-    SubIntVarConst,
+    // ── Operand-movement superinstructions: two u32 operands (9 bytes) ──
+    LoadVar2,
+    StoreVar2,
 }
 
 impl OpCode {
@@ -1083,13 +993,7 @@ impl OpCode {
             | Self::CaptureRef
             | Self::Jump
             | Self::PopJumpIfFalse
-            | Self::JumpIfFalse
-            | Self::AddIntVar
-            | Self::AddIntConst
-            | Self::CmpIntLtVar
-            | Self::CmpIntLtConst
-            | Self::SubIntVar
-            | Self::SubIntConst => 5,
+            | Self::JumpIfFalse => 5,
 
             // 7-byte: opcode + u32 + u16 (type-arg threading)
             Self::AllocInstance | Self::Call => 7,
@@ -1100,24 +1004,8 @@ impl OpCode {
             // 9-byte: opcode + u32 + i32
             Self::JumpTable => 9,
 
-            // 9-byte: opcode + u32 + u32 (double-folded fused binops, move-local)
-            Self::AddIntVarVar
-            | Self::AddIntVarConst
-            | Self::CmpIntLtVarVar
-            | Self::CmpIntLtVarConst
-            | Self::MoveLocal => 9,
-
-            // 9-byte: opcode + u32 + u32 (double-folded subtraction)
-            Self::SubIntVarVar | Self::SubIntVarConst => 9,
-
-            // 13-byte: opcode + u32 + u32 + u32 (triple-folded store binops)
-            Self::AddIntVarVarStore | Self::AddIntVarConstStore => 13,
-
-            // 13-byte: opcode + u32 + u32 + i32 (compare-and-branch)
-            Self::CmpIntLtVarVarBrFalse
-            | Self::CmpIntLtVarConstBrFalse
-            | Self::CmpIntLtVarVarBrTrue
-            | Self::CmpIntLtVarConstBrTrue => 13,
+            // 9-byte: opcode + u32 + u32 (operand-movement superinstructions)
+            Self::LoadVar2 | Self::StoreVar2 => 9,
         }
     }
 }
@@ -1238,25 +1126,8 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::JumpIfFalse as u8 => Ok(Self::JumpIfFalse),
             x if x == Self::JumpTable as u8 => Ok(Self::JumpTable),
             x if x == Self::MakeClosure as u8 => Ok(Self::MakeClosure),
-            x if x == Self::AddIntVar as u8 => Ok(Self::AddIntVar),
-            x if x == Self::AddIntConst as u8 => Ok(Self::AddIntConst),
-            x if x == Self::CmpIntLtVar as u8 => Ok(Self::CmpIntLtVar),
-            x if x == Self::CmpIntLtConst as u8 => Ok(Self::CmpIntLtConst),
-            x if x == Self::AddIntVarVar as u8 => Ok(Self::AddIntVarVar),
-            x if x == Self::AddIntVarConst as u8 => Ok(Self::AddIntVarConst),
-            x if x == Self::CmpIntLtVarVar as u8 => Ok(Self::CmpIntLtVarVar),
-            x if x == Self::CmpIntLtVarConst as u8 => Ok(Self::CmpIntLtVarConst),
-            x if x == Self::MoveLocal as u8 => Ok(Self::MoveLocal),
-            x if x == Self::AddIntVarVarStore as u8 => Ok(Self::AddIntVarVarStore),
-            x if x == Self::AddIntVarConstStore as u8 => Ok(Self::AddIntVarConstStore),
-            x if x == Self::CmpIntLtVarVarBrFalse as u8 => Ok(Self::CmpIntLtVarVarBrFalse),
-            x if x == Self::CmpIntLtVarConstBrFalse as u8 => Ok(Self::CmpIntLtVarConstBrFalse),
-            x if x == Self::CmpIntLtVarVarBrTrue as u8 => Ok(Self::CmpIntLtVarVarBrTrue),
-            x if x == Self::CmpIntLtVarConstBrTrue as u8 => Ok(Self::CmpIntLtVarConstBrTrue),
-            x if x == Self::SubIntVar as u8 => Ok(Self::SubIntVar),
-            x if x == Self::SubIntConst as u8 => Ok(Self::SubIntConst),
-            x if x == Self::SubIntVarVar as u8 => Ok(Self::SubIntVarVar),
-            x if x == Self::SubIntVarConst as u8 => Ok(Self::SubIntVarConst),
+            x if x == Self::LoadVar2 as u8 => Ok(Self::LoadVar2),
+            x if x == Self::StoreVar2 as u8 => Ok(Self::StoreVar2),
             _ => Err(byte),
         }
     }
@@ -1376,25 +1247,8 @@ impl std::fmt::Display for OpCode {
             Self::JumpIfFalse => "JUMP_IF_FALSE",
             Self::JumpTable => "JUMP_TABLE",
             Self::MakeClosure => "MAKE_CLOSURE",
-            Self::AddIntVar => "ADD_INT_VAR",
-            Self::AddIntConst => "ADD_INT_CONST",
-            Self::CmpIntLtVar => "CMP_INT_LT_VAR",
-            Self::CmpIntLtConst => "CMP_INT_LT_CONST",
-            Self::AddIntVarVar => "ADD_INT_VAR_VAR",
-            Self::AddIntVarConst => "ADD_INT_VAR_CONST",
-            Self::CmpIntLtVarVar => "CMP_INT_LT_VAR_VAR",
-            Self::CmpIntLtVarConst => "CMP_INT_LT_VAR_CONST",
-            Self::MoveLocal => "MOVE_LOCAL",
-            Self::AddIntVarVarStore => "ADD_INT_VAR_VAR_STORE",
-            Self::AddIntVarConstStore => "ADD_INT_VAR_CONST_STORE",
-            Self::CmpIntLtVarVarBrFalse => "CMP_INT_LT_VAR_VAR_BR_FALSE",
-            Self::CmpIntLtVarConstBrFalse => "CMP_INT_LT_VAR_CONST_BR_FALSE",
-            Self::CmpIntLtVarVarBrTrue => "CMP_INT_LT_VAR_VAR_BR_TRUE",
-            Self::CmpIntLtVarConstBrTrue => "CMP_INT_LT_VAR_CONST_BR_TRUE",
-            Self::SubIntVar => "SUB_INT_VAR",
-            Self::SubIntConst => "SUB_INT_CONST",
-            Self::SubIntVarVar => "SUB_INT_VAR_VAR",
-            Self::SubIntVarConst => "SUB_INT_VAR_CONST",
+            Self::LoadVar2 => "LOAD_VAR2",
+            Self::StoreVar2 => "STORE_VAR2",
         };
         f.write_str(name)
     }
@@ -1523,37 +1377,8 @@ impl std::fmt::Display for Instruction {
             Instruction::BinOp(op) => write!(f, "BIN_OP {op}"),
             Instruction::CmpOp(op) => write!(f, "CMP_OP {op}"),
             Instruction::AddInt => f.write_str("ADD_INT"),
-            Instruction::AddIntVar(i) => write!(f, "ADD_INT_VAR {i}"),
-            Instruction::AddIntConst(i) => write!(f, "ADD_INT_CONST {i}"),
-            Instruction::CmpIntLtVar(i) => write!(f, "CMP_INT_LT_VAR {i}"),
-            Instruction::CmpIntLtConst(i) => write!(f, "CMP_INT_LT_CONST {i}"),
-            Instruction::AddIntVarVar(a, b) => write!(f, "ADD_INT_VAR_VAR {a} {b}"),
-            Instruction::AddIntVarConst(a, c) => write!(f, "ADD_INT_VAR_CONST {a} {c}"),
-            Instruction::CmpIntLtVarVar(a, b) => write!(f, "CMP_INT_LT_VAR_VAR {a} {b}"),
-            Instruction::CmpIntLtVarConst(a, c) => write!(f, "CMP_INT_LT_VAR_CONST {a} {c}"),
-            Instruction::MoveLocal(dst, src) => write!(f, "MOVE_LOCAL {dst} {src}"),
-            Instruction::AddIntVarVarStore(a, b, dst) => {
-                write!(f, "ADD_INT_VAR_VAR_STORE {a} {b} {dst}")
-            }
-            Instruction::AddIntVarConstStore(a, c, dst) => {
-                write!(f, "ADD_INT_VAR_CONST_STORE {a} {c} {dst}")
-            }
-            Instruction::CmpIntLtVarVarBrFalse(a, b, o) => {
-                write!(f, "CMP_INT_LT_VAR_VAR_BR_FALSE {a} {b} {o:+}")
-            }
-            Instruction::CmpIntLtVarConstBrFalse(a, c, o) => {
-                write!(f, "CMP_INT_LT_VAR_CONST_BR_FALSE {a} {c} {o:+}")
-            }
-            Instruction::CmpIntLtVarVarBrTrue(a, b, o) => {
-                write!(f, "CMP_INT_LT_VAR_VAR_BR_TRUE {a} {b} {o:+}")
-            }
-            Instruction::CmpIntLtVarConstBrTrue(a, c, o) => {
-                write!(f, "CMP_INT_LT_VAR_CONST_BR_TRUE {a} {c} {o:+}")
-            }
-            Instruction::SubIntVar(i) => write!(f, "SUB_INT_VAR {i}"),
-            Instruction::SubIntConst(i) => write!(f, "SUB_INT_CONST {i}"),
-            Instruction::SubIntVarVar(a, b) => write!(f, "SUB_INT_VAR_VAR {a} {b}"),
-            Instruction::SubIntVarConst(a, c) => write!(f, "SUB_INT_VAR_CONST {a} {c}"),
+            Instruction::LoadVar2(a, b) => write!(f, "LOAD_VAR2 {a} {b}"),
+            Instruction::StoreVar2(a, b) => write!(f, "STORE_VAR2 {a} {b}"),
             Instruction::SubInt => f.write_str("SUB_INT"),
             Instruction::MulInt => f.write_str("MUL_INT"),
             Instruction::DivInt => f.write_str("DIV_INT"),
@@ -2081,45 +1906,19 @@ impl Bytecode {
                 | Instruction::StoreDeref(v)
                 | Instruction::LoadCapture(v)
                 | Instruction::StoreCapture(v)
-                | Instruction::CaptureRef(v)
-                | Instruction::AddIntVar(v)
-                | Instruction::AddIntConst(v)
-                | Instruction::CmpIntLtVar(v)
-                | Instruction::CmpIntLtConst(v)
-                | Instruction::SubIntVar(v)
-                | Instruction::SubIntConst(v) => {
+                | Instruction::CaptureRef(v) => {
                     code.extend_from_slice(
                         &u32::try_from(*v).expect("operand fits u32").to_le_bytes(),
                     );
                 }
 
-                // ── Two usize operands → u32 + u32 (double-folded binops) ──
-                Instruction::AddIntVarVar(a, b)
-                | Instruction::AddIntVarConst(a, b)
-                | Instruction::CmpIntLtVarVar(a, b)
-                | Instruction::CmpIntLtVarConst(a, b)
-                | Instruction::SubIntVarVar(a, b)
-                | Instruction::SubIntVarConst(a, b)
-                | Instruction::MoveLocal(a, b) => {
+                // ── Two usize operands → u32 + u32 (movement superinstructions) ──
+                Instruction::LoadVar2(a, b) | Instruction::StoreVar2(a, b) => {
                     code.extend_from_slice(
                         &u32::try_from(*a).expect("operand fits u32").to_le_bytes(),
                     );
                     code.extend_from_slice(
                         &u32::try_from(*b).expect("operand fits u32").to_le_bytes(),
-                    );
-                }
-
-                // ── Three usize operands → u32 + u32 + u32 (store binops) ──
-                Instruction::AddIntVarVarStore(a, b, dst)
-                | Instruction::AddIntVarConstStore(a, b, dst) => {
-                    code.extend_from_slice(
-                        &u32::try_from(*a).expect("operand fits u32").to_le_bytes(),
-                    );
-                    code.extend_from_slice(
-                        &u32::try_from(*b).expect("operand fits u32").to_le_bytes(),
-                    );
-                    code.extend_from_slice(
-                        &u32::try_from(*dst).expect("operand fits u32").to_le_bytes(),
                     );
                 }
 
@@ -2180,26 +1979,6 @@ impl Bytecode {
                     let target_byte = index_to_offset[target_instr];
                     // In compact bytecode, offset is relative to the end of
                     // this instruction (after all operand bytes are read).
-                    let instr_end = index_to_offset[i] + op.encoded_size();
-                    let byte_delta = target_byte as i64 - instr_end as i64;
-                    code.extend_from_slice(&(byte_delta as i32).to_le_bytes());
-                }
-
-                // ── Compare-and-branch: u32 a + u32 b + i32 jump offset ──────
-                Instruction::CmpIntLtVarVarBrFalse(a, b, offset)
-                | Instruction::CmpIntLtVarConstBrFalse(a, b, offset)
-                | Instruction::CmpIntLtVarVarBrTrue(a, b, offset)
-                | Instruction::CmpIntLtVarConstBrTrue(a, b, offset) => {
-                    code.extend_from_slice(
-                        &u32::try_from(*a).expect("operand fits u32").to_le_bytes(),
-                    );
-                    code.extend_from_slice(
-                        &u32::try_from(*b).expect("operand fits u32").to_le_bytes(),
-                    );
-                    // Same instruction-relative -> byte-relative-to-end
-                    // translation as the plain jumps above.
-                    let target_instr = (i as isize + offset) as usize;
-                    let target_byte = index_to_offset[target_instr];
                     let instr_end = index_to_offset[i] + op.encoded_size();
                     let byte_delta = target_byte as i64 - instr_end as i64;
                     code.extend_from_slice(&(byte_delta as i32).to_le_bytes());
@@ -2419,26 +2198,9 @@ impl Bytecode {
             Instruction::StoreCapture(_) => OpCode::StoreCapture,
             Instruction::CaptureRef(_) => OpCode::CaptureRef,
 
-            // Fused superinstructions
-            Instruction::AddIntVar(_) => OpCode::AddIntVar,
-            Instruction::AddIntConst(_) => OpCode::AddIntConst,
-            Instruction::CmpIntLtVar(_) => OpCode::CmpIntLtVar,
-            Instruction::CmpIntLtConst(_) => OpCode::CmpIntLtConst,
-            Instruction::AddIntVarVar(..) => OpCode::AddIntVarVar,
-            Instruction::AddIntVarConst(..) => OpCode::AddIntVarConst,
-            Instruction::CmpIntLtVarVar(..) => OpCode::CmpIntLtVarVar,
-            Instruction::CmpIntLtVarConst(..) => OpCode::CmpIntLtVarConst,
-            Instruction::MoveLocal(..) => OpCode::MoveLocal,
-            Instruction::AddIntVarVarStore(..) => OpCode::AddIntVarVarStore,
-            Instruction::AddIntVarConstStore(..) => OpCode::AddIntVarConstStore,
-            Instruction::CmpIntLtVarVarBrFalse(..) => OpCode::CmpIntLtVarVarBrFalse,
-            Instruction::CmpIntLtVarConstBrFalse(..) => OpCode::CmpIntLtVarConstBrFalse,
-            Instruction::CmpIntLtVarVarBrTrue(..) => OpCode::CmpIntLtVarVarBrTrue,
-            Instruction::CmpIntLtVarConstBrTrue(..) => OpCode::CmpIntLtVarConstBrTrue,
-            Instruction::SubIntVar(_) => OpCode::SubIntVar,
-            Instruction::SubIntConst(_) => OpCode::SubIntConst,
-            Instruction::SubIntVarVar(..) => OpCode::SubIntVarVar,
-            Instruction::SubIntVarConst(..) => OpCode::SubIntVarConst,
+            // Operand-movement superinstructions
+            Instruction::LoadVar2(..) => OpCode::LoadVar2,
+            Instruction::StoreVar2(..) => OpCode::StoreVar2,
 
             // Specialized arithmetic (dedicated opcodes, skip type dispatch)
             Instruction::AddInt => OpCode::AddInt,

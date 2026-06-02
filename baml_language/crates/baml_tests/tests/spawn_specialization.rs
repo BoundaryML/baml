@@ -35,7 +35,8 @@ async fn non_spawn_captured_int_arithmetic_keeps_specialized_op() {
         call_indirect
         pop 1
         load_deref ?1
-        add_int_const 1
+        load_const 1
+        add_int
         return
     }
     ");
