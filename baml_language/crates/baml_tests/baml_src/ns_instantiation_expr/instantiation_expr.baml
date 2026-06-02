@@ -106,3 +106,21 @@ function forward_reflect<T>() -> string {
 test "param_dependent_reflect_resolves_T" {
     assert.is_true(baml.deep_equals(forward_reflect<int>(), "int"))
 }
+
+// Multi-segment qualified instantiation value: a generic function in a nested
+// namespace, referenced by its fully-qualified name (`name.space.fun<string>`).
+function qualified_value_fn() -> string {
+    let f = user.instantiation_expr.qualified.q_describe<string>;
+    f()
+}
+function qualified_value_id_fn() -> int {
+    let g = user.instantiation_expr.qualified.q_id<int>;
+    g(7)
+}
+
+test "qualified_namespaced_value_reflects" {
+    assert.is_true(baml.deep_equals(qualified_value_fn(), "string"))
+}
+test "qualified_namespaced_value_runs" {
+    assert.is_true(baml.deep_equals(qualified_value_id_fn(), 7))
+}
