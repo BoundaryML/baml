@@ -19,8 +19,8 @@ use std::{
 };
 
 use baml_type::Ty;
+use borsh::{BorshDeserialize, BorshSerialize};
 use indexmap::IndexMap;
-use serde::{Deserialize, Serialize};
 pub use tokio_util::sync::CancellationToken;
 
 use crate::{
@@ -48,7 +48,7 @@ pub mod type_tags {
 ///
 /// Note: At compile time, globals use `ConstValue` (with `ObjectIndex` for object refs).
 /// At load time (`BexEngine::new`), these are converted to `Value` (with `HeapPtr`).
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, BorshSerialize, BorshDeserialize)]
 pub struct Program {
     /// Object pool containing functions, classes, strings, etc.
     pub objects: ObjectPool,
@@ -94,12 +94,23 @@ pub struct Program {
     /// Only recursive aliases are stored (non-recursive ones are expanded inline).
     /// Keyed by [`baml_type::TypeName`] for consistent identity with `Ty::TypeAlias`.
     pub recursive_type_alias_defs: IndexMap<baml_type::TypeName, Ty>,
+
+    /// Per-program interface implementation registry (BEP-044).
+    ///
+    /// Maps each interface's `TypeName` to the list of class `TypeName`s that
+    /// nominally implement it (transitively through `extends`). Used by the
+    /// runtime reflection methods `type.implementors()`, `type.implements()`,
+    /// and `type.implemented_by()`.
+    ///
+    /// Empty for programs without interfaces.
+    pub interface_implementors:
+        IndexMap<baml_type::TypeName, Vec<(baml_type::TypeName, Vec<baml_type::Ty>)>>,
 }
 
 /// Metadata for building a client tree at runtime.
 ///
 /// Stored on `Program` during compilation, transferred to `SysOpContext` during engine construction.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, BorshSerialize, BorshDeserialize)]
 pub struct ClientBuildMeta {
     /// Provider type mapped to client type enum.
     pub client_type: ClientBuildType,
@@ -112,7 +123,7 @@ pub struct ClientBuildMeta {
 }
 
 /// Client type for build metadata (mirrors runtime `LlmClientType`).
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, BorshSerialize, BorshDeserialize)]
 pub enum ClientBuildType {
     #[default]
     Primitive,
@@ -121,7 +132,7 @@ pub enum ClientBuildType {
 }
 
 /// Retry policy metadata stored at compile time.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
 pub struct RetryPolicyMeta {
     pub max_retries: i64,
     pub initial_delay_ms: i64,
@@ -162,7 +173,7 @@ impl Program {
 /// reference. Each `OpErrorKind` variant maps to exactly one category via
 /// `OpErrorKind::category()`. Rich detail stays in `OpErrorKind`; this enum
 /// is purely for contract enforcement and compiler analysis.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub enum SysOpErrorCategory {
     Io,
     Timeout,
@@ -197,7 +208,7 @@ impl std::fmt::Display for SysOpErrorCategory {
 }
 
 /// Contract-level panic categories for `sys_op` panic contracts.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub enum SysOpPanicCategory {
     HostPanic,
 }
@@ -284,49 +295,38 @@ unsafe impl Send for FunctionKind {}
 #[allow(unsafe_code)]
 unsafe impl Sync for FunctionKind {}
 
-impl Serialize for FunctionKind {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        // Native pointers are runtime-only; serialize as NativeUnresolved.
-        match self {
-            Self::Native(_) => Self::NativeUnresolved.serialize(serializer),
-            _ => {
-                #[derive(Serialize)]
-                enum FunctionKindRef<'a> {
-                    Bytecode,
-                    SysOp(&'a SysOp),
-                    NativeUnresolved,
-                }
-                match self {
-                    Self::Bytecode => FunctionKindRef::Bytecode.serialize(serializer),
-                    Self::SysOp(op) => FunctionKindRef::SysOp(op).serialize(serializer),
-                    Self::NativeUnresolved => {
-                        FunctionKindRef::NativeUnresolved.serialize(serializer)
-                    }
-                    Self::Native(_) => unreachable!(),
-                }
-            }
-        }
+// Borsh proxy mirroring the previous serde-side shape — `Native(*const ())`
+// is runtime-only and must collapse to `NativeUnresolved` on the wire.
+#[derive(BorshSerialize, BorshDeserialize)]
+enum FunctionKindWire {
+    Bytecode,
+    SysOp(SysOp),
+    NativeUnresolved,
+}
+
+impl BorshSerialize for FunctionKind {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        let wire = match self {
+            Self::Bytecode => FunctionKindWire::Bytecode,
+            Self::SysOp(op) => FunctionKindWire::SysOp(*op),
+            Self::NativeUnresolved | Self::Native(_) => FunctionKindWire::NativeUnresolved,
+        };
+        wire.serialize(writer)
     }
 }
 
-impl<'de> Deserialize<'de> for FunctionKind {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        #[derive(Deserialize)]
-        enum FunctionKindDe {
-            Bytecode,
-            SysOp(SysOp),
-            NativeUnresolved,
-        }
-        match FunctionKindDe::deserialize(deserializer)? {
-            FunctionKindDe::Bytecode => Ok(Self::Bytecode),
-            FunctionKindDe::SysOp(op) => Ok(Self::SysOp(op)),
-            FunctionKindDe::NativeUnresolved => Ok(Self::NativeUnresolved),
-        }
+impl BorshDeserialize for FunctionKind {
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        Ok(match FunctionKindWire::deserialize_reader(reader)? {
+            FunctionKindWire::Bytecode => Self::Bytecode,
+            FunctionKindWire::SysOp(op) => Self::SysOp(op),
+            FunctionKindWire::NativeUnresolved => Self::NativeUnresolved,
+        })
     }
 }
 
 /// LLM-specific metadata for a function.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub enum FunctionMeta {
     Llm {
         prompt_template: String,
@@ -334,7 +334,7 @@ pub enum FunctionMeta {
     },
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub enum FunctionOrigin {
     UserDefined,
     Companion,
@@ -359,7 +359,7 @@ impl FunctionOrigin {
 }
 
 /// Represents any Baml function.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Function {
     /// Function name.
     pub name: String,
@@ -476,7 +476,7 @@ impl Function {
 }
 
 /// A field within a runtime class, carrying type and schema metadata.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct ClassField {
     pub name: String,
     /// Resolved field type with `TypeVar`s erased to `Ty::Void`.
@@ -498,7 +498,7 @@ pub struct ClassField {
 }
 
 /// Runtime class representation.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Class {
     /// Type identity: carries short name, module path, and display name.
     /// Use `name.display_name` for the display string (e.g. "baml.llm.OrchestrationStep" or "Person").
@@ -528,7 +528,7 @@ impl std::fmt::Display for Class {
 }
 
 /// Runtime instance representation.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Instance {
     /// Pointer to the class object in the heap.
     pub class: HeapPtr,
@@ -554,8 +554,27 @@ impl Instance {
     }
 
     #[inline]
+    pub fn field_len(&self) -> usize {
+        self.fields.len()
+    }
+
+    #[inline]
+    pub fn try_load_field(&self, idx: usize) -> Option<Value> {
+        self.fields.get(idx).map(AtomicValueSlot::load)
+    }
+
+    #[inline]
     pub fn load_field(&self, idx: usize) -> Value {
         self.fields[idx].load()
+    }
+
+    #[inline]
+    pub fn try_store_field(&self, idx: usize, value: Value) -> Result<(), usize> {
+        let Some(field) = self.fields.get(idx) else {
+            return Err(self.fields.len());
+        };
+        field.store(value);
+        Ok(())
     }
 
     #[inline]
@@ -575,7 +594,7 @@ impl std::fmt::Display for Instance {
 }
 
 /// A variant within a runtime enum, carrying schema metadata.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct EnumVariant {
     pub name: String,
     pub description: Option<String>,
@@ -584,7 +603,7 @@ pub struct EnumVariant {
 }
 
 /// Runtime enum representation.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Enum {
     /// Type identity: carries short name, module path, and display name.
     /// Use `name.display_name` for the display string.
@@ -610,7 +629,7 @@ impl std::fmt::Display for Enum {
 }
 
 /// Same as [`Instance`] but for enums.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Variant {
     /// Pointer to the enum object in the heap.
     pub enm: HeapPtr,
@@ -1009,15 +1028,15 @@ impl std::fmt::Debug for AtomicValueSlot {
     }
 }
 
-impl Serialize for AtomicValueSlot {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.load().serialize(serializer)
+impl BorshSerialize for AtomicValueSlot {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        self.load().serialize(writer)
     }
 }
 
-impl<'de> Deserialize<'de> for AtomicValueSlot {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        Value::deserialize(deserializer).map(Self::new)
+impl BorshDeserialize for AtomicValueSlot {
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        Value::deserialize_reader(reader).map(Self::new)
     }
 }
 
@@ -1051,8 +1070,8 @@ impl std::fmt::Display for Value {
 /// encoding. `Object` round-trip will fail because `HeapPtr` itself
 /// refuses to serialize — that matches the prior behavior (heap
 /// pointers are runtime-only).
-#[derive(Serialize, Deserialize)]
-enum ValueSerde {
+#[derive(BorshSerialize, BorshDeserialize)]
+enum ValueWire {
     OmittedArg,
     Null,
     Int(i64),
@@ -1060,37 +1079,38 @@ enum ValueSerde {
     Object(HeapPtr),
 }
 
-impl Serialize for Value {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+impl BorshSerialize for Value {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         let proxy = match self.kind() {
-            ValueKind::Null => ValueSerde::Null,
-            ValueKind::OmittedArg => ValueSerde::OmittedArg,
-            ValueKind::Int(i) => ValueSerde::Int(i),
-            ValueKind::Bool(b) => ValueSerde::Bool(b),
-            ValueKind::Object(ptr) => ValueSerde::Object(ptr),
+            ValueKind::Null => ValueWire::Null,
+            ValueKind::OmittedArg => ValueWire::OmittedArg,
+            ValueKind::Int(i) => ValueWire::Int(i),
+            ValueKind::Bool(b) => ValueWire::Bool(b),
+            ValueKind::Object(ptr) => ValueWire::Object(ptr),
         };
-        proxy.serialize(serializer)
+        proxy.serialize(writer)
     }
 }
 
-impl<'de> Deserialize<'de> for Value {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        use serde::de::Error;
-        let proxy = ValueSerde::deserialize(deserializer)?;
+impl BorshDeserialize for Value {
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let proxy = ValueWire::deserialize_reader(reader)?;
         Ok(match proxy {
-            ValueSerde::Null => Value::NULL,
-            ValueSerde::OmittedArg => Value::OMITTED_ARG,
-            ValueSerde::Int(i) => Value::try_int(i).ok_or_else(|| {
-                D::Error::custom(format!(
-                    "Value::Int payload {i} is outside the i63 range [{}, {}]; \
-                     pre-tagged-pointer payloads with |value| >= 2^62 cannot be \
-                     loaded",
-                    Value::INT_MIN,
-                    Value::INT_MAX,
-                ))
+            ValueWire::Null => Value::NULL,
+            ValueWire::OmittedArg => Value::OMITTED_ARG,
+            ValueWire::Int(i) => Value::try_int(i).ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!(
+                        "Value::Int payload {i} is outside the i63 range [{}, {}]; \
+                         pre-tagged-pointer payloads with |value| >= 2^62 cannot be loaded",
+                        Value::INT_MIN,
+                        Value::INT_MAX,
+                    ),
+                )
             })?,
-            ValueSerde::Bool(b) => Value::bool(b),
-            ValueSerde::Object(ptr) => Value::object(ptr),
+            ValueWire::Bool(b) => Value::bool(b),
+            ValueWire::Object(ptr) => Value::object(ptr),
         })
     }
 }
@@ -1189,7 +1209,7 @@ include!(concat!(env!("OUT_DIR"), "/panics_generated.rs"));
 /// Self-contained type with no dependency on HIR or external types.
 /// Converted from HIR's `TestArgValue` during emission, and converted
 /// to `BexExternalValue` in the engine for function calls.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub enum TestArgValue {
     Null,
     Int(i64),
@@ -1208,7 +1228,7 @@ pub enum TestArgValue {
 }
 
 /// A compiled test case, ready for execution.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct TestCase {
     /// Test name (e.g., "`TestAddOne`").
     pub name: String,
@@ -1227,7 +1247,7 @@ pub struct TestCase {
 /// `LoadType` instruction reads the `TyTemplate` directly from the constant pool at execution
 /// time and substitutes type arguments from `frame.type_args` before allocating an
 /// `Object::Type` on the heap.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub enum ConstValue {
     OmittedArg,
     Null,
@@ -1512,25 +1532,25 @@ pub type Uint8ArrayContainer = LockedContainer<Vec<u8>>;
 pub type Uint8ArrayReadGuard<'a> = LockedReadGuard<'a, Vec<u8>>;
 pub type Uint8ArrayWriteGuard<'a> = LockedWriteGuard<'a, Vec<u8>>;
 
-/// Heap-mutable map container. Pairs a boxed `IndexMap<String, Value>` with
+/// Heap-mutable map container. Pairs a boxed `IndexMap<BexStr, Value>` with
 /// the generic [`LockedContainer`] lock/guard machinery.
 ///
 /// `IndexMap` is 72 bytes before the lock, so storing it inline would push
 /// `Object` past its size cap. Storing only the backing map behind `Box<_>`
 /// keeps the container itself small while avoiding an extra indirection around
 /// the lock.
-pub type MapContainer = LockedContainer<Box<IndexMap<String, Value>>>;
-pub type MapReadGuard<'a> = LockedReadGuard<'a, Box<IndexMap<String, Value>>>;
-pub type MapWriteGuard<'a> = LockedWriteGuard<'a, Box<IndexMap<String, Value>>>;
+pub type MapContainer = LockedContainer<Box<IndexMap<bex_str::BexStr, Value>>>;
+pub type MapReadGuard<'a> = LockedReadGuard<'a, Box<IndexMap<bex_str::BexStr, Value>>>;
+pub type MapWriteGuard<'a> = LockedWriteGuard<'a, Box<IndexMap<bex_str::BexStr, Value>>>;
 
 impl MapReadGuard<'_> {
     /// Snapshot the underlying `IndexMap`.
-    pub fn to_index_map(&self) -> IndexMap<String, Value> {
+    pub fn to_index_map(&self) -> IndexMap<bex_str::BexStr, Value> {
         self.as_ref().clone()
     }
 }
 
-impl LockedContainer<Box<IndexMap<String, Value>>> {
+impl LockedContainer<Box<IndexMap<bex_str::BexStr, Value>>> {
     /// Locked convenience: number of entries.
     pub fn len(&self) -> usize {
         self.lock().len()
@@ -1547,13 +1567,15 @@ impl LockedContainer<Box<IndexMap<String, Value>>> {
     }
 
     /// Locked convenience: snapshot the underlying `IndexMap`.
-    pub fn to_index_map(&self) -> IndexMap<String, Value> {
+    pub fn to_index_map(&self) -> IndexMap<bex_str::BexStr, Value> {
         self.lock().to_index_map()
     }
 }
 
-impl From<IndexMap<String, Value>> for LockedContainer<Box<IndexMap<String, Value>>> {
-    fn from(data: IndexMap<String, Value>) -> Self {
+impl From<IndexMap<bex_str::BexStr, Value>>
+    for LockedContainer<Box<IndexMap<bex_str::BexStr, Value>>>
+{
+    fn from(data: IndexMap<bex_str::BexStr, Value>) -> Self {
         Self::new(Box::new(data))
     }
 }
@@ -1602,16 +1624,11 @@ pub enum Object {
     /// A mutable cell holding a single captured value.
     Cell(Cell),
 
-    /// Heap allocated string.
+    /// Heap allocated string backed by [`bex_str::BexStr`].
     ///
-    /// TODO: Add a `Vm::strings` interner to avoid allocating duplicates.
-    /// In Rust it's not easy to implement because `Vm::objects`
-    /// owns the strings allocated on heap, but the interner would be something
-    /// like `HashSet`<&str> and it would store pointers to the strings. That
-    /// reference will cause some lifetime issues because the VM would have
-    /// pointers to itself, so we'd have to figure how to implement it
-    /// otherwise.
-    String(String),
+    /// `BexStr` avoids allocating for small strings (up to ~22 bytes inline)
+    /// and reference-counts larger ones, making clone cheap.
+    String(bex_str::BexStr),
 
     /// Heap-allocated arbitrary-precision integer.
     ///
@@ -1660,14 +1677,14 @@ pub enum Object {
 }
 
 const _: () = assert!(
-    std::mem::size_of::<Object>() <= 80,
-    "Object enum size regression — expected <= 80 bytes"
+    std::mem::size_of::<Object>() <= 64,
+    "Object enum size regression — expected <= 64 bytes"
 );
 
-// Custom serde for Object: RustData and Collector contain non-serializable
+// Custom borsh for Object: RustData and Collector contain non-serializable
 // trait objects (Arc<dyn Any>). They should never appear in a compiled Program.
-#[derive(Serialize, Deserialize)]
-enum ObjectSerde {
+#[derive(BorshSerialize, BorshDeserialize)]
+enum ObjectWire {
     Function(Box<Function>),
     Class(Box<Class>),
     Instance(Instance),
@@ -1677,9 +1694,17 @@ enum ObjectSerde {
     BoundMethod(BoundMethod),
     Cell(Cell),
     String(String),
-    // `Arc<BigInt>` isn't `Serialize` (serde's `rc` feature is off), so the proxy
-    // holds the inner `BigInt` by value — the same representation `ConstValue::Bigint` uses.
-    Bigint(num_bigint::BigInt),
+    // `Arc<BigInt>` isn't directly Borsh-derivable (and we want the same
+    // wire form `ConstValue::Bigint` uses), so the proxy holds the inner
+    // `BigInt` by value. `num_bigint::BigInt` has no native borsh impl, so
+    // route through `baml_base::core_types::borsh_bigint`.
+    Bigint(
+        #[borsh(
+            serialize_with = "baml_base::core_types::borsh_bigint::serialize",
+            deserialize_with = "baml_base::core_types::borsh_bigint::deserialize"
+        )]
+        num_bigint::BigInt,
+    ),
     Uint8Array(Vec<u8>),
     Array(Vec<Value>),
     Map(IndexMap<String, Value>),
@@ -1689,78 +1714,98 @@ enum ObjectSerde {
     Type(Box<baml_type::Ty>),
 }
 
-impl Serialize for Object {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+impl BorshSerialize for Object {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         let proxy = match self {
-            Self::Function(v) => ObjectSerde::Function(v.clone()),
-            Self::Class(v) => ObjectSerde::Class(v.clone()),
-            Self::Instance(v) => ObjectSerde::Instance(v.clone()),
-            Self::Enum(v) => ObjectSerde::Enum(v.clone()),
-            Self::Variant(v) => ObjectSerde::Variant(v.clone()),
-            Self::Closure(v) => ObjectSerde::Closure(v.clone()),
-            Self::BoundMethod(v) => ObjectSerde::BoundMethod(v.clone()),
-            Self::Cell(v) => ObjectSerde::Cell(v.clone()),
-            Self::String(v) => ObjectSerde::String(v.clone()),
-            Self::Bigint(v) => ObjectSerde::Bigint((**v).clone()),
-            Self::Uint8Array(v) => ObjectSerde::Uint8Array(v.lock().clone()),
-            Self::Array(v) => ObjectSerde::Array(v.lock().clone()),
-            Self::Map(v) => ObjectSerde::Map(v.to_index_map()),
-            Self::Float(v) => ObjectSerde::Float(*v),
-            Self::Future(v) => ObjectSerde::Future(v.clone()),
-            Self::UnscheduledFuture(v) => ObjectSerde::UnscheduledFuture(v.clone()),
-            Self::Type(v) => ObjectSerde::Type(v.clone()),
+            Self::Function(v) => ObjectWire::Function(v.clone()),
+            Self::Class(v) => ObjectWire::Class(v.clone()),
+            Self::Instance(v) => ObjectWire::Instance(v.clone()),
+            Self::Enum(v) => ObjectWire::Enum(v.clone()),
+            Self::Variant(v) => ObjectWire::Variant(v.clone()),
+            Self::Closure(v) => ObjectWire::Closure(v.clone()),
+            Self::BoundMethod(v) => ObjectWire::BoundMethod(v.clone()),
+            Self::Cell(v) => ObjectWire::Cell(v.clone()),
+            Self::String(v) => ObjectWire::String(v.to_string()),
+            Self::Bigint(v) => ObjectWire::Bigint((**v).clone()),
+            Self::Uint8Array(v) => ObjectWire::Uint8Array(v.lock().clone()),
+            Self::Array(v) => ObjectWire::Array(v.lock().clone()),
+            Self::Map(v) => ObjectWire::Map(
+                v.to_index_map()
+                    .into_iter()
+                    .map(|(k, v)| (k.to_string(), v))
+                    .collect(),
+            ),
+            Self::Float(v) => ObjectWire::Float(*v),
+            Self::Future(v) => ObjectWire::Future(v.clone()),
+            Self::UnscheduledFuture(v) => ObjectWire::UnscheduledFuture(v.clone()),
+            Self::Type(v) => ObjectWire::Type(v.clone()),
             Self::RustData(_) => {
-                return Err(serde::ser::Error::custom("RustData cannot be serialized"));
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "RustData cannot be serialized",
+                ));
             }
             Self::Collector(_) => {
-                return Err(serde::ser::Error::custom("Collector cannot be serialized"));
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "Collector cannot be serialized",
+                ));
             }
             Self::HostClosure(_) => {
-                return Err(serde::ser::Error::custom(
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
                     "HostClosure cannot be serialized",
                 ));
             }
             #[cfg(feature = "heap_debug")]
             Self::Sentinel(_) => {
-                return Err(serde::ser::Error::custom("Sentinel cannot be serialized"));
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "Sentinel cannot be serialized",
+                ));
             }
         };
-        proxy.serialize(serializer)
+        proxy.serialize(writer)
     }
 }
 
-impl<'de> Deserialize<'de> for Object {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let proxy = ObjectSerde::deserialize(deserializer)?;
+impl BorshDeserialize for Object {
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let proxy = ObjectWire::deserialize_reader(reader)?;
         Ok(match proxy {
-            ObjectSerde::Function(v) => Self::Function(v),
-            ObjectSerde::Class(v) => Self::Class(v),
-            ObjectSerde::Instance(v) => Self::Instance(v),
-            ObjectSerde::Enum(v) => Self::Enum(v),
-            ObjectSerde::Variant(v) => Self::Variant(v),
-            ObjectSerde::Closure(v) => Self::Closure(v),
-            ObjectSerde::BoundMethod(v) => Self::BoundMethod(v),
-            ObjectSerde::Cell(v) => Self::Cell(v),
-            ObjectSerde::String(v) => Self::String(v),
-            ObjectSerde::Bigint(v) => Self::Bigint(std::sync::Arc::new(v)),
-            ObjectSerde::Uint8Array(v) => Self::Uint8Array(Uint8ArrayContainer::new(v)),
-            ObjectSerde::Array(v) => Self::Array(ArrayContainer::new(v)),
-            ObjectSerde::Map(v) => Self::Map(v.into()),
-            ObjectSerde::Float(v) => Self::Float(v),
-            ObjectSerde::Future(v) => Self::Future(v),
-            ObjectSerde::UnscheduledFuture(v) => Self::UnscheduledFuture(v),
-            ObjectSerde::Type(v) => Self::Type(v),
+            ObjectWire::Function(v) => Self::Function(v),
+            ObjectWire::Class(v) => Self::Class(v),
+            ObjectWire::Instance(v) => Self::Instance(v),
+            ObjectWire::Enum(v) => Self::Enum(v),
+            ObjectWire::Variant(v) => Self::Variant(v),
+            ObjectWire::Closure(v) => Self::Closure(v),
+            ObjectWire::BoundMethod(v) => Self::BoundMethod(v),
+            ObjectWire::Cell(v) => Self::Cell(v),
+            ObjectWire::String(v) => Self::String(bex_str::BexStr::from(v)),
+            ObjectWire::Bigint(v) => Self::Bigint(std::sync::Arc::new(v)),
+            ObjectWire::Uint8Array(v) => Self::Uint8Array(Uint8ArrayContainer::new(v)),
+            ObjectWire::Array(v) => Self::Array(ArrayContainer::new(v)),
+            ObjectWire::Map(v) => Self::Map(
+                v.into_iter()
+                    .map(|(k, v)| (bex_str::BexStr::from(k), v))
+                    .collect::<IndexMap<bex_str::BexStr, Value>>()
+                    .into(),
+            ),
+            ObjectWire::Float(v) => Self::Float(v),
+            ObjectWire::Future(v) => Self::Future(v),
+            ObjectWire::UnscheduledFuture(v) => Self::UnscheduledFuture(v),
+            ObjectWire::Type(v) => Self::Type(v),
         })
     }
 }
 
 /// A closure: a function object paired with a list of captured variable cells.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Closure {
     /// Pointer to the underlying `Object::Function`.
     pub function: HeapPtr,
     /// Captured cells, one per closed-over variable (each is `Object::Cell`).
-    pub captures: Vec<Value>,
+    pub captures: Box<[Value]>,
     /// Type arguments captured from the enclosing generic context at the time
     /// the closure is created by `MakeClosure`.
     ///
@@ -1769,14 +1814,14 @@ pub struct Closure {
     /// before the cell captures.  These become `frame.type_args` when the
     /// closure is invoked, so that `LoadType(TypeArgRef(N))` inside the
     /// closure body resolves correctly.
-    pub captured_type_args: Vec<baml_type::Ty>,
+    pub captured_type_args: Box<[baml_type::Ty]>,
 }
 
 /// A method bound to a specific receiver instance.
 ///
 /// Created by `MakeBoundMethod`. The receiver is inserted as `self`
 /// at call time by `CallIndirect`.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct BoundMethod {
     /// Pointer to the underlying `Object::Function`.
     pub function: HeapPtr,
@@ -1815,7 +1860,7 @@ pub struct HostClosure {
 ///
 /// Variables that are closed over are heap-allocated as `Cell` objects so that
 /// both the enclosing scope and any closures share the same storage.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Cell {
     pub value: AtomicValueSlot,
 }
@@ -1958,15 +2003,21 @@ unsafe impl Sync for Future {}
 
 // Futures are runtime-only; they never appear in a compiled Program. Reject
 // serialization explicitly so a malformed program fails fast.
-impl Serialize for Future {
-    fn serialize<S: serde::Serializer>(&self, _serializer: S) -> Result<S::Ok, S::Error> {
-        Err(serde::ser::Error::custom("Future cannot be serialized"))
+impl BorshSerialize for Future {
+    fn serialize<W: std::io::Write>(&self, _writer: &mut W) -> std::io::Result<()> {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Future cannot be serialized",
+        ))
     }
 }
 
-impl<'de> Deserialize<'de> for Future {
-    fn deserialize<D: serde::Deserializer<'de>>(_deserializer: D) -> Result<Self, D::Error> {
-        Err(serde::de::Error::custom("Future cannot be deserialized"))
+impl BorshDeserialize for Future {
+    fn deserialize_reader<R: std::io::Read>(_reader: &mut R) -> std::io::Result<Self> {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Future cannot be deserialized",
+        ))
     }
 }
 
@@ -1975,17 +2026,19 @@ impl<'de> Deserialize<'de> for Future {
 // envelope (`baml_exec::PackEnvelope`) serializes the bytecode + the
 // constant heap; if an `UnscheduledFuture` ever reaches the serializer
 // that's a malformed program and we want to fail fast.
-impl Serialize for UnscheduledFuture {
-    fn serialize<S: serde::Serializer>(&self, _serializer: S) -> Result<S::Ok, S::Error> {
-        Err(serde::ser::Error::custom(
+impl BorshSerialize for UnscheduledFuture {
+    fn serialize<W: std::io::Write>(&self, _writer: &mut W) -> std::io::Result<()> {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
             "UnscheduledFuture cannot be serialized",
         ))
     }
 }
 
-impl<'de> Deserialize<'de> for UnscheduledFuture {
-    fn deserialize<D: serde::Deserializer<'de>>(_deserializer: D) -> Result<Self, D::Error> {
-        Err(serde::de::Error::custom(
+impl BorshDeserialize for UnscheduledFuture {
+    fn deserialize_reader<R: std::io::Read>(_reader: &mut R) -> std::io::Result<Self> {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
             "UnscheduledFuture cannot be deserialized",
         ))
     }
@@ -2344,7 +2397,7 @@ pub struct UnscheduledFuture {
 ///
 /// Unlike `bex_engine::CallId`, these are created for every scheduled future (sys op or function call),
 /// not just when there is a new call from the host.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub struct FutureId {
     id: usize,
 }
@@ -2386,7 +2439,7 @@ impl FutureId {
 ///
 /// Used for checking type errors at runtime. We can probably use some lib
 /// that creates this automatically based on the [`Value`] enum.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub enum Type {
     OmittedArg,
     Int,
@@ -2436,7 +2489,7 @@ impl Type {
 }
 
 /// Object type lattice.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub enum ObjectType {
     /// Top type of the lattice. It is castable to any of the other
     /// types.
@@ -2530,7 +2583,7 @@ impl std::fmt::Display for ObjectType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub enum FunctionType {
     /// Top of function type lattice: represents all function types.
     Any,
@@ -2558,7 +2611,7 @@ impl From<&FunctionKind> for FunctionType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub enum FutureType {
     /// Top of future type lattice: represents all future types.
     Any,
@@ -2602,7 +2655,7 @@ impl From<&Future> for FutureType {
 
 #[cfg(test)]
 mod tests {
-    use super::{ConstValue, Type, Value, format_float};
+    use super::{ConstValue, HeapPtr, Instance, Type, Value, format_float};
 
     #[test]
     fn test_format_float() {
@@ -2634,5 +2687,31 @@ mod tests {
             Type::OmittedArg
         );
         assert_eq!(value.to_string(), "<omitted>");
+    }
+
+    #[test]
+    fn instance_field_helpers_load_and_store_checked_slots() {
+        let instance = Instance::new(
+            HeapPtr::null(),
+            vec![],
+            vec![Value::int(10), Value::int(20)],
+        );
+
+        assert_eq!(instance.field_len(), 2);
+        assert_eq!(instance.try_load_field(0), Some(Value::int(10)));
+        assert_eq!(instance.try_load_field(2), None);
+        assert_eq!(instance.load_field(1), Value::int(20));
+
+        assert_eq!(instance.try_store_field(1, Value::int(99)), Ok(()));
+        assert_eq!(instance.try_load_field(1), Some(Value::int(99)));
+        assert_eq!(instance.try_store_field(2, Value::int(123)), Err(2));
+    }
+
+    #[test]
+    #[should_panic(expected = "index out of bounds")]
+    fn instance_load_field_panics_for_invalid_slot() {
+        let instance = Instance::new(HeapPtr::null(), vec![], vec![Value::int(10)]);
+
+        let _ = instance.load_field(1);
     }
 }

@@ -40,7 +40,9 @@ async fn net_connect_and_read() {
     "#);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("Hello from server!".to_string()))
+        Ok(BexExternalValue::String(
+            "Hello from server!".to_string().into()
+        ))
     );
 }
 
@@ -110,6 +112,6 @@ async fn net_multiple_reads() {
     "#);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("chunk1".to_string()))
+        Ok(BexExternalValue::String("chunk1".to_string().into()))
     );
 }

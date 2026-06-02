@@ -18,8 +18,6 @@ pub(crate) mod resolve_media;
 mod specialize_prompt;
 pub mod stream_accumulator;
 pub(crate) mod types;
-#[cfg(target_arch = "wasm32")]
-pub(crate) mod wasm;
 
 use std::{str::FromStr, sync::Arc};
 
@@ -38,7 +36,13 @@ pub use types::LlmOpError;
 // --- Public API: only what sys_types and bex_engine tests actually use ---
 pub use types::SapStreamCache;
 
+// Selects the rustls crypto provider for the crate. No longer called directly
+// now that all HTTPS flows through `RuntimeIo` (sys_native installs its own
+// provider), but the `aws-crypto`/`ring-crypto` features are still part of the
+// workspace-wide feature chain (e.g. `sys_ops/aws-crypto` forwards here), so
+// the helper and its `rustls` dep are retained.
 #[cfg(all(not(target_arch = "wasm32"), feature = "ring-crypto"))]
+#[allow(dead_code)]
 pub(crate) fn ensure_rustls_crypto_provider() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 }
@@ -48,6 +52,7 @@ pub(crate) fn ensure_rustls_crypto_provider() {
     not(feature = "ring-crypto"),
     feature = "aws-crypto"
 ))]
+#[allow(dead_code)]
 pub(crate) fn ensure_rustls_crypto_provider() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 }
@@ -57,6 +62,7 @@ pub(crate) fn ensure_rustls_crypto_provider() {
     not(feature = "ring-crypto"),
     not(feature = "aws-crypto")
 ))]
+#[allow(dead_code)]
 pub(crate) fn ensure_rustls_crypto_provider() {}
 
 // ============================================================================
@@ -786,7 +792,7 @@ fn mixed_text_image_parts(
         match part {
             parse_response::LlmOutputPart::Text { text } if !text.trim().is_empty() => {
                 items.push(BexExternalValue::union(
-                    BexExternalValue::String(text.clone()),
+                    BexExternalValue::String(bex_external_types::BexStr::from(text.as_str())),
                     members.clone(),
                     string_ty.clone(),
                 ));
@@ -818,24 +824,24 @@ fn single_text_or_image_union_output(
             let baml_type::Ty::Union(members, _) = target else {
                 return Ok(None);
             };
-            let text = items
+            let text: String = items
                 .into_iter()
                 .filter_map(|item| match item {
                     BexExternalValue::Union { value, .. } => match *value {
-                        BexExternalValue::String(text) => Some(text),
+                        BexExternalValue::String(text) => Some(text.to_string()),
                         _ => None,
                     },
-                    BexExternalValue::String(text) => Some(text),
+                    BexExternalValue::String(text) => Some(text.to_string()),
                     _ => None,
                 })
-                .collect::<String>();
+                .collect();
             let string_ty = members
                 .iter()
                 .find(|member| matches!(member, baml_type::Ty::String { .. }))
                 .cloned()
                 .unwrap_or_else(baml_type::Ty::string);
             Ok(Some(BexExternalValue::union(
-                BexExternalValue::String(text),
+                BexExternalValue::String(bex_external_types::BexStr::from(text.as_str())),
                 members.clone(),
                 string_ty,
             )))
@@ -1437,7 +1443,7 @@ mod tests {
                     element_type: Ty::String {
                         attr: TyAttr::default(),
                     },
-                    items: vec![BexExternalValue::String("text".to_string())],
+                    items: vec![BexExternalValue::String("text".into())],
                 },
             )]),
             ..Default::default()

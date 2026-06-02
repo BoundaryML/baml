@@ -19,12 +19,12 @@ function NoElseIfChain(r: Ok | Err) -> string {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// error: type mismatch: expected user.Ok, got user.Ok | user.Err
+// error: type mismatch: expected Ok, got Ok | Err
 //    ╭─[ let_else_let_else_no_else_if.baml:7:15 ]
 //    │
 //  7 │   let o: Ok = r else if true { return "x"; };
 //    │               ┬  
-//    │               ╰── type mismatch: expected user.Ok, got user.Ok | user.Err
+//    │               ╰── type mismatch: expected Ok, got Ok | Err
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯

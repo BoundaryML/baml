@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 38208
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] error: type `string` has no member `len`
@@ -14,49 +15,49 @@ source: crates/baml_tests/src/generated_tests.rs
     │     Note: Error code: E0007
 ────╯
 
-  [type] error: type `user.ChainItem[]` has no member `len`
+  [type] error: type `ChainItem[]` has no member `len`
     ╭─[ chain_expr.baml:86:21 ]
     │
  86 │ ╭─▶     user.name.len();
  87 │ ├─▶     items.len();
     │ │                      
-    │ ╰────────────────────── type `user.ChainItem[]` has no member `len`
+    │ ╰────────────────────── type `ChainItem[]` has no member `len`
     │     
     │     Note: Error code: E0007
 ────╯
 
-  [type] error: type `user.ChainItem[]` has no member `get`
+  [type] error: type `ChainItem[]` has no member `get`
     ╭─[ chain_expr.baml:87:17 ]
     │
  87 │ ╭─▶     items.len();
     ┆ ┆   
  90 │ ├─▶     user.profile.items.get(0);
     │ │                                    
-    │ ╰──────────────────────────────────── type `user.ChainItem[]` has no member `get`
+    │ ╰──────────────────────────────────── type `ChainItem[]` has no member `get`
     │     
     │     Note: Error code: E0007
 ────╯
 
-  [type] error: type `user.ChainItem[]` has no member `get`
+  [type] error: type `ChainItem[]` has no member `get`
     ╭─[ chain_expr.baml:90:31 ]
     │
  90 │ ╭─▶     user.profile.items.get(0);
     ┆ ┆   
  98 │ ├─▶     get // 6 method trailing
     │ │                                  
-    │ ╰────────────────────────────────── type `user.ChainItem[]` has no member `get`
+    │ ╰────────────────────────────────── type `ChainItem[]` has no member `get`
     │     
     │     Note: Error code: E0007
 ────╯
 
-  [type] error: type `user.ChainItem[]` has no member `get`
+  [type] error: type `ChainItem[]` has no member `get`
      ╭─[ chain_expr.baml:104:6 ]
      │
  104 │ ╭─▶     ;
      ┆ ┆   
  112 │ ├─▶     get /* 6 method trailing */
      │ │                                     
-     │ ╰───────────────────────────────────── type `user.ChainItem[]` has no member `get`
+     │ ╰───────────────────────────────────── type `ChainItem[]` has no member `get`
      │     
      │     Note: Error code: E0007
 ─────╯
@@ -95,44 +96,44 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0007
 ─────╯
 
-  [type] error: type `user.ChainItem[]` has no member `get`
+  [type] error: type `ChainItem[]` has no member `get`
      ╭─[ chain_expr.baml:155:98 ]
      │
  155 │ ╭─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
      ┆ ┆   
  158 │ ├─▶     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
      │ │                                                                                                                                   
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── type `user.ChainItem[]` has no member `get`
+     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── type `ChainItem[]` has no member `get`
      │     
      │     Note: Error code: E0007
 ─────╯
 
-  [type] error: type `user.ChainItem[]` has no member `len`
+  [type] error: type `ChainItem[]` has no member `len`
      ╭─[ chain_expr.baml:158:28 ]
      │
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
      │                            ───────────┬──────────  
-     │                                       ╰──────────── type `user.ChainItem[]` has no member `len`
+     │                                       ╰──────────── type `ChainItem[]` has no member `len`
      │ 
      │ Note: Error code: E0007
 ─────╯
 
-  [type] error: type `user.ChainItem[]` has no member `len`
+  [type] error: type `ChainItem[]` has no member `len`
      ╭─[ chain_expr.baml:158:58 ]
      │
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
      │                                                          ───────────┬───────────  
-     │                                                                     ╰───────────── type `user.ChainItem[]` has no member `len`
+     │                                                                     ╰───────────── type `ChainItem[]` has no member `len`
      │ 
      │ Note: Error code: E0007
 ─────╯
 
-  [type] error: type `user.ChainItem[]` has no member `len`
+  [type] error: type `ChainItem[]` has no member `len`
      ╭─[ chain_expr.baml:158:89 ]
      │
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
      │                                                                                         ───────────┬───────────  
-     │                                                                                                    ╰───────────── type `user.ChainItem[]` has no member `len`
+     │                                                                                                    ╰───────────── type `ChainItem[]` has no member `len`
      │ 
      │ Note: Error code: E0007
 ─────╯
@@ -149,12 +150,12 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0005
 ─────╯
 
-  [type] error: type `user.ChainItem[]` has no member `len`
+  [type] error: type `ChainItem[]` has no member `len`
      ╭─[ chain_expr.baml:161:32 ]
      │
  161 │     user.profile.items.slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size);
      │                                ───────────┬───────────  
-     │                                           ╰───────────── type `user.ChainItem[]` has no member `len`
+     │                                           ╰───────────── type `ChainItem[]` has no member `len`
      │ 
      │ Note: Error code: E0007
 ─────╯
@@ -183,36 +184,36 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0007
 ─────╯
 
-  [type] error: type `user.ChainItem[]` has no member `get`
+  [type] error: type `ChainItem[]` has no member `get`
      ╭─[ chain_expr.baml:225:6 ]
      │
  225 │ ╭─▶     ;
      ┆ ┆   
  238 │ ├─▶     get // 11 trailing
      │ │                            
-     │ ╰──────────────────────────── type `user.ChainItem[]` has no member `get`
+     │ ╰──────────────────────────── type `ChainItem[]` has no member `get`
      │     
      │     Note: Error code: E0007
 ─────╯
 
-  [type] error: type `user.ChainItem[]` has no member `len`
+  [type] error: type `ChainItem[]` has no member `len`
      ╭─[ chain_expr.baml:239:6 ]
      │
  239 │ ╭─▶     ( // 12 trailing
      ┆ ┆   
  241 │ ├─▶     user.profile.items.len() - 1 + user.profile.items.len() - 2 // 14 trailing
      │ │                                                                                    
-     │ ╰──────────────────────────────────────────────────────────────────────────────────── type `user.ChainItem[]` has no member `len`
+     │ ╰──────────────────────────────────────────────────────────────────────────────────── type `ChainItem[]` has no member `len`
      │     
      │     Note: Error code: E0007
 ─────╯
 
-  [type] error: type `user.ChainItem[]` has no member `len`
+  [type] error: type `ChainItem[]` has no member `len`
      ╭─[ chain_expr.baml:241:35 ]
      │
  241 │     user.profile.items.len() - 1 + user.profile.items.len() - 2 // 14 trailing
      │                                   ───────────┬───────────  
-     │                                              ╰───────────── type `user.ChainItem[]` has no member `len`
+     │                                              ╰───────────── type `ChainItem[]` has no member `len`
      │ 
      │ Note: Error code: E0007
 ─────╯
@@ -237,13 +238,13 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0007
 ─────╯
 
-  [type] error: type `user.ChainItem[]` has no member `get`
+  [type] error: type `ChainItem[]` has no member `get`
      ╭─[ chain_expr.baml:255:20 ]
      │
  255 │ ╭─▶     items  [  0  ];
  256 │ ├─▶     items  .  get  (  0  );
      │ │                                 
-     │ ╰───────────────────────────────── type `user.ChainItem[]` has no member `get`
+     │ ╰───────────────────────────────── type `ChainItem[]` has no member `get`
      │     
      │     Note: Error code: E0007
 ─────╯
@@ -531,62 +532,62 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0004
 ─────╯
 
-  [type] error: non-exhaustive match on `int`; missing: _
+  [type] error: non-exhaustive match on type int; missing: _
      ╭─[ match_exprs.baml:386:6 ]
      │
  386 │ ╭─▶     }
      ┆ ┆   
  391 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `int`; missing: _
+     │ ╰─────────── non-exhaustive match on type int; missing: _
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] error: non-exhaustive match on `int`; missing: _
+  [type] error: non-exhaustive match on type int; missing: _
      ╭─[ match_exprs.baml:391:6 ]
      │
  391 │ ╭─▶     }
      ┆ ┆   
  396 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `int`; missing: _
+     │ ╰─────────── non-exhaustive match on type int; missing: _
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] error: non-exhaustive match on `int`; missing: _
+  [type] error: non-exhaustive match on type int; missing: _
      ╭─[ match_exprs.baml:396:6 ]
      │
  396 │ ╭─▶     }
      ┆ ┆   
  401 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `int`; missing: _
+     │ ╰─────────── non-exhaustive match on type int; missing: _
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] error: non-exhaustive match on `int`; missing: _
+  [type] error: non-exhaustive match on type int; missing: _
      ╭─[ match_exprs.baml:401:6 ]
      │
  401 │ ╭─▶     }
      ┆ ┆   
  406 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `int`; missing: _
+     │ ╰─────────── non-exhaustive match on type int; missing: _
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] error: non-exhaustive match on `int`; missing: _
+  [type] error: non-exhaustive match on type int; missing: _
      ╭─[ match_exprs.baml:416:6 ]
      │
  416 │ ╭─▶     }
      ┆ ┆   
  421 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `int`; missing: _
+     │ ╰─────────── non-exhaustive match on type int; missing: _
      │     
      │     Note: Error code: E0062
 ─────╯

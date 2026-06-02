@@ -166,13 +166,18 @@ class BamlRuntime:
         r"""
         Initialize the process-global runtime from in-memory BAML source files.
         
-        Mirrors `bridge_cffi::engine::initialize_runtime`: the same
+        Mirrors `bridge_cffi::initialize_runtime`: the same
         single-slot singleton is used, so a second call replaces the prior
         runtime.
         
         # Arguments
         * `root_path` - Root path for BAML files
         * `files` - Map of filename to file content
+        """
+    @staticmethod
+    def initialize_runtime_from_bytecode(bytecode: bytes) -> BamlRuntime:
+        r"""
+        Initialize the process-global runtime from serialized BAML bytecode.
         """
     def call_function(self, function_name: str, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None, collectors: typing.Optional[typing.Sequence["Collector"]] = None, abort_controller: typing.Optional["AbortController"] = None) -> typing.Any:
         r"""
@@ -482,4 +487,3 @@ def take_pyhandle_from_table(key: builtins.int, handle_type: builtins.int) -> Ba
     key exists so a malformed wire payload errors here rather than on
     later use.
     """
-

@@ -16,7 +16,8 @@
 // Renamed from `Wrapper<T>` to `WrapperMethods<T>` to avoid colliding
 // with the bare `Wrapper<T>` shape fixture in types.baml.
 //
-// Exercised by `customizable/test_generic_method.py`.
+// Exercised by `customizable/test_generic.py` and
+// `customizable/test_generic.test.ts`.
 class WrapperMethods<T> {
   value T
 
@@ -50,6 +51,6 @@ class WrapperMarker {
 // `test_stream_next_reaches_finished` takes against `Stream<T, S>` —
 // builds the generic instance on one side, calls the generic instance
 // method from the other.
-function MakeWrapperMethods(text: string) -> WrapperMethods<string> {
+function make_wrapper_methods(text: string) -> WrapperMethods<string> {
   WrapperMethods<string> { value: text }
 }

@@ -40,6 +40,7 @@ text-size = { workspace = true }
 prettyplease = { workspace = true }
 proc-macro2 = { workspace = true }
 quote = { workspace = true }
+serde_json = { workspace = true }
 syn = { workspace = true }
 walkdir = { workspace = true }
 
@@ -54,6 +55,10 @@ serde_json = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = [ "rt-multi-thread", "macros", "net" ] }
 wiremock = { workspace = true }
+
+[[bench]]
+name = "compiler_benchmark"
+harness = false
 
 [[bench]]
 name = "runtime_benchmark"

@@ -1,12 +1,12 @@
 class InterfaceThree {
-  interface int
+  iface int
   foo
 }
 
 // error: Error validating: No type specified for field `foo`
 //   -->  class/incomplete_class.baml:3
 //    |
-//  2 |   interface int
+//  2 |   iface int
 //  3 |   foo
 //  4 | }
 //    |

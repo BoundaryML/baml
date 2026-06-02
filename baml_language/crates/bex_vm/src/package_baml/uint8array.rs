@@ -107,7 +107,7 @@ impl BamlClassUint8Array for PackageBamlImpl {
             .collect()
     }
 
-    fn from_hex(hex: &str) -> Result<Vec<u8>, VmRustFnError> {
+    fn from_hex(hex: &bex_str::BexStr) -> Result<Vec<u8>, VmRustFnError> {
         #[inline]
         const fn parse_hex_digit(c: u8) -> Option<u8> {
             match c {
@@ -143,7 +143,7 @@ impl BamlClassUint8Array for PackageBamlImpl {
             .collect()
     }
 
-    fn to_hex(uint8array: &[u8]) -> String {
+    fn to_hex(uint8array: &[u8]) -> bex_str::BexStr {
         use std::fmt::Write;
         let mut s = String::with_capacity(uint8array.len() * 2);
         for &b in uint8array {
@@ -151,26 +151,26 @@ impl BamlClassUint8Array for PackageBamlImpl {
                 unreachable!("write!() to `String` should never fail");
             };
         }
-        s
+        bex_str::BexStr::from(s)
     }
 
-    fn from_base64(base64_str: &str) -> Result<Vec<u8>, VmRustFnError> {
+    fn from_base64(base64_str: &bex_str::BexStr) -> Result<Vec<u8>, VmRustFnError> {
         use base64::Engine;
         base64::engine::general_purpose::STANDARD
-            .decode(base64_str)
+            .decode(base64_str.as_str())
             .map_err(|e| VmBamlError::InvalidArgument {
                 message: format!("failed to decode base64: {e}"),
             })
             .map_err(VmRustFnError::BamlError)
     }
 
-    fn to_base64(uint8array: &[u8]) -> String {
+    fn to_base64(uint8array: &[u8]) -> bex_str::BexStr {
         use base64::Engine;
-        base64::engine::general_purpose::STANDARD.encode(uint8array)
+        bex_str::BexStr::from(base64::engine::general_purpose::STANDARD.encode(uint8array))
     }
 
-    fn to_string(uint8array: &[u8]) -> String {
-        String::from_utf8_lossy(uint8array).into_owned()
+    fn to_string(uint8array: &[u8]) -> bex_str::BexStr {
+        bex_str::BexStr::from(String::from_utf8_lossy(uint8array).into_owned())
     }
 
     #[allow(clippy::unused_unit)]

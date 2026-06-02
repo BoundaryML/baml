@@ -36,7 +36,7 @@ class Client {
 
   function get_constructor(
     self
-  ) -> () -> PrimitiveClient throws root.errors.InvalidArgument {
+  ) -> (() -> PrimitiveClient throws root.errors.InvalidArgument) throws never {
     $rust_io_function
   }
 
@@ -463,7 +463,7 @@ class StreamCache<TStream, TFinal> {
   _data $rust_type
 
   /// DO NOT CALL FROM USER CODE
-  function new(target: type, streaming: type) -> StreamCache<TStream, TFinal> {
+  function new(target: type, streaming: type) -> StreamCache<TStream, TFinal> throws never {
     $rust_io_function
   }
 }

@@ -113,7 +113,7 @@ impl BexEngine {
                         .iter()
                         .map(|(k, v)| {
                             Ok((
-                                k.clone(),
+                                k.to_string(),
                                 self.convert_vm_value_to_external_with_type(
                                     *v, value_type, permit,
                                 )?,
@@ -356,8 +356,11 @@ impl BexEngine {
             BexExternalValue::Map { entries, .. } => {
                 let values = entries
                     .into_iter()
-                    .map(|(k, v)| self.convert_external_to_vm_value(holder, v).map(|v| (k, v)))
-                    .collect::<Result<indexmap::IndexMap<String, Value>, _>>()?;
+                    .map(|(k, v)| {
+                        self.convert_external_to_vm_value(holder, v)
+                            .map(|v| (bex_vm_types::BexStr::from(k.as_str()), v))
+                    })
+                    .collect::<Result<indexmap::IndexMap<bex_vm_types::BexStr, Value>, _>>()?;
                 Value::object(holder.holder_mut().tlab_mut().alloc_map(values))
             }
             BexExternalValue::Uint8Array(bytes) => {
@@ -618,7 +621,7 @@ impl BexEngine {
                         // and embed the error in the trace payload so it shows
                         // up wherever traces are consumed.
                         tracing::error!(error = %e, "trace payload deep-copy failed");
-                        BexExternalValue::String(format!("<trace-error: {e}>"))
+                        BexExternalValue::String(format!("<trace-error: {e}>").into())
                     })
             }
         }
@@ -807,6 +810,12 @@ fn value_matches_type(value: &BexExternalValue, ty: &Ty) -> bool {
         (BexExternalValue::Bool(_), Ty::Literal(Literal::Bool(_), _)) => true,
         (BexExternalValue::Array { .. }, Ty::List(_, _)) => true,
         (BexExternalValue::Map { .. }, Ty::Map { .. }) => true,
+        // A host-encoded object arrives as a bare `Map` (the JS encoder emits
+        // every non-builtin object as `map_value`, no FQN), so a `Map`
+        // matches a `Class` slot at the FFI boundary — it is promoted to an
+        // `Instance` during materialization. This lets a host-built class
+        // value satisfy a union's class member (e.g. `T | string`).
+        (BexExternalValue::Map { .. }, Ty::Class(..)) => true,
         // For FFI-boundary matching we only compare class names because
         // `BexExternalValue::Instance` does not carry class_type_args (that
         // field lives on the VM-side `Object::Instance`).  Fine-grained
@@ -1182,7 +1191,7 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
                     let snap = map.to_index_map();
                     let entries: indexmap::IndexMap<String, BexExternalValue> = snap
                         .iter()
-                        .map(|(k, v)| (k.clone(), vm_arg_to_external(vm, *v)))
+                        .map(|(k, v)| (k.to_string(), vm_arg_to_external(vm, *v)))
                         .collect();
                     BexExternalValue::Map {
                         key_type: bex_external_types::Ty::String {
@@ -1302,8 +1311,38 @@ pub(crate) fn coerce_arg_to_declared_type(
             })
         }
 
+        // ── Union with a class member (incoming only) ────────────────────
+        // A host-encoded object arrives as a bare `Map` (the JS encoder emits
+        // every non-builtin object as `map_value`, with no FQN). Against a
+        // union it would otherwise fail `value_matches_type` ("Value of type
+        // 'map' does not match any member of union [...]"). Route it to the
+        // union's class-typed member (unwrapping `Optional`) and promote it to
+        // an `Instance`. The wire value carries no class name, so we pick the
+        // first class arm — sufficient while a union has at most one class
+        // member; numeric/string arms are left to the existing routing.
+        (
+            value @ (BexExternalValue::Map { .. } | BexExternalValue::Instance { .. }),
+            Ty::Union(members, _),
+        ) => {
+            if let Some(class_arm) = members.iter().find_map(union_class_arm) {
+                coerce_arg_to_declared_type(value, class_arm)
+            } else {
+                Ok(value)
+            }
+        }
+
         // ── Numeric / optional / union ───────────────────────────────────
         (v, ty) => coerce_numeric_to_declared_type(v, ty),
+    }
+}
+
+/// If `ty` is a class (directly, or inside an `Optional`), return that class
+/// `Ty`. Used to route a host-encoded object value to a union's class member.
+fn union_class_arm(ty: &Ty) -> Option<&Ty> {
+    match ty {
+        Ty::Class(..) => Some(ty),
+        Ty::Optional(inner, _) => union_class_arm(inner),
+        _ => None,
     }
 }
 
@@ -1399,7 +1438,7 @@ pub fn test_arg_to_external(v: &bex_vm_types::TestArgValue) -> BexExternalValue 
         bex_vm_types::TestArgValue::Int(i) => BexExternalValue::Int(*i),
         bex_vm_types::TestArgValue::Float(f) => BexExternalValue::Float(*f),
         bex_vm_types::TestArgValue::Bool(b) => BexExternalValue::Bool(*b),
-        bex_vm_types::TestArgValue::String(s) => BexExternalValue::String(s.clone()),
+        bex_vm_types::TestArgValue::String(s) => BexExternalValue::String(s.as_str().into()),
         bex_vm_types::TestArgValue::Array {
             element_type,
             items,

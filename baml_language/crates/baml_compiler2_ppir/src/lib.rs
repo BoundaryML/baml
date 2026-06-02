@@ -117,6 +117,61 @@ pub fn collect_alias_bodies(
     result
 }
 
+// -- Project-wide expansion maps (memoized) -----------------------------------
+
+/// The whole-project maps consumed by [`ppir_expansion_items`] when building a
+/// file's `*$stream` companions.
+///
+/// Both maps are derived by scanning **every** file in the project (see
+/// [`collect_block_attrs`] / [`collect_alias_bodies`]). `ppir_expansion_items`
+/// is a per-file query, so computing these inline made expansion `O(files²)`:
+/// each of N files re-lowered all N files. Wrapping them in a single
+/// project-keyed [`salsa::tracked`] query ([`project_expansion_maps`]) computes
+/// them once and shares the result across every file's expansion.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ProjectExpansionMaps {
+    /// `@@` block attributes per type, keyed by fully-qualified path.
+    pub block_attrs: FxHashMap<Vec<Name>, Vec<Name>>,
+    /// Type alias bodies keyed by fully-qualified path.
+    pub alias_bodies: FxHashMap<Vec<Name>, PpirTy>,
+}
+
+/// # Safety
+///
+/// Mirrors [`baml_compiler2_hir::package::PackageItems`]'s impl. The contained
+/// maps hold no Salsa-interned (`'db`) data, so storing them by value is sound;
+/// `maybe_update` uses `PartialEq` for proper Salsa early-cutoff.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for ProjectExpansionMaps {
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        // SAFETY: `old_pointer` is valid, aligned, and Salsa-owned.
+        #[allow(unsafe_code)]
+        let old = unsafe { &*old_pointer };
+        if old == &new_value {
+            false
+        } else {
+            #[allow(unsafe_code)]
+            unsafe {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            true
+        }
+    }
+}
+
+/// Compute the project-wide [`ProjectExpansionMaps`] once, memoized by Salsa.
+#[salsa::tracked(returns(ref))]
+pub fn project_expansion_maps(
+    db: &dyn crate::Db,
+    project: baml_workspace::Project,
+) -> ProjectExpansionMaps {
+    ProjectExpansionMaps {
+        block_attrs: collect_block_attrs(db, project),
+        alias_bodies: collect_alias_bodies(db, project),
+    }
+}
+
 // -- Helpers ------------------------------------------------------------------
 
 /// Build a map of all packages' items for cross-package type classification.
@@ -160,10 +215,13 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
     // Build cross-package items map for resolving foreign type references
     let all_package_items = build_all_package_items(db);
 
-    // Get @@ block attributes and alias bodies
+    // Get @@ block attributes and alias bodies. Memoized once per project so
+    // this per-file query doesn't re-scan (and re-lower) every file on every
+    // file — which made expansion O(files²).
     let project = db.project();
-    let block_attrs = collect_block_attrs(db, project);
-    let alias_bodies = collect_alias_bodies(db, project);
+    let expansion_maps = project_expansion_maps(db, project);
+    let block_attrs = &expansion_maps.block_attrs;
+    let alias_bodies = &expansion_maps.alias_bodies;
 
     let mut synthetic_items = Vec::new();
     let mut stream_return_types: Vec<(SmolStr, ast::TypeExpr)> = Vec::new();
@@ -210,8 +268,8 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                         namespace_path: &pkg_info.namespace_path,
                         package_items,
                         all_package_items: &all_package_items,
-                        block_attrs: &block_attrs,
-                        alias_bodies: &alias_bodies,
+                        block_attrs,
+                        alias_bodies,
                     };
                     let (stream_type, sap_attrs) = stream_expand(&ppir_ty, &ctx);
 
@@ -297,8 +355,8 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     namespace_path: &pkg_info.namespace_path,
                     package_items,
                     all_package_items: &all_package_items,
-                    block_attrs: &block_attrs,
-                    alias_bodies: &alias_bodies,
+                    block_attrs,
+                    alias_bodies,
                 };
                 let expanded_body = expand_partial(&ty, &ctx);
 
@@ -351,8 +409,8 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     namespace_path: &pkg_info.namespace_path,
                     package_items,
                     all_package_items: &all_package_items,
-                    block_attrs: &block_attrs,
-                    alias_bodies: &alias_bodies,
+                    block_attrs,
+                    alias_bodies,
                 };
                 let (stream_type, _sap_attrs) = stream_expand(&ppir_ty, &ctx);
                 let stream_type_expr = stream_type.to_type_expr();
@@ -412,6 +470,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     let companion = ast::FunctionDef {
                         name: SmolStr::new(format!("{}$stream", func.name)),
                         generic_params: func.generic_params.clone(),
+                        generic_param_bounds: func.generic_param_bounds.clone(),
                         params: func.params.clone(),
                         defaults: func.defaults.clone(),
                         return_type: Some(stream_return_type.clone()),
@@ -455,6 +514,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     let companion = ast::FunctionDef {
                         name: SmolStr::new(format!("{}$parse_stream", func.name)),
                         generic_params: func.generic_params.clone(),
+                        generic_param_bounds: func.generic_param_bounds.clone(),
                         params: vec![sse_param],
                         defaults: ast::FunctionDefaults::empty(),
                         return_type: Some(stream_return_type),
@@ -484,8 +544,9 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
 pub fn file_semantic_index(db: &dyn Db, file: SourceFile) -> FileSemanticIndex<'_> {
     let tree = baml_compiler_parser::syntax_tree(db, file);
     let file_range = tree.text_range();
+    let path = file.path(db);
     let (mut items, lowering_diags, env_var_refs) =
-        ast::lower_file_with_file_id(&tree, file.file_id(db));
+        ast::lower_file_with_path(&tree, Some(path.as_path()));
 
     // Merge synthetic *$stream items
     let expansion = ppir_expansion_items(db, file);
@@ -593,11 +654,20 @@ fn enclosing_class_generic_params(
     item_tree: &ItemTree,
     function_id: baml_compiler2_hir::ids::LocalItemId<baml_compiler2_hir::ids::FunctionMarker>,
 ) -> Vec<Name> {
-    item_tree
+    if let Some(class_data) = item_tree
         .classes
         .values()
         .find(|class_data| class_data.methods.contains(&function_id))
-        .map(|class_data| class_data.generic_params.clone())
+    {
+        return class_data.generic_params.clone();
+    }
+    // BEP-044: a generic interface's default method sees the interface's type
+    // params (`interface Container<T> { function f(self) -> T { ... } }`).
+    item_tree
+        .interfaces
+        .values()
+        .find(|iface_data| iface_data.default_methods.contains(&function_id))
+        .map(|iface_data| iface_data.generic_params.clone())
         .unwrap_or_default()
 }
 

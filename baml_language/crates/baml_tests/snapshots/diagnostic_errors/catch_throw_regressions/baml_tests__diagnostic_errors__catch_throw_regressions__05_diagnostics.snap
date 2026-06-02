@@ -1,23 +1,24 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 35881
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: type mismatch: expected string, got user.Status
+  [type] error: type mismatch: expected string, got Status
     ╭─[ regressions.baml:25:5 ]
     │
  25 │     WrapperAlwaysThrows(n) catch (e) {
     │     ───────────┬──────────  
-    │                ╰──────────── type mismatch: expected string, got user.Status
+    │                ╰──────────── type mismatch: expected string, got Status
     │ 
     │ Note: Error code: E0001
 ────╯
 
-  [type] error: type mismatch: expected string, got user.Status
+  [type] error: type mismatch: expected string, got Status
     ╭─[ regressions.baml:43:5 ]
     │
  43 │     ThrowsAllStatusVariants(n) catch (e) {
     │     ─────────────┬────────────  
-    │                  ╰────────────── type mismatch: expected string, got user.Status
+    │                  ╰────────────── type mismatch: expected string, got Status
     │ 
     │ Note: Error code: E0001
 ────╯

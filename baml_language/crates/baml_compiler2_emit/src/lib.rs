@@ -8,7 +8,7 @@ mod pull_semantics;
 mod stack_carry;
 mod verifier;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub use analysis::OptLevel;
 use baml_base::{Name, Span};
@@ -21,12 +21,13 @@ use baml_compiler2_hir::{
     package::PackageId,
 };
 use baml_compiler2_mir::{
-    BuiltinKind, MirFunctionKind, ResolvedAliases, def_to_item_ref, lower_function, lower_let_body,
+    BuiltinKind, Local, MirFunctionBody, MirFunctionKind, Operand, Place, ResolvedAliases, Rvalue,
+    StatementKind, Terminator, def_to_item_ref, lower_function, lower_let_body,
 };
 // Use the PPIR item tree (which includes synthetic *$stream items) rather than
 // the bare HIR item tree, to stay consistent with TIR's LocalItemId indices.
 use baml_compiler2_ppir::file_item_tree;
-use baml_type::TyAttr;
+use baml_type::{Ty, TyAttr};
 use bex_vm_types::{
     Bytecode, Class, ClassField, ConstValue, Enum, EnumVariant, Function, FunctionKind,
     FunctionMeta, FunctionOrigin, Instruction, Object, ObjectIndex, ObjectPool, Program,
@@ -46,6 +47,41 @@ fn build_alias_caches(
         });
     }
     caches
+}
+
+fn contains_tir_type_var(ty: &baml_compiler2_tir::ty::Ty) -> bool {
+    use baml_compiler2_tir::ty::{FunctionParamTy, Ty};
+
+    match ty {
+        Ty::TypeVar(..) => true,
+        Ty::Class(_, args, _) | Ty::Interface(_, args, _) | Ty::Union(args, _) => {
+            args.iter().any(contains_tir_type_var)
+        }
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) | Ty::Optional(inner, _) => {
+            contains_tir_type_var(inner)
+        }
+        Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) | Ty::Future(k, v, _) => {
+            contains_tir_type_var(k) || contains_tir_type_var(v)
+        }
+        Ty::Function {
+            generic_param_bounds,
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            generic_param_bounds
+                .iter()
+                .flatten()
+                .any(contains_tir_type_var)
+                || params
+                    .iter()
+                    .any(|FunctionParamTy { ty, .. }| contains_tir_type_var(ty))
+                || contains_tir_type_var(ret)
+                || contains_tir_type_var(throws)
+        }
+        _ => false,
+    }
 }
 pub(crate) use emit::compile_mir_function;
 
@@ -85,6 +121,10 @@ pub(crate) struct MirCodegenContext<'ctx, 'obj> {
     pub lambda_object_indices: &'ctx [usize],
     /// Lambda debug names, parallel to `lambda_object_indices`.
     pub lambda_names: &'ctx [String],
+    /// Compile-time types for captures in the function currently being emitted.
+    pub capture_types: &'ctx [Ty],
+    /// Capture slots whose cells may be touched by spawned code.
+    pub spawn_capture_indices: &'ctx HashSet<usize>,
 }
 
 /// Database trait for compiler2 emit queries.
@@ -182,6 +222,41 @@ fn extract_schema_attrs(
 }
 
 pub use bex_vm_types::Program as ProgramAlias;
+
+/// One entry in the emitted runtime field list for a class.
+type MergedFieldEntry = (
+    String,
+    Option<baml_compiler2_ast::SpannedTypeExpr>,
+    Vec<baml_compiler2_hir::item_tree::Attribute>,
+    Vec<Name>,
+    Vec<Name>,
+);
+
+/// BEP-044: collect actual runtime fields. Interface fields are views over
+/// class fields, so they never add qualified runtime slots.
+fn collect_class_fields_with_implements(
+    pkg_ns: &[Name],
+    class_data: &baml_compiler2_hir::item_tree::Class,
+) -> Vec<MergedFieldEntry> {
+    let mut out: Vec<MergedFieldEntry> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    for field in &class_data.fields {
+        let name = field.name.to_string();
+        if !seen.insert(name.clone()) {
+            continue;
+        }
+        out.push((
+            name,
+            field.type_expr.clone(),
+            field.attributes.clone(),
+            class_data.generic_params.clone(),
+            pkg_ns.to_vec(),
+        ));
+    }
+
+    out
+}
 
 /// Build a `TypeName` from a fully-qualified dotted path.
 ///
@@ -299,9 +374,15 @@ pub fn generate_project_bytecode_with_opt(
             // empty, `tir2_to_template` produces `TyTemplate::Concrete(...)`
             // for every leaf and `field_template == Concrete(field_type)`.
             let class_generic_params: Vec<baml_base::Name> = class_data.generic_params.clone();
-            for (idx, field) in class_data.fields.iter().enumerate() {
-                field_indices.insert(field.name.to_string(), idx);
-                let (field_type, field_template) = match field.type_expr.as_ref() {
+            // BEP-044: collect only the class's actual runtime fields.
+            // Interface fields are typed views over class storage, and the
+            // validator enforces/link-checks them before emit.
+            let merged_fields =
+                collect_class_fields_with_implements(&pkg_info.namespace_path, class_data);
+            for (idx, (name, type_expr, attrs, gen_params, ns)) in merged_fields.iter().enumerate()
+            {
+                field_indices.insert(name.clone(), idx);
+                let (field_type, field_template) = match type_expr {
                     Some(te) => {
                         let mut diags = Vec::new();
                         // Pass `class_generic_params` as the binding context so
@@ -312,12 +393,7 @@ pub fn generate_project_bytecode_with_opt(
                         // the `TyTemplate` (TypeVar→TypeArgRef(N)) used by
                         // typed runtime walking.
                         let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-                            db,
-                            &te.expr,
-                            pkg_items,
-                            &pkg_info.namespace_path,
-                            &class_generic_params,
-                            &mut diags,
+                            db, &te.expr, pkg_items, ns, gen_params, &mut diags,
                         );
                         let resolved_ty = cache.convert(&tir_ty);
                         let template = baml_compiler2_mir::tir2_to_template(
@@ -334,9 +410,9 @@ pub fn generate_project_bytecode_with_opt(
                         (null_ty.clone(), baml_type::TyTemplate::Concrete(null_ty))
                     }
                 };
-                let (field_desc, field_alias, field_skip) = extract_schema_attrs(&field.attributes);
+                let (field_desc, field_alias, field_skip) = extract_schema_attrs(attrs.as_slice());
                 fields.push(ClassField {
-                    name: field.name.to_string(),
+                    name: name.clone(),
                     field_type,
                     field_template,
                     description: field_desc,
@@ -388,21 +464,20 @@ pub fn generate_project_bytecode_with_opt(
             class_object_indices
                 .entry(short_name.clone())
                 .or_insert(class_obj_idx);
-            classes.entry(display_name).or_insert_with(|| {
+            // The display- and short-name maps must agree with the emitted
+            // runtime field indices used by the Class object above. Use a
+            // closure that rebuilds the same ordering.
+            let rebuild_indices = || {
+                let merged =
+                    collect_class_fields_with_implements(&pkg_info.namespace_path, class_data);
                 let mut m = HashMap::new();
-                for (idx, field) in class_data.fields.iter().enumerate() {
-                    m.insert(field.name.to_string(), idx);
+                for (idx, (name, _, _, _, _)) in merged.iter().enumerate() {
+                    m.insert(name.clone(), idx);
                 }
                 m
-            });
-            classes.entry(short_name).or_insert_with(|| {
-                // Rebuild field_indices since we moved it above; re-read from class_data.
-                let mut m = HashMap::new();
-                for (idx, field) in class_data.fields.iter().enumerate() {
-                    m.insert(field.name.to_string(), idx);
-                }
-                m
-            });
+            };
+            classes.entry(display_name).or_insert_with(rebuild_indices);
+            classes.entry(short_name).or_insert_with(rebuild_indices);
         }
     }
 
@@ -468,8 +543,13 @@ pub fn generate_project_bytecode_with_opt(
                 MirFunctionKind::Bytecode(body) => {
                     // Compile lambda children first, collecting their ObjectPool indices.
                     let source_file = file.path(db).display().to_string();
+                    let empty_capture_types = Vec::new();
+                    let empty_spawn_capture_indices = HashSet::new();
                     let lambda_info = compile_lambdas_flat(
                         &mir.lambdas,
+                        Some(body),
+                        &empty_capture_types,
+                        &empty_spawn_capture_indices,
                         &line_starts,
                         &source_file,
                         &globals,
@@ -493,6 +573,8 @@ pub fn generate_project_bytecode_with_opt(
                         objects: &mut program.objects,
                         lambda_object_indices: &lambda_obj_indices,
                         lambda_names: &lambda_names_vec,
+                        capture_types: &empty_capture_types,
+                        spawn_capture_indices: &empty_spawn_capture_indices,
                     };
                     let mut f =
                         compile_mir_function(body, mir.arity, mir.span, &line_starts, ctx, opt);
@@ -697,14 +779,14 @@ pub fn generate_project_bytecode_with_opt(
     }
 
     // --- Pass 4.6: Synthesize $init_test chainer per package ---
-    // Cross-file aggregation of per-file $init_test_<N> functions.
+    // Cross-file aggregation of per-file $init_test_<path> functions.
     // This must happen at emit level because:
-    //   - AST layer (lower_file_with_file_id) is per-file only
+    //   - AST layer (lower_file_with_path) is per-file only
     //   - MIR (lower_function) is per-function only
     //   - Only emit iterates all_files and has the compiled program
     // Follows the exact $init pattern at Pass 4.5 above.
     {
-        // Discover per-file $init_test_<N> functions using structured
+        // Discover per-file $init_test_<path> functions using structured
         // compiler metadata (HIR item trees), group by package.
         let mut pkg_init_tests: HashMap<String, Vec<(String, usize)>> = HashMap::new();
 
@@ -714,16 +796,16 @@ pub fn generate_project_bytecode_with_opt(
             for local_id in item_tree.functions.keys() {
                 let func_loc = FunctionLoc::new(db, *file, *local_id);
                 let fq_name = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
-                // Match per-file $init_test_<N> functions synthesized by
-                // lower_cst.rs:912-972. The trailing underscore in the filter
-                // is intentional: all real files produce `$init_test_{file_id}`
-                // with a numeric suffix. The sentinel FileId path in lower_cst.rs
-                // produces bare `$init_test` (no suffix), but that only runs in
-                // unit tests, PPIR intermediate processing, and codegen — none of
-                // which produce functions that reach program.function_indices at
-                // emit time. So `contains("$init_test_")` safely matches only
-                // per-file functions without risk of collision with the chainer
-                // name we're about to synthesize.
+                // Match per-file $init_test_<path> functions synthesized by
+                // `synthesize_init_test_function`. The trailing underscore in the
+                // filter is intentional: all real files produce a path-derived
+                // suffix. The no-path branch in lower_cst.rs produces bare
+                // `$init_test` (no suffix), but that only runs in unit tests, PPIR
+                // intermediate processing, and codegen — none of which produce
+                // functions that reach program.function_indices at emit time. So
+                // `contains("$init_test_")` safely matches only per-file functions
+                // without risk of collision with the chainer name we're about to
+                // synthesize.
                 if fq_name.contains("$init_test_") {
                     if let Some(&global_slot) = program.function_global_indices.get(&fq_name) {
                         pkg_init_tests
@@ -860,6 +942,159 @@ pub fn generate_project_bytecode_with_opt(
         }
     }
 
+    // --- Pass 7.6: Interface implementation registry (BEP-044) ---
+    //
+    // Inverts the per-class `package_implements_registry` (class → ifaces it
+    // implements) into a runtime-friendly per-interface map (iface → classes
+    // that implement it), then bakes it into `Program.interface_implementors`
+    // so the `type` reflection methods (`implements`, `implementors`,
+    // `implemented_by`) have a static lookup table at runtime.
+    {
+        use std::collections::HashSet;
+
+        // Per interface name: the classes that implement it, each paired with
+        // the *interface type args* that instantiation used (BEP-044). Reflection
+        // (`implements` / `implementors`) compares these so `Box<int>` and
+        // `Box<string>` are distinguished. Empty args = non-generic interface
+        // (or a blanket impl whose args can't be made concrete) → matches any.
+        let mut inverted: indexmap::IndexMap<
+            baml_type::TypeName,
+            Vec<(baml_type::TypeName, Vec<baml_type::Ty>)>,
+        > = indexmap::IndexMap::new();
+        // Dedup key: (interface qualified name, class/primitive dedup key,
+        // interface type args). The args are keyed *structurally* (`Vec<Ty>`,
+        // which derives `Eq`/`Hash`) rather than by `format!("{:?}")` — `Debug`
+        // is not contractually unique across distinct types, so two distinct
+        // `Ty` values with a colliding `Debug` string would have silently dropped
+        // a legitimate implementor entry.
+        let mut seen_pairs: HashSet<(String, String, Vec<baml_type::Ty>)> = HashSet::new();
+        for (pkg_name, cache) in &alias_caches {
+            let pkg_id = PackageId::new(db, pkg_name.clone());
+            let registry = baml_compiler2_tir::interfaces::package_implements_registry(db, pkg_id);
+            let mut add_impl = |iface_qtn: &baml_compiler2_tir::ty::QualifiedTypeName,
+                                class_name: baml_type::TypeName,
+                                dedup_key: String,
+                                iface_args: Vec<baml_type::Ty>| {
+                let iface_name = baml_compiler2_mir::qtn_to_type_name(iface_qtn);
+                if seen_pairs.insert((iface_qtn.to_string(), dedup_key, iface_args.clone())) {
+                    inverted
+                        .entry(iface_name)
+                        .or_default()
+                        .push((class_name, iface_args));
+                }
+            };
+
+            for rule in &registry.interface_impl_rules {
+                let baml_compiler2_tir::ty::Ty::Interface(iface_qtn, iface_type_args, _) =
+                    &rule.interface_ty
+                else {
+                    continue;
+                };
+                let converted_iface_args: Vec<baml_type::Ty> = iface_type_args
+                    .iter()
+                    .map(|a| baml_compiler2_mir::convert_tir2_ty(a, cache))
+                    .collect();
+                match &rule.for_ty_pattern {
+                    baml_compiler2_tir::ty::Ty::Class(class_qtn, _, _) => {
+                        let iface_args = if iface_type_args.iter().any(contains_tir_type_var) {
+                            Vec::new()
+                        } else {
+                            converted_iface_args.clone()
+                        };
+                        add_impl(
+                            iface_qtn,
+                            baml_compiler2_mir::qtn_to_type_name(class_qtn),
+                            class_qtn.to_string(),
+                            iface_args,
+                        );
+                    }
+                    // BEP-044 wf3 #G19: an out-of-body `implements I for <primitive>`
+                    // is visible to reflection via a synthetic primitive TypeName
+                    // (the name MUST match `bex_vm`'s `primitive_type_name`).
+                    baml_compiler2_tir::ty::Ty::Primitive(prim, _) => {
+                        use baml_compiler2_tir::ty::PrimitiveType;
+                        let prim_name = match prim {
+                            PrimitiveType::Int => Some("int"),
+                            PrimitiveType::Bigint => Some("bigint"),
+                            PrimitiveType::Float => Some("float"),
+                            PrimitiveType::String => Some("string"),
+                            PrimitiveType::Bool => Some("bool"),
+                            PrimitiveType::Null => Some("null"),
+                            _ => None,
+                        };
+                        if let Some(prim_name) = prim_name {
+                            let tn = baml_type::TypeName {
+                                name: Name::new(prim_name),
+                                module_path: Vec::new(),
+                                display_name: Name::new(prim_name),
+                            };
+                            add_impl(
+                                iface_qtn,
+                                tn,
+                                format!("prim:{prim_name}"),
+                                converted_iface_args,
+                            );
+                        }
+                    }
+                    baml_compiler2_tir::ty::Ty::TypeVar(type_var, _) => {
+                        let Some(bound) = rule
+                            .generic_params
+                            .iter()
+                            .position(|param| param == type_var)
+                            .and_then(|idx| rule.generic_param_bounds.get(idx))
+                            .and_then(|bound| bound.as_ref())
+                        else {
+                            continue;
+                        };
+                        let baml_compiler2_tir::ty::Ty::Interface(..) = bound else {
+                            continue;
+                        };
+                        for class_qtn in registry.class_implements.keys() {
+                            let actual = baml_compiler2_tir::ty::Ty::Class(
+                                class_qtn.clone(),
+                                Vec::new(),
+                                baml_compiler2_tir::ty::TyAttr::default(),
+                            );
+                            if registry.type_implements_interface_via_rule(
+                                &actual,
+                                bound,
+                                &cache.aliases,
+                                |_actual, _bound| false,
+                            ) {
+                                // Blanket impl: the concrete interface args
+                                // aren't known here, so leave them empty
+                                // (matches any instantiation at reflection time).
+                                add_impl(
+                                    iface_qtn,
+                                    baml_compiler2_mir::qtn_to_type_name(class_qtn),
+                                    class_qtn.to_string(),
+                                    Vec::new(),
+                                );
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        // Order each interface's implementors deterministically (lexicographic by
+        // qualified name) so `implementors()` doesn't depend on the unordered
+        // `FxHashMap` iteration that built the rules.
+        let impl_sort_key = |tn: &baml_type::TypeName| {
+            (
+                tn.module_path
+                    .iter()
+                    .map(std::string::ToString::to_string)
+                    .collect::<Vec<_>>(),
+                tn.name.to_string(),
+            )
+        };
+        for impls in inverted.values_mut() {
+            impls.sort_by(|(a, _), (b, _)| impl_sort_key(a).cmp(&impl_sort_key(b)));
+        }
+        program.interface_implementors = inverted;
+    }
+
     // --- Pass 8: Test cases (only when requested) ---
     if options.emit_test_cases {
         for file in &all_files {
@@ -983,6 +1218,24 @@ fn compute_function_metadata_from_item_tree(
         attr: baml_type::TyAttr::default(),
     };
 
+    let item_tree = file_item_tree(db, file);
+    let enclosing_impl = item_tree
+        .implements_for
+        .iter()
+        .find(|imp| imp.methods.contains(&func_id));
+    let enclosing_class_self = item_tree
+        .classes
+        .values()
+        .find(|class_data| class_data.methods.contains(&func_id))
+        .map(|class_data| class_data.name.clone());
+    let self_replacement = enclosing_impl
+        .map(|imp| imp.for_target.expr.clone())
+        .or_else(|| {
+            enclosing_class_self
+                .clone()
+                .map(baml_compiler2_tir::lower_type_expr::type_expr_for_name)
+        });
+
     // For methods on generic classes, the class-level generic params are in
     // scope inside the method signature.  Without them, type references like
     // `S` in `Stream<T, S>.next(self) -> S | StreamFinished` route through
@@ -991,16 +1244,50 @@ fn compute_function_metadata_from_item_tree(
     // `MirLowerer::enclosing_generic_params`: class params come first, then
     // function-level params.
     let enclosing_generics: Vec<baml_base::Name> = {
-        let item_tree = file_item_tree(db, file);
-        let mut params: Vec<baml_base::Name> = item_tree
-            .classes
-            .values()
-            .find(|class_data| class_data.methods.contains(&func_id))
-            .map(|class_data| class_data.generic_params.clone())
-            .unwrap_or_default();
-        params.extend(func_data.generic_params.iter().cloned());
-        params
+        if let Some(imp) = enclosing_impl {
+            let mut params = imp.generic_params.clone();
+            params.extend(func_data.generic_params.iter().cloned());
+            params
+        } else {
+            let mut params: Vec<baml_base::Name> = item_tree
+                .classes
+                .values()
+                .find(|class_data| class_data.methods.contains(&func_id))
+                .map(|class_data| class_data.generic_params.clone())
+                .unwrap_or_default();
+            params.extend(func_data.generic_params.iter().cloned());
+            params
+        }
     };
+    let (bound_param_names, bound_exprs) = if let Some(imp) = enclosing_impl {
+        let mut names = imp.generic_params.clone();
+        names.extend(func_data.generic_params.iter().cloned());
+        let mut bounds = imp.generic_param_bounds.clone();
+        bounds.extend(func_data.generic_param_bounds.iter().cloned());
+        (names, bounds)
+    } else {
+        (
+            func_data.generic_params.clone(),
+            func_data.generic_param_bounds.clone(),
+        )
+    };
+    let generic_param_bounds: HashMap<Name, baml_compiler2_tir::ty::Ty> = bound_param_names
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, name)| {
+            let bound_te = bound_exprs.get(idx)?.as_ref()?;
+            let mut diags = Vec::new();
+            let bound_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+                db,
+                bound_te,
+                pkg_items,
+                &pkg_info.namespace_path,
+                &enclosing_generics,
+                &mut diags,
+            );
+            diags.is_empty().then(|| (name.clone(), bound_ty))
+        })
+        .collect();
 
     let resolve = |te: &TypeExpr| -> baml_type::Ty {
         let mut diags = Vec::new();
@@ -1011,15 +1298,23 @@ fn compute_function_metadata_from_item_tree(
         // parameter types to `Ty::Unknown` → `Ty::Void` for any non-root-ns
         // class — surfacing as "expected instance, got map" in the runtime
         // because the coercion layer can't see the declared type.
+        let resolved_te = if let Some(replacement) = &self_replacement {
+            baml_compiler2_tir::lower_type_expr::substitute_self_in(te, replacement)
+        } else {
+            te.clone()
+        };
         let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
             db,
-            te,
+            &resolved_te,
             pkg_items,
             &pkg_info.namespace_path,
             &enclosing_generics,
             &mut diags,
         );
-        cache.convert(&tir_ty)
+        let runtime_ty = baml_compiler2_tir::generics::erase_typevars_matching(&tir_ty, &|name| {
+            generic_param_bounds.contains_key(name)
+        });
+        cache.convert(&runtime_ty)
     };
 
     let param_types: Vec<baml_type::Ty> = func_data
@@ -1029,6 +1324,11 @@ fn compute_function_metadata_from_item_tree(
             p.type_expr
                 .as_ref()
                 .map(|te| resolve(&te.expr))
+                .or_else(|| {
+                    (p.name.as_str() == "self")
+                        .then(|| self_replacement.as_ref().map(&resolve))
+                        .flatten()
+                })
                 .unwrap_or_else(null_ty)
         })
         .collect();
@@ -1220,6 +1520,223 @@ fn topological_sort_lets<'db>(
     Ok(sorted.into_iter().map(|i| bindings[i].clone()).collect())
 }
 
+#[derive(Clone, Default)]
+struct LambdaCaptureInfo {
+    capture_types: Vec<Ty>,
+    spawn_capture_indices: HashSet<usize>,
+}
+
+fn unknown_capture_ty() -> Ty {
+    Ty::BuiltinUnknown {
+        attr: TyAttr::default(),
+    }
+}
+
+fn local_def_rvalue(body: &MirFunctionBody, local: Local) -> Option<&Rvalue> {
+    body.blocks
+        .iter()
+        .flat_map(|block| &block.statements)
+        .find_map(|statement| match &statement.kind {
+            StatementKind::Assign {
+                destination: Place::Local(dest),
+                value,
+            } if *dest == local => Some(value),
+            _ => None,
+        })
+}
+
+fn resolve_capture_operand_type(
+    body: &MirFunctionBody,
+    parent_capture_types: &[Ty],
+    operand: &Operand,
+) -> Option<Ty> {
+    match operand {
+        Operand::Constant(c) => match c {
+            baml_compiler2_mir::Constant::Int(_) => Some(Ty::int()),
+            baml_compiler2_mir::Constant::Bigint(_) => Some(Ty::bigint()),
+            baml_compiler2_mir::Constant::Float(_) => Some(Ty::float()),
+            baml_compiler2_mir::Constant::String(_) => Some(Ty::string()),
+            baml_compiler2_mir::Constant::Bool(_) => Some(Ty::bool()),
+            baml_compiler2_mir::Constant::Null => Some(Ty::null()),
+            _ => None,
+        },
+        Operand::Copy(place) | Operand::Move(place) => {
+            resolve_capture_place_type(body, parent_capture_types, place)
+        }
+    }
+}
+
+fn resolve_capture_place_type(
+    body: &MirFunctionBody,
+    parent_capture_types: &[Ty],
+    place: &Place,
+) -> Option<Ty> {
+    match place {
+        Place::Local(local) => body.locals.get(local.0).map(|decl| decl.ty.clone()),
+        Place::Capture(idx) => parent_capture_types.get(*idx).cloned(),
+        Place::Field { .. } | Place::Index { .. } => None,
+    }
+}
+
+fn operand_reads_spawn_capture(
+    body: &MirFunctionBody,
+    parent_spawn_capture_indices: &HashSet<usize>,
+    operand: &Operand,
+    seen: &mut HashSet<Local>,
+) -> bool {
+    match operand {
+        Operand::Copy(place) | Operand::Move(place) => {
+            place_reads_spawn_capture(body, parent_spawn_capture_indices, place, seen)
+        }
+        Operand::Constant(_) => false,
+    }
+}
+
+fn place_reads_spawn_capture(
+    body: &MirFunctionBody,
+    parent_spawn_capture_indices: &HashSet<usize>,
+    place: &Place,
+    seen: &mut HashSet<Local>,
+) -> bool {
+    match place {
+        Place::Local(local) => {
+            if !seen.insert(*local) {
+                return false;
+            }
+            match local_def_rvalue(body, *local) {
+                Some(Rvalue::Use(operand)) => {
+                    operand_reads_spawn_capture(body, parent_spawn_capture_indices, operand, seen)
+                }
+                _ => false,
+            }
+        }
+        Place::Capture(idx) => parent_spawn_capture_indices.contains(idx),
+        Place::Field { base, .. } => {
+            place_reads_spawn_capture(body, parent_spawn_capture_indices, base, seen)
+        }
+        Place::Index { base, index, .. } => {
+            place_reads_spawn_capture(body, parent_spawn_capture_indices, base, seen)
+                || place_reads_spawn_capture(
+                    body,
+                    parent_spawn_capture_indices,
+                    &Place::Local(*index),
+                    seen,
+                )
+        }
+    }
+}
+
+fn make_closure_for_operand<'a>(
+    body: &'a MirFunctionBody,
+    operand: &'a Operand,
+    seen: &mut HashSet<Local>,
+) -> Option<(usize, &'a [Operand])> {
+    match operand {
+        Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
+            if !seen.insert(*local) {
+                return None;
+            }
+            match local_def_rvalue(body, *local)? {
+                Rvalue::MakeClosure {
+                    lambda_idx,
+                    captures,
+                    ..
+                } => Some((*lambda_idx, captures)),
+                Rvalue::Use(operand) => make_closure_for_operand(body, operand, seen),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+fn mark_spawned_closure_operand(
+    body: &MirFunctionBody,
+    infos: &mut [LambdaCaptureInfo],
+    operand: &Operand,
+    seen_locals: &mut HashSet<Local>,
+    seen_lambdas: &mut HashSet<usize>,
+) {
+    let Some((lambda_idx, captures)) = make_closure_for_operand(body, operand, seen_locals) else {
+        return;
+    };
+    let Some(info) = infos.get_mut(lambda_idx) else {
+        return;
+    };
+
+    if !seen_lambdas.insert(lambda_idx) {
+        return;
+    }
+
+    info.spawn_capture_indices.extend(0..captures.len());
+
+    for capture in captures {
+        mark_spawned_closure_operand(body, infos, capture, seen_locals, seen_lambdas);
+    }
+}
+
+fn collect_lambda_capture_infos(
+    body: &MirFunctionBody,
+    lambda_count: usize,
+    parent_capture_types: &[Ty],
+    parent_spawn_capture_indices: &HashSet<usize>,
+) -> Vec<LambdaCaptureInfo> {
+    let mut infos = vec![LambdaCaptureInfo::default(); lambda_count];
+
+    for block in &body.blocks {
+        for statement in &block.statements {
+            let StatementKind::Assign { value, .. } = &statement.kind else {
+                continue;
+            };
+            let Rvalue::MakeClosure {
+                lambda_idx,
+                captures,
+                ..
+            } = value
+            else {
+                continue;
+            };
+            let Some(info) = infos.get_mut(*lambda_idx) else {
+                continue;
+            };
+
+            info.capture_types = captures
+                .iter()
+                .map(|capture| {
+                    resolve_capture_operand_type(body, parent_capture_types, capture)
+                        .unwrap_or_else(unknown_capture_ty)
+                })
+                .collect();
+
+            for (capture_idx, capture) in captures.iter().enumerate() {
+                if operand_reads_spawn_capture(
+                    body,
+                    parent_spawn_capture_indices,
+                    capture,
+                    &mut HashSet::new(),
+                ) {
+                    info.spawn_capture_indices.insert(capture_idx);
+                }
+            }
+        }
+    }
+
+    for block in &body.blocks {
+        let Some(Terminator::Spawn { closure, .. }) = &block.terminator else {
+            continue;
+        };
+        mark_spawned_closure_operand(
+            body,
+            &mut infos,
+            closure,
+            &mut HashSet::new(),
+            &mut HashSet::new(),
+        );
+    }
+
+    infos
+}
+
 /// Compile a flat list of lambda `MirFunction`s into bytecode `Function` objects
 /// and register them in `objects`.  Returns a parallel `Vec<(obj_idx, name)>`
 /// that can be used to build `lambda_object_indices` and `lambda_names` for the
@@ -1231,6 +1748,9 @@ fn topological_sort_lets<'db>(
 #[allow(clippy::too_many_arguments)]
 fn compile_lambdas_flat(
     lambdas: &[baml_compiler2_mir::MirFunction],
+    parent_body: Option<&MirFunctionBody>,
+    parent_capture_types: &[Ty],
+    parent_spawn_capture_indices: &HashSet<usize>,
     line_starts: &[u32],
     source_file: &str,
     globals: &HashMap<String, usize>,
@@ -1241,14 +1761,29 @@ fn compile_lambdas_flat(
     objects: &mut ObjectPool,
     opt: OptLevel,
 ) -> Vec<(usize, String)> {
+    let capture_infos = parent_body.map_or_else(
+        || vec![LambdaCaptureInfo::default(); lambdas.len()],
+        |body| {
+            collect_lambda_capture_infos(
+                body,
+                lambdas.len(),
+                parent_capture_types,
+                parent_spawn_capture_indices,
+            )
+        },
+    );
     let mut result = Vec::with_capacity(lambdas.len());
-    for lambda in lambdas {
+    for (lambda_idx, lambda) in lambdas.iter().enumerate() {
+        let capture_info = capture_infos.get(lambda_idx).cloned().unwrap_or_default();
         let lambda_name = lambda.item_ref.to_string();
         let obj_idx = match &lambda.kind {
             MirFunctionKind::Bytecode(body) => {
                 // Recursively compile any nested lambdas within this lambda.
                 let nested_info = compile_lambdas_flat(
                     &lambda.lambdas,
+                    Some(body),
+                    &capture_info.capture_types,
+                    &capture_info.spawn_capture_indices,
                     line_starts,
                     source_file,
                     globals,
@@ -1272,6 +1807,8 @@ fn compile_lambdas_flat(
                     objects,
                     lambda_object_indices: &nested_obj_indices,
                     lambda_names: &nested_names,
+                    capture_types: &capture_info.capture_types,
+                    spawn_capture_indices: &capture_info.spawn_capture_indices,
                 };
                 let mut f =
                     compile_mir_function(body, lambda.arity, lambda.span, line_starts, ctx, opt);
@@ -1331,8 +1868,13 @@ fn compile_init_function<'db>(
                 let line_starts = build_line_starts(file.text(db));
                 // Compile lambda children first and collect their object indices.
                 let source_file = file.path(db).display().to_string();
+                let empty_capture_types = Vec::new();
+                let empty_spawn_capture_indices = HashSet::new();
                 let lambda_info = compile_lambdas_flat(
                     &lambdas,
+                    Some(&mir_body),
+                    &empty_capture_types,
+                    &empty_spawn_capture_indices,
                     &line_starts,
                     &source_file,
                     globals,
@@ -1356,6 +1898,8 @@ fn compile_init_function<'db>(
                     objects: &mut program.objects,
                     lambda_object_indices: &lambda_let_obj_indices,
                     lambda_names: &lambda_let_names,
+                    capture_types: &empty_capture_types,
+                    spawn_capture_indices: &empty_spawn_capture_indices,
                 };
                 let mut helper = compile_mir_function(&mir_body, 0, None, &line_starts, ctx, opt);
                 helper.name = format!("$init_let_{i}");
@@ -1664,6 +2208,7 @@ mod tests {
         let func_data = baml_compiler2_hir::item_tree::Function {
             name: baml_base::Name::new("f"),
             generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
             params: vec![
                 param("required", None),
                 param("with_default", Some(default_ref)),

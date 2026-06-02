@@ -23,5 +23,20 @@ export declare class HostCallableSyncError extends Error {
  * already registered, so we release them here.
  */
 export declare function encodeCallArgs(kwargs: Record<string, unknown>, syncMode?: boolean): Buffer;
+/**
+ * Decode a bare `BamlOutboundValue` to a JS value. Used for the host-callable
+ * args path, where the engine sends a list-shaped `BamlOutboundValue` rather
+ * than the call-result `BamlOutboundResult` envelope.
+ */
+export declare function decodeOutboundValue(data: Buffer | Uint8Array): unknown;
+/**
+ * Decode a `BamlOutboundResult` envelope (the engine's call-result wire shape
+ * after 31c/31e). The `ok` arm returns the decoded value; the `error`/`panic`
+ * arms **throw** a `BamlError`/`BamlPanic` carrying the fully decoded thrown
+ * value (`.value`), the BAML trace (`.bamlTrace`), and the class FQN
+ * (`.className`), with a readable formatted `.message`. An `is_exit_panic`
+ * (clean `baml.sys.exit`) terminates the process via `process.exit(code)`
+ * rather than throwing.
+ */
 export declare function decodeCallResult(data: Buffer | Uint8Array): unknown;
 //# sourceMappingURL=proto.d.ts.map

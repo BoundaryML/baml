@@ -33,6 +33,8 @@ usage() {
     echo "  $0 compare <base.json> <new.json>  Compare two results"
     echo "  $0 flamegraph [workload.baml]    Record samply flame graph"
     echo "  $0 divan                         Run divan wall-clock benchmarks"
+    echo "  $0 compiler                      Run divan compiler (parse/compile) benchmarks"
+    echo "  $0 flamegraph-compiler [filter]  Record samply flame graph of a compile benchmark"
     exit 1
 }
 
@@ -231,6 +233,48 @@ cmd_divan() {
     cargo bench --bench runtime_benchmark -- vm_ "$@"
 }
 
+# ---- compiler: wall-clock compile-time benchmarks ----
+cmd_compiler() {
+    cargo bench --bench compiler_benchmark -- "$@"
+}
+
+# ---- compiler flamegraph: samply record of a compile benchmark ----
+# Profiles the compiler_benchmark divan binary so the flame graph shows where
+# the compiler spends its time (parse → HIR → TIR → MIR → emit). Defaults to the
+# full-project workload, which runs long enough to gather dense samples; pass a
+# divan filter (e.g. compile_empty_project) to profile a different benchmark.
+cmd_flamegraph_compiler() {
+    local filter="${1:-compile_baml_tests_project}"
+
+    echo "==> Building compiler_benchmark (profiling profile)..."
+    cargo build --bench compiler_benchmark --profile profiling -p baml_tests 2>&1 | tail -3
+
+    # Find the binary (executable Mach-O in deps/, not .o/.d/.rmeta files)
+    local bin
+    bin=$(find target/profiling/deps -name "compiler_benchmark-*" -type f \
+        ! -name "*.o" ! -name "*.d" ! -name "*.rmeta" ! -name "*.rlib" \
+        -perm +111 2>/dev/null \
+        | sort -t- -k2 | tail -1)
+
+    if [[ -z "$bin" ]]; then
+        echo "ERROR: could not find compiler_benchmark binary in target/profiling/deps/"
+        exit 1
+    fi
+
+    local commit
+    commit=$(git rev-parse --short HEAD)
+    local output="/tmp/bex-compiler-flamegraph-${commit}.json"
+
+    echo "==> Binary: $bin"
+    echo "==> Recording with samply (filter: $filter)..."
+    samply record --save-only --rate 10000 -o "$output" \
+        "$bin" "$filter"
+
+    echo ""
+    echo "==> Profile saved to $output"
+    echo "    View with: samply load $output"
+}
+
 # ---- dispatch ----
 case "${1:-}" in
     run)        shift; cmd_run "$@" ;;
@@ -238,5 +282,7 @@ case "${1:-}" in
     compare)    shift; cmd_compare "$@" ;;
     flamegraph) shift; cmd_flamegraph "$@" ;;
     divan)      shift; cmd_divan "$@" ;;
+    compiler)   shift; cmd_compiler "$@" ;;
+    flamegraph-compiler) shift; cmd_flamegraph_compiler "$@" ;;
     *)          usage ;;
 esac

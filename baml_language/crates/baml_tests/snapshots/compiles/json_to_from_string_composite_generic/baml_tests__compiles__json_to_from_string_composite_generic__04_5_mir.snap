@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 13254
 ---
 === MIR2 ===
 fn user.decode_container(s: string) -> Container<User> {
@@ -63,7 +64,7 @@ fn user.Container.from_json(j: baml.json.json) -> Container<void> {
     }
 
     bb2: {
-        _0 = user.Container<TypeArgRef(0)> { copy _2 };
+        _0 = user.Container<#0> { copy _2 };
         goto -> bb3;
     }
 

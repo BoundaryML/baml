@@ -16,50 +16,50 @@ class Literals {
   literal_false false
 }
 
-function ReturnLiteral42() -> 42 {
+function return_literal42() -> 42 {
   42
 }
 
-function ReturnLiteralNegOne() -> -1 {
+function return_literal_neg_one() -> -1 {
   -1
 }
 
-function ReturnLiteralDraft() -> "draft" {
+function return_literal_draft() -> "draft" {
   "draft"
 }
 
-function ReturnLiteralEscaped() -> "has \"quotes\"" {
+function return_literal_escaped() -> "has \"quotes\"" {
   "has \"quotes\""
 }
 
-function ReturnLiteralTrue() -> true {
+function return_literal_true() -> true {
   true
 }
 
-function ReturnLiteralFalse() -> false {
+function return_literal_false() -> false {
   false
 }
 
-function RoundTripLiteral42(x: 42) -> 42 {
+function round_trip_literal42(x: 42) -> 42 {
   x
 }
 
-function RoundTripLiteralDraft(x: "draft") -> "draft" {
+function round_trip_literal_draft(x: "draft") -> "draft" {
   x
 }
 
-function RoundTripLiteralEscaped(x: "has \"quotes\"") -> "has \"quotes\"" {
+function round_trip_literal_escaped(x: "has \"quotes\"") -> "has \"quotes\"" {
   x
 }
 
-function RoundTripLiteralTrue(x: true) -> true {
+function round_trip_literal_true(x: true) -> true {
   x
 }
 
-function RoundTripLiteralFalse(x: false) -> false {
+function round_trip_literal_false(x: false) -> false {
   x
 }
 
-function RoundTripLiterals(l: Literals) -> Literals {
+function round_trip_literals(l: Literals) -> Literals {
   l
 }

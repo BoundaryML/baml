@@ -163,7 +163,7 @@ async fn expand_testset(
     engine
         .call_function(
             "testing.TestRegistry.expand_set",
-            vec![registry, BexExternalValue::String(name.to_string())],
+            vec![registry, BexExternalValue::String(name.to_string().into())],
             bex_engine::FunctionCallContextBuilder::new(CallId::next()).build(),
             true,
         )
@@ -179,7 +179,7 @@ async fn run_named_test(
     engine
         .call_function(
             "testing.TestRegistry.run_test",
-            vec![registry, BexExternalValue::String(name.to_string())],
+            vec![registry, BexExternalValue::String(name.to_string().into())],
             bex_engine::FunctionCallContextBuilder::new(CallId::next()).build(),
             true,
         )

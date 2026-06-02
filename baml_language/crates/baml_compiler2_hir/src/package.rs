@@ -164,7 +164,15 @@ pub fn package_items<'db>(db: &'db dyn crate::Db, package_id: PackageId<'db>) ->
     // Use compiler2_all_files() so that compiler2-only builtin stubs (e.g.
     // Array<T>, Map<K,V>) are visible here without being added to the v1
     // compiler's project.files() list.
-    let mut ns_paths: std::collections::HashSet<Vec<Name>> = std::collections::HashSet::new();
+    //
+    // `IndexSet` (not `HashSet`) so the downstream `namespaces` map is built
+    // in a deterministic insertion order. Without this, when two namespaces
+    // declare items with the same short name (e.g. two `Status` enums in
+    // different `ns_*/` directories), downstream consumers that key by short
+    // name (`baml_compiler2_mir::lower::enum_variants`) see whichever
+    // namespace was inserted last — flipping the choice of bytecode lowering
+    // path across runs.
+    let mut ns_paths: indexmap::IndexSet<Vec<Name>> = indexmap::IndexSet::new();
     for file in crate::compiler2_all_files(db) {
         let pkg_info = crate::file_package::file_package(db, file);
         if pkg_info.package == *package_name {

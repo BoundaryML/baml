@@ -41,7 +41,7 @@ class SseStream {
   }
 
   /// Closes the SSE stream and releases the underlying connection.
-  function close(self) -> null {
+  function close(self) -> null throws never {
     $rust_io_function
   }
 }

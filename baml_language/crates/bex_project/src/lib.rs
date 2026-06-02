@@ -12,7 +12,8 @@ use std::{collections::HashMap, sync::Arc};
 pub use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
 pub use bex::Bex;
 pub use bex_engine::{
-    CANCELLED_PANIC_CLASS, EngineError, FunctionCallContextBuilder, is_cancelled_engine_error,
+    CANCELLED_PANIC_CLASS, EngineError, FunctionCallContext, FunctionCallContextBuilder,
+    is_cancelled_engine_error,
 };
 pub use bex_events::EventSink;
 pub use bex_external_types::{
@@ -83,6 +84,27 @@ pub fn new(
     project.update_all_sources(&files);
     let engine = project.take()?;
     Ok(engine)
+}
+
+/// Initialize a runtime from a serialized BAML program — the borsh-encoded
+/// `bex_vm_types::Program` that `baml pack` embeds — rather than from source
+/// files. Mirrors [`new`] but skips compilation, decoding the program and
+/// instantiating the engine directly.
+///
+/// This is the blessed seam for running pre-packed bytecode: bridge crates call
+/// it instead of reaching into `bex_engine` / `bex_vm_types` themselves.
+#[allow(clippy::needless_pass_by_value)]
+pub fn new_from_bytecode(
+    bytecode: &[u8],
+    sys_ops: SysOps,
+    event_sink: Option<Arc<dyn EventSink>>,
+) -> Result<Arc<dyn Bex>, RuntimeError> {
+    let program: bex_vm_types::Program =
+        borsh::from_slice(bytecode).map_err(|e| RuntimeError::Compilation {
+            message: format!("Failed to deserialize BAML bytecode: {e}"),
+        })?;
+    let engine = bex_engine::BexEngine::new(program, Arc::new(sys_ops), event_sink, Vec::new())?;
+    Ok(Arc::new(engine))
 }
 
 pub use bex_lsp::{

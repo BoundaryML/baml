@@ -59,7 +59,7 @@ function user.test_return_type(function_name: string) -> type throws never {
 }
 function user.test_optional(function_name: string) -> string throws never {
   { : never
-    let t: type? = null : null
+    let t: type? = null : null -> type | null
     return "ok" : "ok"
   }
 }

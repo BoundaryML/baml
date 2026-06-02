@@ -1,7 +1,7 @@
 /// A 64-bit signed integer (i64). Range: -2^63 to 2^63-1.
 class Int {
   /// Serializes this integer to a JSON number.
-  function to_json(self) -> baml.json.json {
+  function to_json(self) -> baml.json.json throws never {
     $rust_function
   }
   // ─── Comparisons / clamping ───────────────────────────────────────────────
@@ -30,7 +30,7 @@ class Int {
   /// (3).min(3)   // 3
   /// (-2).min(0)  // -2
   /// ```
-  function min(self, other: int) -> int {
+  function min(self, other: int) -> int throws never {
     $rust_function
   }
 
@@ -42,7 +42,7 @@ class Int {
   /// (3).max(3)   // 3
   /// (-2).max(0)  // 0
   /// ```
-  function max(self, other: int) -> int {
+  function max(self, other: int) -> int throws never {
     $rust_function
   }
 
@@ -58,7 +58,7 @@ class Int {
   /// (-3).clamp(0, 10)   // 0
   /// (15).clamp(0, 10)   // 10
   /// ```
-  function clamp(self, min: int, max: int) -> int {
+  function clamp(self, min: int, max: int) -> int throws never {
     $rust_function
   }
 
@@ -100,7 +100,7 @@ class Int {
   /// (10).pow(100)    // saturates to int.max_value()
   /// (-2).pow(3)      // -8
   /// ```
-  function pow(self, exp: int) -> int {
+  function pow(self, exp: int) -> int throws never {
     $rust_function
   }
 
@@ -135,7 +135,7 @@ class Int {
   /// (1).leading_zeros()  // 63
   /// (-1).leading_zeros() // 0  (all-ones)
   /// ```
-  function leading_zeros(self) -> int {
+  function leading_zeros(self) -> int throws never {
     $rust_function
   }
 
@@ -147,7 +147,7 @@ class Int {
   /// (0).leading_ones()   // 0
   /// (-1).leading_ones()  // 64
   /// ```
-  function leading_ones(self) -> int {
+  function leading_ones(self) -> int throws never {
     $rust_function
   }
 
@@ -159,7 +159,7 @@ class Int {
   /// (8).trailing_zeros()  // 3   (binary 1000)
   /// (1).trailing_zeros()  // 0
   /// ```
-  function trailing_zeros(self) -> int {
+  function trailing_zeros(self) -> int throws never {
     $rust_function
   }
 
@@ -171,7 +171,7 @@ class Int {
   /// (8).trailing_ones()   // 0
   /// (-1).trailing_ones()  // 64
   /// ```
-  function trailing_ones(self) -> int {
+  function trailing_ones(self) -> int throws never {
     $rust_function
   }
 
@@ -183,7 +183,7 @@ class Int {
   /// (0).count_zeros()   // 64
   /// (-1).count_zeros()  // 0
   /// ```
-  function count_zeros(self) -> int {
+  function count_zeros(self) -> int throws never {
     $rust_function
   }
 
@@ -197,7 +197,7 @@ class Int {
   /// (7).count_ones()   // 3
   /// (-1).count_ones()  // 64
   /// ```
-  function count_ones(self) -> int {
+  function count_ones(self) -> int throws never {
     $rust_function
   }
 

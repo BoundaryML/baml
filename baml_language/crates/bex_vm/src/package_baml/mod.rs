@@ -31,12 +31,14 @@ mod root;
 mod stack_trace;
 mod string;
 mod sys;
+mod time;
 mod type_class;
 mod uint8array;
 mod unstable;
 
 use std::collections::HashMap;
 
+use bex_heap::TlabHolder;
 use bex_vm_types::{
     ArrayReadGuard, HeapPtr, MapReadGuard,
     types::{Instance, Object, Type, Value},
@@ -187,11 +189,10 @@ pub(super) fn make_to_json_callee(vm: &mut BexVm, v: Value) -> Result<HeapPtr, V
     })?;
 
     // Allocate a BoundMethod with the value as receiver.
-    let bound = vm.alloc_bound_method(fn_ptr, v);
-    let Some(bound_ptr) = bound.as_object_ptr() else {
-        unreachable!("alloc_bound_method always returns Value::Object");
-    };
-    Ok(bound_ptr)
+    Ok(vm.alloc_bound_method(bex_vm_types::BoundMethod {
+        function: fn_ptr,
+        receiver: v,
+    }))
 }
 
 // =============================================================================

@@ -39,13 +39,16 @@ jobs:
         with:
           workspaces: "baml_language -> target"
           shared-key: "linux-cargo"
+          # Read-only consumer. The canary saver lives in
+          # cargo-tests.reusable.yaml; see the cache strategy comment there.
+          save-if: false
 
       - name: "Run size-gate check"
         id: check
         working-directory: baml_language
         run: |
           cargo run --timings -p cargo-size-gate -- size-gate check \
-            --only bridge_cffi-stripped,bridge_cffi \
+            --only baml-cli,packed-program \
             --format json > size-gate-linux.json 2> size-gate-stderr.txt || exit_code=$?
           cat size-gate-stderr.txt >&2
           echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
@@ -84,13 +87,16 @@ jobs:
         with:
           workspaces: "baml_language -> target"
           shared-key: "macos-cargo"
+          # Read-only consumer. The canary saver lives in
+          # cargo-tests.reusable.yaml; see the cache strategy comment there.
+          save-if: false
 
       - name: "Run size-gate check"
         id: check
         working-directory: baml_language
         run: |
           cargo run --timings -p cargo-size-gate -- size-gate check \
-            --only bridge_cffi-stripped,bridge_cffi \
+            --only baml-cli,packed-program \
             --format json > size-gate-macos.json 2> size-gate-stderr.txt || exit_code=$?
           cat size-gate-stderr.txt >&2
           echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
@@ -136,13 +142,16 @@ jobs:
         with:
           workspaces: "baml_language -> target"
           shared-key: "windows-cargo"
+          # Read-only consumer. The canary saver lives in
+          # cargo-tests.reusable.yaml; see the cache strategy comment there.
+          save-if: false
 
       - name: "Run size-gate check"
         id: check
         working-directory: baml_language
         run: |
           cargo run --timings -p cargo-size-gate -- size-gate check \
-            --only bridge_cffi-stripped,bridge_cffi \
+            --only baml-cli,packed-program \
             --format json > size-gate-windows.json 2> size-gate-stderr.txt || exit_code=$?
           cat size-gate-stderr.txt >&2
           echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
@@ -183,6 +192,9 @@ jobs:
         with:
           workspaces: "baml_language -> target"
           shared-key: "linux-wasm"
+          # Read-only consumer. The canary saver lives in
+          # cargo-tests.reusable.yaml; see the cache strategy comment there.
+          save-if: false
 
       - name: "Run size-gate check"
         id: check
@@ -319,8 +331,13 @@ jobs:
           file-path: unified-report.md
           comment-tag: size-gate
 
-      - name: "Write job summary"
-        run: cat unified-report.md >> "$GITHUB_STEP_SUMMARY"
+      - name: "Print report + write job summary"
+        run: |
+          # Print to the workflow console log (so the status is visible in
+          # the job output, not just the summary tab and PR comment)...
+          cat unified-report.md
+          # ...and to the run's summary tab.
+          cat unified-report.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: "Fail if any platform is missing or any check failed"
         env:

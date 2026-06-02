@@ -9,6 +9,12 @@ class IndexOutOfBounds {
   length int
 }
 
+/// Raised when VM field access targets a stale or invalid field slot.
+class InvalidFieldAccess {
+  field_index int
+  field_count int
+}
+
 /// Raised when a map is accessed with a key that does not exist.
 class MapKeyNotFound {
   key string
@@ -70,4 +76,12 @@ class NegativeBitShift {
   message string
 }
 
-type Panic = DivisionByZero | IndexOutOfBounds | MapKeyNotFound | StackOverflow | AssertionFailed | Unreachable | Cancelled | UserPanic | Exit | AllocFailure | HostUnavailable | NegativeBitShift
+/// An internal BAML engine failure surfaced to the host. Opaque: the specific
+/// engine error (an `EngineError` variant) is carried as text in `message`,
+/// since these are engine/VM-internal failures with nothing host-actionable to
+/// branch on. Synthesized host-side from any `EngineError`.
+class SdkPanic {
+  message string
+}
+
+type Panic = DivisionByZero | IndexOutOfBounds | InvalidFieldAccess | MapKeyNotFound | StackOverflow | AssertionFailed | Unreachable | Cancelled | UserPanic | Exit | AllocFailure | HostUnavailable | NegativeBitShift | SdkPanic

@@ -2,5 +2,5 @@
 // to `Unit`, which Python renders as `None`. Any expression body works as
 // long as it type-checks; we use a no-op for the simplest possible body.
 
-function NoOp() -> void {
+function no_op() -> void {
 }

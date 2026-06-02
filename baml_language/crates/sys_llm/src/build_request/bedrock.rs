@@ -1,23 +1,23 @@
 //! AWS Bedrock Converse API HTTP request builder.
 //!
 //! Builds raw HTTP requests for the Bedrock Converse API. Text and media
-//! (image, video, audio, PDF) are supported. Body serialization is delegated
-//! to the `aws-sdk-bedrockruntime` crate via a dry-run interception pattern.
+//! (image, video, audio, PDF) are supported. Body serialization uses the slim
+//! `aws-bedrock` fork's serde model, which produces JSON compatible with the
+//! Bedrock Converse endpoint without pulling in the AWS SDK / Smithy runtime.
 //!
 //! Auth (`SigV4` signing, credential resolution) is NOT handled here -- that
 //! belongs in `auth_request`.
 
 use std::sync::Arc;
 
-use aws_credential_types::Credentials;
-use aws_sdk_bedrockruntime as bedrock;
+use aws_bedrock::{
+    AudioBlock, AudioFormat, AudioSource, Blob, ContentBlock, ConversationRole, ConverseRequest,
+    DocumentBlock, DocumentFormat, DocumentSource, ImageBlock, ImageFormat, ImageSource,
+    InferenceConfiguration, Message, S3Location, SystemContentBlock, VideoBlock, VideoFormat,
+    VideoSource, converse_model_path,
+};
 use baml_base::MediaKind;
 use baml_builtins2::{PromptAst, PromptAstSimple};
-use bedrock::types::{
-    ContentBlock, ConversationRole, DocumentBlock, DocumentFormat, DocumentSource, ImageBlock,
-    ImageFormat, ImageSource, InferenceConfiguration, Message, SystemContentBlock, VideoBlock,
-    VideoFormat, VideoSource,
-};
 
 use super::BuildRequestError;
 
@@ -30,22 +30,25 @@ pub(crate) async fn build_request(
     prompt: &bex_vm_types::PromptAst,
     io: Arc<dyn ::sys_types::runtime_io::RuntimeIo>,
 ) -> Result<crate::baml_std::HttpRequest, BuildRequestError> {
-    // Convert BAML prompt to SDK types.
     let (system_blocks, messages) = prompt_to_sdk_types(prompt, &client.default_role)?;
     let inference_config = build_inference_config(client)?;
     let additional_fields = collect_additional_fields(client);
 
-    // Serialize via the SDK's own pipeline, capturing body and URI path.
-    let dry_run = serialize_via_sdk(
-        &client.model,
-        system_blocks,
+    let request = ConverseRequest {
         messages,
+        system: if system_blocks.is_empty() {
+            None
+        } else {
+            Some(system_blocks)
+        },
         inference_config,
-        additional_fields,
-    )
-    .await?;
+        additional_model_request_fields: additional_fields,
+    };
+    let body = request
+        .to_json()
+        .map_err(|e| BuildRequestError::Other(format!("failed to serialize Converse body: {e}")))?;
 
-    let url = resolve_url(client, io, &dry_run.sdk_uri).await?;
+    let url = resolve_url(client, io, &client.model).await?;
 
     let mut headers = indexmap::IndexMap::new();
     headers.insert("content-type".to_string(), "application/json".to_string());
@@ -55,26 +58,19 @@ pub(crate) async fn build_request(
         method: "POST".to_string(),
         url,
         headers,
-        body: dry_run.body,
+        body,
     })
 }
 
-/// Build the Bedrock URL, using the path from the SDK-generated URI (which
-/// correctly encodes the model ID, including ARN-shaped IDs with `/`).
-///
-/// `sdk_uri` is the full URL from the dry-run SDK client (e.g.
-/// `https://bedrock-runtime.us-east-1.amazonaws.com/model/{encoded}/converse`).
-/// We extract the path starting at `/model/` and prepend the real host.
+/// Build the Bedrock URL: `<base>/model/{encoded model id}/converse`. The model
+/// id is percent-encoded as a single path segment (ARN slashes become `%2F`,
+/// `:` becomes `%3A`), matching the AWS SDK's URI construction.
 async fn resolve_url(
     client: &crate::baml_std::PrimitiveClient,
     io: Arc<dyn ::sys_types::runtime_io::RuntimeIo>,
-    sdk_uri: &str,
+    model: &str,
 ) -> Result<String, BuildRequestError> {
-    // Extract the path portion from the SDK URI (everything from `/model/` onward).
-    let path = sdk_uri
-        .find("/model/")
-        .map(|i| &sdk_uri[i..])
-        .unwrap_or(sdk_uri);
+    let path = converse_model_path(model);
 
     let bedrock_opts = match &client.provider_options {
         Some(crate::baml_std::ProviderOptions::Bedrock(opts)) => opts.clone(),
@@ -93,105 +89,7 @@ async fn resolve_url(
 }
 
 // ============================================================================
-// SDK body serialization via map_request interception
-// ============================================================================
-
-/// Sentinel error returned by the `map_request` interceptor to abort the SDK
-/// pipeline after capturing the serialized body.
-#[derive(Debug)]
-struct DryRunError;
-
-impl std::fmt::Display for DryRunError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "dry-run: body captured, request aborted")
-    }
-}
-
-impl std::error::Error for DryRunError {}
-
-/// Build a throwaway SDK client config for serialization only.
-fn dry_run_sdk_config() -> bedrock::Config {
-    #[allow(unused_mut)]
-    let mut builder = bedrock::Config::builder()
-        .behavior_version(bedrock::config::BehaviorVersion::latest())
-        .region(bedrock::config::Region::new("us-east-1"))
-        .credentials_provider(Credentials::new("AKID", "SECRET", None, None, "dry-run"))
-        .retry_config(aws_smithy_types::retry::RetryConfig::disabled());
-
-    #[cfg(target_arch = "wasm32")]
-    {
-        builder = builder
-            .sleep_impl(crate::wasm::BrowserSleep)
-            .time_source(crate::wasm::BrowserTime);
-    }
-
-    builder.build()
-}
-
-/// Captured body and URI from the SDK's dry-run serialization.
-struct SdkDryRunResult {
-    body: String,
-    /// The full URI the SDK would send to, including the dummy host from
-    /// `dry_run_sdk_config`. Only the path portion (starting with `/model/`)
-    /// is used -- `resolve_url` replaces the host with the real one.
-    sdk_uri: String,
-}
-
-/// Serialize the Converse API request using the SDK's own Smithy serializer,
-/// capturing both the body and the URI path (which correctly encodes the model ID).
-async fn serialize_via_sdk(
-    model: &str,
-    system_blocks: Vec<SystemContentBlock>,
-    messages: Vec<Message>,
-    inference_config: Option<InferenceConfiguration>,
-    additional_fields: Option<aws_smithy_types::Document>,
-) -> Result<SdkDryRunResult, BuildRequestError> {
-    let captured_body = Arc::new(std::sync::Mutex::new(String::new()));
-    let captured_uri = Arc::new(std::sync::Mutex::new(String::new()));
-    let body_clone = captured_body.clone();
-    let uri_clone = captured_uri.clone();
-
-    let sdk_client = bedrock::Client::from_conf(dry_run_sdk_config());
-
-    let mut fluent = sdk_client.converse().model_id(model);
-    fluent = fluent.set_messages(Some(messages));
-    if !system_blocks.is_empty() {
-        fluent = fluent.set_system(Some(system_blocks));
-    }
-    if let Some(cfg) = inference_config {
-        fluent = fluent.inference_config(cfg);
-    }
-    if let Some(doc) = additional_fields {
-        fluent = fluent.additional_model_request_fields(doc);
-    }
-
-    let _ = fluent
-        .customize()
-        .map_request(move |req| {
-            *uri_clone.lock().unwrap() = req.uri().to_string();
-            if let Some(bytes) = req.body().bytes() {
-                *body_clone.lock().unwrap() = String::from_utf8_lossy(bytes).into_owned();
-            }
-            Err::<_, DryRunError>(DryRunError)
-        })
-        .send()
-        .await;
-
-    let body = captured_body.lock().unwrap().clone();
-    let uri_path = captured_uri.lock().unwrap().clone();
-    if body.is_empty() {
-        return Err(BuildRequestError::Other(
-            "SDK serialization produced no body (dry-run interception failed)".into(),
-        ));
-    }
-    Ok(SdkDryRunResult {
-        body,
-        sdk_uri: uri_path,
-    })
-}
-
-// ============================================================================
-// BAML -> SDK type conversions
+// BAML -> Converse type conversions
 // ============================================================================
 
 fn prompt_to_sdk_types(
@@ -222,32 +120,18 @@ fn prompt_to_sdk_types(
             } => {
                 let conv_role = parse_conversation_role(role)?;
                 let blocks = content_to_content_blocks(content)?;
-                messages.push(
-                    Message::builder()
-                        .role(conv_role)
-                        .set_content(Some(blocks))
-                        .build()
-                        .map_err(|e| {
-                            BuildRequestError::UnsupportedMedia(format!(
-                                "failed to build message: {e}"
-                            ))
-                        })?,
-                );
+                messages.push(Message {
+                    role: conv_role,
+                    content: blocks,
+                });
             }
             PromptAst::Simple(content) => {
                 let conv_role = parse_conversation_role(default_role)?;
                 let blocks = content_to_content_blocks(content)?;
-                messages.push(
-                    Message::builder()
-                        .role(conv_role)
-                        .set_content(Some(blocks))
-                        .build()
-                        .map_err(|e| {
-                            BuildRequestError::UnsupportedMedia(format!(
-                                "failed to build message: {e}"
-                            ))
-                        })?,
-                );
+                messages.push(Message {
+                    role: conv_role,
+                    content: blocks,
+                });
             }
             PromptAst::Vec(_) => unreachable!(),
         }
@@ -380,8 +264,7 @@ fn parse_video_format(mime: &str) -> Result<VideoFormat, BuildRequestError> {
     }
 }
 
-fn parse_audio_format(mime: &str) -> Result<bedrock::types::AudioFormat, BuildRequestError> {
-    use bedrock::types::AudioFormat;
+fn parse_audio_format(mime: &str) -> Result<AudioFormat, BuildRequestError> {
     match mime {
         "audio/mpeg" | "audio/mp3" => Ok(AudioFormat::Mp3),
         "audio/wav" | "audio/x-wav" => Ok(AudioFormat::Wav),
@@ -392,13 +275,6 @@ fn parse_audio_format(mime: &str) -> Result<bedrock::types::AudioFormat, BuildRe
             "unsupported audio format for Bedrock: {other}"
         ))),
     }
-}
-
-fn s3_location(uri: String) -> bedrock::types::S3Location {
-    bedrock::types::S3Location::builder()
-        .uri(uri)
-        .build()
-        .expect("S3Location build cannot fail when uri is set")
 }
 
 fn media_to_content_block(
@@ -413,55 +289,40 @@ fn media_to_content_block(
         MediaKind::Image => {
             let format = parse_image_format(&mime)?;
             let img_source = match source {
-                ResolvedMedia::S3Uri(uri) => ImageSource::S3Location(s3_location(uri)),
-                ResolvedMedia::Bytes(bytes) => {
-                    ImageSource::Bytes(aws_smithy_types::Blob::new(bytes))
-                }
+                ResolvedMedia::S3Uri(uri) => ImageSource::S3Location(S3Location::new(uri)),
+                ResolvedMedia::Bytes(bytes) => ImageSource::Bytes(Blob::new(bytes)),
             };
-            let block = ImageBlock::builder()
-                .format(format)
-                .source(img_source)
-                .build()
-                .map_err(|e| {
-                    BuildRequestError::UnsupportedMedia(format!("failed to build image block: {e}"))
-                })?;
-            Ok(vec![ContentBlock::Image(block)])
+            Ok(vec![ContentBlock::Image(ImageBlock {
+                format,
+                source: img_source,
+            })])
         }
         MediaKind::Video => {
             let format = parse_video_format(&mime)?;
             let vid_source = match source {
-                ResolvedMedia::S3Uri(uri) => VideoSource::S3Location(s3_location(uri)),
-                ResolvedMedia::Bytes(bytes) => {
-                    VideoSource::Bytes(aws_smithy_types::Blob::new(bytes))
-                }
+                ResolvedMedia::S3Uri(uri) => VideoSource::S3Location(S3Location::new(uri)),
+                ResolvedMedia::Bytes(bytes) => VideoSource::Bytes(Blob::new(bytes)),
             };
-            let block = VideoBlock::builder()
-                .format(format)
-                .source(vid_source)
-                .build()
-                .map_err(|e| {
-                    BuildRequestError::UnsupportedMedia(format!("failed to build video block: {e}"))
-                })?;
-            Ok(vec![ContentBlock::Video(block)])
+            Ok(vec![ContentBlock::Video(VideoBlock {
+                format,
+                source: vid_source,
+            })])
         }
         MediaKind::Pdf => {
+            if mime != "application/pdf" {
+                return Err(BuildRequestError::UnsupportedMedia(format!(
+                    "unsupported document format for Bedrock: {mime}"
+                )));
+            }
             let doc_source = match source {
-                ResolvedMedia::S3Uri(uri) => DocumentSource::S3Location(s3_location(uri)),
-                ResolvedMedia::Bytes(bytes) => {
-                    DocumentSource::Bytes(aws_smithy_types::Blob::new(bytes))
-                }
+                ResolvedMedia::S3Uri(uri) => DocumentSource::S3Location(S3Location::new(uri)),
+                ResolvedMedia::Bytes(bytes) => DocumentSource::Bytes(Blob::new(bytes)),
             };
-            let block = DocumentBlock::builder()
-                .format(DocumentFormat::Pdf)
-                .name("document")
-                .source(doc_source)
-                .build()
-                .map_err(|e| {
-                    BuildRequestError::UnsupportedMedia(format!(
-                        "failed to build document block: {e}"
-                    ))
-                })?;
-            Ok(vec![ContentBlock::Document(block)])
+            Ok(vec![ContentBlock::Document(DocumentBlock {
+                format: DocumentFormat::Pdf,
+                name: "document".to_string(),
+                source: doc_source,
+            })])
         }
         MediaKind::Audio => {
             let format = parse_audio_format(&mime)?;
@@ -471,18 +332,12 @@ fn media_to_content_block(
                         "Bedrock does not support S3 URIs for audio".into(),
                     ));
                 }
-                ResolvedMedia::Bytes(bytes) => {
-                    bedrock::types::AudioSource::Bytes(aws_smithy_types::Blob::new(bytes))
-                }
+                ResolvedMedia::Bytes(bytes) => AudioSource::Bytes(Blob::new(bytes)),
             };
-            let block = bedrock::types::AudioBlock::builder()
-                .format(format)
-                .source(aud_source)
-                .build()
-                .map_err(|e| {
-                    BuildRequestError::UnsupportedMedia(format!("failed to build audio block: {e}"))
-                })?;
-            Ok(vec![ContentBlock::Audio(block)])
+            Ok(vec![ContentBlock::Audio(AudioBlock {
+                format,
+                source: aud_source,
+            })])
         }
         MediaKind::Generic => Err(BuildRequestError::UnsupportedMedia(
             "generic media type is not supported -- specify image, video, audio, or pdf".into(),
@@ -497,8 +352,7 @@ fn media_to_content_block(
 fn build_inference_config(
     client: &crate::baml_std::PrimitiveClient,
 ) -> Result<Option<InferenceConfiguration>, BuildRequestError> {
-    let mut builder = InferenceConfiguration::builder();
-    let mut has_config = false;
+    let mut config = InferenceConfiguration::default();
 
     if let Some(crate::baml_std::ProviderOptions::Bedrock(bedrock_opts)) = &client.provider_options
     {
@@ -511,81 +365,47 @@ fn build_inference_config(
                         i32::MAX
                     ),
                 })?;
-            builder = builder.max_tokens(narrow);
-            has_config = true;
+            config.max_tokens = Some(narrow);
         }
 
         #[allow(clippy::cast_possible_truncation)]
         if let Some(t) = bedrock_opts.temperature {
-            builder = builder.temperature(t as f32);
-            has_config = true;
+            config.temperature = Some(t as f32);
         }
 
         #[allow(clippy::cast_possible_truncation)]
         if let Some(p) = bedrock_opts.top_p {
-            builder = builder.top_p(p as f32);
-            has_config = true;
+            config.top_p = Some(p as f32);
         }
 
         if let Some(seqs) = &bedrock_opts.stop_sequences {
             if !seqs.is_empty() {
-                builder = builder.set_stop_sequences(Some(seqs.clone()));
-                has_config = true;
+                config.stop_sequences = Some(seqs.clone());
             }
         }
     }
 
-    if has_config {
-        Ok(Some(builder.build()))
-    } else {
+    if config.is_empty() {
         Ok(None)
+    } else {
+        Ok(Some(config))
     }
 }
 
+/// Collect `extra_body` fields into the `additionalModelRequestFields` JSON
+/// object, or `None` when there are none.
 fn collect_additional_fields(
     client: &crate::baml_std::PrimitiveClient,
-) -> Option<aws_smithy_types::Document> {
-    let mut fields = std::collections::HashMap::new();
-    for (key, value) in &client.extra_body {
-        if let Some(doc) = json_value_to_document(value) {
-            fields.insert(key.clone(), doc);
-        }
+) -> Option<serde_json::Value> {
+    if client.extra_body.is_empty() {
+        return None;
     }
-
-    if fields.is_empty() {
-        None
-    } else {
-        Some(aws_smithy_types::Document::Object(fields))
-    }
-}
-
-fn json_value_to_document(value: &serde_json::Value) -> Option<aws_smithy_types::Document> {
-    use aws_smithy_types::{Document, Number};
-    match value {
-        serde_json::Value::Null => Some(Document::Null),
-        serde_json::Value::Bool(b) => Some(Document::Bool(*b)),
-        serde_json::Value::Number(n) => {
-            if let Some(u) = n.as_u64() {
-                Some(Document::Number(Number::PosInt(u)))
-            } else if let Some(i) = n.as_i64() {
-                Some(Document::Number(Number::NegInt(i)))
-            } else {
-                n.as_f64().map(|f| Document::Number(Number::Float(f)))
-            }
-        }
-        serde_json::Value::String(s) => Some(Document::String(s.clone())),
-        serde_json::Value::Array(arr) => {
-            let docs: Vec<Document> = arr.iter().filter_map(json_value_to_document).collect();
-            Some(Document::Array(docs))
-        }
-        serde_json::Value::Object(map) => {
-            let docs: std::collections::HashMap<String, Document> = map
-                .iter()
-                .filter_map(|(k, v)| json_value_to_document(v).map(|d| (k.clone(), d)))
-                .collect();
-            Some(Document::Object(docs))
-        }
-    }
+    let map: serde_json::Map<String, serde_json::Value> = client
+        .extra_body
+        .iter()
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    Some(serde_json::Value::Object(map))
 }
 
 // ============================================================================

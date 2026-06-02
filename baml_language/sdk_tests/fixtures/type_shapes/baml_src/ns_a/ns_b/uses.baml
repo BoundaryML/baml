@@ -2,10 +2,10 @@
 //   - bare `Thing` from `a/b/uses.baml`              → `Thing`
 //   - `root.Foo` from a deeper leaf (`a/b`)           → `Foo` (root-leaf shortcut still fires)
 
-function RoundTripThingFromAB(t: Thing) -> Thing {
+function round_trip_thing_from_ab(t: Thing) -> Thing {
   t
 }
 
-function RoundTripRootFooFromAB(f: root.Foo) -> root.Foo {
+function round_trip_root_foo_from_ab(f: root.Foo) -> root.Foo {
   f
 }

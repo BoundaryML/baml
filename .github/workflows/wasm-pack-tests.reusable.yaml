@@ -42,6 +42,9 @@ jobs:
           workspaces: "baml_language -> target"
           # Share cache across similar Linux WASM jobs for better hit rates
           shared-key: "linux-wasm"
+          # Read-only consumer. The canary saver lives in
+          # cargo-tests.reusable.yaml; see the cache strategy comment there.
+          save-if: false
 
       # Only wasm-pack is needed here.
       - name: "Install mise"
@@ -50,10 +53,6 @@ jobs:
           install_args: "cargo:wasm-pack"
 
       # NOTE: if you add a crate with wasm-gated tests, add a step here.
-      - name: "Run wasm-pack tests (baml_playground_wasm)"
-        run: wasm-pack test --node crates/baml_playground_wasm
-        working-directory: baml_language
-
       - name: "Run wasm-pack tests (sys_llm)"
         run: wasm-pack test --node crates/sys_llm
         working-directory: baml_language

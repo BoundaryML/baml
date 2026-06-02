@@ -9,7 +9,8 @@ fn user.ByteStringBasic() -> int {
 
     bb0: {
         _1 = b"<5 bytes>";
-        _0 = call const fn baml.Uint8Array.length(copy _1) -> [bb1];
+        _0 = len(_1);
+        goto -> bb1;
     }
 
     bb1: {
@@ -44,7 +45,8 @@ fn user.ByteStringEmpty() -> int {
 
     bb0: {
         _1 = b"<0 bytes>";
-        _0 = call const fn baml.Uint8Array.length(copy _1) -> [bb1];
+        _0 = len(_1);
+        goto -> bb1;
     }
 
     bb1: {
@@ -77,7 +79,8 @@ fn user.ByteStringHexEscapes() -> int {
 
     bb0: {
         _1 = b"<5 bytes>";
-        _0 = call const fn baml.Uint8Array.length(copy _1) -> [bb1];
+        _0 = len(_1);
+        goto -> bb1;
     }
 
     bb1: {
@@ -94,7 +97,8 @@ fn user.ByteStringInCondition() -> int {
 
     bb0: {
         _3 = b"<3 bytes>";
-        _2 = call const fn baml.Uint8Array.length(copy _3) -> [bb1];
+        _2 = len(_3);
+        goto -> bb1;
     }
 
     bb1: {
@@ -171,7 +175,8 @@ fn user.ByteStringPassAndReturn(data: uint8array) -> int {
     let _1: uint8array // data // param
 
     bb0: {
-        _0 = call const fn baml.Uint8Array.length(copy _1) -> [bb1];
+        _0 = len(_1);
+        goto -> bb1;
     }
 
     bb1: {
@@ -186,7 +191,8 @@ fn user.ByteStringStandardEscapes() -> int {
 
     bb0: {
         _1 = b"<6 bytes>";
-        _0 = call const fn baml.Uint8Array.length(copy _1) -> [bb1];
+        _0 = len(_1);
+        goto -> bb1;
     }
 
     bb1: {

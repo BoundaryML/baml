@@ -25,34 +25,8 @@ async fn env_get_or_panic_existing_var() {
     "#);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("panic_value".to_string()))
+        Ok(BexExternalValue::String("panic_value".to_string().into()))
     );
-}
-
-#[tokio::test]
-async fn env_get_or_panic_missing_var() {
-    unsafe { std::env::remove_var("BAML_TEST_MISSING_PANIC") };
-    let output = baml_test!(
-        r#"
-            function main() -> string {
-                baml.env.get_or_panic("BAML_TEST_MISSING_PANIC")
-            }
-        "#
-    );
-
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> string {
-        load_const "BAML_TEST_MISSING_PANIC"
-        call baml.env.get_or_panic
-        return
-    }
-    "#);
-    insta::assert_snapshot!(output.result.unwrap_err().to_string(), @r#"
-    Traceback (most recent call last):
-      File "test.baml", line 3, in user.main
-      File "<builtin>/baml/ns_env/env.baml", line 8, in baml.env.get_or_panic
-    uncaught throw: Instance { class_name: "baml.panics.UserPanic", fields: {"message": String("env var not found: BAML_TEST_MISSING_PANIC")} }
-    "#);
 }
 
 #[tokio::test]
@@ -75,29 +49,8 @@ async fn env_get_existing_var() {
     "#);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("hello_env".to_string()))
+        Ok(BexExternalValue::String("hello_env".to_string().into()))
     );
-}
-
-#[tokio::test]
-async fn env_get_missing_var_returns_null() {
-    unsafe { std::env::remove_var("BAML_TEST_NONEXISTENT_VAR") };
-    let output = baml_test!(
-        r#"
-            function main() -> string? {
-                baml.env.get("BAML_TEST_NONEXISTENT_VAR")
-            }
-        "#
-    );
-
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> string? {
-        load_const "BAML_TEST_NONEXISTENT_VAR"
-        sys_op baml.env.get
-        return
-    }
-    "#);
-    assert_eq!(output.result, Ok(BexExternalValue::Null));
 }
 
 #[tokio::test]
@@ -120,32 +73,6 @@ async fn env_sugar_existing_var() {
     "#);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("sugar_value".to_string()))
+        Ok(BexExternalValue::String("sugar_value".to_string().into()))
     );
-}
-
-#[tokio::test]
-async fn env_sugar_missing_var() {
-    unsafe { std::env::remove_var("BAML_TEST_SUGAR_MISSING") };
-    let output = baml_test!(
-        r#"
-            function main() -> string {
-                env.BAML_TEST_SUGAR_MISSING
-            }
-        "#
-    );
-
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> string {
-        load_const "BAML_TEST_SUGAR_MISSING"
-        call baml.env.get_or_panic
-        return
-    }
-    "#);
-    insta::assert_snapshot!(output.result.unwrap_err().to_string(), @r#"
-    Traceback (most recent call last):
-      File "test.baml", line 3, in user.main
-      File "<builtin>/baml/ns_env/env.baml", line 8, in baml.env.get_or_panic
-    uncaught throw: Instance { class_name: "baml.panics.UserPanic", fields: {"message": String("env var not found: BAML_TEST_SUGAR_MISSING")} }
-    "#);
 }

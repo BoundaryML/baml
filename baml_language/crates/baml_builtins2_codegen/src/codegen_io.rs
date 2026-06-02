@@ -230,9 +230,16 @@ fn view_return_type(ty: &BamlType, needs_heap: &mut bool) -> TokenStream {
             quote! { Result<f64, AccessError> }
         }
         BamlType::Bool => quote! { Result<bool, AccessError> },
+        // Bigints live behind a heap pointer (`Object::Bigint`) or by value in
+        // an external value; either way `as_bigint` hands back an owned `Arc`,
+        // so the accessor needs a `PermitProof` to deref the pointer soundly.
+        BamlType::Bigint => {
+            *needs_heap = true;
+            quote! { Result<std::sync::Arc<num_bigint::BigInt>, AccessError> }
+        }
         BamlType::String => {
             *needs_heap = true;
-            quote! { Result<&'a String, AccessError> }
+            quote! { Result<&'a bex_str::BexStr, AccessError> }
         }
         BamlType::RustType => {
             *needs_heap = true;
@@ -252,6 +259,7 @@ fn view_accessor_body(field_name: &str, ty: &BamlType) -> TokenStream {
         BamlType::Int => quote! { self.cls.field(#field_lit)?.as_int() },
         BamlType::Float => quote! { self.cls.field(#field_lit)?.as_float(heap, permit) },
         BamlType::Bool => quote! { self.cls.field(#field_lit)?.as_bool() },
+        BamlType::Bigint => quote! { self.cls.field(#field_lit)?.as_bigint(heap, permit) },
         BamlType::String => quote! { self.cls.field(#field_lit)?.as_string(heap, permit) },
         BamlType::RustType => quote! { self.cls.field(#field_lit)?.as_rust_data(heap, permit) },
         _ => quote! { self.cls.field(#field_lit)?.as_owned_but_very_slow(heap, permit) },
@@ -269,7 +277,7 @@ fn external_to_typed_expr(
     match ty {
         BamlType::String => quote! {
             match #val_expr {
-                BexExternalValue::String(v) => Ok(v),
+                BexExternalValue::String(v) => Ok(v.to_string()),
                 other => Err(AccessError::TypeMismatch {
                     expected: "string",
                     actual: other.type_name().to_string(),
@@ -396,7 +404,7 @@ fn into_owned_expr(
         }
         // Float accessor is now heap-aware (`Object::Float` deref).
         BamlType::Float => quote! { self.#field_ident(heap, permit)? },
-        BamlType::String => quote! { self.#field_ident(heap, permit)?.clone() },
+        BamlType::String => quote! { self.#field_ident(heap, permit)?.to_string() },
         BamlType::RustType => quote! { self.#field_ident(heap, permit)? },
         BamlType::Uint8Array | BamlType::List(_) | BamlType::Map(_, _) | BamlType::Optional(_) => {
             let val = quote! { self.#field_ident(heap, permit)? };
@@ -426,7 +434,7 @@ fn owned_to_external_expr(
         },
         BamlType::Float => quote! { BexExternalValue::Float(#field_expr) },
         BamlType::Bool => quote! { BexExternalValue::Bool(#field_expr) },
-        BamlType::String => quote! { BexExternalValue::String(#field_expr) },
+        BamlType::String => quote! { BexExternalValue::String((#field_expr).into()) },
         BamlType::RustType => quote! { BexExternalValue::RustData(#field_expr) },
         BamlType::Null => quote! { BexExternalValue::Null },
         BamlType::List(inner) => {
@@ -583,11 +591,14 @@ pub fn generate_sys_op_enum(io_builtins: &[NativeBuiltin]) -> String {
         .iter()
         .map(|b| {
             let variant = format_ident!("{}", b.sys_op_variant_name());
-            if b.throws.is_empty() {
-                quote! { SysOp::#variant => &[] }
-            } else {
-                let cats: Vec<_> = b.throws.iter().map(|t| format_ident!("{}", t)).collect();
-                quote! { SysOp::#variant => &[#(SysOpErrorCategory::#cats),*] }
+            // `None` (no clause) is rejected during extraction; `Some([])`
+            // (`throws never`) and `None` both map to no error categories.
+            match &b.throws {
+                Some(cats) if !cats.is_empty() => {
+                    let cats: Vec<_> = cats.iter().map(|t| format_ident!("{}", t)).collect();
+                    quote! { SysOp::#variant => &[#(SysOpErrorCategory::#cats),*] }
+                }
+                _ => quote! { SysOp::#variant => &[] },
             }
         })
         .collect();
@@ -614,7 +625,15 @@ pub fn generate_sys_op_enum(io_builtins: &[NativeBuiltin]) -> String {
         .collect();
 
     let tokens = quote! {
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, ::serde::Serialize, ::serde::Deserialize)]
+        #[derive(
+            Clone,
+            Copy,
+            Debug,
+            PartialEq,
+            Eq,
+            ::borsh::BorshSerialize,
+            ::borsh::BorshDeserialize,
+        )]
         pub enum SysOp {
             #(#variant_idents,)*
         }
@@ -2261,7 +2280,7 @@ fn emit_result_conversion_for_ty(
             let msg = format!("expected string{ctx}, got {{}}");
             quote! {
                 match __val {
-                    BexExternalValue::String(s) => Ok(s),
+                    BexExternalValue::String(s) => Ok(s.to_string()),
                     other => Err(RuntimeIoError::Other(
                         format!(#msg, other.type_name()),
                     )),

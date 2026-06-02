@@ -1,36 +1,37 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 46362
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: type mismatch: expected user.llm.openai.Box<int>, got user.llm.openai.Box
+  [type] error: type mismatch: expected root.llm.openai.Box<int>, got root.llm.openai.Box
    ╭─[ main.baml:2:20 ]
    │
  2 │ ╭─▶     match (boxed) {
  3 │ ├─▶         root.llm.openai.Box => 1
    │ │                                      
-   │ ╰────────────────────────────────────── type mismatch: expected user.llm.openai.Box<int>, got user.llm.openai.Box
+   │ ╰────────────────────────────────────── type mismatch: expected root.llm.openai.Box<int>, got root.llm.openai.Box
    │     
    │     Note: Error code: E0001
 ───╯
 
-  [type] error: type mismatch: expected user.llm.openai.Box<int>, got user.llm.openai.Box
+  [type] error: type mismatch: expected root.llm.openai.Box<int>, got root.llm.openai.Box
    ╭─[ main.baml:8:20 ]
    │
  8 │ ╭─▶     match (boxed) {
  9 │ ├─▶         llm.openai.Box => 1
    │ │                                 
-   │ ╰───────────────────────────────── type mismatch: expected user.llm.openai.Box<int>, got user.llm.openai.Box
+   │ ╰───────────────────────────────── type mismatch: expected root.llm.openai.Box<int>, got root.llm.openai.Box
    │     
    │     Note: Error code: E0001
 ───╯
 
-  [type] error: type mismatch: expected user.llm.openai.Box<int>, got user.llm.openai.Box<int, string>
+  [type] error: type mismatch: expected root.llm.openai.Box<int>, got root.llm.openai.Box<int, string>
     ╭─[ main.baml:14:20 ]
     │
  14 │ ╭─▶     match (boxed) {
  15 │ ├─▶         root.llm.openai.Box<int, string> => 1,
     │ │                                                    
-    │ ╰──────────────────────────────────────────────────── type mismatch: expected user.llm.openai.Box<int>, got user.llm.openai.Box<int, string>
+    │ ╰──────────────────────────────────────────────────── type mismatch: expected root.llm.openai.Box<int>, got root.llm.openai.Box<int, string>
     │     
     │     Note: Error code: E0001
 ────╯
@@ -45,13 +46,13 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0063
 ────╯
 
-  [type] error: type mismatch: expected user.llm.openai.Response, got user.llm.openai.Response<int>
+  [type] error: type mismatch: expected root.llm.openai.Response, got root.llm.openai.Response<int>
     ╭─[ main.baml:21:23 ]
     │
  21 │ ╭─▶     match (response) {
  22 │ ├─▶         root.llm.openai.Response<int> => 1
     │ │                                                
-    │ ╰──────────────────────────────────────────────── type mismatch: expected user.llm.openai.Response, got user.llm.openai.Response<int>
+    │ ╰──────────────────────────────────────────────── type mismatch: expected root.llm.openai.Response, got root.llm.openai.Response<int>
     │     
     │     Note: Error code: E0001
 ────╯

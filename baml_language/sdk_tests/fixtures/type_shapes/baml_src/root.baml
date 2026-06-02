@@ -8,10 +8,10 @@ class Foo {
 }
 
 // Same-file, same-leaf (root): bare `Foo` → `Foo`.
-function MakeFoo(v: int) -> Foo {
+function make_foo(v: int) -> Foo {
   Foo { v: v }
 }
 
-function RoundTripFoo(f: Foo) -> Foo {
+function round_trip_foo(f: Foo) -> Foo {
   f
 }

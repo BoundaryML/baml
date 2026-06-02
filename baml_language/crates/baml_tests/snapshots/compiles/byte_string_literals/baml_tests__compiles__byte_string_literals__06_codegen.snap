@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 function user.ByteStringBasic() -> int {
     load_const b"\x68\x65\x6c\x6c\x6f"
     call baml.deep_copy
-    call baml.Uint8Array.length
+    container_len
     return
 }
 
@@ -19,7 +19,7 @@ function user.ByteStringDirectIndexRead() -> int {
 function user.ByteStringEmpty() -> int {
     load_const b""
     call baml.deep_copy
-    call baml.Uint8Array.length
+    container_len
     return
 }
 
@@ -35,14 +35,14 @@ function user.ByteStringEquality() -> bool {
 function user.ByteStringHexEscapes() -> int {
     load_const b"\x48\x65\x6c\x6c\x6f"
     call baml.deep_copy
-    call baml.Uint8Array.length
+    container_len
     return
 }
 
 function user.ByteStringInCondition() -> int {
     load_const b"\x61\x62\x63"
     call baml.deep_copy
-    call baml.Uint8Array.length
+    container_len
     load_const 0
     cmp_int_op >
     pop_jump_if_false L0
@@ -89,13 +89,13 @@ function user.ByteStringMutate() -> int? {
 
 function user.ByteStringPassAndReturn(data: uint8array) -> int {
     load_var data
-    call baml.Uint8Array.length
+    container_len
     return
 }
 
 function user.ByteStringStandardEscapes() -> int {
     load_const b"\x0a\x09\x0d\x00\x5c\x22"
     call baml.deep_copy
-    call baml.Uint8Array.length
+    container_len
     return
 }

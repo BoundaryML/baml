@@ -1,0 +1,73 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function time.$init_test_ns_time_time(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "instant_parse_epoch"
+    make_closure .<lambda($init_test_ns_time_time, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "instant_parse_one_second"
+    make_closure .<lambda($init_test_ns_time_time, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "instant_parse_fractional_seconds"
+    make_closure .<lambda($init_test_ns_time_time, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "instant_parse_honors_timezone_offset"
+    make_closure .<lambda($init_test_ns_time_time, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "instant_parse_iso8601_basic_no_separators"
+    make_closure .<lambda($init_test_ns_time_time, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "instant_parse_rfc2822_epoch"
+    make_closure .<lambda($init_test_ns_time_time, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "instant_parse_rfc2822_honors_offset"
+    make_closure .<lambda($init_test_ns_time_time, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "instant_parse_invalid_throws_parse_error"
+    make_closure .<lambda($init_test_ns_time_time, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "instant_now_returns_recent_wall_clock"
+    make_closure .<lambda($init_test_ns_time_time, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "duration_from_seconds_to_milliseconds"
+    make_closure .<lambda($init_test_ns_time_time, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "duration_since_is_nonnegative_for_past_instant"
+    make_closure .<lambda($init_test_ns_time_time, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}

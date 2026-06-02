@@ -313,7 +313,7 @@ impl BexHeap {
         let new_ptr = unsafe {
             let inactive = self.inactive_mut();
             let new_runtime_idx = inactive.len();
-            inactive.push_with(obj, || Object::String(String::new()));
+            inactive.push_with(obj, || Object::String(bex_str::BexStr::empty()));
             let raw_ptr = inactive.get_ptr(new_runtime_idx);
             self.make_heap_ptr(raw_ptr)
         };
@@ -626,7 +626,7 @@ impl BexHeap {
         let new_ptr = unsafe {
             let vec = &mut *space.get();
             let new_idx = vec.len();
-            vec.push_with(obj, || Object::String(String::new()));
+            vec.push_with(obj, || Object::String(bex_str::BexStr::empty()));
             let raw_ptr = vec.get_ptr(new_idx);
             self.make_heap_ptr(raw_ptr)
         };
@@ -1018,8 +1018,8 @@ mod tests {
     #[test]
     fn test_gc_preserves_compile_time_objects() {
         let compile_time: Vec<Object> = vec![
-            Object::String("builtin1".to_string()),
-            Object::String("builtin2".to_string()),
+            Object::String(bex_str::BexStr::from("builtin1")),
+            Object::String(bex_str::BexStr::from("builtin2")),
         ];
         let heap = BexHeap::new(compile_time);
 
@@ -1250,6 +1250,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "allocates ~15k objects to drive GC heuristics; runs for minutes under Miri and exercises collection policy, not unsafe memory paths"
+    )]
     fn test_gc_heuristics() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
@@ -1292,8 +1296,8 @@ mod tests {
     #[test]
     fn test_compile_time_objects_never_collected() {
         let compile_time: Vec<Object> = vec![
-            Object::String("builtin1".to_string()),
-            Object::String("builtin2".to_string()),
+            Object::String(bex_str::BexStr::from("builtin1")),
+            Object::String(bex_str::BexStr::from("builtin2")),
         ];
         let heap = BexHeap::new(compile_time);
         let mut tlab = Tlab::new(Arc::clone(&heap));
@@ -1332,7 +1336,7 @@ mod tests {
 
         // Allocate a map that references the string
         let mut map = indexmap::IndexMap::new();
-        map.insert("key".to_string(), Value::object(str_obj));
+        map.insert(bex_str::BexStr::from("key"), Value::object(str_obj));
         let map_obj = tlab.alloc_map(map);
 
         // Allocate unreferenced garbage
@@ -1457,7 +1461,7 @@ mod tests {
         let inner_array = tlab.alloc_array(vec![Value::object(leaf_str)]);
 
         let mut map = indexmap::IndexMap::new();
-        map.insert("nested".to_string(), Value::object(inner_array));
+        map.insert(bex_str::BexStr::from("nested"), Value::object(inner_array));
         let middle_map = tlab.alloc_map(map);
 
         let outer_array = tlab.alloc_array(vec![Value::object(middle_map)]);
@@ -1712,7 +1716,7 @@ mod tests {
     fn test_generation_of_compile_time() {
         use crate::heap::Generation;
 
-        let heap = BexHeap::new(vec![Object::String("builtin".to_string())]);
+        let heap = BexHeap::new(vec![Object::String(bex_str::BexStr::from("builtin"))]);
         let ct_ptr = heap.compile_time_ptr(0);
         assert_eq!(heap.generation_of(ct_ptr), Generation::CompileTime);
     }
@@ -1812,8 +1816,8 @@ mod tests {
         let captured = tlab.alloc_string("captured_value".to_string());
         let closure_ptr = tlab.alloc(Object::Closure(Closure {
             function: func_ptr,
-            captures: vec![Value::object(captured), Value::int(7)],
-            captured_type_args: vec![],
+            captures: Box::new([Value::object(captured), Value::int(7)]),
+            captured_type_args: Box::new([]),
         }));
 
         let roots = vec![closure_ptr];
@@ -2384,14 +2388,14 @@ mod tests {
 
         // --- Container: Object::Map ---
         let mut map_data = indexmap::IndexMap::new();
-        map_data.insert("k".to_string(), Value::object(leaf_for_map));
+        map_data.insert(bex_str::BexStr::from("k"), Value::object(leaf_for_map));
         let map_container = tlab.alloc_map(map_data);
 
         // --- Container: Object::Closure ---
         let closure_container = tlab.alloc(Object::Closure(Closure {
             function: leaf_func,
-            captures: vec![Value::object(leaf_for_closure_cap), Value::int(7)],
-            captured_type_args: vec![],
+            captures: Box::new([Value::object(leaf_for_closure_cap), Value::int(7)]),
+            captured_type_args: Box::new([]),
         }));
 
         // --- Container: Object::Cell ---
@@ -2557,6 +2561,10 @@ mod tests {
 
     /// Verify `should_collect` returns `Some(Minor)` after 10,000+ allocations.
     #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "allocates 10k+ objects to cross the GC threshold; runs for minutes under Miri and exercises collection policy, not unsafe memory paths"
+    )]
     fn test_should_collect_minor_on_gen0_pressure() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
@@ -2571,6 +2579,10 @@ mod tests {
 
     /// Verify `should_collect` returns `Some(Minor)` when Gen1 exceeds its threshold.
     #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "allocates 10k+ objects to cross the GC threshold; runs for minutes under Miri and exercises collection policy, not unsafe memory paths"
+    )]
     fn test_should_collect_minor_on_gen1_pressure() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
@@ -2709,6 +2721,10 @@ mod tests {
     /// Verify that the `should_collect` Gen1 path triggers correctly once the
     /// threshold has been lowered by post-collection adaptation.
     #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "allocates 10k+ objects to cross the GC threshold; runs for minutes under Miri and exercises collection policy, not unsafe memory paths"
+    )]
     fn test_should_collect_minor_when_gen1_exceeds_adapted_threshold() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));

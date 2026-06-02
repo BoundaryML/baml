@@ -9,13 +9,16 @@ client<llm> MyClient {
   }
 }
 
-// error: values in allowed_roles must be strings. Got: number
-//   -->  client/remap_role_non_string_allowed_roles.baml:5
-//    |
-//  4 |     model "gpt-4o"
-//  5 |     allowed_roles ["user", 123, "assistant"]
-//    |
-
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// error: type mismatch: expected string[] | null, got (string | null)[]
+//     ╭─[ client_remap_role_non_string_allowed_roles.baml:1:1 ]
+//     │
+//   1 │ ╭─▶ client<llm> MyClient {
+//     ┆ ┆   
+//  10 │ ├─▶ }
+//     │ │      
+//     │ ╰────── type mismatch: expected string[] | null, got (string | null)[]
+//     │     
+//     │     Note: Error code: E0001
+// ────╯

@@ -9,26 +9,26 @@
 // proto.ts — mirrors bridge_python/python_src/baml_py/proto.py
 //
 // Encodes TS objects → CallFunctionArgs protobuf bytes (for sending to Rust)
-// Decodes BamlOutboundValue protobuf bytes → TS objects (for receiving from Rust)
+// Decodes the BamlOutboundResult envelope → TS objects (call results), and
+// bare BamlOutboundValue bytes → TS objects (host-callable args).
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.HostCallableSyncError = void 0;
 exports.encodeCallArgs = encodeCallArgs;
+exports.decodeOutboundValue = decodeOutboundValue;
 exports.decodeCallResult = decodeCallResult;
 const baml_cffi_1 = require("./proto/baml_cffi");
 const native_1 = require("./native");
+const stream_1 = require("./stream");
+const errors_1 = require("./errors");
+const typemap_1 = require("./typemap");
 const CallFunctionArgs = baml_cffi_1.baml_core.cffi.v1.CallFunctionArgs;
 const BamlOutboundValue = baml_cffi_1.baml_core.cffi.v1.BamlOutboundValue;
+const BamlOutboundResult = baml_cffi_1.baml_core.cffi.v1.BamlOutboundResult;
 const InboundValue = baml_cffi_1.baml_core.cffi.v1.InboundValue;
 const HostCallableError = baml_cffi_1.baml_core.cffi.v1.HostCallableError;
 const HostCallableErrorCategory = baml_cffi_1.baml_core.cffi.v1.HostCallableErrorCategory;
 const BamlHandleType = baml_cffi_1.baml_core.cffi.v1.BamlHandleType;
 // ─── Inbound (TS → Rust) ───
-function isPlainObject(value) {
-    if (value == null || typeof value !== 'object')
-        return false;
-    const proto = Object.getPrototypeOf(value);
-    return proto === Object.prototype || proto === null;
-}
 /**
  * Error thrown when a host callable (a JS `function`) is passed to the
  * *synchronous* call path. See {@link encodeCallArgs} for why this can't work.
@@ -80,7 +80,24 @@ function setInboundValue(iv, value, ctx) {
                 '(callFunction) instead of callFunctionSync. The sync path blocks the Node main ' +
                 'thread, so the host callback can never run and the call would hang.');
         }
-        iv.handle = { key: value.key, handleType: value.handleType };
+        // The Rust inbound decoder drains handle-table entries. Send a fresh
+        // cloned key so the JS-owned handle remains valid for later calls.
+        iv.handle = { key: (0, native_1.putHandleIntoTable)(value), handleType: value.handleType };
+    }
+    else if (value instanceof stream_1.BamlStream) {
+        // Stream wrapper → its inner TaggedHeapHandle. Mirrors the BamlHandle
+        // branch above; the engine re-binds it to the heap value on decode.
+        const h = value._toHandle();
+        iv.handle = { key: h.key, handleType: h.handleType };
+    }
+    else if (value instanceof native_1.BamlImage
+        || value instanceof native_1.BamlAudio
+        || value instanceof native_1.BamlVideo
+        || value instanceof native_1.BamlPdf) {
+        // Stdlib media wrappers → their backing ADT_MEDIA_* handle. `_toHandle`
+        // clones the table row so the wrapper stays usable after encode.
+        const h = value._toHandle();
+        iv.handle = { key: h.key, handleType: h.handleType };
     }
     else if (typeof value === 'function') {
         // Host callables cannot work on the synchronous call path —
@@ -110,9 +127,52 @@ function setInboundValue(iv, value, ctx) {
         }
         iv.listValue = { values: listVal };
     }
-    else if (isPlainObject(value)) {
+    else if (value !== null && typeof value === 'object') {
+        // Any remaining object — a plain object OR a codegen-emitted class
+        // instance (e.g. `new Resume({...})`) — encodes as `map_value` with
+        // no FQN tag. The Rust side's `coerce_arg_to_declared_type` reshapes
+        // it against the function's declared parameter type (the 10a
+        // typemap-free encode simplification). `Object.entries` yields the
+        // class's own enumerable fields, set by the constructor's
+        // `Object.assign(this, init)`. The specific built-in wrappers
+        // (BamlHandle/BamlStream/media) are handled by the instanceof
+        // branches above, so they never reach here.
+        //
+        // Class instances additionally carry their instance-method bindings
+        // (`m = defineInstanceFunction(...).bind(this)`) as own enumerable
+        // fields. Those are behavior, not state — skip function-valued fields
+        // on a class instance so re-encoding a handle-backed value (e.g. a
+        // `baml.fs.File` with `read`/`text` bindings) sends only its data
+        // (the `_handle`). Plain objects keep every field, so a host callable
+        // nested in a plain object still encodes as a callable.
+        const proto = Object.getPrototypeOf(value);
+        const isClassInstance = proto !== Object.prototype && proto !== null;
+        // Handle-backed stdlib types (e.g. `baml.fs.File`, `baml.http.Response`)
+        // decode to a class instance that carries the engine's handle in a
+        // field (`_handle` / `_body`). The engine resolves these from a
+        // FQN-tagged `class_value` (not a bare `map` — which has no FQN — nor a
+        // bare `handle`), so re-sending the same handle inside the named class
+        // value lets it resolve the same object and preserve cursor/connection
+        // state across FFI calls. The FQN comes from the typemap reverse map.
+        if (isClassInstance && Object.values(value).some(v => v instanceof native_1.BamlHandle)) {
+            const fqn = (0, typemap_1.getTypeMap)().jsTypeToBamlType(value.constructor);
+            if (fqn) {
+                const classFields = [];
+                for (const [k, v] of Object.entries(value)) {
+                    if (typeof v === 'function')
+                        continue;
+                    const childVal = {};
+                    setInboundValue(childVal, v, ctx);
+                    classFields.push({ stringKey: k, value: childVal });
+                }
+                iv.classValue = { name: fqn, fields: classFields };
+                return;
+            }
+        }
         const entries = [];
         for (const [k, v] of Object.entries(value)) {
+            if (isClassInstance && typeof v === 'function')
+                continue;
             const entry = { stringKey: k };
             const childVal = {};
             setInboundValue(childVal, v, ctx);
@@ -196,7 +256,7 @@ function parseHexBigint(s) {
         ? -BigInt(`0x${magnitude}`)
         : BigInt(`0x${magnitude}`);
 }
-function decodeValueHolder(holder) {
+function decodeValueHolder(holder, typeMap) {
     if (holder.nullValue != null)
         return null;
     if (holder.stringValue != null)
@@ -213,16 +273,11 @@ function decodeValueHolder(holder) {
     if (holder.uint8arrayValue != null)
         return holder.uint8arrayValue;
     if (holder.classValue) {
-        const obj = Object.create(null);
-        for (const entry of holder.classValue.fields || []) {
-            if (entry.key != null && entry.value) {
-                obj[entry.key] = decodeValueHolder(entry.value);
-            }
-        }
-        return obj;
+        return decodeClass(holder.classValue, typeMap);
     }
-    if (holder.enumValue)
-        return holder.enumValue.value;
+    if (holder.enumValue) {
+        return decodeEnum(holder.enumValue, typeMap);
+    }
     if (holder.literalValue) {
         if (holder.literalValue.stringLiteral != null)
             return holder.literalValue.stringLiteral.value;
@@ -243,34 +298,202 @@ function decodeValueHolder(holder) {
         }
     }
     if (holder.listValue) {
-        return (holder.listValue.items || []).map(item => decodeValueHolder(item));
+        return (holder.listValue.items || []).map(item => decodeValueHolder(item, typeMap));
     }
     if (holder.mapValue) {
         const obj = Object.create(null);
         for (const entry of holder.mapValue.entries || []) {
             if (entry.key != null && entry.value) {
-                obj[entry.key] = decodeValueHolder(entry.value);
+                obj[entry.key] = decodeValueHolder(entry.value, typeMap);
             }
         }
         return obj;
     }
     if (holder.unionVariantValue && holder.unionVariantValue.value) {
-        return decodeValueHolder(holder.unionVariantValue.value);
+        return decodeValueHolder(holder.unionVariantValue.value, typeMap);
     }
     // handle_value: pass the protobufjs Long directly as the key — BamlHandle's
     // constructor accepts { low, high } which is layout-compatible with Long.
+    // Dispatch on handle_type so media handles decode to their typed wrapper.
     if (holder.handleValue) {
-        return new native_1.BamlHandle(holder.handleValue.key, holder.handleValue.handleType ?? 0);
+        const ht = holder.handleValue.handleType ?? 0;
+        if (ht === BamlHandleType.HANDLE_UNSPECIFIED) {
+            // Never a valid decoded handle (mirrors Python's _decode_handle).
+            throw new errors_1.BamlError('decoded handle has HANDLE_UNSPECIFIED handle_type');
+        }
+        const handle = new native_1.BamlHandle(holder.handleValue.key, ht);
+        if (ht === BamlHandleType.ADT_MEDIA_IMAGE)
+            return native_1.BamlImage._fromHandle(handle);
+        if (ht === BamlHandleType.ADT_MEDIA_AUDIO)
+            return native_1.BamlAudio._fromHandle(handle);
+        if (ht === BamlHandleType.ADT_MEDIA_VIDEO)
+            return native_1.BamlVideo._fromHandle(handle);
+        if (ht === BamlHandleType.ADT_MEDIA_PDF)
+            return native_1.BamlPdf._fromHandle(handle);
+        // ADT_MEDIA_GENERIC has no typed wrapper — stays a bare BamlHandle.
+        // TODO: ADT_TAGGED_HEAP_HANDLE / RustData re-encode (handle-backed
+        // stdlib types like baml.fs.File) needs cross-call handle-lifecycle
+        // work; for now non-media handles decode to a bare BamlHandle.
+        return handle;
     }
-    // FIXME: Unknown/unsupported outbound variants silently collapse to null, making them
-    // indistinguishable from a legitimate BAML null result. Legacy engine/ threw via Rust
-    // Err/anyhow. bridge_python has the same silent `return None` fallthrough. Leaving as-is
-    // for parity with bridge_python; fix both together if this becomes a forward-compat issue.
+    // Inline media / prompt AST are not expected on the Node FFI path — they
+    // travel via `handle_value`. Reject loudly rather than silently collapsing
+    // to null (mirrors bridge_python's proto.py, which raises here).
+    if (holder.mediaValue || holder.promptAstValue) {
+        const which = holder.mediaValue ? 'media_value' : 'prompt_ast_value';
+        throw new errors_1.BamlError(`BEX emitted ${which} on the FFI path — media/prompt AST are expected ` +
+            `via handle_value, not inline`);
+    }
+    // Any remaining unset oneof is a legitimate null: an all-default holder is a
+    // null BAML result.
     return null;
 }
-function decodeCallResult(data) {
+/**
+ * Decode a `class_value` to a typed instance via the typemap. When the FQN is
+ * in the typemap (the generated-SDK path), construct `new Cls(fieldDict)`
+ * (codegen emits `constructor(init) { Object.assign(this, init); }`). The five
+ * stdlib media wrappers unwrap their `_data` envelope to the wrapper itself.
+ * When the FQN is absent (the bare bridge has no typemap, or an unmapped
+ * class), fall back to a plain object — preserving the pre-typemap behavior.
+ */
+function decodeClass(classValue, typeMap) {
+    const fieldDict = {};
+    for (const entry of classValue.fields || []) {
+        if (entry.key != null && entry.value) {
+            fieldDict[entry.key] = decodeValueHolder(entry.value, typeMap);
+        }
+    }
+    const fqn = classValue.name?.name ?? '';
+    if (fqn) {
+        let Cls;
+        try {
+            Cls = typeMap.getClass(fqn);
+        }
+        catch {
+            Cls = undefined; // unmapped FQN — fall back below
+        }
+        if (Cls !== undefined) {
+            // Stdlib media wrappers: the decoded `_data` is already the typed
+            // wrapper (its inner handle_value decoded via the media branch);
+            // unwrap the envelope per the spec's Instance row.
+            if ((Cls === native_1.BamlImage || Cls === native_1.BamlAudio || Cls === native_1.BamlVideo || Cls === native_1.BamlPdf)
+                && '_data' in fieldDict) {
+                return fieldDict._data;
+            }
+            const Ctor = Cls;
+            return new Ctor(fieldDict);
+        }
+    }
+    // Fallback: plain object (null-prototype, matching the prior behavior).
+    const obj = Object.create(null);
+    for (const [k, v] of Object.entries(fieldDict))
+        obj[k] = v;
+    return obj;
+}
+/**
+ * Decode an `enum_value` to a typed enum member via the typemap. Falls back to
+ * the raw variant string when the FQN is unmapped (bare bridge / unmapped enum).
+ */
+function decodeEnum(enumValue, typeMap) {
+    const fqn = enumValue.name?.name ?? '';
+    const variant = enumValue.value;
+    if (fqn && variant != null) {
+        let En;
+        try {
+            En = typeMap.getEnum(fqn);
+        }
+        catch {
+            En = undefined;
+        }
+        if (En !== undefined && variant in En) {
+            return En[variant];
+        }
+    }
+    return variant;
+}
+/**
+ * Decode a bare `BamlOutboundValue` to a JS value. Used for the host-callable
+ * args path, where the engine sends a list-shaped `BamlOutboundValue` rather
+ * than the call-result `BamlOutboundResult` envelope.
+ */
+function decodeOutboundValue(data) {
     const msg = BamlOutboundValue.decode(data instanceof Buffer ? data : Buffer.from(data));
-    return decodeValueHolder(msg);
+    return decodeValueHolder(msg, (0, typemap_1.getTypeMap)());
+}
+/**
+ * Decode the thrown value off the wire holder. Returns the fully decoded BAML
+ * `value` (a generated class instance when the FQN is mapped, else a plain
+ * object / primitive), the class FQN (`className`), and a readable `message`
+ * lifted from the value's `message` field when present. Mirrors
+ * bridge_python's `decode_value` + `_outbound_class_fqn` so the surfaced
+ * `BamlError`/`BamlPanic` carries the decoded value, not just a string.
+ *
+ * Decoding is defensive: a malformed/unsupported thrown payload must not mask
+ * the original error/panic, so a decode failure degrades to an undefined value
+ * (the formatted message and className are still surfaced).
+ */
+function decodeThrown(holder) {
+    const className = holder?.classValue?.name?.name ?? undefined;
+    let value;
+    try {
+        value = holder ? decodeValueHolder(holder, (0, typemap_1.getTypeMap)()) : undefined;
+    }
+    catch {
+        value = undefined;
+    }
+    let message = '';
+    if (value != null && typeof value === 'object' && 'message' in value) {
+        const m = value.message;
+        if (typeof m === 'string')
+            message = m;
+    }
+    return { value, className, message };
+}
+function formatThrownMessage(kind, className, message, trace) {
+    const label = className || `baml.${kind}`;
+    let text = `baml ${kind}: ${label}`;
+    if (message)
+        text += `: ${message}`;
+    if (trace.length)
+        text += '\n' + trace.map(l => '    ' + l).join('\n');
+    return text;
+}
+/**
+ * Decode a `BamlOutboundResult` envelope (the engine's call-result wire shape
+ * after 31c/31e). The `ok` arm returns the decoded value; the `error`/`panic`
+ * arms **throw** a `BamlError`/`BamlPanic` carrying the fully decoded thrown
+ * value (`.value`), the BAML trace (`.bamlTrace`), and the class FQN
+ * (`.className`), with a readable formatted `.message`. An `is_exit_panic`
+ * (clean `baml.sys.exit`) terminates the process via `process.exit(code)`
+ * rather than throwing.
+ */
+function decodeCallResult(data) {
+    const buf = data instanceof Buffer ? data : Buffer.from(data);
+    const result = BamlOutboundResult.decode(buf);
+    switch (result.result) {
+        case 'error': {
+            const { value, className, message } = decodeThrown(result.error?.value);
+            const trace = result.error?.trace ?? [];
+            throw new errors_1.BamlError(formatThrownMessage('error', className ?? '', message, trace), { value, bamlTrace: trace, className });
+        }
+        case 'panic': {
+            const panic = result.panic;
+            if (panic?.isExitPanic) {
+                // Clean process-exit panic: exit after flushing telemetry (the
+                // registered `process.once('exit', flushEvents)` hook fires
+                // synchronously inside process.exit), rather than throwing.
+                const code = Number(panic.exitCode ?? 0);
+                process.exit(code);
+            }
+            const { value, className, message } = decodeThrown(panic?.value);
+            const trace = panic?.trace ?? [];
+            throw new errors_1.BamlPanic(formatThrownMessage('panic', className ?? '', message, trace), { value, bamlTrace: trace, className });
+        }
+        case 'ok':
+        default:
+            // `ok` (or an absent oneof — an all-default envelope is a null `ok`).
+            return result.ok ? decodeValueHolder(result.ok, (0, typemap_1.getTypeMap)()) : null;
+    }
 }
 // ─── Host-callable dispatch (BAML → JS) ───
 //
@@ -298,7 +521,9 @@ function makeHostCallableDispatch(userFn) {
         try {
             let args;
             try {
-                const decoded = decodeCallResult(argsBytes);
+                // Host-callable args arrive as a bare list-shaped
+                // BamlOutboundValue, not the call-result envelope.
+                const decoded = decodeOutboundValue(argsBytes);
                 if (!Array.isArray(decoded)) {
                     throw new TypeError(`host-callable args decoded to a non-list value (got ${typeof decoded})`);
                 }

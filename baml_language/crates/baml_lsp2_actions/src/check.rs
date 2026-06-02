@@ -19,7 +19,7 @@
 //!    and type alias bodies, via `resolve_class_fields` and `resolve_type_alias`
 //!    (both Salsa-cached per item).
 
-use std::collections::HashSet;
+use std::{collections::HashSet, fmt::Write as _};
 
 use baml_base::{FileId, Name, SourceFile, Span};
 use baml_compiler_diagnostics::{Diagnostic, DiagnosticId, DiagnosticPhase, ToDiagnostic};
@@ -27,7 +27,7 @@ use baml_compiler2_hir::{body::FunctionBody, file_semantic_index, scope::ScopeKi
 use baml_compiler2_tir::{
     infer_context::{DiagnosticLocation, TirTypeError},
     inference::render_scope_diagnostics,
-    ty::{Ty, TyAttr},
+    ty::{QualifiedTypeName, Ty, TyAttr},
 };
 use indexmap::IndexMap;
 use text_size::{TextRange, TextSize};
@@ -79,7 +79,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     for scope_id in &index.scope_ids {
         let rendered = render_scope_diagnostics(db, *scope_id);
         for r in rendered {
-            diagnostics.push(tir_rendered_to_diagnostic(r, file_id));
+            diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, r));
         }
     }
 
@@ -98,7 +98,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                     diagnostics.push(
                         Diagnostic::error(
                             tir_type_error_to_diagnostic_id(error),
-                            error.to_string(),
+                            source_aware_tir_type_error_message(db, file, error),
                         )
                         .with_primary_span(Span {
                             file_id,
@@ -114,7 +114,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                     diagnostics.push(
                         Diagnostic::error(
                             tir_type_error_to_diagnostic_id(error),
-                            error.to_string(),
+                            source_aware_tir_type_error_message(db, file, error),
                         )
                         .with_primary_span(Span {
                             file_id,
@@ -134,6 +134,11 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     let res_ctx = baml_compiler2_tir::package_interface::package_resolution_context(db, pkg_id);
     let pkg_items = &res_ctx.own_items;
     let aliases = collect_type_aliases_for_resolution_context(db, res_ctx);
+    let ast_items = {
+        let tree = baml_compiler_parser::syntax_tree(db, file);
+        let (items, _, _) = baml_compiler2_ast::lower_file(&tree);
+        items
+    };
 
     // ── 5. Jinja prompt/template diagnostics ────────────────────────────────
     //
@@ -318,13 +323,29 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                 if !is_function_default_signature_diagnostic(&tir_diag) {
                     continue;
                 }
-                diagnostics.push(tir_rendered_to_diagnostic(
+                diagnostics.push(tir_rendered_to_diagnostic_for_file(
+                    db,
+                    file,
                     tir_diag.render(db, file, None),
-                    file_id,
                 ));
             }
         }
     }
+
+    // ── 7. Interface validation (BEP-044) ────────────────────────────────────
+    //
+    // Structural / semantic checks for `interface I { ... }` declarations and
+    // `implements I { ... }` blocks. Runs over the AST and the package items
+    // so cross-file interface references work.
+    diagnostics.extend(check_interfaces(
+        db,
+        file,
+        file_id,
+        &ast_items,
+        pkg_items,
+        &pkg_info.namespace_path,
+        &aliases,
+    ));
 
     // Deduplicate: multiple steps can produce the same diagnostic (e.g. scope
     // inference + signature validation for the same unresolved return type).
@@ -333,6 +354,2558 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     });
 
     diagnostics
+}
+
+/// Validate `interface` and `implements` blocks for a single file.
+///
+/// Diagnostics emitted here cover:
+/// - Cycle in interface `extends`.
+/// - `implements I {}` references an unknown interface.
+/// - Duplicate `implements I` blocks on the same class.
+/// - Missing implementations of required interface methods.
+/// - Method bodies in `implements I {}` that name something I doesn't declare.
+/// - Field type mismatches between class and interface.
+/// - Two interfaces requiring the same field with conflicting types.
+fn check_interfaces<'db>(
+    db: &'db dyn Db,
+    file: SourceFile,
+    file_id: FileId,
+    items: &[baml_compiler2_ast::Item],
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    namespace_path: &[Name],
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+) -> Vec<Diagnostic> {
+    use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
+
+    let mut diagnostics = Vec::new();
+
+    // Detect direct + transitive cycles in interface `extends`.
+    for item in items {
+        if let baml_compiler2_ast::Item::Interface(iface) = item
+            && let Some(chain) = interface_has_cycle(db, iface, pkg_items, namespace_path)
+        {
+            diagnostics.push(
+                Hir2Diagnostic::InterfaceExtendsCycle {
+                    chain,
+                    span: iface.name_span,
+                }
+                .to_diagnostic(file_id),
+            );
+        }
+    }
+
+    // Detect field conflicts in interface `extends` chains.
+    for item in items {
+        if let baml_compiler2_ast::Item::Interface(iface) = item
+            && !iface.requires.is_empty()
+            && interface_has_cycle(db, iface, pkg_items, namespace_path).is_none()
+        {
+            validate_interface_extends_fields(
+                &InterfaceValidationCtx {
+                    db,
+                    pkg_items,
+                    namespace_path,
+                    aliases,
+                },
+                file,
+                file_id,
+                iface,
+                &mut diagnostics,
+            );
+        }
+    }
+
+    // E0133: an interface can only `requires` other interfaces. A non-interface
+    // target (class, enum, or unknown) is rejected at the `requires` clause
+    // itself — not deferred to an implementor's `implements` site.
+    for item in items {
+        if let baml_compiler2_ast::Item::Interface(iface) = item
+            && interface_has_cycle(db, iface, pkg_items, namespace_path).is_none()
+        {
+            for parent_te in &iface.requires {
+                if resolve_interface_path(db, &parent_te.expr, pkg_items, namespace_path).is_none()
+                {
+                    // BEP-044 wf3 #19: echo the user-written name verbatim
+                    // (e.g. `root.a.Ghost`) rather than stripping to the bare
+                    // leaf — matches how `implements` renders its target.
+                    let target_name = format!("{}", parent_te.expr);
+                    let interface_name = Name::new(
+                        interface_qtn_for_file(db, file, &iface.name).render_user_facing(),
+                    );
+                    // Distinguish "name exists but isn't an interface" (E0133)
+                    // from "name doesn't exist at all" (E0112), mirroring the
+                    // `implements` path. Without this, a `requires` on an
+                    // unknown name wrongly claims the name "is not an interface".
+                    let diag = if is_non_interface_type(&parent_te.expr, pkg_items, namespace_path)
+                    {
+                        Hir2Diagnostic::InterfaceRequiresNonInterface {
+                            interface_name,
+                            target_name,
+                            span: parent_te.span,
+                        }
+                    } else {
+                        Hir2Diagnostic::UnknownRequiredInterface {
+                            interface_name,
+                            target_name,
+                            span: parent_te.span,
+                        }
+                    };
+                    diagnostics.push(diag.to_diagnostic(file_id));
+                }
+            }
+        }
+    }
+
+    // BEP-044 wf3 #G17 [decision O1]: `Self` is only valid in method-signature
+    // positions (params / return / throws). In an interface FIELD type it is
+    // rejected here with one clear diagnostic — historically it produced a
+    // contradictory cascade (E0116 demanding the class field be `Self?`, then
+    // E0002 `unresolved type: Self` when the user wrote `Self?`). Recursive
+    // fields should use the interface's own name instead.
+    for item in items {
+        if let baml_compiler2_ast::Item::Interface(iface) = item {
+            for field in &iface.fields {
+                if let Some(te) = &field.type_expr
+                    && type_expr_contains_self(&te.expr)
+                {
+                    diagnostics.push(
+                        Diagnostic::error(
+                            DiagnosticId::SelfInInterfaceField,
+                            format!(
+                                "`Self` is not allowed in an interface field type; field `{}` of \
+                                 interface `{}` must use a concrete type (use the interface's own \
+                                 name for recursion)",
+                                field.name, iface.name
+                            ),
+                        )
+                        .with_primary_span(Span {
+                            file_id,
+                            range: te.span,
+                        })
+                        .with_phase(DiagnosticPhase::Type),
+                    );
+                }
+            }
+        }
+    }
+
+    for item in items {
+        if let baml_compiler2_ast::Item::Class(class) = item {
+            validate_class_implements(
+                db,
+                file_id,
+                class,
+                pkg_items,
+                namespace_path,
+                aliases,
+                &mut diagnostics,
+            );
+        }
+    }
+
+    for item in items {
+        if let baml_compiler2_ast::Item::ImplementsFor(imp) = item {
+            validate_implements_for(
+                db,
+                file_id,
+                imp,
+                items,
+                pkg_items,
+                namespace_path,
+                aliases,
+                &mut diagnostics,
+            );
+        }
+    }
+
+    validate_overlapping_implements(
+        db,
+        file_id,
+        items,
+        pkg_items,
+        namespace_path,
+        aliases,
+        &mut diagnostics,
+    );
+
+    for item in items {
+        if let baml_compiler2_ast::Item::Interface(iface) = item {
+            for method in &iface.default_methods {
+                if let Some(ret) = &method.return_type
+                    && type_expr_contains_self(&ret.expr)
+                {
+                    diagnostics.push(
+                        Diagnostic::error(
+                            DiagnosticId::TypeMismatch,
+                            format!(
+                                "default method `{}` on interface `{}` cannot return `Self`",
+                                method.name, iface.name
+                            ),
+                        )
+                        .with_primary(
+                            Span {
+                                file_id,
+                                range: ret.span,
+                            },
+                            "`Self` return type is not allowed on interface default methods",
+                        )
+                        .with_phase(DiagnosticPhase::Hir),
+                    );
+                }
+            }
+        }
+    }
+
+    diagnostics
+}
+
+/// Resolve a `TypeExpr::Path` to an interface, by name, walking the package.
+///
+/// Returns `None` if the path doesn't name an interface (including: name
+/// doesn't exist, or resolves to a class/enum/etc.).
+#[derive(Debug, Clone)]
+struct ResolvedInterfaceData<'db> {
+    loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+    iface: baml_compiler2_hir::item_tree::Interface,
+    qtn: QualifiedTypeName,
+}
+
+impl ResolvedInterfaceData<'_> {
+    fn display_name(&self) -> Name {
+        Name::new(self.qtn.render_user_facing())
+    }
+}
+
+fn resolve_interface_path<'db>(
+    db: &'db dyn Db,
+    target: &baml_compiler2_ast::TypeExpr,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    namespace_path: &[Name],
+) -> Option<ResolvedInterfaceData<'db>> {
+    let resolved = baml_compiler2_tir::interfaces::resolve_path_to_interface_identity(
+        db,
+        target,
+        pkg_items,
+        namespace_path,
+    )?;
+    let item_tree = baml_compiler2_hir::file_item_tree(db, resolved.loc.file(db));
+    let iface = item_tree.interfaces.get(&resolved.loc.id(db))?.clone();
+    Some(ResolvedInterfaceData {
+        loc: resolved.loc,
+        iface,
+        qtn: resolved.qtn,
+    })
+}
+
+fn path_lookup_namespace<'a>(head: &'a [Name], namespace_path: &'a [Name]) -> &'a [Name] {
+    if head.is_empty() {
+        namespace_path
+    } else if head
+        .first()
+        .is_some_and(|segment| segment.as_str() == "root")
+    {
+        &head[1..]
+    } else {
+        head
+    }
+}
+
+/// Returns the cycle path `A -> B -> … -> A` (interface simple names) when
+/// `iface`'s transitive `requires` closure loops back to itself, or `None` when
+/// there is no cycle. The full path (rather than a bool) lets E0118 report the
+/// actionable chain instead of a single node (BEP-044 wf3 #G12).
+fn interface_has_cycle<'db>(
+    db: &'db dyn Db,
+    iface: &baml_compiler2_ast::InterfaceDef,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    namespace_path: &[Name],
+) -> Option<Vec<Name>> {
+    use baml_compiler2_ast::TypeExpr;
+
+    let self_probe = TypeExpr::Path {
+        segments: vec![iface.name.clone()],
+        generic_args: Vec::new(),
+        attrs: Vec::new(),
+    };
+    let self_loc =
+        resolve_interface_path(db, &self_probe, pkg_items, namespace_path).map(|r| r.loc);
+    // Frontier item: (segments to probe, name-chain leading here from `iface`).
+    let leaf = |segments: &[Name]| segments.last().cloned().unwrap_or_default();
+    let mut frontier: Vec<(Vec<Name>, Vec<Name>)> = iface
+        .requires
+        .iter()
+        .filter_map(|p| match &p.expr {
+            TypeExpr::Path { segments, .. } if !segments.is_empty() => {
+                Some((segments.clone(), vec![iface.name.clone(), leaf(segments)]))
+            }
+            _ => None,
+        })
+        .collect();
+    let mut visited = HashSet::new();
+    while let Some((path, chain)) = frontier.pop() {
+        if !visited.insert(path.clone()) {
+            continue;
+        }
+        let probe = TypeExpr::Path {
+            segments: path,
+            generic_args: Vec::new(),
+            attrs: Vec::new(),
+        };
+        if let Some(parent) = resolve_interface_path(db, &probe, pkg_items, namespace_path) {
+            if self_loc.as_ref().is_some_and(|loc| *loc == parent.loc) {
+                return Some(chain);
+            }
+            for parent in &parent.iface.requires {
+                if let TypeExpr::Path { segments, .. } = &parent.expr
+                    && !segments.is_empty()
+                {
+                    let mut next_chain = chain.clone();
+                    next_chain.push(leaf(segments));
+                    frontier.push((segments.clone(), next_chain));
+                }
+            }
+        }
+    }
+    None
+}
+
+/// A method signature in canonical string form, used by the interface
+/// validator to compare class method overrides against the interface's
+/// declared signature.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct MethodSignature {
+    /// Generic type parameters local to this method, in declaration order.
+    generic_params: Vec<Name>,
+    /// Rendered generic bounds parallel to `generic_params`.
+    generic_param_bounds: Vec<Option<String>>,
+    /// `(name, type)` pairs in declaration order. `self` is excluded — its
+    /// type is the implementing class and so trivially matches.
+    params: Vec<(Name, String)>,
+    /// Rendered return type, or `"<unspecified>"` when missing.
+    return_type: String,
+    /// Rendered declared throws type. `None` means the signature did not
+    /// declare `throws`; interface implementations must preserve that spelling.
+    throws: Option<String>,
+    /// Substituted `TypeExpr`s parallel to `params`/`return_type`/`throws`, kept
+    /// so signature matching can compare *semantically* (union-order- and
+    /// alias-insensitive) rather than by rendered string (BEP-044 wf3 G8). A
+    /// `None` param entry means the param had no declared type. Excluded from
+    /// `PartialEq` — equality stays string-based for any incidental use; the
+    /// semantic check lives in [`MethodSignature::matches`].
+    param_types: Vec<Option<baml_compiler2_ast::TypeExpr>>,
+    return_te: Option<baml_compiler2_ast::TypeExpr>,
+    throws_te: Option<baml_compiler2_ast::TypeExpr>,
+}
+
+impl MethodSignature {
+    fn from_params_and_return(
+        generic_params: &[Name],
+        generic_param_bounds: &[Option<baml_compiler2_ast::TypeExpr>],
+        params: &[baml_compiler2_ast::Param],
+        return_type: Option<&baml_compiler2_ast::SpannedTypeExpr>,
+        throws: Option<&baml_compiler2_ast::SpannedTypeExpr>,
+    ) -> Self {
+        Self::from_params_and_return_with_subst(
+            generic_params,
+            generic_param_bounds,
+            params,
+            return_type,
+            throws,
+            &std::collections::HashMap::new(),
+        )
+    }
+
+    /// Like [`Self::from_params_and_return`] but substitutes generic parameter
+    /// references in the param/return/throws types using `subst` before
+    /// stringifying. Used when comparing an `implements Container<int>`
+    /// block against `interface Container<T>`: the interface signature is
+    /// rebuilt with `T → int` so a concrete-typed override matches.
+    fn from_params_and_return_with_subst(
+        generic_params: &[Name],
+        generic_param_bounds: &[Option<baml_compiler2_ast::TypeExpr>],
+        params: &[baml_compiler2_ast::Param],
+        return_type: Option<&baml_compiler2_ast::SpannedTypeExpr>,
+        throws: Option<&baml_compiler2_ast::SpannedTypeExpr>,
+        subst: &std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr>,
+    ) -> Self {
+        // Capture the original AST inputs before the string-rendering shadows
+        // `params`/`return_type`/`throws` below.
+        let orig_params = params;
+        let orig_return = return_type;
+        let orig_throws = throws;
+        let generic_param_bounds = generic_param_bounds
+            .iter()
+            .map(|bound| {
+                bound
+                    .as_ref()
+                    .map(|bound| substitute_type_vars(bound, subst).to_string())
+            })
+            .collect();
+        let params = params
+            .iter()
+            .filter(|p| p.name.as_str() != "self")
+            .map(|p| {
+                let ty_str = p
+                    .type_expr
+                    .as_ref()
+                    .map(|te| substitute_type_vars(&te.expr, subst).to_string())
+                    .unwrap_or_else(|| "<unknown>".to_string());
+                (p.name.clone(), ty_str)
+            })
+            .collect();
+        let return_type = return_type
+            .map(|te| substitute_type_vars(&te.expr, subst).to_string())
+            .unwrap_or_else(|| "<unspecified>".to_string());
+        let throws = throws.map(|te| substitute_type_vars(&te.expr, subst).to_string());
+        // Keep the substituted TypeExprs for semantic (not string) matching.
+        let param_types = orig_params
+            .iter()
+            .filter(|p| p.name.as_str() != "self")
+            .map(|p| {
+                p.type_expr
+                    .as_ref()
+                    .map(|te| substitute_type_vars(&te.expr, subst))
+            })
+            .collect();
+        let return_te = orig_return.map(|te| substitute_type_vars(&te.expr, subst));
+        let throws_te = orig_throws.map(|te| substitute_type_vars(&te.expr, subst));
+        Self {
+            generic_params: generic_params.to_vec(),
+            generic_param_bounds,
+            params,
+            return_type,
+            throws,
+            param_types,
+            return_te,
+            throws_te,
+        }
+    }
+
+    fn render(&self) -> String {
+        let generic_params: Vec<String> = self
+            .generic_params
+            .iter()
+            .enumerate()
+            .map(|(idx, param)| {
+                if let Some(Some(bound)) = self.generic_param_bounds.get(idx) {
+                    format!("{param} extends {bound}")
+                } else {
+                    param.to_string()
+                }
+            })
+            .collect();
+        let ps: Vec<String> = self
+            .params
+            .iter()
+            .map(|(n, t)| format!("{n}: {t}"))
+            .collect();
+        let generics = if generic_params.is_empty() {
+            String::new()
+        } else {
+            format!("<{}>", generic_params.join(", "))
+        };
+        let mut rendered = format!("{generics}({}) -> {}", ps.join(", "), self.return_type);
+        if let Some(throws) = &self.throws {
+            write!(rendered, " throws {throws}").expect("writing to String cannot fail");
+        }
+        rendered
+    }
+
+    /// Semantic signature match for interface impls (BEP-044 wf3 G8). Compares
+    /// each component (param, return, throws) by lowering both `TypeExpr`s in
+    /// `namespace_path` and testing `is_same_normalized_type`, so union member
+    /// order (`A | B` vs `B | A`) and type aliases (`Err` vs `IoError`) no
+    /// longer cause false mismatches. Falls back to string equality per
+    /// component when a type can't be lowered (via `type_exprs_compatible`).
+    /// Generic params/bounds and `throws` presence stay exact (invariant).
+    fn matches(
+        &self,
+        other: &Self,
+        db: &dyn Db,
+        pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+        namespace_path: &[Name],
+        aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    ) -> bool {
+        if self.generic_params != other.generic_params
+            || self.generic_param_bounds != other.generic_param_bounds
+            || self.params.len() != other.params.len()
+        {
+            return false;
+        }
+        let gp = &self.generic_params;
+        let cmp = |a: &baml_compiler2_ast::TypeExpr, b: &baml_compiler2_ast::TypeExpr| {
+            type_exprs_compatible(
+                db,
+                pkg_items,
+                namespace_path,
+                gp,
+                a,
+                namespace_path,
+                gp,
+                b,
+                aliases,
+            )
+        };
+        for (i, ((an, at), (bn, bt))) in self.params.iter().zip(&other.params).enumerate() {
+            if an != bn {
+                return false;
+            }
+            match (
+                self.param_types.get(i).and_then(|t| t.as_ref()),
+                other.param_types.get(i).and_then(|t| t.as_ref()),
+            ) {
+                (Some(a), Some(b)) => {
+                    if !cmp(a, b) {
+                        return false;
+                    }
+                }
+                _ => {
+                    if at != bt {
+                        return false;
+                    }
+                }
+            }
+        }
+        match (&self.return_te, &other.return_te) {
+            (Some(a), Some(b)) => {
+                if !cmp(a, b) {
+                    return false;
+                }
+            }
+            (None, None) => {}
+            _ => {
+                if self.return_type != other.return_type {
+                    return false;
+                }
+            }
+        }
+        // `throws` presence must match exactly (omitting it stays E0120); when
+        // both declare it, `throws` is covariant — the impl (`other`) may
+        // narrow the interface's (`self`) declared throws.
+        match (&self.throws_te, &other.throws_te) {
+            (Some(iface_throws), Some(impl_throws)) => throws_covariant_compatible(
+                db,
+                pkg_items,
+                namespace_path,
+                gp,
+                iface_throws,
+                impl_throws,
+                aliases,
+            ),
+            (None, None) => true,
+            _ => false,
+        }
+    }
+}
+
+/// Substitute generic parameter references in a `TypeExpr`. A single-segment
+/// `Path` whose segment matches a key in `subst` is replaced with the
+/// corresponding `TypeExpr`. Containers (`List`, `Optional`, `Union`, etc.)
+/// recurse so nested usages like `T[]` and `T?` substitute too.
+fn substitute_type_vars(
+    ty: &baml_compiler2_ast::TypeExpr,
+    subst: &std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr>,
+) -> baml_compiler2_ast::TypeExpr {
+    use baml_compiler2_ast::TypeExpr;
+    if subst.is_empty() {
+        return ty.clone();
+    }
+    match ty {
+        TypeExpr::Path {
+            segments,
+            generic_args,
+            attrs,
+        } => {
+            if segments.len() == 1
+                && generic_args.is_empty()
+                && let Some(replacement) = subst.get(&segments[0])
+            {
+                return replacement.clone();
+            }
+            TypeExpr::Path {
+                segments: segments.clone(),
+                generic_args: generic_args
+                    .iter()
+                    .map(|a| substitute_type_vars(a, subst))
+                    .collect(),
+                attrs: attrs.clone(),
+            }
+        }
+        TypeExpr::List { inner, attrs } => TypeExpr::List {
+            inner: Box::new(substitute_type_vars(inner, subst)),
+            attrs: attrs.clone(),
+        },
+        TypeExpr::Optional { inner, attrs } => TypeExpr::Optional {
+            inner: Box::new(substitute_type_vars(inner, subst)),
+            attrs: attrs.clone(),
+        },
+        TypeExpr::Union { variants, attrs } => TypeExpr::Union {
+            variants: variants
+                .iter()
+                .map(|m| substitute_type_vars(m, subst))
+                .collect(),
+            attrs: attrs.clone(),
+        },
+        TypeExpr::Map { key, value, attrs } => TypeExpr::Map {
+            key: Box::new(substitute_type_vars(key, subst)),
+            value: Box::new(substitute_type_vars(value, subst)),
+            attrs: attrs.clone(),
+        },
+        TypeExpr::Function {
+            generic_params,
+            generic_param_bounds,
+            params,
+            ret,
+            throws,
+            attrs,
+        } => TypeExpr::Function {
+            generic_params: generic_params.clone(),
+            generic_param_bounds: generic_param_bounds
+                .iter()
+                .map(|bound| {
+                    bound
+                        .as_ref()
+                        .map(|bound| substitute_type_vars(bound, subst))
+                })
+                .collect(),
+            params: params
+                .iter()
+                .map(|param| baml_compiler2_ast::FunctionTypeParam {
+                    name: param.name.clone(),
+                    optional: param.optional,
+                    ty: substitute_type_vars(&param.ty, subst),
+                })
+                .collect(),
+            ret: Box::new(substitute_type_vars(ret, subst)),
+            throws: throws
+                .as_ref()
+                .map(|throws| Box::new(substitute_type_vars(throws, subst))),
+            attrs: attrs.clone(),
+        },
+        _ => ty.clone(),
+    }
+}
+
+#[derive(Debug, Default)]
+struct InterfaceMembers {
+    /// (origin interface name, field name, field type)
+    fields: Vec<(Name, Name, Option<baml_compiler2_ast::SpannedTypeExpr>)>,
+    /// (origin interface name, required method name, signature)
+    required_methods: Vec<(InterfaceMemberOrigin, Name, MethodSignature)>,
+    /// (origin interface name, default method name, signature)
+    default_methods: Vec<(InterfaceMemberOrigin, Name, MethodSignature)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct InterfaceMemberOrigin {
+    name: Name,
+    qualified_name: QualifiedTypeName,
+    type_args: Vec<baml_compiler2_ast::TypeExpr>,
+    lowered_type_args: Vec<Ty>,
+}
+
+impl InterfaceMemberOrigin {
+    fn display_name(&self) -> Name {
+        Name::new(self.qualified_name.render_user_facing())
+    }
+}
+
+type InterfaceMemberStackEntry = (
+    baml_compiler2_hir::item_tree::Interface,
+    baml_base::SourceFile,
+    std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr>,
+    Vec<baml_compiler2_ast::TypeExpr>,
+    Vec<Name>,
+);
+
+fn interface_qtn_for_file(db: &dyn Db, file: SourceFile, name: &Name) -> QualifiedTypeName {
+    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+    QualifiedTypeName::new(
+        pkg_info.package.clone(),
+        pkg_info.namespace_path,
+        name.clone(),
+    )
+}
+
+fn lower_interface_origin_type_args(
+    db: &dyn Db,
+    file: SourceFile,
+    type_args: &[baml_compiler2_ast::TypeExpr],
+    generic_params: &[Name],
+) -> Vec<Ty> {
+    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
+    let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
+    lower_interface_type_args_in_context(
+        db,
+        pkg_items,
+        &pkg_info.namespace_path,
+        type_args,
+        generic_params,
+    )
+}
+
+fn lower_interface_type_args_in_context(
+    db: &dyn Db,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    namespace_path: &[Name],
+    type_args: &[baml_compiler2_ast::TypeExpr],
+    generic_params: &[Name],
+) -> Vec<Ty> {
+    let mut diags = Vec::new();
+    type_args
+        .iter()
+        .map(|arg| {
+            baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+                db,
+                arg,
+                pkg_items,
+                namespace_path,
+                generic_params,
+                &mut diags,
+            )
+        })
+        .collect()
+}
+
+/// Walk `extends` of `iface` (including `iface` itself) and gather all members
+/// contributed up the chain. Methods are tagged with the interface they came
+/// from so diagnostics can point at the right contract.
+#[allow(dead_code)]
+fn collect_interface_members<'db>(
+    db: &'db dyn Db,
+    iface: &baml_compiler2_hir::item_tree::Interface,
+    iface_file: baml_base::SourceFile,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    namespace_path: &[Name],
+) -> InterfaceMembers {
+    collect_interface_members_with_subst(
+        db,
+        iface,
+        iface_file,
+        pkg_items,
+        namespace_path,
+        &std::collections::HashMap::new(),
+        &[],
+    )
+}
+
+/// Like [`collect_interface_members`] but applies a type-variable
+/// substitution to every field, parameter, and return type. Used when an
+/// `implements Container<int>` block needs the interface's `T`-typed
+/// signatures rewritten to `int` before comparison.
+fn collect_interface_members_with_subst<'db>(
+    db: &'db dyn Db,
+    iface: &baml_compiler2_hir::item_tree::Interface,
+    iface_file: baml_base::SourceFile,
+    _pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    _namespace_path: &[Name],
+    subst: &std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr>,
+    generic_params_in_scope: &[Name],
+) -> InterfaceMembers {
+    use baml_compiler2_ast::TypeExpr;
+
+    let mut out = InterfaceMembers::default();
+    let mut visited: HashSet<Vec<Name>> = HashSet::new();
+    let root_type_args: Vec<baml_compiler2_ast::TypeExpr> = iface
+        .generic_params
+        .iter()
+        .map(|param| {
+            subst.get(param).cloned().unwrap_or_else(|| TypeExpr::Path {
+                segments: vec![param.clone()],
+                generic_args: Vec::new(),
+                attrs: Vec::new(),
+            })
+        })
+        .collect();
+    let mut stack: Vec<InterfaceMemberStackEntry> =
+        vec![(iface.clone(), iface_file, subst.clone(), root_type_args, {
+            let mut params = iface.generic_params.clone();
+            params.extend(generic_params_in_scope.iter().cloned());
+            params
+        })];
+    visited.insert(vec![iface.name.clone()]);
+
+    while let Some((
+        current,
+        current_file,
+        current_subst,
+        current_type_args,
+        generic_params_in_scope,
+    )) = stack.pop()
+    {
+        let origin = InterfaceMemberOrigin {
+            name: current.name.clone(),
+            qualified_name: interface_qtn_for_file(db, current_file, &current.name),
+            lowered_type_args: lower_interface_origin_type_args(
+                db,
+                current_file,
+                &current_type_args,
+                &generic_params_in_scope,
+            ),
+            type_args: current_type_args.clone(),
+        };
+        for field in &current.fields {
+            let substituted =
+                field
+                    .type_expr
+                    .as_ref()
+                    .map(|te| baml_compiler2_ast::SpannedTypeExpr {
+                        expr: substitute_type_vars(&te.expr, &current_subst),
+                        span: te.span,
+                    });
+            out.fields
+                .push((origin.display_name(), field.name.clone(), substituted));
+        }
+        for sig in &current.required_methods {
+            // Convert the HIR `FunctionParam` list (no AST defaults) into a
+            // canonical signature for comparison.
+            let ast_params: Vec<baml_compiler2_ast::Param> = sig
+                .params
+                .iter()
+                .map(|p| baml_compiler2_ast::Param {
+                    name: p.name.clone(),
+                    type_expr: p.type_expr.clone(),
+                    default: None,
+                    span: p.span,
+                    name_span: p.span,
+                })
+                .collect();
+            let signature = MethodSignature::from_params_and_return_with_subst(
+                &sig.generic_params,
+                &sig.generic_param_bounds,
+                &ast_params,
+                sig.return_type.as_ref(),
+                sig.throws.as_ref(),
+                &current_subst,
+            );
+            out.required_methods
+                .push((origin.clone(), sig.name.clone(), signature));
+        }
+        // Default-method ids point into the same file's item tree as the
+        // interface itself — fetch each function's name + signature from
+        // there.
+        let cur_tree = baml_compiler2_hir::file_item_tree(db, current_file);
+        for fid in &current.default_methods {
+            if let Some(f) = cur_tree.functions.get(fid) {
+                let ast_params: Vec<baml_compiler2_ast::Param> = f
+                    .params
+                    .iter()
+                    .map(|p| baml_compiler2_ast::Param {
+                        name: p.name.clone(),
+                        type_expr: p.type_expr.clone(),
+                        default: None,
+                        span: p.span,
+                        name_span: p.span,
+                    })
+                    .collect();
+                let signature = MethodSignature::from_params_and_return_with_subst(
+                    &f.generic_params,
+                    &f.generic_param_bounds,
+                    &ast_params,
+                    f.return_type.as_ref(),
+                    f.throws.as_ref(),
+                    &current_subst,
+                );
+                out.default_methods
+                    .push((origin.clone(), f.name.clone(), signature));
+            }
+        }
+
+        for parent_te in &current.requires {
+            let TypeExpr::Path { segments, .. } = &parent_te.expr else {
+                continue;
+            };
+            if segments.is_empty() {
+                continue;
+            }
+            if !visited.insert(segments.clone()) {
+                continue;
+            }
+            let probe = TypeExpr::Path {
+                segments: segments.clone(),
+                generic_args: Vec::new(),
+                attrs: Vec::new(),
+            };
+            let current_pkg_info = baml_compiler2_hir::file_package::file_package(db, current_file);
+            let current_pkg_id =
+                baml_compiler2_hir::package::PackageId::new(db, current_pkg_info.package.clone());
+            let current_pkg_items = baml_compiler2_hir::package::package_items(db, current_pkg_id);
+            if let Some(parent) = resolve_interface_path(
+                db,
+                &probe,
+                current_pkg_items,
+                &current_pkg_info.namespace_path,
+            ) {
+                let parent_args = match &parent_te.expr {
+                    TypeExpr::Path { generic_args, .. } => generic_args
+                        .iter()
+                        .map(|arg| substitute_type_vars(arg, &current_subst))
+                        .collect::<Vec<_>>(),
+                    _ => Vec::new(),
+                };
+                let parent_subst = parent
+                    .iface
+                    .generic_params
+                    .iter()
+                    .zip(parent_args.iter())
+                    .map(|(param, arg)| (param.clone(), arg.clone()))
+                    .collect();
+                let mut parent_generic_params = generic_params_in_scope.clone();
+                parent_generic_params.extend(parent.iface.generic_params.iter().cloned());
+                stack.push((
+                    parent.iface,
+                    parent.loc.file(db),
+                    parent_subst,
+                    parent_args,
+                    parent_generic_params,
+                ));
+            }
+        }
+    }
+
+    out
+}
+
+/// Returns `true` if the type expression resolves to a type that exists
+/// but is NOT an interface (e.g. a class or enum).
+fn is_non_interface_type(
+    target: &baml_compiler2_ast::TypeExpr,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    namespace_path: &[Name],
+) -> bool {
+    use baml_compiler2_ast::TypeExpr;
+    use baml_compiler2_hir::contributions::Definition;
+
+    let TypeExpr::Path { segments, .. } = target else {
+        return false;
+    };
+    let Some((name, head)) = segments.split_last() else {
+        return false;
+    };
+    let lookup_ns = path_lookup_namespace(head, namespace_path);
+    matches!(
+        pkg_items.lookup_type(lookup_ns, name),
+        Some(Definition::Class(_) | Definition::Enum(_))
+    )
+}
+
+fn rendered_type_args(args: &[baml_compiler2_ast::TypeExpr]) -> Vec<String> {
+    args.iter().map(ToString::to_string).collect()
+}
+
+fn type_args_from_target_expr(
+    target: &baml_compiler2_ast::TypeExpr,
+) -> Vec<baml_compiler2_ast::TypeExpr> {
+    match target {
+        baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => generic_args.clone(),
+        _ => Vec::new(),
+    }
+}
+
+fn interface_origin_matches_target_expr<'db>(
+    db: &'db dyn Db,
+    target: &baml_compiler2_ast::TypeExpr,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    namespace_path: &[Name],
+    generic_params: &[Name],
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    origin: &InterfaceMemberOrigin,
+) -> bool {
+    let Some(resolved) = resolve_interface_path(db, target, pkg_items, namespace_path) else {
+        return false;
+    };
+    if resolved.qtn != origin.qualified_name {
+        return false;
+    }
+    let target_type_args = type_args_from_target_expr(target);
+    if target_type_args.len() != origin.type_args.len() {
+        return false;
+    }
+    let target_lowered = lower_interface_type_args_in_context(
+        db,
+        pkg_items,
+        namespace_path,
+        &target_type_args,
+        generic_params,
+    );
+    if target_lowered.len() == origin.lowered_type_args.len()
+        && target_lowered
+            .iter()
+            .zip(origin.lowered_type_args.iter())
+            .all(|(target_arg, origin_arg)| {
+                baml_compiler2_tir::normalize::is_same_normalized_type(
+                    target_arg, origin_arg, aliases,
+                )
+            })
+    {
+        return true;
+    }
+
+    rendered_type_args(&target_type_args) == rendered_type_args(&origin.type_args)
+}
+
+struct InterfaceValidationCtx<'db, 'a> {
+    db: &'db dyn Db,
+    pkg_items: &'a baml_compiler2_hir::package::PackageItems<'db>,
+    namespace_path: &'a [Name],
+    aliases: &'a std::collections::HashMap<QualifiedTypeName, Ty>,
+}
+
+fn interface_target_matches_required_parent(
+    ctx: &InterfaceValidationCtx<'_, '_>,
+    candidate_target: &baml_compiler2_ast::TypeExpr,
+    candidate_namespace_path: &[Name],
+    required_parent: &baml_compiler2_ast::TypeExpr,
+    required_parent_namespace_path: &[Name],
+    generic_params: &[Name],
+) -> bool {
+    let Some(candidate) = resolve_interface_path(
+        ctx.db,
+        candidate_target,
+        ctx.pkg_items,
+        candidate_namespace_path,
+    ) else {
+        return false;
+    };
+    let Some(required) = resolve_interface_path(
+        ctx.db,
+        required_parent,
+        ctx.pkg_items,
+        required_parent_namespace_path,
+    ) else {
+        return false;
+    };
+    if candidate.qtn != required.qtn {
+        return false;
+    }
+
+    let candidate_args = lower_path_generic_args(
+        ctx.db,
+        candidate_target,
+        ctx.pkg_items,
+        candidate_namespace_path,
+        generic_params,
+    );
+    let required_args = lower_path_generic_args(
+        ctx.db,
+        required_parent,
+        ctx.pkg_items,
+        required_parent_namespace_path,
+        generic_params,
+    );
+    candidate_args.len() == required_args.len()
+        && candidate_args
+            .iter()
+            .zip(required_args.iter())
+            .all(|(candidate_arg, required_arg)| {
+                baml_compiler2_tir::normalize::is_same_normalized_type(
+                    candidate_arg,
+                    required_arg,
+                    ctx.aliases,
+                )
+            })
+}
+
+fn implements_for_targets_match(
+    ctx: &InterfaceValidationCtx<'_, '_>,
+    lhs: &baml_compiler2_ast::TypeExpr,
+    lhs_generic_params: &[Name],
+    rhs: &baml_compiler2_ast::TypeExpr,
+    rhs_generic_params: &[Name],
+) -> bool {
+    let mut lhs_diags = Vec::new();
+    let mut rhs_diags = Vec::new();
+    let lhs_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+        ctx.db,
+        lhs,
+        ctx.pkg_items,
+        ctx.namespace_path,
+        lhs_generic_params,
+        &mut lhs_diags,
+    );
+    let rhs_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+        ctx.db,
+        rhs,
+        ctx.pkg_items,
+        ctx.namespace_path,
+        rhs_generic_params,
+        &mut rhs_diags,
+    );
+    lhs_diags.is_empty()
+        && rhs_diags.is_empty()
+        && (baml_compiler2_tir::normalize::is_same_normalized_type(&lhs_ty, &rhs_ty, ctx.aliases)
+            || baml_compiler2_tir::interfaces::match_ty_pattern(
+                &lhs_ty,
+                &rhs_ty,
+                lhs_generic_params,
+                ctx.aliases,
+            )
+            .is_some()
+            || baml_compiler2_tir::interfaces::match_ty_pattern(
+                &rhs_ty,
+                &lhs_ty,
+                rhs_generic_params,
+                ctx.aliases,
+            )
+            .is_some())
+}
+
+fn implements_for_target_matches_class(
+    ctx: &InterfaceValidationCtx<'_, '_>,
+    target: &baml_compiler2_ast::TypeExpr,
+    target_generic_params: &[Name],
+    class: &baml_compiler2_ast::ClassDef,
+) -> bool {
+    use baml_compiler2_hir::contributions::Definition;
+
+    let Some(Definition::Class(class_loc)) =
+        ctx.pkg_items.lookup_type(ctx.namespace_path, &class.name)
+    else {
+        return false;
+    };
+    let class_qtn = baml_compiler2_tir::lower_type_expr::qualify_def(
+        ctx.db,
+        Definition::Class(class_loc),
+        &class.name,
+    );
+    let class_ty = Ty::Class(
+        class_qtn,
+        class
+            .generic_params
+            .iter()
+            .map(|param| Ty::TypeVar(param.clone(), TyAttr::default()))
+            .collect(),
+        TyAttr::default(),
+    );
+    let mut target_diags = Vec::new();
+    let target_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+        ctx.db,
+        target,
+        ctx.pkg_items,
+        ctx.namespace_path,
+        target_generic_params,
+        &mut target_diags,
+    );
+    target_diags.is_empty()
+        && (baml_compiler2_tir::normalize::is_same_normalized_type(
+            &target_ty,
+            &class_ty,
+            ctx.aliases,
+        ) || baml_compiler2_tir::interfaces::match_ty_pattern(
+            &class_ty,
+            &target_ty,
+            &class.generic_params,
+            ctx.aliases,
+        )
+        .is_some()
+            || baml_compiler2_tir::interfaces::match_ty_pattern(
+                &target_ty,
+                &class_ty,
+                target_generic_params,
+                ctx.aliases,
+            )
+            .is_some())
+}
+
+fn class_method_names_for_implements_target(
+    ctx: &InterfaceValidationCtx<'_, '_>,
+    target: &baml_compiler2_ast::TypeExpr,
+    target_generic_params: &[Name],
+) -> HashSet<Name> {
+    use baml_compiler2_hir::contributions::Definition;
+
+    let mut target_diags = Vec::new();
+    let target_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+        ctx.db,
+        target,
+        ctx.pkg_items,
+        ctx.namespace_path,
+        target_generic_params,
+        &mut target_diags,
+    );
+    let Ty::Class(class_qtn, _, _) = target_ty else {
+        return HashSet::new();
+    };
+    let pkg_id = baml_compiler2_hir::package::PackageId::new(ctx.db, class_qtn.package().clone());
+    let pkg_items = baml_compiler2_ppir::package_items(ctx.db, pkg_id);
+    let Some(Definition::Class(class_loc)) =
+        pkg_items.lookup_type(class_qtn.namespace(), class_qtn.name())
+    else {
+        return HashSet::new();
+    };
+    let item_tree = baml_compiler2_hir::file_item_tree(ctx.db, class_loc.file(ctx.db));
+    let Some(class_data) = item_tree.classes.get(&class_loc.id(ctx.db)) else {
+        return HashSet::new();
+    };
+
+    class_data
+        .methods
+        .iter()
+        .filter(|method_id| !item_tree.method_to_iface_target.contains_key(method_id))
+        .filter_map(|method_id| item_tree.functions.get(method_id))
+        .map(|method| method.name.clone())
+        .collect()
+}
+
+fn item_implements_required_parent_for_target(
+    ctx: &InterfaceValidationCtx<'_, '_>,
+    item: &baml_compiler2_ast::Item,
+    current: &baml_compiler2_ast::ImplementsForDef,
+    current_generic_params: &[Name],
+    required_parent: &baml_compiler2_ast::TypeExpr,
+    required_parent_namespace_path: &[Name],
+) -> bool {
+    match item {
+        baml_compiler2_ast::Item::ImplementsFor(candidate) => {
+            if candidate.span == current.span {
+                return false;
+            }
+            let candidate_generic_params: Vec<Name> = candidate
+                .generic_params
+                .iter()
+                .map(|(name, _)| name.clone())
+                .collect();
+            implements_for_targets_match(
+                ctx,
+                &candidate.for_target.expr,
+                &candidate_generic_params,
+                &current.for_target.expr,
+                current_generic_params,
+            ) && interface_target_matches_required_parent(
+                ctx,
+                &candidate.interface_target.expr,
+                ctx.namespace_path,
+                required_parent,
+                required_parent_namespace_path,
+                &candidate_generic_params,
+            )
+        }
+        baml_compiler2_ast::Item::Class(class) => {
+            implements_for_target_matches_class(
+                ctx,
+                &current.for_target.expr,
+                current_generic_params,
+                class,
+            ) && class.implements.iter().any(|candidate| {
+                interface_target_matches_required_parent(
+                    ctx,
+                    &candidate.target.expr,
+                    ctx.namespace_path,
+                    required_parent,
+                    required_parent_namespace_path,
+                    &class.generic_params,
+                )
+            })
+        }
+        _ => false,
+    }
+}
+
+fn has_sibling_implements_for_origin(
+    ctx: &InterfaceValidationCtx<'_, '_>,
+    current: &baml_compiler2_ast::ImplementsForDef,
+    all_items: &[baml_compiler2_ast::Item],
+    origin: &InterfaceMemberOrigin,
+) -> bool {
+    all_items.iter().any(|item| {
+        let baml_compiler2_ast::Item::ImplementsFor(candidate) = item else {
+            return false;
+        };
+        if candidate.span == current.span {
+            return false;
+        }
+        let candidate_generic_params: Vec<Name> = candidate
+            .generic_params
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect();
+        let current_generic_params: Vec<Name> = current
+            .generic_params
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect();
+        implements_for_targets_match(
+            ctx,
+            &candidate.for_target.expr,
+            &candidate_generic_params,
+            &current.for_target.expr,
+            &current_generic_params,
+        ) && interface_origin_matches_target_expr(
+            ctx.db,
+            &candidate.interface_target.expr,
+            ctx.pkg_items,
+            ctx.namespace_path,
+            &candidate_generic_params,
+            ctx.aliases,
+            origin,
+        )
+    })
+}
+
+#[derive(Clone)]
+struct ImplOverlapEntry {
+    iface_qtn: QualifiedTypeName,
+    iface_ty: Ty,
+    for_ty: Ty,
+    generic_params: Vec<Name>,
+    span: TextRange,
+    in_body_class: Option<QualifiedTypeName>,
+}
+
+fn validate_overlapping_implements<'db>(
+    db: &'db dyn Db,
+    file_id: FileId,
+    items: &[baml_compiler2_ast::Item],
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    namespace_path: &[Name],
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let entries = collect_impl_overlap_entries(db, items, pkg_items, namespace_path);
+    for (idx, lhs) in entries.iter().enumerate() {
+        for rhs in entries.iter().skip(idx + 1) {
+            if lhs.iface_qtn != rhs.iface_qtn {
+                continue;
+            }
+            if lhs.in_body_class.is_some()
+                && lhs.in_body_class == rhs.in_body_class
+                && baml_compiler2_tir::normalize::is_same_normalized_type(
+                    &lhs.iface_ty,
+                    &rhs.iface_ty,
+                    aliases,
+                )
+            {
+                continue;
+            }
+            if !impl_patterns_overlap(lhs, rhs, aliases) {
+                continue;
+            }
+            diagnostics.push(
+                Diagnostic::error(
+                    DiagnosticId::OverlappingImplements,
+                    "overlapping interface implementations for the same receiver/interface",
+                )
+                .with_primary_span(Span {
+                    file_id,
+                    range: rhs.span,
+                })
+                .with_secondary(
+                    Span {
+                        file_id,
+                        range: lhs.span,
+                    },
+                    "first implementation is here",
+                )
+                .with_phase(DiagnosticPhase::Type),
+            );
+        }
+    }
+}
+
+fn collect_impl_overlap_entries<'db>(
+    db: &'db dyn Db,
+    items: &[baml_compiler2_ast::Item],
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    namespace_path: &[Name],
+) -> Vec<ImplOverlapEntry> {
+    use baml_compiler2_hir::contributions::Definition;
+
+    let mut entries = Vec::new();
+    for item in items {
+        match item {
+            baml_compiler2_ast::Item::Class(class) => {
+                let Some(Definition::Class(class_loc)) =
+                    pkg_items.lookup_type(namespace_path, &class.name)
+                else {
+                    continue;
+                };
+                let class_qtn = baml_compiler2_tir::lower_type_expr::qualify_def(
+                    db,
+                    Definition::Class(class_loc),
+                    &class.name,
+                );
+                let for_ty = Ty::Class(
+                    class_qtn.clone(),
+                    class
+                        .generic_params
+                        .iter()
+                        .map(|param| Ty::TypeVar(param.clone(), TyAttr::default()))
+                        .collect(),
+                    TyAttr::default(),
+                );
+                for block in &class.implements {
+                    let Some(resolved_iface) =
+                        resolve_interface_path(db, &block.target.expr, pkg_items, namespace_path)
+                    else {
+                        continue;
+                    };
+                    let iface_args = lower_path_generic_args(
+                        db,
+                        &block.target.expr,
+                        pkg_items,
+                        namespace_path,
+                        &class.generic_params,
+                    );
+                    entries.push(ImplOverlapEntry {
+                        iface_qtn: resolved_iface.qtn.clone(),
+                        iface_ty: Ty::Interface(
+                            resolved_iface.qtn.clone(),
+                            iface_args,
+                            TyAttr::default(),
+                        ),
+                        for_ty: for_ty.clone(),
+                        generic_params: class.generic_params.clone(),
+                        span: block.target.span,
+                        in_body_class: Some(class_qtn.clone()),
+                    });
+                }
+            }
+            baml_compiler2_ast::Item::ImplementsFor(imp) => {
+                let generic_params: Vec<Name> = imp
+                    .generic_params
+                    .iter()
+                    .map(|(name, _)| name.clone())
+                    .collect();
+                let Some(resolved_iface) = resolve_interface_path(
+                    db,
+                    &imp.interface_target.expr,
+                    pkg_items,
+                    namespace_path,
+                ) else {
+                    continue;
+                };
+                let mut diags = Vec::new();
+                let for_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+                    db,
+                    &imp.for_target.expr,
+                    pkg_items,
+                    namespace_path,
+                    &generic_params,
+                    &mut diags,
+                );
+                if !diags.is_empty() {
+                    continue;
+                }
+                let iface_args = lower_path_generic_args(
+                    db,
+                    &imp.interface_target.expr,
+                    pkg_items,
+                    namespace_path,
+                    &generic_params,
+                );
+                entries.push(ImplOverlapEntry {
+                    iface_qtn: resolved_iface.qtn.clone(),
+                    iface_ty: Ty::Interface(
+                        resolved_iface.qtn.clone(),
+                        iface_args,
+                        TyAttr::default(),
+                    ),
+                    for_ty,
+                    generic_params,
+                    span: imp.span,
+                    in_body_class: None,
+                });
+            }
+            _ => {}
+        }
+    }
+    entries
+}
+
+fn lower_path_generic_args<'db>(
+    db: &'db dyn Db,
+    expr: &baml_compiler2_ast::TypeExpr,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    namespace_path: &[Name],
+    generic_params: &[Name],
+) -> Vec<Ty> {
+    let baml_compiler2_ast::TypeExpr::Path { generic_args, .. } = expr else {
+        return Vec::new();
+    };
+    let mut diags = Vec::new();
+    generic_args
+        .iter()
+        .map(|arg| {
+            baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+                db,
+                arg,
+                pkg_items,
+                namespace_path,
+                generic_params,
+                &mut diags,
+            )
+        })
+        .collect()
+}
+
+fn impl_patterns_overlap(
+    lhs: &ImplOverlapEntry,
+    rhs: &ImplOverlapEntry,
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+) -> bool {
+    let lhs_for_rhs = baml_compiler2_tir::interfaces::match_ty_pattern(
+        &lhs.for_ty,
+        &rhs.for_ty,
+        &lhs.generic_params,
+        aliases,
+    )
+    .is_some();
+    let rhs_for_lhs = baml_compiler2_tir::interfaces::match_ty_pattern(
+        &rhs.for_ty,
+        &lhs.for_ty,
+        &rhs.generic_params,
+        aliases,
+    )
+    .is_some();
+    if !(lhs_for_rhs || rhs_for_lhs) {
+        return false;
+    }
+    if lhs.generic_params == rhs.generic_params
+        && baml_compiler2_tir::normalize::is_same_normalized_type(&lhs.for_ty, &rhs.for_ty, aliases)
+    {
+        return baml_compiler2_tir::normalize::is_same_normalized_type(
+            &lhs.iface_ty,
+            &rhs.iface_ty,
+            aliases,
+        );
+    }
+
+    baml_compiler2_tir::interfaces::match_ty_pattern(
+        &lhs.iface_ty,
+        &rhs.iface_ty,
+        &lhs.generic_params,
+        aliases,
+    )
+    .is_some()
+        || baml_compiler2_tir::interfaces::match_ty_pattern(
+            &rhs.iface_ty,
+            &lhs.iface_ty,
+            &rhs.generic_params,
+            aliases,
+        )
+        .is_some()
+}
+
+fn validate_interface_extends_fields(
+    ctx: &InterfaceValidationCtx<'_, '_>,
+    file: SourceFile,
+    file_id: FileId,
+    iface: &baml_compiler2_ast::InterfaceDef,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
+
+    let mut seen: IndexMap<Name, (Name, baml_compiler2_ast::TypeExpr, String)> = IndexMap::new();
+
+    // Seed with the interface's own fields.
+    for field in &iface.fields {
+        if let Some(te) = &field.type_expr {
+            seen.insert(
+                field.name.clone(),
+                (iface.name.clone(), te.expr.clone(), format!("{}", te.expr)),
+            );
+        }
+    }
+
+    // Walk each parent via resolve and collect its members.
+    for parent_te in &iface.requires {
+        let Some(parent) =
+            resolve_interface_path(ctx.db, &parent_te.expr, ctx.pkg_items, ctx.namespace_path)
+        else {
+            continue;
+        };
+        let members = collect_interface_members_with_subst(
+            ctx.db,
+            &parent.iface,
+            parent.loc.file(ctx.db),
+            ctx.pkg_items,
+            ctx.namespace_path,
+            &std::collections::HashMap::new(),
+            &iface.generic_params,
+        );
+        for (origin, field_name, field_te) in &members.fields {
+            let Some(field_te) = field_te else { continue };
+            let ty_str = format!("{}", field_te.expr);
+            if let Some((existing_origin, existing_ty, existing_rendered)) = seen.get(field_name) {
+                if !type_exprs_compatible(
+                    ctx.db,
+                    ctx.pkg_items,
+                    ctx.namespace_path,
+                    &iface.generic_params,
+                    existing_ty,
+                    ctx.namespace_path,
+                    &iface.generic_params,
+                    &field_te.expr,
+                    ctx.aliases,
+                ) {
+                    diagnostics.push(
+                        Hir2Diagnostic::InterfaceExtendsFieldConflict {
+                            interface_name: Name::new(
+                                interface_qtn_for_file(ctx.db, file, &iface.name)
+                                    .render_user_facing(),
+                            ),
+                            field_name: field_name.clone(),
+                            first_interface: existing_origin.clone(),
+                            first_type: existing_rendered.clone(),
+                            second_interface: origin.clone(),
+                            second_type: ty_str,
+                            span: iface.name_span,
+                        }
+                        .to_diagnostic(file_id),
+                    );
+                }
+            } else {
+                seen.insert(
+                    field_name.clone(),
+                    (origin.clone(), field_te.expr.clone(), ty_str),
+                );
+            }
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn validate_implements_for<'db>(
+    db: &'db dyn Db,
+    file_id: FileId,
+    imp: &baml_compiler2_ast::ImplementsForDef,
+    all_items: &[baml_compiler2_ast::Item],
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    namespace_path: &[Name],
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
+
+    let target_name = Name::new(format!("{}", imp.for_target.expr));
+    let generic_param_names: Vec<Name> =
+        imp.generic_params.iter().map(|(n, _)| n.clone()).collect();
+    let ctx = InterfaceValidationCtx {
+        db,
+        pkg_items,
+        namespace_path,
+        aliases,
+    };
+    let mut target_type_errors = Vec::new();
+    baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+        db,
+        &imp.for_target.expr,
+        pkg_items,
+        namespace_path,
+        &generic_param_names,
+        &mut target_type_errors,
+    );
+    if !target_type_errors.is_empty() {
+        for error in target_type_errors {
+            diagnostics.push(
+                Diagnostic::error(tir_type_error_to_diagnostic_id(&error), error.to_string())
+                    .with_primary_span(Span {
+                        file_id,
+                        range: imp.for_target.span,
+                    })
+                    .with_phase(DiagnosticPhase::Type),
+            );
+        }
+        return;
+    }
+
+    // BEP-044 wf3 #G10: every declared generic parameter must be determined by
+    // the implementor (`for`) type. A param that appears only in the interface
+    // arguments (`implements<T> Tagged<T> for Holder`) is unconstrained, hence
+    // unsound — the runtime can't recover `T`. Reject it.
+    {
+        let mut bound_in_target: HashSet<Name> = HashSet::new();
+        collect_type_var_names(
+            &imp.for_target.expr,
+            &generic_param_names,
+            &mut bound_in_target,
+        );
+        for (name, _) in &imp.generic_params {
+            if !bound_in_target.contains(name) {
+                diagnostics.push(
+                    Diagnostic::error(
+                        DiagnosticId::UnconstrainedImplTypeParam,
+                        format!(
+                            "type parameter `{name}` is not constrained by the implementor type \
+                             `{}`; it appears only in the interface arguments",
+                            imp.for_target.expr
+                        ),
+                    )
+                    .with_primary_span(Span {
+                        file_id,
+                        range: imp.interface_target.span,
+                    })
+                    .with_phase(DiagnosticPhase::Type),
+                );
+            }
+        }
+    }
+
+    let Some(resolved_iface) =
+        resolve_interface_path(db, &imp.interface_target.expr, pkg_items, namespace_path)
+    else {
+        let is_non_interface =
+            is_non_interface_type(&imp.interface_target.expr, pkg_items, namespace_path);
+        if is_non_interface {
+            diagnostics.push(
+                Hir2Diagnostic::NotAnInterface {
+                    class_name: target_name,
+                    target_name: format!("{}", imp.interface_target.expr),
+                    span: imp.interface_target.span,
+                }
+                .to_diagnostic(file_id),
+            );
+        } else {
+            diagnostics.push(
+                Hir2Diagnostic::UnknownInterface {
+                    class_name: target_name,
+                    target_name: format!("{}", imp.interface_target.expr),
+                    span: imp.interface_target.span,
+                }
+                .to_diagnostic(file_id),
+            );
+        }
+        return;
+    };
+
+    let iface_display_name = resolved_iface.display_name();
+    let iface_qtn = resolved_iface.qtn.clone();
+    let iface_file = resolved_iface.loc.file(db);
+    let iface = resolved_iface.iface;
+    let iface_namespace_path =
+        baml_compiler2_hir::file_package::file_package(db, iface_file).namespace_path;
+    let subst: std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr> =
+        match &imp.interface_target.expr {
+            baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => iface
+                .generic_params
+                .iter()
+                .zip(generic_args.iter())
+                .map(|(p, a)| (p.clone(), a.clone()))
+                .collect(),
+            _ => std::collections::HashMap::new(),
+        };
+    let members = collect_interface_members_with_subst(
+        db,
+        &iface,
+        iface_file,
+        pkg_items,
+        namespace_path,
+        &subst,
+        &[],
+    );
+
+    if !members.fields.is_empty() {
+        diagnostics.push(
+            Hir2Diagnostic::OutOfBodyImplementsFieldInterface {
+                target_name: target_name.to_string(),
+                interface_name: iface_display_name,
+                span: imp.interface_target.span,
+            }
+            .to_diagnostic(file_id),
+        );
+        return;
+    }
+
+    let mut provided_method_names: HashSet<Name> = HashSet::new();
+    for method in &imp.methods {
+        let expected_sig = members
+            .required_methods
+            .iter()
+            .find_map(|(_, name, sig)| {
+                if *name == method.name {
+                    Some(sig.clone())
+                } else {
+                    None
+                }
+            })
+            .or_else(|| {
+                members.default_methods.iter().find_map(|(_, name, sig)| {
+                    if *name == method.name {
+                        Some(sig.clone())
+                    } else {
+                        None
+                    }
+                })
+            });
+        match expected_sig {
+            None => diagnostics.push(
+                Hir2Diagnostic::UnknownInterfaceMember {
+                    interface_name: iface_display_name.clone(),
+                    method_name: method.name.clone(),
+                    span: method.name_span,
+                }
+                .to_diagnostic(file_id),
+            ),
+            Some(expected) => {
+                let actual = MethodSignature::from_params_and_return(
+                    &method.generic_params,
+                    &method.generic_param_bounds,
+                    &method.params,
+                    method.return_type.as_ref(),
+                    method.throws.as_ref(),
+                );
+                if !expected.matches(&actual, db, pkg_items, namespace_path, aliases) {
+                    diagnostics.push(
+                        Hir2Diagnostic::InterfaceMethodSignatureMismatch {
+                            class_name: target_name.clone(),
+                            interface_name: iface_display_name.clone(),
+                            method_name: method.name.clone(),
+                            actual: actual.render(),
+                            expected: expected.render(),
+                            span: method.name_span,
+                        }
+                        .to_diagnostic(file_id),
+                    );
+                }
+            }
+        }
+        provided_method_names.insert(method.name.clone());
+    }
+
+    let target_class_method_names =
+        class_method_names_for_implements_target(&ctx, &imp.for_target.expr, &generic_param_names);
+    for (origin, req_name, _sig) in &members.required_methods {
+        if provided_method_names.contains(req_name) || target_class_method_names.contains(req_name)
+        {
+            continue;
+        }
+        if origin.qualified_name != iface_qtn
+            && has_sibling_implements_for_origin(&ctx, imp, all_items, origin)
+        {
+            continue;
+        }
+        diagnostics.push(
+            Hir2Diagnostic::MissingInterfaceMethod {
+                class_name: target_name.clone(),
+                interface_name: origin.display_name(),
+                method_name: req_name.clone(),
+                span: imp.span,
+            }
+            .to_diagnostic(file_id),
+        );
+    }
+
+    if !iface.requires.is_empty() {
+        let missing: Vec<Name> = iface
+            .requires
+            .iter()
+            .filter_map(|parent_te| {
+                let required_parent = substitute_type_vars(&parent_te.expr, &subst);
+                let baml_compiler2_ast::TypeExpr::Path { segments, .. } = &required_parent else {
+                    return None;
+                };
+                let parent_name =
+                    resolve_interface_path(db, &required_parent, pkg_items, &iface_namespace_path)
+                        .map(|parent| parent.display_name())
+                        .or_else(|| segments.last().cloned())?;
+                let target_implements_it = all_items.iter().any(|item| {
+                    item_implements_required_parent_for_target(
+                        &ctx,
+                        item,
+                        imp,
+                        &generic_param_names,
+                        &required_parent,
+                        &iface_namespace_path,
+                    )
+                });
+                if target_implements_it {
+                    None
+                } else {
+                    Some(parent_name)
+                }
+            })
+            .collect();
+        if !missing.is_empty() {
+            diagnostics.push(
+                Hir2Diagnostic::MissingRequiredInterface {
+                    class_name: target_name,
+                    interface_name: iface_display_name,
+                    missing_parents: missing,
+                    span: imp.interface_target.span,
+                }
+                .to_diagnostic(file_id),
+            );
+        }
+    }
+}
+
+fn validate_class_implements<'db>(
+    db: &'db dyn Db,
+    file_id: FileId,
+    class: &baml_compiler2_ast::ClassDef,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    namespace_path: &[Name],
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
+
+    let ctx = InterfaceValidationCtx {
+        db,
+        pkg_items,
+        namespace_path,
+        aliases,
+    };
+    let mut seen_targets: IndexMap<String, (Name, Vec<TextRange>)> = IndexMap::new();
+    for block in &class.implements {
+        let Some(resolved_iface) =
+            resolve_interface_path(db, &block.target.expr, pkg_items, namespace_path)
+        else {
+            continue;
+        };
+        let iface_display_name = resolved_iface.display_name();
+        // Use the resolved interface identity plus its concrete type
+        // arguments for duplicate detection. `Foo` and `ns.Foo` should
+        // collide when they resolve to the same interface, but
+        // `Converter<int>` and `Converter<float>` are distinct views.
+        let type_arg_key = match &block.target.expr {
+            baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => generic_args
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(","),
+            _ => String::new(),
+        };
+        let key = format!(
+            "{}:{}<{}>",
+            resolved_iface.loc.file(db).file_id(db).as_u32(),
+            resolved_iface.loc.id(db).as_u32(),
+            type_arg_key
+        );
+        seen_targets
+            .entry(key)
+            .or_insert_with(|| (iface_display_name, Vec::new()))
+            .1
+            .push(block.target.span);
+    }
+    for (_target, (name, sites)) in &seen_targets {
+        if sites.len() > 1 {
+            diagnostics.push(
+                Hir2Diagnostic::DuplicateImplementsBlock {
+                    class_name: class.name.clone(),
+                    interface_name: name.clone(),
+                    sites: sites.clone(),
+                }
+                .to_diagnostic(file_id),
+            );
+        }
+    }
+
+    // Hoisted: the class's own method set doesn't change across blocks.
+    let class_method_names: HashSet<Name> = class.methods.iter().map(|m| m.name.clone()).collect();
+
+    for block in &class.implements {
+        let Some(resolved_iface) =
+            resolve_interface_path(db, &block.target.expr, pkg_items, namespace_path)
+        else {
+            // Distinguish "name doesn't exist" (E0112) from "name exists
+            // but isn't an interface" (E0119).
+            let is_non_interface =
+                is_non_interface_type(&block.target.expr, pkg_items, namespace_path);
+            if is_non_interface {
+                diagnostics.push(
+                    Hir2Diagnostic::NotAnInterface {
+                        class_name: class.name.clone(),
+                        target_name: format!("{}", block.target.expr),
+                        span: block.target.span,
+                    }
+                    .to_diagnostic(file_id),
+                );
+            } else {
+                diagnostics.push(
+                    Hir2Diagnostic::UnknownInterface {
+                        class_name: class.name.clone(),
+                        target_name: format!("{}", block.target.expr),
+                        span: block.target.span,
+                    }
+                    .to_diagnostic(file_id),
+                );
+            }
+            continue;
+        };
+        // E0002: the interface name resolved, but its generic type arguments
+        // must themselves be resolvable types. `implements Container<Bogus>`
+        // is rejected here just like a field type `x: Bogus` is. Without this,
+        // an unresolvable type argument in an `implements` clause is silently
+        // dropped — the only code that lowers the target (dispatch-source
+        // collection) discards these diagnostics.
+        {
+            let mut arg_errors = Vec::new();
+            baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+                db,
+                &block.target.expr,
+                pkg_items,
+                namespace_path,
+                &class.generic_params,
+                &mut arg_errors,
+            );
+            for error in arg_errors {
+                diagnostics.push(
+                    Diagnostic::error(tir_type_error_to_diagnostic_id(&error), error.to_string())
+                        .with_primary_span(Span {
+                            file_id,
+                            range: block.target.span,
+                        })
+                        .with_phase(DiagnosticPhase::Type),
+                );
+            }
+        }
+        let iface_display_name = resolved_iface.display_name();
+        let iface_qtn = resolved_iface.qtn.clone();
+        let iface_file = resolved_iface.loc.file(db);
+        let iface = resolved_iface.iface;
+        let iface_namespace_path =
+            baml_compiler2_hir::file_package::file_package(db, iface_file).namespace_path;
+        let mut interface_generic_params = class.generic_params.clone();
+        interface_generic_params.extend(iface.generic_params.clone());
+        // Build a T → concrete-type substitution from the implements target's
+        // generic args. `implements Container<int>` gives `{T → int}` so
+        // signature comparisons see the concrete shape.
+        let subst: std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr> =
+            match &block.target.expr {
+                baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => iface
+                    .generic_params
+                    .iter()
+                    .zip(generic_args.iter())
+                    .map(|(p, a)| (p.clone(), a.clone()))
+                    .collect(),
+                _ => std::collections::HashMap::new(),
+            };
+        let members = collect_interface_members_with_subst(
+            db,
+            &iface,
+            iface_file,
+            pkg_items,
+            namespace_path,
+            &subst,
+            &class.generic_params,
+        );
+        if block.is_out_of_body && !members.fields.is_empty() {
+            diagnostics.push(
+                Hir2Diagnostic::OutOfBodyImplementsFieldInterface {
+                    target_name: class.name.to_string(),
+                    interface_name: iface_display_name.clone(),
+                    span: block.target.span,
+                }
+                .to_diagnostic(file_id),
+            );
+            continue;
+        }
+
+        // Check that every method declared in `implements I {}` actually
+        // exists on `I` (required or default), and matches the interface's
+        // declared signature.
+        let mut provided_method_names: HashSet<Name> = HashSet::new();
+        for m in &block.methods {
+            let expected_sig = members
+                .required_methods
+                .iter()
+                .find_map(|(_, n, s)| if *n == m.name { Some(s.clone()) } else { None })
+                .or_else(|| {
+                    members.default_methods.iter().find_map(|(_, n, s)| {
+                        if *n == m.name { Some(s.clone()) } else { None }
+                    })
+                });
+            match expected_sig {
+                None => diagnostics.push(
+                    Hir2Diagnostic::UnknownInterfaceMember {
+                        interface_name: iface_display_name.clone(),
+                        method_name: m.name.clone(),
+                        span: m.name_span,
+                    }
+                    .to_diagnostic(file_id),
+                ),
+                Some(expected) => {
+                    let actual = MethodSignature::from_params_and_return(
+                        &m.generic_params,
+                        &m.generic_param_bounds,
+                        &m.params,
+                        m.return_type.as_ref(),
+                        m.throws.as_ref(),
+                    );
+                    if !expected.matches(&actual, db, pkg_items, namespace_path, aliases) {
+                        diagnostics.push(
+                            Hir2Diagnostic::InterfaceMethodSignatureMismatch {
+                                class_name: class.name.clone(),
+                                interface_name: iface_display_name.clone(),
+                                method_name: m.name.clone(),
+                                actual: actual.render(),
+                                expected: expected.render(),
+                                span: m.name_span,
+                            }
+                            .to_diagnostic(file_id),
+                        );
+                    }
+                }
+            }
+            provided_method_names.insert(m.name.clone());
+        }
+
+        // Check that every required method has a body — either provided here,
+        // by a same-named class method, or by a separate `implements` block
+        // that targets the originating interface.
+        for (origin, req_name, _sig) in &members.required_methods {
+            if provided_method_names.contains(req_name) || class_method_names.contains(req_name) {
+                continue;
+            }
+            // If the method originates from a parent interface that this
+            // class explicitly implements in a separate block, skip the
+            // check — that block is responsible for providing the method.
+            if origin.qualified_name != iface_qtn
+                && class.implements.iter().any(|candidate| {
+                    interface_origin_matches_target_expr(
+                        db,
+                        &candidate.target.expr,
+                        pkg_items,
+                        namespace_path,
+                        &class.generic_params,
+                        aliases,
+                        origin,
+                    )
+                })
+            {
+                continue;
+            }
+            diagnostics.push(
+                Hir2Diagnostic::MissingInterfaceMethod {
+                    class_name: class.name.clone(),
+                    interface_name: origin.display_name(),
+                    method_name: req_name.clone(),
+                    span: block.span,
+                }
+                .to_diagnostic(file_id),
+            );
+        }
+
+        // BEP-044 v2: interface fields are satisfied by class fields. The
+        // implements block may contain only explicit `field as class_field`
+        // links; an absent link auto-links by exact field name.
+        let class_fields: IndexMap<Name, &baml_compiler2_ast::FieldDef> =
+            class.fields.iter().map(|f| (f.name.clone(), f)).collect();
+
+        let own_fields: IndexMap<Name, Option<baml_compiler2_ast::SpannedTypeExpr>> = iface
+            .fields
+            .iter()
+            .map(|f| {
+                let substituted =
+                    f.type_expr
+                        .as_ref()
+                        .map(|te| baml_compiler2_ast::SpannedTypeExpr {
+                            expr: substitute_type_vars(&te.expr, &subst),
+                            span: te.span,
+                        });
+                (f.name.clone(), substituted)
+            })
+            .collect();
+
+        let mut link_sites: IndexMap<Name, Vec<TextRange>> = IndexMap::new();
+        for link in &block.field_links {
+            link_sites
+                .entry(link.interface_field.clone())
+                .or_default()
+                .push(link.interface_field_span);
+        }
+        for (field_name, sites) in &link_sites {
+            if sites.len() > 1 {
+                diagnostics.push(
+                    Hir2Diagnostic::DuplicateInterfaceFieldLink {
+                        interface_name: iface_display_name.clone(),
+                        field_name: field_name.clone(),
+                        sites: sites.clone(),
+                    }
+                    .to_diagnostic(file_id),
+                );
+            }
+        }
+
+        let mut explicit_links: IndexMap<Name, &baml_compiler2_ast::InterfaceFieldLinkDef> =
+            IndexMap::new();
+        for link in &block.field_links {
+            if !own_fields.contains_key(&link.interface_field) {
+                diagnostics.push(
+                    Hir2Diagnostic::UnknownInterfaceFieldLink {
+                        interface_name: iface_display_name.clone(),
+                        field_name: link.interface_field.clone(),
+                        span: link.interface_field_span,
+                    }
+                    .to_diagnostic(file_id),
+                );
+                continue;
+            }
+            let Some(class_field) = class_fields.get(&link.class_field) else {
+                diagnostics.push(
+                    Hir2Diagnostic::UnknownClassFieldInInterfaceLink {
+                        class_name: class.name.clone(),
+                        interface_name: iface_display_name.clone(),
+                        field_name: link.class_field.clone(),
+                        span: link.class_field_span,
+                    }
+                    .to_diagnostic(file_id),
+                );
+                explicit_links.insert(link.interface_field.clone(), link);
+                continue;
+            };
+            if let (Some(iface_te), Some(class_te)) = (
+                own_fields
+                    .get(&link.interface_field)
+                    .and_then(std::option::Option::as_ref),
+                class_field.type_expr.as_ref(),
+            ) {
+                // C12: `Self`-in-field is reported separately (E0136); skip the
+                // invariance check here to avoid the contradictory cascade.
+                if type_expr_contains_self(&iface_te.expr) {
+                    continue;
+                }
+                if !type_exprs_compatible(
+                    db,
+                    pkg_items,
+                    &iface_namespace_path,
+                    &interface_generic_params,
+                    &iface_te.expr,
+                    namespace_path,
+                    &class.generic_params,
+                    &class_te.expr,
+                    aliases,
+                ) {
+                    diagnostics.push(
+                        Hir2Diagnostic::InterfaceFieldTypeMismatch {
+                            class_name: class.name.clone(),
+                            field_name: link.class_field.clone(),
+                            interface_field_name: link.interface_field.clone(),
+                            interface_name: iface_display_name.clone(),
+                            class_type: format!("{}", class_te.expr),
+                            interface_type: format!("{}", iface_te.expr),
+                            span: class_te.span,
+                        }
+                        .to_diagnostic(file_id),
+                    );
+                }
+            }
+            explicit_links
+                .entry(link.interface_field.clone())
+                .or_insert(link);
+        }
+
+        for (field_name, iface_te) in &own_fields {
+            if explicit_links.contains_key(field_name) {
+                continue;
+            }
+            let Some(class_field) = class_fields.get(field_name) else {
+                diagnostics.push(
+                    Hir2Diagnostic::MissingInterfaceField {
+                        class_name: class.name.clone(),
+                        interface_name: iface_display_name.clone(),
+                        field_name: field_name.clone(),
+                        span: block.span,
+                    }
+                    .to_diagnostic(file_id),
+                );
+                continue;
+            };
+            if let (Some(iface_te), Some(class_te)) =
+                (iface_te.as_ref(), class_field.type_expr.as_ref())
+            {
+                // C12: `Self` in the interface field type is rejected separately
+                // (E0136); skip the invariance check so it doesn't ALSO demand
+                // the class field be `Self?` (the old contradictory cascade).
+                if type_expr_contains_self(&iface_te.expr) {
+                    continue;
+                }
+                if !type_exprs_compatible(
+                    db,
+                    pkg_items,
+                    &iface_namespace_path,
+                    &interface_generic_params,
+                    &iface_te.expr,
+                    namespace_path,
+                    &class.generic_params,
+                    &class_te.expr,
+                    aliases,
+                ) {
+                    diagnostics.push(
+                        Hir2Diagnostic::InterfaceFieldTypeMismatch {
+                            class_name: class.name.clone(),
+                            field_name: class_field.name.clone(),
+                            // Non-aliased: the interface and class field share a name.
+                            interface_field_name: field_name.clone(),
+                            interface_name: iface_display_name.clone(),
+                            class_type: format!("{}", class_te.expr),
+                            interface_type: format!("{}", iface_te.expr),
+                            span: class_te.span,
+                        }
+                        .to_diagnostic(file_id),
+                    );
+                }
+            }
+        }
+
+        // E0125: check that all `requires` parents are explicitly
+        // implemented by this class.
+        if !iface.requires.is_empty() {
+            let missing: Vec<Name> = iface
+                .requires
+                .iter()
+                .filter_map(|parent_te| {
+                    let required_parent = substitute_type_vars(&parent_te.expr, &subst);
+                    let baml_compiler2_ast::TypeExpr::Path { segments, .. } = &required_parent
+                    else {
+                        return None;
+                    };
+                    let parent_name = resolve_interface_path(
+                        db,
+                        &required_parent,
+                        pkg_items,
+                        &iface_namespace_path,
+                    )
+                    .map(|parent| parent.display_name())
+                    .or_else(|| segments.last().cloned())?;
+                    let class_implements_it = class.implements.iter().any(|candidate| {
+                        interface_target_matches_required_parent(
+                            &ctx,
+                            &candidate.target.expr,
+                            namespace_path,
+                            &required_parent,
+                            &iface_namespace_path,
+                            &class.generic_params,
+                        )
+                    });
+                    if class_implements_it {
+                        None
+                    } else {
+                        Some(parent_name)
+                    }
+                })
+                .collect();
+            if !missing.is_empty() {
+                diagnostics.push(
+                    Hir2Diagnostic::MissingRequiredInterface {
+                        class_name: class.name.clone(),
+                        interface_name: iface_display_name.clone(),
+                        missing_parents: missing,
+                        span: block.target.span,
+                    }
+                    .to_diagnostic(file_id),
+                );
+            }
+        }
+    }
+
+    // BEP-044 §"Method Disambiguation": same-named methods declared in
+    // two `implements` blocks are NOT a class-level error. The class
+    // compiles; the ambiguity surfaces at the call site instead — see
+    // `resolve_member` in TIR for the unqualified-call diagnostic.
+}
+
+/// Invariant compatibility check for interface fields.
+///
+/// Interface fields are writeable through the interface view, so the class
+/// storage type must match the interface field type exactly. The exactness
+/// rule lives in TIR normalization so LSP and compiler diagnostics agree on
+/// semantic equality without permitting assignment subtyping.
+#[allow(clippy::too_many_arguments)]
+fn type_exprs_compatible(
+    db: &dyn Db,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    lhs_namespace_path: &[Name],
+    lhs_generic_params: &[Name],
+    lhs: &baml_compiler2_ast::TypeExpr,
+    rhs_namespace_path: &[Name],
+    rhs_generic_params: &[Name],
+    rhs: &baml_compiler2_ast::TypeExpr,
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+) -> bool {
+    let mut diagnostics = Vec::new();
+    let lhs_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+        db,
+        lhs,
+        pkg_items,
+        lhs_namespace_path,
+        lhs_generic_params,
+        &mut diagnostics,
+    );
+    let lhs_lowered = diagnostics.is_empty();
+    diagnostics.clear();
+    let rhs_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+        db,
+        rhs,
+        pkg_items,
+        rhs_namespace_path,
+        rhs_generic_params,
+        &mut diagnostics,
+    );
+
+    if !lhs_lowered || !diagnostics.is_empty() {
+        // Resolution diagnostics are emitted elsewhere. Avoid inventing a
+        // misleading interface-field mismatch on partially unresolved types.
+        return lhs.to_string() == rhs.to_string();
+    }
+
+    baml_compiler2_tir::normalize::is_same_normalized_type(&lhs_ty, &rhs_ty, aliases)
+}
+
+/// Nominal subtype check used for `throws` covariance: `sub <: sup` when the
+/// types normalize equal, or when `sup` is an interface that `sub` implements
+/// (via the implements registry). Recurses for the bound check.
+fn ty_nominal_subtype(
+    db: &dyn Db,
+    sub: &Ty,
+    sup: &Ty,
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+) -> bool {
+    if baml_compiler2_tir::normalize::is_same_normalized_type(sub, sup, aliases) {
+        return true;
+    }
+    if let Ty::Interface(iface_qtn, _, _) = sup {
+        let registry = baml_compiler2_tir::interfaces::package_implements_registry(
+            db,
+            baml_compiler2_hir::package::PackageId::new(db, iface_qtn.package().clone()),
+        );
+        return registry.type_implements_interface_via_rule(sub, sup, aliases, |a, b| {
+            ty_nominal_subtype(db, a, b, aliases)
+        });
+    }
+    false
+}
+
+/// BEP-044 wf3 #G9a: `throws` is covariant — an interface impl may declare a
+/// *narrower* throws than the interface (`throws NetworkError` satisfying
+/// `throws IError` when `NetworkError implements IError`). Every member of the
+/// impl's throws union must be a nominal subtype of some member of the
+/// interface's. Falls back to string equality when a type can't be lowered.
+fn throws_covariant_compatible(
+    db: &dyn Db,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    namespace_path: &[Name],
+    generic_params: &[Name],
+    iface_throws: &baml_compiler2_ast::TypeExpr,
+    impl_throws: &baml_compiler2_ast::TypeExpr,
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+) -> bool {
+    let mut diagnostics = Vec::new();
+    let iface_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+        db,
+        iface_throws,
+        pkg_items,
+        namespace_path,
+        generic_params,
+        &mut diagnostics,
+    );
+    let ok = diagnostics.is_empty();
+    diagnostics.clear();
+    let impl_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+        db,
+        impl_throws,
+        pkg_items,
+        namespace_path,
+        generic_params,
+        &mut diagnostics,
+    );
+    if !ok || !diagnostics.is_empty() {
+        return iface_throws.to_string() == impl_throws.to_string();
+    }
+    if baml_compiler2_tir::normalize::is_same_normalized_type(&impl_ty, &iface_ty, aliases) {
+        return true;
+    }
+    let members = |ty: &Ty| -> Vec<Ty> {
+        match ty {
+            Ty::Union(m, _) => m.clone(),
+            other => vec![other.clone()],
+        }
+    };
+    let iface_members = members(&iface_ty);
+    members(&impl_ty).iter().all(|im| {
+        iface_members
+            .iter()
+            .any(|sup| ty_nominal_subtype(db, im, sup, aliases))
+    })
+}
+
+/// Collect single-segment path names in `expr` that are members of
+/// `type_params` (i.e. references to declared generic parameters), recursing
+/// through containers and generic args. Used to check that an out-of-body
+/// `implements<T> … for …` binds every declared param in the implementor type.
+fn collect_type_var_names(
+    expr: &baml_compiler2_ast::TypeExpr,
+    type_params: &[Name],
+    out: &mut HashSet<Name>,
+) {
+    use baml_compiler2_ast::TypeExpr;
+    match expr {
+        TypeExpr::Path {
+            segments,
+            generic_args,
+            ..
+        } => {
+            if segments.len() == 1 && type_params.contains(&segments[0]) {
+                out.insert(segments[0].clone());
+            }
+            for a in generic_args {
+                collect_type_var_names(a, type_params, out);
+            }
+        }
+        TypeExpr::List { inner, .. } | TypeExpr::Optional { inner, .. } => {
+            collect_type_var_names(inner, type_params, out);
+        }
+        TypeExpr::Map { key, value, .. } => {
+            collect_type_var_names(key, type_params, out);
+            collect_type_var_names(value, type_params, out);
+        }
+        TypeExpr::Union { variants, .. } => {
+            for v in variants {
+                collect_type_var_names(v, type_params, out);
+            }
+        }
+        TypeExpr::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            for p in params {
+                collect_type_var_names(&p.ty, type_params, out);
+            }
+            collect_type_var_names(ret, type_params, out);
+            if let Some(throws) = throws {
+                collect_type_var_names(throws, type_params, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn type_expr_contains_self(expr: &baml_compiler2_ast::TypeExpr) -> bool {
+    use baml_compiler2_ast::TypeExpr;
+    match expr {
+        TypeExpr::Path {
+            segments,
+            generic_args,
+            ..
+        } => {
+            segments.iter().any(|s| s.as_str() == "Self")
+                || generic_args.iter().any(type_expr_contains_self)
+        }
+        TypeExpr::Optional { inner, .. } | TypeExpr::List { inner, .. } => {
+            type_expr_contains_self(inner)
+        }
+        TypeExpr::Map { key, value, .. } => {
+            type_expr_contains_self(key) || type_expr_contains_self(value)
+        }
+        TypeExpr::Union { variants, .. } => variants.iter().any(type_expr_contains_self),
+        TypeExpr::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            params.iter().any(|p| type_expr_contains_self(&p.ty))
+                || type_expr_contains_self(ret)
+                || throws
+                    .as_ref()
+                    .is_some_and(|throws| type_expr_contains_self(throws))
+        }
+        _ => false,
+    }
 }
 
 fn check_jinja_templates(
@@ -858,6 +3431,113 @@ fn tir_rendered_to_diagnostic(
         .with_phase(DiagnosticPhase::Type)
 }
 
+fn tir_rendered_to_diagnostic_for_file(
+    db: &dyn Db,
+    file: SourceFile,
+    mut rendered: baml_compiler2_tir::infer_context::RenderedTirDiagnostic,
+) -> Diagnostic {
+    rendered.message = source_aware_tir_type_error_message(db, file, &rendered.error);
+    tir_rendered_to_diagnostic(rendered, file.file_id(db))
+}
+
+fn source_aware_tir_type_error_message(
+    db: &dyn Db,
+    file: SourceFile,
+    error: &TirTypeError,
+) -> String {
+    let ty = |ty: &Ty| crate::utils::display_ty_for_file(db, file, ty);
+    match error {
+        TirTypeError::TypeMismatch { expected, got } => {
+            format!("type mismatch: expected {}, got {}", ty(expected), ty(got))
+        }
+        TirTypeError::UnresolvedMember { base_type, member } => {
+            format!("type `{}` has no member `{member}`", ty(base_type))
+        }
+        TirTypeError::NotCallable { ty: callee_ty } => {
+            format!(
+                "`{}` is not a function — it cannot be called",
+                ty(callee_ty)
+            )
+        }
+        TirTypeError::NotIterable { ty: iter_ty } => {
+            format!("cannot iterate over type `{}`", ty(iter_ty))
+        }
+        TirTypeError::NotIndexable { ty: index_ty } => {
+            format!("type `{}` is not indexable", ty(index_ty))
+        }
+        TirTypeError::InvalidBinaryOp { op, lhs, rhs } => {
+            format!(
+                "operator `{op:?}` cannot be applied to `{}` and `{}`",
+                ty(lhs),
+                ty(rhs)
+            )
+        }
+        TirTypeError::InvalidUnaryOp { op, operand } => {
+            format!("operator `{op:?}` cannot be applied to `{}`", ty(operand))
+        }
+        TirTypeError::MissingReturn { expected } => {
+            format!("missing return value of type {}", ty(expected))
+        }
+        TirTypeError::NonExhaustiveMatch {
+            scrutinee_type,
+            missing_cases,
+        } => {
+            if missing_cases.is_empty() {
+                format!("non-exhaustive match on type {}", ty(scrutinee_type))
+            } else {
+                format!(
+                    "non-exhaustive match on type {}; missing: {}",
+                    ty(scrutinee_type),
+                    missing_cases.join(", ")
+                )
+            }
+        }
+        TirTypeError::OrPatternBindingTypeMismatch {
+            name,
+            first_type,
+            other_type,
+        } => {
+            format!(
+                "or-pattern binding `{name}` has conflicting types: {} and {}",
+                ty(first_type),
+                ty(other_type)
+            )
+        }
+        TirTypeError::ThrowsContractViolation {
+            declared,
+            extra_types,
+        } => {
+            format!(
+                "declared throws is `{}`, but this function may also throw `{}`",
+                ty(declared),
+                extra_types.join(" | ")
+            )
+        }
+        TirTypeError::CallbackThrowsContractViolation {
+            callback_name,
+            declared,
+            concrete_throws,
+        } => {
+            if let Some(concrete_throws) = concrete_throws {
+                format!(
+                    "this body may throw through callback `{callback_name}`, but declared throws is `{}`. Add `throws {}` to the callback, catch the call, or make the callback non-throwing.",
+                    ty(declared),
+                    ty(concrete_throws)
+                )
+            } else {
+                format!(
+                    "this body may throw through callback `{callback_name}`, but declared throws is `{}`. Add an explicit `throws` to the callback, catch the call, or make the callback non-throwing.",
+                    ty(declared)
+                )
+            }
+        }
+        TirTypeError::InvalidInterfaceUpcastTarget { target } => {
+            format!("`.as<T>` requires an interface target, got {}", ty(target))
+        }
+        _ => error.to_string(),
+    }
+}
+
 /// Map a `TirTypeError` to an approximate `DiagnosticId` for structural items.
 ///
 /// This is used when we have access to the typed `TirTypeError` (for class field
@@ -918,6 +3598,21 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::SuggestNullCoalesce { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::NullCoalesceWithNull { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::NullableMemberAccess { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::AmbiguousInterfaceMethod { .. } => DiagnosticId::AmbiguousInterfaceMethod,
+        TirTypeError::AmbiguousInterfaceField { .. } => DiagnosticId::AmbiguousInterfaceField,
+        TirTypeError::InterfaceFieldRequiresProjection { .. } => DiagnosticId::NoSuchField,
+        TirTypeError::InterfaceFieldRequiresQualifiedConstruction { .. } => {
+            DiagnosticId::NoSuchField
+        }
+        TirTypeError::DeprecatedInterfaceProjection { .. } => DiagnosticId::NoSuchField,
+        TirTypeError::InvalidInterfaceUpcastTarget { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::InterfaceMemberRequiresReceiver { .. } => DiagnosticId::NoSuchField,
+        TirTypeError::InvalidSelfCallThroughInterface { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::DefaultOnRequiredMethod { .. } => DiagnosticId::DefaultOnRequiredMethod,
+        TirTypeError::BareDefaultKeyword => DiagnosticId::BareDefaultKeyword,
+        TirTypeError::TypeDoesNotImplementInterface { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::BlanketBoundNotSatisfied { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::AmbiguousInterfaceInstantiation { .. } => DiagnosticId::OverlappingImplements,
     }
 }
 

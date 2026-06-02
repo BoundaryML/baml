@@ -259,8 +259,9 @@ impl<'a> BexValue<'a> {
         self,
         heap: &BexHeap,
         permit: PermitProof<'a>,
-    ) -> Result<&'a String, AccessError> {
+    ) -> Result<&'a bex_str::BexStr, AccessError> {
         match self {
+            // Phase 3: BexExternalValue::String now holds BexStr directly.
             BexValue::ExternalValue(BexExternalValue::String(s)) => Ok(s),
             other => other.as_object("string", heap, permit, |ptr| {
                 let obj = unsafe { ptr.get() };
@@ -345,7 +346,7 @@ impl<'a> BexValue<'a> {
                 let data = map.to_index_map();
                 Ok(data
                     .into_iter()
-                    .map(|(k, v)| (k, BexValue::OwnedValue(v)))
+                    .map(|(k, v)| (k.as_str().to_owned(), BexValue::OwnedValue(v)))
                     .collect())
             }),
         }
@@ -592,7 +593,9 @@ fn owned_inner(
 ) -> Result<BexExternalValue, AccessError> {
     let unconvertible = |reason: &str| -> Result<BexExternalValue, AccessError> {
         if lossy {
-            Ok(BexExternalValue::String(format!("<{reason}>")))
+            Ok(BexExternalValue::String(bex_str::BexStr::from(format!(
+                "<{reason}>"
+            ))))
         } else {
             Err(AccessError::CannotConvertToOwned {
                 reason: reason.to_string(),
@@ -705,7 +708,9 @@ fn convert_object(
 ) -> Result<BexExternalValue, AccessError> {
     let unconvertible = |type_name: &str| -> Result<BexExternalValue, AccessError> {
         if lossy {
-            Ok(BexExternalValue::String(format!("<{type_name}>")))
+            Ok(BexExternalValue::String(bex_str::BexStr::from(format!(
+                "<{type_name}>"
+            ))))
         } else {
             Err(AccessError::CannotConvertToOwned {
                 reason: format!("cannot convert {type_name} to BexExternalValue"),
@@ -743,7 +748,12 @@ fn convert_object(
             entries: map
                 .to_index_map()
                 .into_iter()
-                .map(|(k, v)| Ok((k, owned_inner(BexValue::OwnedValue(v), heap, lossy)?)))
+                .map(|(k, v)| {
+                    Ok((
+                        k.as_str().to_owned(),
+                        owned_inner(BexValue::OwnedValue(v), heap, lossy)?,
+                    ))
+                })
                 .collect::<Result<_, _>>()?,
         }),
         Object::Instance(instance) => {

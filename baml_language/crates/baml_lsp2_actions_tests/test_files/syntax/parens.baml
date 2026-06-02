@@ -731,14 +731,14 @@ function foo() -> int {
 //     │ 
 //     │ Note: Error code: E0006
 // ────╯
-// error: missing return: expected `int`
+// error: missing return value of type int
 //     ╭─[ parens.baml:1:22 ]
 //     │
 //   1 │ ╭─▶ function foo() -> int {
 //     ┆ ┆   
 //  63 │ ├─▶ }
 //     │ │       
-//     │ ╰─────── missing return: expected `int`
+//     │ ╰─────── missing return value of type int
 //     │     
 //     │     Note: Error code: E0029
 // ────╯

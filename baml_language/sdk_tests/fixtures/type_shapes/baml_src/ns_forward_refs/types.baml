@@ -32,22 +32,22 @@ class GNode<T> {
   children GNode<T>[]
 }
 
-function RoundTripOther(o: Other) -> Other {
+function round_trip_other(o: Other) -> Other {
   o
 }
 
-function RoundTripRecList(r: RecList) -> RecList {
+function round_trip_rec_list(r: RecList) -> RecList {
   r
 }
 
-function RoundTripRecListWithOther(r: RecListWithOther) -> RecListWithOther {
+function round_trip_rec_list_with_other(r: RecListWithOther) -> RecListWithOther {
   r
 }
 
-function RoundTripNode(n: Node) -> Node {
+function round_trip_node(n: Node) -> Node {
   n
 }
 
-function RoundTripGNodeInt(g: GNode<int>) -> GNode<int> {
+function round_trip_g_node_int(g: GNode<int>) -> GNode<int> {
   g
 }

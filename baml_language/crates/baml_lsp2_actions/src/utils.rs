@@ -20,12 +20,12 @@
 //!   `TypeExpr` as a source-level string. Used for function parameter types
 //!   in hover output.
 
-use baml_base::SourceFile;
+use baml_base::{Name, SourceFile};
 use baml_compiler_syntax::{SyntaxToken, TokenAtOffset};
 use baml_compiler2_ast::TypeExpr;
-use baml_compiler2_hir::contributions::Definition;
+use baml_compiler2_hir::{contributions::Definition, package::PackageItems};
 use baml_compiler2_tir::{
-    ty::{FunctionParamTy, Ty},
+    ty::{QualifiedTypeName, Ty, TyRenderStrategy},
     user_facing::humanize_type_string,
 };
 use text_size::{TextRange, TextSize};
@@ -109,118 +109,196 @@ pub fn definition_span<'db>(
 
 // ── display_ty ────────────────────────────────────────────────────────────────
 
-fn ty_needs_postfix_parens(ty: &Ty) -> bool {
-    matches!(ty, Ty::Union(..) | Ty::Function { .. })
+/// Context for the LSP's hover/completion type rendering: knows the file's
+/// current package + namespace so qualified names collapse to the shortest
+/// unambiguous form (bare when in scope, `root.path` when not, the dependency
+/// package prefix for cross-package types). Implements [`TyRenderStrategy`] so
+/// the structural walk lives once in `baml_compiler2_tir`.
+struct TyDisplayContext<'db> {
+    current_package: Name,
+    current_namespace: Vec<Name>,
+    package_items: &'db PackageItems<'db>,
+    /// When set, collapse builtin companion classes to their lowercase
+    /// primitive/keyword alias (`baml.String` → `string`, `baml.json.json` →
+    /// `json`). Only the describe + hover + signature paths opt in (via
+    /// [`display_ty_canonical_for_file`]); diagnostics/completions/inlay hints
+    /// keep the un-collapsed spelling.
+    collapse_aliases: bool,
 }
 
-fn display_ty_as_postfix_base(ty: &Ty) -> String {
-    let rendered = display_ty(ty);
-    if ty_needs_postfix_parens(ty) {
-        format!("({rendered})")
-    } else {
-        rendered
+impl TyDisplayContext<'_> {
+    fn display_qtn(&self, qtn: &QualifiedTypeName) -> String {
+        if self.collapse_aliases {
+            if let Some(alias) = qtn.builtin_alias() {
+                return alias.to_string();
+            }
+        }
+
+        if qtn.package() != &self.current_package {
+            // Cross-package: keep the dependency package prefix to disambiguate,
+            // but never the implicit `user` package.
+            return qtn.render_user_facing();
+        }
+
+        if self.can_use_bare_name(qtn) {
+            return qtn.name().to_string();
+        }
+
+        let path = qtn
+            .namespace()
+            .iter()
+            .chain(std::iter::once(qtn.name()))
+            .map(Name::as_str)
+            .collect::<Vec<_>>()
+            .join(".");
+        format!("root.{path}")
+    }
+
+    fn can_use_bare_name(&self, qtn: &QualifiedTypeName) -> bool {
+        if qtn.namespace() == &self.current_namespace {
+            return true;
+        }
+
+        if qtn.namespace().is_empty() {
+            return self
+                .package_items
+                .lookup_type(&self.current_namespace, qtn.name())
+                .is_none();
+        }
+
+        false
+    }
+
+    /// Render `ty` in this file's context — the LSP hover/completion form.
+    /// The structural walk lives once in `baml_compiler2_tir`; this context
+    /// only supplies the name/policy decisions via [`TyRenderStrategy`].
+    fn display_ty(&self, ty: &Ty) -> String {
+        ty.render_with(self)
     }
 }
 
-fn display_ty_as_function_result(ty: &Ty) -> String {
-    let rendered = display_ty(ty);
-    if matches!(ty, Ty::Function { .. }) {
-        format!("({rendered})")
-    } else {
-        rendered
+impl TyRenderStrategy for TyDisplayContext<'_> {
+    fn qtn(&self, qtn: &QualifiedTypeName, _with_generic_params: bool) -> String {
+        self.display_qtn(qtn)
+    }
+
+    fn type_var(&self, name: &Name) -> String {
+        if baml_compiler2_tir::ty::is_synthetic_effect_param(name) {
+            "callback".to_string()
+        } else {
+            name.to_string()
+        }
+    }
+
+    // Hover/completion show declared shapes: the bare name (no `<_>`
+    // placeholders) and no streaming-only `(evolving)` annotation.
+    fn show_unspecialized_placeholders(&self) -> bool {
+        false
+    }
+
+    fn show_evolving(&self) -> bool {
+        false
     }
 }
 
-pub fn display_function_param_ty(param: &FunctionParamTy) -> String {
-    param
-        .name
-        .as_ref()
-        .map(|name| {
-            let optional = if param.is_optional() { "?" } else { "" };
-            format!("{}{}: {}", name, optional, display_ty(&param.ty))
-        })
-        .unwrap_or_else(|| display_ty(&param.ty))
+/// Context-free strategy: like the canonical form but elides the implicit
+/// `user` package, hides `(evolving)`/`<_>` placeholders, and shows synthetic
+/// effect params as `callback`. Used by [`display_ty`] where no current-package
+/// context is available.
+struct PlainTyRender;
+
+impl TyRenderStrategy for PlainTyRender {
+    fn qtn(&self, qtn: &QualifiedTypeName, _with_generic_params: bool) -> String {
+        qtn.render_user_facing()
+    }
+
+    fn type_var(&self, name: &Name) -> String {
+        if baml_compiler2_tir::ty::is_synthetic_effect_param(name) {
+            "callback".to_string()
+        } else {
+            name.to_string()
+        }
+    }
+
+    fn show_unspecialized_placeholders(&self) -> bool {
+        false
+    }
+
+    fn show_evolving(&self) -> bool {
+        false
+    }
 }
 
-/// Format a resolved `Ty` as a user-friendly string.
-///
-/// Delegates to the `Display` impl on `Ty`. For user-visible output (hover,
-/// inlay hints) we strip the package qualifier so `user.Foo` shows as `Foo`
-/// and `baml.PrimitiveClient` shows as `PrimitiveClient`.
-pub fn display_ty(ty: &Ty) -> String {
-    use baml_compiler2_tir::ty::PrimitiveType;
-    let rendered = match ty {
-        Ty::Class(qn, type_args, _) => {
-            if type_args.is_empty() {
-                qn.to_string()
-            } else {
-                let args: Vec<String> = type_args.iter().map(display_ty).collect();
-                format!("{}<{}>", qn, args.join(", "))
-            }
-        }
-        Ty::Enum(qn, _) | Ty::TypeAlias(qn, _) => qn.to_string(),
-        Ty::EnumVariant(qn, v, _) => format!("{qn}.{v}"),
-        Ty::Primitive(p, _) => match p {
-            PrimitiveType::Int => "int".to_string(),
-            PrimitiveType::Bigint => "bigint".to_string(),
-            PrimitiveType::Float => "float".to_string(),
-            PrimitiveType::String => "string".to_string(),
-            PrimitiveType::Bool => "bool".to_string(),
-            PrimitiveType::Null => "null".to_string(),
-            PrimitiveType::Image => "image".to_string(),
-            PrimitiveType::Audio => "audio".to_string(),
-            PrimitiveType::Video => "video".to_string(),
-            PrimitiveType::Pdf => "pdf".to_string(),
-            PrimitiveType::Uint8Array => "uint8array".to_string(),
-        },
-        Ty::List(inner, _) => format!("{}[]", display_ty_as_postfix_base(inner)),
-        Ty::Map(k, v, _) => format!("map<{}, {}>", display_ty(k), display_ty(v)),
-        Ty::EvolvingList(inner, _) => {
-            if matches!(**inner, Ty::Never { .. }) {
-                "_[]".to_string()
-            } else {
-                format!("{}[]", display_ty_as_postfix_base(inner))
-            }
-        }
-        Ty::EvolvingMap(k, v, _) => {
-            if matches!(**k, Ty::Never { .. }) && matches!(**v, Ty::Never { .. }) {
-                "map<_, _>".to_string()
-            } else {
-                format!("map<{}, {}>", display_ty(k), display_ty(v))
-            }
-        }
-        Ty::Union(members, _) => {
-            let parts: Vec<_> = members.iter().map(display_ty).collect();
-            parts.join(" | ")
-        }
-        Ty::Optional(inner, _) => format!("{}?", display_ty_as_postfix_base(inner)),
-        Ty::Literal(lit, _freshness, _) => lit.to_string(),
-        Ty::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } => {
-            let ps: Vec<String> = params.iter().map(display_function_param_ty).collect();
-            format!(
-                "({}) -> {} throws {}",
-                ps.join(", "),
-                display_ty_as_function_result(ret),
-                display_ty(throws)
-            )
-        }
-        Ty::TypeVar(name, _) => name.to_string(),
-        Ty::Never { .. } => "never".to_string(),
-        Ty::Void { .. } => "void".to_string(),
-        Ty::BuiltinUnknown { .. } | Ty::Unknown { .. } => "unknown".to_string(),
-        Ty::RustType { .. } => "$rust_type".to_string(),
-        Ty::Type { .. } => "type".to_string(),
-        Ty::Error { .. } => "!error".to_string(),
-        Ty::Future(value, error, _) => {
-            format!("Future<{}, {}>", display_ty(value), display_ty(error))
-        }
+pub fn display_ty_for_file(db: &dyn Db, file: SourceFile, ty: &Ty) -> String {
+    display_ty_for_file_impl(db, file, ty, false)
+}
+
+/// Like [`display_ty_for_file`], but collapses builtin companion classes to
+/// their lowercase primitive/keyword alias (`baml.String` → `string`,
+/// `baml.media.Image` → `image`, `baml.json.json` → `json`). This is the
+/// canonical type printer used by the describe + hover + signature paths;
+/// other call sites (diagnostics, completions, inlay hints) keep the
+/// un-collapsed [`display_ty_for_file`].
+pub fn display_ty_canonical_for_file(db: &dyn Db, file: SourceFile, ty: &Ty) -> String {
+    display_ty_for_file_impl(db, file, ty, true)
+}
+
+fn display_ty_for_file_impl(
+    db: &dyn Db,
+    file: SourceFile,
+    ty: &Ty,
+    collapse_aliases: bool,
+) -> String {
+    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
+    let package_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    let ctx = TyDisplayContext {
+        current_package: pkg_info.package,
+        current_namespace: pkg_info.namespace_path,
+        package_items,
+        collapse_aliases,
     };
-    humanize_type_string(&rendered)
+    ctx.display_ty(ty)
+}
+
+/// Canonical fully-qualified name string for a resolved type, used by the
+/// describe header and the LSP hover "Run `baml describe …`" hint.
+///
+/// Rules (single source of truth, matching the canonical printer):
+/// - builtin companion class with a lowercase alias → the alias (`string`);
+/// - user type at package root → its bare name (`Foo`);
+/// - user type in a namespace → `root.<ns>.<Name>`;
+/// - other dependency type → `<pkg>.<path>` (`baml.json.JsonObject`).
+pub fn canonical_fqn_string(qtn: &QualifiedTypeName) -> String {
+    if let Some(alias) = qtn.builtin_alias() {
+        return alias.to_string();
+    }
+    if qtn.is_local() {
+        if qtn.namespace().is_empty() {
+            qtn.name().to_string()
+        } else {
+            let path = qtn
+                .namespace()
+                .iter()
+                .chain(std::iter::once(qtn.name()))
+                .map(Name::as_str)
+                .collect::<Vec<_>>()
+                .join(".");
+            format!("root.{path}")
+        }
+    } else {
+        qtn.render_user_facing()
+    }
+}
+
+/// Format a resolved `Ty` as a user-friendly string without file context.
+///
+/// Keeps the dependency package prefix so same-short-name types stay
+/// distinguishable in hover output, but elides the implicit `user` package and
+/// shows synthetic effect params as `callback`. Used where no current-package
+/// context is available; with context, prefer [`display_ty_for_file`].
+pub fn display_ty(ty: &Ty) -> String {
+    ty.render_with(&PlainTyRender)
 }
 
 // ── display_type_expr ─────────────────────────────────────────────────────────
@@ -286,11 +364,31 @@ pub fn display_type_expr(te: &TypeExpr) -> String {
         }
         TypeExpr::Literal { value, .. } => value.to_string(),
         TypeExpr::Function {
+            generic_params,
+            generic_param_bounds,
             params,
             ret,
             throws,
             ..
         } => {
+            let generics = if generic_params.is_empty() {
+                String::new()
+            } else {
+                let params = generic_params
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, param)| {
+                        if let Some(bound) = generic_param_bounds.get(idx).and_then(Option::as_ref)
+                        {
+                            format!("{param} extends {}", display_type_expr(bound))
+                        } else {
+                            param.to_string()
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("<{params}>")
+            };
             let ps: Vec<String> = params
                 .iter()
                 .map(|p| {
@@ -309,7 +407,7 @@ pub fn display_type_expr(te: &TypeExpr) -> String {
                 .map(|throws| format!(" throws {throws}"))
                 .unwrap_or_default();
             format!(
-                "({}) -> {}{}",
+                "{generics}({}) -> {}{}",
                 ps.join(", "),
                 display_type_expr_as_function_result(ret),
                 throws
