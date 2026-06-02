@@ -658,7 +658,7 @@ fn expr_desc_spans<'db>(
             spans.extend(expr_desc_spans(*future, body, inference));
         }
         Expr::Template { tag, .. } => {
-            if let baml_compiler2_ast::TemplateTag::Custom { tag } = tag {
+            if let baml_compiler2_ast::TemplateTag::Custom { tag, .. } = tag {
                 spans.extend(expr_desc_spans(*tag, body, inference));
             }
             spans.push(DetailSpan::Code("`…`".into()));
@@ -2127,7 +2127,7 @@ impl CompilerRunner {
                 }
                 Expr::Await { future } => format!("await {}", expr_desc(*future, body)),
                 Expr::Template { tag, .. } => match tag {
-                    baml_compiler2_ast::TemplateTag::Custom { tag } => {
+                    baml_compiler2_ast::TemplateTag::Custom { tag, .. } => {
                         format!("{}`…`", expr_desc(*tag, body))
                     }
                     baml_compiler2_ast::TemplateTag::Default { .. } => "`…`".into(),

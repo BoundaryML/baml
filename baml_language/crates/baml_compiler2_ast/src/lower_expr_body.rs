@@ -2750,13 +2750,285 @@ impl LoweringContext {
             .map(|lit| self.lower_template_segments(lit.segments()))
             .unwrap_or_default();
 
+        // Desugared closure body: flatten segments into a `baml.TaggedString`.
+        // MIR lowers this for the dynamic (`${for}`/`${if}`) case and keeps a
+        // fixed-array fast-path off `segments` for purely-static templates.
+        let body = self.elaborate_tagged_body(&segments, span);
+
         self.alloc_expr(
             Expr::Template {
-                tag: TemplateTag::Custom { tag },
+                tag: TemplateTag::Custom { tag, body },
                 segments,
             },
             span,
         )
+    }
+
+    /// Build the desugared body of a tagged template — the closure the tag is
+    /// invoked with. Produces a block that flattens the segments into
+    /// `baml.TaggedString { parts, values }` (BEP §10): text runs accumulate
+    /// into a `cur` string flushed into `parts` at each interpolation, each
+    /// `${expr}` is pushed *raw* (uncoerced — §11) into `values`, and
+    /// `${for}`/`${if}` drive runtime growth via real loops/branches.
+    ///
+    /// Built from the already-lowered [`TemplateSegment`]s (reusing their
+    /// `ExprId`s/`PatId`s for interps, for-bindings, collections, conditions).
+    /// The `parts`/`values`/`cur` synthetic locals use leading-space names so
+    /// they can never collide with user identifiers; their references sit at an
+    /// empty range after the template so they land inside each `let`'s
+    /// visibility window (mirrors the untagged accumulator in
+    /// `elaborate_default_for`).
+    fn elaborate_tagged_body(&mut self, segments: &[TemplateSegment], span: TextRange) -> ExprId {
+        let parts = Name::new(" __tt_parts");
+        let values = Name::new(" __tt_values");
+        let cur = Name::new(" __tt_cur");
+
+        let mut stmts: Vec<StmtId> = Vec::new();
+        // let __tt_parts: string[] = [];
+        stmts.push(self.tt_let_typed_empty_list(
+            &parts,
+            TypeExpr::String { attrs: Vec::new() },
+            span,
+        ));
+        // let __tt_values: unknown[] = [];
+        stmts.push(self.tt_let_typed_empty_list(
+            &values,
+            TypeExpr::BuiltinUnknown { attrs: Vec::new() },
+            span,
+        ));
+        // let __tt_cur = "";
+        let at = TextRange::empty(span.start());
+        let cur_init = self.alloc_expr(Expr::Literal(Literal::String(String::new())), at);
+        let cur_pat = self.alloc_pattern(
+            Pattern::Bind {
+                name: cur.clone(),
+                subpat: None,
+            },
+            at,
+        );
+        stmts.push(self.alloc_stmt(
+            Stmt::Let {
+                pattern: cur_pat,
+                initializer: Some(cur_init),
+                is_watched: false,
+                origin: LetOrigin::Compiler,
+                else_branch: None,
+            },
+            at,
+        ));
+
+        self.elaborate_tagged_walk(segments, &parts, &values, &cur, &mut stmts, span);
+
+        // __tt_parts.push(__tt_cur);  — flush the trailing text run.
+        let cur_ref = self.tt_path(&cur, span);
+        stmts.push(self.tt_push_stmt(&parts, cur_ref, span));
+
+        // baml.TaggedString { parts: __tt_parts, values: __tt_values }
+        let parts_ref = self.tt_path(&parts, span);
+        let values_ref = self.tt_path(&values, span);
+        let tail = self.alloc_expr(
+            Expr::Object {
+                type_name: Some(baml_base::TypePath::from_dotted("baml.TaggedString")),
+                type_args: Vec::new(),
+                fields: vec![
+                    (Name::new("parts"), parts_ref),
+                    (Name::new("values"), values_ref),
+                ],
+                spreads: Vec::new(),
+            },
+            span,
+        );
+
+        self.alloc_expr(
+            Expr::Block {
+                stmts,
+                tail_expr: Some(tail),
+            },
+            span,
+        )
+    }
+
+    /// Emit the per-segment flatten statements into `stmts`. Recurses through
+    /// `${for}` bodies and `${if}` branches, threading the same accumulator
+    /// locals so the resulting `(parts, values)` honour the alternating
+    /// `parts.len() == values.len() + 1` invariant across data-dependent
+    /// lengths.
+    fn elaborate_tagged_walk(
+        &mut self,
+        segments: &[TemplateSegment],
+        parts: &Name,
+        values: &Name,
+        cur: &Name,
+        stmts: &mut Vec<StmtId>,
+        span: TextRange,
+    ) {
+        for seg in segments {
+            match seg {
+                TemplateSegment::Text(s) => {
+                    // __tt_cur = __tt_cur + "<text>";
+                    let lhs = self.tt_path(cur, span);
+                    let rhs = self.alloc_expr(Expr::Literal(Literal::String(s.clone())), span);
+                    let concat = self.alloc_expr(
+                        Expr::Binary {
+                            op: BinaryOp::Add,
+                            lhs,
+                            rhs,
+                        },
+                        span,
+                    );
+                    stmts.push(self.tt_assign(cur, concat, span));
+                }
+                TemplateSegment::Interp(e) => {
+                    // __tt_parts.push(__tt_cur); __tt_cur = ""; __tt_values.push(<e>);
+                    let cur_ref = self.tt_path(cur, span);
+                    stmts.push(self.tt_push_stmt(parts, cur_ref, span));
+                    let empty =
+                        self.alloc_expr(Expr::Literal(Literal::String(String::new())), span);
+                    stmts.push(self.tt_assign(cur, empty, span));
+                    stmts.push(self.tt_push_stmt(values, *e, span));
+                }
+                TemplateSegment::For {
+                    binding,
+                    collection,
+                    body,
+                } => {
+                    // for (let p in c) { <walk body> }
+                    let mut inner: Vec<StmtId> = Vec::new();
+                    self.elaborate_tagged_walk(body, parts, values, cur, &mut inner, span);
+                    let loop_body = self.alloc_expr(
+                        Expr::Block {
+                            stmts: inner,
+                            tail_expr: None,
+                        },
+                        span,
+                    );
+                    stmts.push(self.alloc_stmt(
+                        Stmt::For {
+                            binding: *binding,
+                            collection: *collection,
+                            body: loop_body,
+                        },
+                        span,
+                    ));
+                }
+                TemplateSegment::If {
+                    branches,
+                    else_body,
+                } => {
+                    // Build the if/else-if chain inside-out, each branch body a
+                    // block of the walked statements (unit-valued).
+                    let mut current_else: Option<ExprId> = else_body.as_deref().map(|eb| {
+                        let mut s: Vec<StmtId> = Vec::new();
+                        self.elaborate_tagged_walk(eb, parts, values, cur, &mut s, span);
+                        self.alloc_expr(
+                            Expr::Block {
+                                stmts: s,
+                                tail_expr: None,
+                            },
+                            span,
+                        )
+                    });
+                    for branch in branches.iter().rev() {
+                        let mut s: Vec<StmtId> = Vec::new();
+                        self.elaborate_tagged_walk(&branch.body, parts, values, cur, &mut s, span);
+                        let then_branch = self.alloc_expr(
+                            Expr::Block {
+                                stmts: s,
+                                tail_expr: None,
+                            },
+                            span,
+                        );
+                        let if_expr = self.alloc_expr(
+                            Expr::If {
+                                condition: branch.condition,
+                                then_branch,
+                                else_branch: current_else,
+                            },
+                            span,
+                        );
+                        current_else = Some(if_expr);
+                    }
+                    if let Some(if_expr) = current_else {
+                        stmts.push(self.alloc_stmt(Stmt::Expr(if_expr), span));
+                    }
+                }
+            }
+        }
+    }
+
+    /// `let <name>: <elem>[] = []` with a leading-space (non-collidable) name.
+    fn tt_let_typed_empty_list(&mut self, name: &Name, elem: TypeExpr, span: TextRange) -> StmtId {
+        // Anchor the binding at the template start so its visibility window
+        // (`visible_from == let.span.end`) begins at `span.start`, letting the
+        // start-anchored accumulator references (see `tt_path`) resolve to it.
+        let at = TextRange::empty(span.start());
+        let list_ty = TypeExpr::List {
+            inner: Box::new(elem),
+            attrs: Vec::new(),
+        };
+        let type_pat = self.alloc_pattern(Pattern::Type(list_ty), at);
+        let pat = self.alloc_pattern(
+            Pattern::Bind {
+                name: name.clone(),
+                subpat: Some(type_pat),
+            },
+            at,
+        );
+        let empty = self.alloc_expr(
+            Expr::Array {
+                elements: Vec::new(),
+            },
+            at,
+        );
+        self.alloc_stmt(
+            Stmt::Let {
+                pattern: pat,
+                initializer: Some(empty),
+                is_watched: false,
+                origin: LetOrigin::Compiler,
+                else_branch: None,
+            },
+            at,
+        )
+    }
+
+    /// A `Path` reference to a synthetic accumulator local. Anchored at an
+    /// empty range at the *start* of the template — inside the closure's
+    /// `ScopeKind::Lambda` range `[span.start, span.end)` (so it resolves) and
+    /// `>=` each accumulator `let`'s visibility (also anchored at the start).
+    /// `span.end` would be the exclusive scope boundary → out of scope.
+    fn tt_path(&mut self, name: &Name, span: TextRange) -> ExprId {
+        let at = TextRange::empty(span.start());
+        self.alloc_expr(Expr::Path(vec![name.clone()]), at)
+    }
+
+    /// `<name> = <value>;`
+    fn tt_assign(&mut self, name: &Name, value: ExprId, span: TextRange) -> StmtId {
+        let at = TextRange::empty(span.start());
+        let target = self.alloc_expr(Expr::Path(vec![name.clone()]), at);
+        self.alloc_stmt(Stmt::Assign { target, value }, at)
+    }
+
+    /// `<name>.push(<arg>);` as a statement.
+    fn tt_push_stmt(&mut self, name: &Name, arg: ExprId, span: TextRange) -> StmtId {
+        let at = TextRange::empty(span.start());
+        let recv = self.alloc_expr(Expr::Path(vec![name.clone()]), at);
+        let callee = self.alloc_expr(
+            Expr::MemberAccess {
+                base: recv,
+                member: Name::new("push"),
+            },
+            at,
+        );
+        let call = self.alloc_expr(
+            Expr::Call {
+                callee,
+                type_args: Vec::new(),
+                args: vec![CallArg::positional(arg)],
+            },
+            at,
+        );
+        self.alloc_stmt(Stmt::Expr(call), at)
     }
 
     /// Walk backtick segments into [`TemplateSegment`]s, preserving `${for}` /

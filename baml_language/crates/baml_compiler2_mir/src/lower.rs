@@ -3139,6 +3139,7 @@ impl LoweringContext<'_> {
         &mut self,
         expr_id: AstExprId,
         tag: AstExprId,
+        body: AstExprId,
         segments: &[baml_compiler2_ast::TemplateSegment],
         dest: Place,
     ) {
@@ -3219,13 +3220,15 @@ impl LoweringContext<'_> {
             },
         };
 
-        // ── Static segment layout (M4e.1a: text + interp only). `None` ⇒ a
-        //    `${for}`/`${if}` block is present (flattening lands in M4e.1b). ──
+        // ── Static segment layout (text + interp only) → fixed-array fast path
+        //    (M4e.1a). `None` ⇒ a `${for}`/`${if}` block is present, so the
+        //    closure body lowers the desugared `body` flatten block instead
+        //    (M4e.1b). ──
         let static_layout = Self::collect_static_tagged_segments(segments);
 
         // ── Hand-roll the body closure → an Operand. ──
         let closure_op =
-            self.build_tagged_body_closure(expr_id, &body_params, closure_ty, static_layout);
+            self.build_tagged_body_closure(expr_id, body, &body_params, closure_ty, static_layout);
 
         // ── Emit `tag(closure)` → dest. The result is the template's value. ──
         let callee = Operand::Constant(Constant::Function(tag_item_ref));
@@ -3283,6 +3286,7 @@ impl LoweringContext<'_> {
     fn build_tagged_body_closure(
         &mut self,
         expr_id: AstExprId,
+        body: AstExprId,
         body_params: &[(Name, Ty)],
         closure_ty: Ty,
         static_layout: Option<(Vec<String>, Vec<AstExprId>)>,
@@ -3445,11 +3449,25 @@ impl LoweringContext<'_> {
                 );
             }
             None => {
-                // M4e.1b: ${for}/${if} flattening to runtime array-builders.
-                self.emit_panic_call(
-                    "tagged templates with ${for}/${if} blocks are not yet implemented (M4e.1b)",
-                    expr_id,
-                );
+                // M4e.1b: a `${for}`/`${if}` block is present, so lengths are
+                // data-dependent. Lower the desugared `body` flatten block
+                // (built at AST lowering, type-checked by TIR): it builds
+                // `baml.TaggedString { parts, values }` via empty lists + `push`
+                // in real loops/branches. Body-param and capture references
+                // inside resolve through the closure scope / capture indices
+                // set up above (those don't use the metadata scope).
+                //
+                // The flatten block's exprs were inferred INLINE in the
+                // enclosing function (the tag isn't a real `Expr::Lambda`), so
+                // their TIR types/resolutions are keyed under the enclosing
+                // body's `MetadataScope` — not this synthetic lambda scope.
+                // Temporarily restore it so `expr_ty`/resolution lookups (e.g.
+                // resolving `parts.push(...)` to `Array.push` rather than a
+                // map-element access) hit the recorded entries.
+                let prev_metadata_scope = self.current_metadata_scope;
+                self.current_metadata_scope = saved_metadata_scope;
+                self.lower_expr(body, Place::local(ret));
+                self.current_metadata_scope = prev_metadata_scope;
             }
         }
 
@@ -3782,8 +3800,8 @@ impl LoweringContext<'_> {
             }
 
             AstExpr::Template { tag, segments } => match tag {
-                baml_compiler2_ast::TemplateTag::Custom { tag } => {
-                    self.lower_tagged_template(expr_id, tag, &segments, dest);
+                baml_compiler2_ast::TemplateTag::Custom { tag, body } => {
+                    self.lower_tagged_template(expr_id, tag, body, &segments, dest);
                 }
                 // Untagged (BEP §11): the value is the desugared `elaborated`
                 // concat (built at AST lowering and type-checked by TIR). Lower

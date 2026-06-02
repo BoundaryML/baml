@@ -2283,7 +2283,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 );
             }
             Expr::Template { tag, segments } => {
-                if let ast::TemplateTag::Custom { tag } = tag {
+                if let ast::TemplateTag::Custom { tag, .. } = tag {
                     Self::collect_default_expr_forward_references(
                         *tag,
                         body,
@@ -3176,23 +3176,29 @@ impl<'db> TypeInferenceBuilder<'db> {
             } => self.infer_spawn_expr(body, *name, *spawn_body),
             Expr::Await { future } => self.infer_await_expr(body, *future),
             Expr::Template {
-                tag: ast::TemplateTag::Custom { tag },
-                segments,
+                tag:
+                    ast::TemplateTag::Custom {
+                        tag,
+                        body: tag_body,
+                    },
+                ..
             } => {
                 // Tagged template (BEP §10). TIR validates the tag (a
                 // `//baml:tagged_string` function whose first parameter is
                 // `body: (...) -> baml.TaggedString`) and type-checks the
-                // `segments` with the tag's body-lambda parameters — and any
-                // `${for}` bindings — in scope.
+                // desugared `tag_body` flatten block with the tag's body-lambda
+                // parameters — and any `${for}` bindings — in scope.
                 //
                 // The template's RESULT type is the tag fn's return type
-                // (`Unknown` on any tag error). Walking the segments is
-                // side-effecting only — it surfaces interpolation diagnostics
-                // and records each `${expr}` type. We always walk (even on a
-                // tag error) so interps are still checked; the body-lambda
-                // params are bound only when the tag validated. Interps are
-                // NOT strictly coerced — `TaggedString.values` is `unknown[]`,
-                // so values pass through with their original types (§10/§11).
+                // (`Unknown` on any tag error). Typing `tag_body` is
+                // side-effecting only — it surfaces interpolation diagnostics,
+                // records each `${expr}` type, and gives MIR the `push` /
+                // `baml.TaggedString` resolutions it needs to lower the closure.
+                // We always type it (even on a tag error) so interps are still
+                // checked; the body-lambda params are bound only when the tag
+                // validated. Interps are NOT strictly coerced —
+                // `TaggedString.values` is `unknown[]`, so values pass through
+                // with their original types (§10/§11).
                 let tag_ty = self.infer_expr(*tag, body);
                 let tag_name = match &body.exprs[*tag] {
                     Expr::Path(segs) => segs.last().cloned(),
@@ -3254,7 +3260,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         );
                     }
                 }
-                self.infer_template_segments(segments, body);
+                self.infer_expr(*tag_body, body);
                 self.restore_scoped_locals(&snapshot);
 
                 result_ty
@@ -6430,7 +6436,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             Expr::Template { tag, segments } => {
-                if let ast::TemplateTag::Custom { tag } = tag {
+                if let ast::TemplateTag::Custom { tag, .. } = tag {
                     self.collect_throw_facts_from_expr(*tag, body, out);
                 }
                 Self::collect_throw_facts_from_template_segments(self, segments, body, out);
@@ -7391,105 +7397,6 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         // Valid tag: the template evaluates to the tag fn's return type.
         ret.clone()
-    }
-
-    /// BEP-049 §10: type-check a *tagged* template's segments. Mirrors the HIR
-    /// `walk_template_segment` shape and reuses the `Stmt::For` pipeline.
-    ///
-    /// `${for (let p in c)}` binds `p` into a fresh scope for its body;
-    /// `${if (cond)}` infers each condition with no bool coercion, matching
-    /// `Expr::If`. The caller binds the tag's body-lambda params before calling
-    /// this and restores scope afterwards.
-    ///
-    /// Interpolations are unconstrained — `TaggedString.values` is `unknown[]`,
-    /// so each `${expr}` is merely inferred (for its diagnostics and to record
-    /// its type). The untagged (`Default`) form does NOT use this: it types its
-    /// desugared `elaborated` tree and checks stringability separately via
-    /// [`check_template_interps_stringable`].
-    fn infer_template_segments(&mut self, segments: &[ast::TemplateSegment], body: &ExprBody) {
-        for seg in segments {
-            match seg {
-                ast::TemplateSegment::Text(_) => {}
-                ast::TemplateSegment::Interp(expr_id) => {
-                    self.infer_expr(*expr_id, body);
-                }
-                ast::TemplateSegment::For {
-                    binding,
-                    collection,
-                    body: inner,
-                } => {
-                    // Mirror `Stmt::For`: infer the collection, derive the
-                    // element type, bind the loop pattern into a fresh scope,
-                    // recurse, then restore.
-                    let coll_ty = self.infer_expr(*collection, body);
-                    let elem_ty = match &coll_ty {
-                        Ty::List(elem, _) => *elem.clone(),
-                        Ty::EvolvingList(elem, _) => *elem.clone(),
-                        _ => {
-                            self.context.report_simple(
-                                TirTypeError::NotIterable { ty: coll_ty },
-                                *collection,
-                            );
-                            Ty::Unknown {
-                                attr: TyAttr::default(),
-                            }
-                        }
-                    };
-
-                    let expected = self.pattern_expected_ty(*binding, body);
-                    let is_structural_pattern =
-                        Self::pattern_contains_structural_syntax(*binding, body);
-                    let (flow_ty, declared_for_scope) =
-                        if let Some(PatternExpectedTy::Full(expected)) = expected
-                            && !is_structural_pattern
-                        {
-                            if !self.is_subtype(&elem_ty, &expected) {
-                                let err = TirTypeError::TypeMismatch {
-                                    expected: expected.clone(),
-                                    got: elem_ty,
-                                };
-                                self.report_at_pat_or_expr(err, *binding, *collection);
-                            }
-                            (expected.clone(), Some(expected))
-                        } else {
-                            (elem_ty, None)
-                        };
-
-                    let snapshot = self.snapshot_scoped_locals();
-                    // `*collection` is only a diagnostic anchor for the pattern
-                    // check (unused for the bare `let x` form, which short-
-                    // circuits) — the segment body has no single `ExprId`.
-                    let result = self.analyze_and_lower(*binding, &flow_ty, body, *collection);
-                    self.finalize_pattern_lowering(
-                        *binding,
-                        &result,
-                        declared_for_scope.as_ref(),
-                        Some(IrrefutablePatternContext {
-                            context: IrrefutableContextKind::ForLet,
-                            fallback_expr: Some(*collection),
-                        }),
-                        &flow_ty,
-                    );
-
-                    self.infer_template_segments(inner, body);
-                    self.restore_scoped_locals(&snapshot);
-                }
-                ast::TemplateSegment::If {
-                    branches,
-                    else_body,
-                } => {
-                    for branch in branches {
-                        // Match `Expr::If`: infer the condition without
-                        // enforcing a bool expectation.
-                        self.infer_expr(branch.condition, body);
-                        self.infer_template_segments(&branch.body, body);
-                    }
-                    if let Some(eb) = else_body {
-                        self.infer_template_segments(eb, body);
-                    }
-                }
-            }
-        }
     }
 
     /// BEP §11 strict-interpolation check for an untagged template. Recurses

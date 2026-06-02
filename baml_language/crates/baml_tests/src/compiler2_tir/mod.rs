@@ -321,7 +321,7 @@ pub(crate) mod support {
             }
             Expr::Await { future } => format!("await {}", expr_desc(*future, body)),
             Expr::Template { tag, .. } => match tag {
-                baml_compiler2_ast::TemplateTag::Custom { tag } => {
+                baml_compiler2_ast::TemplateTag::Custom { tag, .. } => {
                     format!("{}`...`", expr_desc(*tag, body))
                 }
                 baml_compiler2_ast::TemplateTag::Default { .. } => "`...`".into(),
@@ -1717,7 +1717,7 @@ pub(crate) mod support {
                     expr_desc_hir(*future, body, prefix, local_type_names)
                 ),
                 Expr::Template { tag, .. } => match tag {
-                    baml_compiler2_ast::TemplateTag::Custom { tag } => format!(
+                    baml_compiler2_ast::TemplateTag::Custom { tag, .. } => format!(
                         "{}`...`",
                         expr_desc_hir(*tag, body, prefix, local_type_names)
                     ),

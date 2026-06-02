@@ -427,7 +427,7 @@ function Demo(items: string[]) -> string {
         // A tagged template carries `TemplateTag::Custom`, whose tag expr
         // lowers to the bare path `sql` (TIR validates it resolves to a
         // `//baml:tagged_string` fn; lowering only handles it structurally).
-        let TemplateTag::Custom { tag } = tag else {
+        let TemplateTag::Custom { tag, .. } = tag else {
             panic!("expected Custom tag, got {tag:?}");
         };
         assert!(

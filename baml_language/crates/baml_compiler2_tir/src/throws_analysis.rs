@@ -306,7 +306,7 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
             collect_from_expr(context, *future, body, out);
         }
         Expr::Template { tag, segments } => {
-            if let ast::TemplateTag::Custom { tag } = tag {
+            if let ast::TemplateTag::Custom { tag, .. } = tag {
                 collect_from_expr(context, *tag, body, out);
             }
             collect_from_template_segments(context, segments, body, out);

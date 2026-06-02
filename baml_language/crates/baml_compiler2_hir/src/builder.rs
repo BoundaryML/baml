@@ -530,15 +530,18 @@ impl<'db> SemanticIndexBuilder<'db> {
                 self.walk_expr(*lhs, body, source_map, true);
                 self.walk_expr(*rhs, body, source_map, true);
             }
-            ast::Expr::Template { tag, segments } => match tag {
+            ast::Expr::Template { tag, .. } => match tag {
                 // Tagged (`Custom`): the tag is an ordinary value reference in
                 // the ENCLOSING scope, and the template body is its own lambda
                 // scope so references to enclosing locals inside `${...}` are
                 // computed as captures (BEP-049 §10 — MIR hand-rolls the body
                 // closure off these captures).
-                ast::TemplateTag::Custom { tag } => {
+                ast::TemplateTag::Custom {
+                    tag,
+                    body: flatten_body,
+                } => {
                     self.walk_expr(*tag, body, source_map, true);
-                    self.walk_template_lambda_body(expr_id, segments, body, source_map);
+                    self.walk_template_lambda_body(expr_id, *flatten_body, body, source_map);
                 }
                 // Untagged (`Default`): no closure. The template is realized by
                 // the desugared `elaborated` concat in the ENCLOSING scope, so
@@ -607,62 +610,6 @@ impl<'db> SemanticIndexBuilder<'db> {
         }
     }
 
-    /// Recursively walk a template segment, registering any for-binding
-    /// patterns and walking interpolated/conditional/iter expressions.
-    /// Mirrors `walk_expr`'s recursion shape. Used by both template forms:
-    /// the tagged path calls it inside a lambda scope, the untagged path
-    /// inline in the enclosing scope.
-    fn walk_template_segment(
-        &mut self,
-        seg: &ast::TemplateSegment,
-        body: &ast::ExprBody,
-        source_map: &ast::AstSourceMap,
-    ) {
-        match seg {
-            ast::TemplateSegment::Text(_) => {}
-            ast::TemplateSegment::Interp(expr_id) => {
-                self.walk_expr(*expr_id, body, source_map, true);
-            }
-            ast::TemplateSegment::For {
-                binding,
-                collection,
-                body: inner,
-            } => {
-                self.walk_expr(*collection, body, source_map, true);
-                // Mirror Stmt::For: push a block scope for the binding.
-                let span = source_map.pattern_span(*binding);
-                self.push_scope(ScopeKind::Block, None, span);
-                self.register_local_pattern(
-                    *binding,
-                    DefinitionSite::PatternBinding(*binding),
-                    body,
-                    source_map,
-                    source_map.pattern_span(*binding).start(),
-                );
-                for inner_seg in inner {
-                    self.walk_template_segment(inner_seg, body, source_map);
-                }
-                self.pop_scope();
-            }
-            ast::TemplateSegment::If {
-                branches,
-                else_body,
-            } => {
-                for branch in branches {
-                    self.walk_expr(branch.condition, body, source_map, true);
-                    for inner_seg in &branch.body {
-                        self.walk_template_segment(inner_seg, body, source_map);
-                    }
-                }
-                if let Some(eb) = else_body {
-                    for inner_seg in eb {
-                        self.walk_template_segment(inner_seg, body, source_map);
-                    }
-                }
-            }
-        }
-    }
-
     /// Walk a *tagged* template's segments inside a fresh `ScopeKind::Lambda`
     /// scope spanning the whole template expression (BEP-049 §10). This makes
     /// the body a capture boundary: interpolation references to enclosing
@@ -679,18 +626,24 @@ impl<'db> SemanticIndexBuilder<'db> {
     fn walk_template_lambda_body(
         &mut self,
         expr_id: ast::ExprId,
-        segments: &[ast::TemplateSegment],
+        flatten_body: ast::ExprId,
         body: &ast::ExprBody,
         source_map: &ast::AstSourceMap,
     ) {
         self.push_scope(ScopeKind::Lambda, None, source_map.expr_span(expr_id));
         let scope_id = self.current_scope_id();
         self.lambda_stack.push(scope_id);
-        for seg in segments {
-            self.walk_template_segment(seg, body, source_map);
+        // Walk the desugared flatten block's CONTENTS inline (not via
+        // `walk_expr`, which treats `Expr::Block` as a no-op): its `${…}` exprs
+        // referencing enclosing locals become captures, its synthetic
+        // accumulator `let`s register as lambda-locals, and any `${for}`
+        // binding nests in a child block scope. The Lambda scope range stays
+        // == the template-expr span, which MIR matches to find these captures.
+        if let ast::Expr::Block { stmts, tail_expr } = &body.exprs[flatten_body] {
+            self.walk_block_contents(stmts, *tail_expr, body, source_map);
+        } else {
+            self.walk_expr(flatten_body, body, source_map, true);
         }
-        // `body`/`source_map` are unused by capture analysis (it works off the
-        // recorded path-root references), but match the existing signature.
         self.analyze_lambda_captures(scope_id, body, source_map);
         self.lambda_stack.pop();
         self.pop_scope();

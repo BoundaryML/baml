@@ -6,7 +6,10 @@
 //! template to a hand-rolled body closure + `tag(body = closure)` call.
 //!
 //! M4e.1a covers text + interpolation + arity-N body params + captures (static
-//! parts/values arrays). `${for}`/`${if}` flattening is M4e.1b.
+//! parts/values arrays). M4e.1b covers `${for}`/`${if}` flattening — the body
+//! closure builds `parts`/`values` at runtime via empty lists + `push` in real
+//! loops/branches, so their lengths are data-dependent (the
+//! `parts.len() == values.len() + 1` invariant is preserved).
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
@@ -77,4 +80,114 @@ function main() -> string {
 "#
     );
     assert_eq!(output.result, ok_string("Hi World!"));
+}
+
+// ─── M4e.1b: ${for}/${if} runtime flattening ──────────────────────────────
+
+/// A generic `//baml:tagged_string` renderer used by the M4e.1b tests below:
+/// it reconstructs the rendered string from the flattened `(parts, values)`
+/// by interleaving them, downcasting each (string-typed) value. This exercises
+/// the data-dependent array lengths the dynamic flattener produces.
+const RENDER_TAG: &str = r#"
+//baml:tagged_string
+function render(body: () -> baml.TaggedString) -> string {
+  let t = body()
+  let out = ""
+  let i = 0
+  while (i < t.values.length()) {
+    let v = match (t.values[i]) {
+      let s: string => s,
+      _ => "?"
+    }
+    out = out + t.parts[i] + v
+    i = i + 1
+  }
+  out + t.parts[t.values.length()]
+}
+"#;
+
+#[tokio::test]
+async fn tagged_template_for_loop_flattens() {
+    // `${for}` grows parts/values per iteration: 2 items → 3 parts, 2 values.
+    let output = baml_test!(&format!(
+        r#"{RENDER_TAG}
+function main() -> string {{
+  let items = ["a", "b"]
+  render`${{for (let x in items)}}[${{x}}]${{endfor}}`
+}}
+"#
+    ));
+    assert_eq!(output.result, ok_string("[a][b]"));
+}
+
+#[tokio::test]
+async fn tagged_template_for_loop_empty_collection() {
+    // Empty collection → loop body never runs → parts == [""], values == [].
+    let output = baml_test!(&format!(
+        r#"{RENDER_TAG}
+function main() -> string {{
+  let items: string[] = []
+  render`${{for (let x in items)}}[${{x}}]${{endfor}}`
+}}
+"#
+    ));
+    assert_eq!(output.result, ok_string(""));
+}
+
+#[tokio::test]
+async fn tagged_template_if_block_taken_and_skipped() {
+    // `${if}` includes its body only when the condition holds.
+    let taken = baml_test!(&format!(
+        r#"{RENDER_TAG}
+function main() -> string {{
+  let flag = true
+  let x = "Y"
+  render`IN${{if (flag)}}${{x}} mid${{endif}}OUT`
+}}
+"#
+    ));
+    assert_eq!(taken.result, ok_string("INY midOUT"));
+
+    let skipped = baml_test!(&format!(
+        r#"{RENDER_TAG}
+function main() -> string {{
+  let flag = false
+  let x = "Y"
+  render`IN${{if (flag)}}${{x}} mid${{endif}}OUT`
+}}
+"#
+    ));
+    assert_eq!(skipped.result, ok_string("INOUT"));
+}
+
+#[tokio::test]
+async fn tagged_template_mixed_static_and_for() {
+    // Static interpolation + a `${for}` in one template → the static fast-path
+    // is NOT used (a block is present); everything flows through the dynamic
+    // flattener. 1 leading value + 2 loop values → 4 parts, 3 values.
+    let output = baml_test!(&format!(
+        r#"{RENDER_TAG}
+function main() -> string {{
+  let a = "A"
+  let xs = ["1", "2"]
+  render`pre ${{a}} ${{for (let x in xs)}}${{x}},${{endfor}}end`
+}}
+"#
+    ));
+    assert_eq!(output.result, ok_string("pre A 1,2,end"));
+}
+
+#[tokio::test]
+async fn tagged_template_nested_for_in_if() {
+    // Nested control flow: a `${for}` inside a taken `${if}` branch.
+    let output = baml_test!(&format!(
+        r#"{RENDER_TAG}
+function main() -> string {{
+  let show = true
+  let xs = ["p", "q"]
+  render`${{if (show)}}${{for (let x in xs)}}<${{x}}>${{endfor}}${{endif}}`
+}}
+"#
+    ));
+    assert_eq!(output.result, ok_string("<p><q>"));
 }

@@ -476,7 +476,7 @@ impl ExprBody {
             } => self.display_expr_inner(*tail, depth + 1),
             Expr::Template { tag, .. } => match tag {
                 TemplateTag::Default { .. } => "`…`".to_string(),
-                TemplateTag::Custom { tag } => {
+                TemplateTag::Custom { tag, .. } => {
                     format!("{}`…`", self.display_expr_inner(*tag, depth + 1))
                 }
             },
@@ -807,8 +807,18 @@ pub enum TemplateTag {
     /// Tagged `` tag`…` `` (BEP §10): `tag` is the tag expression — usually a
     /// bare identifier referring to a fn marked `//baml:tagged_string`. Stored
     /// as an `ExprId` so paths and future curry forms compose without grammar
-    /// changes. Values pass to the tag verbatim; there is no elaboration.
-    Custom { tag: ExprId },
+    /// changes. Values pass to the tag verbatim with their original types.
+    ///
+    /// `body` is the desugared closure body the tag is invoked with — a block
+    /// that flattens the segments into `baml.TaggedString { parts, values }`
+    /// (text runs concatenated into `parts`, each `${expr}` pushed raw into
+    /// `values`, with `${for}`/`${if}` driving runtime array growth). Built
+    /// from the *same* lowered `ExprId`s the `segments` hold. TIR types it (so
+    /// MIR has the `push`/aggregate resolutions) and MIR lowers it as the
+    /// hand-rolled `body` closure — except when the template is purely static
+    /// (text + interp, no `${for}`/`${if}`), where MIR keeps a fixed-array
+    /// fast-path off `segments` instead.
+    Custom { tag: ExprId, body: ExprId },
 }
 
 /// One segment of an [`Expr::Template`] body. Parallel to `BacktickSegment`
