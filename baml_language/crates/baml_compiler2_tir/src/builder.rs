@@ -2657,17 +2657,20 @@ impl<'db> TypeInferenceBuilder<'db> {
                     //     survives substitution as a `TypeVar`, possibly nested as
                     //     `Self[]` / `Self?`), validated by identity (Unit-A
                     //     reflexivity) — this is what makes `other: Self` sound; and
-                    //   - a caller-scope generic param that is not shadowed by a
-                    //     callee generic, so a bound-method value `let f = x.eq`
-                    //     keeps `Self` pinned to the caller's `T` and a later
-                    //     `f(y: U)` is still rejected rather than silently accepted.
+                    //   - any caller-scope generic param (bounded *or not*) that is
+                    //     not shadowed by a callee generic, so a bound-method value
+                    //     `let f = x.eq` keeps `Self` pinned to the caller's `T`,
+                    //     and a function value `g: (T) -> _` applied to a `U` is
+                    //     still rejected rather than silently accepted.
                     // A callee generic of the same name (a shadow) stays deferred,
                     // which avoids confusing it with an identically-named caller
-                    // param.
+                    // param. The bounds map (`self.generic_param_bounds`) only holds
+                    // *bounded* generics, so we consult the full `self.generic_params`
+                    // list to catch an unbounded caller `T` too.
                     let defers_typevar =
                         crate::generics::contains_typevar_where(&expected_arg_ty, &|name| {
                             let rigid = rigid_self_var.as_ref() == Some(name)
-                                || (self.generic_param_bounds.contains_key(name)
+                                || (self.generic_params.iter().any(|gp| gp == name)
                                     && !generic_params.iter().any(|g| g == name));
                             !rigid
                         });
