@@ -3602,6 +3602,8 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::TaggedTagNotMarked { .. } | TirTypeError::TaggedTagBadBodyParam { .. } => {
             DiagnosticId::TypeMismatch
         }
+        TirTypeError::InterpolatedValueMaybeNull { .. }
+        | TirTypeError::TypeNotInterpolatable { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::AmbiguousInterfaceMethod { .. } => DiagnosticId::AmbiguousInterfaceMethod,
         TirTypeError::AmbiguousInterfaceField { .. } => DiagnosticId::AmbiguousInterfaceField,
         TirTypeError::InterfaceFieldRequiresProjection { .. } => DiagnosticId::NoSuchField,

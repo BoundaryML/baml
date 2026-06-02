@@ -305,9 +305,11 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
         Expr::Await { future } => {
             collect_from_expr(context, *future, body, out);
         }
-        Expr::TaggedTemplate { tag, segments } => {
-            collect_from_expr(context, *tag, body, out);
-            collect_from_tagged_segments(context, segments, body, out);
+        Expr::Template { tag, segments } => {
+            if let ast::TemplateTag::Custom { tag } = tag {
+                collect_from_expr(context, *tag, body, out);
+            }
+            collect_from_template_segments(context, segments, body, out);
         }
         Expr::Lambda(_)
         | Expr::Literal(_)
@@ -318,36 +320,36 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
     }
 }
 
-/// Recursive walk of a tagged-template segment tree collecting throw facts
-/// from each interp/condition/iter expression and any nested for/if bodies.
-fn collect_from_tagged_segments<C: ThrowsAnalysisContext>(
+/// Recursive walk of a template segment tree collecting throw facts from
+/// each interp/condition/iter expression and any nested for/if bodies.
+fn collect_from_template_segments<C: ThrowsAnalysisContext>(
     context: &C,
-    segments: &[ast::TaggedSegment],
+    segments: &[ast::TemplateSegment],
     body: &ExprBody,
     out: &mut BTreeSet<Ty>,
 ) {
     for seg in segments {
         match seg {
-            ast::TaggedSegment::Text(_) => {}
-            ast::TaggedSegment::Interp(e) => collect_from_expr(context, *e, body, out),
-            ast::TaggedSegment::For {
+            ast::TemplateSegment::Text(_) => {}
+            ast::TemplateSegment::Interp(e) => collect_from_expr(context, *e, body, out),
+            ast::TemplateSegment::For {
                 collection,
                 body: inner,
                 ..
             } => {
                 collect_from_expr(context, *collection, body, out);
-                collect_from_tagged_segments(context, inner, body, out);
+                collect_from_template_segments(context, inner, body, out);
             }
-            ast::TaggedSegment::If {
+            ast::TemplateSegment::If {
                 branches,
                 else_body,
             } => {
                 for branch in branches {
                     collect_from_expr(context, branch.condition, body, out);
-                    collect_from_tagged_segments(context, &branch.body, body, out);
+                    collect_from_template_segments(context, &branch.body, body, out);
                 }
                 if let Some(eb) = else_body {
-                    collect_from_tagged_segments(context, eb, body, out);
+                    collect_from_template_segments(context, eb, body, out);
                 }
             }
         }

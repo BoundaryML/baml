@@ -6,13 +6,13 @@ class user.FooNoToString {
   x: int
 }
 function user.case_a_null_interp() -> string  [expr] {
-  { let x: int? = null } "val: " Add {  } x.to_string()
+  { let x: int? = null } `...`
 }
 function user.case_b_class_without_to_string() -> string  [expr] {
-  { let f = user.FooNoToString { x: 1 } } "val: " Add {  } f.to_string()
+  { let f = user.FooNoToString { x: 1 } } `...`
 }
 function user.case_e_optional_int_interp() -> string  [expr] {
-  { let c = get_count() } "count: " Add {  } c.to_string()
+  { let c = get_count() } `...`
 }
 function user.from_json(j: baml.json.json) -> user.FooNoToString  [expr] {
   user.FooNoToString { x: baml.json.from_json(baml.json.field(j, "x")) }

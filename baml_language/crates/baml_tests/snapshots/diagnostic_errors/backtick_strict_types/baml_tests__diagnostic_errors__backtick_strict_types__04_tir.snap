@@ -5,10 +5,9 @@ source: crates/baml_tests/src/generated_tests.rs
 function user.case_a_null_interp() -> string throws never {
   { : string
     let x: int? = null : null -> int | null
-    "val: " + { 0 stmts + tail }.to_string() : string
+    `...` : string
   }
-  !! 935..939: did you mean `...?.to_string`? `....to_string` does not handle the case when `...` is null
-  !! 935..939: `((self: baml.Int) -> string throws never)?` is not a function — it cannot be called
+  !! 936..939: cannot interpolate a value of type `int | null` — it may be null; coalesce with `?? "…"` or unwrap it first
 }
 class user.FooNoToString {
   x: int
@@ -22,9 +21,9 @@ function user.FooNoToString.from_json(j: baml.json.json) -> user.FooNoToString t
 function user.case_b_class_without_to_string() -> string throws never {
   { : string
     let f = FooNoToString { x: 1 } : user.FooNoToString
-    "val: " + { 0 stmts + tail }.to_string() : string
+    `...` : string
   }
-  !! 1152..1156: type `FooNoToString` has no member `to_string`
+  !! 1153..1156: cannot interpolate a value of type `FooNoToString` — it has no `to_string` method
 }
 function user.get_count() -> int? throws never {
   { : 42
@@ -34,10 +33,9 @@ function user.get_count() -> int? throws never {
 function user.case_e_optional_int_interp() -> string throws never {
   { : string
     let c = get_count() : int?
-    "count: " + { 0 stmts + tail }.to_string() : string
+    `...` : string
   }
-  !! 1442..1446: did you mean `...?.to_string`? `....to_string` does not handle the case when `...` is null
-  !! 1442..1446: `((self: baml.Int) -> string throws never)?` is not a function — it cannot be called
+  !! 1443..1446: cannot interpolate a value of type `int?` — it may be null; coalesce with `?? "…"` or unwrap it first
 }
 class user.FooNoToString$stream {
   x: null | int

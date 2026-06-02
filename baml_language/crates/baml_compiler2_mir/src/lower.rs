@@ -3139,7 +3139,7 @@ impl LoweringContext<'_> {
         &mut self,
         expr_id: AstExprId,
         tag: AstExprId,
-        segments: &[baml_compiler2_ast::TaggedSegment],
+        segments: &[baml_compiler2_ast::TemplateSegment],
         dest: Place,
     ) {
         use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
@@ -3253,21 +3253,21 @@ impl LoweringContext<'_> {
     /// `parts.len() == value_exprs.len() + 1`. Returns `None` if any
     /// `${for}`/`${if}` block is present (M4e.1b handles those at runtime).
     fn collect_static_tagged_segments(
-        segments: &[baml_compiler2_ast::TaggedSegment],
+        segments: &[baml_compiler2_ast::TemplateSegment],
     ) -> Option<(Vec<String>, Vec<AstExprId>)> {
-        use baml_compiler2_ast::TaggedSegment;
+        use baml_compiler2_ast::TemplateSegment;
         let mut parts: Vec<String> = Vec::new();
         let mut values: Vec<AstExprId> = Vec::new();
         let mut cur = String::new();
         for seg in segments {
             match seg {
-                TaggedSegment::Text(s) => cur.push_str(s),
-                TaggedSegment::Interp(e) => {
+                TemplateSegment::Text(s) => cur.push_str(s),
+                TemplateSegment::Interp(e) => {
                     // Close the current literal part, then record the value.
                     parts.push(std::mem::take(&mut cur));
                     values.push(*e);
                 }
-                TaggedSegment::For { .. } | TaggedSegment::If { .. } => return None,
+                TemplateSegment::For { .. } | TemplateSegment::If { .. } => return None,
             }
         }
         parts.push(cur); // trailing part (possibly empty) → parts.len()==values.len()+1
@@ -3781,9 +3781,17 @@ impl LoweringContext<'_> {
                 self.emit_panic_call("parse error", expr_id);
             }
 
-            AstExpr::TaggedTemplate { tag, segments } => {
-                self.lower_tagged_template(expr_id, tag, &segments, dest);
-            }
+            AstExpr::Template { tag, segments } => match tag {
+                baml_compiler2_ast::TemplateTag::Custom { tag } => {
+                    self.lower_tagged_template(expr_id, tag, &segments, dest);
+                }
+                // Untagged (BEP §11): the value is the desugared `elaborated`
+                // concat (built at AST lowering and type-checked by TIR). Lower
+                // it directly — the structured `segments` were diagnostics-only.
+                baml_compiler2_ast::TemplateTag::Default { elaborated } => {
+                    self.lower_expr(elaborated, dest);
+                }
+            },
 
             AstExpr::Spawn { name, body } => {
                 self.lower_spawn(expr_id, name, body, dest);

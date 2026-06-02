@@ -227,6 +227,13 @@ pub enum TirTypeError {
     /// well-formed `body: (...) -> baml.TaggedString` (missing / wrong name /
     /// not a lambda / lambda return type isn't `baml.TaggedString`).
     TaggedTagBadBodyParam { name: Name },
+    /// BEP-049 §11: an untagged `${expr}` interpolates a nullable value. The
+    /// implicit `.to_string()` can't run on a possibly-null value; the user
+    /// must coalesce (`${x ?? "…"}`) or unwrap first.
+    InterpolatedValueMaybeNull { ty: Ty },
+    /// BEP-049 §11: an untagged `${expr}` interpolates a value whose type has
+    /// no `to_string` method, so it can't be implicitly stringified.
+    TypeNotInterpolatable { ty: Ty },
 
     /// BEP-044 §"Method Disambiguation": an unqualified call resolves to
     /// a method declared by two or more interfaces — the receiver carries
@@ -655,6 +662,16 @@ impl fmt::Display for TirTypeError {
             TirTypeError::TaggedTagBadBodyParam { name } => write!(
                 f,
                 "the first parameter of tagged-string function `{name}` must be `body: (...) -> baml.TaggedString`"
+            ),
+            TirTypeError::InterpolatedValueMaybeNull { ty } => write!(
+                f,
+                "cannot interpolate a value of type `{}` — it may be null; coalesce with `?? \"…\"` or unwrap it first",
+                ty.render_user_facing()
+            ),
+            TirTypeError::TypeNotInterpolatable { ty } => write!(
+                f,
+                "cannot interpolate a value of type `{}` — it has no `to_string` method",
+                ty.render_user_facing()
             ),
             TirTypeError::AmbiguousInterfaceMethod {
                 class_name,
@@ -1086,6 +1103,22 @@ impl<'db> InferContext<'db> {
     /// Convenience: report an error with no related locations.
     pub fn report_simple(&self, error: TirTypeError, at: ExprId) {
         self.report(error, at, Vec::new());
+    }
+
+    /// Number of diagnostics recorded so far. Paired with
+    /// [`Self::truncate_diagnostics`] to discard diagnostics emitted while
+    /// type-checking synthesized/desugared subtrees (e.g. an untagged
+    /// template's elaborated `.to_string()` concat) whose errors would be
+    /// redundant with, or less precise than, the ones reported on the original
+    /// source.
+    pub fn diagnostic_count(&self) -> usize {
+        self.diagnostics.borrow().diagnostics.len()
+    }
+
+    /// Drop every diagnostic recorded after `count` (see
+    /// [`Self::diagnostic_count`]). No-op if fewer than `count` remain.
+    pub fn truncate_diagnostics(&self, count: usize) {
+        self.diagnostics.borrow_mut().diagnostics.truncate(count);
     }
 
     /// Report a type error at the member-name portion of a `MemberAccess` expression.

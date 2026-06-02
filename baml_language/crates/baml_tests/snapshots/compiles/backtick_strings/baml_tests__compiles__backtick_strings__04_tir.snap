@@ -1,51 +1,50 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 4795
 ---
 === TIR2 ===
 function user.BacktickOneLiner() -> string throws never {
   { : "hello world"
-    "hello world" : "hello world"
+    `...` : "hello world"
   }
 }
 function user.BacktickStandardEscapes() -> string throws never {
   { : "line\nbreak\twith\rcr\0nul"
-    "line\nbreak\twith\rc..." : "line\nbreak\twith\rcr\0nul"
+    `...` : "line\nbreak\twith\rcr\0nul"
   }
 }
 function user.BacktickEscapedBacktick() -> string throws never {
   { : "before ` after"
-    "before ` after" : "before ` after"
+    `...` : "before ` after"
   }
 }
 function user.BacktickEscapedDollar() -> string throws never {
   { : "literal ${name}"
-    "literal ${name}" : "literal ${name}"
+    `...` : "literal ${name}"
   }
 }
 function user.BacktickMultiline() -> string throws never {
   { : "first line\nsecond line\nthird line"
-    "first line\nsecond..." : "first line\nsecond line\nthird line"
+    `...` : "first line\nsecond line\nthird line"
   }
 }
 function user.BacktickMultilineWithBlankLines() -> string throws never {
   { : "para one\n\npara two"
-    "para one\n\npara two" : "para one\n\npara two"
+    `...` : "para one\n\npara two"
   }
 }
 function user.BacktickMultiTickTwo() -> string throws never {
   { : "inline `code` here"
-    "inline `code` here" : "inline `code` here"
+    `...` : "inline `code` here"
   }
 }
 function user.BacktickMultiTickThree() -> string throws never {
   { : "nested ``double`` ticks"
-    "nested ``double``..." : "nested ``double`` ticks"
+    `...` : "nested ``double`` ticks"
   }
 }
 function user.BacktickInCondition() -> int throws never {
   { : 1 | 0
-    if ("abc".length() > 0 : bool) : 1 | 0
+    if (`...`.length() > 0 : bool) : 1 | 0
       { : 1
         1 : 1
       }
@@ -57,7 +56,7 @@ function user.BacktickInCondition() -> int throws never {
 }
 function user.BacktickEquality() -> bool throws never {
   { : true
-    "abc" == "abc" : true
+    `...` == `...` : true
   }
 }
 function user.BacktickPassThrough(s: string) -> string throws never {
@@ -67,37 +66,37 @@ function user.BacktickPassThrough(s: string) -> string throws never {
 }
 function user.BacktickLiteralAsArg() -> string throws never {
   { : string
-    BacktickPassThrough("forwarded") : string
+    BacktickPassThrough(`...`) : string
   }
 }
 function user.BacktickInterpSimple(name: string) -> string throws never {
   { : string
-    "Hello, " + { 0 stmts + tail }.to_string() + "!" : string
+    `...` : string
   }
 }
 function user.BacktickInterpMultiple(first: string, last: string) -> string throws never {
   { : string
-    { 0 stmts + tail }.to_string() + " " + { 0 stmts + tail }.to_string() : string
+    `...` : string
   }
 }
 function user.BacktickInterpInt(n: int) -> string throws never {
   { : string
-    "count: " + { 0 stmts + tail }.to_string() : string
+    `...` : string
   }
 }
 function user.BacktickInterpBool(b: bool) -> string throws never {
   { : string
-    "flag: " + { 0 stmts + tail }.to_string() : string
+    `...` : string
   }
 }
 function user.BacktickInterpFloat(x: float) -> string throws never {
   { : string
-    "ratio: " + { 0 stmts + tail }.to_string() : string
+    `...` : string
   }
 }
 function user.BacktickInterpBlockBody(items: int[]) -> string throws never {
   { : string
-    "head: " + { 1 stmts + tail }.to_string() : string
+    `...` : string
   }
 }
 function user.bangs(n: int) -> string throws never {
@@ -114,47 +113,31 @@ function user.bangs(n: int) -> string throws never {
 }
 function user.BacktickInterpCallsFn() -> string throws never {
   { : string
-    "done" + { 0 stmts + tail }.to_string() : string
+    `...` : string
   }
 }
 function user.BacktickInterpMultiline(name: string, count: int) -> string throws never {
   { : string
-    "name:  " + { 0 stmts + tail }.to_string() + "\ncount: " + { 0 stmts + tail }.to_string() : string
+    `...` : string
   }
 }
 function user.BacktickEscapedInterpStaysLiteral() -> string throws never {
   { : "literal: ${ignored}"
-    "literal: ${ignored}" : "literal: ${ignored}"
+    `...` : "literal: ${ignored}"
   }
 }
 function user.BacktickM3ForLoop(xs: string[]) -> string throws never {
   { : string
-    { : string
-      let  __m3_for = "" : "" -> string
-      for x in xs
-        { : void
-           __m3_for =  __m3_for + "- " + { 0 stmts + tail }.to_string() + "\n" : string
-        }
-       __m3_for : string
-    }
+    `...` : string
   }
 }
 function user.BacktickM3IfBlock(show: bool) -> string throws never {
   { : "hello" | ""
-    if (show : bool) : "hello" | ""
-      "hello" : "hello"
-    else
-      "" : ""
+    `...` : "hello" | ""
   }
 }
 function user.BacktickM3IfElseChain(n: int) -> string throws never {
   { : "pos" | "neg" | "zero"
-    if (n > 0 : bool) : "pos" | "neg" | "zero"
-      "pos" : "pos"
-    else
-      if (n < 0 : bool) : "neg" | "zero"
-        "neg" : "neg"
-      else
-        "zero" : "zero"
+    `...` : "pos" | "neg" | "zero"
   }
 }

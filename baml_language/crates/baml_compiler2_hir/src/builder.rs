@@ -530,15 +530,25 @@ impl<'db> SemanticIndexBuilder<'db> {
                 self.walk_expr(*lhs, body, source_map, true);
                 self.walk_expr(*rhs, body, source_map, true);
             }
-            ast::Expr::TaggedTemplate { tag, segments } => {
-                // The tag is an ordinary value reference in the ENCLOSING scope.
-                self.walk_expr(*tag, body, source_map, true);
-                // The template body (all segments) is its own lambda scope, so
-                // that references to enclosing-function locals inside `${...}`
-                // are computed as captures (BEP-049 M4e.1 — MIR hand-rolls the
-                // body closure off these captures).
-                self.walk_tagged_template_body(expr_id, segments, body, source_map);
-            }
+            ast::Expr::Template { tag, segments } => match tag {
+                // Tagged (`Custom`): the tag is an ordinary value reference in
+                // the ENCLOSING scope, and the template body is its own lambda
+                // scope so references to enclosing locals inside `${...}` are
+                // computed as captures (BEP-049 §10 — MIR hand-rolls the body
+                // closure off these captures).
+                ast::TemplateTag::Custom { tag } => {
+                    self.walk_expr(*tag, body, source_map, true);
+                    self.walk_template_lambda_body(expr_id, segments, body, source_map);
+                }
+                // Untagged (`Default`): no closure. The template is realized by
+                // the desugared `elaborated` concat in the ENCLOSING scope, so
+                // we walk that directly — it contains the same `${…}` exprs and
+                // any `${for}` bindings (in normal loop scopes), with no capture
+                // boundary. The structured `segments` are diagnostics-only.
+                ast::TemplateTag::Default { elaborated } => {
+                    self.walk_expr(*elaborated, body, source_map, true);
+                }
+            },
             ast::Expr::Unary { expr, .. } | ast::Expr::OptionalChain { expr } => {
                 self.walk_expr(*expr, body, source_map, true);
             }
@@ -597,21 +607,23 @@ impl<'db> SemanticIndexBuilder<'db> {
         }
     }
 
-    /// Recursively walk a tagged-template segment, registering any
-    /// for-binding patterns and walking interpolated/conditional/iter
-    /// expressions. Mirrors `walk_expr`'s recursion shape.
-    fn walk_tagged_segment(
+    /// Recursively walk a template segment, registering any for-binding
+    /// patterns and walking interpolated/conditional/iter expressions.
+    /// Mirrors `walk_expr`'s recursion shape. Used by both template forms:
+    /// the tagged path calls it inside a lambda scope, the untagged path
+    /// inline in the enclosing scope.
+    fn walk_template_segment(
         &mut self,
-        seg: &ast::TaggedSegment,
+        seg: &ast::TemplateSegment,
         body: &ast::ExprBody,
         source_map: &ast::AstSourceMap,
     ) {
         match seg {
-            ast::TaggedSegment::Text(_) => {}
-            ast::TaggedSegment::Interp(expr_id) => {
+            ast::TemplateSegment::Text(_) => {}
+            ast::TemplateSegment::Interp(expr_id) => {
                 self.walk_expr(*expr_id, body, source_map, true);
             }
-            ast::TaggedSegment::For {
+            ast::TemplateSegment::For {
                 binding,
                 collection,
                 body: inner,
@@ -628,45 +640,46 @@ impl<'db> SemanticIndexBuilder<'db> {
                     source_map.pattern_span(*binding).start(),
                 );
                 for inner_seg in inner {
-                    self.walk_tagged_segment(inner_seg, body, source_map);
+                    self.walk_template_segment(inner_seg, body, source_map);
                 }
                 self.pop_scope();
             }
-            ast::TaggedSegment::If {
+            ast::TemplateSegment::If {
                 branches,
                 else_body,
             } => {
                 for branch in branches {
                     self.walk_expr(branch.condition, body, source_map, true);
                     for inner_seg in &branch.body {
-                        self.walk_tagged_segment(inner_seg, body, source_map);
+                        self.walk_template_segment(inner_seg, body, source_map);
                     }
                 }
                 if let Some(eb) = else_body {
                     for inner_seg in eb {
-                        self.walk_tagged_segment(inner_seg, body, source_map);
+                        self.walk_template_segment(inner_seg, body, source_map);
                     }
                 }
             }
         }
     }
 
-    /// Walk a tagged template's segments inside a fresh `ScopeKind::Lambda`
-    /// scope spanning the whole tagged-template expression (BEP-049 §10 /
-    /// M4e.1). This makes the body a capture boundary: interpolation references
-    /// to enclosing-function locals are recorded as captures (consumed by MIR
-    /// when it hand-rolls the body closure).
+    /// Walk a *tagged* template's segments inside a fresh `ScopeKind::Lambda`
+    /// scope spanning the whole template expression (BEP-049 §10). This makes
+    /// the body a capture boundary: interpolation references to enclosing
+    /// locals are recorded as captures (consumed by MIR when it hand-rolls the
+    /// body closure). Untagged templates do NOT use this — they walk segments
+    /// inline (no closure, no captures).
     ///
     /// The lambda's parameters (the tag's `body: (...) -> baml.TaggedString`
     /// params) are NOT registered here: the tag is a cross-file item whose
     /// signature cannot be resolved during the semantic-index walk (it would
-    /// cycle `file_semantic_index` -> `package_items`), so MIR (and TIR, via
-    /// M4d.4) inject the params instead. `${for}` bindings still nest in their
-    /// own block scopes via `walk_tagged_segment`.
-    fn walk_tagged_template_body(
+    /// cycle `file_semantic_index` -> `package_items`), so MIR (and TIR) inject
+    /// the params instead. `${for}` bindings still nest in their own block
+    /// scopes via `walk_template_segment`.
+    fn walk_template_lambda_body(
         &mut self,
         expr_id: ast::ExprId,
-        segments: &[ast::TaggedSegment],
+        segments: &[ast::TemplateSegment],
         body: &ast::ExprBody,
         source_map: &ast::AstSourceMap,
     ) {
@@ -674,7 +687,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         let scope_id = self.current_scope_id();
         self.lambda_stack.push(scope_id);
         for seg in segments {
-            self.walk_tagged_segment(seg, body, source_map);
+            self.walk_template_segment(seg, body, source_map);
         }
         // `body`/`source_map` are unused by capture analysis (it works off the
         // recorded path-root references), but match the existing signature.

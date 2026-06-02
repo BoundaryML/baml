@@ -470,6 +470,16 @@ impl ExprBody {
                 )
             }
             Expr::OptionalChain { expr } => self.display_expr_inner(*expr, depth + 1),
+            Expr::Block {
+                tail_expr: Some(tail),
+                ..
+            } => self.display_expr_inner(*tail, depth + 1),
+            Expr::Template { tag, .. } => match tag {
+                TemplateTag::Default { .. } => "`…`".to_string(),
+                TemplateTag::Custom { tag } => {
+                    format!("{}`…`", self.display_expr_inner(*tag, depth + 1))
+                }
+            },
             Expr::Literal(lit) => lit.to_string(),
             Expr::Null => "null".to_string(),
             _ => "...".to_string(),
@@ -751,31 +761,60 @@ pub enum Expr {
     OptionalChain {
         expr: ExprId,
     },
-    /// Tagged template literal site, per BEP-049 §10. Held as a
-    /// first-class HIR node through TIR so type checking can apply
-    /// tag-aware rules: the tag's body parameter brings extra bindings
-    /// into scope for interpolation expressions, and errors point at the
-    /// original segment span. MIR lowers this to the equivalent
-    /// `tag(body = (...) -> TaggedString { TaggedString { parts, values } })`
-    /// call form.
-    TaggedTemplate {
-        /// The tag expression — usually a bare identifier referring to a
-        /// fn marked `//baml:tagged_string`. Stored as an `ExprId` so
-        /// paths and future curry forms compose without grammar changes.
-        tag: ExprId,
+    /// Backtick template literal site (BEP-049). Held as a first-class HIR
+    /// node through TIR so type checking applies template-aware rules with
+    /// errors pointing at the original `${…}` spans, and MIR owns the
+    /// lowering. The `tag` discriminates the two BEP forms:
+    ///
+    /// - [`TemplateTag::Default`] — an untagged `` `…` `` literal (§11):
+    ///   each `${expr}` is implicitly `.to_string()`-coerced (strict — a
+    ///   nullable / non-stringable value is a compile error), and the whole
+    ///   template evaluates to `string`. MIR lowers it to a concat chain.
+    /// - [`TemplateTag::Custom`] — a tagged `` tag`…` `` literal (§10): the
+    ///   tag's body parameter brings extra bindings into scope, values are
+    ///   passed to the tag *verbatim* with their original types, and the
+    ///   result is the tag fn's return type. MIR lowers it to
+    ///   `tag(body = (...) -> TaggedString { TaggedString { parts, values } })`.
+    Template {
+        /// Which BEP form this is — see [`TemplateTag`].
+        tag: TemplateTag,
         /// Structured template body. Mirrors `BacktickSegment` from the
         /// CST but each interp/condition/collection is already a lowered
         /// `ExprId`, and for-bindings are lowered `PatId`s. Lets TIR walk
-        /// the tree without re-touching the CST.
-        segments: Vec<TaggedSegment>,
+        /// the tree without re-touching the CST. Interp payloads are the
+        /// *raw* inner expressions (no `.to_string()` wrapping); coercion
+        /// is MIR's job for the `Default` form.
+        segments: Vec<TemplateSegment>,
     },
     Missing,
 }
 
-/// One segment of a `TaggedTemplate` body. Parallel to `BacktickSegment`
+/// Which BEP-049 backtick form an [`Expr::Template`] is, plus the per-form
+/// payload needed to realize it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TemplateTag {
+    /// Untagged `` `…` `` (BEP §11): implicit per-value `.to_string()`,
+    /// result type `string`.
+    ///
+    /// `elaborated` is the desugared realization — a left-folded `+` concat
+    /// of the segments (text literals, `${expr}.to_string()`, `${for}`
+    /// accumulator blocks, `${if}` chains), built from the *same* lowered
+    /// `ExprId`s the `segments` hold. TIR types this for codegen and HIR/MIR
+    /// consume it directly; the structured `segments` exist only so TIR can
+    /// emit per-`${…}` strict-stringify diagnostics (BEP §11) on the original
+    /// spans rather than on the synthetic `.to_string()` calls.
+    Default { elaborated: ExprId },
+    /// Tagged `` tag`…` `` (BEP §10): `tag` is the tag expression — usually a
+    /// bare identifier referring to a fn marked `//baml:tagged_string`. Stored
+    /// as an `ExprId` so paths and future curry forms compose without grammar
+    /// changes. Values pass to the tag verbatim; there is no elaboration.
+    Custom { tag: ExprId },
+}
+
+/// One segment of an [`Expr::Template`] body. Parallel to `BacktickSegment`
 /// in the CST layer, but every sub-expression is already lowered.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TaggedSegment {
+pub enum TemplateSegment {
     /// Literal text between interpolations / block tags.
     Text(std::string::String),
     /// A `${expr}` interpolation. The wrapped `ExprId` is the lowered
@@ -785,19 +824,19 @@ pub enum TaggedSegment {
     For {
         binding: PatId,
         collection: ExprId,
-        body: Vec<TaggedSegment>,
+        body: Vec<TemplateSegment>,
     },
     /// A `${if (c)}...${else if (c)}...${else}...${endif}` chain.
     If {
-        branches: Vec<TaggedIfBranch>,
-        else_body: Option<Vec<TaggedSegment>>,
+        branches: Vec<TemplateIfBranch>,
+        else_body: Option<Vec<TemplateSegment>>,
     },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TaggedIfBranch {
+pub struct TemplateIfBranch {
     pub condition: ExprId,
-    pub body: Vec<TaggedSegment>,
+    pub body: Vec<TemplateSegment>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

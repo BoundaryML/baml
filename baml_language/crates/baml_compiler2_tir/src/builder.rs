@@ -2282,15 +2282,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                     refs,
                 );
             }
-            Expr::TaggedTemplate { tag, segments } => {
-                Self::collect_default_expr_forward_references(
-                    *tag,
-                    body,
-                    later_params,
-                    shadowed,
-                    refs,
-                );
-                Self::collect_default_expr_forward_references_in_tagged_segments(
+            Expr::Template { tag, segments } => {
+                if let ast::TemplateTag::Custom { tag } = tag {
+                    Self::collect_default_expr_forward_references(
+                        *tag,
+                        body,
+                        later_params,
+                        shadowed,
+                        refs,
+                    );
+                }
+                Self::collect_default_expr_forward_references_in_template_segments(
                     segments,
                     body,
                     later_params,
@@ -2306,8 +2308,8 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// collection as `collect_default_expr_forward_references` but threads
     /// through nested for-bodies and if-branches, pushing for-bindings onto the
     /// shadowed stack.
-    fn collect_default_expr_forward_references_in_tagged_segments(
-        segments: &[ast::TaggedSegment],
+    fn collect_default_expr_forward_references_in_template_segments(
+        segments: &[ast::TemplateSegment],
         body: &ExprBody,
         later_params: &FxHashSet<Name>,
         shadowed: &mut Vec<Name>,
@@ -2315,8 +2317,8 @@ impl<'db> TypeInferenceBuilder<'db> {
     ) {
         for seg in segments {
             match seg {
-                ast::TaggedSegment::Text(_) => {}
-                ast::TaggedSegment::Interp(e) => {
+                ast::TemplateSegment::Text(_) => {}
+                ast::TemplateSegment::Interp(e) => {
                     Self::collect_default_expr_forward_references(
                         *e,
                         body,
@@ -2325,7 +2327,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         refs,
                     );
                 }
-                ast::TaggedSegment::For {
+                ast::TemplateSegment::For {
                     binding,
                     collection,
                     body: inner,
@@ -2339,7 +2341,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     );
                     let saved_len = shadowed.len();
                     Self::push_pattern_bindings(*binding, body, shadowed);
-                    Self::collect_default_expr_forward_references_in_tagged_segments(
+                    Self::collect_default_expr_forward_references_in_template_segments(
                         inner,
                         body,
                         later_params,
@@ -2348,7 +2350,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     );
                     shadowed.truncate(saved_len);
                 }
-                ast::TaggedSegment::If {
+                ast::TemplateSegment::If {
                     branches,
                     else_body,
                 } => {
@@ -2360,7 +2362,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             shadowed,
                             refs,
                         );
-                        Self::collect_default_expr_forward_references_in_tagged_segments(
+                        Self::collect_default_expr_forward_references_in_template_segments(
                             &branch.body,
                             body,
                             later_params,
@@ -2369,7 +2371,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         );
                     }
                     if let Some(eb) = else_body {
-                        Self::collect_default_expr_forward_references_in_tagged_segments(
+                        Self::collect_default_expr_forward_references_in_template_segments(
                             eb,
                             body,
                             later_params,
@@ -3173,19 +3175,24 @@ impl<'db> TypeInferenceBuilder<'db> {
                 body: spawn_body,
             } => self.infer_spawn_expr(body, *name, *spawn_body),
             Expr::Await { future } => self.infer_await_expr(body, *future),
-            Expr::TaggedTemplate { tag, segments } => {
-                // M4d.3 validated the tag (a `//baml:tagged_string` function
-                // whose first parameter is `body: (...) -> baml.TaggedString`);
-                // M4d.4 type-checks the `segments` with the tag's body-lambda
-                // parameters — and any `${for}` bindings — in scope.
+            Expr::Template {
+                tag: ast::TemplateTag::Custom { tag },
+                segments,
+            } => {
+                // Tagged template (BEP §10). TIR validates the tag (a
+                // `//baml:tagged_string` function whose first parameter is
+                // `body: (...) -> baml.TaggedString`) and type-checks the
+                // `segments` with the tag's body-lambda parameters — and any
+                // `${for}` bindings — in scope.
                 //
                 // The template's RESULT type is the tag fn's return type
-                // (`Unknown` on any tag error, exactly as M4d.3). Walking the
-                // segments is side-effecting only — it surfaces interpolation
-                // diagnostics and records each `${expr}` type — so it never
-                // changes the result. We always walk (even on a tag error) so
-                // interps are still checked; the body-lambda params are bound
-                // only when the tag validated.
+                // (`Unknown` on any tag error). Walking the segments is
+                // side-effecting only — it surfaces interpolation diagnostics
+                // and records each `${expr}` type. We always walk (even on a
+                // tag error) so interps are still checked; the body-lambda
+                // params are bound only when the tag validated. Interps are
+                // NOT strictly coerced — `TaggedString.values` is `unknown[]`,
+                // so values pass through with their original types (§10/§11).
                 let tag_ty = self.infer_expr(*tag, body);
                 let tag_name = match &body.exprs[*tag] {
                     Expr::Path(segs) => segs.last().cloned(),
@@ -3247,10 +3254,32 @@ impl<'db> TypeInferenceBuilder<'db> {
                         );
                     }
                 }
-                self.infer_tagged_segments(segments, body);
+                self.infer_template_segments(segments, body);
                 self.restore_scoped_locals(&snapshot);
 
                 result_ty
+            }
+            Expr::Template {
+                tag: ast::TemplateTag::Default { elaborated },
+                segments,
+            } => {
+                // Untagged backtick (BEP §11). The value is realized by the
+                // desugared `elaborated` concat; type it so codegen has the
+                // `.to_string()` resolutions it needs, but DISCARD its
+                // diagnostics — those describe the synthetic `.to_string()`
+                // calls. The user-facing strict-stringify errors come from the
+                // structured `segments`, anchored on the original `${…}` spans:
+                // each `${expr}` must be non-null and stringable.
+                //
+                // The template's type IS the elaborated tree's type — always a
+                // string, but literal-preserving for a constant template (e.g.
+                // `` `abc` `` infers `Ty::Literal("abc")`), so constant folding
+                // of comparisons on literal backticks (BEP §9) still fires.
+                let saved = self.context.diagnostic_count();
+                let elaborated_ty = self.infer_expr(*elaborated, body);
+                self.context.truncate_diagnostics(saved);
+                self.check_template_interps_stringable(segments, body);
+                elaborated_ty
             }
             Expr::Missing => Ty::Unknown {
                 attr: TyAttr::default(),
@@ -6400,9 +6429,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                     out.extend(crate::throw_inference::flatten_ty_to_facts(error));
                 }
             }
-            Expr::TaggedTemplate { tag, segments } => {
-                self.collect_throw_facts_from_expr(*tag, body, out);
-                Self::collect_throw_facts_from_tagged_segments(self, segments, body, out);
+            Expr::Template { tag, segments } => {
+                if let ast::TemplateTag::Custom { tag } = tag {
+                    self.collect_throw_facts_from_expr(*tag, body, out);
+                }
+                Self::collect_throw_facts_from_template_segments(self, segments, body, out);
             }
             Expr::Lambda(_)
             | Expr::Literal(_)
@@ -6416,36 +6447,36 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// Recursive walk of a tagged-template segment tree collecting throw
     /// facts from interpolated/condition/iter expressions and any nested
     /// for/if bodies.
-    fn collect_throw_facts_from_tagged_segments(
+    fn collect_throw_facts_from_template_segments(
         &self,
-        segments: &[ast::TaggedSegment],
+        segments: &[ast::TemplateSegment],
         body: &ExprBody,
         out: &mut BTreeSet<Ty>,
     ) {
         for seg in segments {
             match seg {
-                ast::TaggedSegment::Text(_) => {}
-                ast::TaggedSegment::Interp(e) => {
+                ast::TemplateSegment::Text(_) => {}
+                ast::TemplateSegment::Interp(e) => {
                     self.collect_throw_facts_from_expr(*e, body, out);
                 }
-                ast::TaggedSegment::For {
+                ast::TemplateSegment::For {
                     collection,
                     body: inner,
                     ..
                 } => {
                     self.collect_throw_facts_from_expr(*collection, body, out);
-                    self.collect_throw_facts_from_tagged_segments(inner, body, out);
+                    self.collect_throw_facts_from_template_segments(inner, body, out);
                 }
-                ast::TaggedSegment::If {
+                ast::TemplateSegment::If {
                     branches,
                     else_body,
                 } => {
                     for branch in branches {
                         self.collect_throw_facts_from_expr(branch.condition, body, out);
-                        self.collect_throw_facts_from_tagged_segments(&branch.body, body, out);
+                        self.collect_throw_facts_from_template_segments(&branch.body, body, out);
                     }
                     if let Some(eb) = else_body {
-                        self.collect_throw_facts_from_tagged_segments(eb, body, out);
+                        self.collect_throw_facts_from_template_segments(eb, body, out);
                     }
                 }
             }
@@ -7362,23 +7393,27 @@ impl<'db> TypeInferenceBuilder<'db> {
         ret.clone()
     }
 
-    /// BEP-049 §10 (M4d.4): type-check a tagged template's segments. Mirrors
-    /// the HIR `walk_tagged_segment` shape and reuses the `Stmt::For` pipeline.
+    /// BEP-049 §10: type-check a *tagged* template's segments. Mirrors the HIR
+    /// `walk_template_segment` shape and reuses the `Stmt::For` pipeline.
+    ///
+    /// `${for (let p in c)}` binds `p` into a fresh scope for its body;
+    /// `${if (cond)}` infers each condition with no bool coercion, matching
+    /// `Expr::If`. The caller binds the tag's body-lambda params before calling
+    /// this and restores scope afterwards.
     ///
     /// Interpolations are unconstrained — `TaggedString.values` is `unknown[]`,
     /// so each `${expr}` is merely inferred (for its diagnostics and to record
-    /// its type). `${for (let p in c)}` binds `p` into a fresh scope for its
-    /// body; `${if (cond)}` infers each condition with no bool coercion, matching
-    /// `Expr::If`. The caller binds the tag's body-lambda params before calling
-    /// this and restores scope afterwards.
-    fn infer_tagged_segments(&mut self, segments: &[ast::TaggedSegment], body: &ExprBody) {
+    /// its type). The untagged (`Default`) form does NOT use this: it types its
+    /// desugared `elaborated` tree and checks stringability separately via
+    /// [`check_template_interps_stringable`].
+    fn infer_template_segments(&mut self, segments: &[ast::TemplateSegment], body: &ExprBody) {
         for seg in segments {
             match seg {
-                ast::TaggedSegment::Text(_) => {}
-                ast::TaggedSegment::Interp(expr_id) => {
+                ast::TemplateSegment::Text(_) => {}
+                ast::TemplateSegment::Interp(expr_id) => {
                     self.infer_expr(*expr_id, body);
                 }
-                ast::TaggedSegment::For {
+                ast::TemplateSegment::For {
                     binding,
                     collection,
                     body: inner,
@@ -7436,10 +7471,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                         &flow_ty,
                     );
 
-                    self.infer_tagged_segments(inner, body);
+                    self.infer_template_segments(inner, body);
                     self.restore_scoped_locals(&snapshot);
                 }
-                ast::TaggedSegment::If {
+                ast::TemplateSegment::If {
                     branches,
                     else_body,
                 } => {
@@ -7447,13 +7482,89 @@ impl<'db> TypeInferenceBuilder<'db> {
                         // Match `Expr::If`: infer the condition without
                         // enforcing a bool expectation.
                         self.infer_expr(branch.condition, body);
-                        self.infer_tagged_segments(&branch.body, body);
+                        self.infer_template_segments(&branch.body, body);
                     }
                     if let Some(eb) = else_body {
-                        self.infer_tagged_segments(eb, body);
+                        self.infer_template_segments(eb, body);
                     }
                 }
             }
+        }
+    }
+
+    /// BEP §11 strict-interpolation check for an untagged template. Recurses
+    /// the structured `segments` and, for each `${expr}`, inspects the type
+    /// already recorded by typing the desugared `elaborated` tree — reporting a
+    /// purpose-built error on the interp's own span (no synthetic `.to_string()`
+    /// call for the error to leak through). Read-only: it never re-infers, so
+    /// it can't double-report diagnostics from inside the interpolations.
+    fn check_template_interps_stringable(
+        &mut self,
+        segments: &[ast::TemplateSegment],
+        body: &ExprBody,
+    ) {
+        for seg in segments {
+            match seg {
+                ast::TemplateSegment::Text(_) => {}
+                ast::TemplateSegment::Interp(expr_id) => {
+                    self.check_interp_stringable(*expr_id, body);
+                }
+                ast::TemplateSegment::For { body: inner, .. } => {
+                    self.check_template_interps_stringable(inner, body);
+                }
+                ast::TemplateSegment::If {
+                    branches,
+                    else_body,
+                } => {
+                    for branch in branches {
+                        self.check_template_interps_stringable(&branch.body, body);
+                    }
+                    if let Some(eb) = else_body {
+                        self.check_template_interps_stringable(eb, body);
+                    }
+                }
+            }
+        }
+    }
+
+    /// The per-`${expr}` half of [`check_template_interps_stringable`]. Reads
+    /// the recorded type (from typing the elaborated tree) and requires it to
+    /// be non-null and expose a `to_string` method.
+    fn check_interp_stringable(&mut self, expr_id: ExprId, body: &ExprBody) {
+        let Some(ty) = self.expressions.get(&expr_id).cloned() else {
+            return;
+        };
+        // Unknown/Error already produced their own diagnostics upstream.
+        if matches!(ty, Ty::Unknown { .. } | Ty::Error { .. }) {
+            return;
+        }
+        // A statement-only block (`${ let x = 1 }`) is unit-valued and renders
+        // as the empty string (BEP §4) — no `to_string` required.
+        if matches!(
+            &body.exprs[expr_id],
+            Expr::Block {
+                tail_expr: None,
+                ..
+            }
+        ) {
+            return;
+        }
+        // Nullable values can't be stringified directly — the user must
+        // coalesce (`${x ?? "…"}`) or unwrap first. Applies the §7-style
+        // "surface null bugs at type-check time" rule to interpolation.
+        let inner = crate::narrowing::remove_null(&ty);
+        if inner != ty {
+            self.context
+                .report_simple(TirTypeError::InterpolatedValueMaybeNull { ty }, expr_id);
+            return;
+        }
+        // Otherwise the value must expose a `to_string` method.
+        if self
+            .try_resolve_member_on_ty(&ty, &Name::new("to_string"))
+            .is_none()
+        {
+            self.context
+                .report_simple(TirTypeError::TypeNotInterpolatable { ty }, expr_id);
         }
     }
 

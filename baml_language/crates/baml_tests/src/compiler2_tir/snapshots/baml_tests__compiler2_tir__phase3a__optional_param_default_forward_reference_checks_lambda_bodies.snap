@@ -1,9 +1,8 @@
 ---
 source: crates/baml_tests/src/compiler2_tir/phase3a.rs
-assertion_line: 210
 expression: tir.as_str()
 ---
-function user.lambda_capture_later_param(a: int = ..., b: int = 1) -> int throws never {
+function user.lambda_capture_later_param(a: int = f(), b: int = 1) -> int throws never {
   { : int
     a : int
   }

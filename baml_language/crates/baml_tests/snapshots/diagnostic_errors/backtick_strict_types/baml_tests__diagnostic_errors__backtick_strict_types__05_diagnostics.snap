@@ -2,52 +2,32 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: `((self: baml.Int) -> string throws never)?` is not a function — it cannot be called
-    ╭─[ main.baml:20:11 ]
+  [type] error: cannot interpolate a value of type `int | null` — it may be null; coalesce with `?? "…"` or unwrap it first
+    ╭─[ main.baml:20:12 ]
     │
  20 │     `val: ${x}`
-    │           ──┬─  
-    │             ╰─── `((self: baml.Int) -> string throws never)?` is not a function — it cannot be called
-    │ 
-    │ Note: Error code: E0006
-────╯
-
-  [type] error: did you mean `...?.to_string`? `....to_string` does not handle the case when `...` is null
-    ╭─[ main.baml:20:11 ]
-    │
- 20 │     `val: ${x}`
-    │           ──┬─  
-    │             ╰─── did you mean `...?.to_string`? `....to_string` does not handle the case when `...` is null
+    │            ─┬─  
+    │             ╰─── cannot interpolate a value of type `int | null` — it may be null; coalesce with `?? "…"` or unwrap it first
     │ 
     │ Note: Error code: E0001
 ────╯
 
-  [type] error: type `FooNoToString` has no member `to_string`
-    ╭─[ main.baml:30:11 ]
+  [type] error: cannot interpolate a value of type `FooNoToString` — it has no `to_string` method
+    ╭─[ main.baml:30:12 ]
     │
  30 │     `val: ${f}`
-    │           ──┬─  
-    │             ╰─── type `FooNoToString` has no member `to_string`
+    │            ─┬─  
+    │             ╰─── cannot interpolate a value of type `FooNoToString` — it has no `to_string` method
     │ 
-    │ Note: Error code: E0007
+    │ Note: Error code: E0001
 ────╯
 
-  [type] error: `((self: baml.Int) -> string throws never)?` is not a function — it cannot be called
-    ╭─[ main.baml:41:13 ]
+  [type] error: cannot interpolate a value of type `int?` — it may be null; coalesce with `?? "…"` or unwrap it first
+    ╭─[ main.baml:41:14 ]
     │
  41 │     `count: ${c}`
-    │             ──┬─  
-    │               ╰─── `((self: baml.Int) -> string throws never)?` is not a function — it cannot be called
-    │ 
-    │ Note: Error code: E0006
-────╯
-
-  [type] error: did you mean `...?.to_string`? `....to_string` does not handle the case when `...` is null
-    ╭─[ main.baml:41:13 ]
-    │
- 41 │     `count: ${c}`
-    │             ──┬─  
-    │               ╰─── did you mean `...?.to_string`? `....to_string` does not handle the case when `...` is null
+    │              ─┬─  
+    │               ╰─── cannot interpolate a value of type `int?` — it may be null; coalesce with `?? "…"` or unwrap it first
     │ 
     │ Note: Error code: E0001
 ────╯
