@@ -52,8 +52,8 @@ async def launch_agent(
         already used (409 `agent_id_conflict`).
 
     Raises:
-        httpx.HTTPStatusError: If the Cursor API returns a non-2xx response other
-            than 409.
+        httpx.HTTPStatusError: If the Cursor API returns a non-2xx response, other
+            than a 409 whose body is `error.code == "agent_id_conflict"`.
     """
     auth = base64.b64encode(f"{api_key}:".encode()).decode()
     body: dict[str, Any] = {
@@ -71,10 +71,17 @@ async def launch_agent(
             json=body,
             headers={"Authorization": f"Basic {auth}", "Content-Type": "application/json"},
         )
-        # A reused agentId means this issue was already dispatched (an idempotent
-        # re-dispatch after a crash). Treat it as already launched rather than
-        # spawning a duplicate agent/PR.
+        # A reused agentId (409 agent_id_conflict) means this issue was already
+        # dispatched (an idempotent re-dispatch after a crash); treat it as already
+        # launched. Other 409s (e.g. agent_busy) or an unparseable body must
+        # surface, not be silently swallowed.
         if r.status_code == 409 and agent_id:
-            return {"id": agent_id, "alreadyLaunched": True}
+            try:
+                body = r.json()
+            except Exception:  # noqa: BLE001
+                body = None
+            err = body.get("error") if isinstance(body, dict) else None
+            if isinstance(err, dict) and err.get("code") == "agent_id_conflict":
+                return {"id": agent_id, "alreadyLaunched": True}
         r.raise_for_status()
         return r.json()

@@ -47,6 +47,19 @@ async def test_launch_agent_409_is_already_launched():
 
 
 @respx.mock
+async def test_launch_agent_409_wrong_error_code_raises():
+    """A 409 whose error.code is not agent_id_conflict is not idempotent and raises."""
+    respx.post(AGENTS_URL).mock(
+        return_value=httpx.Response(409, json={"error": {"code": "some_other_conflict"}})
+    )
+    with pytest.raises(httpx.HTTPStatusError):
+        await cursor_client.launch_agent(
+            "key", "fix it", "https://github.com/o/r", "canary",
+            agent_id="notion-fixer-issue1",
+        )
+
+
+@respx.mock
 async def test_launch_agent_non_409_error_still_raises():
     """A non-409 error status is not swallowed and still raises HTTPStatusError."""
     respx.post(AGENTS_URL).mock(return_value=httpx.Response(500, json={"error": "boom"}))
