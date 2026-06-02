@@ -9,6 +9,8 @@ node = "22"         # For pnpm
 java = "temurin-23"
 
 uv = "0.11.3"
+direnv = "2.37.1"
+sccache = "0.10.0"
 
 # Rust tools
 "cargo:bacon" = "latest"
