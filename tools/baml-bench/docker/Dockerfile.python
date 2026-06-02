@@ -20,6 +20,14 @@ COPY services ./services
 
 RUN pip install --no-cache-dir -e .
 
+# Drop root at runtime. Pre-create /data/blobs owned by the unprivileged user so
+# a fresh named volume mounted there inherits writable ownership.
+RUN groupadd -r -g 1000 appuser \
+    && useradd -r -u 1000 -g appuser -d /app -s /usr/sbin/nologin appuser \
+    && mkdir -p /data/blobs \
+    && chown -R appuser:appuser /app /data
+
 ENV PYTHONUNBUFFERED=1 PYTHONPATH=/app/libs:/app
+USER appuser
 # default command; overridden per service in docker-compose
 CMD ["python", "-m", "services.api"]
