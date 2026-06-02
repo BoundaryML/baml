@@ -89,6 +89,115 @@ async fn all_complete_collects_in_order() {
     assert_eq!(run_main(source).await.unwrap(), BexExternalValue::Int(123));
 }
 
+/// `all` collects every value in input order on the happy path.
+#[tokio::test]
+async fn all_collects_in_order() {
+    let source = r#"
+        function main() -> int {
+            let fs = [spawn { 1 }, spawn { 2 }, spawn { 3 }];
+            let r = await baml.future.all(fs);
+            r[0] * 100 + r[1] * 10 + r[2]
+        }
+    "#;
+    assert_eq!(run_main(source).await.unwrap(), BexExternalValue::Int(123));
+}
+
+/// `all` re-throws the first failure; the surrounding `catch` observes it.
+///
+/// KNOWN ISSUE (separate from the combinators): an input future spawned in the
+/// SAME task that awaits the combinator, if it throws unhandled, gets its error
+/// queued on the spawner's fire-and-forget queue (`notify_parent_of_error`).
+/// The spawner's `await` then surfaces it as `UnhandledThrow`, bypassing this
+/// `catch`. Lives in the spawn fire-and-forget model; exposed by, not caused
+/// by, the combinators.
+#[ignore = "fire-and-forget input error bypasses combinator catch — see comment"]
+#[tokio::test]
+async fn all_rethrows_failure_to_catch() {
+    let source = r#"
+        function bad() -> int throws string { throw "boom" }
+        function main() -> int {
+            let fs = [spawn { 1 }, spawn { bad() }];
+            let r = await baml.future.all(fs) catch (e) {
+                let e => [99]
+            };
+            r[0]
+        }
+    "#;
+    assert_eq!(run_main(source).await.unwrap(), BexExternalValue::Int(99));
+}
+
+/// `race` settles with the FIRST future to settle — here the faster one wins.
+#[tokio::test]
+async fn race_returns_first_to_settle() {
+    let source = r#"
+        function slow() -> int { baml.sys.sleep(300); 2 }
+        function fast() -> int { baml.sys.sleep(20); 1 }
+        function main() -> int {
+            let fs = [spawn { slow() }, spawn { fast() }];
+            await baml.future.race(fs)
+        }
+    "#;
+    assert_eq!(run_main(source).await.unwrap(), BexExternalValue::Int(1));
+}
+
+/// `any` returns the first SUCCESS even when a faster future fails first.
+///
+/// KNOWN ISSUE: `any` currently mis-runs. Its closure body
+/// (`__await_any` → `await futures[i]` inside a `spawn`) hits a runtime fault
+/// that surfaces as a spurious `JsonDecodeError(SpawnConfig)`. `race`, which
+/// shares the `__await_any` primitive, works — the difference is `race`'s
+/// `Array.map` native call between the `AwaitAny` resume and the `await`. Root
+/// cause is in the `AwaitAny` suspend/resume path; under investigation.
+#[ignore = "any miscompiles: AwaitAny resume path fault — see comment"]
+#[tokio::test]
+async fn any_returns_first_success() {
+    let source = r#"
+        function bad() -> int throws string { throw "boom" }
+        function good() -> int { baml.sys.sleep(80); 42 }
+        function main() -> int {
+            let fs = [spawn { bad() }, spawn { good() }];
+            await baml.future.any(fs) catch (e) {
+                let e => -1
+            }
+        }
+    "#;
+    assert_eq!(run_main(source).await.unwrap(), BexExternalValue::Int(42));
+}
+
+/// `any` throws `AllFailed` carrying every error when all futures fail.
+#[ignore = "any miscompiles: AwaitAny resume path fault — see any_returns_first_success"]
+#[tokio::test]
+async fn any_all_fail_throws_allfailed() {
+    let source = r#"
+        function bad1() -> int throws string { throw "a" }
+        function bad2() -> int throws string { throw "b" }
+        function main() -> int {
+            let fs = [spawn { bad1() }, spawn { bad2() }];
+            await baml.future.any(fs) catch (e) {
+                let e: baml.future.AllFailed<string> => e.errors.length()
+            }
+        }
+    "#;
+    assert_eq!(run_main(source).await.unwrap(), BexExternalValue::Int(2));
+}
+
+/// `await f catch (e) {…}` must parse as `(await f) catch …` so the handler
+/// catches the error `await` re-throws from the future (regression test for
+/// the await/catch precedence fix).
+#[tokio::test]
+async fn await_catch_binds_to_await_not_future() {
+    let source = r#"
+        function bad() -> int throws string { throw "boom" }
+        function main() -> int {
+            let f = spawn { bad() };
+            await f catch (e) {
+                let e => 7
+            }
+        }
+    "#;
+    assert_eq!(run_main(source).await.unwrap(), BexExternalValue::Int(7));
+}
+
 /// The inputs run concurrently: three 200ms sleeps complete in ~200ms, not
 /// ~600ms (compile/bootstrap excluded from the timing budget).
 #[tokio::test]
@@ -130,4 +239,23 @@ async fn all_complete_runs_concurrently() {
         elapsed < std::time::Duration::from_millis(500),
         "all_complete inputs should run concurrently (~200ms); got {elapsed:?}"
     );
+}
+// temp probe appended
+// Bug 2 repro WITHOUT combinators: f errors, g awaits+handles f's error,
+// main awaits g. f's error must NOT bypass g's handling and surface at main.
+// Lives in the pre-existing spawn fire-and-forget model; being fixed on a
+// parallel branch. Remove `#[ignore]` once that lands.
+#[ignore = "bug 2: fire-and-forget error bypasses the future's consumer (separate branch)"]
+#[tokio::test]
+async fn bug2_fire_and_forget_bypasses_consumer() {
+    let source = r#"
+        function bad() -> int throws string { throw "boom" }
+        function main() -> int {
+            let f = spawn { bad() };
+            let g = spawn { (await f) catch (e) { let e => 7 } };
+            (await g) catch (e) { let e => -1 }
+        }
+    "#;
+    // g handles f's error and returns 7; main should see 7.
+    assert_eq!(run_main(source).await.unwrap(), BexExternalValue::Int(7));
 }

@@ -232,6 +232,7 @@ pub(crate) fn display_instruction(
         | Instruction::StoreArrayElement
         | Instruction::StoreMapElement
         | Instruction::Await
+        | Instruction::AwaitAny
         | Instruction::CallIndirect
         | Instruction::Throw
         | Instruction::Discriminant
@@ -407,7 +408,7 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::InitInstance(_)
         | Instruction::AllocVariant(_)
         | Instruction::AllocArray(_) => Style::new().cyan(),
-        Instruction::SysOp(_) | Instruction::Spawn | Instruction::Await => {
+        Instruction::SysOp(_) | Instruction::Spawn | Instruction::Await | Instruction::AwaitAny => {
             Style::new().green().bright()
         }
         Instruction::Watch(_) | Instruction::Unwatch(_) | Instruction::Notify(_) => {
@@ -873,6 +874,7 @@ fn display_instruction_textual(
         Instruction::SysOp(_) => format!("sys_op {}", meta_str(&"")),
         Instruction::Spawn => "spawn".to_string(),
         Instruction::Await => "await".to_string(),
+        Instruction::AwaitAny => "await_any".to_string(),
 
         // --- Control ---
         Instruction::Return => "return".to_string(),
@@ -1216,6 +1218,7 @@ pub fn display_compact_bytecode(
             // Unit ops: no operands
             OpCode::Return
             | OpCode::Await
+            | OpCode::AwaitAny
             | OpCode::Throw
             | OpCode::LoadArrayElement
             | OpCode::LoadMapElement

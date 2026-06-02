@@ -2758,6 +2758,78 @@ impl BexEngine {
                     }
                 }
 
+                // BEP-034 `baml.future.__await_any`: park until the FIRST of
+                // several input futures settles, then resume so the VM
+                // re-executes the `AwaitAny` opcode and pushes the winner's
+                // index. Mirrors the `Await` arm's permit/cancel dance but
+                // races all the inputs' SetOnce wakeups at once. The opcode
+                // already filtered out futures that were settled going in, so
+                // an empty `future_ids` means every input had a wakeup pending
+                // or the array was empty.
+                VmExecState::AwaitAny(future_ids) => {
+                    // Fail-fast on our own cancellation, exactly as `Await`
+                    // does: the next suspension point after the token fires
+                    // must surface `Cancelled`.
+                    if cancel.is_cancelled() {
+                        if let Some(future_id) = thread.vm_thread_settles_future() {
+                            self.settle_child_cancelled(&mut thread, future_id).await?;
+                            return Ok(ThreadOutcome::SettledChild);
+                        }
+                        return Err(cancelled_unhandled_throw());
+                    }
+                    #[allow(clippy::items_after_statements)]
+                    enum AwaitAnyOutcome {
+                        Cancelled,
+                        Done(Result<(), EngineError>),
+                    }
+                    // Build one SetOnce waiter per pending input. Each waiter
+                    // is self-contained (clones the future's `Arc<SetOnce>`),
+                    // so we can drop the guard and release the permit before
+                    // parking — same safepoint discipline as `Await`.
+                    let waiters = {
+                        let g = self.futures.acquire(thread.proof()).await;
+                        let mut ws = Vec::with_capacity(future_ids.len());
+                        for future_id in &future_ids {
+                            ws.push(g.future_ready(*future_id)?);
+                        }
+                        ws
+                    };
+                    let inactive = thread.release();
+                    self.maybe_collect_garbage().await;
+                    let outcome = if waiters.is_empty() {
+                        // No pending inputs to wake us — only cancellation can.
+                        // `race`/`any` guard against empty arrays in the stdlib,
+                        // so reaching here means every named future vanished;
+                        // wait for cancel rather than busy-spin or panic in
+                        // `select_all` (which rejects an empty iterator).
+                        cancel.cancelled().await;
+                        AwaitAnyOutcome::Cancelled
+                    } else {
+                        let first_settled =
+                            futures::future::select_all(waiters.into_iter().map(Box::pin));
+                        tokio::select! {
+                            biased;
+                            () = cancel.cancelled() => AwaitAnyOutcome::Cancelled,
+                            (r, _idx, _rest) = first_settled => AwaitAnyOutcome::Done(r),
+                        }
+                    };
+                    thread = inactive.acquire().await;
+                    match outcome {
+                        AwaitAnyOutcome::Cancelled => {
+                            if let Some(future_id) = thread.vm_thread_settles_future() {
+                                self.settle_child_cancelled(&mut thread, future_id).await?;
+                                return Ok(ThreadOutcome::SettledChild);
+                            }
+                            return Err(cancelled_unhandled_throw());
+                        }
+                        // Only an internal-error future surfaces here; normal
+                        // BAML success/throw/cancel settles resolve the SetOnce
+                        // with `Ok(())` and are observed when the VM re-reads
+                        // the future (and the stdlib `await futures[i]` it).
+                        AwaitAnyOutcome::Done(r) => r?,
+                    }
+                }
+
                 VmExecState::Event {
                     event_name,
                     data,

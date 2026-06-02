@@ -1194,6 +1194,11 @@ pub enum BuiltinKind {
     /// Compiler intrinsic — lowered to `StatementKind::Intrinsic` in MIR,
     /// not compiled as a callable function.
     Intrinsic,
+    /// BEP-034 `baml.future.__await_any` — lowered to a `Terminator::AwaitAny`
+    /// suspend point (like `await`), not a normal call. The single argument is
+    /// the array of futures; the result is the `int` index of the first to
+    /// settle.
+    AwaitAny,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

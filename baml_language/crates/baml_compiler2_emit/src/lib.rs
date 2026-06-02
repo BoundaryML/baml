@@ -517,6 +517,12 @@ pub fn generate_project_bytecode_with_opt(
                     // StatementKind::Intrinsic directly. Skip compilation entirely.
                     continue;
                 }
+                MirFunctionKind::Builtin(BuiltinKind::AwaitAny) => {
+                    // BEP-034 `__await_any` has no callable body — call sites
+                    // lower to a `Terminator::AwaitAny` suspend point directly.
+                    // Skip compilation entirely (like an intrinsic).
+                    continue;
+                }
                 MirFunctionKind::Builtin(BuiltinKind::Io) => {
                     let sys_op = bex_vm_types::sys_op_for_path(&fq_name)
                         .unwrap_or_else(|| panic!("unknown sys_op path: {fq_name}"));

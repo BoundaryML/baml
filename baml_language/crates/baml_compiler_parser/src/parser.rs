@@ -4499,10 +4499,15 @@ impl<'a> Parser<'a> {
         } else if self.at(TokenKind::Await) {
             // BEP-034 `await expr` — prefix operator binding like other
             // prefixes so postfix `.`/`()`/`[]` still attach to the
-            // awaited value.
+            // awaited value. The operand is parsed *no-catch* (like the
+            // payload of `throw`, see `parse_throw_expr`) so a trailing
+            // `catch` binds to the whole `await expr` — i.e.
+            // `await f catch (e) {…}` is `(await f) catch (e) {…}`, catching
+            // the error `await` re-throws — not `await (f catch …)`, which
+            // would attach the handler to the never-throwing future handle.
             self.with_node(SyntaxKind::AWAIT_EXPR, |p| {
                 p.bump(); // `await`
-                p.parse_expr_bp(PREFIX_BP);
+                p.parse_expr_bp_no_catch(PREFIX_BP);
             });
         } else if self.at(TokenKind::Spawn) {
             // BEP-034 `spawn name_expr? block`.

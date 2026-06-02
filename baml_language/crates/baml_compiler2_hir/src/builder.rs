@@ -1335,6 +1335,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                     ast::BuiltinKind::Vm => "$rust_function",
                     ast::BuiltinKind::Io => "$rust_io_function",
                     ast::BuiltinKind::Intrinsic => "$compiler_intrinsic",
+                    ast::BuiltinKind::AwaitAny => "$await_any",
                 };
                 self.diagnostics.push(Hir2Diagnostic::BuiltinOnlySyntax {
                     feature: feature.to_string(),

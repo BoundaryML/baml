@@ -3963,6 +3963,13 @@ impl CompilerRunner {
                     ));
                     break;
                 }
+                Ok(VmExecState::AwaitAny(_)) => {
+                    self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(
+                        "Function awaits any of several futures (not supported in VM Runner)"
+                            .to_string(),
+                    ));
+                    break;
+                }
                 Ok(VmExecState::Spawn(_)) => {
                     self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(
                         "Function spawned a future (not supported in VM Runner)".to_string(),

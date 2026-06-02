@@ -82,3 +82,101 @@ function all_complete<T, E>(futures: baml.future.Future<T, E>[]) -> baml.future.
     futures.map((f) -> { await f })
   }
 }
+
+/// Await every future and return their values in input order, like
+/// `all_complete`, but on the FIRST failure the remaining futures are
+/// cancelled before the error is re-thrown (JS `Promise.all`). Use
+/// `all_complete` instead when losers have side effects that must finish.
+///
+/// Note: failures are observed in input order (not strictly first-to-fail in
+/// wall-clock time); the value contract — every value, or one error — is the
+/// same either way.
+function all<T, E>(futures: baml.future.Future<T, E>[]) -> baml.future.Future<T[], E> {
+  spawn {
+    futures.map((f) -> {
+      // `(await f)` is parenthesized so `catch` binds to the await (not to the
+      // un-awaited future `f`, which never throws).
+      (await f) catch (e) {
+        let e => {
+          // A future failed: cancel the rest, then re-throw. Cancelling an
+          // already-settled future is a no-op, so cancelling `f` itself is
+          // harmless.
+          futures.map((g) -> { g.cancel() });
+          throw e
+        }
+      }
+    })
+  }
+}
+
+/// The error `any` throws when EVERY input future failed. `errors` holds the
+/// per-future errors in input order. (BEP-034; JS calls this `AggregateError`.)
+class AllFailed<E> {
+  errors E[]
+}
+
+/// BEP-034 internal primitive: suspend until the FIRST of `futures` settles —
+/// whether it succeeds, fails, or is cancelled — and return its index in input
+/// order. Compiles to a dedicated `AwaitAny` suspend point (it is `await` over
+/// many futures), and is the building block for `race` and `any`. The inputs
+/// are already running, so this only decides *which* settled first; it never
+/// re-throws (callers `await futures[i]` to observe the value or error).
+function __await_any<T, E>(futures: baml.future.Future<T, E>[]) -> int throws never {
+  $await_any
+}
+
+/// Settle with the FIRST future to settle, whether it succeeds or fails; the
+/// remaining futures are cancelled (JS `Promise.race`). A fast failure from
+/// one input therefore wins the race — use `any` when you want the first
+/// SUCCESS. Racing an empty array never settles (matching JS).
+function race<T, E>(futures: baml.future.Future<T, E>[]) -> baml.future.Future<T, E> {
+  spawn {
+    let i = baml.future.__await_any(futures);
+    // The winner is already settled; cancelling it is a no-op, so a blanket
+    // cancel cleanly stops just the losers.
+    futures.map((f) -> { f.cancel() });
+    await futures[i]
+  }
+}
+
+/// Settle with the first future to SUCCEED; the remaining futures are then
+/// cancelled (JS `Promise.any`). If every future fails, throws `AllFailed<E>`
+/// carrying all the errors in input order. Cancelled inputs are skipped (they
+/// neither win nor contribute an error).
+function any<T, E>(futures: baml.future.Future<T, E>[]) -> baml.future.Future<T, baml.future.AllFailed<E>> {
+  spawn {
+    // `errors` accumulates failures in input order; `winners` holds the first
+    // success (0 or 1 element — an array stands in for an optional so we avoid
+    // a nullable local). `remaining` shrinks as settled losers are dropped so
+    // the next `__await_any` doesn't keep re-reporting the same one.
+    let errors: E[] = [];
+    let winners: T[] = [];
+    let remaining = futures;
+    while (remaining.length() > 0) {
+      let i = baml.future.__await_any(remaining);
+      let f = remaining[i];
+      if (f.is_result()) {
+        // `f` succeeded; record its value and stop. The catch is unreachable
+        // and only there to keep the throws type `AllFailed<E>` (not `E`).
+        winners.push((await f) catch (e) {
+          let e => throw baml.future.AllFailed { errors: errors.concat([e]) }
+        });
+        break;
+      }
+      if (f.is_error()) {
+        // Settled error: drain it into `errors` (returns immediately).
+        (await f) catch (e) {
+          let e => { errors.push(e); 0 }
+        };
+      }
+      // Drop `f` (failed or cancelled) and keep going.
+      remaining = remaining.slice(0, i).concat(remaining.slice(i + 1, remaining.length()));
+    }
+    if (winners.length() == 0) {
+      throw baml.future.AllFailed { errors: errors };
+    }
+    // A success was recorded; cancel the losers and return it.
+    futures.map((g) -> { g.cancel() });
+    winners[0]
+  }
+}

@@ -2141,6 +2141,21 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.emit_jump_unless_fallthrough(*target);
             }
 
+            Terminator::AwaitAny {
+                futures,
+                destination,
+                target,
+                unwind: _,
+            } => {
+                // Push the array of futures, then AWAIT_ANY pops it and pushes
+                // the winning `int` index (BEP-034 `baml.future.__await_any`).
+                self.emit_operand_pull(futures);
+                self.emit(Instruction::AwaitAny);
+
+                self.emit_store_place(destination);
+                self.emit_jump_unless_fallthrough(*target);
+            }
+
             Terminator::Throw { value } => {
                 self.emit_operand_pull(value);
                 self.emit(Instruction::Throw);

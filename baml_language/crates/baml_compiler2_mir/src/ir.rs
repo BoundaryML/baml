@@ -433,6 +433,25 @@ pub enum Terminator {
         unwind: Option<BlockId>,
     },
 
+    /// BEP-034 `baml.future.__await_any(futures)` — suspend until the FIRST
+    /// of an array of futures settles, then bind the `int` index (in input
+    /// order) of the first-settled future.
+    ///
+    /// Like `Await`, this is a suspend point. The `race`/`any` combinators
+    /// are pure BAML built on top of it. `__await_any` is declared `throws
+    /// never` (it only reports *which* future settled, never re-throws), so
+    /// `unwind` is normally `None`; it is kept for shape-parity with `Await`.
+    AwaitAny {
+        /// The array of futures to wait on (a read operand).
+        futures: Operand,
+        /// Where to store the winning index (`int`).
+        destination: Place,
+        /// Block to continue at after the first future settles.
+        target: BlockId,
+        /// Catch context (unused — `__await_any` throws never).
+        unwind: Option<BlockId>,
+    },
+
     /// Throw an error value, unwinding to the nearest catch handler.
     ///
     /// If no catch handler is active, the error propagates to the caller.
@@ -502,7 +521,8 @@ impl Terminator {
                 succs
             }
             Terminator::Spawn { resume, .. } => vec![*resume],
-            Terminator::Await { target, unwind, .. } => {
+            Terminator::Await { target, unwind, .. }
+            | Terminator::AwaitAny { target, unwind, .. } => {
                 let mut succs = vec![*target];
                 if let Some(u) = unwind {
                     succs.push(*u);

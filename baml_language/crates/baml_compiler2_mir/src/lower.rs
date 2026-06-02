@@ -3865,6 +3865,41 @@ impl LoweringContext<'_> {
             arg_operands.clone()
         };
 
+        // BEP-034 `baml.future.__await_any(futures)` lowers to a dedicated
+        // `Terminator::AwaitAny` suspend point (like `await`), not a call.
+        if self.check_await_any(callee) {
+            // The single value arg is the array of futures. (`__await_any` has
+            // two type params T,E used only for type checking; the runtime
+            // terminator just needs the array operand.)
+            let futures_operand = arg_operands
+                .into_iter()
+                .next()
+                .expect("__await_any takes exactly one (array) argument");
+            match &dest {
+                Place::Local(l) => {
+                    self.builder
+                        .await_any(futures_operand, Place::Local(*l), target, unwind);
+                }
+                _ => {
+                    // Projection/capture destination: await into a temp, then
+                    // assign across (mirrors the regular-call path below).
+                    let call_ty = self.expr_ty(expr_id);
+                    let tmp = self.builder.temp(call_ty);
+                    self.builder
+                        .await_any(futures_operand, Place::local(tmp), target, unwind);
+                    self.builder.set_current_block(target);
+                    let after = self.builder.create_block();
+                    self.builder
+                        .assign(dest, Rvalue::Use(Operand::Copy(Place::local(tmp))));
+                    self.builder.goto(after);
+                    self.builder.set_current_block(after);
+                    return;
+                }
+            }
+            self.builder.set_current_block(target);
+            return;
+        }
+
         // Check if callee resolves to a builtin IO function (sys-op)
         let is_sys_op = self.check_sys_op(callee);
 
@@ -3946,9 +3981,27 @@ impl LoweringContext<'_> {
         self.builder.set_current_block(target);
     }
 
+    /// True when the callee resolves to a builtin IO function (sys-op).
     fn check_sys_op(&self, callee: AstExprId) -> bool {
-        use baml_compiler2_ast::BuiltinKind;
+        matches!(
+            self.callee_builtin_kind(callee),
+            Some(baml_compiler2_ast::BuiltinKind::Io)
+        )
+    }
 
+    /// BEP-034: true when the callee resolves to the `$await_any` builtin
+    /// (`baml.future.__await_any`), which lowers to `Terminator::AwaitAny`.
+    fn check_await_any(&self, callee: AstExprId) -> bool {
+        matches!(
+            self.callee_builtin_kind(callee),
+            Some(baml_compiler2_ast::BuiltinKind::AwaitAny)
+        )
+    }
+
+    /// Resolve `callee` to its `BuiltinKind`, if it is a `$rust_*` /
+    /// `$await_any` / `$compiler_intrinsic` builtin function. Handles both
+    /// path callees (single- and multi-segment) and member-access callees.
+    fn callee_builtin_kind(&self, callee: AstExprId) -> Option<baml_compiler2_ast::BuiltinKind> {
         // ── Path callee (single- or multi-segment) ─────────────────────────────
         if let AstExpr::Path(segments) = &self.body.exprs[callee] {
             let func_loc = if segments.len() == 1 {
@@ -4001,8 +4054,8 @@ impl LoweringContext<'_> {
             };
             if let Some(fl) = func_loc {
                 let body = baml_compiler2_ppir::function_body(self.db, fl);
-                if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
-                    return true;
+                if let FunctionBody::Builtin(kind) = body.as_ref() {
+                    return Some(*kind);
                 }
             }
         }
@@ -4019,14 +4072,14 @@ impl LoweringContext<'_> {
                 };
                 if let Some(fl) = func_loc {
                     let body = baml_compiler2_ppir::function_body(self.db, fl);
-                    if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
-                        return true;
+                    if let FunctionBody::Builtin(kind) = body.as_ref() {
+                        return Some(*kind);
                     }
                 }
             }
         }
 
-        false
+        None
     }
 
     /// Check if the callee resolves to a `$compiler_intrinsic` function and return the

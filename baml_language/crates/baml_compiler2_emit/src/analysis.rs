@@ -898,6 +898,24 @@ fn collect_uses_in_terminator(
                 }
             }
         }
+        Terminator::AwaitAny {
+            futures,
+            destination,
+            ..
+        } => {
+            collect_uses_in_operand(futures, block, StatementRef::Terminator, def_use);
+            // Record the def for the destination (the winning index)
+            if let Place::Local(local) = destination {
+                if let Some(du) = def_use.get_mut(local) {
+                    du.def = Some(DefLocation {
+                        block,
+                        statement_ref: StatementRef::Terminator,
+                        rvalue: Rvalue::Use(Operand::Constant(Constant::Null)),
+                    });
+                    du.all_defs.push((block, StatementRef::Terminator));
+                }
+            }
+        }
         Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
             collect_uses_in_operand(value, block, StatementRef::Terminator, def_use);
         }
@@ -1240,6 +1258,7 @@ fn is_return_phi(
                     Some(Terminator::Call { target, .. }) => Some(*target),
                     Some(Terminator::SysOp { target, .. }) => Some(*target),
                     Some(Terminator::Await { target, .. }) => Some(*target),
+                    Some(Terminator::AwaitAny { target, .. }) => Some(*target),
                     _ => None,
                 };
                 let valid = continuation.is_some_and(leads_to_return_safely);
@@ -1638,6 +1657,12 @@ fn is_call_result_immediate(local: Local, du: &LocalDefUse, body: &MirFunctionBo
         Some(Terminator::Await { destination, .. }) => {
             matches!(destination, Place::Local(l) if *l == local)
         }
+        // NOTE: `AwaitAny` is intentionally NOT treated as a call-result
+        // immediate. Its opcode rewinds + re-executes across the engine
+        // suspend (like `Await`), but its result also commonly feeds straight
+        // into an indexed `await futures[i]`; carrying the result on the stack
+        // across that combination misaligns the stack. Always store it to a
+        // local instead (correct, marginally less optimal).
         Some(Terminator::SysOp { destination, .. }) => {
             matches!(destination, Place::Local(l) if *l == local)
         }
@@ -1762,6 +1787,8 @@ fn is_call_like_result_local(local: Local, du: &LocalDefUse, body: &MirFunctionB
         Some(
             Terminator::Call { destination, .. }
             | Terminator::Await { destination, .. }
+            // `AwaitAny` deliberately excluded — see the note in the sibling
+            // call-result-immediate check above.
             | Terminator::SysOp { destination, .. },
         ) => {
             matches!(destination, Place::Local(l) if *l == local)
