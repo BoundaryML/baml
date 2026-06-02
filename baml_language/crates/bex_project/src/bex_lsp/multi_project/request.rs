@@ -8,7 +8,7 @@ use lsp_types::{
 };
 
 use super::{BexMulitProject, LspError, WithDiagnostics, commands, wasm_helpers};
-use crate::bex_lsp::{multi_project::commands::BexLspCommand, request::BexLspRequest};
+use crate::bex_lsp::{multi_project::commands::BexLspCommand, protocol, request::BexLspRequest};
 
 /// Server capabilities advertised during the LSP `initialize` handshake.
 ///
@@ -77,6 +77,16 @@ pub(super) fn server_capabilities() -> ServerCapabilities {
                 resolve_provider: Some(false),
             }),
         )),
+        experimental: Some(serde_json::json!({
+            "baml": {
+                "toolchainVersion": baml_version::CANONICAL_VERSION,
+                "lspProtocol": protocol::BAML_LSP_PROTOCOL_VERSION,
+                "minSupportedClientLspProtocol": protocol::MIN_SUPPORTED_VSCODE_LSP_PROTOCOL,
+                "playgroundProtocol": protocol::BAML_PLAYGROUND_PROTOCOL_VERSION,
+                "minSupportedClientPlaygroundProtocol": protocol::MIN_SUPPORTED_PLAYGROUND_PROTOCOL,
+                "capabilities": protocol::CAPABILITIES,
+            }
+        })),
         ..Default::default()
     }
 }
@@ -139,7 +149,7 @@ impl BexLspRequest for BexMulitProject {
             capabilities: server_capabilities(),
             server_info: Some(lsp_types::ServerInfo {
                 name: "baml-lsp".to_string(),
-                version: Some(env!("CARGO_PKG_VERSION").to_string()),
+                version: Some(baml_version::CANONICAL_VERSION.to_string()),
             }),
         })
     }

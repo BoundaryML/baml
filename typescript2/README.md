@@ -71,44 +71,36 @@ What `pnpm vscode:package` does:
    pnpm build:wasm
    ```
 
-   The current VSIX does not bundle this WASM output; it ships the native `baml-cli` and the webview talks to that CLI over WebSocket. Building WASM here makes the local packaging command catch browser/WASM regressions too.
+   The VSIX is platform-neutral. It does not bundle `baml-cli`; the extension launches `baml lsp` through the configured `baml` wrapper or `baml` on PATH.
 
-3. Builds the release language-server CLI:
-
-   ```bash
-   cargo build -p baml_cli --manifest-path ../baml_language/Cargo.toml --release
-   ```
-
-4. Builds the packaged React webview:
+3. Builds the packaged React webview:
 
    ```bash
    pnpm --filter app-vscode-webview build
    ```
 
-5. Builds the VS Code extension host bundle:
+4. Builds the VS Code extension host bundle:
 
    ```bash
    pnpm --filter app-vscode-ext build
    ```
 
-6. Stages runtime assets into the extension package:
+5. Stages runtime assets into the extension package:
 
    ```bash
-   rm -rf app-vscode-ext/dist/playground app-vscode-ext/dist/baml-cli
-   mkdir -p app-vscode-ext/dist/playground app-vscode-ext/dist/baml-cli
+   rm -rf app-vscode-ext/dist/playground
+   mkdir -p app-vscode-ext/dist/playground
    cp -R app-vscode-webview/dist/. app-vscode-ext/dist/playground/
-   cp ../baml_language/target/release/baml-cli app-vscode-ext/dist/baml-cli/baml-cli
-   chmod 755 app-vscode-ext/dist/baml-cli/baml-cli
    ```
 
-7. Packages the VSIX:
+6. Packages the VSIX:
 
    ```bash
    cd app-vscode-ext
    pnpm dlx @vscode/vsce package --no-dependencies --allow-missing-repository --skip-license
    ```
 
-The packaged extension includes `dist/extension.js`, the built webview under `dist/playground`, and the bundled `baml-cli` under `dist/baml-cli`. The bundled CLI is platform-specific, so build the VSIX on the same platform/architecture as the machine that will install it.
+The packaged extension includes `dist/extension.js` and the built webview under `dist/playground`. It launches `baml lsp` through the wrapper, so the same VSIX can work across supported platforms and project toolchain pins.
 
 ### Standalone Web App
 

@@ -973,6 +973,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "baml_release",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "toml 0.8.23",
+]
+
+[[package]]
 name = "baml_base"
 version = "0.0.0-beta"
 dependencies = [
@@ -1055,8 +1067,10 @@ dependencies = [
  "baml_lsp2_actions",
  "baml_lsp_server",
  "baml_project",
+ "baml_release",
  "baml_tests",
  "baml_type",
+ "baml_version",
  "baml_workspace",
  "bex_engine",
  "bex_events",
@@ -1351,6 +1365,7 @@ dependencies = [
  "axum",
  "baml_compiler2_visualization",
  "baml_type",
+ "baml_version",
  "base64",
  "bex_events",
  "bex_events_native",
@@ -1437,6 +1452,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_release"
+version = "0.0.0-beta"
+dependencies = [
+ "anyhow",
+ "flate2",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tar",
+ "thiserror 2.0.18",
+ "zip",
+]
+
+[[package]]
 name = "baml_tests"
 version = "0.0.0-beta"
 dependencies = [
@@ -1489,6 +1519,10 @@ dependencies = [
  "borsh",
  "num-bigint",
 ]
+
+[[package]]
+name = "baml_version"
+version = "0.0.0-beta"
 
 [[package]]
 name = "baml_workspace"
@@ -1649,6 +1683,7 @@ dependencies = [
  "baml_lsp2_actions",
  "baml_project",
  "baml_type",
+ "baml_version",
  "baml_workspace",
  "bex_engine",
  "bex_events",
@@ -1883,6 +1918,7 @@ checksum = "36f64beae40a84da1b4b26ff2761a5b895c12adc41dc25aaee1c4f2bbfe97a6e"
 name = "bridge_cffi"
 version = "0.218.1"
 dependencies = [
+ "baml_version",
  "bex_events",
  "bex_events_native",
  "bex_project",
@@ -1923,6 +1959,7 @@ dependencies = [
 name = "bridge_nodejs"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_version",
  "bex_events",
  "bex_project",
  "bridge_cffi",
@@ -1941,6 +1978,7 @@ dependencies = [
 name = "bridge_python"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_version",
  "bex_events",
  "bex_project",
  "bridge_cffi",
@@ -1962,6 +2000,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "baml_type",
+ "baml_version",
  "bex_events",
  "bex_heap",
  "bex_project",
@@ -6624,6 +6663,7 @@ checksum = "219c5811de6525e5416c7d5d53bb656d3afdbc6c5af816e0802bcfa42dbdc1c3"
 dependencies = [
  "base64",
  "bytes",
+ "futures-channel",
  "futures-core",
  "futures-util",
  "http 1.4.1",

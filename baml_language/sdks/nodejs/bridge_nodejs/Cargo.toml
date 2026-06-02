@@ -22,6 +22,7 @@ aws-crypto = [ "bex_project/aws-crypto", "bridge_cffi/aws-crypto" ]
 ring-crypto = [ "bex_project/ring-crypto", "bridge_cffi/ring-crypto" ]
 
 [dependencies]
+baml_version = { workspace = true }
 bex_events = { workspace = true }
 bex_project = { workspace = true }
 bridge_cffi = { workspace = true }

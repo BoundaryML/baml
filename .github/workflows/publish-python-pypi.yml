@@ -1,24 +1,23 @@
-name: BAML SDK Release
+name: Publish Python PyPI
 
-# Release orchestrator for the BAML SDKs (currently: `baml_core` Python
-# wheel via PyPI). Mirrors the shape of `release.yml`: determine-version
-# → build → all-builds gate → publish-* jobs.
-#
-# TODO: tag-driven release. The convention isn't decided yet, so this
-# workflow is `workflow_dispatch`-only for now. Once the tag scheme is
-# locked in, add a `push: tags:` trigger and revive the tag-parsing
-# branch in `determine-version`.
-#
-# TODO: merge the Homebrew formula dispatch from
-# `release-baml-language-alpha.yml` into this workflow so a single
-# release tag also bumps the tap. That means adding a `dispatch_homebrew`
-# input, threading the homebrew payload through the build outputs, and
-# adding a `dispatch-homebrew` job that fires `repository_dispatch` to
-# `BoundaryML/homebrew-baml`. See the `Validate tap version before
-# dispatch` and `Dispatch Homebrew update` steps in
-# `release-baml-language-alpha.yml` for the existing implementation.
+# Focused PyPI publisher for Python `baml_core`. The BAML language release
+# graph owns version planning/stamping and calls this path after its build gate.
+# Before production publishing with this renamed workflow, update or validate
+# PyPI's trusted-publisher binding for project `baml-core`.
 
 on:
+  workflow_call:
+    inputs:
+      publish:
+        description: "Publish to PyPI after building"
+        type: boolean
+        default: false
+        required: false
+      release_plan_json:
+        description: "Frozen BAML language release-plan.json content"
+        type: string
+        default: ""
+        required: false
   workflow_dispatch:
     inputs:
       publish:
@@ -28,18 +27,19 @@ on:
         required: false
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-release-sdk
-  cancel-in-progress: true
+  group: publish-python-pypi-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
   id-token: write
 
 jobs:
-  # Version comes from `baml_language/sdks/python/pyproject.toml`
-  # as-is — bump the file there and merge before tagging a release run.
+  # Version comes from the stamped checkout prepared by the release graph.
   build-python-sdk:
     uses: ./.github/workflows/build-python-sdk.reusable.yaml
+    with:
+      release_plan_json: ${{ inputs.release_plan_json }}
 
   all-builds:
     name: Assert all builds passed
@@ -66,8 +66,8 @@ jobs:
       - name: Verify wheel count
         run: |
           set -euo pipefail
-          ls -la dist/
-          wheel_count=$(ls dist/*.whl 2>/dev/null | wc -l)
+          find dist -maxdepth 1 -type f -print
+          wheel_count=$(find dist -maxdepth 1 -type f -name '*.whl' | wc -l | tr -d ' ')
           if [ "$wheel_count" -lt 8 ]; then
             echo "::error::Expected at least 8 wheels, found $wheel_count"
             exit 1

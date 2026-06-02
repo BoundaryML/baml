@@ -82,6 +82,16 @@ pub enum WsInMessage {
 #[derive(Debug, Serialize, Clone)]
 #[serde(tag = "type")]
 pub enum WsOutMessage {
+    #[serde(rename = "hello")]
+    Hello {
+        #[serde(rename = "toolchainVersion")]
+        toolchain_version: String,
+        #[serde(rename = "playgroundProtocol")]
+        playground_protocol: u32,
+        #[serde(rename = "minClientPlaygroundProtocol")]
+        min_client_playground_protocol: u32,
+        capabilities: Vec<String>,
+    },
     #[serde(rename = "ready")]
     Ready,
     #[serde(rename = "playgroundNotification")]

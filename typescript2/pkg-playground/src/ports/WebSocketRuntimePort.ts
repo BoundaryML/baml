@@ -17,9 +17,11 @@ import { decodeCallResult, RuntimeEvent } from '@b/pkg-proto';
 import { truncateMessage, normalizeLogLevel } from '../shared/log-decorations';
 import { formatValue } from '../shared/format-value';
 import { deserializeRuntimeEvent } from '../shared/deserialize-event';
+import { isPlaygroundProtocolCompatible } from '../protocol';
 
 /** Server → Client message shapes (must match playground_ws.rs WsOutMessage) */
 type WsOutMessage =
+  | { type: 'hello'; toolchainVersion: string; playgroundProtocol: number; minClientPlaygroundProtocol: number; capabilities: string[] }
   | { type: 'ready' }
   | { type: 'playgroundNotification'; notification: PlaygroundNotification }
   | { type: 'callFunctionResult'; id: number; result: string }
@@ -64,6 +66,7 @@ export class WebSocketRuntimePort implements RuntimePort {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private decorationsByLine = new Map<number, { level: LogLevel; message: string; count: number }>();
   private textEncoder = new TextEncoder();
+  private playgroundCompatible = true;
 
   constructor(url: string) {
     this.url = url;
@@ -255,7 +258,19 @@ export class WebSocketRuntimePort implements RuntimePort {
 
   private fromServer(raw: WsOutMessage): WorkerOutMessage | null {
     switch (raw.type) {
+      case 'hello':
+        this.playgroundCompatible = isPlaygroundProtocolCompatible(raw.playgroundProtocol, raw.minClientPlaygroundProtocol);
+        if (!this.playgroundCompatible) {
+          return {
+            type: 'runtimeEventError',
+            error: `BAML playground protocol ${raw.playgroundProtocol} from toolchain ${raw.toolchainVersion} is incompatible with this extension.`,
+          };
+        }
+        return null;
       case 'ready':
+        if (!this.playgroundCompatible) {
+          return null;
+        }
         return { type: 'ready' };
       case 'playgroundNotification':
         return { type: 'playgroundNotification', notification: raw.notification };

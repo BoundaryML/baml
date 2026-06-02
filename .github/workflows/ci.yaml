@@ -74,8 +74,10 @@ jobs:
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':baml_language/**' \
             ':scripts/baml-language-version' \
+            ':scripts/install.sh' \
+            ':scripts/install.ps1' \
             ':.github/workflows/ci.yaml' \
-            ':.github/workflows/release-baml-language-alpha.yml' \
+            ':.github/workflows/release-baml-language.yml' \
             ':.github/workflows/cargo-tests.reusable.yaml' \
             ':.github/workflows/size-gate.reusable.yaml' \
             ':.github/workflows/wasm-pack-tests.reusable.yaml' \

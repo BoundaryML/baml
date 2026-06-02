@@ -22,7 +22,7 @@ use pyo3_stub_gen::{define_stub_info_gatherer, derive::gen_stub_pyfunction};
 #[gen_stub_pyfunction]
 #[pyfunction]
 fn get_version() -> &'static str {
-    env!("CARGO_PKG_VERSION")
+    baml_version::CANONICAL_VERSION
 }
 
 /// Flush all buffered trace events to the JSONL file (if BAML_TRACE_FILE is set).

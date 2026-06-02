@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Manage the baml_language alpha release base version."""
+"""Manage the BAML language release version surfaces."""
 
 from __future__ import annotations
 
 import argparse
+import datetime as dt
+import json
 import os
 import re
 import subprocess
@@ -14,7 +16,18 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RELEASE_TOML = ROOT / "baml_language" / "release.toml"
+BAML_VERSION_RS = ROOT / "baml_language" / "crates" / "baml_version" / "src" / "lib.rs"
+PYPROJECT = ROOT / "baml_language" / "sdks" / "python" / "pyproject.toml"
+PY_INIT = ROOT / "baml_language" / "sdks" / "python" / "src" / "baml_core" / "__init__.py"
+VSIX_PACKAGE = ROOT / "typescript2" / "app-vscode-ext" / "package.json"
+NODE_PACKAGE = ROOT / "baml_language" / "sdks" / "nodejs" / "bridge_nodejs" / "package.json"
+WRAPPER_CARGO_TOML = ROOT / "baml_language" / "crates" / "baml" / "Cargo.toml"
+
 SEMVER_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
+CANONICAL_RE = re.compile(
+    r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-nightly\.(\d{8})\.([a-z]))?$"
+)
+SHA_RE = re.compile(r"^[a-z]$")
 
 
 @dataclass(frozen=True, order=True)
@@ -27,7 +40,7 @@ class Version:
     def parse(cls, value: str) -> "Version":
         match = SEMVER_RE.fullmatch(value)
         if not match:
-            raise ValueError(f"invalid base version {value!r}; expected MAJOR.MINOR.PATCH")
+            raise ValueError(f"invalid canary version {value!r}; expected MAJOR.MINOR.PATCH")
         return cls(*(int(part) for part in match.groups()))
 
     def __str__(self) -> str:
@@ -42,15 +55,31 @@ class Version:
     def bump_patch(self) -> "Version":
         return Version(self.major, self.minor, self.patch + 1)
 
+    def next_patch(self) -> "Version":
+        return self.bump_patch()
 
-def fail(message: str) -> None:
+
+@dataclass(frozen=True)
+class ReleasePlan:
+    schema: int
+    channel: str
+    canary_version: str
+    canonical_version: str
+    pypi_version: str
+    git_tag: str
+
+    def to_json(self) -> str:
+        return json.dumps(self.__dict__, indent=2, sort_keys=True) + "\n"
+
+
+def fail(message: str, code: int = 1) -> None:
     print(f"error: {message}", file=sys.stderr)
-    raise SystemExit(1)
+    raise SystemExit(code)
 
 
-def parse_release_content(content: str) -> tuple[str, Version]:
+def parse_release_content(content: str) -> Version:
     section: str | None = None
-    channel: dict[str, str] = {}
+    release: dict[str, str] = {}
 
     for raw_line in content.splitlines():
         line = raw_line.split("#", 1)[0].strip()
@@ -61,7 +90,7 @@ def parse_release_content(content: str) -> tuple[str, Version]:
             section = line[1:-1].strip()
             continue
 
-        if section != "channel":
+        if section != "release":
             continue
 
         key, separator, value = line.partition("=")
@@ -71,39 +100,58 @@ def parse_release_content(content: str) -> tuple[str, Version]:
         key = key.strip()
         value = value.strip()
         if len(value) < 2 or not value.startswith('"') or not value.endswith('"'):
-            fail(f"channel.{key} must be a quoted string")
+            fail(f"release.{key} must be a quoted string")
 
-        channel[key] = value[1:-1]
+        release[key] = value[1:-1]
 
-    name = channel.get("name")
-    if name is None:
-        fail("channel.name must be a string")
-
-    base_version = channel.get("base_version")
-    if base_version is None:
-        fail("channel.base_version must be a string")
+    canary_version = release.get("canary_version")
+    if canary_version is None:
+        fail("release.canary_version must be a string")
 
     try:
-        version = Version.parse(base_version)
+        return Version.parse(canary_version)
     except ValueError as exc:
         fail(str(exc))
 
-    return name, version
 
+def parse_previous_release_content(content: str) -> Version:
+    if "[release]" in content:
+        return parse_release_content(content)
 
-def load_release(path: Path = RELEASE_TOML) -> tuple[str, Version]:
+    section: str | None = None
+    channel: dict[str, str] = {}
+    for raw_line in content.splitlines():
+        line = raw_line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            section = line[1:-1].strip()
+            continue
+        if section != "channel":
+            continue
+        key, separator, value = line.partition("=")
+        if separator and value.strip().startswith('"') and value.strip().endswith('"'):
+            channel[key.strip()] = value.strip()[1:-1]
+
+    base_version = channel.get("base_version")
+    if base_version is None:
+        fail("previous baml_language/release.toml is invalid")
     try:
-        content = path.read_text()
+        return Version.parse(base_version)
+    except ValueError as exc:
+        fail(f"previous baml_language/release.toml is invalid: {exc}")
+
+
+def load_release(path: Path = RELEASE_TOML) -> Version:
+    try:
+        content = path.read_text(encoding="utf-8")
     except FileNotFoundError:
         fail(f"{path.relative_to(ROOT)} does not exist")
     return parse_release_content(content)
 
 
 def write_release(version: Version) -> None:
-    RELEASE_TOML.write_text(
-        f'[channel]\nname = "alpha"\nbase_version = "{version}"\n',
-        encoding="utf-8",
-    )
+    RELEASE_TOML.write_text(f'[release]\ncanary_version = "{version}"\n', encoding="utf-8")
 
 
 def git_output(*args: str) -> str | None:
@@ -138,37 +186,236 @@ def previous_release_toml() -> str | None:
     return None
 
 
-def parse_release_toml_content(content: str) -> tuple[str, Version]:
+def today_utc() -> str:
+    override = os.environ.get("BAML_LANGUAGE_VERSION_DATE")
+    if override:
+        if not re.fullmatch(r"\d{8}", override):
+            fail("BAML_LANGUAGE_VERSION_DATE must be YYYYMMDD")
+        return override
+    return dt.datetime.now(dt.UTC).strftime("%Y%m%d")
+
+
+def command_output(command: list[str]) -> str | None:
     try:
-        return parse_release_content(content)
-    except Exception as exc:
-        fail(f"previous baml_language/release.toml is invalid: {exc}")
+        return subprocess.check_output(
+            command,
+            cwd=ROOT,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=30,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+
+
+def release_tags() -> list[str]:
+    output = command_output(
+        [
+            "gh",
+            "release",
+            "list",
+            "--repo",
+            "BoundaryML/baml",
+            "--limit",
+            "200",
+            "--json",
+            "tagName",
+            "--jq",
+            ".[].tagName",
+        ]
+    )
+    if output:
+        return [line.strip() for line in output.splitlines() if line.strip()]
+
+    output = command_output(["git", "ls-remote", "--tags", "https://github.com/BoundaryML/baml.git"])
+    if output:
+        tags: list[str] = []
+        for line in output.splitlines():
+            ref = line.rsplit("/", 1)[-1].removesuffix("^{}")
+            if ref:
+                tags.append(ref)
+        return tags
+
+    return []
+
+
+def next_nightly_letter(base: Version, date: str, tags: list[str] | None = None) -> str:
+    prefix = f"baml-language-{base}-nightly.{date}."
+    used = sorted(
+        tag.removeprefix(prefix)
+        for tag in (tags if tags is not None else release_tags())
+        if tag.startswith(prefix) and SHA_RE.fullmatch(tag.removeprefix(prefix))
+    )
+    if not used:
+        return "a"
+
+    max_index = max(ord(letter) - ord("a") for letter in used)
+    if max_index >= 25:
+        fail(
+            f"26 nightly builds today for base {base}; wait for the next UTC day or cut a new canary release by bumping baml_language/release.toml [release].canary_version.",
+            code=2,
+        )
+    return chr(ord("a") + max_index + 1)
+
+
+def compute_version(channel: str) -> str:
+    canary = load_release()
+    if channel == "canary":
+        return str(canary)
+    if channel == "nightly":
+        base = canary.next_patch()
+        date = today_utc()
+        letter = next_nightly_letter(base, date)
+        return f"{base}-nightly.{date}.{letter}"
+    fail(f"unsupported channel {channel!r}")
+
+
+def to_pypi_version(canonical: str) -> str:
+    match = CANONICAL_RE.fullmatch(canonical)
+    if not match:
+        fail(f"invalid canonical version {canonical!r}")
+    major, minor, patch, date, letter = match.groups()
+    if date is None:
+        return f"{major}.{minor}.{patch}"
+    index = ord(letter) - ord("a")
+    return f"{major}.{minor}.{patch}.dev{date}{index:02d}"
+
+
+def make_plan(channel: str) -> ReleasePlan:
+    canonical = compute_version(channel)
+    return ReleasePlan(
+        schema=1,
+        channel=channel,
+        canary_version=str(load_release()),
+        canonical_version=canonical,
+        pypi_version=to_pypi_version(canonical),
+        git_tag=f"baml-language-{canonical}",
+    )
+
+
+def load_plan(path: Path) -> ReleasePlan:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        fail(f"{path} does not exist")
+    except json.JSONDecodeError as exc:
+        fail(f"{path} is not valid JSON: {exc}")
+
+    try:
+        return ReleasePlan(
+            schema=int(data["schema"]),
+            channel=str(data["channel"]),
+            canary_version=str(data["canary_version"]),
+            canonical_version=str(data["canonical_version"]),
+            pypi_version=str(data["pypi_version"]),
+            git_tag=str(data["git_tag"]),
+        )
+    except KeyError as exc:
+        fail(f"{path} is missing {exc.args[0]!r}")
+
+
+def replace_regex(path: Path, pattern: str, replacement: str) -> None:
+    text = path.read_text(encoding="utf-8")
+    new_text, count = re.subn(pattern, replacement, text, count=1, flags=re.MULTILINE)
+    if count != 1:
+        fail(f"could not update expected version surface in {path.relative_to(ROOT)}")
+    path.write_text(new_text, encoding="utf-8")
+
+
+def stamp(plan: ReleasePlan) -> None:
+    BAML_VERSION_RS.parent.mkdir(parents=True, exist_ok=True)
+    BAML_VERSION_RS.write_text(
+        "\n".join(
+            [
+                "//! Stamped BAML language product version.",
+                "",
+                f'pub const CANONICAL_VERSION: &str = "{plan.canonical_version}";',
+                f'pub const PYPI_VERSION: &str = "{plan.pypi_version}";',
+                f'pub const CHANNEL: &str = "{plan.channel}";',
+                f'pub const STABLE_VERSION: &str = "{plan.canary_version}";',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    replace_regex(PYPROJECT, r'^version = ".*"$', f'version = "{plan.pypi_version}"')
+    replace_regex(VSIX_PACKAGE, r'^  "version": ".*",$', f'  "version": "{plan.canonical_version}",')
+    if NODE_PACKAGE.exists():
+        replace_regex(NODE_PACKAGE, r'^  "version": ".*",$', f'  "version": "{plan.canonical_version}",')
+
+    text = PY_INIT.read_text(encoding="utf-8")
+    version_line = f'__version__ = "{plan.canonical_version}"\n'
+    if re.search(r'^__version__ = ".*"$', text, flags=re.MULTILINE):
+        text = re.sub(r'^__version__ = ".*"$', version_line.rstrip(), text, count=1, flags=re.MULTILINE)
+    else:
+        marker = "atexit.register(flush_events)\n"
+        text = text.replace(marker, marker + "\n" + version_line, 1)
+    PY_INIT.write_text(text, encoding="utf-8")
+
+
+def sync_canary() -> None:
+    stamp(make_plan("canary"))
 
 
 def check_release() -> None:
-    name, current = load_release()
-    if name != "alpha":
-        fail('channel.name must be "alpha"')
-
+    current = load_release()
     previous = previous_release_toml()
-    if previous is None:
-        print(f"ok: base_version {current}")
-        return
+    if previous is not None:
+        previous_version = parse_previous_release_content(previous)
+        if current < previous_version:
+            fail(f"canary_version must not decrease: {current} < {previous_version}")
 
-    previous_name, previous_version = parse_release_toml_content(previous)
-    if previous_name != "alpha":
-        fail('previous channel.name was not "alpha"')
+    if current.next_patch() <= current:
+        fail(f"nightly base {current.next_patch()} must be greater than canary {current}")
 
-    if current < previous_version:
-        fail(f"base_version must not decrease: {current} < {previous_version}")
+    expected = make_plan("canary")
+    mismatches: list[str] = []
+    checks = {
+        "baml_version::CANONICAL_VERSION": expected.canonical_version in BAML_VERSION_RS.read_text(encoding="utf-8"),
+        "baml_version::PYPI_VERSION": expected.pypi_version in BAML_VERSION_RS.read_text(encoding="utf-8"),
+        "python pyproject version": f'version = "{expected.pypi_version}"' in PYPROJECT.read_text(encoding="utf-8"),
+        "python __version__": f'__version__ = "{expected.canonical_version}"' in PY_INIT.read_text(encoding="utf-8"),
+        "vsix package version": f'"version": "{expected.canonical_version}"' in VSIX_PACKAGE.read_text(encoding="utf-8"),
+    }
+    if NODE_PACKAGE.exists():
+        checks["node package version"] = f'"version": "{expected.canonical_version}"' in NODE_PACKAGE.read_text(encoding="utf-8")
 
-    print(f"ok: base_version {current}")
+    for name, ok in checks.items():
+        if not ok:
+            mismatches.append(name)
 
+    forbidden = command_output(
+        [
+            "rg",
+            "-n",
+            "BAML_RELEASE_VERSION|BAML_WRAPPER_VERSION|env!\\(\"CARGO_PKG_VERSION\"\\)",
+            "baml_language/crates",
+            "baml_language/sdks",
+            "scripts",
+            ".github/workflows",
+        ]
+    )
+    if forbidden:
+        allowed = []
+        for line in forbidden.splitlines():
+            if "tools_stow" in line or "crates/baml/src" in line:
+                continue
+            if "scripts/baml-language-version:" in line:
+                continue
+            allowed.append(line)
+        if allowed:
+            mismatches.append("deprecated version plumbing:\n" + "\n".join(allowed))
 
-def alpha_number(value: str) -> int:
-    if not re.fullmatch(r"(0|[1-9]\d*)", value):
-        raise argparse.ArgumentTypeError("alpha number must be a non-negative integer")
-    return int(value)
+    wrapper_toml = WRAPPER_CARGO_TOML.read_text(encoding="utf-8")
+    if "version.workspace" in wrapper_toml:
+        mismatches.append("wrapper crate must use a literal [package].version")
+    if not re.search(r'^version = "(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"$', wrapper_toml, flags=re.MULTILINE):
+        mismatches.append("wrapper crate version must be literal MAJOR.MINOR.PATCH SemVer")
+
+    if mismatches:
+        fail("version check failed:\n" + "\n".join(f"- {item}" for item in mismatches))
+
+    print(f"ok: canary_version {current}")
 
 
 def main() -> None:
@@ -176,6 +423,7 @@ def main() -> None:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     subparsers.add_parser("show")
+
     set_parser = subparsers.add_parser("set")
     set_parser.add_argument("version")
 
@@ -185,23 +433,33 @@ def main() -> None:
     bump_group.add_argument("--minor", action="store_true")
     bump_group.add_argument("--patch", action="store_true")
 
-    subparsers.add_parser("check")
     compute_parser = subparsers.add_parser("compute")
-    compute_parser.add_argument("--alpha-number", required=True, type=alpha_number)
+    compute_parser.add_argument("--channel", choices=["canary", "nightly"], required=True)
+    compute_parser.add_argument("--pypi", action="store_true")
+
+    plan_parser = subparsers.add_parser("plan")
+    plan_parser.add_argument("--channel", choices=["canary", "nightly"], required=True)
+    plan_parser.add_argument("--out", type=Path, required=True)
+
+    stamp_parser = subparsers.add_parser("stamp")
+    stamp_parser.add_argument("--plan", type=Path, required=True)
+
+    subparsers.add_parser("sync")
+    subparsers.add_parser("check")
 
     args = parser.parse_args()
 
     if args.command == "show":
-        _, version = load_release()
-        print(version)
+        print(load_release())
     elif args.command == "set":
         try:
             version = Version.parse(args.version)
         except ValueError as exc:
             fail(str(exc))
         write_release(version)
+        sync_canary()
     elif args.command == "bump":
-        _, version = load_release()
+        version = load_release()
         if args.major:
             version = version.bump_major()
         elif args.minor:
@@ -209,11 +467,18 @@ def main() -> None:
         else:
             version = version.bump_patch()
         write_release(version)
+        sync_canary()
+    elif args.command == "compute":
+        canonical = compute_version(args.channel)
+        print(to_pypi_version(canonical) if args.pypi else canonical)
+    elif args.command == "plan":
+        args.out.write_text(make_plan(args.channel).to_json(), encoding="utf-8")
+    elif args.command == "stamp":
+        stamp(load_plan(args.plan))
+    elif args.command == "sync":
+        sync_canary()
     elif args.command == "check":
         check_release()
-    elif args.command == "compute":
-        _, version = load_release()
-        print(f"{version}-alpha.{args.alpha_number}")
 
 
 if __name__ == "__main__":

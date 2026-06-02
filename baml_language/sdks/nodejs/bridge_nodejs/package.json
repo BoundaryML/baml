@@ -1,6 +1,6 @@
 {
   "name": "@boundaryml/baml-node",
-  "version": "0.0.0-beta",
+  "version": "0.11.0",
   "main": "index.js",
   "types": "index.d.ts",
   "napi": {
