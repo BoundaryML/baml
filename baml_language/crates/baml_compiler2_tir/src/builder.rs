@@ -12351,8 +12351,30 @@ impl TypeInferenceBuilder<'_> {
                 // `S | StreamNoYield` rather than last-write-wins.
                 let mut bindings_by_name: indexmap::IndexMap<Name, (PatId, Vec<Ty>)> =
                     indexmap::IndexMap::new();
+                // `pattern_types` is single-valued per PatId, but lowering the
+                // same nested sub-patterns once per union member overwrites
+                // their entries last-write-wins (the `insert` in
+                // `analyze_and_lower_no_subtype_check`). MIR reads those
+                // per-PatId entries to emit each pattern's runtime `is`-type
+                // test, so keeping only the last member makes e.g. `x: A | B`
+                // test only `B` — values of earlier members never match. Join
+                // the per-member writes here so the recorded type spans every
+                // member, mirroring how `matched_ty` / `bindings` are joined
+                // across members below. (MIR already ORs a union's members.)
+                let pt_before = self.pattern_types.clone();
+                let mut pt_joined: FxHashMap<PatId, Ty> = FxHashMap::default();
                 for member_ty in &targets {
                     let inner = self.analyze_and_lower_inner(pat_id, member_ty, body, at_expr);
+                    for (k, v) in &self.pattern_types {
+                        if pt_before.get(k) != Some(v) {
+                            pt_joined
+                                .entry(*k)
+                                .and_modify(|acc| {
+                                    *acc = Self::join_all(&[acc.clone(), v.clone()]);
+                                })
+                                .or_insert_with(|| v.clone());
+                        }
+                    }
                     let wrapped = crate::exhaustiveness::DPat::union_member(
                         member_ty.clone(),
                         inner.dpat,
@@ -12369,6 +12391,11 @@ impl TypeInferenceBuilder<'_> {
                             .or_insert_with(|| (b.pat_id, Vec::new()));
                         entry.1.push(b.ty);
                     }
+                }
+                // Publish the per-member-joined nested pattern types, undoing
+                // the last-write-wins clobber from the loop above.
+                for (k, v) in pt_joined {
+                    self.pattern_types.insert(k, v);
                 }
                 let joined_bindings: Vec<crate::pattern_lowering::PatternBinding> =
                     bindings_by_name
