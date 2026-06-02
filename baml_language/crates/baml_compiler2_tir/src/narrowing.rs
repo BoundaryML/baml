@@ -6,7 +6,7 @@
 //!
 //! ## Patterns recognized
 //!
-//! - `x != null` → then: remove null, else: null (or original)
+//! - `x != null` → then: remove null, else: null
 //! - `x == null` → then: null, else: remove null
 //! - `x` (truthiness) → then: remove null, else: original
 //! - `!(x == null)` → same as `x != null` (negation flips then/else)
@@ -154,7 +154,7 @@ fn collect_narrowings(
         }
 
         // Truthiness: if (x) where x is optional — then-branch removes null
-        Expr::Path(segments) if segments.len() == 1 => {
+        Expr::Path(_) => {
             if let Some((name, ty)) = local_name_and_ty(expr_id, body, expr_types) {
                 // Only narrow if the type is optional / nullable
                 if is_nullable(ty) {
@@ -270,7 +270,7 @@ pub(crate) fn subtract_pattern_type(scrutinee: &Ty, matched: &Ty) -> Ty {
         return scrutinee.clone();
     }
 
-    collapse_union(remaining)
+    crate::ty::union_of(remaining, TyAttr::default())
 }
 
 /// Fixed `null` type constructor used by null-narrowing.
@@ -282,17 +282,6 @@ fn null_ty() -> Ty {
 fn never_ty() -> Ty {
     Ty::Never {
         attr: TyAttr::default(),
-    }
-}
-
-/// Collapse a union member list: empty → `never`, single → that member,
-/// otherwise a `Union`. Deliberately does not dedup (see module note on
-/// shape-only comparison).
-fn collapse_union(members: Vec<Ty>) -> Ty {
-    match members.len() {
-        0 => never_ty(),
-        1 => members.into_iter().next().unwrap(),
-        _ => Ty::Union(members, TyAttr::default()),
     }
 }
 
@@ -340,7 +329,7 @@ pub fn remove_null(ty: &Ty) -> Ty {
                 .filter(|m| !matches!(m, Ty::Primitive(PrimitiveType::Null, _)))
                 .cloned()
                 .collect();
-            collapse_union(filtered)
+            crate::ty::union_of(filtered, TyAttr::default())
         }
         Ty::Primitive(PrimitiveType::Null, _) => never_ty(),
         _ => ty.clone(),
@@ -401,10 +390,10 @@ pub(crate) fn restore_and_apply_else(
 
 /// Restore types to their state before narrowing was applied.
 pub(crate) fn restore_narrowings(
-    saved: Vec<(Name, Option<Ty>)>,
+    saved: &[(Name, Option<Ty>)],
     locals: &mut FxHashMap<Name, LocalBinding>,
 ) {
-    restore_saved(&saved, locals);
+    restore_saved(saved, locals);
 }
 
 /// Apply else-branch narrowings after a then-branch that diverged.

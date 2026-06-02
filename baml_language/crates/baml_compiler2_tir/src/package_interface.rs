@@ -80,11 +80,9 @@ pub enum ResolvedSource {
     Builtin,
 }
 
-/// Common output for resolved method lookups (includes class context).
+/// Common output for resolved method lookups.
 pub struct ResolvedMethod {
     pub function: ExportedFunction,
-    pub class_name: Name,
-    pub class_generic_params: Vec<Name>,
 }
 
 /// Bundles a package's own items with its dependencies' pre-resolved interfaces.
@@ -116,14 +114,6 @@ impl PackageInterface {
 }
 
 impl ExportedType {
-    pub fn qtn(&self) -> &QualifiedTypeName {
-        match self {
-            ExportedType::Class { qtn, .. } => qtn,
-            ExportedType::Enum { qtn, .. } => qtn,
-            ExportedType::TypeAlias { qtn, .. } => qtn,
-        }
-    }
-
     /// Convert to a Ty (for type resolution results).
     pub fn to_ty(&self) -> Ty {
         match self {
@@ -146,23 +136,15 @@ fn exported_function_param(name: Name, ty: Ty, has_default: bool) -> FunctionPar
     }
 }
 
-struct LoweredClassMethodSignature {
-    params: Vec<FunctionParamTy>,
-    return_type: Ty,
-    declared_throws: Option<Ty>,
-    callable_throws: Ty,
-    generic_params: Vec<Name>,
-    builtin_kind: Option<BuiltinKind>,
-}
-
 fn lower_class_method_signature<'db>(
     db: &'db dyn crate::Db,
     pkg_items: &PackageItems<'db>,
     class_data: &baml_compiler2_hir::item_tree::Class,
     method_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
     ns_path: &[Name],
+    name: Name,
     diags: &mut Vec<TirTypeError>,
-) -> LoweredClassMethodSignature {
+) -> ExportedFunction {
     let sig = baml_compiler2_ppir::elaborated_function_signature(db, method_loc);
     let body = baml_compiler2_ppir::function_body(db, method_loc);
 
@@ -216,7 +198,8 @@ fn lower_class_method_signature<'db>(
         _ => None,
     };
 
-    LoweredClassMethodSignature {
+    ExportedFunction {
+        name,
         params,
         return_type,
         declared_throws,
@@ -284,19 +267,15 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                             *method_id,
                         );
                         let method_data = &item_tree[*method_id];
-                        let lowered = lower_class_method_signature(
-                            db, pkg_items, class_data, method_loc, &class_ns, &mut diags,
-                        );
-
-                        methods.push(ExportedFunction {
-                            name: method_data.name.clone(),
-                            params: lowered.params,
-                            return_type: lowered.return_type,
-                            declared_throws: lowered.declared_throws,
-                            callable_throws: lowered.callable_throws,
-                            generic_params: lowered.generic_params,
-                            builtin_kind: lowered.builtin_kind,
-                        });
+                        methods.push(lower_class_method_signature(
+                            db,
+                            pkg_items,
+                            class_data,
+                            method_loc,
+                            &class_ns,
+                            method_data.name.clone(),
+                            &mut diags,
+                        ));
                     }
 
                     let qtn = qualify_def(db, *def, name);
@@ -422,13 +401,10 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
         }
     }
 
-    // Compute throw sets for this package
-    let throw_sets = function_throw_sets(db, pkg_id);
-
     PackageInterface {
         types,
         functions,
-        throw_sets: throw_sets.clone(),
+        throw_sets: function_throw_sets(db, pkg_id).clone(),
     }
 }
 
@@ -643,17 +619,12 @@ impl<'db> PackageResolutionContext<'db> {
                 if dep_name != class_pkg {
                     continue;
                 }
-                if let Some(ExportedType::Class {
-                    methods,
-                    generic_params,
-                    ..
-                }) = dep_iface.lookup_type(class_name.namespace(), class_name.name())
+                if let Some(ExportedType::Class { methods, .. }) =
+                    dep_iface.lookup_type(class_name.namespace(), class_name.name())
                 {
                     if let Some(method) = methods.iter().find(|m| &m.name == method_name) {
                         return Some(ResolvedMethod {
                             function: method.clone(),
-                            class_name: class_name.name().clone(),
-                            class_generic_params: generic_params.clone(),
                         });
                     }
                 }
@@ -686,28 +657,17 @@ impl<'db> PackageResolutionContext<'db> {
             }
             let method_loc =
                 baml_compiler2_hir::loc::FunctionLoc::new(db, class_loc.file(db), *method_id);
-            let lowered = lower_class_method_signature(
+            let function = lower_class_method_signature(
                 db,
                 &self.own_items,
                 class_data,
                 method_loc,
                 &ns,
+                method_data.name.clone(),
                 &mut diags,
             );
 
-            return Some(ResolvedMethod {
-                function: ExportedFunction {
-                    name: method_data.name.clone(),
-                    params: lowered.params,
-                    return_type: lowered.return_type,
-                    declared_throws: lowered.declared_throws,
-                    callable_throws: lowered.callable_throws,
-                    generic_params: lowered.generic_params,
-                    builtin_kind: lowered.builtin_kind,
-                },
-                class_name: class_name.name().clone(),
-                class_generic_params: class_data.generic_params.clone(),
-            });
+            return Some(ResolvedMethod { function });
         }
         None
     }
@@ -715,40 +675,27 @@ impl<'db> PackageResolutionContext<'db> {
 
 /// Convert a Definition to Ty (own-package path).
 fn def_to_ty<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ty {
-    let name = match def {
+    match def {
         Definition::Class(loc) => {
             let item_tree = baml_compiler2_ppir::file_item_tree(db, loc.file(db));
             let data = &item_tree[loc.id(db)];
-            data.name.clone()
+            Ty::Class(qualify_def(db, def, &data.name), vec![], TyAttr::default())
         }
         Definition::Enum(loc) => {
             let item_tree = baml_compiler2_ppir::file_item_tree(db, loc.file(db));
             let data = &item_tree[loc.id(db)];
-            data.name.clone()
+            Ty::Enum(qualify_def(db, def, &data.name), TyAttr::default())
         }
         Definition::Interface(loc) => {
             let item_tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
             let data = &item_tree[loc.id(db)];
-            data.name.clone()
+            Ty::Interface(qualify_def(db, def, &data.name), vec![], TyAttr::default())
         }
         Definition::TypeAlias(loc) => {
             let item_tree = baml_compiler2_ppir::file_item_tree(db, loc.file(db));
             let data = &item_tree[loc.id(db)];
-            data.name.clone()
+            Ty::TypeAlias(qualify_def(db, def, &data.name), TyAttr::default())
         }
-        _ => {
-            return Ty::Unknown {
-                attr: TyAttr::default(),
-            };
-        }
-    };
-    match def {
-        Definition::Class(_) => Ty::Class(qualify_def(db, def, &name), vec![], TyAttr::default()),
-        Definition::Interface(_) => {
-            Ty::Interface(qualify_def(db, def, &name), vec![], TyAttr::default())
-        }
-        Definition::Enum(_) => Ty::Enum(qualify_def(db, def, &name), TyAttr::default()),
-        Definition::TypeAlias(_) => Ty::TypeAlias(qualify_def(db, def, &name), TyAttr::default()),
         _ => Ty::Unknown {
             attr: TyAttr::default(),
         },

@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use baml_base::Name;
-use baml_compiler2_ast::{Expr, ExprBody, ExprId, Stmt, StmtId};
+use baml_compiler2_ast::{CallArg, Expr, ExprBody, ExprId, Stmt, StmtId};
 
 use crate::{
     throw_inference::flatten_ty_to_facts,
@@ -74,28 +74,18 @@ pub(crate) fn collect_escaping_throws<C: ThrowsAnalysisContext>(
     out
 }
 
-/// Collect the throws of a single expression (and everything it transitively
-/// evaluates) into `out`. Used to compute the residual throw set flowing into
-/// a `catch` from its base expression.
-pub(crate) fn collect_throws_from_expr<C: ThrowsAnalysisContext>(
+/// Collect throws for a `throw <value>` statement or expression: walk the
+/// thrown value sub-expression and add the value's own type to the throws set.
+fn collect_throw_value<C: ThrowsAnalysisContext>(
     context: &C,
-    expr_id: ExprId,
+    value: ExprId,
     body: &ExprBody,
     out: &mut BTreeSet<Ty>,
 ) {
-    collect_from_expr(context, expr_id, body, out);
-}
-
-fn collect_value_throw_facts<C: ThrowsAnalysisContext>(
-    context: &C,
-    value_expr_id: ExprId,
-    out: &mut BTreeSet<Ty>,
-) {
-    let thrown_ty = context
-        .expression_type(value_expr_id)
-        .unwrap_or(Ty::Unknown {
-            attr: TyAttr::default(),
-        });
+    collect_from_expr(context, value, body, out);
+    let thrown_ty = context.expression_type(value).unwrap_or(Ty::Unknown {
+        attr: TyAttr::default(),
+    });
     out.extend(flatten_ty_to_facts(&thrown_ty));
 }
 
@@ -173,31 +163,39 @@ fn collect_from_stmt<C: ThrowsAnalysisContext>(
             collect_from_expr(context, *target, body, out);
             collect_from_expr(context, *value, body, out);
         }
-        Stmt::Throw { value } => {
-            collect_from_expr(context, *value, body, out);
-            collect_value_throw_facts(context, *value, out);
-        }
+        Stmt::Throw { value } => collect_throw_value(context, *value, body, out),
         Stmt::Break | Stmt::Continue | Stmt::Missing | Stmt::HeaderComment { .. } => {}
     }
 }
 
-fn collect_from_expr<C: ThrowsAnalysisContext>(
+fn collect_call_throws<C: ThrowsAnalysisContext>(
+    context: &C,
+    callee: ExprId,
+    args: &[CallArg],
+    body: &ExprBody,
+    unwrap_optional: bool,
+    out: &mut BTreeSet<Ty>,
+) {
+    collect_from_expr(context, callee, body, out);
+    let arg_exprs: Vec<_> = args.iter().map(|arg| arg.expr).collect();
+    for &arg in &arg_exprs {
+        collect_from_expr(context, arg, body, out);
+    }
+    collect_callee_escaping_throws(context, callee, &arg_exprs, body, unwrap_optional, out);
+}
+
+/// Collect the throws of a single expression (and everything it transitively
+/// evaluates) into `out`. Used to compute the residual throw set flowing into
+/// a `catch` from its base expression.
+pub(crate) fn collect_from_expr<C: ThrowsAnalysisContext>(
     context: &C,
     expr_id: ExprId,
     body: &ExprBody,
     out: &mut BTreeSet<Ty>,
 ) {
     match &body.exprs[expr_id] {
-        Expr::Throw { value } => {
-            collect_from_expr(context, *value, body, out);
-            collect_value_throw_facts(context, *value, out);
-        }
+        Expr::Throw { value } => collect_throw_value(context, *value, body, out),
         Expr::Call { callee, args, .. } => {
-            collect_from_expr(context, *callee, body, out);
-            let arg_exprs: Vec<_> = args.iter().map(|arg| arg.expr).collect();
-            for arg in args {
-                collect_from_expr(context, arg.expr, body, out);
-            }
             // When the callee is an `OptionalMemberAccess` (`obj?.method`), the
             // inferred callee type is `Ty::Optional(Ty::Function { ... })`.
             // `instantiated_callee_throws` only handles `Ty::Function`, so we
@@ -207,22 +205,10 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
             // `finalize_optional_callee_call`.
             let unwrap_optional = context.call_unwraps_optional_member_callee()
                 && matches!(&body.exprs[*callee], Expr::OptionalMemberAccess { .. });
-            collect_callee_escaping_throws(
-                context,
-                *callee,
-                &arg_exprs,
-                body,
-                unwrap_optional,
-                out,
-            );
+            collect_call_throws(context, *callee, args, body, unwrap_optional, out);
         }
         Expr::OptionalCall { callee, args } => {
-            collect_from_expr(context, *callee, body, out);
-            let arg_exprs: Vec<_> = args.iter().map(|arg| arg.expr).collect();
-            for arg in args {
-                collect_from_expr(context, arg.expr, body, out);
-            }
-            collect_callee_escaping_throws(context, *callee, &arg_exprs, body, true, out);
+            collect_call_throws(context, *callee, args, body, true, out);
         }
         Expr::Catch { base, clauses } => {
             if let Some(residual) = context.catch_residual_throws(expr_id) {
@@ -322,19 +308,15 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
             collect_from_expr(context, *base, body, out);
             collect_from_expr(context, *index, body, out);
         }
-        Expr::Spawn {
-            name,
-            body: spawn_body,
-        } => {
+        Expr::Spawn { name, body: _ } => {
             // Throws from a spawned body do NOT escape the spawning
             // function — they are captured into the resulting
             // `Future<T, E>`'s E parameter and only re-thrown at an
             // `await` site. The name expression itself can throw, so
-            // walk it; do not walk spawn_body.
+            // walk it; do not walk the spawn body.
             if let Some(name_id) = name {
                 collect_from_expr(context, *name_id, body, out);
             }
-            let _ = spawn_body;
         }
         Expr::Await { future } => {
             // `await` re-throws the future's error. Walk the future

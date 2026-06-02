@@ -5,61 +5,6 @@ use std::fmt;
 use baml_base::Name;
 pub use baml_base::attr::TyAttr;
 
-/// Which package a type is defined in. `Local` is the user's own (implicit
-/// root) package — the "current" package for everything a user writes;
-/// `Dep(name)` is a named dependency (e.g. `baml`). Encoding this as a type
-/// rather than a magic `"user"` string means the local-vs-dependency
-/// distinction is checked by the compiler, not by string comparison: the only
-/// place the `"user"` string appears is [`Package::from_name`] (the boundary
-/// where upstream `Name`-based package info is classified).
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Package {
-    /// The user's own implicit root package (`RESERVED_USER_PACKAGE`).
-    Local,
-    /// A named dependency package.
-    Dep(Name),
-}
-
-/// The interned `Name` of the reserved implicit `user` package, materialized
-/// once so [`QualifiedTypeName::package`] can hand out a `&Name` for `Local`.
-static USER_PACKAGE_NAME: Name = Name::new_inline(RESERVED_USER_PACKAGE);
-
-impl Package {
-    /// Classify an upstream package `Name`: the reserved `user` package becomes
-    /// [`Package::Local`], everything else a [`Package::Dep`]. This is the one
-    /// spot the `"user"` magic string is read.
-    pub fn from_name(name: Name) -> Self {
-        if name.as_str() == RESERVED_USER_PACKAGE {
-            Package::Local
-        } else {
-            Package::Dep(name)
-        }
-    }
-
-    /// The package's `Name` (`Local` resolves to the reserved `user` name).
-    pub fn as_name(&self) -> &Name {
-        match self {
-            Package::Local => &USER_PACKAGE_NAME,
-            Package::Dep(name) => name,
-        }
-    }
-}
-
-// Order/sort by the package *name* string, preserving the pre-enum `Ord`
-// (where `pkg` was a `Name`) so `QualifiedTypeName`'s derived ordering — and
-// any sorted output keyed on it — is unchanged.
-impl Ord for Package {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.as_name().as_str().cmp(other.as_name().as_str())
-    }
-}
-
-impl PartialOrd for Package {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
 /// A qualified type name with separate package and local name.
 ///
 /// Used in `Ty::Class`, `Ty::Enum`, and `Ty::TypeAlias` to unambiguously
@@ -67,9 +12,9 @@ impl PartialOrd for Package {
 /// and its short name (e.g. `"Foo"`, `"PrimitiveClient"`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct QualifiedTypeName {
-    /// The package this type is defined in (`Local` for user code, `Dep` for a
-    /// dependency like `baml`).
-    pkg: Package,
+    /// The package this type is defined in (e.g. `"user"` for user code,
+    /// `"baml"` for a dependency).
+    pkg: Name,
     /// The namespace this type is defined in (e.g. `["llm"]`).
     namespace: Vec<Name>,
     /// The short/local name of the type (e.g. `"Foo"`).
@@ -91,7 +36,7 @@ impl QualifiedTypeName {
         generic_params: Vec<Name>,
     ) -> Self {
         Self {
-            pkg: Package::from_name(pkg),
+            pkg,
             namespace,
             name,
             generic_params,
@@ -99,7 +44,7 @@ impl QualifiedTypeName {
     }
 
     pub fn package(&self) -> &Name {
-        self.pkg.as_name()
+        &self.pkg
     }
 
     /// Whether this type lives in the user's own (implicit root) package — the
@@ -107,7 +52,7 @@ impl QualifiedTypeName {
     /// omits the package for these; only dependency types carry a package
     /// qualifier. Use this instead of comparing `package()` to `"user"`.
     pub fn is_local(&self) -> bool {
-        matches!(self.pkg, Package::Local)
+        self.pkg.as_str() == RESERVED_USER_PACKAGE
     }
 
     pub fn namespace(&self) -> &Vec<Name> {
@@ -122,6 +67,16 @@ impl QualifiedTypeName {
         self.package().as_str() == baml_base::BAML_PACKAGE
             && self.namespace.is_empty()
             && self.name.as_str() == name
+    }
+
+    /// Whether this is the builtin `baml.future.Future` type. The single source
+    /// of truth for the `future`/`Future` identity — `lower_type_expr` keys off
+    /// it to produce the dedicated `Ty::Future` variant.
+    pub fn is_builtin_future(&self) -> bool {
+        self.package().as_str() == baml_base::BAML_PACKAGE
+            && self.namespace.len() == 1
+            && self.namespace[0].as_str() == FUTURE_NAMESPACE
+            && self.name.as_str() == FUTURE_TYPE
     }
 
     /// Returns `true` if this type lives in the `baml.panics` namespace
@@ -182,6 +137,12 @@ impl QualifiedTypeName {
 /// user-facing output (`user.Dog` → `Dog`). The canonical `Display` keeps it
 /// (for dumps/identity); only the user-facing path elides it.
 pub const RESERVED_USER_PACKAGE: &str = "user";
+
+/// Namespace and name of the builtin `baml.future.Future` type. Centralizes the
+/// magic strings used by [`QualifiedTypeName::is_builtin_future`] and the
+/// `Ty::Future → class path` mapping in MIR lowering.
+pub const FUTURE_NAMESPACE: &str = "future";
+pub const FUTURE_TYPE: &str = "Future";
 
 /// Prefix of synthetic effect-polymorphism type parameters. These are an
 /// internal encoding (`__effect_param_0`, …); user-facing rendering shows them
@@ -249,27 +210,6 @@ pub enum Ty {
     /// Parallel to `Freshness` on literals: `make_evolving()` is the mirror
     /// of `widen_fresh()` — both called at `let` binding sites without
     /// type annotations.
-    ///
-    /// # Two parallel paths for container mutations
-    ///
-    /// There are two ways container method calls (e.g. `.push()`) are resolved:
-    ///
-    /// 1. **Evolving path** (`try_container_method_call` in `builder.rs`): For
-    ///    mutable locals, `.push(x)` is intercepted *before* normal method
-    ///    resolution. It widens the element type in-place (e.g. `EvolvingList(Never)`
-    ///    → `EvolvingList(int)`) and returns `Void`. This path takes priority.
-    ///
-    /// 2. **Builtin method path** (`resolve_builtin_method` in `builder.rs`): For
-    ///    typed arrays (e.g. `let arr: int[] = ...`), `.push(x)` is resolved via
-    ///    the `Array<T>` class declared in `baml_builtins2/baml/containers.baml`.
-    ///    The type checker bridges `Ty::List(int)` → `Array<int>`, binds `T = int`,
-    ///    and type-checks the call against the method signature. This path does NOT
-    ///    widen — the element type is already known.
-    ///
-    /// The evolving path exists because empty containers (`[]`, `{}`) need
-    /// flow-sensitive type refinement that the static builtin signatures can't
-    /// express. Once an evolving container is read, it freezes to a normal
-    /// `List`/`Map` and subsequent method calls go through the builtin path.
     EvolvingList(Box<Ty>, TyAttr),
     /// Evolving map — created from empty map literal at mutable binding sites.
     /// Same semantics as `EvolvingList` but for maps (see doc on `EvolvingList`).
@@ -456,11 +396,9 @@ pub enum Freshness {
 /// Re-export `baml_base::Literal` as `LiteralValue` for backward compatibility.
 pub type LiteralValue = baml_base::Literal;
 
-/// Collapse a list of union members into a single `Ty` without deduplicating.
-///
-/// The canonical `0 => Never` / `1 => unwrap` / `_ => Union` shape shared by the
-/// type joins across this crate. Callers that need flattening or deduplication
-/// should do it before calling this (see [`dedup_and_collapse`]).
+/// Collapse a list of union members into a single `Ty` without deduplicating:
+/// `0 => Never` / `1 => unwrap` / `_ => Union`. Callers that need flattening or
+/// deduplication should do it before calling this (see [`dedup_and_collapse`]).
 pub(crate) fn union_of(members: Vec<Ty>, attr: TyAttr) -> Ty {
     match members.len() {
         0 => Ty::Never { attr },
@@ -619,6 +557,23 @@ impl Ty {
 
 // ── Display impls ────────────────────────────────────────────────────────────
 
+/// Render an evolving container: the bare `placeholder` when every inner type is
+/// `Never`, otherwise `base()` with a ` (evolving)` suffix when `show_evolving`.
+fn render_evolving(
+    placeholder: &str,
+    base: impl FnOnce() -> String,
+    all_never: bool,
+    show_evolving: bool,
+) -> String {
+    if all_never {
+        placeholder.to_string()
+    } else if show_evolving {
+        format!("{} (evolving)", base())
+    } else {
+        base()
+    }
+}
+
 /// Strategy controlling how a [`Ty`] renders its leaf names plus a couple of
 /// presentation choices. A single recursive renderer ([`Ty::render_with`])
 /// walks the structure; everything package-, type-var-, or context-specific
@@ -667,26 +622,18 @@ impl Ty {
         matches!(self, Ty::Union(..) | Ty::Function { .. })
     }
 
-    /// Render with parentheses if needed for postfix (`[]`/`?`) context.
-    fn render_as_postfix_base(&self, s: &dyn TyRenderStrategy) -> String {
+    /// Render, wrapping in parens when `needs` is set. Used for postfix
+    /// (`[]`/`?`) context (`needs_postfix_parens()`) and function-return
+    /// position (nested `Function`, so the outer `throws` clause stays
+    /// associated with the outer callable rather than the returned one).
+    fn render_parenthesized_if(&self, s: &dyn TyRenderStrategy, needs: bool) -> String {
         let inner = self.render_with(s);
-        if self.needs_postfix_parens() {
-            format!("({inner})")
-        } else {
-            inner
-        }
+        if needs { format!("({inner})") } else { inner }
     }
 
-    /// Render with parentheses if needed in a function-return position.
-    /// Nested function returns need grouping so the outer `throws` clause is
-    /// visually associated with the outer callable rather than the returned one.
-    fn render_as_function_result(&self, s: &dyn TyRenderStrategy) -> String {
-        let inner = self.render_with(s);
-        if matches!(self, Ty::Function { .. }) {
-            format!("({inner})")
-        } else {
-            inner
-        }
+    /// Render with parentheses if needed for postfix (`[]`/`?`) context.
+    fn render_as_postfix_base(&self, s: &dyn TyRenderStrategy) -> String {
+        self.render_parenthesized_if(s, self.needs_postfix_parens())
     }
 
     /// The single structural renderer. Walks the type, delegating every
@@ -717,22 +664,22 @@ impl Ty {
             Ty::List(inner, _) => format!("{}[]", inner.render_as_postfix_base(s)),
             Ty::Map(k, v, _) => format!("map<{}, {}>", k.render_with(s), v.render_with(s)),
             Ty::EvolvingList(inner, _) => {
-                if matches!(**inner, Ty::Never { .. }) {
-                    "_[]".to_string()
-                } else if s.show_evolving() {
-                    format!("{}[] (evolving)", inner.render_as_postfix_base(s))
-                } else {
-                    format!("{}[]", inner.render_as_postfix_base(s))
-                }
+                let all_never = matches!(**inner, Ty::Never { .. });
+                render_evolving(
+                    "_[]",
+                    || format!("{}[]", inner.render_as_postfix_base(s)),
+                    all_never,
+                    s.show_evolving(),
+                )
             }
             Ty::EvolvingMap(k, v, _) => {
-                if matches!(**k, Ty::Never { .. }) && matches!(**v, Ty::Never { .. }) {
-                    "map<_, _>".to_string()
-                } else if s.show_evolving() {
-                    format!("map<{}, {}> (evolving)", k.render_with(s), v.render_with(s))
-                } else {
-                    format!("map<{}, {}>", k.render_with(s), v.render_with(s))
-                }
+                let all_never = matches!(**k, Ty::Never { .. }) && matches!(**v, Ty::Never { .. });
+                render_evolving(
+                    "map<_, _>",
+                    || format!("map<{}, {}>", k.render_with(s), v.render_with(s)),
+                    all_never,
+                    s.show_evolving(),
+                )
             }
             Ty::Union(members, _) => members
                 .iter()
@@ -779,7 +726,7 @@ impl Ty {
                 format!(
                     "{out}({}) -> {} throws {}",
                     ps.join(", "),
-                    ret.render_as_function_result(s),
+                    ret.render_parenthesized_if(s, matches!(**ret, Ty::Function { .. })),
                     throws.render_with(s),
                 )
             }

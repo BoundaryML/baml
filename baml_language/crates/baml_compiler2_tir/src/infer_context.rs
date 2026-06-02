@@ -11,11 +11,7 @@ use std::{cell::RefCell, fmt};
 
 use baml_base::{FileId, Name, SourceFile};
 use baml_compiler2_ast::{AstSourceMap, ExprId, StmtId};
-use baml_compiler2_hir::{
-    contributions::Definition,
-    loc::{ClassLoc, FunctionLoc},
-    scope::ScopeId,
-};
+use baml_compiler2_hir::{contributions::Definition, scope::ScopeId};
 use text_size::TextRange;
 
 use crate::ty::Ty;
@@ -92,18 +88,6 @@ pub enum TirTypeError {
     DefaultParamForwardReference { param: Name, referenced: Name },
     /// Function body ends without returning a value.
     MissingReturn { expected: Ty },
-    /// Type alias participates in an invalid (unguarded) cycle.
-    ///
-    /// Examples: `type A = A`, `type A = B; type B = A`.
-    /// Valid recursion through containers (`type JSON = string | JSON[]`) does NOT
-    /// trigger this — only cycles with no base case.
-    AliasCycle { name: Name },
-    /// Class participates in an unconstructable required-field cycle.
-    ///
-    /// Examples: `class A { b B }; class B { a A }`.
-    /// Cycles through optional, list, or map fields are valid since those can
-    /// be null/empty, breaking the construction dependency.
-    ClassCycle { name: Name, cycle_path: String },
     /// `match` is missing arms for one or more values.
     NonExhaustiveMatch {
         scrutinee_type: Ty,
@@ -156,16 +140,8 @@ pub enum TirTypeError {
     },
     /// Declared throws contains extra types that never escape.
     ExtraneousThrowsDeclaration { extra_types: Vec<String> },
-    /// A type parameter could not be inferred at a call site.
-    CannotInferTypeParameter { name: Name },
     /// A method's generic type parameter shadows a class-level type parameter.
     TypeParamShadowed { param_name: Name, class_name: Name },
-    /// Wrong number of type arguments for a generic class.
-    WrongNumberOfTypeArgs {
-        class_name: Name,
-        expected: usize,
-        got: usize,
-    },
     /// Wrong number of explicit type arguments at a function call site.
     ///
     /// E.g. `f<int>(x)` when `f` declares zero type params, or
@@ -307,6 +283,17 @@ pub enum TirTypeError {
     AmbiguousInterfaceInstantiation { class_name: Name, interface: Ty },
 }
 
+/// Format a list of interface sources as `` `a`, `b` `` for the ambiguous
+/// interface method/field diagnostics. Generic so it works over both
+/// `Vec<String>` (methods) and `Vec<Name>` (fields).
+fn ambiguous_iface_list<T: fmt::Display>(sources: &[T]) -> String {
+    sources
+        .iter()
+        .map(|n| format!("`{n}`"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 impl fmt::Display for TirTypeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -433,12 +420,6 @@ impl fmt::Display for TirTypeError {
                     expected.render_user_facing()
                 )
             }
-            TirTypeError::AliasCycle { name } => {
-                write!(f, "recursive type alias cycle: {name}")
-            }
-            TirTypeError::ClassCycle { cycle_path, .. } => {
-                write!(f, "class cycle: {cycle_path}")
-            }
             TirTypeError::NonExhaustiveMatch {
                 scrutinee_type,
                 missing_cases,
@@ -531,19 +512,6 @@ impl fmt::Display for TirTypeError {
                     f,
                     "extraneous throws declaration: {}",
                     extra_types.join(", ")
-                )
-            }
-            TirTypeError::CannotInferTypeParameter { name } => {
-                write!(f, "cannot infer type parameter `{name}`")
-            }
-            TirTypeError::WrongNumberOfTypeArgs {
-                class_name,
-                expected,
-                got,
-            } => {
-                write!(
-                    f,
-                    "class `{class_name}` expects {expected} type argument(s), got {got}"
                 )
             }
             TirTypeError::WrongTypeArgArity {
@@ -639,11 +607,7 @@ impl fmt::Display for TirTypeError {
                 method_name,
                 sources,
             } => {
-                let iface_list = sources
-                    .iter()
-                    .map(|n| format!("`{n}`"))
-                    .collect::<Vec<_>>()
-                    .join(", ");
+                let iface_list = ambiguous_iface_list(sources);
                 let hint = sources
                     .iter()
                     .map(|n| format!("obj.as<{n}>.{method_name}()"))
@@ -661,11 +625,7 @@ impl fmt::Display for TirTypeError {
                 field_name,
                 sources,
             } => {
-                let iface_list = sources
-                    .iter()
-                    .map(|n| format!("`{n}`"))
-                    .collect::<Vec<_>>()
-                    .join(", ");
+                let iface_list = ambiguous_iface_list(sources);
                 let hint = sources
                     .iter()
                     .map(|n| format!("obj.as<{n}>.{field_name}"))
@@ -775,12 +735,6 @@ pub enum DiagnosticSeverity {
 pub enum RelatedLocation<'db> {
     /// Expression in the same scope's `ExprBody`.
     Expr(ExprId),
-    /// Statement in the same scope's `ExprBody`.
-    Stmt(StmtId),
-    /// A function parameter (possibly in another file).
-    Param(FunctionLoc<'db>, usize),
-    /// A class field definition.
-    ClassField(ClassLoc<'db>, Name),
     /// Any top-level item definition (class, enum, function, etc.).
     Item(Definition<'db>),
 }
@@ -889,33 +843,6 @@ fn resolve_related_location<'db>(
         RelatedLocation::Expr(id) => {
             source_map.map(|sm| (scope_file.file_id(db), sm.expr_span(*id)))
         }
-        RelatedLocation::Stmt(id) => {
-            source_map.map(|sm| (scope_file.file_id(db), sm.stmt_span(*id)))
-        }
-        RelatedLocation::Param(func_loc, idx) => {
-            let signature_source_map =
-                baml_compiler2_hir::signature::function_signature_source_map(db, *func_loc);
-            signature_source_map
-                .param_spans
-                .get(*idx)
-                .copied()
-                .map(|range| (func_loc.file(db).file_id(db), range))
-        }
-        RelatedLocation::ClassField(class_loc, field_name) => {
-            let item_tree = baml_compiler2_hir::file_item_tree(db, class_loc.file(db));
-            let source_map = baml_compiler2_hir::file_item_tree_source_map(db, class_loc.file(db));
-            let class_data = &item_tree[class_loc.id(db)];
-            let field_index = class_data
-                .fields
-                .iter()
-                .position(|field| &field.name == field_name)?;
-            let range = source_map
-                .class_field_spans
-                .get(&class_loc.id(db))?
-                .get(field_index)
-                .copied()?;
-            Some((class_loc.file(db).file_id(db), range))
-        }
         RelatedLocation::Item(def) => {
             let file = def.file(db);
             let contributions = baml_compiler2_hir::file_symbol_contributions(db, file);
@@ -969,13 +896,9 @@ pub struct TypeCheckDiagnostics<'db> {
     pub diagnostics: Vec<TirDiagnostic<'db>>,
 }
 
-impl<'db> TypeCheckDiagnostics<'db> {
+impl TypeCheckDiagnostics<'_> {
     pub fn is_empty(&self) -> bool {
         self.diagnostics.is_empty()
-    }
-
-    pub fn extend(&mut self, other: &TypeCheckDiagnostics<'db>) {
-        self.diagnostics.extend(other.diagnostics.iter().cloned());
     }
 }
 
@@ -1130,34 +1053,9 @@ impl<'db> InferContext<'db> {
         self.push_error(error, DiagnosticLocation::Span(span), related);
     }
 
-    /// Report a warning-level diagnostic at a specific statement.
-    pub fn report_warning_at_stmt(&self, error: TirTypeError, at: StmtId) {
-        self.push(
-            error,
-            DiagnosticSeverity::Warning,
-            DiagnosticLocation::Stmt(at),
-            Vec::new(),
-        );
-    }
-
-    /// Report a warning-level diagnostic at an expression.
-    pub fn report_warning_simple(&self, error: TirTypeError, at: ExprId) {
-        self.push(
-            error,
-            DiagnosticSeverity::Warning,
-            DiagnosticLocation::Expr(at),
-            Vec::new(),
-        );
-    }
-
-    /// Report a warning-level diagnostic at a raw source span.
-    pub fn report_warning_at_span(&self, error: TirTypeError, span: TextRange) {
-        self.push(
-            error,
-            DiagnosticSeverity::Warning,
-            DiagnosticLocation::Span(span),
-            Vec::new(),
-        );
+    /// Report a warning-level diagnostic at the given location.
+    pub fn report_warning(&self, error: TirTypeError, loc: DiagnosticLocation) {
+        self.push(error, DiagnosticSeverity::Warning, loc, Vec::new());
     }
 
     /// Consume the context and return accumulated diagnostics.

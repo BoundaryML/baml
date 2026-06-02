@@ -19,12 +19,16 @@ use crate::{
     ty::{PrimitiveType, Ty, TyAttr},
 };
 
-/// A throw fact is now a proper `Ty` — no more lossy string round-trips.
+/// A throw fact is a `Ty`.
 pub type ThrowFact = Ty;
+
+/// Prefix for `self`-qualified call targets inside class methods.
+const SELF_PREFIX: &str = "self.";
+/// The literal name of the own-package alias used in qualified paths.
+const ROOT_PACKAGE: &str = "root";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionThrowSets {
-    pub direct: BTreeMap<Name, BTreeSet<ThrowFact>>,
     pub transitive: BTreeMap<Name, BTreeSet<ThrowFact>>,
 }
 
@@ -44,14 +48,10 @@ pub fn function_throw_sets<'db>(
 ) -> FunctionThrowSets {
     let pkg_items = baml_compiler2_ppir::package_items(db, package_id);
     // Load dependency interfaces for cross-package throw lookup
-    let dep_interfaces: Vec<(Name, &crate::package_interface::PackageInterface)> =
+    let dep_interfaces: Vec<&crate::package_interface::PackageInterface> =
         package_dependencies(db, package_id)
             .iter()
-            .map(|dep_id| {
-                let name = dep_id.name(db);
-                let iface = crate::package_interface::package_interface(db, *dep_id);
-                (name, iface)
-            })
+            .map(|dep_id| crate::package_interface::package_interface(db, *dep_id))
             .collect();
 
     let mut graph: crate::analysis::AnalysisGraph<Name, ThrowFact> =
@@ -117,7 +117,9 @@ pub fn function_throw_sets<'db>(
     }
 
     // Process call edges: for cross-package targets, merge their throw facts
-    // into the caller's direct facts; for same-package targets, add edges.
+    // into the caller's direct facts; same-package targets become graph edges
+    // (added after nodes so endpoints carry their enriched direct facts).
+    let mut same_pkg_edges: Vec<(Name, Name)> = Vec::new();
     for (from, targets) in &call_edges {
         if has_declared_contract.contains(from) {
             continue;
@@ -129,8 +131,9 @@ pub fn function_throw_sets<'db>(
                     .entry(from.clone())
                     .or_default()
                     .extend(dep_throws.iter().cloned());
+            } else {
+                same_pkg_edges.push((from.clone(), to.clone()));
             }
-            // Same-package edges are added in a later pass, once nodes exist.
         }
     }
 
@@ -140,29 +143,18 @@ pub fn function_throw_sets<'db>(
     }
 
     // Add same-package call edges
-    for (from, targets) in &call_edges {
-        if has_declared_contract.contains(from) {
-            continue;
-        }
-        for to in targets {
-            if lookup_dep_throw_set(&dep_interfaces, to).is_none() {
-                graph.add_edge(from.clone(), to.clone());
-            }
-        }
+    for (from, to) in same_pkg_edges {
+        graph.add_edge(from, to);
     }
 
     let analysis = graph.analyze();
 
-    let mut direct = BTreeMap::new();
     let mut transitive = BTreeMap::new();
-    for (name, facts) in analysis.iter_direct() {
-        direct.insert(name.clone(), facts.clone());
-    }
     for (name, facts) in analysis.iter_transitive() {
         transitive.insert(name.clone(), facts.clone());
     }
 
-    FunctionThrowSets { direct, transitive }
+    FunctionThrowSets { transitive }
 }
 
 /// Compute the direct throw facts, declared-contract flag, and call edges for a
@@ -194,9 +186,14 @@ fn process_callable<'db>(
     });
 
     let has_contract = declared_throws.is_some();
+    let expr_body = if let baml_compiler2_hir::body::FunctionBody::Expr(b) = body.as_ref() {
+        Some(b)
+    } else {
+        None
+    };
     let direct = if let Some(declared) = declared_throws {
         declared
-    } else if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
+    } else if let Some(expr_body) = expr_body {
         collect_direct_throws(db, pkg_items, &ns, expr_body)
     } else {
         BTreeSet::new()
@@ -207,7 +204,7 @@ fn process_callable<'db>(
         has_declared_contract.insert(key.clone());
     }
 
-    if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
+    if let Some(expr_body) = expr_body {
         let targets = collect_call_targets(expr_body);
         let targets = match class_name {
             Some(class_name) => targets
@@ -244,7 +241,7 @@ fn function_key<'db>(
     throw_set_key(&pkg.namespace_path, short_name)
 }
 
-pub fn collect_direct_throws<'db>(
+fn collect_direct_throws<'db>(
     db: &'db dyn crate::Db,
     pkg_items: &PackageItems<'db>,
     ns_context: &[Name],
@@ -292,7 +289,7 @@ fn fact_display_name(fact: &Ty) -> String {
     }
 }
 
-pub fn collect_call_targets(body: &ExprBody) -> BTreeSet<Name> {
+fn collect_call_targets(body: &ExprBody) -> BTreeSet<Name> {
     let mut targets = BTreeSet::new();
     for (_, expr) in body.exprs.iter() {
         if let Expr::Call { callee, .. } = expr {
@@ -332,14 +329,13 @@ fn throw_fact_from_expr<'db>(
         Expr::Literal(Literal::Float(_)) => Ty::Primitive(PrimitiveType::Float, TyAttr::default()),
         Expr::Literal(Literal::Bool(_)) => Ty::Primitive(PrimitiveType::Bool, TyAttr::default()),
         Expr::Null => Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
-        Expr::Path(segments) if !segments.is_empty() => {
-            resolve_path_to_ty(db, pkg_items, ns_context, segments)
+        Expr::Path(_) | Expr::MemberAccess { .. } => {
+            crate::throws_analysis::expr_to_path_segments(expr_id, body)
+                .map(|segments| resolve_path_to_ty(db, pkg_items, ns_context, &segments))
+                .unwrap_or(Ty::Unknown {
+                    attr: TyAttr::default(),
+                })
         }
-        Expr::MemberAccess { .. } => crate::throws_analysis::expr_to_path_segments(expr_id, body)
-            .map(|segments| resolve_path_to_ty(db, pkg_items, ns_context, &segments))
-            .unwrap_or(Ty::Unknown {
-                attr: TyAttr::default(),
-            }),
         Expr::Object {
             type_name: Some(path),
             ..
@@ -354,10 +350,29 @@ fn throw_fact_from_expr<'db>(
 /// Other targets are returned unchanged.
 fn rewrite_self_target(target: &Name, class_name: &Name) -> Name {
     let s = target.as_str();
-    if let Some(rest) = s.strip_prefix("self.") {
+    if let Some(rest) = s.strip_prefix(SELF_PREFIX) {
         Name::new(format!("{class_name}.{rest}"))
     } else {
         target.clone()
+    }
+}
+
+/// Look up a type by namespace, preferring `ns_context`-qualified resolution
+/// for bare names. When `ns_context` is non-empty and the path carries no
+/// namespace of its own (`ns.is_empty()`), try the `ns_context`-qualified name
+/// first, then fall back to the bare lookup; otherwise look up `ns` directly.
+fn lookup_type_ns_first<'db>(
+    pkg_items: &PackageItems<'db>,
+    ns_context: &[Name],
+    ns: &[Name],
+    name: &Name,
+) -> Option<Definition<'db>> {
+    if !ns_context.is_empty() && ns.is_empty() {
+        pkg_items
+            .lookup_type(ns_context, name)
+            .or_else(|| pkg_items.lookup_type(ns, name))
+    } else {
+        pkg_items.lookup_type(ns, name)
     }
 }
 
@@ -378,13 +393,7 @@ fn resolve_path_to_ty<'db>(
         let enum_name = enum_path.last().expect("enum_path is non-empty");
         let enum_ns = &enum_path[..enum_path.len() - 1];
         // Try with namespace context for bare enum names
-        let def = if !ns_context.is_empty() && enum_ns.is_empty() {
-            pkg_items
-                .lookup_type(ns_context, enum_name)
-                .or_else(|| pkg_items.lookup_type(enum_ns, enum_name))
-        } else {
-            pkg_items.lookup_type(enum_ns, enum_name)
-        };
+        let def = lookup_type_ns_first(pkg_items, ns_context, enum_ns, enum_name);
         if let Some(def) = def {
             if let Definition::Enum(_) = def {
                 let qtn = qualify_def(db, def, enum_name);
@@ -397,14 +406,7 @@ fn resolve_path_to_ty<'db>(
     // try namespace-qualified first, then unqualified.
     let name = segments.last().expect("segments is non-empty");
     let seg_ns = &segments[..segments.len() - 1];
-    let def = if !ns_context.is_empty() && seg_ns.is_empty() {
-        let ns: Vec<Name> = ns_context.iter().chain(seg_ns.iter()).cloned().collect();
-        pkg_items
-            .lookup_type(&ns, name)
-            .or_else(|| pkg_items.lookup_type(seg_ns, name))
-    } else {
-        pkg_items.lookup_type(seg_ns, name)
-    };
+    let def = lookup_type_ns_first(pkg_items, ns_context, seg_ns, name);
     // Cross-package fallback for qualified paths whose first segment names
     // either the literal `root` package (own-package alias) or another
     // package the resolver knows about. Mirrors `lower_type_expr_in_ns` so
@@ -414,7 +416,7 @@ fn resolve_path_to_ty<'db>(
         if segments.len() < 2 {
             return None;
         }
-        if segments[0].as_str() == "root" {
+        if segments[0].as_str() == ROOT_PACKAGE {
             pkg_items.lookup_type(&segments[1..segments.len() - 1], name)
         } else {
             let pkg_id = PackageId::new(db, segments[0].clone());
@@ -494,15 +496,12 @@ fn collect_leaf_types(ty: &Ty, out: &mut BTreeSet<Ty>) {
 
 /// Look up a function's transitive throw set from dependency interfaces.
 fn lookup_dep_throw_set<'a>(
-    dep_interfaces: &'a [(Name, &crate::package_interface::PackageInterface)],
+    dep_interfaces: &'a [&crate::package_interface::PackageInterface],
     target_name: &Name,
 ) -> Option<&'a BTreeSet<ThrowFact>> {
-    for (_dep_name, dep_iface) in dep_interfaces {
-        if let Some(throws) = dep_iface.throw_sets.transitive_for(target_name) {
-            return Some(throws);
-        }
-    }
-    None
+    dep_interfaces
+        .iter()
+        .find_map(|iface| iface.throw_sets.transitive_for(target_name))
 }
 
 /// Reject catch-everything binding types — `unknown` and unresolved `any`.

@@ -73,7 +73,7 @@ enum StructuralTy {
     Pdf,
     Uint8Array,
     // Literal
-    Literal(baml_base::Literal),
+    Literal(LiteralValue),
     // User-defined (resolved by qualified name)
     /// Generic class arguments are compared invariantly — `Foo<int>` and `Foo<string>`
     /// are not subtypes of each other.
@@ -199,12 +199,6 @@ impl StructuralTy {
         other: &StructuralTy,
         assumptions: &mut HashSet<(StructuralTy, StructuralTy)>,
     ) -> bool {
-        // Co-inductive: if we've assumed this pair, it holds.
-        let pair = (self.clone(), other.clone());
-        if assumptions.contains(&pair) {
-            return true;
-        }
-
         // Reflexivity
         if self == other {
             return true;
@@ -242,6 +236,14 @@ impl StructuralTy {
             return true;
         }
 
+        // Co-inductive: if we've assumed this pair, it holds. (Only the
+        // structural-recursion cases below can ever populate `assumptions`, so
+        // this check is deferred past the scalar early-returns above — none of
+        // which can apply to an already-assumed pair.)
+        let pair = (self.clone(), other.clone());
+        if assumptions.contains(&pair) {
+            return true;
+        }
         assumptions.insert(pair.clone());
 
         let result = match (self, other) {
@@ -779,15 +781,12 @@ fn extract_type_alias_deps(
                 }
             }
             Ty::Optional(inner, _) => {
-                // Optional does NOT create structural context
                 visit(inner, aliases, non_structural, structural, in_structural);
             }
             Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
-                // List provides structural guard (can be empty)
                 visit(inner, aliases, non_structural, structural, true);
             }
             Ty::Map(key, value, _) | Ty::EvolvingMap(key, value, _) => {
-                // Map provides structural guard (can be empty)
                 visit(key, aliases, non_structural, structural, true);
                 visit(value, aliases, non_structural, structural, true);
             }
@@ -1079,7 +1078,6 @@ fn extract_required_class_deps(
             }
         }
         Ty::Optional(inner, _) => {
-            // Optional breaks the hard dependency
             extract_required_class_deps(
                 inner,
                 class_fields,
@@ -1091,7 +1089,6 @@ fn extract_required_class_deps(
             );
         }
         Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
-            // List breaks the hard dependency (can be empty)
             extract_required_class_deps(
                 inner,
                 class_fields,
@@ -1103,7 +1100,6 @@ fn extract_required_class_deps(
             );
         }
         Ty::Map(key, value, _) | Ty::EvolvingMap(key, value, _) => {
-            // Map breaks the hard dependency (can be empty)
             extract_required_class_deps(
                 key,
                 class_fields,

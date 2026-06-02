@@ -101,8 +101,8 @@ pub enum MemberResolution<'db> {
         enum_loc: EnumLoc<'db>,
         variant_name: Name,
     },
-    /// A free item accessed via a package/namespace path.
-    /// e.g. `baml.env.get` → package=`baml`, namespace=[`env`], name=`get`
+    /// A resolved free function reached through a package/namespace path
+    /// (e.g. `baml.env.get`).
     Free { func_loc: FunctionLoc<'db> },
     /// A bound method reference: root is a value (local variable or field chain).
     /// e.g. `p.get_name` where `p` is a local — type has `self` stripped.
@@ -122,6 +122,16 @@ pub enum MemberResolution<'db> {
         iface_loc: InterfaceLoc<'db>,
         func_loc: FunctionLoc<'db>,
     },
+}
+
+/// Whether the callee's direct or last-path-segment resolution is a
+/// [`MemberResolution::BoundMethod`], i.e. the call binds `self` via a receiver.
+pub(crate) fn uses_method_call_convention(
+    direct: Option<&MemberResolution<'_>>,
+    last_path: Option<&MemberResolution<'_>>,
+) -> bool {
+    matches!(direct, Some(MemberResolution::BoundMethod { .. }))
+        || matches!(last_path, Some(MemberResolution::BoundMethod { .. }))
 }
 
 // ── Per-Scope Inference Result ─────────────────────────────────────────────
@@ -253,7 +263,7 @@ impl CallPlan {
                 param_index: binding_param_index,
                 arg,
             } if *binding_param_index == param_index => Some(*arg),
-            ParamBinding::Provided { .. } | ParamBinding::OmittedDefault { .. } => None,
+            _ => None,
         })
     }
 
@@ -466,7 +476,6 @@ fn find_lambda_by_span<'a>(
         if let AstExpr::Lambda(ref func_def) = *expr {
             let span = source_map.expr_span(expr_id);
             if span == target_span {
-                // Found the matching lambda
                 if let Some(baml_compiler2_ast::FunctionBodyDef::Expr(
                     ref lambda_body,
                     ref lambda_sm,
@@ -475,7 +484,6 @@ fn find_lambda_by_span<'a>(
                     return Some((func_def, lambda_body, lambda_sm));
                 }
             }
-            // Recurse into nested lambda bodies
             if let Some(baml_compiler2_ast::FunctionBodyDef::Expr(ref nested_body, ref nested_sm)) =
                 func_def.body
             {
@@ -488,6 +496,101 @@ fn find_lambda_by_span<'a>(
     None
 }
 
+/// Look up the generic params declared on the class named `class_name`.
+fn enclosing_class_generics(
+    item_tree: &baml_compiler2_hir::item_tree::ItemTree,
+    class_name: &Name,
+) -> Option<Vec<Name>> {
+    item_tree
+        .classes
+        .values()
+        .find(|c| c.name == *class_name)
+        .map(|c| c.generic_params.clone())
+}
+
+/// Front-extend `child` generics with `parent` generics (parent params first).
+fn prepend_generics(parent: Vec<Name>, child: Vec<Name>) -> Vec<Name> {
+    let mut merged = parent;
+    merged.extend(child);
+    merged
+}
+
+/// In-scope generics for a lambda whose enclosing function is `func_generic_params`
+/// with parent scope `func_parent_fsi`: the function's own generics, front-extended
+/// with the enclosing class's generics when the parent is a generic `Class`/interface.
+fn lambda_enclosing_generics(
+    index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
+    item_tree: &baml_compiler2_hir::item_tree::ItemTree,
+    func_generic_params: Vec<Name>,
+    func_parent_fsi: Option<FileScopeId>,
+) -> Vec<Name> {
+    let mut gp = func_generic_params;
+    if let Some(parent_fsi) = func_parent_fsi {
+        let parent_scope = &index.scopes[parent_fsi.index() as usize];
+        if matches!(parent_scope.kind, ScopeKind::Class) {
+            if let Some(class_name) = &parent_scope.name {
+                if let Some(class_generics) = enclosing_class_generics(item_tree, class_name) {
+                    gp = prepend_generics(class_generics, gp);
+                }
+            }
+        }
+    }
+    gp
+}
+
+/// Resolve a lambda scope's own `AstSourceMap` by walking ancestors to the
+/// enclosing Function/Let body and locating the lambda within it by span.
+///
+/// Returns `None` if no enclosing body or matching lambda is found.
+fn lambda_source_map_by_span(
+    index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
+    item_tree: &baml_compiler2_hir::item_tree::ItemTree,
+    file_scope: FileScopeId,
+    lambda_span: TextRange,
+) -> Option<AstSourceMap> {
+    for ancestor_fsi in index.ancestor_scopes(file_scope) {
+        let ancestor = &index.scopes[ancestor_fsi.index() as usize];
+        match &ancestor.kind {
+            ScopeKind::Function => {
+                for func_data in item_tree.functions.values() {
+                    if func_data.span == ancestor.range
+                        && ancestor.name.as_ref() == Some(&func_data.name)
+                    {
+                        if let Some(baml_compiler2_ast::FunctionBodyDef::Expr(ref body, ref sm)) =
+                            func_data.body
+                        {
+                            if let Some((_, _, lambda_sm)) =
+                                find_lambda_by_span(body, sm, lambda_span)
+                            {
+                                return Some(lambda_sm.clone());
+                            }
+                        }
+                        return None;
+                    }
+                }
+            }
+            ScopeKind::Let => {
+                for let_data in item_tree.lets.values() {
+                    if let_data.span == ancestor.range
+                        && ancestor.name.as_ref() == Some(&let_data.name)
+                    {
+                        if let Some((ref body, ref sm)) = let_data.initializer {
+                            if let Some((_, _, lambda_sm)) =
+                                find_lambda_by_span(body, sm, lambda_span)
+                            {
+                                return Some(lambda_sm.clone());
+                            }
+                        }
+                        return None;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
 /// Seed a lambda scope's `builder` with its parameter types and infer its body.
 ///
 /// `generic_params` is the branch-specific set of in-scope generics (the
@@ -495,6 +598,7 @@ fn find_lambda_by_span<'a>(
 /// looks up contextual param types via the parent scope's
 /// `nested_lambda_types`, then seeds each param (annotation → contextual →
 /// `Unknown`) before inferring the body.
+#[allow(clippy::too_many_arguments)]
 fn seed_lambda_and_infer<'db>(
     db: &'db dyn crate::Db,
     builder: &mut TypeInferenceBuilder<'db>,
@@ -559,14 +663,7 @@ fn seed_lambda_and_infer<'db>(
     }
 }
 
-/// Per-scope type inference — the primary Salsa query for type checking.
-///
-/// Returns expression types for a single scope. Lambda/closure bodies are
-/// separate scopes with their own query invocation.
-///
-/// Keyed by `ScopeId<'db>` (tracked: `File + FileScopeId`), so Salsa caches
-/// independently per scope. Editing lambda A does NOT invalidate the enclosing
-/// function's `ScopeInference`.
+/// Cycle seed for `infer_scope_types`: empty inference.
 fn infer_scope_types_cycle_initial<'db>(
     _db: &'db dyn crate::Db,
     _id: salsa::Id,
@@ -575,6 +672,14 @@ fn infer_scope_types_cycle_initial<'db>(
     ScopeInference::default()
 }
 
+/// Per-scope type inference — the primary Salsa query for type checking.
+///
+/// Returns expression types for a single scope. Lambda/closure bodies are
+/// separate scopes with their own query invocation.
+///
+/// Keyed by `ScopeId<'db>` (tracked: `File + FileScopeId`), so Salsa caches
+/// independently per scope. Editing lambda A does NOT invalidate the enclosing
+/// function's `ScopeInference`.
 #[salsa::tracked(returns(ref), cycle_initial=infer_scope_types_cycle_initial)]
 pub fn infer_scope_types<'db>(
     db: &'db dyn crate::Db,
@@ -641,29 +746,22 @@ pub fn infer_scope_types<'db>(
                         let parent = &index.scopes[parent_idx.index() as usize];
                         if matches!(parent.kind, ScopeKind::Class) {
                             if let Some(class_name) = &parent.name {
-                                let mut enclosing_generics: Option<Vec<Name>> = None;
-                                for class_data in item_tree.classes.values() {
-                                    if class_data.name == *class_name {
-                                        enclosing_generics =
-                                            Some(class_data.generic_params.clone());
-                                        break;
-                                    }
-                                }
                                 // BEP-044: interfaces also push a `Class`-kind
                                 // scope, so a *default method* body's enclosing
                                 // generics may come from a generic interface
                                 // (`interface Container<T> { function f(self) -> T
                                 // { ... } }`). Without this its `T` would be
                                 // unresolved in the default body / signature.
-                                if enclosing_generics.is_none() {
-                                    for iface_data in item_tree.interfaces.values() {
-                                        if iface_data.name == *class_name {
-                                            enclosing_generics =
-                                                Some(iface_data.generic_params.clone());
-                                            break;
-                                        }
-                                    }
-                                }
+                                let enclosing_generics = enclosing_class_generics(
+                                    &item_tree, class_name,
+                                )
+                                .or_else(|| {
+                                    item_tree
+                                        .interfaces
+                                        .values()
+                                        .find(|i| i.name == *class_name)
+                                        .map(|i| i.generic_params.clone())
+                                });
                                 if let Some(parent_generics) = enclosing_generics {
                                     // Check for method-level type params that shadow enclosing ones.
                                     for mp in &sig.user_generic_params {
@@ -677,9 +775,8 @@ pub fn infer_scope_types<'db>(
                                             );
                                         }
                                     }
-                                    let mut merged = parent_generics;
-                                    merged.extend(generic_params);
-                                    generic_params = merged;
+                                    generic_params =
+                                        prepend_generics(parent_generics, generic_params);
                                 }
                             }
                         }
@@ -1099,27 +1196,12 @@ pub fn infer_scope_types<'db>(
                                     // `func_data.generic_params` is empty (no function-level
                                     // generics), but a closure body inside `describe(self)` must
                                     // still resolve `T` from `reflect.type_of<T>()`.
-                                    let generic_params: Vec<Name> = {
-                                        let mut gp = func_data.generic_params.clone();
-                                        if let Some(parent_fsi) = ancestor_scope.parent {
-                                            let parent_scope =
-                                                &index.scopes[parent_fsi.index() as usize];
-                                            if matches!(parent_scope.kind, ScopeKind::Class) {
-                                                if let Some(class_name) = &parent_scope.name {
-                                                    for class_data in item_tree.classes.values() {
-                                                        if class_data.name == *class_name {
-                                                            let mut merged =
-                                                                class_data.generic_params.clone();
-                                                            merged.extend(gp);
-                                                            gp = merged;
-                                                            break;
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        gp
-                                    };
+                                    let generic_params: Vec<Name> = lambda_enclosing_generics(
+                                        index,
+                                        &item_tree,
+                                        func_data.generic_params.clone(),
+                                        ancestor_scope.parent,
+                                    );
                                     let parent_scope_id =
                                         index.scope_ids[ancestor_fsi.index() as usize];
                                     seed_lambda_and_infer(
@@ -1176,40 +1258,12 @@ pub fn infer_scope_types<'db>(
                                                         if fd.span == scope.range
                                                             && scope.name.as_ref() == Some(&fd.name)
                                                         {
-                                                            gp.clone_from(&fd.generic_params);
-                                                            if let Some(grandparent_fsi) =
-                                                                scope.parent
-                                                            {
-                                                                let grandparent_scope = &index
-                                                                    .scopes
-                                                                    [grandparent_fsi.index()
-                                                                        as usize];
-                                                                if matches!(
-                                                                    grandparent_scope.kind,
-                                                                    ScopeKind::Class
-                                                                ) {
-                                                                    if let Some(class_name) =
-                                                                        &grandparent_scope.name
-                                                                    {
-                                                                        for class_data in item_tree
-                                                                            .classes
-                                                                            .values()
-                                                                        {
-                                                                            if class_data.name
-                                                                                == *class_name
-                                                                            {
-                                                                                let mut merged =
-                                                                                    class_data
-                                                                                        .generic_params
-                                                                                        .clone();
-                                                                                merged.extend(gp);
-                                                                                gp = merged;
-                                                                                break;
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                }
-                                                            }
+                                                            gp = lambda_enclosing_generics(
+                                                                index,
+                                                                &item_tree,
+                                                                fd.generic_params.clone(),
+                                                                scope.parent,
+                                                            );
                                                             break;
                                                         }
                                                     }
@@ -1537,55 +1591,7 @@ pub fn render_scope_diagnostics<'db>(
     let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
 
     let source_map = match &scope.kind {
-        ScopeKind::Lambda => {
-            // For lambda scopes, walk ancestors to find the parent Function/Let body,
-            // then use find_lambda_by_span to get the lambda's own source map.
-            let lambda_span = scope.range;
-            let mut found_sm = None;
-            'ancestor: for ancestor_fsi in index.ancestor_scopes(file_scope) {
-                let ancestor = &index.scopes[ancestor_fsi.index() as usize];
-                match &ancestor.kind {
-                    ScopeKind::Function => {
-                        for func_data in item_tree.functions.values() {
-                            if func_data.span == ancestor.range
-                                && ancestor.name.as_ref() == Some(&func_data.name)
-                            {
-                                if let Some(baml_compiler2_ast::FunctionBodyDef::Expr(
-                                    ref body,
-                                    ref sm,
-                                )) = func_data.body
-                                {
-                                    if let Some((_, _, lambda_sm)) =
-                                        find_lambda_by_span(body, sm, lambda_span)
-                                    {
-                                        found_sm = Some(lambda_sm.clone());
-                                    }
-                                }
-                                break 'ancestor;
-                            }
-                        }
-                    }
-                    ScopeKind::Let => {
-                        for let_data in item_tree.lets.values() {
-                            if let_data.span == ancestor.range
-                                && ancestor.name.as_ref() == Some(&let_data.name)
-                            {
-                                if let Some((ref body, ref sm)) = let_data.initializer {
-                                    if let Some((_, _, lambda_sm)) =
-                                        find_lambda_by_span(body, sm, lambda_span)
-                                    {
-                                        found_sm = Some(lambda_sm.clone());
-                                    }
-                                }
-                                break 'ancestor;
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            found_sm
-        }
+        ScopeKind::Lambda => lambda_source_map_by_span(index, &item_tree, file_scope, scope.range),
         _ => {
             // For Function/Let scopes, find the source map directly.
             // Use PPIR's canonical version so PPIR-synthesized functions are found.
@@ -1616,57 +1622,4 @@ pub fn render_scope_diagnostics<'db>(
         .iter()
         .map(|d| d.render(db, file, source_map.as_ref()))
         .collect()
-}
-
-// ── File-Level Diagnostic Collection ────────────────────────────────────────
-
-/// Collect all type-check diagnostics for a file by iterating all scopes.
-///
-/// Modeled after ruff's ty `check_types`.
-pub fn collect_file_diagnostics(
-    db: &dyn crate::Db,
-    file: baml_base::SourceFile,
-) -> TypeCheckDiagnostics<'_> {
-    let index = baml_compiler2_ppir::file_semantic_index(db, file);
-    let mut all_diagnostics = TypeCheckDiagnostics::default();
-
-    for scope_id in &index.scope_ids {
-        let scope_result = infer_scope_types(db, *scope_id);
-        all_diagnostics.extend(scope_result.diagnostics());
-    }
-
-    // Collect diagnostics from structural items (class fields, type aliases)
-    for (_name, contrib) in &index.symbol_contributions.types {
-        match contrib.definition {
-            Definition::Class(class_loc) => {
-                let resolved = resolve_class_fields(db, class_loc);
-                for (error, span) in &resolved.diagnostics {
-                    all_diagnostics
-                        .diagnostics
-                        .push(crate::infer_context::TirDiagnostic {
-                            error: error.clone(),
-                            severity: crate::infer_context::DiagnosticSeverity::Error,
-                            primary: crate::infer_context::DiagnosticLocation::Span(*span),
-                            related: Vec::new(),
-                        });
-                }
-            }
-            Definition::TypeAlias(alias_loc) => {
-                let resolved = resolve_type_alias(db, alias_loc);
-                for (error, span) in &resolved.diagnostics {
-                    all_diagnostics
-                        .diagnostics
-                        .push(crate::infer_context::TirDiagnostic {
-                            error: error.clone(),
-                            severity: crate::infer_context::DiagnosticSeverity::Error,
-                            primary: crate::infer_context::DiagnosticLocation::Span(*span),
-                            related: Vec::new(),
-                        });
-                }
-            }
-            _ => {}
-        }
-    }
-
-    all_diagnostics
 }

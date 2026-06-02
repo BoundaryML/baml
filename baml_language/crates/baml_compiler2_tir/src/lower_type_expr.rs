@@ -42,77 +42,10 @@ pub fn lower_type_expr(
 /// the enclosing class/interface's type expression before regular
 /// resolution runs.
 pub fn substitute_self_in(type_expr: &TypeExpr, replacement: &TypeExpr) -> TypeExpr {
-    match type_expr {
-        TypeExpr::Path {
-            segments,
-            generic_args,
-            attrs,
-        } => {
-            if segments.len() == 1 && generic_args.is_empty() && segments[0].as_str() == "Self" {
-                return replacement.clone();
-            }
-            TypeExpr::Path {
-                segments: segments.clone(),
-                generic_args: generic_args
-                    .iter()
-                    .map(|a| substitute_self_in(a, replacement))
-                    .collect(),
-                attrs: attrs.clone(),
-            }
-        }
-        TypeExpr::List { inner, attrs } => TypeExpr::List {
-            inner: Box::new(substitute_self_in(inner, replacement)),
-            attrs: attrs.clone(),
-        },
-        TypeExpr::Optional { inner, attrs } => TypeExpr::Optional {
-            inner: Box::new(substitute_self_in(inner, replacement)),
-            attrs: attrs.clone(),
-        },
-        TypeExpr::Map { key, value, attrs } => TypeExpr::Map {
-            key: Box::new(substitute_self_in(key, replacement)),
-            value: Box::new(substitute_self_in(value, replacement)),
-            attrs: attrs.clone(),
-        },
-        TypeExpr::Union { variants, attrs } => TypeExpr::Union {
-            variants: variants
-                .iter()
-                .map(|v| substitute_self_in(v, replacement))
-                .collect(),
-            attrs: attrs.clone(),
-        },
-        TypeExpr::Function {
-            generic_params,
-            generic_param_bounds,
-            params,
-            ret,
-            throws,
-            attrs,
-        } => TypeExpr::Function {
-            generic_params: generic_params.clone(),
-            generic_param_bounds: generic_param_bounds
-                .iter()
-                .map(|bound| {
-                    bound
-                        .as_ref()
-                        .map(|bound| substitute_self_in(bound, replacement))
-                })
-                .collect(),
-            params: params
-                .iter()
-                .map(|param| {
-                    let mut param = param.clone();
-                    param.ty = substitute_self_in(&param.ty, replacement);
-                    param
-                })
-                .collect(),
-            ret: Box::new(substitute_self_in(ret, replacement)),
-            throws: throws
-                .as_ref()
-                .map(|ty| Box::new(substitute_self_in(ty, replacement))),
-            attrs: attrs.clone(),
-        },
-        _ => type_expr.clone(),
-    }
+    substitute_in(type_expr, &|segments, generic_args| {
+        (segments.len() == 1 && generic_args.is_empty() && segments[0].as_str() == "Self")
+            .then(|| replacement.clone())
+    })
 }
 
 /// BEP-044 generic bounds: walk `type_expr` and replace any single-
@@ -127,12 +60,22 @@ pub fn substitute_paths_in(
     if subst.is_empty() {
         return type_expr.clone();
     }
-    substitute_paths_walk(type_expr, subst)
+    substitute_in(type_expr, &|segments, generic_args| {
+        if segments.len() == 1 && generic_args.is_empty() {
+            subst.get(&segments[0]).cloned()
+        } else {
+            None
+        }
+    })
 }
 
-fn substitute_paths_walk(
+/// Shared recursion for the `substitute_*` walkers. `replace` inspects each
+/// `Path`'s segments/generic-args and returns a replacement to swap in, or
+/// `None` to recurse into it normally. All non-`Path` variants are rebuilt
+/// identically regardless of the replacement decision.
+fn substitute_in(
     ty: &TypeExpr,
-    subst: &std::collections::HashMap<baml_base::Name, TypeExpr>,
+    replace: &impl Fn(&[baml_base::Name], &[TypeExpr]) -> Option<TypeExpr>,
 ) -> TypeExpr {
     match ty {
         TypeExpr::Path {
@@ -140,39 +83,33 @@ fn substitute_paths_walk(
             generic_args,
             attrs,
         } => {
-            if segments.len() == 1
-                && generic_args.is_empty()
-                && let Some(replacement) = subst.get(&segments[0])
-            {
-                return replacement.clone();
+            if let Some(replacement) = replace(segments, generic_args) {
+                return replacement;
             }
             TypeExpr::Path {
                 segments: segments.clone(),
                 generic_args: generic_args
                     .iter()
-                    .map(|a| substitute_paths_walk(a, subst))
+                    .map(|a| substitute_in(a, replace))
                     .collect(),
                 attrs: attrs.clone(),
             }
         }
         TypeExpr::List { inner, attrs } => TypeExpr::List {
-            inner: Box::new(substitute_paths_walk(inner, subst)),
+            inner: Box::new(substitute_in(inner, replace)),
             attrs: attrs.clone(),
         },
         TypeExpr::Optional { inner, attrs } => TypeExpr::Optional {
-            inner: Box::new(substitute_paths_walk(inner, subst)),
+            inner: Box::new(substitute_in(inner, replace)),
             attrs: attrs.clone(),
         },
         TypeExpr::Map { key, value, attrs } => TypeExpr::Map {
-            key: Box::new(substitute_paths_walk(key, subst)),
-            value: Box::new(substitute_paths_walk(value, subst)),
+            key: Box::new(substitute_in(key, replace)),
+            value: Box::new(substitute_in(value, replace)),
             attrs: attrs.clone(),
         },
         TypeExpr::Union { variants, attrs } => TypeExpr::Union {
-            variants: variants
-                .iter()
-                .map(|v| substitute_paths_walk(v, subst))
-                .collect(),
+            variants: variants.iter().map(|v| substitute_in(v, replace)).collect(),
             attrs: attrs.clone(),
         },
         TypeExpr::Function {
@@ -186,24 +123,20 @@ fn substitute_paths_walk(
             generic_params: generic_params.clone(),
             generic_param_bounds: generic_param_bounds
                 .iter()
-                .map(|bound| {
-                    bound
-                        .as_ref()
-                        .map(|bound| substitute_paths_walk(bound, subst))
-                })
+                .map(|bound| bound.as_ref().map(|bound| substitute_in(bound, replace)))
                 .collect(),
             params: params
                 .iter()
                 .map(|param| {
                     let mut param = param.clone();
-                    param.ty = substitute_paths_walk(&param.ty, subst);
+                    param.ty = substitute_in(&param.ty, replace);
                     param
                 })
                 .collect(),
-            ret: Box::new(substitute_paths_walk(ret, subst)),
+            ret: Box::new(substitute_in(ret, replace)),
             throws: throws
                 .as_ref()
-                .map(|ty| Box::new(substitute_paths_walk(ty, subst))),
+                .map(|ty| Box::new(substitute_in(ty, replace))),
             attrs: attrs.clone(),
         },
         _ => ty.clone(),
@@ -283,21 +216,39 @@ fn lower_args(
         .collect()
 }
 
-/// Emit a `TypeIsNotGeneric` diagnostic if `generic_args` were supplied for a
-/// non-generic type (enum / type alias). The args are lowered separately by the
-/// caller so their own diagnostics still surface.
-fn not_generic(
+/// Lower a non-generic type reference (enum / type alias): lower any generic
+/// args for their own diagnostics, flag them as not-generic, then build the
+/// `Ty` via `make_ty`.
+#[allow(clippy::too_many_arguments)]
+fn lower_non_generic(
+    db: &dyn crate::Db,
+    def: Definition,
+    item: &baml_base::Name,
     generic_args: &[TypeExpr],
-    type_name: &baml_base::Name,
-    kind: &'static str,
+    package_items: &PackageItems<'_>,
+    ns_context: &[baml_base::Name],
+    generic_params: &[baml_base::Name],
     diagnostics: &mut Vec<TirTypeError>,
-) {
+    kind: &'static str,
+    make_ty: impl FnOnce(QualifiedTypeName) -> Ty,
+) -> Ty {
+    lower_args(
+        db,
+        generic_args,
+        package_items,
+        ns_context,
+        generic_params,
+        diagnostics,
+    );
+    // Flag generic args supplied for a non-generic type (enum / type alias).
+    // The args were lowered just above so their own diagnostics still surface.
     if !generic_args.is_empty() {
         diagnostics.push(TirTypeError::TypeIsNotGeneric {
-            type_name: type_name.clone(),
+            type_name: item.clone(),
             kind,
         });
     }
+    make_ty(qualify_def(db, def, item))
 }
 
 /// Like [`lower_type_expr`], but resolves unqualified names relative to
@@ -326,7 +277,6 @@ pub fn lower_type_expr_in_ns(
             if let Some(def) = resolved {
                 match def {
                     Definition::Class(_) => {
-                        // Collect and lower generic args, storing them in Ty::Class.
                         let lowered_args = lower_args(
                             db,
                             generic_args,
@@ -345,12 +295,7 @@ pub fn lower_type_expr_in_ns(
                         // how `int[]` resolves to `Ty::List` even though
                         // `class Array<T>` is a regular class declaration.
                         let qtn = qualify_def(db, def, item);
-                        if qtn.name().as_str() == "Future"
-                            && qtn.package().as_str() == baml_base::BAML_PACKAGE
-                            && qtn.namespace().len() == 1
-                            && qtn.namespace()[0].as_str() == "future"
-                            && lowered_args.len() == 2
-                        {
+                        if qtn.is_builtin_future() && lowered_args.len() == 2 {
                             return Ty::Future(
                                 Box::new(lowered_args[0].clone()),
                                 Box::new(lowered_args[1].clone()),
@@ -366,8 +311,6 @@ pub fn lower_type_expr_in_ns(
                         Ty::Class(qtn, lowered_args, TyAttr::default())
                     }
                     Definition::Interface(_) => {
-                        // Same generic-arg handling as `Class` — interface
-                        // parameters are valid in the same positions.
                         let lowered_args = lower_args(
                             db,
                             generic_args,
@@ -378,40 +321,35 @@ pub fn lower_type_expr_in_ns(
                         );
                         Ty::Interface(qualify_def(db, def, item), lowered_args, TyAttr::default())
                     }
-                    Definition::Enum(_) => {
-                        // Enums are not generic — lower args (for their own
-                        // diagnostics) but flag any as not-generic.
-                        lower_args(
-                            db,
-                            generic_args,
-                            package_items,
-                            ns_context,
-                            generic_params,
-                            diagnostics,
-                        );
-                        not_generic(generic_args, item, "enum", diagnostics);
-                        Ty::Enum(qualify_def(db, def, item), TyAttr::default())
-                    }
-                    Definition::TypeAlias(_) => {
-                        // Type aliases are not generic — same handling as enums.
-                        lower_args(
-                            db,
-                            generic_args,
-                            package_items,
-                            ns_context,
-                            generic_params,
-                            diagnostics,
-                        );
-                        not_generic(generic_args, item, "type alias", diagnostics);
-                        Ty::TypeAlias(qualify_def(db, def, item), TyAttr::default())
-                    }
-                    // Let bindings are values, not types — produce Unknown in a type position.
+                    Definition::Enum(_) => lower_non_generic(
+                        db,
+                        def,
+                        item,
+                        generic_args,
+                        package_items,
+                        ns_context,
+                        generic_params,
+                        diagnostics,
+                        "enum",
+                        |qtn| Ty::Enum(qtn, TyAttr::default()),
+                    ),
+                    Definition::TypeAlias(_) => lower_non_generic(
+                        db,
+                        def,
+                        item,
+                        generic_args,
+                        package_items,
+                        ns_context,
+                        generic_params,
+                        diagnostics,
+                        "type alias",
+                        |qtn| Ty::TypeAlias(qtn, TyAttr::default()),
+                    ),
                     _ => Ty::Unknown {
                         attr: TyAttr::default(),
                     },
                 }
             } else {
-                // Check if this is a generic type parameter (e.g. T, K, V).
                 if segments.len() == 1 {
                     if generic_params.iter().any(|p| *p == segments[0]) {
                         return Ty::TypeVar(segments[0].clone(), TyAttr::default());
@@ -442,11 +380,7 @@ pub fn lower_type_expr_in_ns(
                         }
                     }
                 }
-                let name_str = segments
-                    .iter()
-                    .map(smol_str::SmolStr::as_str)
-                    .collect::<Vec<_>>()
-                    .join(".");
+                let name_str = dotted(segments);
                 // Scan all namespaces for the item name to build "did you mean" suggestions.
                 // Only do this for single-segment bare names — multi-segment paths already
                 // encode the intended namespace.
@@ -457,11 +391,7 @@ pub fn lower_type_expr_in_ns(
                             if ns_path.is_empty() {
                                 suggestions.push(format!("root.{item}"));
                             } else {
-                                let ns_str = ns_path
-                                    .iter()
-                                    .map(smol_str::SmolStr::as_str)
-                                    .collect::<Vec<_>>()
-                                    .join(".");
+                                let ns_str = dotted(ns_path);
                                 suggestions.push(format!("root.{ns_str}.{item}"));
                             }
                         }
@@ -656,6 +586,15 @@ pub fn lower_type_expr_in_ns(
             attr: TyAttr::default(),
         },
     }
+}
+
+/// Join name segments with `.` for diagnostic messages.
+fn dotted(parts: &[baml_base::Name]) -> String {
+    parts
+        .iter()
+        .map(smol_str::SmolStr::as_str)
+        .collect::<Vec<_>>()
+        .join(".")
 }
 
 /// Derive the qualified name for a type from its Definition's file location.

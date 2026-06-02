@@ -127,7 +127,7 @@ pub(crate) fn display_instruction(
     let metadata = match instruction {
         Instruction::NotifyBlock(block_index) => {
             if let Some(notification) = function.block_notifications.get(*block_index) {
-                format!("({})", &notification.block_name)
+                format!("({})", notification.block_name)
             } else {
                 format!("(invalid block index: {block_index})")
             }
@@ -183,7 +183,7 @@ pub(crate) fn display_instruction(
 
         Instruction::VizEnter(index) | Instruction::VizExit(index) => {
             if let Some(node) = function.viz_nodes.get(*index) {
-                format!("({})", &node.label)
+                format!("({})", node.label)
             } else {
                 format!("(invalid viz index: {index})")
             }

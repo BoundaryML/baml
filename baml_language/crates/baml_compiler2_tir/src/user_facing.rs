@@ -1,8 +1,10 @@
 use crate::ty::SYNTHETIC_EFFECT_PARAM_PREFIX;
 
 /// Rewrites synthetic effect-param names (`__effect_param_N` → `callback`) in an
-/// already-rendered type string. Called only by the LSP display path. The
-/// prefix+digit-run predicate mirrors [`crate::ty::is_synthetic_effect_param`].
+/// already-rendered type string. Called only by the LSP display path. Applies
+/// the same prefix-then-digit-run rule as [`crate::ty::is_synthetic_effect_param`],
+/// but on rendered substrings: it consumes the prefix plus its leading digit run,
+/// so the match is local rather than requiring the whole remainder to be digits.
 pub fn humanize_type_string(raw: &str) -> String {
     let mut out = String::with_capacity(raw.len());
     let mut rest = raw;

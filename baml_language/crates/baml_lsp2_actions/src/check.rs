@@ -3569,8 +3569,6 @@ fn tir_type_error_to_diagnostic_id(
         | TirTypeError::SelfParamDefault
         | TirTypeError::DefaultParamForwardReference { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::MissingReturn { .. } => DiagnosticId::MissingReturnExpression,
-        TirTypeError::AliasCycle { .. } => DiagnosticId::AliasCycle,
-        TirTypeError::ClassCycle { .. } => DiagnosticId::ClassCycle,
         TirTypeError::NonExhaustiveMatch { .. } => DiagnosticId::NonExhaustiveMatch,
         TirTypeError::UnreachableArm => DiagnosticId::UnreachableArm,
         TirTypeError::OrPatternBindingTypeMismatch { .. } => DiagnosticId::TypeMismatch,
@@ -3586,10 +3584,8 @@ fn tir_type_error_to_diagnostic_id(
             DiagnosticId::ThrowsContractViolation
         }
         TirTypeError::ExtraneousThrowsDeclaration { .. } => DiagnosticId::ThrowsContractExtraneous,
-        TirTypeError::CannotInferTypeParameter { .. } => DiagnosticId::UnknownType,
         TirTypeError::TypeParamShadowed { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::CannotInferLambdaParamType { .. } => DiagnosticId::UnknownType,
-        TirTypeError::WrongNumberOfTypeArgs { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::TypeIsNotGeneric { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::WrongTypeArgArity { .. } => DiagnosticId::ArgumentCountMismatch,
         // Optional chaining diagnostics

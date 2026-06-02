@@ -100,14 +100,21 @@ fn signature_cycle_initial_callable_throws<'db>(
     join_throw_facts(&facts)
 }
 
-fn enclosing_class_generic_params(
+fn enclosing_class(
     item_tree: &baml_compiler2_hir::item_tree::ItemTree,
     function_id: baml_compiler2_hir::ids::LocalItemId<baml_compiler2_hir::ids::FunctionMarker>,
-) -> Vec<Name> {
+) -> Option<&baml_compiler2_hir::item_tree::Class> {
     item_tree
         .classes
         .values()
         .find(|class_data| class_data.methods.contains(&function_id))
+}
+
+fn enclosing_class_generic_params(
+    item_tree: &baml_compiler2_hir::item_tree::ItemTree,
+    function_id: baml_compiler2_hir::ids::LocalItemId<baml_compiler2_hir::ids::FunctionMarker>,
+) -> Vec<Name> {
+    enclosing_class(item_tree, function_id)
         .map(|class_data| class_data.generic_params.clone())
         .unwrap_or_default()
 }
@@ -117,11 +124,7 @@ fn callable_short_name<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) 
     let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
     let func_data = &item_tree[function.id(db)];
 
-    if let Some(class_data) = item_tree
-        .classes
-        .values()
-        .find(|class_data| class_data.methods.contains(&function.id(db)))
-    {
+    if let Some(class_data) = enclosing_class(&item_tree, function.id(db)) {
         Name::new(format!("{}.{}", class_data.name, func_data.name))
     } else {
         func_data.name.clone()
@@ -241,14 +244,46 @@ impl ThrowsAnalysisContext for CallableThrowsAnalysis<'_, '_> {
         args: &[baml_compiler2_ast::ExprId],
         unwrap_optional_callee: bool,
     ) -> Option<Ty> {
-        let call_plan = self.inference.call_plan_for_provided_args(args);
-        instantiated_callee_throws(
-            self.inference,
-            callee_expr_id,
+        let inference = self.inference;
+        let call_plan = inference.call_plan_for_provided_args(args);
+
+        let callee_ty = inference.expression_type(callee_expr_id)?;
+        let typed_callee = if unwrap_optional_callee {
+            crate::narrowing::remove_null(callee_ty)
+        } else {
+            callee_ty.clone()
+        };
+
+        let Ty::Function { params, throws, .. } = typed_callee else {
+            return None;
+        };
+
+        let uses_method_call_convention = crate::inference::uses_method_call_convention(
+            inference.resolution(callee_expr_id),
+            inference
+                .path_member_resolution(callee_expr_id)
+                .and_then(<[_]>::last),
+        );
+        let effective_params = if uses_method_call_convention {
+            crate::generics::skip_self_param(&params)
+        } else {
+            params.as_slice()
+        };
+
+        Some(substitute_throws_with_inferred_bindings(
+            effective_params,
+            &throws,
             args,
-            unwrap_optional_callee,
             call_plan,
-        )
+            |arg_expr_id| {
+                inference
+                    .expression_type(arg_expr_id)
+                    .cloned()
+                    .unwrap_or(Ty::Unknown {
+                        attr: TyAttr::default(),
+                    })
+            },
+        ))
     }
 
     fn named_callee_summary(
@@ -267,61 +302,6 @@ impl ThrowsAnalysisContext for CallableThrowsAnalysis<'_, '_> {
         let res_ctx = package_resolution_context(self.db, self.pkg_id);
         lookup_named_throw_summary(self.db, self.pkg_id, &res_ctx.dep_interfaces, &key)
     }
-}
-
-fn callee_uses_method_call_convention(
-    inference: &ScopeInference<'_>,
-    callee_expr_id: baml_compiler2_ast::ExprId,
-) -> bool {
-    matches!(
-        inference.resolution(callee_expr_id),
-        Some(MemberResolution::BoundMethod { .. })
-    ) || matches!(
-        inference
-            .path_member_resolution(callee_expr_id)
-            .and_then(|resolutions| resolutions.last()),
-        Some(MemberResolution::BoundMethod { .. })
-    )
-}
-
-pub(crate) fn instantiated_callee_throws(
-    inference: &ScopeInference<'_>,
-    callee_expr_id: baml_compiler2_ast::ExprId,
-    args: &[baml_compiler2_ast::ExprId],
-    unwrap_optional_callee: bool,
-    call_plan: Option<&CallPlan>,
-) -> Option<Ty> {
-    let callee_ty = inference.expression_type(callee_expr_id)?;
-    let typed_callee = if unwrap_optional_callee {
-        crate::narrowing::remove_null(callee_ty)
-    } else {
-        callee_ty.clone()
-    };
-
-    let Ty::Function { params, throws, .. } = typed_callee else {
-        return None;
-    };
-
-    let effective_params = if callee_uses_method_call_convention(inference, callee_expr_id) {
-        crate::generics::skip_self_param(&params)
-    } else {
-        params.as_slice()
-    };
-
-    Some(substitute_throws_with_inferred_bindings(
-        effective_params,
-        &throws,
-        args,
-        call_plan,
-        |arg_expr_id| {
-            inference
-                .expression_type(arg_expr_id)
-                .cloned()
-                .unwrap_or(Ty::Unknown {
-                    attr: TyAttr::default(),
-                })
-        },
-    ))
 }
 
 /// Infer generic bindings from `(param, arg)` pairs (honoring an explicit

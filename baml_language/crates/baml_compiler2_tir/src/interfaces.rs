@@ -250,81 +250,79 @@ impl ImplementsRegistry {
             });
         };
 
+        let index = &self.interface_impl_rule_index;
         match actual_ty {
             Ty::Class(class_qtn, _, _) => {
-                if let Some(indices_by_class) =
-                    self.interface_impl_rule_index.by_class.get(iface_qtn)
-                    && let Some(indices) = indices_by_class.get(class_qtn)
-                    && self.any_indexed_rule_matches(
-                        indices,
-                        actual_ty,
-                        requested_iface_ty,
-                        aliases,
-                        &mut is_subtype,
-                    )
-                {
-                    return true;
-                }
-                if let Some(indices) = self
-                    .interface_impl_rule_index
-                    .fallback_by_interface
-                    .get(iface_qtn)
-                {
-                    return self.any_indexed_rule_matches(
-                        indices,
+                let primary = index.by_class.get(iface_qtn).and_then(|m| m.get(class_qtn));
+                self.primary_or_fallback(
+                    primary.map(Vec::as_slice),
+                    iface_qtn,
+                    actual_ty,
+                    requested_iface_ty,
+                    aliases,
+                    &mut is_subtype,
+                )
+            }
+            _ => {
+                if let Some(key) = implementation_key_for_ty(actual_ty) {
+                    let primary = index.by_type.get(iface_qtn).and_then(|m| m.get(&key));
+                    return self.primary_or_fallback(
+                        primary.map(Vec::as_slice),
+                        iface_qtn,
                         actual_ty,
                         requested_iface_ty,
                         aliases,
                         &mut is_subtype,
                     );
                 }
-                false
-            }
-            _ => {
-                if let Some(key) = implementation_key_for_ty(actual_ty) {
-                    if let Some(indices_by_type) =
-                        self.interface_impl_rule_index.by_type.get(iface_qtn)
-                        && let Some(indices) = indices_by_type.get(&key)
-                        && self.any_indexed_rule_matches(
-                            indices,
-                            actual_ty,
-                            requested_iface_ty,
-                            aliases,
-                            &mut is_subtype,
-                        )
-                    {
-                        return true;
-                    }
-                    if let Some(indices) = self
-                        .interface_impl_rule_index
-                        .fallback_by_interface
-                        .get(iface_qtn)
-                    {
-                        return self.any_indexed_rule_matches(
-                            indices,
-                            actual_ty,
-                            requested_iface_ty,
-                            aliases,
-                            &mut is_subtype,
-                        );
-                    }
-                    return false;
-                }
 
-                self.interface_impl_rule_index
-                    .by_interface
-                    .get(iface_qtn)
-                    .is_some_and(|indices| {
-                        self.any_indexed_rule_matches(
-                            indices,
-                            actual_ty,
-                            requested_iface_ty,
-                            aliases,
-                            &mut is_subtype,
-                        )
-                    })
+                index.by_interface.get(iface_qtn).is_some_and(|indices| {
+                    self.any_indexed_rule_matches(
+                        indices,
+                        actual_ty,
+                        requested_iface_ty,
+                        aliases,
+                        &mut is_subtype,
+                    )
+                })
             }
         }
+    }
+
+    /// Try the `primary` index slice, then fall back to `fallback_by_interface`.
+    ///
+    /// Both current call sites short-circuit on the primary match before trying
+    /// the interface-wide fallback, so this preserves that exact behavior.
+    fn primary_or_fallback(
+        &self,
+        primary: Option<&[usize]>,
+        iface_qtn: &QualifiedTypeName,
+        actual_ty: &Ty,
+        requested_iface_ty: &Ty,
+        aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+        is_subtype: &mut impl FnMut(&Ty, &Ty) -> bool,
+    ) -> bool {
+        primary.is_some_and(|indices| {
+            self.any_indexed_rule_matches(
+                indices,
+                actual_ty,
+                requested_iface_ty,
+                aliases,
+                &mut *is_subtype,
+            )
+        }) || self
+            .interface_impl_rule_index
+            .fallback_by_interface
+            .get(iface_qtn)
+            .is_some_and(|indices| {
+                self.any_indexed_rule_matches(
+                    indices,
+                    actual_ty,
+                    requested_iface_ty,
+                    aliases,
+                    &mut *is_subtype,
+                )
+            })
     }
 
     fn any_indexed_rule_matches(
@@ -524,11 +522,15 @@ fn match_ty_pattern_into(
         return bind_type_var(name, concrete, bindings, aliases);
     }
 
-    if !contains_bound_typevar(pattern, generic_params)
+    // When the pattern has no bound type vars and neither side carries generic
+    // function binders, two types match iff they normalize to the same type —
+    // try that fast path first. If it's eligible but fails here, the structural
+    // arms can't change the answer, so the fallback arm below must not re-run
+    // the (expensive, alias-normalizing) check.
+    let normalized_eligible = !contains_bound_typevar(pattern, generic_params)
         && !contains_generic_function_binders(pattern)
-        && !contains_generic_function_binders(concrete)
-        && normalize::is_same_normalized_type(pattern, concrete, aliases)
-    {
+        && !contains_generic_function_binders(concrete);
+    if normalized_eligible && normalize::is_same_normalized_type(pattern, concrete, aliases) {
         return Some(());
     }
 
@@ -619,7 +621,13 @@ fn match_ty_pattern_into(
             let c_throws = generics::substitute_ty(c_throws, &c_function_bindings);
             match_ty_pattern_into(&p_throws, &c_throws, generic_params, aliases, bindings)
         }
-        _ if normalize::is_same_normalized_type(pattern, concrete, aliases) => Some(()),
+        // Only re-check normalized equality when the fast path above was skipped
+        // (a guard failed); if it was eligible it already returned false.
+        _ if !normalized_eligible
+            && normalize::is_same_normalized_type(pattern, concrete, aliases) =>
+        {
+            Some(())
+        }
         _ => None,
     }
 }
@@ -867,7 +875,7 @@ pub fn implementation_key_for_ty(ty: &Ty) -> Option<Ty> {
             keys.dedup();
             Some(Ty::Union(keys, TyAttr::default()))
         }
-        Ty::Class(..) | Ty::Interface(..) | Ty::Enum(..) | Ty::TypeAlias(..) => None,
+        // Class/Interface/Enum/TypeAlias and all other constructors are unkeyable.
         _ => None,
     }
 }
@@ -886,7 +894,7 @@ pub fn package_implements_registry<'db>(
     let mut interface_impl_rules: Vec<InterfaceImplRule> = Vec::new();
     let mut all_class_qtns: Vec<QualifiedTypeName> = Vec::new();
     // Multiple classes often implement the same interface (or an interface
-    // higher up the extends chain). Cache the transitive closure per
+    // higher up the requires chain). Cache the transitive closure per
     // `InterfaceLoc` so we only walk each chain once per query invocation.
     let mut closure_cache: FxHashMap<
         baml_compiler2_hir::loc::InterfaceLoc<'db>,
@@ -1087,7 +1095,7 @@ pub fn resolve_path_to_interface<'db>(
         .map(|resolved| resolved.loc)
 }
 
-/// Transitive `extends` closure for one interface, including itself. Result
+/// Transitive `requires` closure for one interface, including itself. Result
 /// is memoised in `cache` so callers that touch the same interface multiple
 /// times don't re-walk.
 fn interface_closure<'db>(
@@ -1106,7 +1114,7 @@ fn interface_closure<'db>(
             continue;
         };
         let qtn = qualify_def(db, Definition::Interface(loc), &iface.name);
-        // Already-visited check guards cyclic `extends` (validated separately).
+        // Already-visited check guards cyclic `requires` (validated separately).
         if !out.insert(qtn) {
             continue;
         }
@@ -1125,7 +1133,7 @@ fn interface_closure<'db>(
     out
 }
 
-/// Walk the transitive `extends` closure of `root_iface` and return every
+/// Walk the transitive `requires` closure of `root_iface` and return every
 /// interface in it (including `root_iface` itself), in BFS order so the
 /// receiver appears before its parents. Cycles are skipped silently — they
 /// are reported elsewhere (E0118).

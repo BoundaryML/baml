@@ -10,13 +10,18 @@ use std::collections::{BTreeMap, BTreeSet};
 ///
 /// `N` is the node identifier type (must be `Ord` for deterministic ordering).
 /// `F` is the fact type (must be `Ord` for set operations).
-#[derive(Debug, Clone)]
 pub struct AnalysisGraph<N: Ord + Clone, F: Ord + Clone> {
     /// Per-node direct facts (pass 1 output, provided by the caller).
     direct: BTreeMap<N, BTreeSet<F>>,
     /// Adjacency list: `node → {dependency₁, dependency₂, …}`.
     /// An edge from A to B means "A depends on B" (i.e., A calls B).
     edges: BTreeMap<N, BTreeSet<N>>,
+}
+
+impl<N: Ord + Clone, F: Ord + Clone> Default for AnalysisGraph<N, F> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<N: Ord + Clone, F: Ord + Clone> AnalysisGraph<N, F> {
@@ -37,7 +42,6 @@ impl<N: Ord + Clone, F: Ord + Clone> AnalysisGraph<N, F> {
 
     /// Add a directed dependency edge: `from` depends on `to`.
     pub fn add_edge(&mut self, from: N, to: N) {
-        self.direct.entry(from.clone()).or_default();
         self.direct.entry(to.clone()).or_default();
         self.edges.entry(to.clone()).or_default();
         self.edges.entry(from).or_default().insert(to);
@@ -48,28 +52,18 @@ impl<N: Ord + Clone, F: Ord + Clone> AnalysisGraph<N, F> {
     pub fn analyze(self) -> AnalysisResult<N, F> {
         let sccs = Tarjan::components(&self.edges);
         let transitive = propagate(&self.direct, &self.edges, &sccs);
-        AnalysisResult {
-            direct: self.direct,
-            transitive,
-        }
+        AnalysisResult { transitive }
     }
 }
 
 /// The output of a two-pass analysis.
 #[derive(Debug, Clone)]
 pub struct AnalysisResult<N: Ord, F: Ord> {
-    /// Per-node direct facts (unchanged from input).
-    direct: BTreeMap<N, BTreeSet<F>>,
     /// Per-node transitive facts (direct ∪ propagated from dependencies).
     transitive: BTreeMap<N, BTreeSet<F>>,
 }
 
 impl<N: Ord, F: Ord> AnalysisResult<N, F> {
-    /// Iterate over all nodes and their direct facts in deterministic order.
-    pub fn iter_direct(&self) -> impl Iterator<Item = (&N, &BTreeSet<F>)> {
-        self.direct.iter()
-    }
-
     /// Iterate over all nodes and their transitive facts in deterministic order.
     pub fn iter_transitive(&self) -> impl Iterator<Item = (&N, &BTreeSet<F>)> {
         self.transitive.iter()
