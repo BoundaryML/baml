@@ -248,6 +248,11 @@ pub enum DiagnosticId {
     UnconstrainedImplTypeParam,
     /// `Self` used in an interface FIELD type (only valid in method signatures).
     SelfInInterfaceField,
+    /// An `implements … for <target>` whose `for` target is not a single concrete
+    /// type — a union, optional, interface ("dyn"), or `unknown`. Interfaces can
+    /// only be implemented for a concrete type (or a concrete type constructor
+    /// such as `T[]` / `map<K, V>`, or a blanket type parameter).
+    ImplTargetNotConcrete,
     /// An `implements` block is missing a required interface field.
     MissingInterfaceField,
     /// A class implements an interface that `requires` other interfaces,
@@ -455,6 +460,7 @@ impl DiagnosticId {
             DiagnosticId::BareDefaultKeyword => "E0134",
             DiagnosticId::UnconstrainedImplTypeParam => "E0135",
             DiagnosticId::SelfInInterfaceField => "E0136",
+            DiagnosticId::ImplTargetNotConcrete => "E0137",
         }
     }
 }

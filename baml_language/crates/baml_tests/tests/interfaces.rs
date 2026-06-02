@@ -5750,6 +5750,76 @@ fn existing_concrete_implements_for_still_works() {
     );
 }
 
+#[test]
+fn implements_for_union_target_is_rejected() {
+    // BEP-044: the `for` target must be a single concrete type. A union has no
+    // single implementation body, so it is rejected (E0137).
+    assert_compile_error_code(
+        r#"
+        interface Tag {
+            function tag(self) -> int
+        }
+        implements Tag for int | string {
+            function tag(self) -> int { return 0 }
+        }
+        "#,
+        "E0137",
+    );
+}
+
+#[test]
+fn implements_for_interface_target_is_rejected() {
+    // Implementing one interface "for" another (an existential) has no concrete
+    // implementor — rejected.
+    assert_compile_error_code(
+        r#"
+        interface Tag {
+            function tag(self) -> int
+        }
+        interface Other {
+            function other(self) -> int
+        }
+        implements Tag for Other {
+            function tag(self) -> int { return 0 }
+        }
+        "#,
+        "E0137",
+    );
+}
+
+#[test]
+fn implements_for_optional_target_is_rejected() {
+    // An optional is `T | null` — a union — so it has no single implementation
+    // body and is rejected just like any other union target (E0137).
+    assert_compile_error_code(
+        r#"
+        interface Label {
+            function label(self) -> string
+        }
+        implements<T> Label for T? {
+            function label(self) -> string { return "optional" }
+        }
+        "#,
+        "E0137",
+    );
+}
+
+#[test]
+fn implements_for_concrete_container_target_is_allowed() {
+    // A concrete type constructor (`T[]`) is a valid `for` target — the gate only
+    // rejects unions / optionals / interfaces / `unknown`, not list/map/class.
+    assert_no_interface_errors(
+        r#"
+        interface Tag {
+            function tag(self) -> int
+        }
+        implements<T> Tag for T[] {
+            function tag(self) -> int { return 0 }
+        }
+    "#,
+    );
+}
+
 // ── Group: Blanket implementations — Phase 2 (Form 1 runtime) ─────────────
 
 #[tokio::test]
@@ -5894,29 +5964,6 @@ async fn generic_rule_for_map_receiver_dispatches() {
     assert_eq!(
         output.result.unwrap(),
         BexExternalValue::String("map".into())
-    );
-}
-
-#[tokio::test]
-async fn generic_rule_for_optional_receiver_dispatches() {
-    let output = baml_test!(
-        r#"
-        interface Label {
-            function label(self) -> string
-        }
-        implements<T> Label for T? {
-            function label(self) -> string { return "optional" }
-        }
-        function main() -> string {
-            let value: int? = 1
-            let labelled: Label = value
-            return labelled.label()
-        }
-        "#
-    );
-    assert_eq!(
-        output.result.unwrap(),
-        BexExternalValue::String("optional".into())
     );
 }
 
@@ -9542,36 +9589,6 @@ fn wf3_out_of_body_primitive_field_bearing_is_e0126_pins() {
         function main() -> string { return "ok" }
         "#,
         "E0126",
-    );
-}
-
-/// wf3 pin: when a value matches two blanket rules (`int[]?` satisfies both
-/// `for T[]` and `for T?`), the innermost structural (list) match wins. Pins the
-/// (currently undocumented) precedence so a change is noticed.
-/// `_plan/wf3/generics-bounds-blanket/p2_optional_list_ambiguous.baml`
-#[tokio::test]
-async fn wf3_two_blanket_rules_list_wins_pins() {
-    let output = baml_test!(
-        r#"
-        interface Label {
-            function label(self) -> string
-        }
-        implements<T> Label for T[] {
-            function label(self) -> string { return "list" }
-        }
-        implements<T> Label for T? {
-            function label(self) -> string { return "optional" }
-        }
-        function main() -> string {
-            let xs: int[]? = [1, 2, 3]
-            let labelled: Label = xs
-            return labelled.label()
-        }
-        "#
-    );
-    assert_eq!(
-        output.result.unwrap(),
-        BexExternalValue::String("list".into())
     );
 }
 

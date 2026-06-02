@@ -2017,7 +2017,7 @@ fn validate_implements_for<'db>(
         aliases,
     };
     let mut target_type_errors = Vec::new();
-    baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+    let target_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
         db,
         &imp.for_target.expr,
         pkg_items,
@@ -2036,6 +2036,37 @@ fn validate_implements_for<'db>(
                     .with_phase(DiagnosticPhase::Type),
             );
         }
+        return;
+    }
+
+    // BEP-044: an interface may only be implemented for a single *concrete* type
+    // — a class/enum/primitive, a concrete type constructor (`T[]`, `map<K, V>`),
+    // or a blanket type parameter (`implements<T> I for T`, whose `T` is itself a
+    // type variable). A union, optional, or bare interface ("dyn"/existential)
+    // target is rejected: an optional is `T | null` (a union), so each case /
+    // union member would need its own body, and an existential has no single
+    // concrete implementor for dispatch to recover. (`Ty::Unknown` only arises
+    // from an already-diagnosed unresolved target, so it is matched here purely
+    // as defence-in-depth.)
+    if matches!(
+        &target_ty,
+        Ty::Interface(..) | Ty::Union(..) | Ty::Optional(..) | Ty::Unknown { .. }
+    ) {
+        diagnostics.push(
+            Diagnostic::error(
+                DiagnosticId::ImplTargetNotConcrete,
+                format!(
+                    "cannot implement interface `{}` for `{}`: the `for` target must be a single \
+                     concrete type, not a union, optional, or interface",
+                    imp.interface_target.expr, imp.for_target.expr
+                ),
+            )
+            .with_primary_span(Span {
+                file_id,
+                range: imp.for_target.span,
+            })
+            .with_phase(DiagnosticPhase::Type),
+        );
         return;
     }
 
