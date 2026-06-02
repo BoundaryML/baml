@@ -26,6 +26,12 @@ baseline_dir = ".ci/size-gate"
 #     max_delta_pct is the precise slippage guard. Bump a ceiling only as a
 #     deliberate, reviewed commit when a real size increase lands.
 #
+# The per-platform ceilings below are kept ~3% above the recorded baseline
+# automatically by the daily `Size Gate — Daily Baseline Refresh` workflow
+# (`size-gate bake`), which adopts the latest canary CI sizes and opens a PR.
+# Editing them by hand is fine for a deliberate one-off, but the next refresh
+# will re-peg them to `--margin-pct` above the recorded baseline.
+#
 # When recording a new platform (`mise run size-gate-record`), commit the
 # baseline it writes and add the matching `max_file_bytes` ceiling here,
 # ~3% above that file size.
@@ -36,29 +42,29 @@ package = "baml_cli"
 bin = "baml-cli"
 policy.max_delta_pct = 3.0
 
-# macOS arm64: baseline 15.07 MB file.
+# macOS arm64.
 [artifacts.baml-cli.platform.aarch64-apple-darwin]
-max_file_bytes = 15_072_808
-# Linux x86_64: baseline 19.40 MB file.
+max_file_bytes = 15_519_859
+# Linux x86_64.
 [artifacts.baml-cli.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = 19_990_000
-# Windows x86_64: baseline 16.27 MB file.
+max_file_bytes = 20_563_267
+# Windows x86_64.
 [artifacts.baml-cli.platform.x86_64-pc-windows-msvc]
-max_file_bytes = 16_273_800
+max_file_bytes = 16_757_919
 
 [artifacts.packed-program]
 kind = "pack"
 policy.max_delta_pct = 3.0
 
-# macOS arm64: baseline 11.17 MB file.
+# macOS arm64.
 [artifacts.packed-program.platform.aarch64-apple-darwin]
-max_file_bytes = 11_510_000
-# Linux x86_64: baseline 14.69 MB file.
+max_file_bytes = 11_778_242
+# Linux x86_64.
 [artifacts.packed-program.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = 15_140_000
-# Windows x86_64: baseline 11.85 MB file.
+max_file_bytes = 15_467_197
+# Windows x86_64.
 [artifacts.packed-program.platform.x86_64-pc-windows-msvc]
-max_file_bytes = 12_210_000
+max_file_bytes = 12_513_865
 
 [artifacts.packed-program.pack]
 cli_package = "baml_cli"
@@ -80,6 +86,6 @@ no_default_features = true
 wasm = true
 policy.max_delta_pct = 3.0
 
-# Single platform; baseline 3.85 MB gzip.
+# Single platform; gzip-gated.
 [artifacts.bridge_wasm.platform.wasm32-unknown-unknown]
-max_gzip_bytes = 3_900_000
+max_gzip_bytes = 3_967_310

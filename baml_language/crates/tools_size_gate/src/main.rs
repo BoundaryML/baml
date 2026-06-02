@@ -7,6 +7,7 @@
 )]
 
 mod baseline;
+mod ceilings;
 mod compare;
 mod config;
 mod measure;
@@ -19,6 +20,7 @@ use std::{
 
 use anyhow::{Context, Result};
 use baseline::{PlatformBaseline, baseline_path, current_git_sha, now_iso8601};
+use ceilings::sync_ceilings;
 use clap::{Parser, Subcommand, ValueEnum};
 use compare::check_policy;
 use config::{Config, host_triple};
@@ -85,6 +87,30 @@ enum Command {
         #[arg(long)]
         run_url: Option<String>,
     },
+
+    /// Adopt the measurements in CI `check --format json` reports as the
+    /// new baseline — WITHOUT rebuilding anything.
+    ///
+    /// Writes `.ci/size-gate/<platform>.toml` from each report's measured
+    /// sizes and rewrites the per-platform ceilings in `.cargo/size-gate.toml`
+    /// to `--margin-pct` above them (comments preserved). This is what the
+    /// daily baseline-refresh job runs against the artifacts the last canary
+    /// CI run already produced, so drift between the committed baseline and
+    /// real CI sizes never exceeds one refresh interval.
+    Bake {
+        /// JSON report files produced by `check --format json`.
+        files: Vec<PathBuf>,
+
+        /// How far above each recorded size to set the absolute ceiling.
+        /// Defaults to 3% — matching the `max_delta_pct` regression guard.
+        #[arg(long, default_value = "3.0")]
+        margin_pct: f64,
+
+        /// Git SHA the reports were produced from, recorded in each
+        /// baseline file. Defaults to the current HEAD.
+        #[arg(long)]
+        git_sha: Option<String>,
+    },
 }
 
 #[derive(Clone, ValueEnum)]
@@ -107,6 +133,11 @@ fn main() {
         Command::Check => cmd_check(&args),
         Command::Diff => cmd_diff(&args),
         Command::Agg { files, run_url } => cmd_agg(files, run_url.as_deref()),
+        Command::Bake {
+            files,
+            margin_pct,
+            git_sha,
+        } => cmd_bake(files, *margin_pct, git_sha.as_deref()),
     };
 
     match result {
@@ -296,6 +327,84 @@ fn cmd_agg(files: &[PathBuf], run_url: Option<&str>) -> Result<i32> {
     } else {
         Ok(EXIT_OK)
     }
+}
+
+/// Adopt CI report measurements as the new baseline without rebuilding.
+fn cmd_bake(files: &[PathBuf], margin_pct: f64, git_sha: Option<&str>) -> Result<i32> {
+    if files.is_empty() {
+        anyhow::bail!("no JSON report files provided to bake");
+    }
+
+    let workspace_root = find_workspace_root()?;
+    let config = Config::load(&workspace_root)?;
+
+    // Collect every artifact measurement out of the reports, grouped by
+    // platform. A baseline file is per-platform, so several artifacts from
+    // the same platform's report land in the same file.
+    let mut by_platform: BTreeMap<String, BTreeMap<String, ArtifactMeasurement>> = BTreeMap::new();
+    for path in files {
+        let content = std::fs::read_to_string(path)
+            .with_context(|| format!("failed to read report: {}", path.display()))?;
+        let report: JsonReport = serde_json::from_str(&content)
+            .with_context(|| format!("failed to parse JSON report: {}", path.display()))?;
+        for artifact in &report.artifacts {
+            let measurement = ArtifactMeasurement {
+                file_bytes: artifact.file_bytes,
+                stripped_bytes: artifact.stripped_bytes,
+                gzip_bytes: artifact.gzip_bytes,
+                sections: BTreeMap::new(),
+            };
+            by_platform
+                .entry(artifact.platform.clone())
+                .or_default()
+                .insert(artifact.artifact.clone(), measurement);
+        }
+    }
+
+    if by_platform.is_empty() {
+        anyhow::bail!("reports contained no artifacts to bake");
+    }
+
+    let git_sha = git_sha
+        .map(str::to_owned)
+        .or_else(|| current_git_sha(&workspace_root));
+    let timestamp = now_iso8601();
+
+    // Write each platform baseline, preserving any artifact already in the
+    // file that this batch of reports didn't cover. Skip the write entirely
+    // when the measured sizes are unchanged — bumping `recorded_at`/`git_sha`
+    // on every run would churn a no-op baseline-refresh PR daily.
+    for (platform, artifacts) in &by_platform {
+        let path = baseline_path(&workspace_root, &config.baseline_dir, platform);
+        let existing = PlatformBaseline::load(&path)?;
+        let mut merged = match &existing {
+            Some(existing) => existing.artifacts.clone(),
+            None => BTreeMap::new(),
+        };
+        for (name, measurement) in artifacts {
+            merged.insert(name.clone(), measurement.clone());
+        }
+
+        if existing.as_ref().is_some_and(|e| e.artifacts == merged) {
+            eprintln!("baseline unchanged: {}", path.display());
+            continue;
+        }
+
+        let baseline = PlatformBaseline {
+            version: 1,
+            recorded_at: timestamp.clone(),
+            git_sha: git_sha.clone(),
+            artifacts: merged,
+        };
+        baseline.save(&path)?;
+        eprintln!("wrote baseline: {}", path.display());
+    }
+
+    // Re-peg the absolute ceilings to the freshly recorded sizes. This is a
+    // no-op on disk (no diff) when the ceilings already sit margin% above.
+    sync_ceilings(&workspace_root, &config, &by_platform, margin_pct)?;
+
+    Ok(EXIT_OK)
 }
 
 fn cmd_diff(args: &Args) -> Result<i32> {
