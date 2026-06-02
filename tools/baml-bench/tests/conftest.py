@@ -1,15 +1,16 @@
 """Pytest configuration + the end-to-end integration harness.
 
-Two tiers:
+Tiers:
   * Fast tests (no marker) - pure logic / TestClient; run anywhere, no Docker.
-  * Integration tests (``@pytest.mark.integration``) - boot a real Convex backend
-    (one container) plus ``api`` / ``ingress`` / ``fake_proxy`` as host processes and
-    drive the whole pipeline. They self-skip when Docker is unavailable.
+  * Integration / system (``@pytest.mark.integration`` / ``system``) - boot
+    ``api`` / ``ingress`` / ``fake_proxy`` as host ``uvicorn`` subprocesses and drive
+    the whole pipeline through the real claim loops.
 
-The integration harness deliberately runs only Convex as a container (a prebuilt
-image - just a pull). ``api``/``ingress``/``fake_proxy`` run as host ``uvicorn``
-subprocesses against the editable install, so we never pay to build the slow
-``Dockerfile.python`` image just to test.
+By default the api uses the in-process MemoryGateway (``CONVEX_BACKEND=memory``), so
+the heavy tiers need no Convex deployment and no Docker - they run in seconds against
+the editable install. Set ``BAML_BENCH_REAL_CONVEX=1`` to boot the real Convex
+backend in a container instead (Docker + Node), for fidelity against the actual
+backend; that path self-skips when Docker is unavailable.
 """
 
 from __future__ import annotations
@@ -45,7 +46,10 @@ def pytest_configure(config: pytest.Config) -> None:
         config: The pytest config the marker line is added to.
     """
     config.addinivalue_line(
-        "markers", "integration: end-to-end test that boots the stack (needs Docker)"
+        "markers", "integration: per-hop pipeline test that boots the stack (api/ingress/fake_proxy)"
+    )
+    config.addinivalue_line(
+        "markers", "system: full end-to-end pipeline flow, /bug through fix dispatch"
     )
 
 
@@ -116,57 +120,67 @@ def _spawn_uvicorn(target: str, port: int, env: dict[str, str]) -> subprocess.Po
 
 @pytest.fixture(scope="session")
 def bench_stack():
-    """Boot Convex (container) + api/ingress/fake_proxy (host) and yield their URLs.
+    """Boot api/ingress/fake_proxy (host uvicorn) and yield their base URLs.
 
-    Brings up the Convex backend container on ephemeral ports, mints an admin key,
-    pushes the schema/functions, then starts ``fake_proxy``/``api``/``ingress`` as
-    host uvicorn subprocesses and exports the env the in-process drivers read
-    (including a fake ``CURSOR_API_KEY``/``CURSOR_API_BASE`` pointed at fake_proxy so
-    FixDispatch exercises the cloud-agent launch). Tears the whole stack down on exit.
-    Skips when Docker isn't available so the suite still runs on a bare machine.
+    By default the api runs against the in-process MemoryGateway
+    (CONVEX_BACKEND=memory), so the heavy tiers need no Convex deployment and no
+    Docker. Set BAML_BENCH_REAL_CONVEX=1 to instead boot the real Convex backend in
+    a container (mint an admin key, push schema/functions) for fidelity against the
+    actual backend; that path needs Docker + Node and self-skips when Docker is
+    absent (unless BAML_BENCH_REQUIRE_DOCKER=1, which makes it fail loudly).
 
     Yields:
         A dict with the ``api``, ``ingress``, and ``proxy`` base URLs.
     """
-    if not _docker_ready():
-        pytest.skip("Docker not available - skipping integration stack")
-
+    real_convex = os.environ.get("BAML_BENCH_REAL_CONVEX") == "1"
     procs: list[subprocess.Popen] = []
+    convex_started = False
     # Ephemeral host ports so the harness is immune to whatever else is running
-    # locally (e.g. a stale stack squatting on 8080). The Convex container port is
-    # overridden the same way.
-    convex_port, convex_site = _free_port(), _free_port()
+    # locally (e.g. a stale stack squatting on 8080).
     proxy_port, api_port, ingress_port = _free_port(), _free_port(), _free_port()
-    convex_url = f"http://localhost:{convex_port}"
+    # Backend-specific env for the api: in-memory by default, real Convex
+    # (CONVEX_URL + admin key) when BAML_BENCH_REAL_CONVEX=1.
+    api_env = {"SERVICE_TOKEN": "devservicetoken", "BLOB_DIR": str(ROOT / ".pytest-blobs")}
     try:
-        # 1. Convex backend (only container) on an ephemeral host port.
-        up_env = {**os.environ, "CONVEX_PORT": str(convex_port),
-                  "CONVEX_SITE_PORT": str(convex_site)}
-        subprocess.run(["docker", "compose", "up", "-d", "convex"],
-                       cwd=str(ROOT), env=up_env, check=True)
-        _wait_http(f"{convex_url}/version", timeout=90)
+        if real_convex:
+            if not _docker_ready():
+                # BAML_BENCH_REQUIRE_DOCKER=1 makes a broken daemon fail loudly instead
+                # of passing as "skipped"; otherwise self-skip on a bare machine.
+                if os.environ.get("BAML_BENCH_REQUIRE_DOCKER") == "1":
+                    raise RuntimeError(
+                        "Docker required (BAML_BENCH_REAL_CONVEX=1) but not available"
+                    )
+                pytest.skip("Docker not available - skipping real-Convex stack")
+            # 1. Convex backend (only container) on an ephemeral host port.
+            convex_port, convex_site = _free_port(), _free_port()
+            convex_url = f"http://localhost:{convex_port}"
+            up_env = {**os.environ, "CONVEX_PORT": str(convex_port),
+                      "CONVEX_SITE_PORT": str(convex_site)}
+            subprocess.run(["docker", "compose", "up", "-d", "convex"],
+                           cwd=str(ROOT), env=up_env, check=True)
+            convex_started = True
+            _wait_http(f"{convex_url}/version", timeout=90)
+            # 2. Admin key from the running backend.
+            key = subprocess.run(
+                ["docker", "compose", "exec", "-T", "convex", "./generate_admin_key.sh"],
+                cwd=str(ROOT), env=up_env, capture_output=True, text=True, check=True,
+            ).stdout.strip().splitlines()[-1].strip()
+            # 3. Push schema + functions (self-hosted push reads these from the env).
+            push_env = {**os.environ, "CONVEX_SELF_HOSTED_URL": convex_url,
+                        "CONVEX_SELF_HOSTED_ADMIN_KEY": key}
+            if not (ROOT / "node_modules").exists():
+                subprocess.run(["npm", "ci"], cwd=str(ROOT), check=True)
+            subprocess.run(["npx", "convex", "dev", "--once"],
+                           cwd=str(ROOT), env=push_env, check=True)
+            api_env.update({"CONVEX_URL": convex_url, "CONVEX_ADMIN_KEY": key,
+                            "ATB_CONVEX_ADMIN_KEY": key})
+        else:
+            # In-memory Convex backend: no deployment, no Docker, no Node.
+            api_env["CONVEX_BACKEND"] = "memory"
 
-        # 2. Admin key from the running backend.
-        key = subprocess.run(
-            ["docker", "compose", "exec", "-T", "convex", "./generate_admin_key.sh"],
-            cwd=str(ROOT), env=up_env, capture_output=True, text=True, check=True,
-        ).stdout.strip().splitlines()[-1].strip()
-
-        # 3. Push schema + functions (self-hosted push reads these from the env).
-        push_env = {**os.environ,
-                    "CONVEX_SELF_HOSTED_URL": convex_url,
-                    "CONVEX_SELF_HOSTED_ADMIN_KEY": key}
-        if not (ROOT / "node_modules").exists():
-            subprocess.run(["npm", "ci"], cwd=str(ROOT), check=True)
-        subprocess.run(["npx", "convex", "dev", "--once"],
-                       cwd=str(ROOT), env=push_env, check=True)
-
-        # 4. fake_proxy (stub claude-proxy), api, ingress as host processes.
+        # fake_proxy (stub claude-proxy), api, ingress as host uvicorn processes.
         procs.append(_spawn_uvicorn("tests.fake_proxy:app", proxy_port, {}))
-        procs.append(_spawn_uvicorn("services.api.app:app", api_port, {
-            "CONVEX_URL": convex_url, "CONVEX_ADMIN_KEY": key,
-            "SERVICE_TOKEN": "devservicetoken", "BLOB_DIR": str(ROOT / ".pytest-blobs"),
-        }))
+        procs.append(_spawn_uvicorn("services.api.app:app", api_port, api_env))
         procs.append(_spawn_uvicorn("services.ingress.app:app", ingress_port, {
             "SERVICE_URL": f"http://localhost:{api_port}", "SERVICE_TOKEN": "devservicetoken",
             "SLACK_SIGNING_SECRET": "devsigningsecret",
@@ -175,8 +189,8 @@ def bench_stack():
         _wait_http(f"http://localhost:{ingress_port}/healthz")
         _wait_http(f"http://localhost:{proxy_port}/docs")
 
-        # 5. Env the in-process drivers read (worker/dedup/fixdispatch run here). The
-        # fake CURSOR_* point FixDispatch's cloud-agent launch at fake_proxy's stub.
+        # Env the in-process drivers read (worker/dedup/fixdispatch run here). The fake
+        # CURSOR_* point FixDispatch's cloud-agent launch at fake_proxy's stub.
         os.environ.update({
             "SERVICE_URL": f"http://localhost:{api_port}",
             "INGRESS_URL": f"http://localhost:{ingress_port}",
@@ -184,7 +198,9 @@ def bench_stack():
             "CLAUDE_PROXY_TOKEN": "devproxytoken",
             "SLACK_SIGNING_SECRET": "devsigningsecret",
             "SERVICE_TOKEN": "devservicetoken",
-            "CURSOR_API_KEY": "devcursorkey",
+            # FixDispatch reads the ATB_-prefixed key (Infisical naming); CURSOR_API_BASE
+            # stays unprefixed (it's config, not a secret) and points at fake_proxy.
+            "ATB_CURSOR_API_KEY": "devcursorkey",
             "CURSOR_API_BASE": f"http://localhost:{proxy_port}",
         })
         yield {"api": f"http://localhost:{api_port}",
@@ -198,4 +214,5 @@ def bench_stack():
                 p.wait(timeout=10)
             except Exception:  # noqa: BLE001
                 p.kill()
-        subprocess.run(["docker", "compose", "down", "-v"], cwd=str(ROOT))
+        if convex_started:
+            subprocess.run(["docker", "compose", "down", "-v"], cwd=str(ROOT))

@@ -23,6 +23,10 @@ include = ["bench_core*", "services*"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 pythonpath = ["libs", "."]
+markers = [
+    "integration: per-hop pipeline test that boots the stack (api/ingress/fake_proxy)",
+    "system: full end-to-end pipeline flow, /bug through fix dispatch",
+]
 
 [build-system]
 requires = ["setuptools>=68"]
